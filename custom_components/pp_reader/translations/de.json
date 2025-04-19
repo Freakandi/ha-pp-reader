@@ -1,0 +1,14 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Portfolio-Datei konfigurieren",
+        "description": "Pfad zur .portfolio-Datei (z. B. /config/portfolio/S-Depot.portfolio)",
+        "data": {
+          "path": "Dateipfad"
+        }
+      }
+    },
+    "error": {}
+  }
+}
