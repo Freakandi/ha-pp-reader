@@ -33,7 +33,6 @@ def calculate_portfolio_value(portfolio, transactions, securities):
     }
 
     # Wert berechnen
-    securities_by_id = {s.uuid: s for s in securities}
     total_value = 0.0
     for sid, qty in active_securities.items():
         sec = securities_by_id.get(sid)

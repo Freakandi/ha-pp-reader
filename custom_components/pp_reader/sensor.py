@@ -41,11 +41,11 @@ async def async_setup_entry(
         sensors.append(PortfolioAccountSensor(account.name, saldo, file_path))
 
     # 🔸 Depotwerte
+    securities_by_id = {s.uuid: s for s in data.securities}  # ✅ Korrekt erzeugen
     for portfolio in data.portfolios:
         if getattr(portfolio, "isRetired", False):
             continue
 
-        securities_by_id = {s.uuid: s for s in data.securities}
         value, count = calculate_portfolio_value(portfolio, data.transactions, securities_by_id)
         sensors.append(PortfolioDepotSensor(portfolio.name, value, count, file_path))
 
