@@ -23,20 +23,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     ]
     async_add_entities(sensors)
 
-
 class PortfolioSecurityCountSensor(Entity):
     """Sensor für die Anzahl der Wertpapiere im Portfolio."""
 
     def __init__(self, entry_id, file_path, count):
         self._attr_name = "Portfolio: Wertpapiere"
         self._attr_unique_id = f"pp_reader_securities_{entry_id}"
-        self._attr_native_value = count
+        self._count = count
         self._attr_icon = "mdi:finance"
-        self._attr_extra_state_attributes = {
-            "file_path": file_path,
-        }
+        self._file_path = file_path
+
+    @property
+    def native_value(self):
+        return self._count
 
     @property
     def native_unit_of_measurement(self):
         return "Wertpapiere"
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "file_path": self._file_path,
+        }
 
