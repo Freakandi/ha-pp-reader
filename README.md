@@ -66,7 +66,9 @@ Beispiel:
 
 ```bash
 python3 tools/parser.py /pfad/zur/S-Depot.portfolio
+```
 
 ## 🛡️  Sicherheit & Datenschutz
+
 Diese Integration verarbeitet lokale Dateien.
 Es findet kein externer Zugriff oder Upload statt.
