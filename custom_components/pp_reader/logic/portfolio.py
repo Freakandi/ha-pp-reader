@@ -14,7 +14,7 @@ def calculate_portfolio_value(portfolio, transactions, securities_by_id):
         if tx.portfolio:
             tx_by_portfolio.setdefault(tx.portfolio, []).append(tx)
 
-    for p in portfolios:
+    for p in portfolio:
         if p.isRetired:
             continue
 
