@@ -70,8 +70,13 @@ python3 tools/parser.py /pfad/zur/S-Depot.portfolio
 
 ## 🛡️  Sicherheit & Datenschutz
 
-Diese Integration verarbeitet lokale Dateien.
-Es findet kein externer Zugriff oder Upload statt.
+Diese Integration verarbeitet deine .portfolio-Datei ausschließlich lokal.
+Die enthaltenen Depotdaten, Kontoinformationen und Transaktionen werden nicht nach außen gesendet.
+
+Für die Währungsumrechnung wird jedoch einzelner Zugriff auf die öffentliche API von frankfurter.app benötigt, um tagesaktuelle EUR-Wechselkurse abzurufen (z. B. SEK, USD, CHF).
+Dieser Abruf ist anonym und enthält keine personenbezogenen oder Depotdaten.
+
+Die abgerufenen Kurse werden lokal im Cache (fxrates.json) gespeichert, sodass wiederholte Anfragen vermieden werden.
 
 ## 📜 Lizenz
 
