@@ -8,7 +8,7 @@ PROJECT_ROOT="${SCRIPT_DIR}/.."
 # 📄 Quelle und Zielverzeichnisse definieren
 PROTO_SRC="${PROJECT_ROOT}/proto/pp/client.proto"
 PROTO_PATH="${PROJECT_ROOT}/proto/pp"
-PYTHON_OUT="${PROJECT_ROOT}"
+PYTHON_OUT="${PROJECT_ROOT}/custom_components/pp_reader"
 
 echo "🔧 Kompiliere $PROTO_SRC → Python-Paketstruktur unter $PYTHON_OUT ..."
 

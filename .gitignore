@@ -29,8 +29,9 @@ testdata/
 
 # ❗ explizit erlauben: benutzerdefinierte Tools (z. B. parser.py)
 !tools/*.py
-!name/
-!name/abuchen/
-!name/abuchen/portfolio/
-!name/abuchen/portfolio/client_pb2.py
-!name/abuchen/portfolio/__init__.py
+# HACS-kompatibler Protobuf-Code
+!custom_components/pp_reader/name/
+!custom_components/pp_reader/name/abuchen/
+!custom_components/pp_reader/name/abuchen/portfolio/
+!custom_components/pp_reader/name/abuchen/portfolio/client_pb2.py
+!custom_components/pp_reader/name/abuchen/portfolio/__init__.py
