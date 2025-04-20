@@ -3,9 +3,10 @@ import logging
 from datetime import datetime
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.util import slugify
 
 from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
@@ -15,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistantType,
+    hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
@@ -34,30 +35,38 @@ async def async_setup_entry(
             continue
 
         saldo = calculate_account_balance(account.uuid, data.transactions)
-        account_sensors.append(PortfolioAccountSensor(account.name, saldo, file_path))
+        sensor = PortfolioAccountSensor(account.name, saldo, file_path)
+        account_sensors.append(sensor)
 
     async_add_entities(account_sensors)
 
 
 class PortfolioAccountSensor(SensorEntity):
-    """Ein Sensor für den Kontostand eines Portfolios-Kontos."""
+    """Ein Sensor für den Kontostand eines aktiven Kontos."""
 
-    def __init__(self, name, saldo, file_path):
-        self._attr_name = f"Kontostand {name}"
-        self._attr_native_unit_of_measurement = "€"
-        self._state = round(saldo, 2)
+    def __init__(self, account_name, saldo, file_path):
+        self._account_name = account_name
         self._file_path = file_path
+        self._saldo = round(saldo, 2)
+
+        # Anzeige-Name für die GUI
+        self._attr_name = f"Kontostand {account_name}"
+
+        # Eindeutige ID für HA: Kombination aus Dateiname + Konto
+        base = os.path.basename(file_path)
+        self._attr_unique_id = f"{slugify(base)}_{slugify(account_name)}"
+
+        self._attr_native_unit_of_measurement = "€"
 
     @property
     def native_value(self):
-        return self._state
+        return self._saldo
 
     @property
     def extra_state_attributes(self):
-        """Zusätzliche Attribute, z. B. Änderungsdatum der Datei."""
         try:
             ts = os.path.getmtime(self._file_path)
-            updated = datetime.fromtimestamp(ts).isoformat()
+            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%Mh")
         except Exception as e:
             _LOGGER.warning("Konnte Änderungsdatum nicht lesen: %s", e)
             updated = None
