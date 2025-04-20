@@ -2,7 +2,7 @@ import logging
 import zipfile
 import struct
 
-from name.abuchen.portfolio import client_pb2
+from .name.abuchen.portfolio import client_pb2
 
 _LOGGER = logging.getLogger(__name__)
 
