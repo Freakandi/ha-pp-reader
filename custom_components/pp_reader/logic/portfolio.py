@@ -35,7 +35,7 @@ def calculate_portfolio_value(portfolio, transactions, securities):
     # Wert berechnen
     total_value = 0.0
     for sid, qty in active_securities.items():
-        sec = securities_by_id.get(sid)
+        sec = security_id.get(sid)
         if not sec or not sec.latest:
             continue
         total_value += normalize_price(sec.latest.close) * qty
