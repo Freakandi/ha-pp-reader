@@ -1,5 +1,6 @@
-"""Konstanten für die Portfolio Performance Integration."""
-
 DOMAIN = "pp_reader"
-CONF_PATH = "path"
+
+CONF_FILE_PATH = "file_path"
+
+DEFAULT_NAME = "Portfolio Performance"
 
