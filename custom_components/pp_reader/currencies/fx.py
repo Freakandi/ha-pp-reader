@@ -74,3 +74,9 @@ def get_exchange_rates(client, reference_date: datetime):
         rates = cache[date]
 
     return rates
+
+def load_latest_rates(reference_date: datetime) -> dict:
+    """Lese gespeicherte Wechselkurse aus dem Cache (für ein gegebenes Referenzdatum)."""
+    cache = load_cache()
+    date = reference_date.strftime("%Y-%m-%d")
+    return cache.get(date, {})
