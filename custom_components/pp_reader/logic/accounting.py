@@ -20,19 +20,15 @@ def calculate_account_balance(account_uuid, transactions):
         if tx.account != account_uuid:
             continue
 
+        # Transaktionen mit tx.amount als bereits "bereinigtem" Netto-Wert
         if tx.type in (1, 8, 9, 12, 14):  # SALE, DIVIDEND, INTEREST, TAX_REFUND, FEE_REFUND
-            gross = sum(u.amount for u in tx.units if u.type == 0)
-            tax = sum(u.amount for u in tx.units if u.type == 1)
-            fee = sum(u.amount for u in tx.units if u.type == 2)
-            saldo += gross - tax - fee
+            saldo += tx.amount
 
         elif tx.type in (0, 6, 11, 13):  # PURCHASE, DEPOSIT, TAX, FEE
-            total = sum(u.amount for u in tx.units)
-            saldo -= total
+            saldo -= tx.amount
 
         elif tx.type == 10:  # INTEREST_CHARGE
-            total = sum(u.amount for u in tx.units)
-            saldo -= total
+            saldo -= tx.amount
 
         elif tx.type == 7:  # REMOVAL
             saldo -= tx.amount
