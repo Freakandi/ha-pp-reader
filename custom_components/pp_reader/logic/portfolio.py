@@ -1,6 +1,6 @@
 # logic/portfolio.py
 
-def calculate_portfolio_values(portfolios, transactions, securities_by_id):
+def calculate_portfolio_value(portfolios, transactions, securities_by_id):
     """
     Ermittle für jedes aktive Depot:
     - Gesamtwert (EUR, sofern Kurswährung = Basiswährung)
