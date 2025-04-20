@@ -52,7 +52,7 @@ def calculate_portfolio_value(portfolio, transactions, securities_by_id, referen
         if currency != "EUR":
             rate = fx_rates.get(currency)
             if rate:
-                kurs *= rate
+                kurs / rate
             else:
                 print(f"⚠️ Kein Wechselkurs verfügbar für {currency}, Papier: {sec.name}")
                 continue
