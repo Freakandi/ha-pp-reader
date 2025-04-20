@@ -46,7 +46,7 @@ async def async_setup_entry(
 
     # 💱 Wechselkurse aktualisieren & aus Cache lesen
     reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
-    fx_rates = get_exchange_rates(data, reference_date=reference_date)
+    fx_rates = await get_exchange_rates(data, reference_date=reference_date)
 
     for portfolio in data.portfolios:
         if getattr(portfolio, "isRetired", False):

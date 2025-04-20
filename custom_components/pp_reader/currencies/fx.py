@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+import aiohttp
 from datetime import datetime, timedelta
 
 # Cache-Datei liegt unter custom_components/pp_reader/cache/fxrates.json
@@ -35,19 +36,20 @@ def get_required_currencies(client):
                 currencies.add(sec.currencyCode)
     return currencies
 
-def fetch_exchange_rates(date: str, currencies: set):
-    """Hole Kurse zum gegebenen Datum (Format YYYY-MM-DD) von frankfurter.app"""
+async def fetch_exchange_rates(date: str, currencies: set):
     if not currencies:
         return {}
     symbols = ",".join(currencies)
     url = f"{API_URL}/{date}?from=EUR&to={symbols}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return {k: float(v) for k, v in data["rates"].items()}
-    else:
-        print(f"Fehler beim Abruf der Wechselkurse: {response.status_code}")
-        return {}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+                return {k: float(v) for k, v in data["rates"].items()}
+            else:
+                print(f"Fehler beim Abruf der Wechselkurse: {response.status}")
+                return {}
 
 def load_cache():
     if not os.path.exists(CACHE_FILE):
@@ -59,15 +61,14 @@ def save_cache(data):
     with open(CACHE_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-def get_exchange_rates(client, reference_date: datetime):
-    """Lade oder aktualisiere Wechselkurse für gegebene client-Objektstruktur"""
+async def get_exchange_rates(client, reference_date: datetime):
     needed = get_required_currencies(client)
-    date = (reference_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    date = reference_date.strftime("%Y-%m-%d")
 
     cache = load_cache()
     if date not in cache:
         print(f"Abruf Kurse für {date} ...")
-        rates = fetch_exchange_rates(date, needed)
+        rates = await fetch_exchange_rates(date, needed)
         cache[date] = rates
         save_cache(cache)
     else:
