@@ -12,6 +12,7 @@ from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
+from custom_components.pp_reader.currencies.fx import get_exchange_rates
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,11 +43,16 @@ async def async_setup_entry(
 
     # 🔸 Depotwerte
     securities_by_id = {s.uuid: s for s in data.securities}  # ✅ Korrekt erzeugen
+
+    # 💱 Wechselkurse aktualisieren & aus Cache lesen
+    reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
+    fx_rates = get_exchange_rates(data, reference_date=reference_date)
+
     for portfolio in data.portfolios:
         if getattr(portfolio, "isRetired", False):
             continue
 
-        value, count = calculate_portfolio_value(portfolio, data.transactions, securities_by_id)
+        value, count = calculate_portfolio_value(portfolio, data.transactions, securities_by_id, reference_date)
         sensors.append(PortfolioDepotSensor(portfolio.name, value, count, file_path))
 
     async_add_entities(sensors)
