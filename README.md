@@ -72,3 +72,9 @@ python3 tools/parser.py /pfad/zur/S-Depot.portfolio
 
 Diese Integration verarbeitet lokale Dateien.
 Es findet kein externer Zugriff oder Upload statt.
+
+## 📜 Lizenz
+
+MIT License
+
+© Freakandi
