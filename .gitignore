@@ -3,13 +3,13 @@
 
 # 🔹 Python Bytecode & Caches
 __pycache__/
-*.py[cod]
+*.pyc
 *.so
 *.egg-info/
 
 # 🔹 Protobuf: generierter Code (nicht versionieren)
-name/                                  # generierter client_pb2.py
-proto/pp/client_pb2.py
+proto/
+proto/pp/
 proto/pp/__pycache__/
 
 # 🔹 Tools-Ausgabe & temporäre Artefakte
@@ -29,4 +29,8 @@ testdata/
 
 # ❗ explizit erlauben: benutzerdefinierte Tools (z. B. parser.py)
 !tools/*.py
-
+!name/
+!name/abuchen/
+!name/abuchen/portfolio/
+!name/abuchen/portfolio/client_pb2.py
+!name/abuchen/portfolio/__init__.py

@@ -1,26 +1,31 @@
-"""reader.py – entpackt eine .portfolio-Datei und liefert den Pfad zur data.portfolio."""
-import os
-import zipfile
 import logging
+import zipfile
+import struct
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from name.abuchen.portfolio import client_pb2
 
-def extract_data_portfolio(portfolio_path: str, extract_dir: str) -> str:
-    """Entpacke .portfolio-Datei nach extract_dir. Gibt Pfad zur data.portfolio zurück."""
-    if not os.path.exists(portfolio_path):
-        raise FileNotFoundError(f"Datei nicht gefunden: {portfolio_path}")
+_LOGGER = logging.getLogger(__name__)
 
-    if not zipfile.is_zipfile(portfolio_path):
-        raise zipfile.BadZipFile(f"Ungültige ZIP-Datei: {portfolio_path}")
 
+def decode_pppbv1(raw: bytes) -> bytes:
+    """Entfernt den PPPBV1-Header und extrahiert den Protobuf-Datenblock."""
+    if not raw.startswith(b"PPPBV1"):
+        raise ValueError("Kein gültiger PPPBV1-Header")
+    length = struct.unpack(">I", raw[6:10])[0]
+    return raw[10 : 10 + length]
+
+
+def parse_data_portfolio(file_path: str):
+    """Liest die .portfolio-Datei, entfernt Header, parst mit Protobuf."""
     try:
-        with zipfile.ZipFile(portfolio_path, "r") as zf:
-            zf.extractall(extract_dir)
-            data_file = os.path.join(extract_dir, "data.portfolio")
-            if not os.path.exists(data_file):
-                raise FileNotFoundError("data.portfolio nicht im Archiv enthalten")
-            return data_file
+        with zipfile.ZipFile(file_path, "r") as z:
+            with z.open("data.portfolio") as f:
+                raw = f.read()
+                decoded = decode_pppbv1(raw)
+                client = client_pb2.PClient()
+                client.ParseFromString(decoded)
+                return client
     except Exception as e:
-        logger.exception("Fehler beim Entpacken: %s", str(e))
-        raise
+        _LOGGER.exception("Fehler beim Parsen der Datei: %s", e)
+        return None
+
