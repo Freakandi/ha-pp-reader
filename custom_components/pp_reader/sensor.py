@@ -4,6 +4,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
+from .logic.accounting import calculate_account_balance
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,42 +29,6 @@ async def async_setup_entry(
             sensors.append(PortfolioAccountBalanceSensor(account, saldo))
 
     async_add_entities(sensors)
-
-def calculate_account_balance(account_uuid, transactions):
-    """Berechnet den Kontostand eines Kontos anhand der Transaktionen."""
-    saldo = 0
-
-    for tx in transactions:
-        # CASH_TRANSFER wird separat behandelt
-        if tx.type == 5:  # CASH_TRANSFER
-            if tx.account == account_uuid:
-                saldo -= tx.amount
-            elif tx.otherAccount == account_uuid:
-                saldo += tx.amount
-            continue
-
-        # Nur Transaktionen, die sich direkt auf dieses Konto beziehen
-        if tx.account != account_uuid:
-            continue
-
-        # Bestimme Vorzeichen basierend auf Transaktionstyp
-        negative_types = {7, 10, 11, 13}  # REMOVAL, INTEREST_CHARGE, TAX, FEE
-        positive_types = {6, 8, 9, 12, 14}  # DEPOSIT, DIVIDEND, INTEREST, TAX_REFUND, FEE_REFUND
-
-        sign = 0
-        if tx.type in positive_types:
-            sign = +1
-        elif tx.type in negative_types:
-            sign = -1
-        else:
-            continue  # Unbehandelte Typen ignorieren
-
-        # Summiere alle Units vom Typ GROSS_VALUE
-        for unit in tx.units:
-            if unit.type == 0:  # GROSS_VALUE
-                saldo += sign * unit.amount
-
-    return saldo / 100.0  # Betrag in Euro (statt Cent)
 
 class PortfolioAccountBalanceSensor(SensorEntity):
     """Sensor zeigt den Saldo eines einzelnen Kontos."""
