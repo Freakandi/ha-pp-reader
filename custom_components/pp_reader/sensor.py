@@ -64,6 +64,7 @@ class PortfolioAccountSensor(SensorEntity):
         base = os.path.basename(file_path)
         self._attr_unique_id = f"{slugify(base)}_{slugify(account_name)}"
         self._attr_native_unit_of_measurement = "€"
+        self._attr_icon = "mdi:bank"  # Symbol für Konto
 
     @property
     def native_value(self):
@@ -97,6 +98,7 @@ class PortfolioDepotSensor(SensorEntity):
         base = os.path.basename(file_path)
         self._attr_unique_id = f"{slugify(base)}_{slugify(portfolio_name)}_depot"
         self._attr_native_unit_of_measurement = "€"
+        self._attr_icon = "mdi:finance"  # Symbol für Depot
 
     @property
     def native_value(self):
