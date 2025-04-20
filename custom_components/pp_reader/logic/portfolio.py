@@ -4,7 +4,7 @@ def normalize_price(raw_price: int) -> float:
     """Wandle Kurswert aus Portfolio Performance in echte Euro um (Skalierung beachten)."""
     return raw_price / 10**16  # empirisch ermittelt, siehe PortfolioSnapshot.java
 
-def calculate_portfolio_value(portfolio, transactions, securities):
+def calculate_portfolio_value(portfolio, transactions, securities_by_id):
     """
     Ermittle für ein aktives Depot:
     - Gesamtwert (EUR)
@@ -35,7 +35,7 @@ def calculate_portfolio_value(portfolio, transactions, securities):
     # Wert berechnen
     total_value = 0.0
     for sid, qty in active_securities.items():
-        sec = security_id.get(sid)
+        sec = securities_by_id.get(sid)
         if not sec or not sec.latest:
             continue
         total_value += normalize_price(sec.latest.close) * qty
