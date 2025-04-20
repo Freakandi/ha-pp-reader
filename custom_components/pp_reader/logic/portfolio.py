@@ -1,18 +1,18 @@
 # logic/portfolio.py
 
-def calculate_portfolio_value(portfolio, transactions, securities_by_id):
+def normalize_price(raw_price: int) -> float:
+    """Wandle Kurswert aus Portfolio Performance in echte Euro um (Skalierung beachten)."""
+    return raw_price / 10**16  # empirisch ermittelt, siehe PortfolioSnapshot.java
+
+def calculate_portfolio_value(portfolio, transactions, securities):
     """
-    Ermittle für ein einzelnes aktives Depot:
-    - Gesamtwert (EUR, sofern Kurswährung = Basiswährung)
+    Ermittle für ein aktives Depot:
+    - Gesamtwert (EUR)
     - Anzahl enthaltener Wertpapiere
     """
-    if getattr(portfolio, "isRetired", False):
-        return 0.0, 0
 
-    portfolio_id = portfolio.uuid
-
-    # Transaktionen zu diesem Portfolio filtern
-    tx_list = [tx for tx in transactions if tx.portfolio == portfolio_id]
+    # Transaktionen zu diesem Depot herausfiltern
+    tx_list = [tx for tx in transactions if tx.portfolio == portfolio.uuid]
 
     # Enthaltene Wertpapiere und Anteile bestimmen
     holdings = {}
@@ -32,12 +32,14 @@ def calculate_portfolio_value(portfolio, transactions, securities_by_id):
         sid: qty for sid, qty in holdings.items() if qty > 0
     }
 
+    # Wert berechnen
+    securities_by_id = {s.uuid: s for s in securities}
     total_value = 0.0
     for sid, qty in active_securities.items():
         sec = securities_by_id.get(sid)
         if not sec or not sec.latest:
             continue
-        total_value += (sec.latest.close / 100.0) * qty  # Cent → Euro
+        total_value += normalize_price(sec.latest.close) * qty
 
     return round(total_value, 2), len(active_securities)
 
