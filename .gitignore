@@ -1,0 +1,28 @@
+# Virtuelle Umgebung
+.venv/
+
+# Python Bytecode
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# Protobuf generierte Dateien (nicht manuell editieren!)
+name/
+proto/pp/client_pb2.py
+proto/pp/__pycache__/
+
+
+# Temporäre Testdaten
+testdata/
+*.bak
+*.log
+*.tmp
+*.swp
+*~
+
+# Backup-Dateien (z. B. aus Editoren)
+*~
+
+# Tools-Ausgabe (optional ignorieren)
+tools/__pycache__/
