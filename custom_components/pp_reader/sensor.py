@@ -1,9 +1,7 @@
 import logging
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import CONF_NAME
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import AddEntitiesCallback
 
 from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
@@ -11,11 +9,7 @@ from .reader import parse_data_portfolio
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
     """Set up sensor based on config entry."""
     file_path = entry.data.get(CONF_FILE_PATH)
     client = await hass.async_add_executor_job(parse_data_portfolio, file_path)
@@ -24,11 +18,10 @@ async def async_setup_entry(
         _LOGGER.error("❌ Portfolio konnte nicht geladen werden, Sensor wird nicht erstellt.")
         return
 
-    entities = [
+    sensors = [
         PortfolioSecurityCountSensor(entry.entry_id, file_path, len(client.securities))
     ]
-
-    async_add_entities(entities)
+    async_add_entities(sensors)
 
 
 class PortfolioSecurityCountSensor(Entity):
