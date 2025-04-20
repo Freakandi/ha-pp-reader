@@ -1,17 +1,13 @@
 import os
 import zipfile
 import logging
+import google.protobuf.message
 
 from .name.abuchen.portfolio import client_pb2
 
 _LOGGER = logging.getLogger(__name__)
 
 def parse_data_portfolio(path: str):
-    """
-    Entpackt eine .portfolio-Datei und extrahiert das Client-Objekt aus dem protobuf-Container.
-    :param path: Pfad zur .portfolio-Datei
-    :return: Instanz von client_pb2.PClient oder None bei Fehler
-    """
     if not os.path.exists(path):
         _LOGGER.error("Die Datei %s existiert nicht", path)
         return None
@@ -25,20 +21,31 @@ def parse_data_portfolio(path: str):
             with archive.open("data.portfolio") as f:
                 raw_data = f.read()
 
-        # Protobuf-Inhalt dekodieren
-        container = client_pb2.SerializedModel()
-        container.ParseFromString(raw_data)
+        # Erst versuche als direkten Client
+        try:
+            client = client_pb2.PClient()
+            client.ParseFromString(raw_data)
+            _LOGGER.info("Parsen als PClient erfolgreich (direkt)")
+            return client
+        except google.protobuf.message.DecodeError:
+            _LOGGER.warning("Direktes Parsen als PClient fehlgeschlagen, versuche Container ...")
 
-        client = container.client
-        _LOGGER.info("Erfolgreich geparst: Version %s mit %d Wertpapieren",
-                     client.version, len(client.securities))
-        return client
+        # Alternativ: versuche Parsing über SerializedModel
+        try:
+            container = client_pb2.SerializedModel()
+            container.ParseFromString(raw_data)
+            client = container.client
+            _LOGGER.info("Parsen als container.client erfolgreich")
+            return client
+        except AttributeError:
+            _LOGGER.error("SerializedModel nicht vorhanden in client_pb2")
+        except google.protobuf.message.DecodeError as e:
+            _LOGGER.error("Fehler beim Container-Parsing: %s", e)
 
     except zipfile.BadZipFile:
         _LOGGER.exception("Ungültige ZIP-Datei: %s", path)
-    except google.protobuf.message.DecodeError as e:
-        _LOGGER.error("Fehler beim Parsen der Datei: %s", e)
     except Exception as e:
         _LOGGER.exception("Unerwarteter Fehler beim Parsen: %s", e)
 
     return None
+
