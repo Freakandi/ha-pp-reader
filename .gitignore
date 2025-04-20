@@ -37,3 +37,9 @@ testdata/
 !custom_components/pp_reader/name/abuchen/portfolio/
 !custom_components/pp_reader/name/abuchen/portfolio/client_pb2.py
 !custom_components/pp_reader/name/abuchen/portfolio/__init__.py
+
+# Ignoriere alle Inhalte im cache-Verzeichnis
+custom_components/pp_reader/cache/*
+
+# Aber tracke den Ordner selbst (wird mit .gitkeep oder leerer Datei erzwingbar)
+!custom_components/pp_reader/cache/.gitkeep
