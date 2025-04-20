@@ -1,28 +1,32 @@
-# Virtuelle Umgebung
+# 🔹 Virtuelle Umgebung
 .venv/
 
-# Python Bytecode
+# 🔹 Python Bytecode & Caches
 __pycache__/
 *.py[cod]
 *.so
 *.egg-info/
 
-# Protobuf generierte Dateien (nicht manuell editieren!)
-name/
+# 🔹 Protobuf: generierter Code (nicht versionieren)
+name/                                  # generierter client_pb2.py
 proto/pp/client_pb2.py
 proto/pp/__pycache__/
 
-
-# Temporäre Testdaten
-testdata/
+# 🔹 Tools-Ausgabe & temporäre Artefakte
+tools/__pycache__/
 *.bak
 *.log
 *.tmp
 *.swp
 *~
+.DS_Store
 
-# Backup-Dateien (z. B. aus Editoren)
+# 🔹 Testdaten & manuelle Dateien
+testdata/
+
+# 🔹 Sicherungsdateien aus Editoren (z. B. nano, vim)
 *~
 
-# Tools-Ausgabe (optional ignorieren)
-tools/__pycache__/
+# ❗ explizit erlauben: benutzerdefinierte Tools (z. B. parser.py)
+!tools/*.py
+
