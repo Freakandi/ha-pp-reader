@@ -7,10 +7,12 @@ __pycache__/
 *.so
 *.egg-info/
 
-# 🔹 Protobuf: generierter Code (nicht versionieren)
+# 🔹 Protobuf: nur client.proto versionieren, Rest ignorieren
 proto/
-proto/pp/
-proto/pp/__pycache__/
+!proto/name/
+!proto/name/abuchen/
+!proto/name/abuchen/portfolio/
+!proto/name/abuchen/portfolio/client.proto
 
 # 🔹 Tools-Ausgabe & temporäre Artefakte
 tools/__pycache__/
