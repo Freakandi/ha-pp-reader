@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
-from .accounting import calculate_account_balance
+from .logic.accounting import calculate_account_balance
 
 _LOGGER = logging.getLogger(__name__)
 
