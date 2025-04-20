@@ -45,7 +45,8 @@ async def async_setup_entry(
         if getattr(portfolio, "isRetired", False):
             continue
 
-        value, count = calculate_portfolio_value(portfolio, data.transactions, data.securities)
+        securities_by_id = {s.uuid: s for s in data.securities}
+        value, count = calculate_portfolio_value(portfolio, data.transactions, securities_by_id)
         sensors.append(PortfolioDepotSensor(portfolio.name, value, count, file_path))
 
     async_add_entities(sensors)
