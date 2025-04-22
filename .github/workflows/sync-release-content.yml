@@ -1,6 +1,5 @@
-name: Sync Release‑Branch
+name: Sync Release‑Branch via PR
 
-# Wird bei jedem Push in dev ausgelöst
 on:
   push:
     branches:
@@ -10,30 +9,33 @@ jobs:
   sync-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # Erlaubt pushen in release
+      contents: write   # erlaubt PR‑Erstellung
 
     steps:
-      # 1) Release‑Branch auschecken
       - name: Checkout release branch
         uses: actions/checkout@v3
         with:
           ref: release
           fetch-depth: 0
 
-      # 2) Dev‑only Ordner im Release entfernen
       - name: Remove dev‑only folders
-        run: |
-          git rm -r --ignore-unmatch tools/ proto/ testdata/ .github/
+        run: git rm -r --ignore-unmatch tools/ proto/ testdata/ .github/
 
-      # 3) Nur die gewünschten Pfade aus dev nachziehen
-      - name: Import custom_components, frontend, README, hacs.json, license
+      - name: Pull in only release content from dev
         run: |
           git fetch origin dev
           git checkout origin/dev -- custom_components/ frontend/ README.md hacs.json license
 
-      # 4) Commit & Push auf Release
-      - name: Commit and push to release
-        run: |
-          git add custom_components/ frontend/ README.md hacs.json LICENSE
-          git commit -m "chore(sync): release ← custom_components, frontend, README, hacs.json, license"
-          git push origin release --force
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: chore(sync): update release content
+          branch: sync/release-content-${{ github.run_number }}
+          title: chore(sync): sync release branch
+          body: |
+            Dieser PR synchronisiert die release‑Branch  
+            – nur custom_components/, frontend/, README.md, hacs.json, license  
+          base: release
+          head: release
+          labels: sync
