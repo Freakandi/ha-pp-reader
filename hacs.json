@@ -1,0 +1,11 @@
+{
+  "name": "Portfolio Performance Reader",
+  "content_in_root": true,
+  "domains": [
+    "sensor",
+    "panel_custom"
+  ],
+  "homeassistant": "2025.04.1",
+  "hacs": "2.0.5",
+  "version": "0.2.2"
+}
