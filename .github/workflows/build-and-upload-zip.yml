@@ -1,0 +1,46 @@
+name: Build & Upload HACS ZIP
+
+# Wird ausgelöst, sobald du einen Release publishst
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  build_zip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # erlaubt, Assets an den Release zu hängen
+
+    steps:
+      # 1) Den Code auschecken (inkl. aller Dateien und Tags)
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # 2) ZIP-Package zusammenstellen
+      - name: Create HACS ZIP
+        run: |
+          # Arbeitsverzeichnis für die ZIP anlegen
+          mkdir package
+
+          # Nur die Ordner und Dateien kopieren, die HACS braucht
+          cp -r custom_components package/
+          cp -r frontend          package/
+          cp hacs.json            package/
+          cp README.md            package/
+          cp LICENSE              package/
+
+          # ZIP erzeugen ohne zusätzlichen Oberordner
+          cd package
+          zip -r ../ha-pp-reader.zip ./*
+          cd ..
+
+      # 3) ZIP als Asset an den gerade veröffentlichten Release hängen
+      - name: Upload ZIP to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ha-pp-reader.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
