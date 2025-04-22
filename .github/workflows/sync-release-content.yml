@@ -28,7 +28,7 @@ jobs:
       - name: Pull in only release content from dev
         run: |
           git fetch origin dev
-          git checkout origin/dev -- custom_components/ frontend/ README.md hacs.json LICENSE
+          git checkout origin/dev -- custom_components/ frontend/ README.md hacs.json license
 
       # 4) PR erstellen
       - name: Create Pull Request
@@ -42,6 +42,6 @@ jobs:
           title: "chore(sync): sync release branch"
           body: |
             Dieser PR synchronisiert die **release‑Branch**  
-            – nur `custom_components/`, `frontend/`, `README.md`, `hacs.json`, `LICENSE`
+            – nur `custom_components/`, `frontend/`, `README.md`, `hacs.json`, `license`
           base: release
           labels: sync
