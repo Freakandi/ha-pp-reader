@@ -1,0 +1,39 @@
+name: Sync Release‑Branch
+
+# Wird bei jedem Push in dev ausgelöst
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  sync-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Erlaubt pushen in release
+
+    steps:
+      # 1) Release‑Branch auschecken
+      - name: Checkout release branch
+        uses: actions/checkout@v3
+        with:
+          ref: release
+          fetch-depth: 0
+
+      # 2) Dev‑only Ordner im Release entfernen
+      - name: Remove dev‑only folders
+        run: |
+          git rm -r --ignore-unmatch tools/ proto/ testdata/ .github/
+
+      # 3) Nur die gewünschten Pfade aus dev nachziehen
+      - name: Import custom_components, frontend, README, hacs.json, LICENSE
+        run: |
+          git fetch origin dev
+          git checkout origin/dev -- custom_components/ frontend/ README.md hacs.json LICENSE
+
+      # 4) Commit & Push auf Release
+      - name: Commit and push to release
+        run: |
+          git add custom_components/ frontend/ README.md hacs.json LICENSE
+          git commit -m "chore(sync): release ← custom_components, frontend, README, hacs.json, LICENSE"
+          git push origin release --force
