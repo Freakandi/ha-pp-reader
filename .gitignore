@@ -7,13 +7,6 @@ __pycache__/
 *.so
 *.egg-info/
 
-# 🔹 Protobuf: nur client.proto versionieren, Rest ignorieren
-proto/
-!proto/name/
-!proto/name/abuchen/
-!proto/name/abuchen/portfolio/
-!proto/name/abuchen/portfolio/client.proto
-
 # 🔹 Tools-Ausgabe & temporäre Artefakte
 tools/__pycache__/
 *.bak
@@ -23,20 +16,8 @@ tools/__pycache__/
 *~
 .DS_Store
 
-# 🔹 Testdaten & manuelle Dateien
-testdata/
-
 # 🔹 Sicherungsdateien aus Editoren (z. B. nano, vim)
 *~
-
-# ❗ explizit erlauben: benutzerdefinierte Tools (z. B. parser.py)
-!tools/*.py
-# HACS-kompatibler Protobuf-Code
-!custom_components/pp_reader/name/
-!custom_components/pp_reader/name/abuchen/
-!custom_components/pp_reader/name/abuchen/portfolio/
-!custom_components/pp_reader/name/abuchen/portfolio/client_pb2.py
-!custom_components/pp_reader/name/abuchen/portfolio/__init__.py
 
 # Ignoriere alle Inhalte im cache-Verzeichnis
 custom_components/pp_reader/cache/*
