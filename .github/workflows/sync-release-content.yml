@@ -26,14 +26,14 @@ jobs:
           git rm -r --ignore-unmatch tools/ proto/ testdata/ .github/
 
       # 3) Nur die gewünschten Pfade aus dev nachziehen
-      - name: Import custom_components, frontend, README, hacs.json, LICENSE
+      - name: Import custom_components, frontend, README, hacs.json, license
         run: |
           git fetch origin dev
-          git checkout origin/dev -- custom_components/ frontend/ README.md hacs.json LICENSE
+          git checkout origin/dev -- custom_components/ frontend/ README.md hacs.json license
 
       # 4) Commit & Push auf Release
       - name: Commit and push to release
         run: |
           git add custom_components/ frontend/ README.md hacs.json LICENSE
-          git commit -m "chore(sync): release ← custom_components, frontend, README, hacs.json, LICENSE"
+          git commit -m "chore(sync): release ← custom_components, frontend, README, hacs.json, license"
           git push origin release --force
