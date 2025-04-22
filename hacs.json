@@ -7,7 +7,7 @@
   ],
   "homeassistant": "2025.04.1",
   "hacs": "2.0.5",
-  "version": "0.2.5",
+  "version": "0.2.7",
   "zip_release": true,
   "filename": "ha-pp-reader.zip"
 }
