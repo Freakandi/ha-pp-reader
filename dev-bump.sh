@@ -26,7 +26,7 @@ bump2version "$PART"
 # 4) Branch und Tags pushen
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 git push origin "$BRANCH"
-git push origin --tags
+git push origin "$BRANCH" --follow-tags
 
 echo "✅ Version bumped ($PART) and pushed (branch: $BRANCH)."
 
