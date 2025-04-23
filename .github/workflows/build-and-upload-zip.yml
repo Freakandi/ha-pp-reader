@@ -26,7 +26,7 @@ jobs:
           mkdir package
 
           # 2) Nur den Integrations-Ordner kopieren (ohne custom_components/)
-          cp -r custom_components/pp_reader package/pp_reader
+          cp -r custom_components  package/
 
           # 3) Frontend und Metadaten dazu
           cp -r frontend           package/
@@ -36,12 +36,7 @@ jobs:
 
           # 4) ZIP ohne zusätzlichen Wrapper
           cd package
-          zip -r ../ha-pp-reader.zip ./*.*
-          zip -r ../ha-pp-reader.zip pp_reader
-          zip -r ../ha-pp-reader.zip frontend
-          zip -r ../ha-pp-reader.zip hacs.json
-          zip -r ../ha-pp-reader.zip README.md
-          zip -r ../ha-pp-reader.zip LICENSE
+          zip -r ../ha-pp-reader.zip ./*
           cd ..
 
       # 3) ZIP als Asset an den gerade veröffentlichten Release hängen
