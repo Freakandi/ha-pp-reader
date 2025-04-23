@@ -1,6 +1,5 @@
 {
   "name": "Portfolio Performance Reader",
-  "content_in_root": false,
   "domains": [
     "sensor",
     "panel_custom"
@@ -9,5 +8,6 @@
   "hacs": "2.0.5",
   "version": "0.2.13",
   "zip_release": true,
+  "content_in_root": true,
   "filename": "ha-pp-reader.zip"
 }
