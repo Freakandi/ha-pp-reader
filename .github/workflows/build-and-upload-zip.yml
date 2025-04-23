@@ -20,21 +20,28 @@ jobs:
           fetch-depth: 0
 
       # 2) ZIP-Package zusammenstellen
-      - name: Create HACS ZIP
+      - name: Build ha-pp-reader.zip
         run: |
-          # Arbeitsverzeichnis für die ZIP anlegen
+          # 1) Temp-Ordner anlegen
           mkdir package
 
-          # Nur die Ordner und Dateien kopieren, die HACS braucht
-          cp -r custom_components package/
-          cp -r frontend          package/
-          cp hacs.json            package/
-          cp README.md            package/
-          cp LICENSE              package/
+          # 2) Nur den Integrations-Ordner kopieren (ohne custom_components/)
+          cp -r custom_components/pp_reader package/pp_reader
 
-          # ZIP erzeugen ohne zusätzlichen Oberordner
+          # 3) Frontend und Metadaten dazu
+          cp -r frontend           package/
+          cp hacs.json             package/
+          cp README.md             package/
+          cp LICENSE               package/
+
+          # 4) ZIP ohne zusätzlichen Wrapper
           cd package
-          zip -r ../ha-pp-reader.zip ./*
+          zip -r ../ha-pp-reader.zip ./*.*
+          zip -r ../ha-pp-reader.zip pp_reader
+          zip -r ../ha-pp-reader.zip frontend
+          zip -r ../ha-pp-reader.zip hacs.json
+          zip -r ../ha-pp-reader.zip README.md
+          zip -r ../ha-pp-reader.zip LICENSE
           cd ..
 
       # 3) ZIP als Asset an den gerade veröffentlichten Release hängen
