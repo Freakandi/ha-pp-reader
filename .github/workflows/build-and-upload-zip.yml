@@ -26,7 +26,7 @@ jobs:
           mkdir package
 
           # Nur die Ordner und Dateien kopieren, die HACS braucht
-          cp -r custom_components package/
+          cp -r pp_reader         package/
           cp -r frontend          package/
           cp hacs.json            package/
           cp README.md            package/
