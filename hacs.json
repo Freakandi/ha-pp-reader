@@ -1,6 +1,6 @@
 {
   "name": "Portfolio Performance Reader",
-  "content_in_root": false,
+  "content_in_root": true,
   "domains": [
     "sensor",
     "panel_custom"
