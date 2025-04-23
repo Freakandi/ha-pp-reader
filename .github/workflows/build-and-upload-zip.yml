@@ -20,24 +20,25 @@ jobs:
           fetch-depth: 0
 
       # 2) ZIP-Package zusammenstellen
-      - name: Build ha-pp-reader.zip
-        run: |
-          # 1) Temp-Ordner anlegen
-          mkdir package
+     - name: Build ha-pp-reader.zip
+       run: |
+         # 1) Temp-Ordner anlegen
+         rm -rf package && mkdir package
 
-          # 2) Nur den Integrations-Ordner kopieren (ohne custom_components/)
-          cp -r custom_components  package/
+         # 2) Integrations-Code (nur Inhalt von custom_components/pp_reader)
+         mkdir -p package/custom_components/pp_reader
+         cp -r custom_components/pp_reader/. package/custom_components/pp_reader/
 
-          # 3) Frontend und Metadaten dazu
-          cp -r frontend           package/
-          cp hacs.json             package/
-          cp README.md             package/
-          cp LICENSE               package/
+         # 3) Frontend und Metadaten dazu
+         cp -r frontend           package/
+         cp hacs.json             package/
+         cp README.md             package/
+         cp LICENSE               package/
 
-          # 4) ZIP ohne zusätzlichen Wrapper
-          cd package
-          zip -r ../ha-pp-reader.zip ./*
-          cd ..
+         # 4) ZIP ohne zusätzlichen Wrapper
+         cd package
+         zip -r ../ha-pp-reader.zip ./*
+         cd ..
 
       # 3) ZIP als Asset an den gerade veröffentlichten Release hängen
       - name: Upload ZIP to GitHub Release
