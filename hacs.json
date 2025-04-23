@@ -8,6 +8,7 @@
   "hacs": "2.0.5",
   "version": "0.2.14",
   "zip_release": true,
-  "content_in_root": true,
-  "filename": "ha-pp-reader.zip"
+  "content_in_root": false,
+  "filename": "ha-pp-reader.zip",
+  "folder_name": "pp_reader"
 }
