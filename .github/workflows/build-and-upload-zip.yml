@@ -10,35 +10,35 @@ jobs:
   build_zip:
     runs-on: ubuntu-latest
     permissions:
-      contents: write     # erlaubt, Assets an den Release zu hängen
+      contents: write    # Erlaubt, Assets an den Release zu hängen
 
     steps:
-      # 1) Den Code auschecken (inkl. aller Dateien und Tags)
+      # 1) Checkout des gesamten Repos (inkl. Tags)
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       # 2) ZIP-Package zusammenstellen
-     - name: Build ha-pp-reader.zip
-       run: |
-         # 1) Temp-Ordner anlegen
-         rm -rf package && mkdir package
+      - name: Build ha-pp-reader.zip
+        run: |
+          # Lege temp-Verzeichnis an
+          rm -rf package && mkdir package
 
-         # 2) Integrations-Code (nur Inhalt von custom_components/pp_reader)
-         mkdir -p package/custom_components/pp_reader
-         cp -r custom_components/pp_reader/. package/custom_components/pp_reader/
+          # Kopiere den Integrations­code hinein (Inhalt von custom_components/pp_reader)
+          mkdir -p package/custom_components/pp_reader
+          cp -r custom_components/pp_reader/. package/custom_components/pp_reader/
 
-         # 3) Frontend und Metadaten dazu
-         cp -r frontend           package/
-         cp hacs.json             package/
-         cp README.md             package/
-         cp LICENSE               package/
+          # Kopiere Frontend & Metadaten dazu
+          cp -r frontend             package/
+          cp hacs.json               package/
+          cp README.md               package/
+          cp LICENSE                 package/
 
-         # 4) ZIP ohne zusätzlichen Wrapper
-         cd package
-         zip -r ../ha-pp-reader.zip ./*
-         cd ..
+          # Erzeuge das ZIP ohne weiteren übergeordneten Wrapper
+          cd package
+          zip -r ../ha-pp-reader.zip ./*
+          cd ..
 
       # 3) ZIP als Asset an den gerade veröffentlichten Release hängen
       - name: Upload ZIP to GitHub Release
@@ -47,3 +47,4 @@ jobs:
           files: ha-pp-reader.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
