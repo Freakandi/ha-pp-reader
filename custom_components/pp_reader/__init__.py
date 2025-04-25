@@ -49,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "mdi:finance",                     # Icon
         "pp-reader",                       # URL-Pfad im Sidebar (ohne Slash)
         {
-            "js_url": "/pp_reader_dashboard/dashboard.js"
+            "module_url": "/pp_reader_dashboard/dashboard.js"
         },
         require_admin=False
     )
