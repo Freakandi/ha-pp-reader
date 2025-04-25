@@ -48,13 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "mdi:finance",                  # sidebar_icon
         "pp-reader",                    # url_path im Sidebar (ohne Slash)
         {
-            "_panel_custom": {
-                "name": "pp-reader-dashboard",
-                # Statt module_url jetzt direkt das HTML im IFrame laden:
-                "html_url":  "/pp_reader_dashboard/dashboard.html",
-                "embed_iframe": True,
-                # trust_external nicht nötig, da deine Assets intern liegen
-            }
+            "module_url": "/pp_reader_dashboard/dashboard.js"
         },
         require_admin=False
     )
