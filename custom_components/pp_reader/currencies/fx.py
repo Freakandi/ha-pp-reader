@@ -1,7 +1,7 @@
 import json
 import os
-import requests
 import aiohttp
+import asyncio
 from datetime import datetime, timedelta
 
 # Cache-Datei liegt unter custom_components/pp_reader/cache/fxrates.json
@@ -14,9 +14,10 @@ if not os.path.exists(CACHE_DIR):
 
 API_URL = "https://api.frankfurter.app"
 
+
 def get_required_currencies(client):
     """Extrahiere Fremdwährungen mit Bestand > 0 aus der Portfolio-Datei"""
-    holdings = {}
+    holdings: dict[str, float] = {}
     for tx in client.transactions:
         if not tx.HasField("security"):
             continue
@@ -27,7 +28,7 @@ def get_required_currencies(client):
         elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
             holdings[sid] = holdings.get(sid, 0) - shares
 
-    currencies = set()
+    currencies: set[str] = set()
     for sec in client.securities:
         if sec.HasField("currencyCode") and sec.currencyCode != "EUR":
             sid = sec.uuid
@@ -36,7 +37,9 @@ def get_required_currencies(client):
                 currencies.add(sec.currencyCode)
     return currencies
 
-async def fetch_exchange_rates(date: str, currencies: set):
+
+async def fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
+    """Hole frische Wechselkurse via HTTP."""
     if not currencies:
         return {}
     symbols = ",".join(currencies)
@@ -51,33 +54,54 @@ async def fetch_exchange_rates(date: str, currencies: set):
                 print(f"Fehler beim Abruf der Wechselkurse: {response.status}")
                 return {}
 
-def load_cache():
+
+# --- SYNCHRONE Helfer, die wir später im Executor laufen lassen ---
+def _load_cache_sync() -> dict[str, dict[str, float]]:
     if not os.path.exists(CACHE_FILE):
         return {}
     with open(CACHE_FILE, "r") as f:
         return json.load(f)
 
-def save_cache(data):
+
+def _save_cache_sync(data: dict[str, dict[str, float]]) -> None:
     with open(CACHE_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-async def get_exchange_rates(client, reference_date: datetime):
+
+async def get_exchange_rates(client, reference_date: datetime) -> dict[str, float]:
+    """
+    Hauptfunktion: ermittelt alle benötigten Währungen, lädt ggf. aus Cache
+    oder ruft sie über fetch_exchange_rates ab und schreibt dann zurück.
+    """
     needed = get_required_currencies(client)
     date = reference_date.strftime("%Y-%m-%d")
 
-    cache = load_cache()
+    # 1) Cache asynchron laden
+    loop = asyncio.get_running_loop()
+    cache = await loop.run_in_executor(None, _load_cache_sync)
+
+    # 2) ggf. neu abrufen und speichern
     if date not in cache:
         print(f"Abruf Kurse für {date} ...")
         rates = await fetch_exchange_rates(date, needed)
         cache[date] = rates
-        save_cache(cache)
+        # Cache asynchron speichern
+        await loop.run_in_executor(None, _save_cache_sync, cache)
     else:
         rates = cache[date]
 
     return rates
 
-def load_latest_rates(reference_date: datetime) -> dict:
-    """Lese gespeicherte Wechselkurse aus dem Cache (für ein gegebenes Referenzdatum)."""
-    cache = load_cache()
+
+def load_latest_rates(reference_date: datetime) -> dict[str, float]:
+    """
+    Lese gespeicherte Wechselkurse aus dem Cache.
+    Achtung: Dies bleibt synchron, sollte nur gelegentlich genutzt werden.
+    """
+    if not os.path.exists(CACHE_FILE):
+        return {}
+    with open(CACHE_FILE, "r") as f:
+        data = json.load(f)
     date = reference_date.strftime("%Y-%m-%d")
-    return cache.get(date, {})
+    return data.get(date, {})
+

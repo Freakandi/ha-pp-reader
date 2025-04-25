@@ -44,12 +44,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # 3) Panel programmatisch registrieren
     frontend.async_register_built_in_panel(
         hass,
-        "pp-reader-dashboard",             # Custom Element-Name
-        "Portfolio Dashboard",             # Sidebar-Titel
-        "mdi:finance",                     # Icon
-        "pp-reader",                       # URL-Pfad im Sidebar (ohne Slash)
+        "pp-reader-dashboard",       # <pp-reader-dashboard>
+        "Portfolio Dashboard",
+        "mdi:finance",
+        "pp-reader",
         {
-            "module_url": "/pp_reader_dashboard/dashboard.js"
+            "_panel_custom": {
+                "name": "pp-reader-dashboard",
+                "module_url": "/pp_reader_dashboard/dashboard.js"
+            }
         },
         require_admin=False
     )
