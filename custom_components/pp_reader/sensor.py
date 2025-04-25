@@ -1,3 +1,4 @@
+# custom_components/pp_reader/sensor.py
 import os
 import logging
 from datetime import datetime
@@ -15,7 +16,6 @@ from .logic.portfolio import calculate_portfolio_value
 from custom_components.pp_reader.currencies.fx import get_exchange_rates
 
 _LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -42,21 +42,26 @@ async def async_setup_entry(
         sensors.append(PortfolioAccountSensor(account.name, saldo, file_path))
 
     # 🔸 Depotwerte
-    securities_by_id = {s.uuid: s for s in data.securities}  # ✅ Korrekt erzeugen
+    securities_by_id = {s.uuid: s for s in data.securities}
 
-    # 💱 Wechselkurse aktualisieren & aus Cache lesen
+    # 💱 Wechselkurse aktualisieren & in Cache speichern
     reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
-    fx_rates = await get_exchange_rates(data, reference_date=reference_date)
+    await get_exchange_rates(data, reference_date=reference_date)
 
+    # 🚀 Depotwerte berechnen (jetzt async) und Sensoren erzeugen
     for portfolio in data.portfolios:
         if getattr(portfolio, "isRetired", False):
             continue
 
-        value, count = calculate_portfolio_value(portfolio, data.transactions, securities_by_id, reference_date)
+        value, count = await calculate_portfolio_value(
+            portfolio,
+            data.transactions,
+            securities_by_id,
+            reference_date
+        )
         sensors.append(PortfolioDepotSensor(portfolio.name, value, count, file_path))
 
     async_add_entities(sensors)
-
 
 class PortfolioAccountSensor(SensorEntity):
     """Sensor für den Kontostand eines aktiven Kontos."""
@@ -70,7 +75,7 @@ class PortfolioAccountSensor(SensorEntity):
         base = os.path.basename(file_path)
         self._attr_unique_id = f"{slugify(base)}_{slugify(account_name)}"
         self._attr_native_unit_of_measurement = "€"
-        self._attr_icon = "mdi:bank"  # Symbol für Konto
+        self._attr_icon = "mdi:bank"
 
     @property
     def native_value(self):
@@ -90,7 +95,6 @@ class PortfolioAccountSensor(SensorEntity):
             "datenquelle": os.path.basename(self._file_path),
         }
 
-
 class PortfolioDepotSensor(SensorEntity):
     """Sensor für den Gesamtwert eines Depots mit Wertpapieranzahl als Attribut."""
 
@@ -104,7 +108,7 @@ class PortfolioDepotSensor(SensorEntity):
         base = os.path.basename(file_path)
         self._attr_unique_id = f"{slugify(base)}_{slugify(portfolio_name)}_depot"
         self._attr_native_unit_of_measurement = "€"
-        self._attr_icon = "mdi:finance"  # Symbol für Depot
+        self._attr_icon = "mdi:finance"
 
     @property
     def native_value(self):

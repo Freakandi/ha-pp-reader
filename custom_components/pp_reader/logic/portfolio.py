@@ -1,3 +1,4 @@
+# custom_components/pp_reader/logic/portfolio.py
 from datetime import datetime
 from custom_components.pp_reader.currencies.fx import load_latest_rates
 
@@ -7,7 +8,12 @@ def normalize_price(raw_price: int) -> float:
 def normalize_shares(raw_shares: int) -> float:
     return raw_shares / 10**8  # Stückzahlen mit 8 Nachkommastellen
 
-def calculate_portfolio_value(portfolio, transactions, securities_by_id, reference_date: datetime):
+async def calculate_portfolio_value(
+    portfolio,
+    transactions,
+    securities_by_id,
+    reference_date: datetime
+) -> tuple[float, int]:
     """
     Ermittle für ein aktives Depot:
     - Gesamtwert (EUR, mit Umrechnung)
@@ -18,7 +24,7 @@ def calculate_portfolio_value(portfolio, transactions, securities_by_id, referen
     tx_list = [tx for tx in transactions if tx.portfolio == portfolio.uuid]
 
     # 2. Bestände berechnen
-    holdings = {}
+    holdings: dict[str, float] = {}
     for tx in tx_list:
         if not tx.security:
             continue
@@ -35,8 +41,8 @@ def calculate_portfolio_value(portfolio, transactions, securities_by_id, referen
         sid: qty for sid, qty in holdings.items() if qty > 0
     }
 
-    # 4. Wechselkurse aus Cache laden
-    fx_rates = load_latest_rates(reference_date)
+    # 4. Wechselkurse asynchron aus Cache laden
+    fx_rates = await load_latest_rates(reference_date)
 
     # 5. Bewertung durchführen
     total_value = 0.0
