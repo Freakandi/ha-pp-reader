@@ -8,7 +8,7 @@
   "resources": [
   {
     "type": "module",
-    "url": "/local/pp_reader_dashboard/dashboard.js"
+    "url": "/local/community/pp_reader_dashboard/dashboard.js"
   }
 ]
 

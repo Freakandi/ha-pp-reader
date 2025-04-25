@@ -7,7 +7,6 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
 
 from homeassistant.components import frontend
-from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
 
@@ -31,24 +30,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # 1) Sensor-Plattformen laden
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # 2) Statische Assets selbst verfügbar machen
-    await hass.http.async_register_static_paths([
-        StaticPathConfig(
-            "/pp_reader_dashboard",
-            str(Path(__file__).parent / "www" / "pp_reader_dashboard"),
-            True
-        )
-    ])
-
-    # 3) Panel programmgesteuert registrieren
+    # 2) Panel programmgesteuert registrieren
     frontend.async_register_built_in_panel(
         hass,
-        "pp-reader-dashboard",          # Name des Custom-Elements (<pp-reader-dashboard>)
-        "Portfolio Dashboard",          # sidebar_title
-        "mdi:finance",                  # sidebar_icon
-        "pp-reader",                    # url_path im Sidebar (ohne Slash)
+        "iframe",                        # Standard-Paneltyp: IFrame
+        "Portfolio Dashboard",           # sidebar_title
+        "mdi:finance",                   # sidebar_icon
+        "pp-reader",                     # url_path (Erreichbar unter /pp-reader)
         {
-            "module_url": "/pp_reader_dashboard/dashboard.js"
+            "url": "/local/community/pp_reader_dashboard/dashboard.html"   # Geladene HTML-Datei
         },
         require_admin=False
     )
