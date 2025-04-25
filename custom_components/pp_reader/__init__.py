@@ -4,6 +4,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
 
+# Für die Panel-Registrierung
+from homeassistant.components import frontend
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -13,7 +16,7 @@ PLATFORMS: list[Platform] = ["sensor"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Legacy setup (wird bei YAML-Konfiguration verwendet – hier aber nicht nötig)."""
+    """Legacy setup (YAML) – hier keine Aktion nötig."""
     return True
 
 
@@ -25,6 +28,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Starte alle registrierten Plattformen
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # --- Panel registrieren ---
+    frontend.async_register_built_in_panel(
+        hass,
+        component_name="panel_custom",
+        url_path="pp-reader",
+        sidebar_title="Portfolio Dashboard",
+        sidebar_icon="mdi:finance",
+        # Pfad unter /hacsfiles/<repo-name>/<Ordner-ohne-www>/
+        module_url="/hacsfiles/ha-pp-reader/pp_reader_dashboard/dashboard.js",
+        require_admin=False
+    )
+    # --------------------------
+
     return True
 
 

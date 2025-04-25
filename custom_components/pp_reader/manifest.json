@@ -12,15 +12,6 @@
   ],
   "config_flow": true,
   "iot_class": "local_polling",
-  "loggers": ["pp_reader"],
-  "panel_custom": [
-    {
-      "name": "pp-reader-dashboard",
-      "url_path": "pp-reader",
-      "sidebar_title": "Portfolio Dashboard",
-      "sidebar_icon": "mdi:finance",
-      "js_url": "/hacsfiles/ha-pp-reader/frontend/pp_reader_dashboard/dashboard.js"
-    }
-  ]
+  "loggers": ["pp_reader"]
 }
 
