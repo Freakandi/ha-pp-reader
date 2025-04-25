@@ -14,18 +14,19 @@ CACHE_FILE = os.path.join(CACHE_DIR, "fxrates.json")
 
 API_URL = "https://api.frankfurter.app"
 
-# --- Deine ursprünglichen Hilfsfunktionen ---
+# ——— Deine bestehenden Hilfsfunktionen ———
+
 def get_required_currencies(client):
-    """Extrahiere Fremdwährungen mit Bestand > 0 aus der Portfolio-Datei"""
+    # … unveränderte Logik …
     holdings: dict[str, float] = {}
     for tx in client.transactions:
         if not tx.HasField("security"):
             continue
         sid = tx.security
         shares = tx.shares if tx.HasField("shares") else 0
-        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
+        if tx.type in (0, 2):
             holdings[sid] = holdings.get(sid, 0) + shares
-        elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
+        elif tx.type in (1, 3):
             holdings[sid] = holdings.get(sid, 0) - shares
 
     currencies: set[str] = set()
@@ -39,7 +40,7 @@ def get_required_currencies(client):
 
 
 async def fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
-    """Hole frische Wechselkurse via HTTP."""
+    # … unveränderte Logik …
     if not currencies:
         return {}
     symbols = ",".join(currencies)
@@ -54,7 +55,8 @@ async def fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, flo
             return {}
 
 
-# --- Synchrone Kernfunktionen für File-I/O ---
+# ——— Synchrone Kernfunktionen für File-I/O ———
+
 def _load_cache_sync() -> dict[str, dict[str, float]]:
     if not os.path.exists(CACHE_FILE):
         return {}
@@ -63,13 +65,13 @@ def _load_cache_sync() -> dict[str, dict[str, float]]:
 
 
 def _save_cache_sync(cache: dict[str, dict[str, float]]) -> None:
-    # Stelle Verzeichnis sicher (wird im Executor ausgeführt)
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2)
 
 
-# --- Asynchrone Wrapper, die im Thread-Pool laufen ---
+# ——— Executor-Wrapper ———
+
 async def _load_cache_async() -> dict[str, dict[str, float]]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _load_cache_sync)
@@ -80,18 +82,13 @@ async def _save_cache_async(cache: dict[str, dict[str, float]]) -> None:
     await loop.run_in_executor(None, _save_cache_sync, cache)
 
 
-# --- Haupt-API für deine Integration ---
+# ——— Haupt-API für neue Kurse ———
+
 async def get_exchange_rates(client, reference_date: datetime) -> dict[str, float]:
-    """
-    Liefere Wechselkurse für das Datum:
-    - Lädt den Cache im Executor
-    - Falls Datum fehlt, ruft API ab und speichert asynchron
-    """
     needed = get_required_currencies(client)
     date = reference_date.strftime("%Y-%m-%d")
 
     cache = await _load_cache_async()
-
     if date not in cache:
         _LOGGER.info("Abruf Kurse für %s: %s", date, needed)
         rates = await fetch_exchange_rates(date, needed)
@@ -103,11 +100,12 @@ async def get_exchange_rates(client, reference_date: datetime) -> dict[str, floa
     return rates
 
 
-def load_latest_rates(reference_date: datetime) -> dict[str, float]:
+# ——— Asynchrone Version von load_latest_rates ———
+
+async def load_latest_rates(reference_date: datetime) -> dict[str, float]:
     """
-    (Synchron) Lese gespeicherte Wechselkurse aus dem Cache.
-    Wird in calculate_portfolio_value verwendet.
+    Lese gespeicherte Wechselkurse aus dem Cache im Executor.
     """
-    cache = _load_cache_sync()
+    cache = await _load_cache_async()
     date = reference_date.strftime("%Y-%m-%d")
     return cache.get(date, {})
