@@ -4,5 +4,12 @@
   "homeassistant": "2025.04.1",
   "hacs": "2.0.5",
   "version": "0.2.39",
-  "content_in_root": false
+  "content_in_root": false,
+  "resources": [
+  {
+    "type": "module",
+    "url": "/local/pp_reader_dashboard/dashboard.js"
+  }
+]
+
 }

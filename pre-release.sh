@@ -23,7 +23,6 @@ fi
 gh release create "v$VERSION" \
   --title "v$VERSION" \
   --notes "$NOTES" \
-  --target main
   --prerelease
 
 echo "✅ Pre-Release v$VERSION created."
