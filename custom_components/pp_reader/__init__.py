@@ -5,7 +5,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
-
 from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
@@ -26,10 +25,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
 
-    # 1) Sensor-Plattformen laden
+    # 1) Starte deine Sensor-Plattformen
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # 2) Statische Assets bereitstellen
+    # 2) Statische Dashboard-Assets bereitstellen
+    #    Diese landen dann unter /pp_reader_dashboard/...
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/pp_reader_dashboard",

@@ -1,7 +1,7 @@
 {
   "domain": "pp_reader",
   "name": "Portfolio Performance Reader",
-  "version": "0.2.40",
+  "version": "0.2.40",  
   "documentation": "https://github.com/Freakandi/ha-pp-reader",
   "dependencies": [],
   "codeowners": ["@Freakandi"],
@@ -14,10 +14,11 @@
   "iot_class": "local_polling",
   "loggers": ["pp_reader"],
 
+  // <<< Neu: Panel-Definition für HACS / HA Core >>>
   "panel_custom": [
     {
-      "name": "pp-reader-dashboard",
-      "url_path": "pp-reader",
+      "name": "pp-reader-dashboard",      // Tag deiner Web-Komponente
+      "url_path": "pp-reader",            // Pfad in der Sidebar
       "sidebar_title": "Portfolio Dashboard",
       "sidebar_icon": "mdi:finance",
       "module_url": "/pp_reader_dashboard/dashboard.js"
