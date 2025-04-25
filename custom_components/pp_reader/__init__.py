@@ -18,7 +18,7 @@ PLATFORMS: list[Platform] = ["sensor"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Legacy setup (YAML) – hier keine Aktion nötig."""
+    """YAML-Setup (nicht genutzt)."""
     return True
 
 
@@ -28,28 +28,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
 
-    # 1) Starte alle registrierten Plattformen (Sensoren)
+    # 1) Sensor-Plattformen laden
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # 2) Statische Pfade für Dashboard-Assets registrieren
-    #    Serviert alles aus custom_components/pp_reader/www/pp_reader_dashboard unter /pp_reader_dashboard/…
-    hass.http.async_register_static_paths([
+    # 2) Statische Assets selbst verfügbar machen
+    #    (url_path, serve-Pfad, cache_headers)
+    await hass.http.async_register_static_paths([
         StaticPathConfig(
-            url_path="/pp_reader_dashboard",  # öffentlicher URL-Pfad
-            serve_dir=str(Path(__file__).parent / "www" / "pp_reader_dashboard"),
-            cache_headers=True
+            "/pp_reader_dashboard",
+            str(Path(__file__).parent / "www" / "pp_reader_dashboard"),
+            True
         )
     ])
 
-    # 3) Panel programmgesteuert registrieren
+    # 3) Panel programmatisch registrieren
     frontend.async_register_built_in_panel(
         hass,
-        "pp-reader-dashboard",             # Name des Custom Elements
-        "Portfolio Dashboard",             # sidebar_title
-        "mdi:finance",                     # sidebar_icon
-        "pp-reader",                       # URL-Pfad im HA-Dashboard (ohne führenden Slash)
+        "pp-reader-dashboard",             # Custom Element-Name
+        "Portfolio Dashboard",             # Sidebar-Titel
+        "mdi:finance",                     # Icon
+        "pp-reader",                       # URL-Pfad im Sidebar (ohne Slash)
         {
-            # Hier nun dein selbst registrierter statischer Pfad
             "js_url": "/pp_reader_dashboard/dashboard.js"
         },
         require_admin=False
@@ -59,7 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Behandle das Entfernen der Integration."""
+    """Integration entfernen."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
