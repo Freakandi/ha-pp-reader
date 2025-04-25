@@ -32,7 +32,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # 2) Statische Assets selbst verfügbar machen
-    #    (url_path, serve-Pfad, cache_headers)
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/pp_reader_dashboard",
@@ -41,13 +40,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     ])
 
-    # 3) Panel programmatisch registrieren
+    # 3) Panel programmgesteuert registrieren
     frontend.async_register_built_in_panel(
         hass,
-        "pp-reader-dashboard",       # <pp-reader-dashboard>
-        "Portfolio Dashboard",
-        "mdi:finance",
-        "pp-reader",
+        "pp-reader-dashboard",          # Name des Custom-Elements (<pp-reader-dashboard>)
+        "Portfolio Dashboard",          # sidebar_title
+        "mdi:finance",                  # sidebar_icon
+        "pp-reader",                    # url_path im Sidebar (ohne Slash)
         {
             "_panel_custom": {
                 "name": "pp-reader-dashboard",
@@ -65,4 +64,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
-
