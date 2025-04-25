@@ -6,7 +6,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
 
-from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
@@ -38,18 +37,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             True
         )
     ])
-
-    # 3) Panel programmgesteuert registrieren
-    frontend.async_register_built_in_panel(
-        hass,
-        "pp-reader-dashboard",                    # Tag deiner Komponente (<pp-reader-dashboard>)
-        "Portfolio Dashboard",                    # sidebar_title
-        "mdi:finance",                            # sidebar_icon
-        "pp-reader",                              # url_path im Sidebar (ohne Slash)
-        {"module_url": "/pp_reader_dashboard/dashboard.js"},
-        require_admin=False,
-        config_panel_domain=DOMAIN                # sorgt dafür, dass HA den 'hass'-Kontext injiziert
-    )
 
     return True
 
