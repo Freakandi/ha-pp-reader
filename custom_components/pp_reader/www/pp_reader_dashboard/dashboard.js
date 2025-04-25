@@ -1,6 +1,6 @@
 // 1) Dashboard-CSS dynamisch laden und injizieren
 (async () => {
-  const res = await fetch("/hacsfiles/ha-pp-reader/pp_reader_dashboard/dashboard.css");
+  const res = await fetch("/pp_reader_dashboard/dashboard.css");
   if (res.ok) {
     const css = await res.text();
     const style = document.createElement("style");
