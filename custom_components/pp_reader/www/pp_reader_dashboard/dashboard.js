@@ -1,3 +1,5 @@
+console.log("✅ PP Reader Dashboard module loaded");
+
 // 1) Dashboard-CSS dynamisch laden und injizieren
 (async () => {
   const res = await fetch("/pp_reader_dashboard/dashboard.css");
