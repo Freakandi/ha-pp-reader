@@ -50,7 +50,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         {
             "_panel_custom": {
                 "name": "pp-reader-dashboard",
-                "module_url": "/pp_reader_dashboard/dashboard.js"
+                # Statt module_url jetzt direkt das HTML im IFrame laden:
+                "html_url":  "/pp_reader_dashboard/dashboard.html",
+                "embed_iframe": True,
+                # trust_external nicht nötig, da deine Assets intern liegen
             }
         },
         require_admin=False
