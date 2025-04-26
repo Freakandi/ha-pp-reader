@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
 from homeassistant.components import frontend
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 from .const import DOMAIN, CONF_API_TOKEN
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,25 +50,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Interner API-Proxy
     token = entry.data.get(CONF_API_TOKEN)
 
-    async def handle_api_states(request):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "http://localhost:8123/api/states",
-                headers={"Authorization": f"Bearer {token}"}
-            ) as resp:
-                if resp.status != 200:
-                    return web.Response(status=resp.status, text="API Error")
-                data = await resp.text()
-                return web.Response(status=200, body=data, content_type="application/json")
+    class PPReaderAPI(HomeAssistantView):
+        url = "/pp_reader_api/states"
+        name = "pp_reader_api"
+        requires_auth = True
 
-    hass.http.register_view(
-        type("PPReaderAPI", (web.View,), {
-            "name": "pp_reader_api",
-            "url": "/pp_reader_api/states",
-            "requires_auth": True,
-            "get": handle_api_states
-        })()
-    )
+        def __init__(self, token):
+            self.token = token
+
+        async def get(self, request):
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "http://localhost:8123/api/states",
+                    headers={"Authorization": f"Bearer {self.token}"}
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("Fehler beim Abrufen von /api/states: %s", resp.status)
+                        return web.Response(status=resp.status, text="API Error")
+                    data = await resp.text()
+                    return web.Response(status=200, body=data, content_type="application/json")
+
+    hass.http.register_view(PPReaderAPI(token))
 
     return True
 
