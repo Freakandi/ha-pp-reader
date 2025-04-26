@@ -66,3 +66,9 @@ class PPReaderDashboard extends HTMLElement {
 
 customElements.define('pp-reader-dashboard', PPReaderDashboard);
 
+document.addEventListener("DOMContentLoaded", () => {
+  const elem = document.querySelector("pp-reader-dashboard");
+  if (!elem.hass) {
+    elem.innerHTML = `<p style="color: red;">⚠️ Keine Verbindung zu Home Assistant (kein hass-Objekt verfügbar)</p>`;
+  }
+});
