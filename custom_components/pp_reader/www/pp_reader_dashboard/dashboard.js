@@ -7,18 +7,24 @@
     return await res.json();
   }
 
-  function makeTable(rows, cols) {
-    let html = '<table><thead><tr>';
-    cols.forEach(c => html += `<th>${c.label}</th>`);
-    html += '</tr></thead><tbody>';
-    rows.forEach(r => {
-      html += '<tr>';
-      cols.forEach(c => html += `<td>${r[c.key]}</td>`);
-      html += '</tr>';
+function makeTable(rows, cols) {
+  let html = '<table><thead><tr>';
+  cols.forEach(c => {
+    const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+    html += `<th${alignClass}>${c.label}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr>';
+    cols.forEach(c => {
+      const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+      html += `<td${alignClass}>${r[c.key]}</td>`;
     });
-    html += '</tbody></table>';
-    return html;
-  }
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
 
   async function renderDashboard() {
     try {
@@ -44,13 +50,13 @@
         <h2>Konten</h2>
         ${makeTable(konten, [
           { key: 'name', label: 'Name' },
-          { key: 'balance', label: 'Kontostand' }
+          { key: 'balance', label: 'Kontostand', align: 'right' }
         ])}
         <h2>Depots</h2>
         ${makeTable(depots, [
           { key: 'name', label: 'Name' },
-          { key: 'count', label: 'Anzahl Wertpapiere' },
-          { key: 'value', label: 'Depotwert' }
+          { key: 'count', label: 'Anzahl Wertpapiere', align: 'right' },
+          { key: 'value', label: 'Depotwert', align: 'right' }
         ])}
       `;
 
