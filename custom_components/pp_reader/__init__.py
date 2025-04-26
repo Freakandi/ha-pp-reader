@@ -6,8 +6,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
 
+from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.components.frontend import async_register_panel
 
 from .const import DOMAIN
 
@@ -41,16 +41,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ])
 
     # 3) Panel (Dashboard) in der Seitenleiste registrieren
-    await async_register_panel(
+    frontend.async_register_built_in_panel(
         hass,
-        frontend_url_path="pp-reader",
-        title="Portfolio Dashboard",
-        icon="mdi:finance",
-        config={
+        "iframe",                        # Paneltyp
+        "Portfolio Dashboard",           # Sidebar-Name
+        "mdi:finance",                   # Icon
+        "pp-reader",                     # URL-Pfad (/pp-reader)
+        {
             "url": "/pp_reader_dashboard/dashboard.html"
         },
-        require_admin=False,
-        component_name="iframe"
+        require_admin=False
     )
 
     return True
