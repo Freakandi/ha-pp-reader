@@ -28,7 +28,7 @@
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
         .map(s => ({
           name: s.attributes.friendly_name,
-          balance: parseFloat(s.state).toFixed(2)
+          balance: parseFloat(s.state).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€'
         }));
 
       const depots = states
@@ -36,7 +36,7 @@
         .map(s => ({
           name: s.attributes.friendly_name,
           count: s.attributes.anzahl_wertpapiere,
-          value: parseFloat(s.state).toFixed(2)
+          value: parseFloat(s.state).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€'
         }));
 
       const root = document.querySelector("pp-reader-dashboard");
@@ -44,13 +44,13 @@
         <h2>Konten</h2>
         ${makeTable(konten, [
           { key: 'name', label: 'Name' },
-          { key: 'balance', label: 'Kontostand (€)' }
+          { key: 'balance', label: 'Kontostand' }
         ])}
         <h2>Depots</h2>
         ${makeTable(depots, [
           { key: 'name', label: 'Name' },
           { key: 'count', label: 'Anzahl Wertpapiere' },
-          { key: 'value', label: 'Depotwert (€)' }
+          { key: 'value', label: 'Depotwert' }
         ])}
       `;
 
