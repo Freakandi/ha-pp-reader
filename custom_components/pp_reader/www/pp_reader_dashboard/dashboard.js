@@ -104,7 +104,7 @@
         <h2>Depots</h2>
         ${makeTable(depots, [
           { key: 'name', label: 'Name' },
-          { key: 'count', label: 'Anzahl Wertpapiere', align: 'right' },
+          { key: 'count', label: 'Anzahl Positionen', align: 'right' },
           { key: 'value', label: 'Depotwert', align: 'right' }
         ])}
       `;
