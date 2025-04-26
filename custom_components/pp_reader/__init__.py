@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     class PPReaderAPI(HomeAssistantView):
         url = "/pp_reader_api/states"
         name = "pp_reader_api"
-        requires_auth = True
+        requires_auth = False
 
         def __init__(self, token):
             self.token = token
