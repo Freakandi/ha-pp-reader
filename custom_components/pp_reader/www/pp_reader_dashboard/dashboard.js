@@ -7,6 +7,16 @@
     return await res.json();
   }
 
+  function formatValue(key, value) {
+    if (key === 'balance' || key === 'value') {
+      return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
+    } else if (key === 'count') {
+      return value.toLocaleString('de-DE');
+    } else {
+      return value;
+    }
+  }
+
   function makeTable(rows, cols) {
     let html = '<table><thead><tr>';
     cols.forEach(c => {
@@ -18,7 +28,7 @@
       html += '<tr>';
       cols.forEach(c => {
         const alignClass = c.align === 'right' ? ' class="align-right"' : '';
-        html += `<td${alignClass}>${r[c.key]}</td>`;
+        html += `<td${alignClass}>${formatValue(c.key, r[c.key])}</td>`;
       });
       html += '</tr>';
     });
@@ -28,14 +38,8 @@
     cols.forEach(c => {
       if (c.align === 'right') {
         sums[c.key] = rows.reduce((acc, row) => {
-          const valueRaw = row[c.key];
-          let value = 0;
-          if (typeof valueRaw === 'string') {
-            value = parseFloat(valueRaw.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-          } else if (typeof valueRaw === 'number') {
-            value = valueRaw;
-          }
-          return acc + value;
+          const value = row[c.key] || 0;
+          return acc + (typeof value === 'number' ? value : 0);
         }, 0);
       }
     });
@@ -46,7 +50,7 @@
       if (index === 0) {
         html += `<td${alignClass}>Summe</td>`;
       } else if (sums[c.key] !== undefined) {
-        html += `<td${alignClass}>${sums[c.key].toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;€</td>`;
+        html += `<td${alignClass}>${formatValue(c.key, sums[c.key])}</td>`;
       } else {
         html += '<td></td>';
       }
