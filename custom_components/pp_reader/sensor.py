@@ -1,4 +1,3 @@
-# custom_components/pp_reader/sensor.py
 import os
 import logging
 from datetime import datetime
@@ -39,7 +38,7 @@ async def async_setup_entry(
             continue
 
         saldo = calculate_account_balance(account.uuid, data.transactions)
-        sensors.append(PortfolioAccountSensor(account.name, saldo, file_path))
+        sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
 
     # 🔸 Depotwerte
     securities_by_id = {s.uuid: s for s in data.securities}
@@ -59,17 +58,19 @@ async def async_setup_entry(
             securities_by_id,
             reference_date
         )
-        sensors.append(PortfolioDepotSensor(portfolio.name, value, count, file_path))
+        sensors.append(PortfolioDepotSensor(hass, portfolio.name, value, count, file_path))
 
     async_add_entities(sensors)
 
 class PortfolioAccountSensor(SensorEntity):
     """Sensor für den Kontostand eines aktiven Kontos."""
 
-    def __init__(self, account_name, saldo, file_path):
+    def __init__(self, hass, account_name, saldo, file_path):
+        self.hass = hass
         self._account_name = account_name
         self._file_path = file_path
         self._saldo = round(saldo, 2)
+        self._last_mtime = os.path.getmtime(file_path)
 
         self._attr_name = f"Kontostand {account_name}"
         base = os.path.basename(file_path)
@@ -85,7 +86,7 @@ class PortfolioAccountSensor(SensorEntity):
     def extra_state_attributes(self):
         try:
             ts = os.path.getmtime(self._file_path)
-            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%Mh")
+            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
         except Exception as e:
             _LOGGER.warning("Konnte Änderungsdatum nicht lesen: %s", e)
             updated = None
@@ -95,14 +96,29 @@ class PortfolioAccountSensor(SensorEntity):
             "datenquelle": os.path.basename(self._file_path),
         }
 
+    async def async_update(self):
+        try:
+            current_mtime = os.path.getmtime(self._file_path)
+            if current_mtime != self._last_mtime:
+                _LOGGER.info("Änderung erkannt bei %s - lade neu", self._file_path)
+                data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
+                if data:
+                    saldo = calculate_account_balance_by_name(self._account_name, data)
+                    self._saldo = round(saldo, 2)
+                    self._last_mtime = current_mtime
+        except Exception as e:
+            _LOGGER.error("Fehler beim Update des Sensors: %s", e)
+
 class PortfolioDepotSensor(SensorEntity):
     """Sensor für den Gesamtwert eines Depots mit Wertpapieranzahl als Attribut."""
 
-    def __init__(self, portfolio_name, value, count, file_path):
+    def __init__(self, hass, portfolio_name, value, count, file_path):
+        self.hass = hass
         self._portfolio_name = portfolio_name
         self._value = round(value, 2)
         self._count = count
         self._file_path = file_path
+        self._last_mtime = os.path.getmtime(file_path)
 
         self._attr_name = f"Depotwert {portfolio_name}"
         base = os.path.basename(file_path)
@@ -118,7 +134,7 @@ class PortfolioDepotSensor(SensorEntity):
     def extra_state_attributes(self):
         try:
             ts = os.path.getmtime(self._file_path)
-            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%Mh")
+            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
         except Exception as e:
             _LOGGER.warning("Konnte Änderungsdatum nicht lesen: %s", e)
             updated = None
@@ -129,3 +145,23 @@ class PortfolioDepotSensor(SensorEntity):
             "datenquelle": os.path.basename(self._file_path),
         }
 
+    async def async_update(self):
+        try:
+            current_mtime = os.path.getmtime(self._file_path)
+            if current_mtime != self._last_mtime:
+                _LOGGER.info("Änderung erkannt bei %s - lade neu", self._file_path)
+                data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
+                if data:
+                    securities_by_id = {s.uuid: s for s in data.securities}
+                    for portfolio in data.portfolios:
+                        if portfolio.name == self._portfolio_name:
+                            value, count = await calculate_portfolio_value(
+                                portfolio, data.transactions, securities_by_id,
+                                reference_date=datetime.fromtimestamp(current_mtime)
+                            )
+                            self._value = round(value, 2)
+                            self._count = count
+                            self._last_mtime = current_mtime
+                            break
+        except Exception as e:
+            _LOGGER.error("Fehler beim Update des Depotsensors: %s", e)
