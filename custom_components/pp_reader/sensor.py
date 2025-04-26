@@ -16,6 +16,16 @@ from custom_components.pp_reader.currencies.fx import get_exchange_rates
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def calculate_account_balance_by_name(account_name, client_data):
+    """Berechnet Kontostand basierend auf dem Kontonamen."""
+    account = next((a for a in client_data.accounts if a.name == account_name), None)
+    if account is None:
+        _LOGGER.error("Konto mit Name '%s' nicht gefunden", account_name)
+        return 0.0
+    return calculate_account_balance(account.uuid, client_data.transactions)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -61,6 +71,7 @@ async def async_setup_entry(
         sensors.append(PortfolioDepotSensor(hass, portfolio.name, value, count, file_path))
 
     async_add_entities(sensors)
+
 
 class PortfolioAccountSensor(SensorEntity):
     """Sensor für den Kontostand eines aktiven Kontos."""
@@ -108,6 +119,7 @@ class PortfolioAccountSensor(SensorEntity):
                     self._last_mtime = current_mtime
         except Exception as e:
             _LOGGER.error("Fehler beim Update des Sensors: %s", e)
+
 
 class PortfolioDepotSensor(SensorEntity):
     """Sensor für den Gesamtwert eines Depots mit Wertpapieranzahl als Attribut."""
