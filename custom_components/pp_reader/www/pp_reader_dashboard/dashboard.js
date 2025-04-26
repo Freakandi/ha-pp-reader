@@ -1,5 +1,5 @@
 (async () => {
-  console.log("📡 PP Reader Dashboard gestartet (via Proxy)");
+  console.log("\ud83d\udcf1 PP Reader Dashboard gestartet (via Proxy)");
 
   async function fetchStates() {
     const res = await fetch("/pp_reader_api/states", { credentials: "same-origin" });
@@ -7,28 +7,64 @@
     return await res.json();
   }
 
-function makeTable(rows, cols) {
-  let html = '<table><thead><tr>';
-  cols.forEach(c => {
-    const alignClass = c.align === 'right' ? ' class="align-right"' : '';
-    html += `<th${alignClass}>${c.label}</th>`;
-  });
-  html += '</tr></thead><tbody>';
-  rows.forEach(r => {
-    html += '<tr>';
+  function makeTable(rows, cols) {
+    let html = '<table><thead><tr>';
     cols.forEach(c => {
       const alignClass = c.align === 'right' ? ' class="align-right"' : '';
-      html += `<td${alignClass}>${r[c.key]}</td>`;
+      html += `<th${alignClass}>${c.label}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    rows.forEach(r => {
+      html += '<tr>';
+      cols.forEach(c => {
+        const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+        html += `<td${alignClass}>${r[c.key]}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    // Summenzeile berechnen
+    const sums = {};
+    cols.forEach(c => {
+      if (c.align === 'right') {
+        sums[c.key] = rows.reduce((acc, row) => {
+          const value = parseFloat(row[c.key]?.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+          return acc + value;
+        }, 0);
+      }
+    });
+
+    html += '<tr style="font-weight:bold">';
+    cols.forEach((c, index) => {
+      const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+      if (index === 0) {
+        html += `<td${alignClass}>Summe</td>`;
+      } else if (sums[c.key] !== undefined) {
+        html += `<td${alignClass}>${sums[c.key].toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;€</td>`;
+      } else {
+        html += '<td></td>';
+      }
     });
     html += '</tr>';
-  });
-  html += '</tbody></table>';
-  return html;
-}
+
+    html += '</tbody></table>';
+    return html;
+  }
 
   async function renderDashboard() {
     try {
       const states = await fetchStates();
+
+      const firstAccount = states.find(s => s.entity_id.startsWith('sensor.kontostand_'));
+      const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
+
+      const lastUpdatedRaw = firstAccount?.last_updated;
+      const lastUpdated = lastUpdatedRaw
+        ? new Date(lastUpdatedRaw).toLocaleString('de-DE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          })
+        : 'Unbekannt';
 
       const konten = states
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
@@ -47,6 +83,9 @@ function makeTable(rows, cols) {
 
       const root = document.querySelector("pp-reader-dashboard");
       root.innerHTML = `
+        <h2>Portfolio Dashboard</h2>
+        <p><strong>📂 Letzte Aktualisierung Portfolio-Datei:</strong> ${fileUpdated}</p>
+        <p><strong>📈 Auf Update geprüft am:</strong> ${lastUpdated}</p>
         <h2>Konten</h2>
         ${makeTable(konten, [
           { key: 'name', label: 'Name' },
