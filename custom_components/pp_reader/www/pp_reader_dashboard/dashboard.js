@@ -1,31 +1,36 @@
-console.log("✅ PP Reader Dashboard module loaded");
+console.log("📡 PP Reader Dashboard gestartet (per REST API)");
 
-// 1) Dashboard-CSS dynamisch laden und injizieren
-(async () => {
-  const res = await fetch("/pp_reader_dashboard/dashboard.css");
-  if (res.ok) {
-    const css = await res.text();
-    const style = document.createElement("style");
-    style.textContent = css;
-    document.head.appendChild(style);
-  } else {
-    console.error("PP Reader Dashboard: CSS konnte nicht geladen werden.", res.status);
-  }
-})();
+async function fetchStates() {
+  const res = await fetch("/api/states", { credentials: "same-origin" });
+  if (!res.ok) throw new Error("Fehler beim Laden der Sensoren");
+  return await res.json();
+}
 
-// 2) Web-Komponente definieren
-class PPReaderDashboard extends HTMLElement {
-  set hass(hass) {
-    // 2.1 Alle Kontostand-Sensoren
-    const konten = Object.values(hass.states)
+function makeTable(rows, cols) {
+  let html = '<table><thead><tr>';
+  cols.forEach(c => html += `<th>${c.label}</th>`);
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr>';
+    cols.forEach(c => html += `<td>${r[c.key]}</td>`);
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+async function renderDashboard() {
+  try {
+    const states = await fetchStates();
+
+    const konten = states
       .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
       .map(s => ({
         name:    s.attributes.friendly_name,
         balance: parseFloat(s.state).toFixed(2),
       }));
 
-    // 2.2 Alle Depotwert-Sensoren
-    const depots = Object.values(hass.states)
+    const depots = states
       .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
       .map(s => ({
         name:  s.attributes.friendly_name,
@@ -33,22 +38,9 @@ class PPReaderDashboard extends HTMLElement {
         value: parseFloat(s.state).toFixed(2),
       }));
 
-    // 2.3 Tabellen-Helper
-    const makeTable = (rows, cols) => {
-      let html = '<table><thead><tr>';
-      cols.forEach(c => html += `<th>${c.label}</th>`);
-      html += '</tr></thead><tbody>';
-      rows.forEach(r => {
-        html += '<tr>';
-        cols.forEach(c => html += `<td>${r[c.key]}</td>`);
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-      return html;
-    };
+    const root = document.querySelector("pp-reader-dashboard");
 
-    // 2.4 Rendern
-    this.innerHTML = `
+    root.innerHTML = `
       <h2>Konten</h2>
       ${makeTable(konten, [
         { key: 'name',    label: 'Name' },
@@ -61,14 +53,88 @@ class PPReaderDashboard extends HTMLElement {
         { key: 'value', label: 'Depotwert (€)' }
       ])}
     `;
+
+  } catch (err) {
+    console.error("Fehler beim Laden des Dashboards:", err);
+    document.querySelector("pp-reader-dashboard").innerHTML = `
+      <p style="color:red">⚠️ Fehler beim Laden der Daten: ${err.message}</p>`;
   }
 }
 
-customElements.define('pp-reader-dashboard', PPReaderDashboard);
-
-document.addEventListener("DOMContentLoaded", () => {
-  const elem = document.querySelector("pp-reader-dashboard");
-  if (!elem.hass) {
-    elem.innerHTML = `<p style="color: red;">⚠️ Keine Verbindung zu Home Assistant (kein hass-Objekt verfügbar)</p>`;
+// Komponente registrieren und starten
+class PPReaderDashboard extends HTMLElement {
+  connectedCallback() {
+    renderDashboard();
   }
-});
+}
+customElements.define('pp-reader-dashboard', PPReaderDashboard);
+console.log("📡 PP Reader Dashboard gestartet (per REST API)");
+
+async function fetchStates() {
+  const res = await fetch("/api/states", { credentials: "same-origin" });
+  if (!res.ok) throw new Error("Fehler beim Laden der Sensoren");
+  return await res.json();
+}
+
+function makeTable(rows, cols) {
+  let html = '<table><thead><tr>';
+  cols.forEach(c => html += `<th>${c.label}</th>`);
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr>';
+    cols.forEach(c => html += `<td>${r[c.key]}</td>`);
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+async function renderDashboard() {
+  try {
+    const states = await fetchStates();
+
+    const konten = states
+      .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
+      .map(s => ({
+        name:    s.attributes.friendly_name,
+        balance: parseFloat(s.state).toFixed(2),
+      }));
+
+    const depots = states
+      .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
+      .map(s => ({
+        name:  s.attributes.friendly_name,
+        count: s.attributes.anzahl_wertpapiere,
+        value: parseFloat(s.state).toFixed(2),
+      }));
+
+    const root = document.querySelector("pp-reader-dashboard");
+
+    root.innerHTML = `
+      <h2>Konten</h2>
+      ${makeTable(konten, [
+        { key: 'name',    label: 'Name' },
+        { key: 'balance', label: 'Kontostand (€)' }
+      ])}
+      <h2>Depots</h2>
+      ${makeTable(depots, [
+        { key: 'name',  label: 'Name' },
+        { key: 'count', label: 'Anzahl Wertpapiere' },
+        { key: 'value', label: 'Depotwert (€)' }
+      ])}
+    `;
+
+  } catch (err) {
+    console.error("Fehler beim Laden des Dashboards:", err);
+    document.querySelector("pp-reader-dashboard").innerHTML = `
+      <p style="color:red">⚠️ Fehler beim Laden der Daten: ${err.message}</p>`;
+  }
+}
+
+// Komponente registrieren und starten
+class PPReaderDashboard extends HTMLElement {
+  connectedCallback() {
+    renderDashboard();
+  }
+}
+customElements.define('pp-reader-dashboard', PPReaderDashboard);
