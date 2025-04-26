@@ -28,7 +28,13 @@
     cols.forEach(c => {
       if (c.align === 'right') {
         sums[c.key] = rows.reduce((acc, row) => {
-          const value = parseFloat(row[c.key]?.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+          const valueRaw = row[c.key];
+          let value = 0;
+          if (typeof valueRaw === 'string') {
+            value = parseFloat(valueRaw.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+          } else if (typeof valueRaw === 'number') {
+            value = valueRaw;
+          }
           return acc + value;
         }, 0);
       }
@@ -70,7 +76,7 @@
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
         .map(s => ({
           name: s.attributes.friendly_name,
-          balance: parseFloat(s.state).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€'
+          balance: parseFloat(s.state)
         }));
 
       const depots = states
@@ -78,7 +84,7 @@
         .map(s => ({
           name: s.attributes.friendly_name,
           count: s.attributes.anzahl_wertpapiere,
-          value: parseFloat(s.state).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€'
+          value: parseFloat(s.state)
         }));
 
       const root = document.querySelector("pp-reader-dashboard");
