@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class PortfolioPurchaseSensor(SensorEntity):
     """Sensor für die Kaufsumme eines Depots (Summe der Kaufpreise aktiver Positionen)."""
-
+    should_poll = True
     def __init__(self, hass, portfolio_name, file_path):
         self.hass = hass
         self._portfolio_name = portfolio_name
