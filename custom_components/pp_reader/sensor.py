@@ -18,13 +18,15 @@ from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 
 _LOGGER = logging.getLogger(__name__)
 
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
     """Initialisiere alle Sensoren."""
-
+    _LOGGER.info("✅ Testlog: async_setup_entry gestartet!")
     file_path = config_entry.data[CONF_FILE_PATH]
     data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
 
