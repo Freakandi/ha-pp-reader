@@ -1,7 +1,7 @@
 # custom_components/pp_reader/logic/portfolio.py
 import logging
 from datetime import datetime
-from custom_components.pp_reader.currencies.fx import load_latest_rates
+from custom_components.pp_reader.currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,14 +40,22 @@ async def calculate_portfolio_value(
             holdings[security_id] = holdings.get(security_id, 0) - shares
 
     # 3. Nur Wertpapiere mit positivem Bestand berücksichtigen
-    active_securities = {
-        sid: qty for sid, qty in holdings.items() if qty > 0
-    }
+    active_securities = {sid: qty for sid, qty in holdings.items() if qty > 0}
 
-    # 4. Wechselkurse asynchron aus Cache laden
+    # 4. Währungen der gehaltenen Wertpapiere erfassen
+    currencies = set()
+    for sid in active_securities:
+        sec = securities_by_id.get(sid)
+        if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
+            currencies.add(sec.currencyCode)
+
+    # 5. Sicherstellen, dass alle benötigten Wechselkurse vorhanden sind
+    await ensure_exchange_rates_for_dates([reference_date], currencies)
+
+    # 6. Wechselkurse laden
     fx_rates = await load_latest_rates(reference_date)
 
-    # 5. Bewertung durchführen
+    # 7. Bewertung durchführen
     total_value = 0.0
     for sid, qty in active_securities.items():
         sec = securities_by_id.get(sid)
@@ -57,13 +65,12 @@ async def calculate_portfolio_value(
         kurs = normalize_price(sec.latest.close)
         currency = sec.currencyCode if sec.HasField("currencyCode") else "EUR"
 
-        # Umrechnung falls nötig
         if currency != "EUR":
             rate = fx_rates.get(currency)
             if rate:
                 kurs = kurs / rate
             else:
-                print(f"⚠️ Kein Wechselkurs verfügbar für {currency}, Papier: {sec.name}")
+                _LOGGER.warning("⚠️ Kein Wechselkurs verfügbar für %s (%s)", sec.name, currency)
                 continue
 
         total_value += qty * kurs
