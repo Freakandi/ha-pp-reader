@@ -1,3 +1,4 @@
+# purchase_sensors.py
 import os
 import logging
 from datetime import datetime
@@ -10,9 +11,12 @@ from custom_components.pp_reader.currencies.fx import ensure_exchange_rates_for_
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class PortfolioPurchaseSensor(SensorEntity):
     """Sensor für die Kaufsumme eines Depots (Summe der Kaufpreise aktiver Positionen)."""
+
     should_poll = True
+
     def __init__(self, hass, portfolio_name, file_path):
         self.hass = hass
         self._portfolio_name = portfolio_name
@@ -30,38 +34,39 @@ class PortfolioPurchaseSensor(SensorEntity):
     def native_value(self):
         return self._purchase_sum
 
-async def async_update(self):
-    try:
-        current_mtime = os.path.getmtime(self._file_path)
-        if current_mtime != self._last_mtime or self._purchase_sum == 0:
-            _LOGGER.warning("📢 Kaufsummen-Sensor wird aktualisiert: %s", self._attr_name)
-            data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
-            if data:
-                securities_by_id = {s.uuid: s for s in data.securities}
+    async def async_update(self):
+        """Aktualisiere die Kaufsumme, wenn Datei verändert wurde oder Summe noch 0 ist."""
+        try:
+            current_mtime = os.path.getmtime(self._file_path)
+            if current_mtime != self._last_mtime or self._purchase_sum == 0:
+                _LOGGER.warning("📢 Kaufsummen-Sensor wird aktualisiert: %s", self._attr_name)
+                data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
+                if data:
+                    securities_by_id = {s.uuid: s for s in data.securities}
 
-                kaufdaten = []
-                currencies = set()
-                for tx in data.transactions:
-                    if tx.type in (0, 2) and tx.HasField("security"):
-                        kaufdatum = datetime.fromtimestamp(tx.date.seconds)
-                        kaufdaten.append(kaufdatum)
+                    kaufdaten = []
+                    currencies = set()
+                    for tx in data.transactions:
+                        if tx.type in (0, 2) and tx.HasField("security"):
+                            kaufdatum = datetime.fromtimestamp(tx.date.seconds)
+                            kaufdaten.append(kaufdatum)
 
-                        sec = securities_by_id.get(tx.security)
-                        if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
-                            currencies.add(sec.currencyCode)
+                            sec = securities_by_id.get(tx.security)
+                            if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
+                                currencies.add(sec.currencyCode)
 
-                await ensure_exchange_rates_for_dates(kaufdaten, currencies)
+                    await ensure_exchange_rates_for_dates(kaufdaten, currencies)
 
-                for portfolio in data.portfolios:
-                    if portfolio.name == self._portfolio_name:
-                        _LOGGER.warning("📦 Gefundenes Portfolio: %s", portfolio.name)
-                        self._purchase_sum = await calculate_purchase_sum(
-                            portfolio,
-                            data.transactions,
-                            securities_by_id,
-                            reference_date=datetime.fromtimestamp(current_mtime)
-                        )
-                        self._last_mtime = current_mtime
-                        break
-    except Exception as e:
-        _LOGGER.error("Fehler beim Update der Kaufsumme: %s", e)
+                    for portfolio in data.portfolios:
+                        if portfolio.name == self._portfolio_name:
+                            _LOGGER.warning("📦 Gefundenes Portfolio: %s", portfolio.name)
+                            self._purchase_sum = await calculate_purchase_sum(
+                                portfolio,
+                                data.transactions,
+                                securities_by_id,
+                                reference_date=datetime.fromtimestamp(current_mtime)
+                            )
+                            self._last_mtime = current_mtime
+                            break
+        except Exception as e:
+            _LOGGER.error("Fehler beim Update der Kaufsumme: %s", e)
