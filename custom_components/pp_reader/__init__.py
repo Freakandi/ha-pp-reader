@@ -35,17 +35,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ])
 
     # Dashboard in Seitenleiste eintragen
-    frontend.async_register_built_in_panel(
-        hass,
-        "iframe",
-        "Portfolio Dashboard",
-        "mdi:finance",
-        "pp-reader",
-        {
-            "url": "/pp_reader_dashboard/dashboard.html"
-        },
-        require_admin=False
-    )
+    if "pp-reader" not in hass.data.get("frontend_panels", {}):
+        frontend.async_register_built_in_panel(
+            hass,
+            "iframe",
+            "Portfolio Dashboard",
+            "mdi:finance",
+            "pp-reader",
+            {
+                "url": "/pp_reader_dashboard/dashboard.html"
+            },
+            require_admin=False
+        )
 
     # Interner API-Proxy
     token = entry.data.get(CONF_API_TOKEN)
