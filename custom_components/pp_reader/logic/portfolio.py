@@ -114,7 +114,7 @@ async def calculate_purchase_sum(
             continue
 
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
-            _LOGGER.info(
+            _LOGGER.warning(
                 "🔍 Kauf-Transaktion: %.4f Stück, %.2f EUR, am %s, Währung: %s, Kurs: %.4f",
                 shares,
                 amount,

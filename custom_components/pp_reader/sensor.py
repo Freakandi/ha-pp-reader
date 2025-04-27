@@ -26,7 +26,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ):
     """Initialisiere alle Sensoren."""
-    _LOGGER.info("✅ Testlog: async_setup_entry gestartet!")
     file_path = config_entry.data[CONF_FILE_PATH]
     data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
 
