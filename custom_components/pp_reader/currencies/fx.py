@@ -38,22 +38,39 @@ def get_required_currencies(client):
                 currencies.add(sec.currencyCode)
     return currencies
 
-
 async def fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
-    # … unveränderte Logik …
+    """
+    Ruft Wechselkurse von EUR zu den angegebenen Währungen ab.
+    Schlägt der Abruf fehl, wird eine leere Antwort geliefert.
+    """
     if not currencies:
         return {}
+
     symbols = ",".join(currencies)
     url = f"{API_URL}/{date}?from=EUR&to={symbols}"
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                data = await response.json()
-                return {k: float(v) for k, v in data["rates"].items()}
-            _LOGGER.error("Fehler beim Abruf der Wechselkurse: %s", response.status)
-            return {}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    _LOGGER.warning("⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d", date, response.status)
+                    return {}
 
+                text = await response.text()
+                if not text.strip():
+                    _LOGGER.error("❌ Leere Antwort beim Abrufen der Wechselkurse für %s", date)
+                    return {}
+
+                try:
+                    data = json.loads(text)
+                except json.JSONDecodeError:
+                    _LOGGER.error("❌ Ungültige JSON-Antwort beim Abrufen der Wechselkurse für %s", date)
+                    return {}
+
+                return {k: float(v) for k, v in data.get("rates", {}).items()}
+    except Exception as e:
+        _LOGGER.error("❌ Unerwarteter Fehler beim Abrufen der Wechselkurse: %s", e)
+        return {}
 
 # ——— Synchrone Kernfunktionen für File-I/O ———
 

@@ -7,7 +7,6 @@ from homeassistant.util import slugify
 
 from custom_components.pp_reader.reader import parse_data_portfolio
 from custom_components.pp_reader.logic.portfolio import calculate_purchase_sum
-from custom_components.pp_reader.currencies.fx import ensure_exchange_rates_for_dates
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,38 +34,30 @@ class PortfolioPurchaseSensor(SensorEntity):
         return self._purchase_sum
 
     async def async_update(self):
-        """Aktualisiere die Kaufsumme, wenn Datei verändert wurde oder Summe noch 0 ist."""
+        """Aktualisiere die Kaufsumme, wenn Datei verändert wurde oder Kaufsumme noch 0 ist."""
         try:
             current_mtime = os.path.getmtime(self._file_path)
             if current_mtime != self._last_mtime or self._purchase_sum == 0:
-                _LOGGER.warning("📢 Kaufsummen-Sensor wird aktualisiert: %s", self._attr_name)
+                _LOGGER.debug("🔄 Aktualisiere Kaufsumme für: %s", self._portfolio_name)
+
                 data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
-                if data:
-                    securities_by_id = {s.uuid: s for s in data.securities}
+                if not data:
+                    _LOGGER.error("❌ Fehler beim Parsen der Portfolio-Datei für %s", self._portfolio_name)
+                    return
 
-                    kaufdaten = []
-                    currencies = set()
-                    for tx in data.transactions:
-                        if tx.type in (0, 2) and tx.HasField("security"):
-                            kaufdatum = datetime.fromtimestamp(tx.date.seconds)
-                            kaufdaten.append(kaufdatum)
+                securities_by_id = {s.uuid: s for s in data.securities}
 
-                            sec = securities_by_id.get(tx.security)
-                            if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
-                                currencies.add(sec.currencyCode)
-
-                    await ensure_exchange_rates_for_dates(kaufdaten, currencies)
-
-                    for portfolio in data.portfolios:
-                        if portfolio.name == self._portfolio_name:
-                            _LOGGER.warning("📦 Gefundenes Portfolio: %s", portfolio.name)
-                            self._purchase_sum = await calculate_purchase_sum(
-                                portfolio,
-                                data.transactions,
-                                securities_by_id,
-                                reference_date=datetime.fromtimestamp(current_mtime)
-                            )
-                            self._last_mtime = current_mtime
-                            break
+                # Kaufsumme neu berechnen
+                for portfolio in data.portfolios:
+                    if portfolio.name == self._portfolio_name:
+                        self._purchase_sum = await calculate_purchase_sum(
+                            portfolio,
+                            data.transactions,
+                            securities_by_id,
+                            reference_date=datetime.fromtimestamp(current_mtime)
+                        )
+                        self._last_mtime = current_mtime
+                        _LOGGER.debug("✅ Neue Kaufsumme für %s: %.2f €", self._portfolio_name, self._purchase_sum)
+                        break
         except Exception as e:
-            _LOGGER.error("Fehler beim Update der Kaufsumme: %s", e)
+            _LOGGER.error("❌ Fehler beim Update der Kaufsumme: %s", e)
