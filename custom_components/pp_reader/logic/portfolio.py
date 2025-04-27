@@ -114,14 +114,6 @@ async def calculate_purchase_sum(
             continue
 
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
-            _LOGGER.warning(
-                "🔍 Kauf-Transaktion: %.4f Stück, %.2f EUR, am %s, Währung: %s, Kurs: %.4f",
-                shares,
-                amount,
-                tx_date.strftime('%d.%m.%Y'),
-                currency,
-                rate or 0.0
-            )
             price_per_share = amount / shares if shares != 0 else 0
             price_per_share_eur = price_per_share / rate
             holdings.setdefault(security_id, []).append((shares, price_per_share_eur, tx_date))
@@ -139,7 +131,7 @@ async def calculate_purchase_sum(
                     updated.append((qty - remaining_to_sell, price, date))
                     remaining_to_sell = 0
                 else:
-                    remaining -= qty
+                    remaining_to_sell -= qty
             holdings[security_id] = updated
 
     # 3. Jetzt aktuelle Bestände summieren
