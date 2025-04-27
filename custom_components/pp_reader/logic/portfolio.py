@@ -111,6 +111,14 @@ async def calculate_purchase_sum(
             continue
 
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
+            print(f"🔍 Kauf-Transaktion:")
+            print(f"    ➔ Anteile: {shares:.4f} Stück")
+            print(f"    ➔ Betrag: {amount:.2f} EUR")
+            print(f"    ➔ Kaufdatum: {tx_date.strftime('%d.%m.%Y')}")
+            print(f"    ➔ Währung: {currency}")
+            print(f"    ➔ Wechselkurs: {rate}")
+            print(f"    ➔ Preis pro Stück vor Umrechnung: {amount / shares:.2f} {currency}")
+            print(f"    ➔ Preis pro Stück in EUR: {(amount / shares) / rate:.2f} EUR")
             price_per_share = amount / shares if shares != 0 else 0
             price_per_share_eur = price_per_share / rate
             holdings.setdefault(security_id, []).append((shares, price_per_share_eur, tx_date))
