@@ -109,3 +109,35 @@ async def load_latest_rates(reference_date: datetime) -> dict[str, float]:
     cache = await _load_cache_async()
     date = reference_date.strftime("%Y-%m-%d")
     return cache.get(date, {})
+
+# ——— Gezieltes Laden von Währungskursen für benötigte Daten ———
+
+async def ensure_exchange_rates_for_dates(
+    dates: list[datetime],
+    currencies: set[str]
+) -> None:
+    """
+    Stelle sicher, dass für alle angegebenen Daten die Wechselkurse im Cache vorhanden sind.
+    Fehlt ein Kurs für ein Datum, wird er live nachgeladen und gespeichert.
+    """
+    if not currencies:
+        return
+
+    cache = await _load_cache_async()
+    updated = False
+
+    for dt in dates:
+        date_str = dt.strftime("%Y-%m-%d")
+        if date_str in cache:
+            continue  # Kurse für dieses Datum sind schon vorhanden
+
+        _LOGGER.info("Lade historische Kurse für %s: %s", date_str, currencies)
+        rates = await fetch_exchange_rates(date_str, currencies)
+        if rates:
+            cache[date_str] = rates
+            updated = True
+        else:
+            _LOGGER.warning("⚠️ Keine Kurse geladen für %s", date_str)
+
+    if updated:
+        await _save_cache_async(cache)

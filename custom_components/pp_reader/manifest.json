@@ -12,6 +12,7 @@
   ],
   "config_flow": true,
   "iot_class": "local_polling",
-  "loggers": ["pp_reader"]
+  "loggers": ["custom_components.pp_reader"],
+  "integration_type": "integration"
 }
 
