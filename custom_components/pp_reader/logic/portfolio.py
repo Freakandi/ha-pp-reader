@@ -1,6 +1,9 @@
 # custom_components/pp_reader/logic/portfolio.py
+import logging
 from datetime import datetime
 from custom_components.pp_reader.currencies.fx import load_latest_rates
+
+_LOGGER = logging.getLogger(__name__)
 
 def normalize_price(raw_price: int) -> float:
     return raw_price / 10**8  # Kurswerte mit 8 Nachkommastellen
@@ -111,14 +114,14 @@ async def calculate_purchase_sum(
             continue
 
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
-            print(f"🔍 Kauf-Transaktion:")
-            print(f"    ➔ Anteile: {shares:.4f} Stück")
-            print(f"    ➔ Betrag: {amount:.2f} EUR")
-            print(f"    ➔ Kaufdatum: {tx_date.strftime('%d.%m.%Y')}")
-            print(f"    ➔ Währung: {currency}")
-            print(f"    ➔ Wechselkurs: {rate}")
-            print(f"    ➔ Preis pro Stück vor Umrechnung: {amount / shares:.2f} {currency}")
-            print(f"    ➔ Preis pro Stück in EUR: {(amount / shares) / rate:.2f} EUR")
+            _LOGGER.info(
+                "🔍 Kauf-Transaktion: %.4f Stück, %.2f EUR, am %s, Währung: %s, Kurs: %.4f",
+                shares,
+                amount,
+                tx_date.strftime('%d.%m.%Y'),
+                currency,
+                rate or 0.0
+            )
             price_per_share = amount / shares if shares != 0 else 0
             price_per_share_eur = price_per_share / rate
             holdings.setdefault(security_id, []).append((shares, price_per_share_eur, tx_date))
