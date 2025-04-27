@@ -30,39 +30,38 @@ class PortfolioPurchaseSensor(SensorEntity):
     def native_value(self):
         return self._purchase_sum
 
-    async def async_update(self):
-        try:
-            current_mtime = os.path.getmtime(self._file_path)
-            if current_mtime != self._last_mtime:
-                _LOGGER.info("Änderung erkannt bei %s - lade Kaufsumme neu", self._file_path)
-                data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
-                if data:
-                    securities_by_id = {s.uuid: s for s in data.securities}
+async def async_update(self):
+    try:
+        current_mtime = os.path.getmtime(self._file_path)
+        if current_mtime != self._last_mtime or self._purchase_sum == 0:
+            _LOGGER.warning("📢 Kaufsummen-Sensor wird aktualisiert: %s", self._attr_name)
+            data = await self.hass.async_add_executor_job(parse_data_portfolio, self._file_path)
+            if data:
+                securities_by_id = {s.uuid: s for s in data.securities}
 
-                    # 🛡️ Wechselkurse für Kaufdaten absichern
-                    kaufdaten = []
-                    currencies = set()
+                kaufdaten = []
+                currencies = set()
+                for tx in data.transactions:
+                    if tx.type in (0, 2) and tx.HasField("security"):
+                        kaufdatum = datetime.fromtimestamp(tx.date.seconds)
+                        kaufdaten.append(kaufdatum)
 
-                    for tx in data.transactions:
-                        if tx.type in (0, 2) and tx.HasField("security"):  # PURCHASE, INBOUND_DELIVERY
-                            kaufdatum = datetime.fromtimestamp(tx.date / 1000)
-                            kaufdaten.append(kaufdatum)
+                        sec = securities_by_id.get(tx.security)
+                        if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
+                            currencies.add(sec.currencyCode)
 
-                            sec = securities_by_id.get(tx.security)
-                            if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
-                                currencies.add(sec.currencyCode)
+                await ensure_exchange_rates_for_dates(kaufdaten, currencies)
 
-                    await ensure_exchange_rates_for_dates(kaufdaten, currencies)
-
-                    for portfolio in data.portfolios:
-                        if portfolio.name == self._portfolio_name:
-                            self._purchase_sum = await calculate_purchase_sum(
-                                portfolio,
-                                data.transactions,
-                                securities_by_id,
-                                reference_date=datetime.fromtimestamp(current_mtime)
-                            )
-                            self._last_mtime = current_mtime
-                            break
-        except Exception as e:
-            _LOGGER.error("Fehler beim Update der Kaufsumme: %s", e)
+                for portfolio in data.portfolios:
+                    if portfolio.name == self._portfolio_name:
+                        _LOGGER.warning("📦 Gefundenes Portfolio: %s", portfolio.name)
+                        self._purchase_sum = await calculate_purchase_sum(
+                            portfolio,
+                            data.transactions,
+                            securities_by_id,
+                            reference_date=datetime.fromtimestamp(current_mtime)
+                        )
+                        self._last_mtime = current_mtime
+                        break
+    except Exception as e:
+        _LOGGER.error("Fehler beim Update der Kaufsumme: %s", e)
