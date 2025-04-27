@@ -1,6 +1,7 @@
 # sensor.py
 import os
 import logging
+import asyncio
 from datetime import datetime
 
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -30,10 +31,11 @@ async def async_setup_entry(
     data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
 
     if not data:
-        _LOGGER.error("Keine Daten aus Datei %s", file_path)
+        _LOGGER.error("❌ Keine Daten aus Datei %s", file_path)
         return
 
     sensors = []
+    purchase_sensors = []
 
     # 🔹 Kontostände
     for account in data.accounts:
@@ -63,16 +65,20 @@ async def async_setup_entry(
         depot_sensor = PortfolioDepotSensor(hass, portfolio.name, value, count, file_path)
         sensors.append(depot_sensor)
 
-        # Kaufsumme-Sensor
+        # Kaufsumme-Sensor (erst anlegen, gleich später gemeinsam updaten)
         purchase_sensor = PortfolioPurchaseSensor(hass, portfolio.name, file_path)
-        await purchase_sensor.async_update()  # 🛠️ Direkt initialisieren!
+        purchase_sensors.append(purchase_sensor)
         sensors.append(purchase_sensor)
 
-        # Kursgewinn-Sensoren (benötigen depot_sensor + purchase_sensor)
+        # Kursgewinn-Sensoren (benötigen Depot + Kauf)
         gain_abs_sensor = PortfolioGainAbsSensor(depot_sensor, purchase_sensor)
         sensors.append(gain_abs_sensor)
 
         gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
         sensors.append(gain_pct_sensor)
 
+    # 🛠️ Jetzt alle Kaufsummen-Sensoren parallel aktualisieren
+    await asyncio.gather(*(sensor.async_update() for sensor in purchase_sensors))
+
+    # 🔥 Jetzt alle fertigen Sensoren zu HA hinzufügen
     async_add_entities(sensors)
