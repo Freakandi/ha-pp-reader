@@ -51,10 +51,11 @@ async def async_setup_entry(
     securities_by_id = {s.uuid: s for s in data.securities}
     reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
 
-    # 🔥 1. Alle Kaufdaten und Währungen einmalig ermitteln
+    # 🔥 1. Alle notwendigen Kaufdaten- und Depotwährungen sammeln
     kaufdaten = []
     currencies = set()
 
+    # Transaktionswährungen für Käufe (zur historischen Bewertung)
     for tx in data.transactions:
         if tx.type in (0, 2) and tx.HasField("security"):
             kaufdatum = datetime.fromtimestamp(tx.date.seconds)
@@ -64,7 +65,12 @@ async def async_setup_entry(
             if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
                 currencies.add(sec.currencyCode)
 
-    # 🔥 2. Wechselkurse einmal zentral laden
+    # Zusätzlich: aktuelle Depotwährungen sichern
+    for sec in data.securities:
+        if sec.HasField("currencyCode") and sec.currencyCode != "EUR":
+            currencies.add(sec.currencyCode)
+
+    # 🔥 2. Wechselkurse zentral laden (einmalig)
     await ensure_exchange_rates_for_dates(kaufdaten, currencies)
 
     # 🔥 3. Sensoren anlegen
