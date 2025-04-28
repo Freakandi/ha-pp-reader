@@ -1,5 +1,28 @@
 (async () => {
-  console.log("📱 PP Reader Dashboard gestartet (via Proxy)");
+  console.log("\ud83d\udcf1 PP Reader Dashboard gestartet (mit manuellem Theme-Umschalter)");
+
+  function createThemeToggle() {
+    const button = document.createElement('button');
+    button.id = 'theme-toggle';
+    button.textContent = 'Dark Mode';
+    button.style.position = 'absolute';
+    button.style.top = '1rem';
+    button.style.right = '1rem';
+    button.style.padding = '0.5rem 1rem';
+    button.style.border = 'none';
+    button.style.borderRadius = '0.5rem';
+    button.style.cursor = 'pointer';
+    button.style.background = '#3b82f6';
+    button.style.color = '#fff';
+    button.style.fontSize = '0.9rem';
+
+    button.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark-mode');
+      button.textContent = document.documentElement.classList.contains('dark-mode') ? 'Light Mode' : 'Dark Mode';
+    });
+
+    document.body.appendChild(button);
+  }
 
   async function fetchStates() {
     const res = await fetch("/pp_reader_api/states", { credentials: "same-origin" });
@@ -9,15 +32,15 @@
 
   function formatValue(key, value) {
     let formatted;
-    if (['gain_abs', 'gain_pct'].includes(key)) {
-      const symbol = key === 'gain_pct' ? '%' : '€';
-      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + `&nbsp;${symbol}`;
-      const cls = value >= 0 ? 'positive' : 'negative';
-      return `<span class=\"${cls}\">${formatted}</span>`;
-    } else if (key === 'count') {
-      formatted = value.toLocaleString('de-DE');
-    } else if (['balance', 'value'].includes(key)) {
-      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
+    if (["gain_abs", "gain_pct"].includes(key)) {
+      const symbol = key === "gain_pct" ? "%" : "€";
+      formatted = value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + `&nbsp;${symbol}`;
+      const cls = value >= 0 ? "positive" : "negative";
+      return `<span class="${cls}">${formatted}</span>`;
+    } else if (key === "count") {
+      formatted = value.toLocaleString("de-DE");
+    } else if (["balance", "value"].includes(key)) {
+      formatted = value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "&nbsp;€";
     } else {
       formatted = value;
     }
@@ -27,7 +50,7 @@
   function makeTable(rows, cols) {
     let html = '<table><thead><tr>';
     cols.forEach(c => {
-      const alignClass = c.align === 'right' ? ' class=\"align-right\"' : '';
+      const alignClass = c.align === 'right' ? ' class="align-right"' : '';
       html += `<th${alignClass}>${c.label}</th>`;
     });
     html += '</tr></thead><tbody>';
@@ -35,13 +58,12 @@
     rows.forEach(r => {
       html += '<tr>';
       cols.forEach(c => {
-        const alignClass = c.align === 'right' ? ' class=\"align-right\"' : '';
+        const alignClass = c.align === 'right' ? ' class="align-right"' : '';
         html += `<td${alignClass}>${formatValue(c.key, r[c.key])}</td>`;
       });
       html += '</tr>';
     });
 
-    // Summenzeile für value & gain_abs
     const sums = {};
     cols.forEach(c => {
       if (c.align === 'right' && ['value', 'gain_abs'].includes(c.key)) {
@@ -51,9 +73,9 @@
       }
     });
 
-    html += '<tr class=\"footer-row\">';
+    html += '<tr class="footer-row">';
     cols.forEach((c, idx) => {
-      const alignClass = c.align === 'right' ? ' class=\"align-right\"' : '';
+      const alignClass = c.align === 'right' ? ' class="align-right"' : '';
       if (idx === 0) {
         html += `<td${alignClass}>Summe</td>`;
       } else if (sums[c.key] != null) {
@@ -72,7 +94,6 @@
     try {
       const states = await fetchStates();
 
-      // Meta-Daten
       const firstAccount = states.find(s => s.entity_id.startsWith('sensor.kontostand_'));
       const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
       const lastUpdatedRaw = firstAccount?.last_updated;
@@ -83,7 +104,6 @@
           })
         : 'Unbekannt';
 
-      // Daten-Arrays
       const konten = states
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
         .map(s => ({ name: s.attributes.friendly_name, balance: parseFloat(s.state) }));
@@ -109,7 +129,6 @@
 
       const totalVermoegen = totalKonten + totalDepots;
 
-      // Aufbau Dashboard
       const root = document.querySelector("pp-reader-dashboard");
       root.innerHTML = `
         <div class="card header-card">
@@ -145,6 +164,8 @@
           </div>
         </div>
       `;
+
+      createThemeToggle();
 
     } catch (err) {
       console.error("Fehler beim Laden des Dashboards:", err);

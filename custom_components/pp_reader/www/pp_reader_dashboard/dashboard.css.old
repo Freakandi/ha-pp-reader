@@ -1,23 +1,46 @@
-/* Grundlegende Schrift & Farben */
-body {
-  font-family: 'Inter', sans-serif;
-  background: #f0f2f5;
-  color: #333;
+/* ===================================================================
+   Dashboard CSS für Portfolio-Integration (HA Theme-kompatibel)
+   =================================================================== */
+
+/* Global: Seitenlayout & Overflow */
+html, body {
   margin: 0;
-  padding: 1rem;
+  padding: 0;
+  overflow-x: hidden;
 }
 
-/* Card-Container */
+/* Wrapper für Dashboard-Inhalt */
+pp-reader-dashboard {
+  display: block;
+  padding: 1rem;
+  box-sizing: border-box;
+  background: var(--card-background-color, #f0f2f5);
+  color: var(--primary-text-color, #333);
+  font-family: 'Inter', sans-serif;
+}
+
+/* Karten: Container, Layout & Scroll */
 .card {
-  background: #fff;
+  background: var(--card-background-color, #fff);
   border-radius: 0.5rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   padding: 1rem;
   margin-bottom: 1.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Header-Card mit Meta-Infos */
-.header-card {
+.card::-webkit-scrollbar {
+  height: 8px;
+}
+.card::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+
+/* Header- & Footer-Cards */
+.header-card,
+.footer-card {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -33,99 +56,67 @@ body {
   font-size: 0.95rem;
 }
 .meta div strong {
-  color: #111827;
+  color: var(--primary-text-color, #111827);
+}
+.footer-card {
+  margin-top: 1rem;
 }
 
-/* Tabellen-Styling */
+/* Tabellen-Grundlayout */
 table {
-  width: 100%;
+  width: auto;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   margin: 0;
-}
-/* Überschriften linksbündig statt zentriert */
-th {
-  text-align: left;
 }
 th, td {
   padding: 0.75rem 1rem;
 }
 th {
-  background: #fafafa;
+  background: var(--primary-background-color, #fafafa);
   font-weight: 600;
   position: sticky;
   top: 0;
   z-index: 1;
+  text-align: left;
 }
+.align-right {
+  text-align: right;
+}
+
+/* Gestreifte & Hover-Zeilen */
 tbody tr:nth-child(odd) {
-  background: #fcfcfc;
+  background: var(--secondary-background-color, #fcfcfc);
 }
 tbody tr:hover {
-  background: #f5faff;
+  background: var(--accent-color, #f5faff);
 }
 
-/* Fußzeile */
+/* Fußzeilen-Reihe (Summenzeile) */
 .footer-row td {
   font-weight: 700;
-  background: #f9fafb;
+  background: var(--primary-background-color, #f9fafb);
 }
 
-/* Alignment & Farben für Werte */
-.align-right { text-align: right; }
-.positive    { color: #16a34a; }
-.negative    { color: #dc2626; }
-
-/* Überschriften */
+/* Überschriften in Karten */
 h2 {
   margin-top: 0;
   font-size: 1.25rem;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--accent-color, #3b82f6);
   padding-left: 0.5rem;
 }
 
-/* Responsive Anpassung */
+/* Farb-Klassen für Gewinnwerte */
+.positive {
+  color: var(--state-icon-color, #16a34a);
+}
+.negative {
+  color: var(--error-color, #dc2626);
+}
+
+/* Responsive Anpassungen */
 @media (max-width: 600px) {
   .meta { flex-direction: column; }
   table, th, td { font-size: 0.9rem; }
-}
-
-/* Footer-Card: gleiche Optik wie Card, ggf. kleiner Abstand nach oben */
-.footer-card {
-  margin-top: 1rem;
-}
-
-/* Footer-Meta: gleiche Formatierung wie Header */
-.footer-card .meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.95rem;
-}
-.footer-card .meta div strong {
-  color: #111827;
-}
-/* 1. Seite insgesamt nicht horizontal scrollen */
-html, body {
-  overflow-x: hidden;
-}
-
-/* 2. Karten scrollbar machen, wenn Inhalt zu breit */
-.card {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch; /* für sanftes Scrollen auf iOS */
-}
-
-/* 3. Tabelle behält ihre natürliche Breite, so dass sie bei Bedarf overflow erzeugt */
-.card table {
-  width: auto;      /* statt 100% */
-  min-width: 100%;  /* sorgt dafür, dass sie mindestens so breit ist wie ihre Spalten */
-}
-
-/* 4. Optional: Padding & Schatten sauber beibehalten */
-.card::-webkit-scrollbar {
-  height: 8px;
-}
-.card::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2);
-  border-radius: 4px;
 }
