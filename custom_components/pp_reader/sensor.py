@@ -12,7 +12,10 @@ from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
-from custom_components.pp_reader.currencies.fx import ensure_exchange_rates_for_dates
+from custom_components.pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates,
+    get_exchange_rates
+)
 
 from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor
@@ -70,8 +73,9 @@ async def async_setup_entry(
         if sec.HasField("currencyCode") and sec.currencyCode != "EUR":
             currencies.add(sec.currencyCode)
 
-    # 🔥 2. Wechselkurse zentral laden (einmalig)
-    await ensure_exchange_rates_for_dates(kaufdaten, currencies)
+    # 🔥 2. Wechselkurse zentral laden
+    await ensure_exchange_rates_for_dates(kaufdaten, currencies)  # historische Kurse für Kaufdatum
+    await get_exchange_rates(data, reference_date)                # aktuelle Wechselkurse für aktive Bestände
 
     # 🔥 3. Sensoren anlegen
     for portfolio in data.portfolios:
