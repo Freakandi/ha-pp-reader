@@ -1,23 +1,50 @@
-/* Grundlegende Schrift & Farben */
-body {
+/* ===================================================================
+   Dashboard CSS für Portfolio-Integration
+   - Light Mode Standardstyles
+   - Dark Mode Overrides
+   - Responsive & Scrollbar
+   =================================================================== */
+
+/* ---------------------------------
+   Global: Seitenlayout & Overflow
+   --------------------------------- */
+html, body {
+  margin: 0;
+  padding: 1rem;
   font-family: 'Inter', sans-serif;
   background: #f0f2f5;
   color: #333;
-  margin: 0;
-  padding: 1rem;
+  overflow-x: hidden;          /* Keine horizontale Seite-Scroll */
 }
 
-/* Card-Container */
+/* ---------------------------------
+   Karten: Container, Layout & Scroll
+   --------------------------------- */
 .card {
   background: #fff;
   border-radius: 0.5rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   padding: 1rem;
   margin-bottom: 1.5rem;
+
+  overflow-x: auto;            /* Horizontales Scroll innerhalb der Karte */
+  -webkit-overflow-scrolling: touch; /* Glatter Scroll auf iOS */
 }
 
-/* Header-Card mit Meta-Infos */
-.header-card {
+/* Scrollbar Styling für Karten */
+.card::-webkit-scrollbar {
+  height: 8px;
+}
+.card::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+
+/* ---------------------------------
+   Header- & Footer-Cards
+   --------------------------------- */
+.header-card,
+.footer-card {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -35,17 +62,19 @@ body {
 .meta div strong {
   color: #111827;
 }
+.footer-card {
+  margin-top: 1rem;
+}
 
-/* Tabellen-Styling */
+/* ---------------------------------
+   Tabellen-Grundlayout
+   --------------------------------- */
 table {
-  width: 100%;
+  width: auto;                /* natürliche Breite */
+  min-width: 100%;            /* mindestens Container-Breite */
   border-collapse: separate;
   border-spacing: 0;
   margin: 0;
-}
-/* Überschriften linksbündig statt zentriert */
-th {
-  text-align: left;
 }
 th, td {
   padding: 0.75rem 1rem;
@@ -56,7 +85,13 @@ th {
   position: sticky;
   top: 0;
   z-index: 1;
+  text-align: left;           /* Standard: linksbündig */
 }
+.align-right {
+  text-align: right;
+}
+
+/* Gestreifte & Hover-Zeilen */
 tbody tr:nth-child(odd) {
   background: #fcfcfc;
 }
@@ -64,18 +99,13 @@ tbody tr:hover {
   background: #f5faff;
 }
 
-/* Fußzeile */
+/* Fußzeilen-Reihe (Summenzeile) */
 .footer-row td {
   font-weight: 700;
   background: #f9fafb;
 }
 
-/* Alignment & Farben für Werte */
-.align-right { text-align: right; }
-.positive    { color: #16a34a; }
-.negative    { color: #dc2626; }
-
-/* Überschriften */
+/* Überschriften in Karten */
 h2 {
   margin-top: 0;
   font-size: 1.25rem;
@@ -83,49 +113,64 @@ h2 {
   padding-left: 0.5rem;
 }
 
-/* Responsive Anpassung */
+/* ---------------------------------
+   Farb-Klassen für Gewinnwerte
+   --------------------------------- */
+.positive { color: #16a34a; }
+.negative { color: #dc2626; }
+
+/* ---------------------------------
+   Responsive Anpassungen
+   --------------------------------- */
 @media (max-width: 600px) {
-  .meta { flex-direction: column; }
-  table, th, td { font-size: 0.9rem; }
+  .meta {
+    flex-direction: column;
+  }
+  table, th, td {
+    font-size: 0.9rem;
+  }
 }
 
-/* Footer-Card: gleiche Optik wie Card, ggf. kleiner Abstand nach oben */
-.footer-card {
-  margin-top: 1rem;
-}
-
-/* Footer-Meta: gleiche Formatierung wie Header */
-.footer-card .meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.95rem;
-}
-.footer-card .meta div strong {
-  color: #111827;
-}
-/* 1. Seite insgesamt nicht horizontal scrollen */
-html, body {
-  overflow-x: hidden;
-}
-
-/* 2. Karten scrollbar machen, wenn Inhalt zu breit */
-.card {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch; /* für sanftes Scrollen auf iOS */
-}
-
-/* 3. Tabelle behält ihre natürliche Breite, so dass sie bei Bedarf overflow erzeugt */
-.card table {
-  width: auto;      /* statt 100% */
-  min-width: 100%;  /* sorgt dafür, dass sie mindestens so breit ist wie ihre Spalten */
-}
-
-/* 4. Optional: Padding & Schatten sauber beibehalten */
-.card::-webkit-scrollbar {
-  height: 8px;
-}
-.card::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2);
-  border-radius: 4px;
+/* ---------------------------------
+   Dark Mode Overrides
+   --------------------------------- */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #121212;
+    color: #e0e0e0;
+  }
+  .card {
+    background: #1e1e1e;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  }
+  th {
+    background: #2c2c2c;
+    color: #fafafa;
+  }
+  tbody tr:nth-child(odd) {
+    background: #1a1a1a;
+  }
+  tbody tr:hover {
+    background: #333333;
+  }
+  .footer-row td {
+    background: #2c2c2c;
+    color: #fafafa;
+  }
+  .header-card .meta div strong,
+  .footer-card .meta div strong {
+    color: #fafafa;
+  }
+  h2 {
+    border-left-color: #90caf9;
+  }
+  .positive {
+    color: #4caf50;
+  }
+  .negative {
+    color: #f44336;
+  }
+  .card::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+  }
 }

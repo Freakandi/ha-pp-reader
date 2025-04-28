@@ -1,24 +1,131 @@
+/* Grundlegende Schrift & Farben */
 body {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
+  background: #f0f2f5;
+  color: #333;
+  margin: 0;
   padding: 1rem;
 }
-h2 {
-  margin-top: 1.5rem;
-  color: #333;
+
+/* Card-Container */
+.card {
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
 }
+
+/* Header-Card mit Meta-Infos */
+.header-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.header-card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+.meta div strong {
+  color: #111827;
+}
+
+/* Tabellen-Styling */
 table {
   width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
 }
-th, td {
-  border: 1px solid #ccc;
-  padding: 0.5rem;
+/* Überschriften linksbündig statt zentriert */
+th {
   text-align: left;
 }
-th {
-  background: #f5f5f5;
+th, td {
+  padding: 0.75rem 1rem;
 }
-.align-right {
-  text-align: right;
+th {
+  background: #fafafa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+tbody tr:nth-child(odd) {
+  background: #fcfcfc;
+}
+tbody tr:hover {
+  background: #f5faff;
+}
+
+/* Fußzeile */
+.footer-row td {
+  font-weight: 700;
+  background: #f9fafb;
+}
+
+/* Alignment & Farben für Werte */
+.align-right { text-align: right; }
+.positive    { color: #16a34a; }
+.negative    { color: #dc2626; }
+
+/* Überschriften */
+h2 {
+  margin-top: 0;
+  font-size: 1.25rem;
+  border-left: 4px solid #3b82f6;
+  padding-left: 0.5rem;
+}
+
+/* Responsive Anpassung */
+@media (max-width: 600px) {
+  .meta { flex-direction: column; }
+  table, th, td { font-size: 0.9rem; }
+}
+
+/* Footer-Card: gleiche Optik wie Card, ggf. kleiner Abstand nach oben */
+.footer-card {
+  margin-top: 1rem;
+}
+
+/* Footer-Meta: gleiche Formatierung wie Header */
+.footer-card .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+.footer-card .meta div strong {
+  color: #111827;
+}
+/* 1. Seite insgesamt nicht horizontal scrollen */
+html, body {
+  overflow-x: hidden;
+}
+
+/* 2. Karten scrollbar machen, wenn Inhalt zu breit */
+.card {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* für sanftes Scrollen auf iOS */
+}
+
+/* 3. Tabelle behält ihre natürliche Breite, so dass sie bei Bedarf overflow erzeugt */
+.card table {
+  width: auto;      /* statt 100% */
+  min-width: 100%;  /* sorgt dafür, dass sie mindestens so breit ist wie ihre Spalten */
+}
+
+/* 4. Optional: Padding & Schatten sauber beibehalten */
+.card::-webkit-scrollbar {
+  height: 8px;
+}
+.card::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
 }
