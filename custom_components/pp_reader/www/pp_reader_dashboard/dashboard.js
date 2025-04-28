@@ -9,12 +9,18 @@
 
   function formatValue(key, value) {
     let formatted;
-    if ([ 'balance', 'value', 'gain_abs' ].includes(key)) {
-      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
+    if (['balance', 'value', 'gain_abs'].includes(key)) {
+      formatted = value.toLocaleString('de-DE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) + '&nbsp;€';
     } else if (key === 'count') {
       formatted = value.toLocaleString('de-DE');
     } else if (key === 'gain_pct') {
-      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;%';
+      formatted = value.toLocaleString('de-DE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) + '&nbsp;%';
     } else {
       formatted = value;
     }
@@ -42,15 +48,18 @@
       html += '</tr>';
     });
 
-    // Summenzeile
+    // Summenzeile für value & gain_abs
     const sums = {};
     cols.forEach(c => {
-      if (c.align === 'right' && [ 'value', 'gain_abs' ].includes(c.key)) {
-        sums[c.key] = rows.reduce((acc, row) => acc + (typeof row[c.key] === 'number' ? row[c.key] : 0), 0);
+      if (c.align === 'right' && ['value', 'gain_abs'].includes(c.key)) {
+        sums[c.key] = rows.reduce((acc, row) => {
+          const v = row[c.key];
+          return acc + (typeof v === 'number' ? v : 0);
+        }, 0);
       }
     });
 
-    html += '<tr style="font-weight:bold">';
+    html += '<tr class="footer-row">';
     cols.forEach((c, idx) => {
       const alignClass = c.align === 'right' ? ' class="align-right"' : '';
       if (idx === 0) {
@@ -71,9 +80,9 @@
     try {
       const states = await fetchStates();
 
+      // Zeitstempel
       const firstAccount = states.find(s => s.entity_id.startsWith('sensor.kontostand_'));
       const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
-
       const lastUpdatedRaw = firstAccount?.last_updated;
       const lastUpdated = lastUpdatedRaw
         ? new Date(lastUpdatedRaw).toLocaleString('de-DE', {
@@ -82,6 +91,7 @@
           })
         : 'Unbekannt';
 
+      // Konten
       const konten = states
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
         .map(s => ({
@@ -89,13 +99,13 @@
           balance: parseFloat(s.state)
         }));
 
+      // Depots inkl. Gewinnsensoren
       const depots = states
         .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
         .map(s => {
           const slug = s.entity_id.replace('sensor.depotwert_', '');
-          // Mögliche Entity-IDs für Gewinnsensoren
           const absId = `sensor.kursgewinn_absolut_${slug}`;
-          const pctId = `sensor.kursgewinn_${slug}`;
+          const pctId = `sensor.kursgewinn_pct_${slug}`;
           const gainAbsState = states.find(x => x.entity_id === absId);
           const gainPctState = states.find(x => x.entity_id === pctId);
           return {
@@ -107,26 +117,43 @@
           };
         });
 
+      // Gesamtvermögen (Konten + Depots)
+      const totalKonten = konten.reduce((sum, k) => sum + (isNaN(k.balance) ? 0 : k.balance), 0);
+      const totalDepots = depots.reduce((sum, d) => sum + (isNaN(d.value) ? 0 : d.value), 0);
+      const totalVermoegen = totalKonten + totalDepots;
+
+      // Rendern
       const root = document.querySelector("pp-reader-dashboard");
       root.innerHTML = `
-        <h2>Portfolio Dashboard</h2>
-        <p><strong>📂 Letzte Aktualisierung Portfolio-Datei:</strong> ${fileUpdated}</p>
-        <p><strong>📈 Auf Update geprüft am:</strong> ${lastUpdated}</p>
+        <div class="card header-card">
+          <h1>Portfolio Dashboard</h1>
+          <div class="meta">
+            <div>📂 Letzte Aktualisierung Portfolio-Datei: <strong>${fileUpdated}</strong></div>
+            <div>📈 Auf Update geprüft am: <strong>${lastUpdated}</strong></div>
+            <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE',{
+              minimumFractionDigits:2,maximumFractionDigits:2
+            })}&nbsp;€</strong></div>
+          </div>
+        </div>
 
-        <h2>Konten</h2>
-        ${makeTable(konten, [
-          { key: 'name', label: 'Name' },
-          { key: 'balance', label: 'Kontostand', align: 'right' }
-        ])}
+        <div class="card">
+          <h2>Konten</h2>
+          ${makeTable(konten, [
+            { key: 'name', label: 'Name' },
+            { key: 'balance', label: 'Kontostand', align: 'right' }
+          ])}
+        </div>
 
-        <h2>Depots</h2>
-        ${makeTable(depots, [
-          { key: 'name', label: 'Name' },
-          { key: 'count', label: 'Anzahl Werte', align: 'right' },
-          { key: 'value', label: 'Aktueller Wert', align: 'right' },
-          { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
-          { key: 'gain_pct', label: '%', align: 'right' }
-        ])}
+        <div class="card">
+          <h2>Depots</h2>
+          ${makeTable(depots, [
+            { key: 'name', label: 'Name' },
+            { key: 'count', label: 'Anzahl Werte', align: 'right' },
+            { key: 'value', label: 'Aktueller Wert', align: 'right' },
+            { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
+            { key: 'gain_pct', label: '%', align: 'right' }
+          ])}
+        </div>
       `;
 
     } catch (err) {

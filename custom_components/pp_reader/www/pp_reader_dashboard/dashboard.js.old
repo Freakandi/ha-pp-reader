@@ -1,5 +1,5 @@
 (async () => {
-  console.log("\ud83d\udcf1 PP Reader Dashboard gestartet (via Proxy)");
+  console.log("📱 PP Reader Dashboard gestartet (via Proxy)");
 
   async function fetchStates() {
     const res = await fetch("/pp_reader_api/states", { credentials: "same-origin" });
@@ -8,13 +8,21 @@
   }
 
   function formatValue(key, value) {
-    if (key === 'balance' || key === 'value') {
-      return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
+    let formatted;
+    if ([ 'balance', 'value', 'gain_abs' ].includes(key)) {
+      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
     } else if (key === 'count') {
-      return value.toLocaleString('de-DE');
+      formatted = value.toLocaleString('de-DE');
+    } else if (key === 'gain_pct') {
+      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;%';
     } else {
-      return value;
+      formatted = value;
     }
+    if (typeof value === 'number') {
+      const cls = value >= 0 ? 'positive' : 'negative';
+      return `<span class="${cls}">${formatted}</span>`;
+    }
+    return formatted;
   }
 
   function makeTable(rows, cols) {
@@ -24,6 +32,7 @@
       html += `<th${alignClass}>${c.label}</th>`;
     });
     html += '</tr></thead><tbody>';
+
     rows.forEach(r => {
       html += '<tr>';
       cols.forEach(c => {
@@ -33,23 +42,20 @@
       html += '</tr>';
     });
 
-    // Summenzeile berechnen
+    // Summenzeile
     const sums = {};
     cols.forEach(c => {
-      if (c.align === 'right') {
-        sums[c.key] = rows.reduce((acc, row) => {
-          const value = row[c.key] || 0;
-          return acc + (typeof value === 'number' ? value : 0);
-        }, 0);
+      if (c.align === 'right' && [ 'value', 'gain_abs' ].includes(c.key)) {
+        sums[c.key] = rows.reduce((acc, row) => acc + (typeof row[c.key] === 'number' ? row[c.key] : 0), 0);
       }
     });
 
     html += '<tr style="font-weight:bold">';
-    cols.forEach((c, index) => {
+    cols.forEach((c, idx) => {
       const alignClass = c.align === 'right' ? ' class="align-right"' : '';
-      if (index === 0) {
+      if (idx === 0) {
         html += `<td${alignClass}>Summe</td>`;
-      } else if (sums[c.key] !== undefined) {
+      } else if (sums[c.key] != null) {
         html += `<td${alignClass}>${formatValue(c.key, sums[c.key])}</td>`;
       } else {
         html += '<td></td>';
@@ -85,27 +91,41 @@
 
       const depots = states
         .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
-        .map(s => ({
-          name: s.attributes.friendly_name,
-          count: s.attributes.anzahl_wertpapiere,
-          value: parseFloat(s.state)
-        }));
+        .map(s => {
+          const slug = s.entity_id.replace('sensor.depotwert_', '');
+          // Mögliche Entity-IDs für Gewinnsensoren
+          const absId = `sensor.kursgewinn_absolut_${slug}`;
+          const pctId = `sensor.kursgewinn_${slug}`;
+          const gainAbsState = states.find(x => x.entity_id === absId);
+          const gainPctState = states.find(x => x.entity_id === pctId);
+          return {
+            name: s.attributes.friendly_name,
+            count: s.attributes.anzahl_wertpapiere,
+            value: parseFloat(s.state),
+            gain_abs: gainAbsState ? parseFloat(gainAbsState.state) : 0,
+            gain_pct: gainPctState ? parseFloat(gainPctState.state) : 0
+          };
+        });
 
       const root = document.querySelector("pp-reader-dashboard");
       root.innerHTML = `
         <h2>Portfolio Dashboard</h2>
         <p><strong>📂 Letzte Aktualisierung Portfolio-Datei:</strong> ${fileUpdated}</p>
         <p><strong>📈 Auf Update geprüft am:</strong> ${lastUpdated}</p>
+
         <h2>Konten</h2>
         ${makeTable(konten, [
           { key: 'name', label: 'Name' },
           { key: 'balance', label: 'Kontostand', align: 'right' }
         ])}
+
         <h2>Depots</h2>
         ${makeTable(depots, [
           { key: 'name', label: 'Name' },
           { key: 'count', label: 'Anzahl Positionen', align: 'right' },
-          { key: 'value', label: 'Depotwert', align: 'right' }
+          { key: 'value', label: 'Aktueller Wert', align: 'right' },
+          { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
+          { key: 'gain_pct', label: '%', align: 'right' }
         ])}
       `;
 
