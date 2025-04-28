@@ -132,45 +132,46 @@ h2 {
 }
 
 /* ---------------------------------
-   Dark Mode Overrides
+   Dark Mode Overrides via Klasse .dark-mode
    --------------------------------- */
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #121212;
-    color: #e0e0e0;
-  }
-  .card {
-    background: #1e1e1e;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.7);
-  }
-  th {
-    background: #2c2c2c;
-    color: #fafafa;
-  }
-  tbody tr:nth-child(odd) {
-    background: #1a1a1a;
-  }
-  tbody tr:hover {
-    background: #333333;
-  }
-  .footer-row td {
-    background: #2c2c2c;
-    color: #fafafa;
-  }
-  .header-card .meta div strong,
-  .footer-card .meta div strong {
-    color: #fafafa;
-  }
-  h2 {
-    border-left-color: #90caf9;
-  }
-  .positive {
-    color: #4caf50;
-  }
-  .negative {
-    color: #f44336;
-  }
-  .card::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.2);
-  }
+html.dark-mode, html.dark-mode body {
+  /* transparent, um Panel-Hintergrund auszunutzen */
+  background: transparent;
+  /* Rand entfernen, um Display-Breite auszufüllen */
+  margin: 0;
+  padding: 0;
+}
+html.dark-mode .card {
+  background: #1e1e1e;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+}
+html.dark-mode th {
+  background: #2c2c2c;
+  color: #fafafa;
+}
+html.dark-mode tbody tr:nth-child(odd) {
+  background: #1a1a1a;
+}
+html.dark-mode tbody tr:hover {
+  background: #333333;
+}
+html.dark-mode .footer-row td {
+  background: #2c2c2c;
+  color: #fafafa;
+}
+html.dark-mode .header-card .meta div strong,
+html.dark-mode .footer-card .meta div strong {
+  color: #fafafa;
+}
+html.dark-mode h2 {
+  border-left-color: #90caf9;
+}
+html.dark-mode .positive {
+  color: #4caf50;
+}
+html.dark-mode .negative {
+  color: #f44336;
+}
+html.dark-mode .card::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
 }
