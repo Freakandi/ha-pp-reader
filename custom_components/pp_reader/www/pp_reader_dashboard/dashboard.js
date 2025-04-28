@@ -140,21 +140,25 @@
 
         <div class="card">
           <h2>Konten</h2>
-          ${makeTable(konten, [
-            { key: 'name', label: 'Name' },
-            { key: 'balance', label: 'Kontostand', align: 'right' }
-          ], ['balance'])}
+          <div class="scroll-container">
+            ${makeTable(konten, [
+              { key: 'name', label: 'Name' },
+              { key: 'balance', label: 'Kontostand', align: 'right' }
+            ], ['balance'])}
+          </div>
         </div>
 
         <div class="card">
           <h2>Depots</h2>
-          ${makeTable(depots, [
-            { key: 'name', label: 'Name' },
-            { key: 'count', label: 'Anzahl Positionen', align: 'right' },
-            { key: 'value', label: 'Aktueller Wert', align: 'right' },
-            { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
-            { key: 'gain_pct', label: '%', align: 'right' }
-          ], ['count', 'value', 'gain_abs'])}
+          <div class="scroll-container">
+            ${makeTable(depots, [
+              { key: 'name', label: 'Name' },
+              { key: 'count', label: 'Anzahl Positionen', align: 'right' },
+              { key: 'value', label: 'Aktueller Wert', align: 'right' },
+              { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
+              { key: 'gain_pct', label: '%', align: 'right' }
+            ], ['count', 'value', 'gain_abs'])}
+          </div>
         </div>
 
         <div class="card footer-card">
