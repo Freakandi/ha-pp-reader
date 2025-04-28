@@ -82,7 +82,6 @@
           })
         : 'Unbekannt';
 
-      // Konten (unverändert)
       const konten = states
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
         .map(s => ({
@@ -90,19 +89,21 @@
           balance: parseFloat(s.state)
         }));
 
-      // Depots inkl. Gesamtgewinn
       const depots = states
         .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
         .map(s => {
           const slug = s.entity_id.replace('sensor.depotwert_', '');
-          const gainAbs = states.find(x => x.entity_id === `sensor.kursgewinn_abs_${slug}`);
-          const gainPct = states.find(x => x.entity_id === `sensor.kursgewinn_pct_${slug}`);
+          // Mögliche Entity-IDs für Gewinnsensoren
+          const absId = `sensor.kursgewinn_absolut_${slug}`;
+          const pctId = `sensor.kursgewinn_${slug}`;
+          const gainAbsState = states.find(x => x.entity_id === absId);
+          const gainPctState = states.find(x => x.entity_id === pctId);
           return {
             name: s.attributes.friendly_name,
             count: s.attributes.anzahl_wertpapiere,
             value: parseFloat(s.state),
-            gain_abs: gainAbs ? parseFloat(gainAbs.state) : 0,
-            gain_pct: gainPct ? parseFloat(gainPct.state) : 0
+            gain_abs: gainAbsState ? parseFloat(gainAbsState.state) : 0,
+            gain_pct: gainPctState ? parseFloat(gainPctState.state) : 0
           };
         });
 
@@ -124,7 +125,7 @@
           { key: 'count', label: 'Anzahl Werte', align: 'right' },
           { key: 'value', label: 'Aktueller Wert', align: 'right' },
           { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
-          { key: 'gain_pct', label: '%' , align: 'right' }
+          { key: 'gain_pct', label: '%', align: 'right' }
         ])}
       `;
 
