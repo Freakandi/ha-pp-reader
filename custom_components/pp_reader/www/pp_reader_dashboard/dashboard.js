@@ -4,24 +4,31 @@
 function updateTheme() {
   let isDark = false;
   try {
-    // Home Assistant setzt auf dem Haupt-Dokument <html> die Klasse "theme-dark" bei Dark Mode
     const parentClasses = window.parent.document.documentElement.classList;
     isDark = parentClasses.contains('theme-dark') || parentClasses.contains('dark');
   } catch {
-    // Fallback: OS-abhängiges prefers-color-scheme
     isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
   document.documentElement.classList.toggle('dark-mode', isDark);
 }
 updateTheme();
-// Wenn der HA-Theme-wechsel via Storage-Event propagiert wird:
+
+// Beobachte Klassenänderungen im Eltern-Dokument
+try {
+  const observer = new MutationObserver(updateTheme);
+  observer.observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['class'] });
+} catch (e) {
+  console.warn("⚠️ Konnte Eltern-Dokument nicht beobachten:", e);
+}
+
+// Home Assistant Theme-Wechsel via Storage
 window.addEventListener('storage', e => {
   if (e.key === 'selectedTheme' || e.key === 'haSelectedTheme') {
     updateTheme();
   }
 });
 
-// ➔ NEU: Systemweites Theme Wechsel erkennen
+// Betriebssystem DarkMode Wechsel
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
 
   async function fetchStates() {
