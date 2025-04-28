@@ -1,36 +1,6 @@
 (async () => {
   console.log("📱 PP Reader Dashboard gestartet (via Proxy)");
 
-function updateTheme() {
-  let isDark = false;
-  try {
-    const parentClasses = window.parent.document.documentElement.classList;
-    isDark = parentClasses.contains('theme-dark') || parentClasses.contains('dark');
-  } catch {
-    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  document.documentElement.classList.toggle('dark-mode', isDark);
-}
-updateTheme();
-
-// Beobachte Klassenänderungen im Eltern-Dokument
-try {
-  const observer = new MutationObserver(updateTheme);
-  observer.observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['class'] });
-} catch (e) {
-  console.warn("⚠️ Konnte Eltern-Dokument nicht beobachten:", e);
-}
-
-// Home Assistant Theme-Wechsel via Storage
-window.addEventListener('storage', e => {
-  if (e.key === 'selectedTheme' || e.key === 'haSelectedTheme') {
-    updateTheme();
-  }
-});
-
-// Betriebssystem DarkMode Wechsel
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
-
   async function fetchStates() {
     const res = await fetch("/pp_reader_api/states", { credentials: "same-origin" });
     if (!res.ok) throw new Error("Fehler beim Laden der Sensoren");

@@ -1,44 +1,35 @@
 /* ===================================================================
-   Dashboard CSS für Portfolio-Integration
-   - Light Mode Standardstyles
-   - Dark Mode Overrides
-   - Responsive & Scrollbar
+   Dashboard CSS für Portfolio-Integration (HA Theme-kompatibel)
    =================================================================== */
 
-/* ---------------------------------
-   Global: Seitenlayout & Overflow
-   --------------------------------- */
+/* Global: Seitenlayout & Overflow */
 html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
 }
 
-/* Wrapper für Dashboard-Inhalt mit einheitlichem Padding */
+/* Wrapper für Dashboard-Inhalt */
 pp-reader-dashboard {
   display: block;
   padding: 1rem;
   box-sizing: border-box;
-  background: #f0f2f5;
-  color: #333;
+  background: var(--card-background-color, #f0f2f5);
+  color: var(--primary-text-color, #333);
   font-family: 'Inter', sans-serif;
 }
 
-/* ---------------------------------
-   Karten: Container, Layout & Scroll
-   --------------------------------- */
+/* Karten: Container, Layout & Scroll */
 .card {
-  background: #fff;
+  background: var(--card-background-color, #fff);
   border-radius: 0.5rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   padding: 1rem;
   margin-bottom: 1.5rem;
-
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Scrollbar Styling für Karten */
 .card::-webkit-scrollbar {
   height: 8px;
 }
@@ -47,9 +38,7 @@ pp-reader-dashboard {
   border-radius: 4px;
 }
 
-/* ---------------------------------
-   Header- & Footer-Cards
-   --------------------------------- */
+/* Header- & Footer-Cards */
 .header-card,
 .footer-card {
   display: flex;
@@ -67,15 +56,13 @@ pp-reader-dashboard {
   font-size: 0.95rem;
 }
 .meta div strong {
-  color: #111827;
+  color: var(--primary-text-color, #111827);
 }
 .footer-card {
   margin-top: 1rem;
 }
 
-/* ---------------------------------
-   Tabellen-Grundlayout
-   --------------------------------- */
+/* Tabellen-Grundlayout */
 table {
   width: auto;
   min-width: 100%;
@@ -87,7 +74,7 @@ th, td {
   padding: 0.75rem 1rem;
 }
 th {
-  background: #fafafa;
+  background: var(--primary-background-color, #fafafa);
   font-weight: 600;
   position: sticky;
   top: 0;
@@ -100,78 +87,36 @@ th {
 
 /* Gestreifte & Hover-Zeilen */
 tbody tr:nth-child(odd) {
-  background: #fcfcfc;
+  background: var(--secondary-background-color, #fcfcfc);
 }
 tbody tr:hover {
-  background: #f5faff;
+  background: var(--accent-color, #f5faff);
 }
 
 /* Fußzeilen-Reihe (Summenzeile) */
 .footer-row td {
   font-weight: 700;
-  background: #f9fafb;
+  background: var(--primary-background-color, #f9fafb);
 }
 
 /* Überschriften in Karten */
 h2 {
   margin-top: 0;
   font-size: 1.25rem;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--accent-color, #3b82f6);
   padding-left: 0.5rem;
 }
 
-/* ---------------------------------
-   Farb-Klassen für Gewinnwerte
-   --------------------------------- */
-.positive { color: #16a34a; }
-.negative { color: #dc2626; }
+/* Farb-Klassen für Gewinnwerte */
+.positive {
+  color: var(--state-icon-color, #16a34a);
+}
+.negative {
+  color: var(--error-color, #dc2626);
+}
 
-/* ---------------------------------
-   Responsive Anpassungen
-   --------------------------------- */
+/* Responsive Anpassungen */
 @media (max-width: 600px) {
   .meta { flex-direction: column; }
   table, th, td { font-size: 0.9rem; }
-}
-
-/* ---------------------------------
-   Dark Mode Overrides via Klasse .dark-mode
-   --------------------------------- */
-html.dark-mode pp-reader-dashboard {
-  background: transparent;
-  color: #e0e0e0;
-}
-html.dark-mode .card {
-  background: #1e1e1e;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.7);
-}
-html.dark-mode th {
-  background: #2c2c2c;
-  color: #fafafa;
-}
-html.dark-mode tbody tr:nth-child(odd) {
-  background: #1a1a1a;
-}
-html.dark-mode tbody tr:hover {
-  background: #333333;
-}
-html.dark-mode .footer-row td {
-  background: #2c2c2c;
-  color: #fafafa;
-}
-html.dark-mode .header-card .meta div strong,
-html.dark-mode .footer-card .meta div strong {
-  color: #fafafa;
-}
-html.dark-mode h2 {
-  border-left-color: #90caf9;
-}
-html.dark-mode .positive {
-  color: #4caf50;
-}
-html.dark-mode .negative {
-  color: #f44336;
-}
-html.dark-mode .card::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
 }
