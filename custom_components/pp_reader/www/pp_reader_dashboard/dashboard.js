@@ -1,5 +1,5 @@
 (async () => {
-  console.log("\ud83d\udcf1 PP Reader Dashboard gestartet (mit manuellem Theme-Umschalter)");
+  console.log("📱 PP Reader Dashboard gestartet (mit manuellem Theme-Umschalter)");
 
   function createThemeToggle() {
     const button = document.createElement('button');
@@ -32,22 +32,22 @@
 
   function formatValue(key, value) {
     let formatted;
-    if (["gain_abs", "gain_pct"].includes(key)) {
-      const symbol = key === "gain_pct" ? "%" : "€";
-      formatted = value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + `&nbsp;${symbol}`;
-      const cls = value >= 0 ? "positive" : "negative";
+    if (['gain_abs', 'gain_pct'].includes(key)) {
+      const symbol = key === 'gain_pct' ? '%' : '€';
+      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + `&nbsp;${symbol}`;
+      const cls = value >= 0 ? 'positive' : 'negative';
       return `<span class="${cls}">${formatted}</span>`;
-    } else if (key === "count") {
-      formatted = value.toLocaleString("de-DE");
-    } else if (["balance", "value"].includes(key)) {
-      formatted = value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "&nbsp;€";
+    } else if (key === 'count') {
+      formatted = value.toLocaleString('de-DE');
+    } else if (['balance', 'value'].includes(key)) {
+      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
     } else {
       formatted = value;
     }
     return formatted;
   }
 
-  function makeTable(rows, cols) {
+  function makeTable(rows, cols, sumColumns = []) {
     let html = '<table><thead><tr>';
     cols.forEach(c => {
       const alignClass = c.align === 'right' ? ' class="align-right"' : '';
@@ -66,7 +66,7 @@
 
     const sums = {};
     cols.forEach(c => {
-      if (c.align === 'right' && ['value', 'gain_abs'].includes(c.key)) {
+      if (c.align === 'right' && sumColumns.includes(c.key)) {
         sums[c.key] = rows.reduce((acc, row) => {
           const v = row[c.key]; return acc + (typeof v === 'number' ? v : 0);
         }, 0);
@@ -143,7 +143,7 @@
           ${makeTable(konten, [
             { key: 'name', label: 'Name' },
             { key: 'balance', label: 'Kontostand', align: 'right' }
-          ])}
+          ], ['balance'])}
         </div>
 
         <div class="card">
@@ -154,7 +154,7 @@
             { key: 'value', label: 'Aktueller Wert', align: 'right' },
             { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
             { key: 'gain_pct', label: '%', align: 'right' }
-          ])}
+          ], ['count', 'value', 'gain_abs'])}
         </div>
 
         <div class="card footer-card">

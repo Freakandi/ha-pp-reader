@@ -1,15 +1,13 @@
 /* ===================================================================
-   Dashboard CSS für Portfolio-Integration (HA Theme-kompatibel)
+   Dashboard CSS für Portfolio-Integration (HA Theme-kompatibel) + Dark Mode manuell
    =================================================================== */
 
-/* Global: Seitenlayout & Overflow */
 html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
 }
 
-/* Wrapper für Dashboard-Inhalt */
 pp-reader-dashboard {
   display: block;
   padding: 1rem;
@@ -17,9 +15,9 @@ pp-reader-dashboard {
   background: var(--card-background-color, #f0f2f5);
   color: var(--primary-text-color, #333);
   font-family: 'Inter', sans-serif;
+  position: relative;
 }
 
-/* Karten: Container, Layout & Scroll */
 .card {
   background: var(--card-background-color, #fff);
   border-radius: 0.5rem;
@@ -38,7 +36,6 @@ pp-reader-dashboard {
   border-radius: 4px;
 }
 
-/* Header- & Footer-Cards */
 .header-card,
 .footer-card {
   display: flex;
@@ -62,7 +59,6 @@ pp-reader-dashboard {
   margin-top: 1rem;
 }
 
-/* Tabellen-Grundlayout */
 table {
   width: auto;
   min-width: 100%;
@@ -85,7 +81,6 @@ th {
   text-align: right;
 }
 
-/* Gestreifte & Hover-Zeilen */
 tbody tr:nth-child(odd) {
   background: var(--secondary-background-color, #fcfcfc);
 }
@@ -93,13 +88,11 @@ tbody tr:hover {
   background: var(--accent-color, #f5faff);
 }
 
-/* Fußzeilen-Reihe (Summenzeile) */
 .footer-row td {
   font-weight: 700;
   background: var(--primary-background-color, #f9fafb);
 }
 
-/* Überschriften in Karten */
 h2 {
   margin-top: 0;
   font-size: 1.25rem;
@@ -107,7 +100,6 @@ h2 {
   padding-left: 0.5rem;
 }
 
-/* Farb-Klassen für Gewinnwerte */
 .positive {
   color: var(--state-icon-color, #16a34a);
 }
@@ -115,13 +107,12 @@ h2 {
   color: var(--error-color, #dc2626);
 }
 
-/* Responsive Anpassungen */
 @media (max-width: 600px) {
   .meta { flex-direction: column; }
   table, th, td { font-size: 0.9rem; }
 }
 
-/* Dark Mode manuell über Klasse */
+/* Dark Mode manuell */
 html.dark-mode pp-reader-dashboard {
   background: #1e1e1e;
   color: #e0e0e0;
@@ -151,4 +142,7 @@ html.dark-mode .positive {
 }
 html.dark-mode .negative {
   color: #f44336;
+}
+html.dark-mode .meta div strong {
+  color: #e0e0e0;
 }
