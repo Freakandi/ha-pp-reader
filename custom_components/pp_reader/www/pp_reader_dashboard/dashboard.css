@@ -104,3 +104,28 @@ h2 {
 .footer-card .meta div strong {
   color: #111827;
 }
+/* 1. Seite insgesamt nicht horizontal scrollen */
+html, body {
+  overflow-x: hidden;
+}
+
+/* 2. Karten scrollbar machen, wenn Inhalt zu breit */
+.card {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* für sanftes Scrollen auf iOS */
+}
+
+/* 3. Tabelle behält ihre natürliche Breite, so dass sie bei Bedarf overflow erzeugt */
+.card table {
+  width: auto;      /* statt 100% */
+  min-width: 100%;  /* sorgt dafür, dass sie mindestens so breit ist wie ihre Spalten */
+}
+
+/* 4. Optional: Padding & Schatten sauber beibehalten */
+.card::-webkit-scrollbar {
+  height: 8px;
+}
+.card::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
