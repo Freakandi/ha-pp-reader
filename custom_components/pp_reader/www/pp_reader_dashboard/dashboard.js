@@ -48,7 +48,7 @@
       html += '</tr>';
     });
 
-    // Summenzeile für value & gain_abs
+    // Fußzeile für value & gain_abs
     const sums = {};
     cols.forEach(c => {
       if (c.align === 'right' && ['value', 'gain_abs'].includes(c.key)) {
@@ -80,7 +80,7 @@
     try {
       const states = await fetchStates();
 
-      // Zeitstempel
+      // Letzte Updates
       const firstAccount = states.find(s => s.entity_id.startsWith('sensor.kontostand_'));
       const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
       const lastUpdatedRaw = firstAccount?.last_updated;
@@ -91,13 +91,11 @@
           })
         : 'Unbekannt';
 
-      // Konten
+      // Konten und Summen
       const konten = states
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
-        .map(s => ({
-          name: s.attributes.friendly_name,
-          balance: parseFloat(s.state)
-        }));
+        .map(s => ({ name: s.attributes.friendly_name, balance: parseFloat(s.state) }));
+      const totalKonten = konten.reduce((acc, k) => acc + (isNaN(k.balance) ? 0 : k.balance), 0);
 
       // Depots inkl. Gewinnsensoren
       const depots = states
@@ -105,7 +103,7 @@
         .map(s => {
           const slug = s.entity_id.replace('sensor.depotwert_', '');
           const absId = `sensor.kursgewinn_absolut_${slug}`;
-          const pctId = `sensor.kursgewinn_pct_${slug}`;
+          const pctId = `sensor.kursgewinn_${slug}`;                // hier angepasst
           const gainAbsState = states.find(x => x.entity_id === absId);
           const gainPctState = states.find(x => x.entity_id === pctId);
           return {
@@ -116,10 +114,9 @@
             gain_pct: gainPctState ? parseFloat(gainPctState.state) : 0
           };
         });
+      const totalDepots = depots.reduce((acc, d) => acc + (isNaN(d.value) ? 0 : d.value), 0);
 
-      // Gesamtvermögen (Konten + Depots)
-      const totalKonten = konten.reduce((sum, k) => sum + (isNaN(k.balance) ? 0 : k.balance), 0);
-      const totalDepots = depots.reduce((sum, d) => sum + (isNaN(d.value) ? 0 : d.value), 0);
+      // Gesamtvermögen
       const totalVermoegen = totalKonten + totalDepots;
 
       // Rendern
@@ -128,10 +125,10 @@
         <div class="card header-card">
           <h1>Portfolio Dashboard</h1>
           <div class="meta">
-            <div>📂 Letzte Aktualisierung Portfolio-Datei: <strong>${fileUpdated}</strong></div>
-            <div>📈 Auf Update geprüft am: <strong>${lastUpdated}</strong></div>
+            <div>📂 Letzte Aktualisierung Datei: <strong>${fileUpdated}</strong></div>
+            <div>📈 Geprüft am: <strong>${lastUpdated}</strong></div>
             <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE',{
-              minimumFractionDigits:2,maximumFractionDigits:2
+              minimumFractionDigits:2, maximumFractionDigits:2
             })}&nbsp;€</strong></div>
           </div>
         </div>
@@ -163,10 +160,7 @@
     }
   }
 
-  class PPReaderDashboard extends HTMLElement {
-    connectedCallback() {
-      renderDashboard();
-    }
-  }
-  customElements.define('pp-reader-dashboard', PPReaderDashboard);
+  customElements.define('pp-reader-dashboard', class extends HTMLElement {
+    connectedCallback() { renderDashboard(); }
+  });
 })();
