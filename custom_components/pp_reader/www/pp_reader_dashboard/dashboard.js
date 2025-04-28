@@ -9,24 +9,17 @@
 
   function formatValue(key, value) {
     let formatted;
-    if (['balance', 'value', 'gain_abs'].includes(key)) {
-      formatted = value.toLocaleString('de-DE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }) + '&nbsp;€';
+    if (['gain_abs', 'gain_pct'].includes(key)) {
+      const symbol = key === 'gain_pct' ? '%' : '€';
+      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + `&nbsp;${symbol}`;
+      const cls = value >= 0 ? 'positive' : 'negative';
+      return `<span class=\"${cls}\">${formatted}</span>`;
     } else if (key === 'count') {
       formatted = value.toLocaleString('de-DE');
-    } else if (key === 'gain_pct') {
-      formatted = value.toLocaleString('de-DE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }) + '&nbsp;%';
+    } else if (['balance', 'value'].includes(key)) {
+      formatted = value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '&nbsp;€';
     } else {
       formatted = value;
-    }
-    if (typeof value === 'number') {
-      const cls = value >= 0 ? 'positive' : 'negative';
-      return `<span class="${cls}">${formatted}</span>`;
     }
     return formatted;
   }
@@ -34,7 +27,7 @@
   function makeTable(rows, cols) {
     let html = '<table><thead><tr>';
     cols.forEach(c => {
-      const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+      const alignClass = c.align === 'right' ? ' class=\"align-right\"' : '';
       html += `<th${alignClass}>${c.label}</th>`;
     });
     html += '</tr></thead><tbody>';
@@ -42,26 +35,25 @@
     rows.forEach(r => {
       html += '<tr>';
       cols.forEach(c => {
-        const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+        const alignClass = c.align === 'right' ? ' class=\"align-right\"' : '';
         html += `<td${alignClass}>${formatValue(c.key, r[c.key])}</td>`;
       });
       html += '</tr>';
     });
 
-    // Fußzeile für value & gain_abs
+    // Summenzeile für value & gain_abs
     const sums = {};
     cols.forEach(c => {
       if (c.align === 'right' && ['value', 'gain_abs'].includes(c.key)) {
         sums[c.key] = rows.reduce((acc, row) => {
-          const v = row[c.key];
-          return acc + (typeof v === 'number' ? v : 0);
+          const v = row[c.key]; return acc + (typeof v === 'number' ? v : 0);
         }, 0);
       }
     });
 
-    html += '<tr class="footer-row">';
+    html += '<tr class=\"footer-row\">';
     cols.forEach((c, idx) => {
-      const alignClass = c.align === 'right' ? ' class="align-right"' : '';
+      const alignClass = c.align === 'right' ? ' class=\"align-right\"' : '';
       if (idx === 0) {
         html += `<td${alignClass}>Summe</td>`;
       } else if (sums[c.key] != null) {
@@ -80,7 +72,7 @@
     try {
       const states = await fetchStates();
 
-      // Letzte Updates
+      // Meta-Daten
       const firstAccount = states.find(s => s.entity_id.startsWith('sensor.kontostand_'));
       const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
       const lastUpdatedRaw = firstAccount?.last_updated;
@@ -91,19 +83,18 @@
           })
         : 'Unbekannt';
 
-      // Konten und Summen
+      // Daten-Arrays
       const konten = states
         .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
         .map(s => ({ name: s.attributes.friendly_name, balance: parseFloat(s.state) }));
       const totalKonten = konten.reduce((acc, k) => acc + (isNaN(k.balance) ? 0 : k.balance), 0);
 
-      // Depots inkl. Gewinnsensoren
       const depots = states
         .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
         .map(s => {
           const slug = s.entity_id.replace('sensor.depotwert_', '');
           const absId = `sensor.kursgewinn_absolut_${slug}`;
-          const pctId = `sensor.kursgewinn_${slug}`;                // hier angepasst
+          const pctId = `sensor.kursgewinn_${slug}`;
           const gainAbsState = states.find(x => x.entity_id === absId);
           const gainPctState = states.find(x => x.entity_id === pctId);
           return {
@@ -116,20 +107,15 @@
         });
       const totalDepots = depots.reduce((acc, d) => acc + (isNaN(d.value) ? 0 : d.value), 0);
 
-      // Gesamtvermögen
       const totalVermoegen = totalKonten + totalDepots;
 
-      // Rendern
+      // Aufbau Dashboard
       const root = document.querySelector("pp-reader-dashboard");
       root.innerHTML = `
         <div class="card header-card">
           <h1>Portfolio Dashboard</h1>
           <div class="meta">
-            <div>📂 Letzte Aktualisierung Datei: <strong>${fileUpdated}</strong></div>
-            <div>📈 Geprüft am: <strong>${lastUpdated}</strong></div>
-            <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE',{
-              minimumFractionDigits:2, maximumFractionDigits:2
-            })}&nbsp;€</strong></div>
+            <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})}&nbsp;€</strong></div>
           </div>
         </div>
 
@@ -145,11 +131,18 @@
           <h2>Depots</h2>
           ${makeTable(depots, [
             { key: 'name', label: 'Name' },
-            { key: 'count', label: 'Anzahl Werte', align: 'right' },
+            { key: 'count', label: 'Anzahl Positionen', align: 'right' },
             { key: 'value', label: 'Aktueller Wert', align: 'right' },
             { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
             { key: 'gain_pct', label: '%', align: 'right' }
           ])}
+        </div>
+
+        <div class="card footer-card">
+          <div class="meta">
+            <div>📂 Letzte Aktualisierung Datei: <strong>${fileUpdated}</strong></div>
+            <div>📈 Geprüft am: <strong>${lastUpdated}</strong></div>
+          </div>
         </div>
       `;
 

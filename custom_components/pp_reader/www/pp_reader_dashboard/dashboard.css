@@ -43,6 +43,10 @@ table {
   border-spacing: 0;
   margin: 0;
 }
+/* Überschriften linksbündig statt zentriert */
+th {
+  text-align: left;
+}
 th, td {
   padding: 0.75rem 1rem;
 }
@@ -83,4 +87,20 @@ h2 {
 @media (max-width: 600px) {
   .meta { flex-direction: column; }
   table, th, td { font-size: 0.9rem; }
+}
+
+/* Footer-Card: gleiche Optik wie Card, ggf. kleiner Abstand nach oben */
+.footer-card {
+  margin-top: 1rem;
+}
+
+/* Footer-Meta: gleiche Formatierung wie Header */
+.footer-card .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+.footer-card .meta div strong {
+  color: #111827;
 }
