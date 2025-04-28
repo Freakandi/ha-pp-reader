@@ -10,11 +10,18 @@
    --------------------------------- */
 html, body {
   margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Wrapper für Dashboard-Inhalt mit einheitlichem Padding */
+pp-reader-dashboard {
+  display: block;
   padding: 1rem;
-  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
   background: #f0f2f5;
   color: #333;
-  overflow-x: hidden;          /* Keine horizontale Seite-Scroll */
+  font-family: 'Inter', sans-serif;
 }
 
 /* ---------------------------------
@@ -27,8 +34,8 @@ html, body {
   padding: 1rem;
   margin-bottom: 1.5rem;
 
-  overflow-x: auto;            /* Horizontales Scroll innerhalb der Karte */
-  -webkit-overflow-scrolling: touch; /* Glatter Scroll auf iOS */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Scrollbar Styling für Karten */
@@ -70,8 +77,8 @@ html, body {
    Tabellen-Grundlayout
    --------------------------------- */
 table {
-  width: auto;                /* natürliche Breite */
-  min-width: 100%;            /* mindestens Container-Breite */
+  width: auto;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   margin: 0;
@@ -85,7 +92,7 @@ th {
   position: sticky;
   top: 0;
   z-index: 1;
-  text-align: left;           /* Standard: linksbündig */
+  text-align: left;
 }
 .align-right {
   text-align: right;
@@ -123,23 +130,16 @@ h2 {
    Responsive Anpassungen
    --------------------------------- */
 @media (max-width: 600px) {
-  .meta {
-    flex-direction: column;
-  }
-  table, th, td {
-    font-size: 0.9rem;
-  }
+  .meta { flex-direction: column; }
+  table, th, td { font-size: 0.9rem; }
 }
 
 /* ---------------------------------
    Dark Mode Overrides via Klasse .dark-mode
    --------------------------------- */
-html.dark-mode, html.dark-mode body {
-  /* transparent, um Panel-Hintergrund auszunutzen */
+html.dark-mode pp-reader-dashboard {
   background: transparent;
-  /* Rand entfernen, um Display-Breite auszufüllen */
-  margin: 0;
-  padding: 0;
+  color: #e0e0e0;
 }
 html.dark-mode .card {
   background: #1e1e1e;

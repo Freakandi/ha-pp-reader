@@ -1,15 +1,25 @@
 (async () => {
   console.log("📱 PP Reader Dashboard gestartet (via Proxy)");
 
-  function updateTheme() {
-    // Media-Query prüfen
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.classList.toggle('dark-mode', isDark);
+function updateTheme() {
+  let isDark = false;
+  try {
+    // Home Assistant setzt auf dem Haupt-Dokument <html> die Klasse "theme-dark" bei Dark Mode
+    const parentClasses = window.parent.document.documentElement.classList;
+    isDark = parentClasses.contains('theme-dark') || parentClasses.contains('dark');
+  } catch {
+    // Fallback: OS-abhängiges prefers-color-scheme
+    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
-  updateTheme();
-  // Auf Änderungen der System-Einstellung lauschen
-  window.matchMedia('(prefers-color-scheme: dark)')
-        .addEventListener('change', updateTheme);
+  document.documentElement.classList.toggle('dark-mode', isDark);
+}
+updateTheme();
+// Wenn der HA-Theme-wechsel via Storage-Event propagiert wird:
+window.addEventListener('storage', e => {
+  if (e.key === 'selectedTheme' || e.key === 'haSelectedTheme') {
+    updateTheme();
+  }
+});
 
   async function fetchStates() {
     const res = await fetch("/pp_reader_api/states", { credentials: "same-origin" });
