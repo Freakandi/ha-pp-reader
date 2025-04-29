@@ -54,7 +54,7 @@ class PortfolioPurchaseSensor(SensorEntity):
                             portfolio,
                             data.transactions,
                             securities_by_id,
-                            reference_date=datetime.fromtimestamp(current_mtime),
+                            datetime.fromtimestamp(current_mtime),
                             self._file_path
                         )
                         self._last_mtime = current_mtime
