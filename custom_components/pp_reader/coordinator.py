@@ -21,7 +21,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         try:
             kaufdaten = []
             currencies = set()
-            securities_by_id = {s.id: s for s in self.data.securities}
+            securities_by_id = {s.uuid: s for s in self.data.securities}
 
             # 🔥 Transaktionen analysieren
             for tx in self.data.transactions:
