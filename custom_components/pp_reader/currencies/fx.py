@@ -152,8 +152,7 @@ def get_required_currencies(client) -> set[str]:
                 currencies.add(sec.currencyCode)
     return currencies
 
-async def get_exchange_rates(client, reference_date: datetime) -> dict[str, float]:
-    file_path = client.file_path
+async def get_exchange_rates(client, reference_date: datetime, file_path: str) -> dict[str, float]:
     db_path = _get_db_path(file_path)
 
     await _migrate_from_json(db_path)

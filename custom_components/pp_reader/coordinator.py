@@ -54,7 +54,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             # 🔥 Wechselkurse laden, aber Fehler dabei tolerieren
             try:
                 await ensure_exchange_rates_for_dates(kaufdaten, currencies, self.file_path)
-                await get_exchange_rates(self.data, datetime.now())
+                await get_exchange_rates(self.data, datetime.now(), self.file_path)
             except Exception as fx_error:
                 _LOGGER.warning("⚠️ Wechselkurse konnten nicht vollständig geladen werden: %s", fx_error)
 
