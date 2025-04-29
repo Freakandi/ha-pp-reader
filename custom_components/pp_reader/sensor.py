@@ -12,17 +12,13 @@ from .const import DOMAIN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
-from custom_components.pp_reader.currencies.fx import (
-    ensure_exchange_rates_for_dates,
-    get_exchange_rates
-)
+from .coordinator import PPReaderCoordinator  # Neu!
 
 from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor
 from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 
 _LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -39,6 +35,10 @@ async def async_setup_entry(
         _LOGGER.error("❌ Keine Daten aus Datei %s", file_path)
         return
 
+    # Coordinator anlegen und Daten vorbereiten (inkl. Wechselkurse)
+    coordinator = PPReaderCoordinator(hass, None, data)
+    await coordinator.async_config_entry_first_refresh()
+
     sensors = []
     purchase_sensors = []
 
@@ -54,30 +54,6 @@ async def async_setup_entry(
     securities_by_id = {s.uuid: s for s in data.securities}
     reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
 
-    # 🔥 1. Alle notwendigen Kaufdaten- und Depotwährungen sammeln
-    kaufdaten = []
-    currencies = set()
-
-    # Transaktionswährungen für Käufe (zur historischen Bewertung)
-    for tx in data.transactions:
-        if tx.type in (0, 2) and tx.HasField("security"):
-            kaufdatum = datetime.fromtimestamp(tx.date.seconds)
-            kaufdaten.append(kaufdatum)
-
-            sec = securities_by_id.get(tx.security)
-            if sec and sec.HasField("currencyCode") and sec.currencyCode != "EUR":
-                currencies.add(sec.currencyCode)
-
-    # Zusätzlich: aktuelle Depotwährungen sichern
-    for sec in data.securities:
-        if sec.HasField("currencyCode") and sec.currencyCode != "EUR":
-            currencies.add(sec.currencyCode)
-
-    # 🔥 2. Wechselkurse zentral laden
-    await ensure_exchange_rates_for_dates(kaufdaten, currencies)  # historische Kurse für Kaufdatum
-    await get_exchange_rates(data, reference_date)                # aktuelle Wechselkurse für aktive Bestände
-
-    # 🔥 3. Sensoren anlegen
     for portfolio in data.portfolios:
         if getattr(portfolio, "isRetired", False):
             continue
@@ -104,12 +80,12 @@ async def async_setup_entry(
         gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
         sensors.append(gain_pct_sensor)
 
-    # 🔥 4. Kaufsummen-Sensoren parallel initialisieren
+    # 🔥 Kaufsummen-Sensoren parallel initialisieren
     await asyncio.gather(*(sensor.async_update() for sensor in purchase_sensors))
 
-    # 🔥 5. Sensoren an HA übergeben
+    # 🔥 Sensoren an HA übergeben
     async_add_entities(sensors)
 
-    # ⏱️ 6. Setup-Dauer messen und loggen
+    # ⏱️ Setup-Dauer messen und loggen
     elapsed = (datetime.now() - start_time).total_seconds()
     _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
