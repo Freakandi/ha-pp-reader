@@ -16,7 +16,15 @@ export function formatValue(key, value) {
       maximumFractionDigits: 2
     }) + '&nbsp;€';
   } else {
+    // HIER wird abgeschnitten:
     formatted = value;
+    if (typeof formatted === 'string') {
+      if (formatted.startsWith('Kontostand ')) {
+        formatted = formatted.substring('Kontostand '.length);
+      } else if (formatted.startsWith('Depotwert ')) {
+        formatted = formatted.substring('Depotwert '.length);
+      }
+    }
   }
   return formatted;
 }
