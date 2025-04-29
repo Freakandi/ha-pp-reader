@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 import aiohttp
+import os
 from aiohttp import web
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
