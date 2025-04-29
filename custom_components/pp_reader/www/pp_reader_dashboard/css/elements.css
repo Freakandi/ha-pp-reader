@@ -1,4 +1,4 @@
-/* --- Neuer Theme-Toggle --- */
+/* --- Neuer, halb so großer Theme-Toggle --- */
 #theme-toggle-wrapper {
   position: fixed;
   top: 1rem;
@@ -9,47 +9,47 @@
 #theme-toggle {
   appearance: none;
   -webkit-appearance: none;
-  width: 80px;
-  height: 40px;
-  background: linear-gradient(to top, #87ceeb 50%, #ffffff 50%); /* Tag-Himmel */
+  width: 40px; /* vorher 80px */
+  height: 20px; /* vorher 40px */
+  background: linear-gradient(to top, #87ceeb 50%, #ffffff 50%);
   border-radius: 999px;
   position: relative;
   cursor: pointer;
   transition: background 0.5s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 #theme-toggle::before {
   content: "";
   position: absolute;
-  top: 5px;
-  left: 5px;
-  width: 30px;
-  height: 30px;
+  top: 2px; /* vorher 5px */
+  left: 2px; /* vorher 5px */
+  width: 15px; /* vorher 30px */
+  height: 15px; /* vorher 30px */
   background: yellow;
   border-radius: 50%;
   transition: all 0.5s ease;
-  box-shadow: 0 0 5px rgba(255,255,0,0.8);
+  box-shadow: 0 0 3px rgba(255,255,0,0.8);
 }
 
-/* Wenn aktiviert (Nachtmodus) */
+/* Nachtmodus */
 #theme-toggle:checked {
-  background: linear-gradient(to top, #0b0c10 50%, #1f1f1f 50%); /* Nacht-Himmel */
+  background: linear-gradient(to top, #0b0c10 50%, #1f1f1f 50%);
 }
 
 #theme-toggle:checked::before {
   background: #ccc;
-  left: 45px; /* nach rechts schieben */
-  box-shadow: inset -4px -4px 0 0 #999; /* Mondkrater */
+  left: 22px; /* angepasst von 45px auf 22px */
+  box-shadow: inset -2px -2px 0 0 #999;
 }
 
-/* Sterne hinzufügen im Nachtmodus */
+/* Sterne im Nachtmodus */
 #theme-toggle:checked::after {
   content: "✨";
   position: absolute;
-  top: 8px;
-  left: 15px;
-  font-size: 14px;
+  top: 4px; /* angepasst */
+  left: 7px; /* angepasst */
+  font-size: 7px; /* vorher 14px */
   color: white;
 }
 
