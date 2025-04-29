@@ -54,7 +54,8 @@ class PortfolioPurchaseSensor(SensorEntity):
                             portfolio,
                             data.transactions,
                             securities_by_id,
-                            reference_date=datetime.fromtimestamp(current_mtime)
+                            reference_date=datetime.fromtimestamp(current_mtime),
+                            self._file_path
                         )
                         self._last_mtime = current_mtime
                         _LOGGER.debug("✅ Neue Kaufsumme für %s: %.2f €", self._portfolio_name, self._purchase_sum)

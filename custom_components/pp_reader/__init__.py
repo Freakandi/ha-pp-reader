@@ -34,6 +34,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not data:
         raise ConfigEntryNotReady(f"❌ Datei konnte nicht gelesen werden: {file_path}")
 
+    data.file_path = file_path
+
     # Coordinator initialisieren
     coordinator = PPReaderCoordinator(hass, None, data, file_path)
     try:
