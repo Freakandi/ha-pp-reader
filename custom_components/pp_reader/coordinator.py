@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .logic.exchange_rates import ensure_exchange_rates_for_dates, get_exchange_rates
+from .currencies.fx import ensure_exchange_rates_for_dates, get_exchange_rates
 
 _LOGGER = logging.getLogger(__name__)
 
