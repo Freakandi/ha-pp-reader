@@ -1,0 +1,27 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+pp-reader-dashboard {
+  display: block;
+  padding: 1rem;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+  position: relative;
+}
+
+.scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 600px) {
+  .meta {
+    flex-direction: column;
+  }
+  table, th, td {
+    font-size: 0.9rem;
+  }
+}

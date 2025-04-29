@@ -1,0 +1,42 @@
+html.dark-mode pp-reader-dashboard {
+  background: #1e1e1e;
+  color: #e0e0e0;
+}
+
+html.dark-mode .card {
+  background: #2c2c2c;
+}
+
+html.dark-mode th {
+  background: #2c2c2c;
+  color: #fafafa;
+}
+
+html.dark-mode tbody tr:nth-child(odd) {
+  background: #1a1a1a;
+}
+
+html.dark-mode tbody tr:hover {
+  background: #333333;
+}
+
+html.dark-mode .footer-row td {
+  background: #2c2c2c;
+  color: #fafafa;
+}
+
+html.dark-mode h2 {
+  border-left-color: #90caf9;
+}
+
+html.dark-mode .positive {
+  color: #4caf50;
+}
+
+html.dark-mode .negative {
+  color: #f44336;
+}
+
+html.dark-mode .meta div strong {
+  color: #e0e0e0;
+}

@@ -1,0 +1,99 @@
+.card {
+  background: var(--card-background-color, #fff);
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  overflow: auto;
+  position: relative;
+}
+
+.card h2 {
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 2;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.card::-webkit-scrollbar {
+  height: 8px;
+}
+.card::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+
+.header-card,
+.footer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.header-card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.footer-card {
+  margin-top: 1rem;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+
+.meta div strong {
+  color: var(--primary-text-color, #111827);
+}
+
+table {
+  width: auto;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+}
+
+th, td {
+  padding: 0.75rem 1rem;
+}
+
+th {
+  background: var(--primary-background-color, #fafafa);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+}
+
+.align-right {
+  text-align: right;
+}
+
+tbody tr:nth-child(odd) {
+  background: var(--secondary-background-color, #fcfcfc);
+}
+
+tbody tr:hover {
+  background: var(--accent-color, #f5faff);
+}
+
+.footer-row td {
+  font-weight: 700;
+  background: var(--primary-background-color, #f9fafb);
+}
+
+.positive {
+  color: var(--state-icon-color, #16a34a);
+}
+
+.negative {
+  color: var(--error-color, #dc2626);
+}
