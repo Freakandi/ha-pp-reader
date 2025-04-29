@@ -78,7 +78,7 @@ def _load_cache_sync() -> dict[str, dict[str, float]]:
 def _save_cache_sync(cache: dict[str, dict[str, float]]) -> None:
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, "w") as f:
-        json.dump(cache, f, indent=2)
+        json.dump(cache, f, indent=2, sort_keys=True)
 
 # ——— Executor-Wrapper ———
 
