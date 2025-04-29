@@ -56,7 +56,8 @@ async def async_setup_entry(
             portfolio,
             data.transactions,
             securities_by_id,
-            reference_date
+            reference_date,
+            file_path
         )
         depot_sensor = PortfolioDepotSensor(hass, portfolio.name, value, count, file_path)
         sensors.append(depot_sensor)

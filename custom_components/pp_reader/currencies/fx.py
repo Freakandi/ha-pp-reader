@@ -24,30 +24,48 @@ def _get_db_path(file_path: str) -> Path:
     basename = Path(file_path).stem
     return BASE_DIR / f"{basename}.db"
 
-async def _open_db(db_path: Path) -> sqlite3.Connection:
-    """Oeffne eine SQLite-Verbindung im Threadpool."""
+async def _execute_db(fn, *args, **kwargs):
+    """Führe eine DB-Operation im Executor aus."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, sqlite3.connect, str(db_path))
+    return await loop.run_in_executor(None, fn, *args, **kwargs)
 
-async def _initialize_db_schema(conn: sqlite3.Connection) -> None:
-    """Initialisiere die Tabelle falls noch nicht vorhanden."""
-    await asyncio.get_running_loop().run_in_executor(
-        None,
-        lambda: conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS fx_rates (
-                date TEXT NOT NULL,
-                currency TEXT NOT NULL,
-                rate REAL NOT NULL,
-                PRIMARY KEY (date, currency)
-            )
-            """
+def _initialize_db_schema_sync(db_path: Path):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fx_rates (
+            date TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            rate REAL NOT NULL,
+            PRIMARY KEY (date, currency)
         )
+    """)
+    conn.commit()
+    conn.close()
+
+def _load_rates_for_date_sync(db_path: Path, date: str) -> dict[str, float]:
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.execute(
+        "SELECT currency, rate FROM fx_rates WHERE date = ?",
+        (date,)
+    )
+    result = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+    return result
+
+def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
+    if not rates:
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    inserts = [(date, currency, rate) for currency, rate in rates.items()]
+    conn.executemany(
+        "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
+        inserts
     )
     conn.commit()
+    conn.close()
 
-async def _migrate_from_json(db_path: Path) -> None:
-    """Migration der alten fxrates.json falls vorhanden."""
+def _migrate_from_json_sync(db_path: Path) -> None:
     old_cache = BASE_DIR.parent / "cache" / "fxrates.json"
     if not old_cache.exists() or db_path.exists():
         return
@@ -66,13 +84,11 @@ async def _migrate_from_json(db_path: Path) -> None:
             PRIMARY KEY (date, currency)
         )
     """)
-
     inserts = [
         (date, currency, rate)
         for date, rates in data.items()
         for currency, rate in rates.items()
     ]
-
     conn.executemany(
         "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
         inserts
@@ -81,6 +97,18 @@ async def _migrate_from_json(db_path: Path) -> None:
     conn.close()
 
     old_cache.rename(old_cache.with_suffix(".migrated"))
+
+async def _migrate_from_json(db_path: Path) -> None:
+    await _execute_db(_migrate_from_json_sync, db_path)
+
+async def _initialize_db_schema(db_path: Path) -> None:
+    await _execute_db(_initialize_db_schema_sync, db_path)
+
+async def _load_rates_for_date(db_path: Path, date: str) -> dict[str, float]:
+    return await _execute_db(_load_rates_for_date_sync, db_path, date)
+
+async def _save_rates(db_path: Path, date: str, rates: dict[str, float]) -> None:
+    await _execute_db(_save_rates_sync, db_path, date, rates)
 
 async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
     if not currencies:
@@ -100,24 +128,6 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     except Exception as e:
         _LOGGER.error("❌ Fehler beim Abruf der Wechselkurse: %s", e)
         return {}
-
-async def _load_rates_for_date(conn: sqlite3.Connection, date: str) -> dict[str, float]:
-    cursor = conn.execute(
-        "SELECT currency, rate FROM fx_rates WHERE date = ?",
-        (date,)
-    )
-    return {row[0]: row[1] for row in cursor.fetchall()}
-
-async def _save_rates(conn: sqlite3.Connection, date: str, rates: dict[str, float]) -> None:
-    if not rates:
-        return
-
-    inserts = [(date, currency, rate) for currency, rate in rates.items()]
-    conn.executemany(
-        "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
-        inserts
-    )
-    conn.commit()
 
 # --- Öffentliche Funktionen ---
 
@@ -143,37 +153,33 @@ def get_required_currencies(client) -> set[str]:
     return currencies
 
 async def get_exchange_rates(client, reference_date: datetime) -> dict[str, float]:
-    file_path = client.file_path  # vorausgesetzt, das Client-Objekt hat file_path
+    file_path = client.file_path
     db_path = _get_db_path(file_path)
 
     await _migrate_from_json(db_path)
-    conn = await _open_db(db_path)
-    await _initialize_db_schema(conn)
+    await _initialize_db_schema(db_path)
 
     date_str = reference_date.strftime("%Y-%m-%d")
-    rates = await _load_rates_for_date(conn, date_str)
+    rates = await _load_rates_for_date(db_path, date_str)
 
     needed = get_required_currencies(client)
 
     if not needed.issubset(set(rates.keys())):
         _LOGGER.info("🔄 Lade fehlende Kurse für %s", date_str)
         fetched = await _fetch_exchange_rates(date_str, needed)
-        await _save_rates(conn, date_str, fetched)
+        await _save_rates(db_path, date_str, fetched)
         rates.update(fetched)
 
-    conn.close()
     return rates
 
 async def load_latest_rates(reference_date: datetime, file_path: str) -> dict[str, float]:
     db_path = _get_db_path(file_path)
 
     await _migrate_from_json(db_path)
-    conn = await _open_db(db_path)
-    await _initialize_db_schema(conn)
+    await _initialize_db_schema(db_path)
 
     date_str = reference_date.strftime("%Y-%m-%d")
-    rates = await _load_rates_for_date(conn, date_str)
-    conn.close()
+    rates = await _load_rates_for_date(db_path, date_str)
     return rates
 
 async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str], file_path: str) -> None:
@@ -183,20 +189,12 @@ async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set
     db_path = _get_db_path(file_path)
 
     await _migrate_from_json(db_path)
-    conn = await _open_db(db_path)
-    await _initialize_db_schema(conn)
-
-    missing_dates = []
+    await _initialize_db_schema(db_path)
 
     for dt in dates:
         date_str = dt.strftime("%Y-%m-%d")
-        existing = await _load_rates_for_date(conn, date_str)
+        existing = await _load_rates_for_date(db_path, date_str)
         if not currencies.issubset(set(existing.keys())):
-            missing_dates.append(date_str)
-
-    for date_str in missing_dates:
-        _LOGGER.info("🔄 Lade historische Kurse für %s", date_str)
-        fetched = await _fetch_exchange_rates(date_str, currencies)
-        await _save_rates(conn, date_str, fetched)
-
-    conn.close()
+            _LOGGER.info("🔄 Lade historische Kurse für %s", date_str)
+            fetched = await _fetch_exchange_rates(date_str, currencies)
+            await _save_rates(db_path, date_str, fetched)
