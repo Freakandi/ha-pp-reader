@@ -24,17 +24,7 @@ async function renderDashboard() {
       </div>
 
       <div class="card">
-        <h2>Konten</h2>
-        <div class="scroll-container">
-          ${makeTable(konten, [
-            { key: 'name', label: 'Name' },
-            { key: 'balance', label: 'Kontostand', align: 'right' }
-          ], ['balance'])}
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Depots</h2>
+        <h2>Investment</h2>
         <div class="scroll-container">
           ${makeTable(depots, [
             { key: 'name', label: 'Name' },
@@ -43,6 +33,16 @@ async function renderDashboard() {
             { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
             { key: 'gain_pct', label: '%', align: 'right' }
           ], ['count', 'value', 'gain_abs'])}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Liquidität</h2>
+        <div class="scroll-container">
+          ${makeTable(konten, [
+            { key: 'name', label: 'Name' },
+            { key: 'balance', label: 'Kontostand', align: 'right' }
+          ], ['balance'])}
         </div>
       </div>
 
