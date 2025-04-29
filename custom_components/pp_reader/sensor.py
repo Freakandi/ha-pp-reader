@@ -1,4 +1,3 @@
-# sensor.py
 import os
 import logging
 import asyncio
@@ -8,17 +7,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, CONF_FILE_PATH
-from .reader import parse_data_portfolio
+from .const import DOMAIN
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
-from .coordinator import PPReaderCoordinator  # Neu!
+from .coordinator import PPReaderCoordinator
 
 from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor
 from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -28,16 +27,10 @@ async def async_setup_entry(
     """Initialisiere alle Sensoren für pp_reader."""
     start_time = datetime.now()
 
-    file_path = config_entry.data[CONF_FILE_PATH]
-    data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
-
-    if not data:
-        _LOGGER.error("❌ Keine Daten aus Datei %s", file_path)
-        return
-
-    # Coordinator anlegen und Daten vorbereiten (inkl. Wechselkurse)
-    coordinator = PPReaderCoordinator(hass, None, data)
-    await coordinator.async_config_entry_first_refresh()
+    # Zugriff auf vorbereitete Objekte aus __init__.py
+    data = hass.data[DOMAIN][config_entry.entry_id]["data"]
+    file_path = hass.data[DOMAIN][config_entry.entry_id]["file_path"]
+    coordinator: PPReaderCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
     sensors = []
     purchase_sensors = []

@@ -2,13 +2,16 @@ import logging
 from pathlib import Path
 import aiohttp
 from aiohttp import web
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import Platform
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
-from .const import DOMAIN, CONF_API_TOKEN
+
+from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH
+from .reader import parse_data_portfolio
+from .coordinator import PPReaderCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = ["sensor"]
@@ -20,9 +23,30 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("🔧 Starte Integration: %s", DOMAIN)
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = entry.data
 
+    file_path = entry.data[CONF_FILE_PATH]
+
+    # Portfolio-Datei laden
+    data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
+    if not data:
+        raise ConfigEntryNotReady(f"❌ Datei konnte nicht gelesen werden: {file_path}")
+
+    # Coordinator initialisieren
+    coordinator = PPReaderCoordinator(hass, None, data)
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        raise ConfigEntryNotReady(f"❌ Coordinator konnte nicht initialisiert werden: {err}")
+
+    # Daten im Speicher ablegen
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "coordinator": coordinator,
+        "data": data,
+        "file_path": file_path,
+        "api_token": entry.data.get(CONF_API_TOKEN),
+    }
+
+    # Sensor-Plattform starten
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Dashboard-Dateien bereitstellen
