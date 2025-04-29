@@ -8,16 +8,15 @@ from datetime import datetime
 _LOGGER = logging.getLogger(__name__)
 
 # Cache-Datei liegt unter custom_components/pp_reader/cache/fxrates.json
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-CACHE_DIR  = os.path.join(BASE_DIR, "..", "cache")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_DIR = os.path.join(BASE_DIR, "..", "cache")
 CACHE_FILE = os.path.join(CACHE_DIR, "fxrates.json")
 
 API_URL = "https://api.frankfurter.app"
 
-# ——— Deine bestehenden Hilfsfunktionen ———
+# ——— Hilfsfunktionen ———
 
 def get_required_currencies(client):
-    # … unveränderte Logik …
     holdings: dict[str, float] = {}
     for tx in client.transactions:
         if not tx.HasField("security"):
@@ -39,10 +38,6 @@ def get_required_currencies(client):
     return currencies
 
 async def fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
-    """
-    Ruft Wechselkurse von EUR zu den angegebenen Währungen ab.
-    Schlägt der Abruf fehl, wird eine leere Antwort geliefert.
-    """
     if not currencies:
         return {}
 
@@ -80,12 +75,10 @@ def _load_cache_sync() -> dict[str, dict[str, float]]:
     with open(CACHE_FILE, "r") as f:
         return json.load(f)
 
-
 def _save_cache_sync(cache: dict[str, dict[str, float]]) -> None:
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2)
-
 
 # ——— Executor-Wrapper ———
 
@@ -93,11 +86,9 @@ async def _load_cache_async() -> dict[str, dict[str, float]]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _load_cache_sync)
 
-
 async def _save_cache_async(cache: dict[str, dict[str, float]]) -> None:
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _save_cache_sync, cache)
-
 
 # ——— Haupt-API für neue Kurse ———
 
@@ -109,52 +100,42 @@ async def get_exchange_rates(client, reference_date: datetime) -> dict[str, floa
     if date not in cache:
         _LOGGER.info("Abruf Kurse für %s: %s", date, needed)
         rates = await fetch_exchange_rates(date, needed)
-        cache[date] = rates
-        await _save_cache_async(cache)
+        if rates:
+            cache[date] = rates
+            await _save_cache_async(cache)
     else:
         rates = cache[date]
 
     return rates
 
-
-# ——— Asynchrone Version von load_latest_rates ———
-
 async def load_latest_rates(reference_date: datetime) -> dict[str, float]:
-    """
-    Lese gespeicherte Wechselkurse aus dem Cache im Executor.
-    """
     cache = await _load_cache_async()
     date = reference_date.strftime("%Y-%m-%d")
     return cache.get(date, {})
 
-# ——— Gezieltes Laden von Währungskursen für benötigte Daten ———
-
-async def ensure_exchange_rates_for_dates(
-    dates: list[datetime],
-    currencies: set[str]
-) -> None:
-    """
-    Stelle sicher, dass für alle angegebenen Daten die Wechselkurse im Cache vorhanden sind.
-    Fehlt ein Kurs für ein Datum, wird er live nachgeladen und gespeichert.
-    """
+async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str]) -> None:
     if not currencies:
         return
 
     cache = await _load_cache_async()
-    updated = False
 
-    for dt in dates:
-        date_str = dt.strftime("%Y-%m-%d")
-        if date_str in cache:
-            continue  # Kurse für dieses Datum sind schon vorhanden
+    tasks = [
+        _fetch_and_update_cache(date.strftime("%Y-%m-%d"), currencies, cache)
+        for date in dates
+        if date.strftime("%Y-%m-%d") not in cache
+    ]
 
+    if tasks:
+        await asyncio.gather(*tasks)
+        await _save_cache_async(cache)
+
+async def _fetch_and_update_cache(date_str: str, currencies: set[str], cache: dict) -> None:
+    try:
         _LOGGER.info("Lade historische Kurse für %s: %s", date_str, currencies)
         rates = await fetch_exchange_rates(date_str, currencies)
         if rates:
             cache[date_str] = rates
-            updated = True
         else:
             _LOGGER.warning("⚠️ Keine Kurse geladen für %s", date_str)
-
-    if updated:
-        await _save_cache_async(cache)
+    except Exception as e:
+        _LOGGER.error("❌ Fehler beim Laden der Kurse für %s: %s", date_str, e)
