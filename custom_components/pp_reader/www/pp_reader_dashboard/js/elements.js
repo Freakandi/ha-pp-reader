@@ -38,7 +38,11 @@ export function makeTable(rows, cols, sumColumns = []) {
     html += '</tr>';
   });
 
+  // Summen berechnen
   const sums = {};
+  let totalGainAbs = 0;
+  let totalValue = 0;
+
   cols.forEach(c => {
     if (c.align === 'right' && sumColumns.includes(c.key)) {
       sums[c.key] = rows.reduce((acc, row) => {
@@ -47,6 +51,11 @@ export function makeTable(rows, cols, sumColumns = []) {
       }, 0);
     }
   });
+
+  if ('gain_abs' in sums && 'value' in sums) {
+    // Gesamtprozent berechnen: (Summe Gewinn absolut / Summe Wert) * 100
+    sums['gain_pct'] = (sums['gain_abs'] / sums['value']) * 100;
+  }
 
   html += '<tr class="footer-row">';
   cols.forEach((c, idx) => {
@@ -64,4 +73,3 @@ export function makeTable(rows, cols, sumColumns = []) {
   html += '</tbody></table>';
   return html;
 }
-

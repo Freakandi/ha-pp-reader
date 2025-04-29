@@ -88,6 +88,7 @@ tbody tr:hover {
 .footer-row td {
   font-weight: 700;
   background: var(--primary-background-color, #f9fafb);
+  border-top: 2px solid #ccc;
 }
 
 .positive {
