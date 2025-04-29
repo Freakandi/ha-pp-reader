@@ -1,22 +1,127 @@
-import json
+# custom_components/pp_reader/currencies/fx.py
+
 import os
+import sqlite3
 import aiohttp
 import asyncio
 import logging
+import json
+from pathlib import Path
 from datetime import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
-# Cache-Datei liegt unter custom_components/pp_reader/cache/fxrates.json
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CACHE_DIR = os.path.join(BASE_DIR, "..", "cache")
-CACHE_FILE = os.path.join(CACHE_DIR, "fxrates.json")
-
+# API URL
 API_URL = "https://api.frankfurter.app"
 
-# ——— Hilfsfunktionen ———
+# Speicherort Basis
+BASE_DIR = Path(__file__).resolve().parent.parent / "storage"
 
-def get_required_currencies(client):
+# --- Hilfsfunktionen ---
+
+def _get_db_path(file_path: str) -> Path:
+    """Gibt den Pfad zur SQLite-Datei basierend auf der Portfolio-Datei."""
+    basename = Path(file_path).stem
+    return BASE_DIR / f"{basename}.db"
+
+async def _open_db(db_path: Path) -> sqlite3.Connection:
+    """Oeffne eine SQLite-Verbindung im Threadpool."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, sqlite3.connect, str(db_path))
+
+async def _initialize_db_schema(conn: sqlite3.Connection) -> None:
+    """Initialisiere die Tabelle falls noch nicht vorhanden."""
+    await asyncio.get_running_loop().run_in_executor(
+        None,
+        lambda: conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fx_rates (
+                date TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                rate REAL NOT NULL,
+                PRIMARY KEY (date, currency)
+            )
+            """
+        )
+    )
+    conn.commit()
+
+async def _migrate_from_json(db_path: Path) -> None:
+    """Migration der alten fxrates.json falls vorhanden."""
+    old_cache = BASE_DIR.parent / "cache" / "fxrates.json"
+    if not old_cache.exists() or db_path.exists():
+        return
+
+    _LOGGER.info("🔄 Migriere alte fxrates.json nach SQLite: %s", db_path.name)
+
+    with open(old_cache, "r") as f:
+        data = json.load(f)
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fx_rates (
+            date TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            rate REAL NOT NULL,
+            PRIMARY KEY (date, currency)
+        )
+    """)
+
+    inserts = [
+        (date, currency, rate)
+        for date, rates in data.items()
+        for currency, rate in rates.items()
+    ]
+
+    conn.executemany(
+        "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
+        inserts
+    )
+    conn.commit()
+    conn.close()
+
+    old_cache.rename(old_cache.with_suffix(".migrated"))
+
+async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
+    if not currencies:
+        return {}
+
+    symbols = ",".join(currencies)
+    url = f"{API_URL}/{date}?from=EUR&to={symbols}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    _LOGGER.warning("⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d", date, response.status)
+                    return {}
+                data = await response.json()
+                return {k: float(v) for k, v in data.get("rates", {}).items()}
+    except Exception as e:
+        _LOGGER.error("❌ Fehler beim Abruf der Wechselkurse: %s", e)
+        return {}
+
+async def _load_rates_for_date(conn: sqlite3.Connection, date: str) -> dict[str, float]:
+    cursor = conn.execute(
+        "SELECT currency, rate FROM fx_rates WHERE date = ?",
+        (date,)
+    )
+    return {row[0]: row[1] for row in cursor.fetchall()}
+
+async def _save_rates(conn: sqlite3.Connection, date: str, rates: dict[str, float]) -> None:
+    if not rates:
+        return
+
+    inserts = [(date, currency, rate) for currency, rate in rates.items()]
+    conn.executemany(
+        "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
+        inserts
+    )
+    conn.commit()
+
+# --- Öffentliche Funktionen ---
+
+def get_required_currencies(client) -> set[str]:
     holdings: dict[str, float] = {}
     for tx in client.transactions:
         if not tx.HasField("security"):
@@ -37,105 +142,61 @@ def get_required_currencies(client):
                 currencies.add(sec.currencyCode)
     return currencies
 
-async def fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
-    if not currencies:
-        return {}
-
-    symbols = ",".join(currencies)
-    url = f"{API_URL}/{date}?from=EUR&to={symbols}"
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    _LOGGER.warning("⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d", date, response.status)
-                    return {}
-
-                text = await response.text()
-                if not text.strip():
-                    _LOGGER.error("❌ Leere Antwort beim Abrufen der Wechselkurse für %s", date)
-                    return {}
-
-                try:
-                    data = json.loads(text)
-                except json.JSONDecodeError:
-                    _LOGGER.error("❌ Ungültige JSON-Antwort beim Abrufen der Wechselkurse für %s", date)
-                    return {}
-
-                return {k: float(v) for k, v in data.get("rates", {}).items()}
-    except Exception as e:
-        _LOGGER.error("❌ Unerwarteter Fehler beim Abrufen der Wechselkurse: %s", e)
-        return {}
-
-# ——— Synchrone Kernfunktionen für File-I/O ———
-
-def _load_cache_sync() -> dict[str, dict[str, float]]:
-    if not os.path.exists(CACHE_FILE):
-        return {}
-    with open(CACHE_FILE, "r") as f:
-        return json.load(f)
-
-def _save_cache_sync(cache: dict[str, dict[str, float]]) -> None:
-    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-    with open(CACHE_FILE, "w") as f:
-        json.dump(cache, f, indent=2, sort_keys=True)
-
-# ——— Executor-Wrapper ———
-
-async def _load_cache_async() -> dict[str, dict[str, float]]:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _load_cache_sync)
-
-async def _save_cache_async(cache: dict[str, dict[str, float]]) -> None:
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _save_cache_sync, cache)
-
-# ——— Haupt-API für neue Kurse ———
-
 async def get_exchange_rates(client, reference_date: datetime) -> dict[str, float]:
+    file_path = client.file_path  # vorausgesetzt, das Client-Objekt hat file_path
+    db_path = _get_db_path(file_path)
+
+    await _migrate_from_json(db_path)
+    conn = await _open_db(db_path)
+    await _initialize_db_schema(conn)
+
+    date_str = reference_date.strftime("%Y-%m-%d")
+    rates = await _load_rates_for_date(conn, date_str)
+
     needed = get_required_currencies(client)
-    date = reference_date.strftime("%Y-%m-%d")
 
-    cache = await _load_cache_async()
-    if date not in cache:
-        _LOGGER.info("Abruf Kurse für %s: %s", date, needed)
-        rates = await fetch_exchange_rates(date, needed)
-        if rates:
-            cache[date] = rates
-            await _save_cache_async(cache)
-    else:
-        rates = cache[date]
+    if not needed.issubset(set(rates.keys())):
+        _LOGGER.info("🔄 Lade fehlende Kurse für %s", date_str)
+        fetched = await _fetch_exchange_rates(date_str, needed)
+        await _save_rates(conn, date_str, fetched)
+        rates.update(fetched)
 
+    conn.close()
     return rates
 
-async def load_latest_rates(reference_date: datetime) -> dict[str, float]:
-    cache = await _load_cache_async()
-    date = reference_date.strftime("%Y-%m-%d")
-    return cache.get(date, {})
+async def load_latest_rates(reference_date: datetime, file_path: str) -> dict[str, float]:
+    db_path = _get_db_path(file_path)
 
-async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str]) -> None:
+    await _migrate_from_json(db_path)
+    conn = await _open_db(db_path)
+    await _initialize_db_schema(conn)
+
+    date_str = reference_date.strftime("%Y-%m-%d")
+    rates = await _load_rates_for_date(conn, date_str)
+    conn.close()
+    return rates
+
+async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str], file_path: str) -> None:
     if not currencies:
         return
 
-    cache = await _load_cache_async()
+    db_path = _get_db_path(file_path)
 
-    tasks = [
-        _fetch_and_update_cache(date.strftime("%Y-%m-%d"), currencies, cache)
-        for date in dates
-        if date.strftime("%Y-%m-%d") not in cache
-    ]
+    await _migrate_from_json(db_path)
+    conn = await _open_db(db_path)
+    await _initialize_db_schema(conn)
 
-    if tasks:
-        await asyncio.gather(*tasks)
-        await _save_cache_async(cache)
+    missing_dates = []
 
-async def _fetch_and_update_cache(date_str: str, currencies: set[str], cache: dict) -> None:
-    try:
-        _LOGGER.info("Lade historische Kurse für %s: %s", date_str, currencies)
-        rates = await fetch_exchange_rates(date_str, currencies)
-        if rates:
-            cache[date_str] = rates
-        else:
-            _LOGGER.warning("⚠️ Keine Kurse geladen für %s", date_str)
-    except Exception as e:
-        _LOGGER.error("❌ Fehler beim Laden der Kurse für %s: %s", date_str, e)
+    for dt in dates:
+        date_str = dt.strftime("%Y-%m-%d")
+        existing = await _load_rates_for_date(conn, date_str)
+        if not currencies.issubset(set(existing.keys())):
+            missing_dates.append(date_str)
+
+    for date_str in missing_dates:
+        _LOGGER.info("🔄 Lade historische Kurse für %s", date_str)
+        fetched = await _fetch_exchange_rates(date_str, currencies)
+        await _save_rates(conn, date_str, fetched)
+
+    conn.close()

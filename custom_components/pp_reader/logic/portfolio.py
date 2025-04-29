@@ -15,7 +15,8 @@ async def calculate_portfolio_value(
     portfolio,
     transactions,
     securities_by_id,
-    reference_date: datetime
+    reference_date: datetime,
+    file_path: str
 ) -> tuple[float, int]:
     """
     Ermittle für ein aktives Depot:
@@ -50,10 +51,10 @@ async def calculate_portfolio_value(
             currencies.add(sec.currencyCode)
 
     # 5. Sicherstellen, dass alle benötigten Wechselkurse vorhanden sind
-    await ensure_exchange_rates_for_dates([reference_date], currencies)
+    await ensure_exchange_rates_for_dates([reference_date], currencies, file_path)
 
     # 6. Wechselkurse laden
-    fx_rates = await load_latest_rates(reference_date)
+    fx_rates = await load_latest_rates(reference_date, file_path)
 
     # 7. Bewertung durchführen
     total_value = 0.0
@@ -81,14 +82,13 @@ async def calculate_purchase_sum(
     portfolio,
     transactions,
     securities_by_id,
-    reference_date: datetime
+    reference_date: datetime,
+    file_path: str
 ) -> float:
     """
     Berechne die Summe der ursprünglichen Kaufpreise (EUR, mit historischer Umrechnung)
     für alle noch aktiven Positionen eines Depots, basierend auf FIFO.
     """
-
-    from custom_components.pp_reader.currencies.fx import load_latest_rates
 
     # 1. Transaktionen für das Depot filtern
     tx_list = [tx for tx in transactions if tx.portfolio == portfolio.uuid]
@@ -113,7 +113,7 @@ async def calculate_purchase_sum(
         currency = sec.currencyCode if sec.HasField("currencyCode") else "EUR"
 
         # Historische Wechselkurse laden
-        fx_rates = await load_latest_rates(tx_date)
+        fx_rates = await load_latest_rates(tx_date, file_path)
         rate = fx_rates.get(currency) if currency != "EUR" else 1.0
 
         if not rate:

@@ -7,7 +7,7 @@ from .currencies.fx import ensure_exchange_rates_for_dates, get_exchange_rates
 _LOGGER = logging.getLogger(__name__)
 
 class PPReaderCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, client, data):
+    def __init__(self, hass, client, data, file_path):
         super().__init__(
             hass,
             _LOGGER,
@@ -16,6 +16,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         )
         self.client = client
         self.data = data  # Eingeladene Portfolio-Datei
+        self.file_path = file_path
 
     async def _async_update_data(self):
         try:
@@ -52,7 +53,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
             # 🔥 Wechselkurse laden, aber Fehler dabei tolerieren
             try:
-                await ensure_exchange_rates_for_dates(kaufdaten, currencies)
+                await ensure_exchange_rates_for_dates(kaufdaten, currencies, self.file_path)
                 await get_exchange_rates(self.data, datetime.now())
             except Exception as fx_error:
                 _LOGGER.warning("⚠️ Wechselkurse konnten nicht vollständig geladen werden: %s", fx_error)

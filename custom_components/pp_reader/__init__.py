@@ -24,6 +24,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("🔧 Starte Integration: %s", DOMAIN)
 
+    os.makedirs(hass.config.path("custom_components/pp_reader/storage"), exist_ok=True)
+
     file_path = entry.data[CONF_FILE_PATH]
 
     # Portfolio-Datei laden
@@ -32,7 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"❌ Datei konnte nicht gelesen werden: {file_path}")
 
     # Coordinator initialisieren
-    coordinator = PPReaderCoordinator(hass, None, data)
+    coordinator = PPReaderCoordinator(hass, None, data, file_path)
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception as err:
