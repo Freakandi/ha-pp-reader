@@ -32,15 +32,16 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
         await hass.async_add_executor_job(run_backup_cycle, db_path)
 
     try:
-        if not hass.services.has_service("pp_reader", "trigger_backup_debug"):
-            hass.services.async_register(
-                "pp_reader",
-                "trigger_backup_debug",
-                async_trigger_debug_backup
-            )
+#        if not hass.services.has_service("pp_reader", "trigger_backup_debug"):
+        hass.services.async_register(
+            "pp_reader",
+            "trigger_backup_debug",
+            async_trigger_debug_backup
+        )
         _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
     except Exception as e:
         _LOGGER.error("❌ Fehler bei Service-Registrierung: %s", e)
+        raise
 
 # === Core Logic ===
 
