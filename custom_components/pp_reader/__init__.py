@@ -10,6 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 
+from .backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH
 from .reader import parse_data_portfolio
 from .coordinator import PPReaderCoordinator
@@ -99,6 +100,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return web.Response(status=200, body=data, content_type="application/json")
 
     hass.http.register_view(PPReaderAPI(token))
+
+    # 🔄 Backup-System starten
+    db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
+    setup_backup_system(hass, db_path)
 
     return True
 
