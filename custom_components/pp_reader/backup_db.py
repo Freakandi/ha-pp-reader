@@ -83,7 +83,7 @@ def is_sqlite_integrity_ok(db_path: str) -> bool:
 # === Backup-Erstellung ===
 
 def create_backup_if_valid(db_path: Path):
-    now = datetime.now().strftime("%Y%m%d_%H%M")
+    now = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = db_path.parent / BACKUP_SUBDIR
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_path = backup_dir / f"{db_path.stem}_{now}.db"
@@ -125,6 +125,7 @@ def cleanup_old_backups(backup_dir: Path):
         key = dt.date()
         if age == 0:
             keep.add(b)
+            continue
         elif age <= 7:
             daily[key] = max(daily.get(key, b), b, key=os.path.getmtime)
         elif age <= 28:
