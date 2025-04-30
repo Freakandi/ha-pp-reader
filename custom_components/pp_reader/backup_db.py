@@ -33,7 +33,7 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
 
     try:
         if not hass.services.has_service("pp_reader", "trigger_backup_debug"):
-            await hass.services.async_register(
+            hass.services.async_register(
                 "pp_reader",
                 "trigger_backup_debug",
                 async_trigger_debug_backup
