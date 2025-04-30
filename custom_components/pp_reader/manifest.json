@@ -1,7 +1,7 @@
 {
   "domain": "pp_reader",
   "name": "Portfolio Performance Reader",
-  "version": "0.5.22",
+  "version": "0.5.23",
   "documentation": "https://github.com/Freakandi/ha-pp-reader",
   "dependencies": [],
   "codeowners": ["@Freakandi"],
