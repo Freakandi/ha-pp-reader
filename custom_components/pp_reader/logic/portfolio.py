@@ -1,22 +1,27 @@
 # custom_components/pp_reader/logic/portfolio.py
+
 import logging
+from pathlib import Path
 from datetime import datetime
 from custom_components.pp_reader.currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def normalize_price(raw_price: int) -> float:
     return raw_price / 10**8  # Kurswerte mit 8 Nachkommastellen
 
+
 def normalize_shares(raw_shares: int) -> float:
     return raw_shares / 10**8  # Stückzahlen mit 8 Nachkommastellen
+
 
 async def calculate_portfolio_value(
     portfolio,
     transactions,
     securities_by_id,
     reference_date: datetime,
-    file_path: str
+    db_path: Path
 ) -> tuple[float, int]:
     """
     Ermittle für ein aktives Depot:
@@ -51,10 +56,10 @@ async def calculate_portfolio_value(
             currencies.add(sec.currencyCode)
 
     # 5. Sicherstellen, dass alle benötigten Wechselkurse vorhanden sind
-    await ensure_exchange_rates_for_dates([reference_date], currencies, file_path)
+    await ensure_exchange_rates_for_dates([reference_date], currencies, db_path)
 
     # 6. Wechselkurse laden
-    fx_rates = await load_latest_rates(reference_date, file_path)
+    fx_rates = await load_latest_rates(reference_date, db_path)
 
     # 7. Bewertung durchführen
     total_value = 0.0
@@ -78,12 +83,13 @@ async def calculate_portfolio_value(
 
     return round(total_value, 2), len(active_securities)
 
+
 async def calculate_purchase_sum(
     portfolio,
     transactions,
     securities_by_id,
     reference_date: datetime,
-    file_path: str
+    db_path: Path
 ) -> float:
     """
     Berechne die Summe der ursprünglichen Kaufpreise (EUR, mit historischer Umrechnung)
@@ -94,7 +100,7 @@ async def calculate_purchase_sum(
     tx_list = [tx for tx in transactions if tx.portfolio == portfolio.uuid]
 
     # 2. Bestände und Kaufhistorie aufbauen
-    holdings: dict[str, list[tuple[float, float, datetime]]] = {}  # {security_id: [(shares, price_per_share_eur, date), ...]}
+    holdings: dict[str, list[tuple[float, float, datetime]]] = {}
 
     for tx in sorted(tx_list, key=lambda x: x.date.seconds):  # wichtig: FIFO, daher nach Datum sortieren
         if not tx.HasField("security"):
@@ -109,15 +115,14 @@ async def calculate_purchase_sum(
         if not sec or shares == 0:
             continue
 
-        # Währung ermitteln
         currency = sec.currencyCode if sec.HasField("currencyCode") else "EUR"
 
         # Historische Wechselkurse laden
-        fx_rates = await load_latest_rates(tx_date, file_path)
+        fx_rates = await load_latest_rates(tx_date, db_path)
         rate = fx_rates.get(currency) if currency != "EUR" else 1.0
 
         if not rate:
-            print(f"⚠️ Kein Wechselkurs verfügbar für {currency} am {tx_date.date()}, Papier: {sec.name}")
+            _LOGGER.warning("⚠️ Kein Wechselkurs verfügbar für %s am %s", currency, tx_date.date())
             continue
 
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
@@ -126,7 +131,6 @@ async def calculate_purchase_sum(
             holdings.setdefault(security_id, []).append((shares, price_per_share_eur, tx_date))
 
         elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
-            # Verkaufte Stücke FIFO reduzieren
             remaining_to_sell = shares
             existing = holdings.get(security_id, [])
             updated = []
@@ -151,22 +155,18 @@ async def calculate_purchase_sum(
 
     return round(total_purchase, 2)
 
+
 def calculate_unrealized_gain(
     current_value: float,
     purchase_sum: float
 ) -> float:
-    """
-    Berechne den absoluten Gewinn oder Verlust auf Basis aktueller Wertentwicklung.
-    """
     return round(current_value - purchase_sum, 2)
+
 
 def calculate_unrealized_gain_pct(
     current_value: float,
     purchase_sum: float
 ) -> float:
-    """
-    Berechne die prozentuale Veränderung auf Basis aktueller Wertentwicklung.
-    """
     if purchase_sum == 0:
         return 0.0
     return round(((current_value - purchase_sum) / purchase_sum) * 100, 2)

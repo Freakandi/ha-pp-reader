@@ -2,6 +2,7 @@
 import os
 import logging
 from datetime import datetime
+from pathlib import Path
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.util import slugify
 
@@ -16,10 +17,11 @@ class PortfolioPurchaseSensor(SensorEntity):
 
     should_poll = True
 
-    def __init__(self, hass, portfolio_name, file_path):
+    def __init__(self, hass, portfolio_name, file_path: str, db_path: Path):
         self.hass = hass
         self._portfolio_name = portfolio_name
         self._file_path = file_path
+        self._db_path = db_path
         self._purchase_sum = 0.0
         self._last_mtime = os.path.getmtime(file_path)
 
@@ -47,7 +49,6 @@ class PortfolioPurchaseSensor(SensorEntity):
 
                 securities_by_id = {s.uuid: s for s in data.securities}
 
-                # Kaufsumme neu berechnen
                 for portfolio in data.portfolios:
                     if portfolio.name == self._portfolio_name:
                         self._purchase_sum = await calculate_purchase_sum(
@@ -55,7 +56,7 @@ class PortfolioPurchaseSensor(SensorEntity):
                             data.transactions,
                             securities_by_id,
                             datetime.fromtimestamp(current_mtime),
-                            self._file_path
+                            db_path=self._db_path
                         )
                         self._last_mtime = current_mtime
                         _LOGGER.debug("✅ Neue Kaufsumme für %s: %.2f €", self._portfolio_name, self._purchase_sum)

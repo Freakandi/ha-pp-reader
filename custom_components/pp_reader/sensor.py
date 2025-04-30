@@ -1,7 +1,10 @@
+### Datei: sensor.py
+
 import os
 import logging
 import asyncio
 from datetime import datetime
+from pathlib import Path
 
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
@@ -30,6 +33,7 @@ async def async_setup_entry(
     # Zugriff auf vorbereitete Objekte aus __init__.py
     data = hass.data[DOMAIN][config_entry.entry_id]["data"]
     file_path = hass.data[DOMAIN][config_entry.entry_id]["file_path"]
+    db_path = Path(hass.data[DOMAIN][config_entry.entry_id]["db_path"])
     coordinator: PPReaderCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
     sensors = []
@@ -57,13 +61,13 @@ async def async_setup_entry(
             data.transactions,
             securities_by_id,
             reference_date,
-            file_path
+            db_path=db_path
         )
         depot_sensor = PortfolioDepotSensor(hass, portfolio.name, value, count, file_path)
         sensors.append(depot_sensor)
 
         # Kaufsumme-Sensor
-        purchase_sensor = PortfolioPurchaseSensor(hass, portfolio.name, file_path)
+        purchase_sensor = PortfolioPurchaseSensor(hass, portfolio.name, file_path, db_path)
         purchase_sensors.append(purchase_sensor)
         sensors.append(purchase_sensor)
 

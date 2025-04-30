@@ -45,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"❌ Datei konnte nicht gelesen werden: {file_path}")
 
     # Schritt 3: Coordinator initialisieren
-    coordinator = PPReaderCoordinator(hass, None, data, file_path)
+    coordinator = PPReaderCoordinator(hass, None, data, file_path, db_path)
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception as err:

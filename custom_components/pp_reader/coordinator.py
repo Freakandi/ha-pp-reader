@@ -1,13 +1,15 @@
 import logging
 from datetime import datetime
+from pathlib import Path
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .currencies.fx import ensure_exchange_rates_for_dates, get_exchange_rates
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class PPReaderCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, client, data, file_path):
+    def __init__(self, hass, client, data, file_path, db_path: Path):
         super().__init__(
             hass,
             _LOGGER,
@@ -17,6 +19,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self.client = client
         self.data = data  # Eingeladene Portfolio-Datei
         self.file_path = file_path
+        self.db_path = db_path
 
     async def _async_update_data(self):
         try:
@@ -53,8 +56,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
             # 🔥 Wechselkurse laden, aber Fehler dabei tolerieren
             try:
-                await ensure_exchange_rates_for_dates(kaufdaten, currencies, self.file_path)
-                await get_exchange_rates(self.data, datetime.now(), self.file_path)
+                await ensure_exchange_rates_for_dates(kaufdaten, currencies, self.db_path)
+                await get_exchange_rates(self.data, datetime.now(), self.db_path)
             except Exception as fx_error:
                 _LOGGER.warning("⚠️ Wechselkurse konnten nicht vollständig geladen werden: %s", fx_error)
 
