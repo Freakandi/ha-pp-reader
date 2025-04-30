@@ -18,7 +18,7 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
     """Initialisiere zyklische Backups innerhalb von Home Assistant."""
     _LOGGER.debug("🔁 Initialisiere Backup-System mit DB: %s", db_path)
 
-    interval = timedelta(hours=6)  # alle 6 Stunden
+    interval = timedelta(hours=6)
 
     async def _periodic_backup(now):
         _LOGGER.debug("⏱️ Starte geplantes Backup")
@@ -26,7 +26,6 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
 
     async_track_time_interval(hass, _periodic_backup, interval)
 
-    # Debug-Service
     async def async_trigger_debug_backup(call: ServiceCall):
         _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
         await hass.async_add_executor_job(run_backup_cycle, db_path)
@@ -44,23 +43,12 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
             _LOGGER.exception("❌ Fehler bei Service-Registrierung:")
             raise
 
-# Warten auf vollständigen Start von Home Assistant
-if hass.is_running:
-    await register_backup_service()
-else:
-    hass.bus.async_listen_once("homeassistant_started", register_backup_service)
+    # 🧠 Hier innerhalb der Funktion prüfen und reagieren
+    if hass.is_running:
+        await register_backup_service()
+    else:
+        hass.bus.async_listen_once("homeassistant_started", register_backup_service)
 
-
-#    try:
-#        hass.services.async_register(
-#            "pp_reader",
-#            "trigger_backup_debug",
-#            async_trigger_debug_backup
-#        )
-#        _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
-#    except Exception as e:
-#        _LOGGER.error("❌ Fehler bei Service-Registrierung: %s", e)
-#        raise
 
 # === Core Logic ===
 
