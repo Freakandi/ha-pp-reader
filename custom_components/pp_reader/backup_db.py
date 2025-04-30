@@ -27,12 +27,13 @@ def setup_backup_system(hass: HomeAssistant, db_path: Path):
     async_track_time_interval(hass, _periodic_backup, interval)
 
     # Debug-Service
-    async def trigger_debug_backup(call: ServiceCall):
+    def trigger_debug_backup(call: ServiceCall):
         _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
-        await hass.async_add_executor_job(run_backup_cycle, db_path)
+        hass.async_add_executor_job(run_backup_cycle, db_path)
 
     try:
-        hass.services.async_register("pp_reader", "trigger_backup_debug", trigger_debug_backup)
+        if not hass.services.has_service("pp_reader", "trigger_backup_debug"):
+            hass.services.register("pp_reader", "trigger_backup_debug", trigger_debug_backup)
         _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
     except Exception as e:
         _LOGGER.error("❌ Fehler bei Service-Registrierung: %s", e)
