@@ -31,8 +31,9 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
         _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
         await hass.async_add_executor_job(run_backup_cycle, db_path)
 
+async def register_backup_service(event=None):
+    _LOGGER.debug("⏳ Registriere Backup-Service nach Start von Home Assistant")
     try:
-#        if not hass.services.has_service("pp_reader", "trigger_backup_debug"):
         hass.services.async_register(
             "pp_reader",
             "trigger_backup_debug",
@@ -40,8 +41,26 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
         )
         _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
     except Exception as e:
-        _LOGGER.error("❌ Fehler bei Service-Registrierung: %s", e)
+        _LOGGER.exception("❌ Fehler bei Service-Registrierung:")
         raise
+
+# Warten auf vollständigen Start von Home Assistant
+if hass.is_running:
+    await register_backup_service()
+else:
+    hass.bus.async_listen_once("homeassistant_started", register_backup_service)
+
+
+#    try:
+#        hass.services.async_register(
+#            "pp_reader",
+#            "trigger_backup_debug",
+#            async_trigger_debug_backup
+#        )
+#        _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
+#    except Exception as e:
+#        _LOGGER.error("❌ Fehler bei Service-Registrierung: %s", e)
+#        raise
 
 # === Core Logic ===
 
