@@ -29,32 +29,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     file_path = entry.data[CONF_FILE_PATH]
     db_path = Path(entry.data[CONF_DB_PATH])
+    token = entry.data.get(CONF_API_TOKEN)
 
-    # Portfolio-Datei laden
+    # Schritt 1: Datenbank initialisieren (verhindert race conditions)
+    try:
+        _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
+        initialize_database_schema(db_path)
+    except Exception as e:
+        _LOGGER.exception("❌ Fehler bei der DB-Initialisierung: %s", e)
+        raise ConfigEntryNotReady("Datenbank konnte nicht initialisiert werden")
+
+    # Schritt 2: Portfolio-Datei laden
     data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
     if not data:
         raise ConfigEntryNotReady(f"❌ Datei konnte nicht gelesen werden: {file_path}")
 
-    # Coordinator initialisieren
+    # Schritt 3: Coordinator initialisieren
     coordinator = PPReaderCoordinator(hass, None, data, file_path)
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception as err:
         raise ConfigEntryNotReady(f"❌ Coordinator konnte nicht initialisiert werden: {err}")
 
-    # Daten im Speicher ablegen
+    # Schritt 4: State speichern
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "coordinator": coordinator,
         "data": data,
         "file_path": file_path,
-        "api_token": entry.data.get(CONF_API_TOKEN),
+        "api_token": token,
         "db_path": str(db_path)
     }
 
-    # Sensor-Plattform starten
+    # Schritt 5: Sensor-Plattform starten
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Dashboard-Dateien bereitstellen
+    # Schritt 6: Dashboard-Dateien registrieren
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/pp_reader_dashboard",
@@ -63,7 +72,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     ])
 
-    # Dashboard in Seitenleiste eintragen
     if "pp-reader" not in hass.data.get("frontend_panels", {}):
         frontend.async_register_built_in_panel(
             hass,
@@ -77,9 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             require_admin=False
         )
 
-    # Interner API-Proxy
-    token = entry.data.get(CONF_API_TOKEN)
-
+    # Schritt 7: Interner API-Proxy registrieren
     class PPReaderAPI(HomeAssistantView):
         url = "/pp_reader_api/states"
         name = "pp_reader_api"
@@ -102,12 +108,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.http.register_view(PPReaderAPI(token))
 
+    # Schritt 8: Backup-System starten (nachdem DB verfügbar ist)
     try:
-        # 📦 Datenbank initialisieren
-        initialize_database_schema(db_path)
-
-        # 🔄 Backup-System starten
-        _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
+        _LOGGER.debug("🔁 Starte Backup-System mit: %s", db_path)
         await setup_backup_system(hass, db_path)
     except Exception as e:
         _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
