@@ -16,21 +16,29 @@ BACKUP_SUBDIR = "backups"
 
 def setup_backup_system(hass: HomeAssistant, db_path: Path):
     """Initialisiert zyklische Backups innerhalb von Home Assistant."""
+    _LOGGER.debug("🔁 Initialisiere Backup-System mit DB: %s", db_path)
+
     interval = timedelta(hours=6)  # alle 6 Stunden
+
     async def _periodic_backup(now):
+        _LOGGER.debug("⏱️ Starte geplantes Backup")
         await hass.async_add_executor_job(run_backup_cycle, db_path)
 
     async_track_time_interval(hass, _periodic_backup, interval)
 
     # Debug-Service
     async def trigger_debug_backup(call):
+        _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
         await hass.async_add_executor_job(run_backup_cycle, db_path)
 
     hass.services.async_register("pp_reader", "trigger_backup_debug", trigger_debug_backup)
+    _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
 
 # === Core Logic ===
 
 def run_backup_cycle(db_path: Path):
+    _LOGGER.debug("🚀 Starte Backup-Zyklus für: %s", db_path)
+
     if not db_path.exists():
         _LOGGER.warning("⚠️ Datenbankpfad existiert nicht: %s", db_path)
         return

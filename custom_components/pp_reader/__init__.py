@@ -103,6 +103,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # 🔄 Backup-System starten
     db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
+    _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
     setup_backup_system(hass, db_path)
 
     return True
