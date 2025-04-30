@@ -11,9 +11,10 @@ from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 
 from .backup_db import setup_backup_system
-from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH
+from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .reader import parse_data_portfolio
 from .coordinator import PPReaderCoordinator
+from .db_init import initialize_database_schema
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = ["sensor"]
@@ -26,9 +27,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("🔧 Starte Integration: %s", DOMAIN)
 
-    os.makedirs(hass.config.path("custom_components/pp_reader/storage"), exist_ok=True)
-
     file_path = entry.data[CONF_FILE_PATH]
+    db_path = Path(entry.data[CONF_DB_PATH])
 
     # Portfolio-Datei laden
     data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
@@ -48,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "data": data,
         "file_path": file_path,
         "api_token": entry.data.get(CONF_API_TOKEN),
+        "db_path": str(db_path)
     }
 
     # Sensor-Plattform starten
@@ -102,18 +103,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.http.register_view(PPReaderAPI(token))
 
     try:
+        # 📦 Datenbank initialisieren
+        initialize_database_schema(db_path)
+
         # 🔄 Backup-System starten
-        db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
         _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
         await setup_backup_system(hass, db_path)
     except Exception as e:
         _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
         raise ConfigEntryNotReady("Backup-Initialisierung fehlgeschlagen")
-
-    # 🔄 Backup-System starten
-#    db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
-#    _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
-#    await setup_backup_system(hass, db_path)
 
     return True
 

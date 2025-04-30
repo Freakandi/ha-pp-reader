@@ -1,4 +1,5 @@
 DOMAIN = "pp_reader"
 CONF_FILE_PATH = "file_path"
 CONF_API_TOKEN = "api_token"
+CONF_DB_PATH = "db_path"
 DEFAULT_NAME = "Portfolio Performance"
