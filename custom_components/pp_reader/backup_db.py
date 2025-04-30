@@ -28,8 +28,9 @@ def setup_backup_system(hass: HomeAssistant, db_path: Path):
 
     # Debug-Service
     async def trigger_debug_backup(call):
-        _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
-        await hass.async_add_executor_job(run_backup_cycle, db_path)
+         _LOGGER.warning("📦 Test-Backup per Service ausgelöst")
+#        _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
+#        await hass.async_add_executor_job(run_backup_cycle, db_path)
 
     hass.services.async_register("pp_reader", "trigger_backup_debug", trigger_debug_backup)
     _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
