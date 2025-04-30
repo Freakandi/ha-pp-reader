@@ -117,7 +117,7 @@ def cleanup_old_backups(backup_dir: Path):
     for b in backups:
         try:
             dt_str = b.stem.split("_")[-1]  # 20250430_1430
-            dt = datetime.strptime(dt_str, "%Y%m%d_%H%M")
+            dt = datetime.strptime(dt_str, "%Y%m%d_%H%M%S")
         except Exception:
             continue
 
