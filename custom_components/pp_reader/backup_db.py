@@ -121,9 +121,8 @@ def cleanup_old_backups(backup_dir: Path):
         except Exception:
             continue
 
-        age = (now - dt).days
         key = dt.date()
-        if age == 0:
+        if key == now.date():
             keep.add(b)
             continue
         elif age <= 7:
