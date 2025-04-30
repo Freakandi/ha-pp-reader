@@ -14,7 +14,7 @@ BACKUP_SUBDIR = "backups"
 
 # === Public Entry Point ===
 
-def setup_backup_system(hass: HomeAssistant, db_path: Path):
+async def setup_backup_system(hass: HomeAssistant, db_path: Path):
     """Initialisiere zyklische Backups innerhalb von Home Assistant."""
     _LOGGER.debug("🔁 Initialisiere Backup-System mit DB: %s", db_path)
 
@@ -27,13 +27,17 @@ def setup_backup_system(hass: HomeAssistant, db_path: Path):
     async_track_time_interval(hass, _periodic_backup, interval)
 
     # Debug-Service
-    def trigger_debug_backup(call: ServiceCall):
+    async def async_trigger_debug_backup(call: ServiceCall):
         _LOGGER.debug("📦 Manuelles Backup per Service ausgelöst")
-        hass.async_add_executor_job(run_backup_cycle, db_path)
+        await hass.async_add_executor_job(run_backup_cycle, db_path)
 
     try:
         if not hass.services.has_service("pp_reader", "trigger_backup_debug"):
-            hass.services.register("pp_reader", "trigger_backup_debug", trigger_debug_backup)
+            await hass.services.async_register(
+                "pp_reader",
+                "trigger_backup_debug",
+                async_trigger_debug_backup
+            )
         _LOGGER.info("✅ Backup-Service registriert: pp_reader.trigger_backup_debug")
     except Exception as e:
         _LOGGER.error("❌ Fehler bei Service-Registrierung: %s", e)
