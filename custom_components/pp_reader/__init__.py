@@ -101,10 +101,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.http.register_view(PPReaderAPI(token))
 
+    try:
+        # 🔄 Backup-System starten
+        db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
+        _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
+        await setup_backup_system(hass, db_path)
+    except Exception as e:
+        _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
+        raise ConfigEntryNotReady("Backup-Initialisierung fehlgeschlagen")
+
     # 🔄 Backup-System starten
-    db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
-    _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
-    await setup_backup_system(hass, db_path)
+#    db_path = Path(hass.config.path("custom_components/pp_reader/storage")) / (Path(file_path).stem + ".db")
+#    _LOGGER.debug("📦 Backup-Pfad: %s", db_path)
+#    await setup_backup_system(hass, db_path)
 
     return True
 
