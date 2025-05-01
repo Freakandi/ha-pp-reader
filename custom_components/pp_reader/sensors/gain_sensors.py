@@ -23,12 +23,20 @@ class PortfolioGainAbsSensor(SensorEntity):
     @property
     def native_value(self):
         try:
-            return calculate_unrealized_gain(
-                self._depot_sensor.native_value,
-                self._purchase_sensor.native_value,
-            )
+            depot_value = self._depot_sensor.native_value
+            purchase_value = self._purchase_sensor.native_value
+            
+            if depot_value is None or purchase_value is None:
+                _LOGGER.warning(
+                    "Keine Werte verfügbar für Kursgewinn-Berechnung: %s/%s",
+                    depot_value,
+                    purchase_value
+                )
+                return None
+                
+            return calculate_unrealized_gain(depot_value, purchase_value)
         except Exception as e:
-            _LOGGER.error("Fehler beim Berechnen des Kursgewinns (absolut): %s", e)
+            _LOGGER.error("Fehler beim Berechnen des Kursgewinns: %s", e)
             return None
 
 class PortfolioGainPctSensor(SensorEntity):

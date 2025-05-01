@@ -6,6 +6,7 @@ from datetime import datetime
 from custom_components.pp_reader.currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 from ..logic.validators import PPDataValidator  # Neuer Import
 from typing import Tuple, Dict, Any
+from ..db_access import get_securities, get_portfolio_by_name, get_transactions
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,14 +25,22 @@ def normalize_shares(raw_shares: int) -> float:
 
 
 async def calculate_portfolio_value(
-    portfolio: Dict[str, Any],
-    transactions: list,
-    securities_by_id: Dict[str, Any],
+    portfolio_name: str,
     reference_date: datetime,
     db_path: Path
 ) -> Tuple[float, int]:
     """Berechnet den aktuellen Portfolio-Wert und die Anzahl aktiver Positionen."""
     validator = PPDataValidator()
+    
+    # Daten aus DB laden
+    portfolio = get_portfolio_by_name(db_path, portfolio_name)
+    if not portfolio:
+        _LOGGER.error("Portfolio nicht gefunden: %s", portfolio_name)
+        return 0.0, 0
+        
+    securities = get_securities(db_path)
+    transactions = get_transactions(db_path)
+    
     total_value = 0.0
     active_positions = 0
     
