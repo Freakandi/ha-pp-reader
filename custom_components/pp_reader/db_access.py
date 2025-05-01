@@ -49,7 +49,23 @@ class Portfolio:
     is_retired: bool = False
 
 def get_transactions(db_path: Path) -> List[Transaction]:
-    pass
+    """Lädt alle Transaktionen aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT uuid, type, account, portfolio, 
+                   other_account, other_portfolio,
+                   date, currency_code, amount, 
+                   shares, security
+            FROM transactions
+            ORDER BY date
+        """)
+        return [Transaction(*row) for row in cur.fetchall()]
+    except sqlite3.Error as e:
+        _LOGGER.error("Fehler beim Laden der Transaktionen: %s", str(e))
+        return []
+    finally:
+        conn.close()
 
 def get_securities(db_path: Path) -> Dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
@@ -82,5 +98,21 @@ def get_portfolio_by_name(db_path: Path, name: str) -> Optional[Portfolio]:
         """, (name,))
         row = cur.fetchone()
         return Portfolio(*row) if row else None
+    finally:
+        conn.close()
+
+def get_accounts(db_path: Path) -> List[Account]:
+    """Lädt alle Konten aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT uuid, name, currency_code, note, COALESCE(is_retired, 0) 
+            FROM accounts 
+            ORDER BY name
+        """)
+        return [Account(*row) for row in cur.fetchall()]
+    except sqlite3.Error as e:
+        _LOGGER.error("Fehler beim Laden der Konten: %s", str(e))
+        return []
     finally:
         conn.close()
