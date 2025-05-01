@@ -3,6 +3,8 @@ from decimal import Decimal
 from datetime import datetime
 import logging
 from typing import Optional, Dict, Any, Union, Tuple
+from name.abuchen.portfolio import client_pb2
+from ..db_access import Transaction
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,41 +62,74 @@ class PPDataValidator:
         
         return ValidationResult(True, "Wechselkurs valid")
 
-    def validate_transaction(self, tx: dict) -> ValidationResult:
+    def validate_transaction(self, tx: Union[dict, client_pb2.PTransaction, Transaction]) -> ValidationResult:
         """Validiert eine einzelne Transaktion."""
-        if tx.type not in self.VALID_TRANSACTION_TYPES:
-            return ValidationResult(
-                False,
-                f"Ungültiger Transaktionstyp: {tx.type}",
-                {"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())}
-            )
         
-        required_fields = ["uuid", "type", "date"]
-        missing = [f for f in required_fields if f not in tx]
-        
-        if missing:
-            return ValidationResult(
-                False,
-                f"Fehlende Pflichtfelder: {', '.join(missing)}",
-                {"tx_id": tx.get("uuid", "UNKNOWN")}
-            )
+        # Protobuf Transaction validieren
+        if isinstance(tx, client_pb2.PTransaction):
+            if not self._is_valid_transaction_type(tx.type):
+                return ValidationResult(
+                    False,
+                    f"Ungültiger Transaktionstyp: {tx.type}",
+                    {"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())}
+                )
             
-        try:
-            date = datetime.fromisoformat(tx["date"])
-            if date > datetime.now():
+            if not tx.HasField("uuid") or not tx.HasField("date"):
+                return ValidationResult(
+                    False,
+                    "Fehlende Pflichtfelder in Transaktion",
+                    {"tx_id": getattr(tx, "uuid", "UNKNOWN")}
+                )
+            
+            # Datumsvalidierung für Protobuf
+            tx_date = datetime.fromtimestamp(tx.date.seconds)
+            if tx_date > datetime.now():
                 return ValidationResult(
                     False,
                     "Transaktionsdatum in der Zukunft",
-                    {"date": tx["date"]}
+                    {"date": tx_date.isoformat()}
                 )
-        except ValueError:
+                
+            return ValidationResult(True, "Transaktion valid")
+            
+        # Dictionary oder DB-Transaction validieren
+        elif isinstance(tx, (dict, Transaction)):
+            required_fields = ["uuid", "type", "date"]
+            
+            # Bei Transaction-Objekt: Attribute statt Dict-Keys prüfen
+            if isinstance(tx, Transaction):
+                missing = [f for f in required_fields if not hasattr(tx, f)]
+            else:
+                missing = [f for f in required_fields if f not in tx]
+            
+            if missing:
+                return ValidationResult(
+                    False,
+                    f"Fehlende Pflichtfelder: {', '.join(missing)}",
+                    {"tx_id": getattr(tx, "uuid", tx.get("uuid", "UNKNOWN"))}
+                )
+            
+            # Typ-Validierung
+            tx_type = tx.type if isinstance(tx, Transaction) else tx["type"]
+            if not self._is_valid_transaction_type(tx_type):
+                return ValidationResult(
+                    False,
+                    f"Ungültiger Transaktionstyp: {tx_type}",
+                    {"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())}
+                )
+                
+            return ValidationResult(True, "Transaktion valid")
+            
+        else:
             return ValidationResult(
                 False,
-                f"Ungültiges Datumsformat: {tx['date']}",
-                {"tx_id": tx["uuid"]}
+                f"Ungültiger Transaktionstyp: {type(tx)}",
+                {"expected": ["dict", "PTransaction", "Transaction"]}
             )
             
-        return ValidationResult(True, "Transaktion valid")
+    def _is_valid_transaction_type(self, type_id: int) -> bool:
+        """Prüft ob der Transaktionstyp gültig ist."""
+        return type_id in self.VALID_TRANSACTION_TYPES
 
     def validate_account_balance(self, balance: float, account_name: str) -> ValidationResult:
         """Validiert einen Kontostand auf Plausibilität."""

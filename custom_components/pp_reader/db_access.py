@@ -14,6 +14,9 @@ class Transaction:
     other_account: Optional[str]
     amount: int  # in Cent
     currency_code: str
+    security: Optional[str]  # Security UUID
+    shares: Optional[int]    # *10^8
+    date: str               # ISO8601 Format
 
 @dataclass
 class Account:
@@ -39,7 +42,8 @@ def get_transactions(db_path: Path) -> List[Transaction]:
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.execute("""
-            SELECT uuid, type, account, other_account, amount, currency_code 
+            SELECT uuid, type, account, other_account, amount, 
+                   currency_code, security, shares, date 
             FROM transactions
         """)
         return [Transaction(*row) for row in cur.fetchall()]

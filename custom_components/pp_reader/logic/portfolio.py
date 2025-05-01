@@ -87,63 +87,51 @@ async def calculate_portfolio_value(
 
 
 async def calculate_purchase_sum(
-    portfolio,
-    transactions,
-    securities_by_id,
+    portfolio_name: str,
     reference_date: datetime,
     db_path: Path
 ) -> float:
-    """
-    Berechne die Summe der ursprünglichen Kaufpreise (EUR, mit historischer Umrechnung)
-    für alle noch aktiven Positionen eines Depots, basierend auf FIFO.
-    """
-    validator = PPDataValidator()
-    total_purchase = 0.0
+    """Berechnet die Kaufsumme für ein Portfolio aus DB-Daten."""
+    holdings: Dict[str, List[Tuple[float, float, datetime]]] = {}
+    total_value = 0.0
+    
+    # Daten aus DB laden
+    transactions = get_transactions(db_path)
+    securities = get_securities(db_path)
     
     for tx in transactions:
-        result = validator.validate_transaction(tx)
-        if not result.is_valid:
-            _LOGGER.warning(result.message)
+        if not tx.security:  # Kein Wertpapier = keine Kaufsumme
             continue
-
-    # 1. Transaktionen für das Depot filtern
-    tx_list = [tx for tx in transactions if tx.portfolio == portfolio.uuid]
-
-    # 2. Bestände und Kaufhistorie aufbauen
-    holdings: dict[str, list[tuple[float, float, datetime]]] = {}
-
-    for tx in sorted(tx_list, key=lambda x: x.date.seconds):  # wichtig: FIFO, daher nach Datum sortieren
-        if not tx.HasField("security"):
+            
+        security = securities.get(tx.security)
+        if not security:
             continue
-
-        security_id = tx.security
-        shares = tx.shares / 10**8  # normalize shares
-        amount = tx.amount / 100  # normalize amount (Cent -> EUR)
-        tx_date = datetime.fromtimestamp(tx.date.seconds)
-
-        sec = securities_by_id.get(security_id)
-        if not sec or shares == 0:
-            continue
-
-        currency = sec.currencyCode if sec.HasField("currencyCode") else "EUR"
-
-        # Historische Wechselkurse laden
+            
+        shares = tx.shares / 10**8  # Normalisieren
+        amount = tx.amount / 100    # Cent zu Euro
+        tx_date = datetime.fromisoformat(tx.date)
+        
+        currency = security.currency_code or "EUR"
+        
+        # Wechselkurse laden
         fx_rates = await load_latest_rates(tx_date, db_path)
         rate = fx_rates.get(currency) if currency != "EUR" else 1.0
-
+        
         if not rate:
-            _LOGGER.warning("⚠️ Kein Wechselkurs verfügbar für %s am %s", currency, tx_date.date())
+            _LOGGER.warning("⚠️ Kein Wechselkurs für %s am %s", currency, tx_date.date())
             continue
-
+            
+        # FIFO-Prinzip für Käufe/Verkäufe
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
             price_per_share = amount / shares if shares != 0 else 0
             price_per_share_eur = price_per_share / rate
-            holdings.setdefault(security_id, []).append((shares, price_per_share_eur, tx_date))
-
+            holdings.setdefault(tx.security, []).append((shares, price_per_share_eur, tx_date))
+            
         elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
             remaining_to_sell = shares
-            existing = holdings.get(security_id, [])
+            existing = holdings.get(tx.security, [])
             updated = []
+            
             for qty, price, date in existing:
                 if remaining_to_sell <= 0:
                     updated.append((qty, price, date))
@@ -153,17 +141,15 @@ async def calculate_purchase_sum(
                     remaining_to_sell = 0
                 else:
                     remaining_to_sell -= qty
-            holdings[security_id] = updated
-
-    # 3. Jetzt aktuelle Bestände summieren
-    total_purchase = 0.0
+                    
+            holdings[tx.security] = updated
+            
+    # Summe der verbleibenden Positionen
     for security_id, positions in holdings.items():
-        for qty, price, _ in positions:
-            if qty <= 0:
-                continue
-            total_purchase += qty * price
-
-    return round(total_purchase, 2)
+        for shares, price, _ in positions:
+            total_value += shares * price
+            
+    return total_value
 
 
 def calculate_unrealized_gain(

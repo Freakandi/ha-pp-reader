@@ -1,12 +1,12 @@
-from ..db_access import Transaction
+from typing import Union, List
+from ..db_access import Transaction, get_transactions
 from ..logic.validators import PPDataValidator
 import logging
-from typing import List
 
 _LOGGER = logging.getLogger(__name__)
 
 def calculate_account_balance(account_uuid: str, transactions: List[Transaction]) -> float:
-    """Berechne den Kontostand eines Kontos anhand aller relevanten Transaktionen."""
+    """Berechne den Kontostand eines Kontos anhand aller relevanten DB-Transaktionen."""
     validator = PPDataValidator()
     saldo = 0
 
@@ -15,16 +15,16 @@ def calculate_account_balance(account_uuid: str, transactions: List[Transaction]
         if not result.is_valid:
             _LOGGER.warning(result.message)
             continue
-
+            
+        # Alle Felder kommen direkt aus der DB-Transaction
         if tx.account != account_uuid and tx.other_account != account_uuid:
             continue
 
-        # CASH_TRANSFER → Quelle = negativ, Ziel = positiv
         if tx.type == 5:  # CASH_TRANSFER
             if tx.account == account_uuid:
-                saldo -= tx.amount  # TRANSFER_OUT
+                saldo -= tx.amount
             elif tx.other_account == account_uuid:
-                saldo += tx.amount  # TRANSFER_IN
+                saldo += tx.amount
             continue
 
         if tx.account != account_uuid:

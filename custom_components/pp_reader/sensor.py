@@ -53,36 +53,25 @@ async def async_setup_entry(
 ) -> bool:
     """Richte die Portfolio Performance Sensoren ein."""
     try:
-        if DOMAIN not in hass.data:
-            _LOGGER.error("Domain %s nicht in hass.data gefunden", DOMAIN)
-            return False
-            
         entry_data = hass.data[DOMAIN].get(config_entry.entry_id)
         if not entry_data:
             _LOGGER.error("Keine Daten für entry_id %s gefunden", config_entry.entry_id)
             return False
             
-        data = entry_data.get("data")
-        if not data:
-            _LOGGER.error("Keine Portfolio-Daten gefunden")
-            return False
-            
-        start_time = datetime.now()
+        coordinator = entry_data["coordinator"]
+        db_path = coordinator.db_path
         
-        # Zugriff auf vorbereitete Objekte
-        file_path = entry_data["file_path"]
-        db_path = Path(entry_data["db_path"])
-        coordinator: PPReaderCoordinator = entry_data["coordinator"]
-
+        # Daten aus DB laden statt aus Protobuf
+        transactions = await hass.async_add_executor_job(get_transactions, db_path)
+        
         sensors = []
-        purchase_sensors = []
-
+        # Sensoren mit DB-Daten initialisieren
         # 🔹 Kontostände
         for account in data.accounts:
             if getattr(account, "isRetired", False):
                 continue
 
-            saldo = calculate_account_balance(account.uuid, data.transactions)
+            saldo = calculate_account_balance(account.uuid, transactions)
             sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
 
         # 🔸 Depots und zusätzliche Sensoren vorbereiten
@@ -96,7 +85,7 @@ async def async_setup_entry(
             # Depotwert-Sensor
             value, count = await calculate_portfolio_value(
                 portfolio,
-                data.transactions,
+                transactions,
                 securities_by_id,
                 reference_date,
                 db_path=db_path
@@ -116,25 +105,9 @@ async def async_setup_entry(
             gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_pct_sensor)
 
-        # Sensoren erstellen und initialisieren
-        try:
-            # Kaufsummen-Sensoren parallel initialisieren
-            init_tasks = [sensor.async_update() for sensor in purchase_sensors]
-            await asyncio.gather(*init_tasks, return_exceptions=True)
-            
-            # Sensoren an HA übergeben
-            async_add_entities(sensors, True)
-            
-            elapsed = (datetime.now() - start_time).total_seconds()
-            _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
-            return True
-            
-        except Exception as e:
-            _LOGGER.error("Fehler bei Sensor-Initialisierung: %s", str(e))
-            # Sensoren trotz Fehler hinzufügen
-            async_add_entities(sensors, True)
-            return False
-            
+        async_add_entities(sensors, True)
+        return True
+        
     except Exception as e:
         _LOGGER.exception("Kritischer Fehler im Sensor-Setup: %s", str(e))
         return False
