@@ -1,8 +1,10 @@
-# accounting.py
+from ..logic.validators import PPDataValidator
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 def calculate_account_balance(account_uuid, transactions):
     """Berechne den Kontostand eines Kontos anhand aller relevanten Transaktionen."""
-
     validator = PPDataValidator()
     saldo = 0
 

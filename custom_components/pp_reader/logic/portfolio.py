@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from custom_components.pp_reader.currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
-from .validators import PPDataValidator
+from ..logic.validators import PPDataValidator  # Neuer Import
 from typing import Tuple, Dict, Any
 
 _LOGGER = logging.getLogger(__name__)

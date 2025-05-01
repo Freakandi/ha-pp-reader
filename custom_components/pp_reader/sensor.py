@@ -22,6 +22,8 @@ from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor
 from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 
+from .logic.validators import PPDataValidator
+
 _LOGGER = logging.getLogger(__name__)
 
 class PortfolioSensor(SensorEntity):
