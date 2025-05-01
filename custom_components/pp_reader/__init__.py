@@ -43,10 +43,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Coordinator erstellen
         coordinator = PPReaderCoordinator(
             hass=hass,
-            client=None,  # Wird aktuell nicht benötigt
-            data=data,
             file_path=file_path,
-            db_path=db_path
+            db_path=db_path,
+            data=data
         )
         
         # Erste Aktualisierung durchführen
