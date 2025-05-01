@@ -3,7 +3,7 @@ import zipfile
 import logging
 import google.protobuf.message
 
-from .name.abuchen.portfolio import client_pb2
+from .name.abuchen.portfolio import client_pb2  # Relativer Import
 
 _LOGGER = logging.getLogger(__name__)
 
