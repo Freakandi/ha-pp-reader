@@ -116,3 +116,19 @@ def get_accounts(db_path: Path) -> List[Account]:
         return []
     finally:
         conn.close()
+
+def get_portfolios(db_path: Path) -> List[Portfolio]:
+    """Lädt alle Portfolios aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT uuid, name, note, reference_account, COALESCE(is_retired, 0)
+            FROM portfolios 
+            ORDER BY name
+        """)
+        return [Portfolio(*row) for row in cur.fetchall()]
+    except sqlite3.Error as e:
+        _LOGGER.error("Fehler beim Laden der Portfolios: %s", str(e))
+        return []
+    finally:
+        conn.close()
