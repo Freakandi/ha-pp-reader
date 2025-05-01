@@ -19,8 +19,16 @@ def initialize_database_schema(db_path: Path) -> None:
         conn.execute("BEGIN TRANSACTION")
         
         try:
-            for ddl in ALL_SCHEMAS:
-                conn.execute(ddl)
+            # Ausführen aller DDL-Statements aus allen Schema-Arrays
+            for schema_group in ALL_SCHEMAS:
+                # Jedes Schema ist ein Array von SQL-Statements
+                if isinstance(schema_group, list):
+                    for ddl in schema_group:
+                        conn.execute(ddl)
+                else:
+                    # Falls einzelnes Statement
+                    conn.execute(schema_group)
+            
             conn.commit()
             _LOGGER.info("📦 Datenbank erfolgreich initialisiert: %s", db_path)
             
