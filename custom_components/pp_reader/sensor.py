@@ -9,6 +9,8 @@ from pathlib import Path
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
 from .logic.accounting import calculate_account_balance
@@ -21,6 +23,24 @@ from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 
 _LOGGER = logging.getLogger(__name__)
 
+class PortfolioSensor(SensorEntity):
+    """Basis-Klasse für Portfolio Performance Sensoren."""
+    
+    async def async_update(self) -> None:
+        """Aktualisiert den Sensor-Wert."""
+        try:
+            value = await self._fetch_value()
+            self._attr_native_value = value
+            self._attr_available = True
+        except Exception as e:
+            self._attr_available = False
+            _LOGGER.error(
+                "Fehler bei Aktualisierung von %s: %s", 
+                self.entity_id, 
+                str(e)
+            )
+            # Werfen einer HA-spezifischen Exception für besseres Handling
+            raise HomeAssistantError(f"Sensor-Update fehlgeschlagen: {e}") from e
 
 async def async_setup_entry(
     hass: HomeAssistant,

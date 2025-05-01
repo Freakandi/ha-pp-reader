@@ -52,9 +52,10 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
 
     symbols = ",".join(currencies)
     url = f"{API_URL}/{date}?from=EUR&to={symbols}"
+    timeout = aiohttp.ClientTimeout(total=10)
 
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
                 if response.status != 200:
                     _LOGGER.warning("⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d", date, response.status)

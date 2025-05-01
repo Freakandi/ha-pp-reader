@@ -3,9 +3,15 @@
 def calculate_account_balance(account_uuid, transactions):
     """Berechne den Kontostand eines Kontos anhand aller relevanten Transaktionen."""
 
+    validator = PPDataValidator()
     saldo = 0
 
     for tx in transactions:
+        result = validator.validate_transaction(tx)
+        if not result.is_valid:
+            _LOGGER.warning(result.message)
+            continue
+
         if tx.account != account_uuid and tx.otherAccount != account_uuid:
             continue
 
@@ -29,5 +35,10 @@ def calculate_account_balance(account_uuid, transactions):
 
         # Hinweis: CASH_TRANSFER bereits oben separat behandelt
 
-    return saldo / 100.0  # Cent → Euro
+    final_balance = saldo / 100.0  # Cent → Euro
+    result = validator.validate_account_balance(final_balance, account_uuid)
+    if not result.is_valid:
+        _LOGGER.warning(result.message)
+
+    return final_balance
 
