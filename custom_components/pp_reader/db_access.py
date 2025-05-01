@@ -25,6 +25,7 @@ class Account:
     uuid: str
     name: str
     currency_code: str
+    is_retired: bool = False  # Standardwert False für aktive Konten
 
 @dataclass
 class Security:
@@ -62,6 +63,19 @@ def get_account_by_name(db_path: Path, name: str) -> Optional[Account]:
         )
         row = cur.fetchone()
         return Account(*row) if row else None
+    finally:
+        conn.close()
+
+def get_accounts(db_path: Path) -> List[Account]:
+    """Lädt alle Konten aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT uuid, name, currency_code, COALESCE(is_retired, 0) 
+            FROM accounts 
+            ORDER BY name
+        """)
+        return [Account(*row) for row in cur.fetchall()]
     finally:
         conn.close()
 
