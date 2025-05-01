@@ -36,16 +36,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
         if not data:
             raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
+        
+        # DB-Pfad konfigurieren
+        db_path = Path(entry.data.get(CONF_DB_PATH, hass.config.path("pp_reader.db")))
+        
+        # Coordinator erstellen
+        coordinator = PPReaderCoordinator(
+            hass=hass,
+            client=None,  # Wird aktuell nicht benötigt
+            data=data,
+            file_path=file_path,
+            db_path=db_path
+        )
+        
+        # Erste Aktualisierung durchführen
+        await coordinator.async_config_entry_first_refresh()
             
         # Datenstruktur initialisieren
         hass.data.setdefault(DOMAIN, {})
         hass.data[DOMAIN][entry.entry_id] = {
             "data": data,
             "file_path": str(file_path),
-            "db_path": entry.data.get(CONF_DB_PATH)
+            "db_path": db_path,
+            "coordinator": coordinator  # Coordinator hinzufügen
         }
         
-        _LOGGER.info("Portfolio Daten erfolgreich geladen")
+        _LOGGER.info("Portfolio Daten und Coordinator erfolgreich initialisiert")
         
         # Plattformen laden
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
