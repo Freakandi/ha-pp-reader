@@ -17,7 +17,7 @@ from .const import DOMAIN
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
 from .coordinator import PPReaderCoordinator
-from .db_access import get_transactions  # Neuer Import
+from .db_access import get_transactions, get_accounts, get_securities, get_portfolios, Transaction, Account, Security, Portfolio  # Neuer Import
 
 from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor
@@ -61,35 +61,38 @@ async def async_setup_entry(
             
         coordinator = entry_data["coordinator"]
         db_path = coordinator.db_path
+        file_path = coordinator.file_path
         
-        # Daten aus DB laden statt aus Protobuf
+        # DB-Daten laden
         transactions = await hass.async_add_executor_job(get_transactions, db_path)
+        accounts = await hass.async_add_executor_job(get_accounts, db_path)
+        securities = await hass.async_add_executor_job(get_securities, db_path)
+        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
         
         sensors = []
-        # Sensoren mit DB-Daten initialisieren
-        # 🔹 Kontostände
-        for account in data.accounts:
-            if getattr(account, "isRetired", False):
+        purchase_sensors = []
+
+        # Kontostände
+        for account in accounts:
+            if account.is_retired:
                 continue
 
             saldo = calculate_account_balance(account.uuid, transactions)
             sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
 
-        # 🔸 Depots und zusätzliche Sensoren vorbereiten
-        securities_by_id = {s.uuid: s for s in data.securities}
+        # Depots und zusätzliche Sensoren
+        securities_by_id = {s.uuid: s for s in securities}
         reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
 
-        for portfolio in data.portfolios:
-            if getattr(portfolio, "isRetired", False):
+        for portfolio in portfolios:
+            if portfolio.is_retired:
                 continue
 
             # Depotwert-Sensor
             value, count = await calculate_portfolio_value(
-                portfolio,
-                transactions,
-                securities_by_id,
+                portfolio.uuid,  # Nur UUID übergeben
                 reference_date,
-                db_path=db_path
+                db_path
             )
             depot_sensor = PortfolioDepotSensor(hass, portfolio.name, value, count, file_path)
             sensors.append(depot_sensor)
