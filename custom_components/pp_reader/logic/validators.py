@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from datetime import datetime
 import logging
@@ -13,17 +13,17 @@ class ValidationResult:
     """Ergebnis einer Datenvalidierung."""
     is_valid: bool
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] = field(default_factory=dict)
 
 class PPDataValidator:
-    """Validiert Portfolio Performance Daten."""
+    """Validiert Portfolio Performance Daten aus der DB."""
     
     VALID_TRANSACTION_TYPES = {
-        0: "PURCHASE",
-        1: "SALE",
+        0: "BUY",
+        1: "SELL",
         2: "INBOUND_DELIVERY",
         3: "OUTBOUND_DELIVERY",
-        5: "TRANSFER_OUT",
+        5: "CASH_TRANSFER",
         6: "DEPOSIT",
         7: "REMOVAL",
         8: "DIVIDENDS",

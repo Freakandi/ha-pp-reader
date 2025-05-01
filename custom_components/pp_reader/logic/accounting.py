@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import List
 from ..db_access import Transaction, get_transactions
 from ..logic.validators import PPDataValidator
 import logging

@@ -5,8 +5,8 @@ from pathlib import Path
 from datetime import datetime
 from custom_components.pp_reader.currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 from ..logic.validators import PPDataValidator  # Neuer Import
-from typing import Tuple, Dict, Any
-from ..db_access import get_securities, get_portfolio_by_name, get_transactions
+from typing import Tuple, Dict, Any, List
+from ..db_access import get_securities, get_portfolio_by_name, get_transactions, Security, Transaction
 
 _LOGGER = logging.getLogger(__name__)
 

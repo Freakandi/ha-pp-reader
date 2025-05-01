@@ -5,7 +5,8 @@ from pathlib import Path
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.util import slugify
 
-from custom_components.pp_reader.logic.portfolio import calculate_purchase_sum
+from ..logic.portfolio import calculate_purchase_sum
+from ..db_access import get_transactions, get_portfolio_by_name
 
 _LOGGER = logging.getLogger(__name__)
 

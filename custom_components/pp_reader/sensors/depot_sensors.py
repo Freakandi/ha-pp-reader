@@ -1,17 +1,13 @@
 import os
 import logging
 from datetime import datetime
+from pathlib import Path
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.util import slugify
-from pathlib import Path
 
-from custom_components.pp_reader.reader import parse_data_portfolio
-from custom_components.pp_reader.logic.accounting import calculate_account_balance
-from custom_components.pp_reader.logic.portfolio import calculate_portfolio_value
-from ..db_access import get_transactions, get_account_by_name
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-
+from ..logic.accounting import calculate_account_balance
+from ..logic.portfolio import calculate_portfolio_value
+from ..db_access import get_transactions, get_account_by_name, get_portfolio_by_name
 from ..coordinator import PPReaderCoordinator
 
 _LOGGER = logging.getLogger(__name__)

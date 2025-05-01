@@ -11,7 +11,9 @@ class Transaction:
     uuid: str
     type: int
     account: Optional[str]
+    portfolio: Optional[str]
     other_account: Optional[str]
+    other_portfolio: Optional[str]
     amount: int  # in Cent
     currency_code: str
     security: Optional[str]  # Security UUID
