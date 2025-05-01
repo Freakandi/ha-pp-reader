@@ -43,13 +43,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not file_path.exists():
             raise ConfigEntryNotReady(f"Datei nicht gefunden: {file_path}")
             
+        # DB-Pfad aus Config Entry verwenden
+        db_path = Path(entry.data[CONF_DB_PATH])
+        
+        # DB initialisieren
+        await hass.async_add_executor_job(initialize_database_schema, db_path)
+            
         # Portfolio-Datei laden
         data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
         if not data:
             raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
-        
-        # DB-Pfad konfigurieren
-        db_path = Path(entry.data.get(CONF_DB_PATH, hass.config.path("pp_reader.db")))
         
         # Coordinator erstellen
         coordinator = PPReaderCoordinator(
