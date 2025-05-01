@@ -48,4 +48,5 @@ class Portfolio:
     reference_account: Optional[str] = None
     is_retired: bool = False
 
-def get_transactions(db_path: Path) -> List[Transaction
+def get_transactions(db_path: Path) -> List[Transaction]:
+    pass
