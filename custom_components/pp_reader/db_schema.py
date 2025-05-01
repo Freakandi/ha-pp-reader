@@ -21,35 +21,19 @@ ACCOUNT_SCHEMA = [
     """
 ]
 
-SECURITY_SCHEMA = [
+SECURITIES_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS securities (
         uuid TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        currency_code TEXT,
-        target_currency_code TEXT,
-        note TEXT,
-        isin TEXT,
-        ticker_symbol TEXT,
-        wkn TEXT,
-        calendar TEXT,
-        feed TEXT,
-        feed_url TEXT,
-        latest_feed TEXT,
-        latest_feed_url TEXT,
-        latest_close REAL,
-        latest_high REAL,
-        latest_low REAL,
-        latest_volume REAL,
-        is_retired INTEGER,
-        updated_at TEXT
+        currency_code TEXT NOT NULL
     );
     """,
     """
-    CREATE TABLE IF NOT EXISTS security_attributes (
-        security_uuid TEXT NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT,
+    CREATE TABLE IF NOT EXISTS latest_prices (
+        security_uuid TEXT PRIMARY KEY,
+        value INTEGER NOT NULL,  -- Preis in 10^-8 Einheiten
+        updated_at TEXT NOT NULL,  -- ISO8601 Zeitstempel
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
     """
@@ -326,7 +310,7 @@ CREATE TABLE IF NOT EXISTS fx_rates (
 
 ALL_SCHEMAS = (
     ACCOUNT_SCHEMA +
-    SECURITY_SCHEMA +
+    SECURITIES_SCHEMA +
     PORTFOLIO_SCHEMA +
     TRANSACTION_SCHEMA +
     FX_SCHEMA
