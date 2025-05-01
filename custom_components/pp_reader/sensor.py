@@ -48,16 +48,29 @@ async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-):
-    """Initialisiere alle Sensoren für pp_reader."""
+) -> bool:
+    """Richte die Portfolio Performance Sensoren ein."""
     try:
+        if DOMAIN not in hass.data:
+            _LOGGER.error("Domain %s nicht in hass.data gefunden", DOMAIN)
+            return False
+            
+        entry_data = hass.data[DOMAIN].get(config_entry.entry_id)
+        if not entry_data:
+            _LOGGER.error("Keine Daten für entry_id %s gefunden", config_entry.entry_id)
+            return False
+            
+        data = entry_data.get("data")
+        if not data:
+            _LOGGER.error("Keine Portfolio-Daten gefunden")
+            return False
+            
         start_time = datetime.now()
         
         # Zugriff auf vorbereitete Objekte
-        data = hass.data[DOMAIN][config_entry.entry_id]["data"]
-        file_path = hass.data[DOMAIN][config_entry.entry_id]["file_path"]
-        db_path = Path(hass.data[DOMAIN][config_entry.entry_id]["db_path"])
-        coordinator: PPReaderCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+        file_path = entry_data["file_path"]
+        db_path = Path(entry_data["db_path"])
+        coordinator: PPReaderCoordinator = entry_data["coordinator"]
 
         sensors = []
         purchase_sensors = []
@@ -108,7 +121,7 @@ async def async_setup_entry(
             await asyncio.gather(*init_tasks, return_exceptions=True)
             
             # Sensoren an HA übergeben
-            async_add_entities(sensors)
+            async_add_entities(sensors, True)
             
             elapsed = (datetime.now() - start_time).total_seconds()
             _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
@@ -117,7 +130,7 @@ async def async_setup_entry(
         except Exception as e:
             _LOGGER.error("Fehler bei Sensor-Initialisierung: %s", str(e))
             # Sensoren trotz Fehler hinzufügen
-            async_add_entities(sensors)
+            async_add_entities(sensors, True)
             return False
             
     except Exception as e:

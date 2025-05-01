@@ -32,14 +32,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not file_path.exists():
             raise ConfigEntryNotReady(f"Datei nicht gefunden: {file_path}")
             
-        # Portfolio-Datei asynchron laden
-        data = await hass.async_add_executor_job(parse_data_portfolio, file_path)
+        # Portfolio-Datei laden
+        data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
         if not data:
             raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
             
-        # Plattform asynchron laden
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # Datenstruktur initialisieren
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = {
+            "data": data,
+            "file_path": str(file_path),
+            "db_path": entry.data.get(CONF_DB_PATH)
+        }
         
+        _LOGGER.info("Portfolio Daten erfolgreich geladen")
+        
+        # Plattformen laden
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         return True
         
     except Exception as e:
@@ -48,13 +57,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    try:
-        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        await coordinator.async_shutdown()  # Neue Methode hinzufügen
-        
-        if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-            hass.data[DOMAIN].pop(entry.entry_id, None)
-        return unload_ok
-    except Exception as e:
-        _LOGGER.error("Fehler beim Entladen: %s", e)
-        return False
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+    return unload_ok
