@@ -2,6 +2,8 @@ import sqlite3
 from pathlib import Path
 import logging
 
+from .db_schema import ALL_SCHEMAS
+
 _LOGGER = logging.getLogger(__name__)
 
 def initialize_database_schema(db_path: Path) -> None:
@@ -10,14 +12,8 @@ def initialize_database_schema(db_path: Path) -> None:
         if not db_path.exists():
             _LOGGER.info("📁 Erzeuge neue Datenbankdatei: %s", db_path)
         conn = sqlite3.connect(str(db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS fx_rates (
-                date TEXT NOT NULL,
-                currency TEXT NOT NULL,
-                rate REAL NOT NULL,
-                PRIMARY KEY (date, currency)
-            )
-        """)
+        for ddl in ALL_SCHEMAS:
+            conn.execute(ddl)
         conn.commit()
         conn.close()
         _LOGGER.info("📦 Datenbank initialisiert unter: %s", db_path)
