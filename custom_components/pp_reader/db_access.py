@@ -39,6 +39,7 @@ class Security:
 class Portfolio:
     uuid: str
     name: str
+    is_retired: bool = False  # Standardwert False für aktive Portfolios
 
 def get_transactions(db_path: Path) -> List[Transaction]:
     """Lädt alle Transaktionen aus der DB."""
@@ -101,5 +102,26 @@ def get_portfolio_by_name(db_path: Path, name: str) -> Optional[Portfolio]:
         )
         row = cur.fetchone()
         return Portfolio(*row) if row else None
+    finally:
+        conn.close()
+
+def get_portfolios(db_path: Path) -> List[Portfolio]:
+    """Lädt alle Portfolios aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT uuid, name, is_retired
+            FROM portfolios 
+            ORDER BY name
+        """)
+        # Portfolio-Klasse um is_retired erweitern
+        return [
+            Portfolio(
+                uuid=row[0], 
+                name=row[1],
+                is_retired=bool(row[2]) if row[2] is not None else False
+            ) 
+            for row in cur.fetchall()
+        ]
     finally:
         conn.close()
