@@ -9,6 +9,10 @@ from custom_components.pp_reader.reader import parse_data_portfolio
 from custom_components.pp_reader.logic.accounting import calculate_account_balance
 from custom_components.pp_reader.logic.portfolio import calculate_portfolio_value
 from ..db_access import get_transactions, get_account_by_name
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+
+from ..coordinator import PPReaderCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,9 +27,10 @@ def calculate_account_balance_by_name(account_name: str, db_path: Path) -> float
     return calculate_account_balance(account.uuid, transactions)
 
 class PortfolioAccountSensor(SensorEntity):
-    """Sensor für den Kontostand eines aktiven Kontos."""
-
+    """Sensor für Kontostände."""
+    
     def __init__(self, coordinator: PPReaderCoordinator, account_name: str):
+        """Initialize the sensor."""
         self._coordinator = coordinator
         self._account_name = account_name
 

@@ -16,6 +16,10 @@ from .reader import parse_data_portfolio
 from .coordinator import PPReaderCoordinator
 from .db_init import initialize_database_schema
 
+import asyncio
+from functools import partial
+import importlib
+
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = ["sensor"]
 
@@ -27,6 +31,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
     try:
+        # Plattform-Import vor dem Event Loop
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, 
+            partial(importlib.import_module, "custom_components.pp_reader.sensor")
+        )
+        
         # Datei-Validierung
         file_path = Path(entry.data[CONF_FILE_PATH])
         if not file_path.exists():
