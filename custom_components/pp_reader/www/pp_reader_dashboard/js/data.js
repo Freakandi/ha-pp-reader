@@ -3,7 +3,8 @@ import { fetchStates } from './api.js';
 export async function prepareDashboardData() {
   const states = await fetchStates();
 
-  const firstAccount = states.find(s => s.entity_id.startsWith('sensor.kontostand_'));
+  // Erste Konto-Entity für Zeitstempel
+  const firstAccount = states.find(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_kontostand'));
   const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
   const lastUpdatedRaw = firstAccount?.last_updated;
   const lastUpdated = lastUpdatedRaw
@@ -13,23 +14,29 @@ export async function prepareDashboardData() {
       })
     : 'Unbekannt';
 
+  // Kontostände
   const konten = states
-    .filter(s => s.entity_id.startsWith('sensor.kontostand_'))
+    .filter(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_kontostand'))
     .map(s => ({
-      name: s.attributes.friendly_name,
+      name: s.attributes.friendly_name.replace('Kontostand ', ''),
       balance: parseFloat(s.state)
     }));
 
+  // Depotwerte
   const depots = states
-    .filter(s => s.entity_id.startsWith('sensor.depotwert_'))
+    .filter(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_depotwert'))
     .map(s => {
-      const slug = s.entity_id.replace('sensor.depotwert_', '');
-      const absId = `sensor.kursgewinn_absolut_${slug}`;
-      const pctId = `sensor.kursgewinn_${slug}`;
+      const name = s.attributes.friendly_name.replace('Depotwert ', '');
+      const slug = s.entity_id.split('_').pop(); // Letztes Segment der Entity-ID
+      
+      // Zugehörige Gewinn-Sensoren finden
+      const absId = `sensor.portfolio_performance_reader_kursgewinn_absolut_${slug}`;
+      const pctId = `sensor.portfolio_performance_reader_kursgewinn_${slug}`;
       const gainAbsState = states.find(x => x.entity_id === absId);
       const gainPctState = states.find(x => x.entity_id === pctId);
+
       return {
-        name: s.attributes.friendly_name,
+        name: name,
         count: s.attributes.anzahl_wertpapiere,
         value: parseFloat(s.state),
         gain_abs: gainAbsState ? parseFloat(gainAbsState.state) : 0,
@@ -43,7 +50,7 @@ export async function prepareDashboardData() {
 
   return {
     konten,
-    depots,
+    depots, 
     totalKonten,
     totalDepots,
     totalVermoegen,
