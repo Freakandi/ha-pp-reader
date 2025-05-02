@@ -4,6 +4,8 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorStateClass
 )
+from homeassistant.helpers.entity import DeviceInfo  # Import hinzugefügt
+from ..const import DOMAIN  # DOMAIN für device_info benötigt
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +17,7 @@ class PortfolioSensor(SensorEntity):
     
     def __init__(self):
         super().__init__()
+        # Device Info für Gruppierung der Sensoren
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, "pp_reader")},
             name="Portfolio Performance Reader",

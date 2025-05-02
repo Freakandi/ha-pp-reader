@@ -25,14 +25,6 @@ class PortfolioAccountSensor(PortfolioSensor):
     entity_category = None
     
     def __init__(self, hass, name: str, account_uuid: str, db_path: Path):
-        """Initialisiere den Kontosensor.
-        
-        Args:
-            hass: Home Assistant Instance
-            name: Name des Kontos für die Anzeige
-            account_uuid: UUID des Kontos für DB-Abfragen
-            db_path: Pfad zur SQLite Datenbank
-        """
         super().__init__()
         self.hass = hass
         self._name = name
@@ -40,10 +32,9 @@ class PortfolioAccountSensor(PortfolioSensor):
         self._db_path = db_path
         self._value = 0.0
 
-        # Korrekte Entity-ID setzen
-        self.entity_id = f"sensor.kontostand_{slugify(name)}"
+        # Entity-Eigenschaften
         self._attr_unique_id = f"pp_reader_kontostand_{slugify(name)}"
-        self._attr_name = f"Kontostand {name}"
+        self._attr_name = f"Kontostand {name}"  
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:piggy-bank"
 
@@ -55,13 +46,11 @@ class PortfolioAccountSensor(PortfolioSensor):
     async def _async_update_internal(self) -> None:
         """Update method implementation."""
         try:
-            # Transaktionen aus der DB laden
             transactions = await self.hass.async_add_executor_job(
                 get_transactions,
                 self._db_path
             )
             
-            # Kontostand über vorhandene Funktion berechnen
             new_value = await self.hass.async_add_executor_job(
                 calculate_account_balance,
                 self._account_uuid,
@@ -85,22 +74,22 @@ class PortfolioAccountSensor(PortfolioSensor):
             )
             raise
 
-class PortfolioDepotSensor(PortfolioSensor):  # Von PortfolioSensor erben
+class PortfolioDepotSensor(PortfolioSensor):
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
     
-    entity_category = None  # Explizit als primary entity markieren
+    should_poll = True
+    entity_category = None
     
     def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
         super().__init__()
         self.hass = hass
-        self._portfolio_name = portfolio_name  # Für die Anzeige
-        self._portfolio_uuid = portfolio_uuid  # Für interne Berechnungen
+        self._portfolio_name = portfolio_name
+        self._portfolio_uuid = portfolio_uuid
         self._db_path = db_path
         self._value = 0.0
         self._count = 0
 
-        # Korrekte Entity-ID setzen
-        self.entity_id = f"sensor.depotwert_{slugify(portfolio_name)}"
+        # Entity-Eigenschaften
         self._attr_unique_id = f"pp_reader_depotwert_{slugify(portfolio_name)}"
         self._attr_name = f"Depotwert {portfolio_name}"
         self._attr_native_unit_of_measurement = "€"
