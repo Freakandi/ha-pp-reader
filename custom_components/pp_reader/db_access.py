@@ -87,6 +87,10 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
     finally:
         conn.close()
 
+def get_securities_by_id(db_path: Path) -> Dict[str, Security]:
+    """Lädt alle Wertpapiere aus der DB und gibt sie als UUID-Dictionary zurück."""
+    return get_securities(db_path)  # get_securities gibt bereits ein Dict zurück
+
 def get_portfolio_by_name(db_path: Path, name: str) -> Optional[Portfolio]:
     """Findet ein Portfolio anhand des Namens."""
     conn = sqlite3.connect(str(db_path))

@@ -62,28 +62,31 @@ async def async_setup_entry(
             return False
             
         coordinator = entry_data["coordinator"]
-        db_path = coordinator.db_path
-        file_path = coordinator.file_path
-        
-        # DB-Daten laden
-        transactions = await hass.async_add_executor_job(get_transactions, db_path)
-        accounts = await hass.async_add_executor_job(get_accounts, db_path)
-        securities = await hass.async_add_executor_job(get_securities, db_path)
-        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
+        db_path = Path(entry_data["db_path"])
+        file_path = entry_data["file_path"]
         
         sensors = []
         purchase_sensors = []
 
-        # Kontostände
+        # Kontostände aus DB laden
+        _LOGGER.debug("Lade Accounts aus DB...")
+        accounts = await hass.async_add_executor_job(get_accounts, db_path)
+        _LOGGER.debug("Gefundene Accounts: %s", accounts)
         for account in accounts:
             if account.is_retired:
                 continue
 
-            saldo = calculate_account_balance(account.uuid, transactions)
+            saldo = await hass.async_add_executor_job(
+                calculate_account_balance,
+                account.uuid,
+                db_path
+            )
             sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
 
         # Depots und zusätzliche Sensoren
-        securities_by_id = {s.uuid: s for s in securities}
+        _LOGGER.debug("Lade Portfolios aus DB...")
+        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
+        _LOGGER.debug("Gefundene Portfolios: %s", portfolios)
         reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
 
         for portfolio in portfolios:
@@ -92,7 +95,7 @@ async def async_setup_entry(
 
             # Depotwert-Sensor
             value, count = await calculate_portfolio_value(
-                portfolio.uuid,  # Nur UUID übergeben
+                portfolio.uuid,
                 reference_date,
                 db_path
             )
@@ -117,7 +120,6 @@ async def async_setup_entry(
         # Sensoren an HA übergeben
         async_add_entities(sensors, True)
 
-        # Setup-Dauer messen und loggen
         elapsed = (datetime.now() - start_time).total_seconds()
         _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
         
