@@ -23,7 +23,7 @@ import sqlite3
 from .sync_from_pclient import sync_from_pclient
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = ["sensor"]
+PLATFORMS: list[Platform] = [Platform.SENSOR]  # Explizite Platform-Konstante verwenden
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:

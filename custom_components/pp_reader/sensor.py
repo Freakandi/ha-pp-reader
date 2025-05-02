@@ -137,6 +137,14 @@ async def async_setup_entry(
         # Kaufsummen-Sensoren parallel initialisieren
         await asyncio.gather(*(sensor.async_update() for sensor in purchase_sensors))
 
+        # Initial-Update für alle Sensoren durchführen
+        update_tasks = []
+        for sensor in sensors:
+            if hasattr(sensor, 'async_update'):
+                update_tasks.append(sensor.async_update())
+        if update_tasks:
+            await asyncio.gather(*update_tasks)
+
         # Sensoren an HA übergeben
         async_add_entities(sensors, True)
         
@@ -144,7 +152,7 @@ async def async_setup_entry(
         _LOGGER.debug(
             "🔄 Registrierte Sensoren (%d): %s",
             len(sensors),
-            ", ".join(s.name for s in sensors)
+            ", ".join(f"{s.name} ({s.__class__.__name__})" for s in sensors)
         )
         
         elapsed = (datetime.now() - start_time).total_seconds()
@@ -153,5 +161,5 @@ async def async_setup_entry(
         return True
         
     except Exception as e:
-        _LOGGER.exception("Kritischer Fehler im Sensor-Setup: %s", str(e))
+        _LOGGER.exception("❌ Kritischer Fehler im Sensor-Setup: %s", str(e))
         return False

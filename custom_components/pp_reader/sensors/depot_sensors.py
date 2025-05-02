@@ -50,12 +50,13 @@ class PortfolioAccountSensor(SensorEntity):
             "datenquelle": os.path.basename(self._file_path),
         }
 
-class PortfolioDepotSensor(SensorEntity):
+class PortfolioDepotSensor(PortfolioSensor):  # Von PortfolioSensor erben
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
     
-    should_poll = True  # Aktiviert regelmäßiges Polling
+    entity_category = None  # Explizit als primary entity markieren
     
     def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
+        super().__init__()
         self.hass = hass
         self._portfolio_name = portfolio_name  # Für die Anzeige
         self._portfolio_uuid = portfolio_uuid  # Für interne Berechnungen
