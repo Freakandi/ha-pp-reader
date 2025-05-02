@@ -4,7 +4,7 @@ export async function prepareDashboardData() {
   const states = await fetchStates();
 
   // Erste Konto-Entity für Zeitstempel
-  const firstAccount = states.find(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_kontostand'));
+  const firstAccount = states.find(s => s.entity_id.startsWith('sensor.pp_reader_kontostand_'));
   const fileUpdated = firstAccount?.attributes?.letzte_aktualisierung || 'Unbekannt';
   const lastUpdatedRaw = firstAccount?.last_updated;
   const lastUpdated = lastUpdatedRaw
@@ -16,33 +16,32 @@ export async function prepareDashboardData() {
 
   // Kontostände
   const konten = states
-    .filter(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_kontostand'))
+    .filter(s => s.entity_id.startsWith('sensor.pp_reader_kontostand_'))
     .map(s => ({
-      name: s.attributes.friendly_name.split('Kontostand ').pop(),
+      name: s.attributes.friendly_name.replace('Kontostand ', ''),
       balance: parseFloat(s.state || 0)
     }));
 
   // Depotwerte
   const depots = states
-    .filter(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_depotwert'))
+    .filter(s => s.entity_id.startsWith('sensor.pp_reader_depotwert_'))
     .map(s => {
-      const name = s.attributes.friendly_name.split('Depotwert ').pop();
-      const baseName = name.replace('Portfolio Performance Reader ', '');
+      const name = s.attributes.friendly_name.replace('Depotwert ', '');
+      
+      // Entity-ID-Basis für zugehörige Sensoren
+      const baseId = s.entity_id.replace('depotwert_', '');
       
       // Zugehörige Gewinn-Sensoren finden
       const gainAbsState = states.find(x => 
-        x.entity_id.startsWith('sensor.portfolio_performance_reader_kursgewinn_absolut_') &&
-        x.attributes.friendly_name.includes(baseName)
+        x.entity_id === `sensor.pp_reader_kursgewinn_absolut_${baseId}`
       );
       
       const gainPctState = states.find(x => 
-        x.entity_id.startsWith('sensor.portfolio_performance_reader_kursgewinn_') &&
-        !x.entity_id.includes('absolut') &&
-        x.attributes.friendly_name.includes(baseName)
+        x.entity_id === `sensor.pp_reader_kursgewinn_${baseId}`
       );
 
       return {
-        name: baseName,
+        name: name,
         count: s.attributes.anzahl_wertpapiere || 0,
         value: parseFloat(s.state || 0),
         gain_abs: gainAbsState ? parseFloat(gainAbsState.state || 0) : 0,
