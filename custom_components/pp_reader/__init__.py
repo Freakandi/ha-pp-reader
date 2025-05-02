@@ -19,6 +19,8 @@ from .db_init import initialize_database_schema
 import asyncio
 from functools import partial
 import importlib
+import sqlite3
+from .sync_from_pclient import sync_from_pclient
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = ["sensor"]
@@ -53,6 +55,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
         if not data:
             raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
+            
+        # Daten in die SQLite DB synchronisieren
+        try:
+            _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
+            conn = sqlite3.connect(str(db_path))
+            await hass.async_add_executor_job(sync_from_pclient, data, conn)
+            conn.close()
+        except Exception as e:
+            _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
+            raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
         
         # Coordinator erstellen
         coordinator = PPReaderCoordinator(

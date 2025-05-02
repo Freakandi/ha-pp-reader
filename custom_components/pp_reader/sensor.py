@@ -68,10 +68,15 @@ async def async_setup_entry(
         sensors = []
         purchase_sensors = []
 
+        # Debug-Logging für DB-Zugriffe
+        _LOGGER.debug("📊 DB-Pfad: %s", db_path)
+        _LOGGER.debug("📄 Datei-Pfad: %s", file_path)
+        
         # Kontostände aus DB laden
-        _LOGGER.debug("Lade Accounts aus DB...")
+        _LOGGER.debug("💰 Lade Accounts aus DB...")
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
-        _LOGGER.debug("Gefundene Accounts: %s", accounts)
+        _LOGGER.debug("👥 Gefundene Accounts (%d): %s", len(accounts), 
+                     ", ".join(f"{a.name} ({a.currency_code})" for a in accounts))
         for account in accounts:
             if account.is_retired:
                 continue
@@ -84,9 +89,10 @@ async def async_setup_entry(
             sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
 
         # Depots und zusätzliche Sensoren
-        _LOGGER.debug("Lade Portfolios aus DB...")
+        _LOGGER.debug("📈 Lade Portfolios aus DB...")
         portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-        _LOGGER.debug("Gefundene Portfolios: %s", portfolios)
+        _LOGGER.debug("📊 Gefundene Portfolios (%d): %s", len(portfolios),
+                     ", ".join(f"{p.name}" for p in portfolios))
         reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
 
         for portfolio in portfolios:
