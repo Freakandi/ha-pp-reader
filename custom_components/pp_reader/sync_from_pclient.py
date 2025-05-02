@@ -93,15 +93,15 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             stats["securities"] += 1
 
             # Latest price speichern falls vorhanden
-            if sec.HasField("latest"):  # Nur prüfen ob latest existiert
+            if sec.HasField("latest"):
                 cur.execute("""
                     INSERT OR REPLACE INTO latest_prices 
-                    (security_uuid, value, date)  # Korrigierter Spaltenname
+                    (security_uuid, value, date)
                     VALUES (?, ?, ?)
                 """, (
                     sec.uuid,
-                    sec.latest.close,  # close ist ein required field
-                    datetime.fromtimestamp(sec.latest.date).isoformat()  # date statt time verwenden
+                    sec.latest.close,
+                    datetime.fromtimestamp(sec.latest.date).isoformat()
                 ))
 
         # --- PORTFOLIOS ---
