@@ -12,11 +12,18 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PortfolioPurchaseSensor(SensorEntity):
-    """Sensor für die Kaufsumme eines Depots (Summe der Kaufpreise aktiver Positionen)."""
+    """Sensor für die Kaufsumme eines Depots."""
 
     should_poll = True
 
     def __init__(self, hass, portfolio_name: str, db_path: Path):
+        """Initialisiere den Sensor.
+        
+        Args:
+            hass: Home Assistant Instance
+            portfolio_name: Name des Portfolios für die Anzeige
+            db_path: Pfad zur SQLite Datenbank
+        """
         self.hass = hass
         self._portfolio_name = portfolio_name
         self._db_path = db_path

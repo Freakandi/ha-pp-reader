@@ -113,7 +113,11 @@ async def async_setup_entry(
             sensors.append(depot_sensor)
 
             # Kaufsumme-Sensor
-            purchase_sensor = PortfolioPurchaseSensor(hass, portfolio.name, file_path, db_path)
+            purchase_sensor = PortfolioPurchaseSensor(
+                hass, 
+                portfolio.name,  # Name für die Anzeige
+                db_path         # Nur noch DB-Pfad übergeben
+            )
             purchase_sensors.append(purchase_sensor)
             sensors.append(purchase_sensor)
 
