@@ -4,8 +4,8 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorStateClass
 )
-from homeassistant.helpers.entity import DeviceInfo  # Import hinzugefügt
-from ..const import DOMAIN  # DOMAIN für device_info benötigt
+from homeassistant.helpers.entity import DeviceInfo
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,13 +27,11 @@ class PortfolioSensor(SensorEntity):
     
     @property
     def device_class(self):
-        """Return the device class."""
         return SensorDeviceClass.MONETARY
         
     @property
     def state_class(self):
-        """Return the state class."""
-        return SensorStateClass.TOTAL  # MEASUREMENT -> TOTAL geändert
+        return SensorStateClass.TOTAL
     
     async def async_update(self) -> None:
         """Aktualisiert den Sensor-Wert."""
