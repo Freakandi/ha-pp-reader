@@ -35,16 +35,15 @@ def calculate_holdings(transactions: List[Transaction]) -> Dict[str, float]:
             continue
         shares = normalize_shares(tx.shares) if tx.shares else 0
 
-        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
+        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY  
             holdings[tx.security] = holdings.get(tx.security, 0) + shares
         elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
             holdings[tx.security] = holdings.get(tx.security, 0) - shares
             
     return holdings
 
-
 async def calculate_portfolio_value(
-    portfolio_uuid: str,  # Änderung: Name → UUID
+    portfolio_uuid: str,
     reference_date: datetime,
     db_path: Path
 ) -> Tuple[float, int]:
@@ -65,7 +64,7 @@ async def calculate_portfolio_value(
     holdings = calculate_holdings(portfolio_transactions)
     active_securities = {sid: qty for sid, qty in holdings.items() if qty > 0}
     
-    # Währungen ermitteln
+    # Währungen ermitteln 
     currencies = set()
     for sid in active_securities:
         sec = securities_by_id.get(sid)
@@ -93,6 +92,13 @@ async def calculate_portfolio_value(
                 continue
                 
         total_value += qty * kurs
+
+    _LOGGER.debug(
+        "💰 Portfolio %s: Wert %.2f € (%d Positionen)", 
+        portfolio.name,
+        total_value,
+        len(active_securities)
+    )
         
     return round(total_value, 2), len(active_securities)
 

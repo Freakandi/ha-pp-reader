@@ -90,7 +90,9 @@ async def async_setup_entry(
                 account.uuid,
                 transactions    # Hier die geladenen Transaktionen übergeben
             )
-            sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
+            account_sensor = PortfolioAccountSensor(hass, account.name, saldo, file_path)
+            account_sensor.entity_registry_enabled_default = True  # Aktiviere Sensor standardmäßig
+            sensors.append(account_sensor)
 
         # Depots und zusätzliche Sensoren
         _LOGGER.debug("📈 Lade Portfolios aus DB...")
@@ -109,6 +111,7 @@ async def async_setup_entry(
                 portfolio.uuid,    # UUID für Berechnungen
                 db_path
             )
+            depot_sensor.entity_registry_enabled_default = True  # Aktiviere Sensor standardmäßig
             sensors.append(depot_sensor)
 
             # Kaufsumme-Sensor
@@ -118,14 +121,17 @@ async def async_setup_entry(
                 portfolio.uuid,    # UUID für Berechnungen
                 db_path
             )
+            purchase_sensor.entity_registry_enabled_default = True  # Aktiviere Sensor standardmäßig
             purchase_sensors.append(purchase_sensor)
             sensors.append(purchase_sensor)
 
-            # Kursgewinn-Sensoren bleiben unverändert
+            # Kursgewinn-Sensoren mit expliziter Aktivierung
             gain_abs_sensor = PortfolioGainAbsSensor(depot_sensor, purchase_sensor)
+            gain_abs_sensor.entity_registry_enabled_default = True
             sensors.append(gain_abs_sensor)
 
             gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
+            gain_pct_sensor.entity_registry_enabled_default = True
             sensors.append(gain_pct_sensor)
 
         # Kaufsummen-Sensoren parallel initialisieren
@@ -133,7 +139,14 @@ async def async_setup_entry(
 
         # Sensoren an HA übergeben
         async_add_entities(sensors, True)
-
+        
+        # Debug-Logging für Sensor-Registrierung
+        _LOGGER.debug(
+            "🔄 Registrierte Sensoren (%d): %s",
+            len(sensors),
+            ", ".join(s.name for s in sensors)
+        )
+        
         elapsed = (datetime.now() - start_time).total_seconds()
         _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
         

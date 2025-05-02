@@ -52,7 +52,9 @@ class PortfolioAccountSensor(SensorEntity):
 
 class PortfolioDepotSensor(SensorEntity):
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
-
+    
+    should_poll = True  # Aktiviert regelmäßiges Polling
+    
     def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
         self.hass = hass
         self._portfolio_name = portfolio_name  # Für die Anzeige
@@ -77,15 +79,24 @@ class PortfolioDepotSensor(SensorEntity):
         }
 
     async def async_update(self):
+        """Aktualisiert den Sensorwert."""
         try:
             value, count = await calculate_portfolio_value(
-                self._portfolio_uuid,  # UUID statt Name
+                self._portfolio_uuid,
                 datetime.now(),
                 self._db_path
             )
             self._value = value
             self._count = count
+            self._attr_native_value = value  # Wichtig: native_value setzen
             self._attr_available = True
+            
+            _LOGGER.debug(
+                "✅ Neuer Depotwert für %s: %.2f € (%d Positionen)", 
+                self._portfolio_name,
+                value,
+                count
+            )
         except Exception as e:
-            _LOGGER.error("Fehler beim Update des Depotsensors: %s", e)
+            _LOGGER.error("❌ Fehler beim Update des Depotwerts: %s", str(e))
             self._attr_available = False
