@@ -13,11 +13,14 @@ from ..db_access import (
     get_securities,
     get_portfolio_by_name
 )
+from ..sensor import PortfolioSensor  # Import der Basis-Klasse
 
 _LOGGER = logging.getLogger(__name__)
 
-class PortfolioAccountSensor(SensorEntity):
+class PortfolioAccountSensor(PortfolioSensor):  # Von Basis-Klasse erben
     """Sensor für Kontostände."""
+    should_poll = True
+    entity_category = None
     
     def __init__(self, hass, name: str, value: float, file_path: str):
         """Initialize the sensor."""

@@ -7,14 +7,16 @@ from homeassistant.util import slugify
 
 from ..logic.portfolio import calculate_purchase_sum
 from ..db_access import get_transactions, get_portfolio_by_name
+from ..sensor import PortfolioSensor  # Import der Basis-Klasse
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class PortfolioPurchaseSensor(SensorEntity):
+class PortfolioPurchaseSensor(PortfolioSensor):
     """Sensor für die Kaufsumme eines Depots."""
 
     should_poll = True
+    entity_category = None
 
     def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
         """Initialisiere den Sensor.

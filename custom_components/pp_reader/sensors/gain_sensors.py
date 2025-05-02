@@ -6,11 +6,15 @@ from custom_components.pp_reader.logic.portfolio import (
     calculate_unrealized_gain_pct,
 )
 from ..db_access import get_transactions, get_securities
+from ..sensor import PortfolioSensor  # Import der Basis-Klasse
 
 _LOGGER = logging.getLogger(__name__)
 
-class PortfolioGainAbsSensor(SensorEntity):
+class PortfolioGainAbsSensor(PortfolioSensor):
     """Sensor für den Kursgewinn (absolut) eines Depots."""
+    
+    should_poll = True
+    entity_category = None
 
     def __init__(self, depot_sensor, purchase_sensor):
         self._depot_sensor = depot_sensor
@@ -40,8 +44,11 @@ class PortfolioGainAbsSensor(SensorEntity):
             _LOGGER.error("Fehler beim Berechnen des Kursgewinns: %s", e)
             return None
 
-class PortfolioGainPctSensor(SensorEntity):
+class PortfolioGainPctSensor(PortfolioSensor):
     """Sensor für den Kursgewinn (prozentual) eines Depots."""
+    
+    should_poll = True
+    entity_category = None
 
     def __init__(self, depot_sensor, purchase_sensor):
         self._depot_sensor = depot_sensor
