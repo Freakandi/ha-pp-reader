@@ -6,7 +6,6 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 
-from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -26,26 +25,6 @@ from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 from .logic.validators import PPDataValidator
 
 _LOGGER = logging.getLogger(__name__)
-
-class PortfolioSensor(SensorEntity):
-    """Basis-Klasse für Portfolio Performance Sensoren."""
-    
-    async def async_update(self) -> None:
-        """Aktualisiert den Sensor-Wert."""
-        try:
-            await self._async_update_internal()
-            self._attr_available = True
-        except Exception as e:
-            self._attr_available = False
-            _LOGGER.error(
-                "Fehler bei Aktualisierung von %s: %s", 
-                self.entity_id, 
-                str(e)
-            )
-            
-    async def _async_update_internal(self) -> None:
-        """Interne Update-Methode, die von Kindklassen überschrieben wird."""
-        raise NotImplementedError()
 
 async def async_setup_entry(
     hass: HomeAssistant,

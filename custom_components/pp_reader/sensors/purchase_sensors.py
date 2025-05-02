@@ -7,7 +7,7 @@ from homeassistant.util import slugify
 
 from ..logic.portfolio import calculate_purchase_sum
 from ..db_access import get_transactions, get_portfolio_by_name
-from ..sensor import PortfolioSensor  # Import der Basis-Klasse
+from .base import PortfolioSensor  # Import der Basis-Klasse
 
 _LOGGER = logging.getLogger(__name__)
 

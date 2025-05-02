@@ -13,7 +13,8 @@ from ..db_access import (
     get_securities,
     get_portfolio_by_name
 )
-from ..sensor import PortfolioSensor  # Import der Basis-Klasse
+
+from .base import PortfolioSensor
 
 _LOGGER = logging.getLogger(__name__)
 
