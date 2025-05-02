@@ -78,6 +78,58 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Plattformen laden
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+        # Dashboard-Dateien registrieren
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(
+                "/pp_reader_dashboard",
+                hass.config.path("custom_components/pp_reader/www/pp_reader_dashboard"),
+                cache_headers=False
+            )
+        ])
+
+        if "pp-reader" not in hass.data.get("frontend_panels", {}):
+            frontend.async_register_built_in_panel(
+                hass,
+                "iframe",
+                "Portfolio Dashboard",
+                "mdi:finance", 
+                "pp-reader",
+                {
+                    "url": "/pp_reader_dashboard/dashboard.html"
+                },
+                require_admin=False
+            )
+
+        # API-Proxy registrieren
+        class PPReaderAPI(HomeAssistantView):
+            url = "/pp_reader_api/states"
+            name = "pp_reader_api"
+            requires_auth = False
+
+            def __init__(self, token):
+                self.token = token
+
+            async def get(self, request):
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        "http://localhost:8123/api/states",
+                        headers={"Authorization": f"Bearer {entry.data[CONF_API_TOKEN]}"}
+                    ) as resp:
+                        if resp.status != 200:
+                            _LOGGER.error("Fehler beim Abrufen von /api/states: %s", resp.status)
+                            return web.Response(status=resp.status, text="API Error")
+                        data = await resp.text()
+                        return web.Response(status=200, body=data, content_type="application/json")
+
+        hass.http.register_view(PPReaderAPI(entry.data[CONF_API_TOKEN]))
+
+        # Backup-System starten
+        try:
+            await setup_backup_system(hass, db_path)
+        except Exception as e:
+            _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
+            
         return True
         
     except Exception as e:

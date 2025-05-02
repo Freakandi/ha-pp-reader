@@ -49,10 +49,12 @@ class PortfolioSensor(SensorEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: ConfigEntry, 
     async_add_entities: AddEntitiesCallback,
 ) -> bool:
     """Richte die Portfolio Performance Sensoren ein."""
+    start_time = datetime.now()
+    
     try:
         entry_data = hass.data[DOMAIN].get(config_entry.entry_id)
         if not entry_data:
@@ -109,7 +111,16 @@ async def async_setup_entry(
             gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_pct_sensor)
 
+        # Kaufsummen-Sensoren parallel initialisieren
+        await asyncio.gather(*(sensor.async_update() for sensor in purchase_sensors))
+
+        # Sensoren an HA übergeben
         async_add_entities(sensors, True)
+
+        # Setup-Dauer messen und loggen
+        elapsed = (datetime.now() - start_time).total_seconds()
+        _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
+        
         return True
         
     except Exception as e:
