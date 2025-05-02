@@ -44,6 +44,12 @@ class PortfolioGainAbsSensor(PortfolioSensor):
             _LOGGER.error("Fehler beim Berechnen des Kursgewinns: %s", e)
             return None
 
+    async def _async_update_internal(self) -> None:
+        """Update method implementation."""
+        value = self.native_value
+        if value is not None:
+            self._attr_native_value = value
+
 class PortfolioGainPctSensor(PortfolioSensor):
     """Sensor für den Kursgewinn (prozentual) eines Depots."""
     
@@ -69,3 +75,9 @@ class PortfolioGainPctSensor(PortfolioSensor):
         except Exception as e:
             _LOGGER.error("Fehler beim Berechnen des Kursgewinns (prozentual): %s", e)
             return None
+
+    async def _async_update_internal(self) -> None:
+        """Update method implementation."""
+        value = self.native_value
+        if value is not None:
+            self._attr_native_value = value

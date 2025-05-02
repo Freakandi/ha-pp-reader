@@ -83,25 +83,13 @@ class PortfolioDepotSensor(PortfolioSensor):  # Von PortfolioSensor erben
             "anzahl_wertpapiere": self._count
         }
 
-    async def async_update(self):
-        """Aktualisiert den Sensorwert."""
-        try:
-            value, count = await calculate_portfolio_value(
-                self._portfolio_uuid,
-                datetime.now(),
-                self._db_path
-            )
-            self._value = value
-            self._count = count
-            self._attr_native_value = value  # Wichtig: native_value setzen
-            self._attr_available = True
-            
-            _LOGGER.debug(
-                "✅ Neuer Depotwert für %s: %.2f € (%d Positionen)", 
-                self._portfolio_name,
-                value,
-                count
-            )
-        except Exception as e:
-            _LOGGER.error("❌ Fehler beim Update des Depotwerts: %s", str(e))
-            self._attr_available = False
+    async def _async_update_internal(self) -> None:
+        """Update method implementation."""
+        value, count = await calculate_portfolio_value(
+            self._portfolio_uuid,
+            datetime.now(),
+            self._db_path
+        )
+        self._value = value
+        self._count = count
+        self._attr_native_value = value

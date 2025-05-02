@@ -21,7 +21,7 @@ class PortfolioSensor(SensorEntity):
     @property
     def state_class(self):
         """Return the state class."""
-        return SensorStateClass.MEASUREMENT
+        return SensorStateClass.TOTAL  # MEASUREMENT -> TOTAL geändert
     
     async def async_update(self) -> None:
         """Aktualisiert den Sensor-Wert."""

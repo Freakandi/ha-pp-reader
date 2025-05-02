@@ -42,20 +42,10 @@ class PortfolioPurchaseSensor(PortfolioSensor):
     def native_value(self):
         return self._purchase_sum
 
-    async def async_update(self):
-        """Aktualisiert den Sensorwert."""
-        try:
-            self._purchase_sum = await calculate_purchase_sum(
-                self._portfolio_uuid,  # UUID statt Name
-                self._db_path
-            )
-            self._attr_native_value = self._purchase_sum
-            self._attr_available = True
-            _LOGGER.debug(
-                "✅ Neue Kaufsumme für %s: %.2f €", 
-                self._portfolio_name, 
-                self._purchase_sum
-            )
-        except Exception as e:
-            _LOGGER.error("❌ Fehler beim Update der Kaufsumme: %s", str(e))
-            self._attr_available = False
+    async def _async_update_internal(self) -> None:
+        """Update method implementation."""
+        self._purchase_sum = await calculate_purchase_sum(
+            self._portfolio_uuid,
+            self._db_path
+        )
+        self._attr_native_value = self._purchase_sum
