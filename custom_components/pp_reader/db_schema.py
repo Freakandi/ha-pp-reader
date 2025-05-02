@@ -26,7 +26,16 @@ SECURITIES_SCHEMA = [
     CREATE TABLE IF NOT EXISTS securities (
         uuid TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        currency_code TEXT NOT NULL
+        currency_code TEXT NOT NULL,
+        target_currency_code TEXT,
+        note TEXT,
+        isin TEXT,
+        wkn TEXT,
+        symbol TEXT,
+        feed_url TEXT,
+        latest_feed_url TEXT,
+        retired INTEGER DEFAULT 0,
+        updated_at TEXT
     );
     """,
     """

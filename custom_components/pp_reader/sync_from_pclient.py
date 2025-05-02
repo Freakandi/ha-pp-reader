@@ -54,14 +54,15 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
 
         for acc in client.accounts:
             cur.execute("""
-                INSERT OR REPLACE INTO accounts (uuid, name, currency_code, note, is_retired, updated_at)
+                INSERT OR REPLACE INTO accounts 
+                (uuid, name, currency_code, note, is_retired, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 acc.uuid,
                 acc.name,
-                acc.currencyCode,
+                acc.currencyCode if acc.HasField("currencyCode") else "EUR",
                 acc.note if acc.HasField("note") else None,
-                int(acc.isRetired),
+                1 if getattr(acc, "isRetired", False) else 0,
                 to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
             ))
 
@@ -71,36 +72,39 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
         for sec in client.securities:
-            latest = sec.latest if sec.HasField("latest") else None
             cur.execute("""
                 INSERT OR REPLACE INTO securities (
-                    uuid, name, currency_code, target_currency_code, note,
-                    isin, ticker_symbol, wkn, calendar, feed, feed_url,
-                    latest_feed, latest_feed_url, latest_close, latest_high,
-                    latest_low, latest_volume, is_retired, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    uuid, name, currency_code, 
+                    note, isin, wkn, symbol,
+                    feed_url, latest_feed_url,
+                    retired, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sec.uuid,
                 sec.name,
-                sec.currencyCode if sec.HasField("currencyCode") else None,
-                sec.targetCurrencyCode if sec.HasField("targetCurrencyCode") else None,
+                sec.currencyCode if sec.HasField("currencyCode") else "EUR",
                 sec.note if sec.HasField("note") else None,
                 sec.isin if sec.HasField("isin") else None,
-                sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
                 sec.wkn if sec.HasField("wkn") else None,
-                sec.calendar if sec.HasField("calendar") else None,
+                sec.symbol if sec.HasField("symbol") else None,
                 sec.feed if sec.HasField("feed") else None,
-                sec.feedURL if sec.HasField("feedURL") else None,
                 sec.latestFeed if sec.HasField("latestFeed") else None,
-                sec.latestFeedURL if sec.HasField("latestFeedURL") else None,
-                latest.close if latest else None,
-                latest.high if latest else None,
-                latest.low if latest else None,
-                latest.volume if latest else None,
-                int(sec.isRetired),
+                1 if getattr(sec, "isRetired", False) else 0,
                 to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
             ))
             stats["securities"] += 1
+
+            # Latest price speichern falls vorhanden
+            if sec.HasField("latest") and sec.latest.HasField("close"):
+                cur.execute("""
+                    INSERT OR REPLACE INTO latest_prices 
+                    (security_uuid, value, updated_at)
+                    VALUES (?, ?, ?)
+                """, (
+                    sec.uuid,
+                    sec.latest.close,
+                    to_iso8601(sec.latest.time) if sec.latest.HasField("time") else None
+                ))
 
         # --- PORTFOLIOS ---
         portfolio_ids = {p.uuid for p in client.portfolios}
