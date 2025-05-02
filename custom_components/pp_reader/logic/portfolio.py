@@ -9,6 +9,7 @@ from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 from ..db_access import (
     get_securities,
     get_portfolio_by_name,
+    get_portfolio_by_uuid,
     get_transactions,
     get_securities_by_id,
     Security,
@@ -43,16 +44,15 @@ def calculate_holdings(transactions: List[Transaction]) -> Dict[str, float]:
 
 
 async def calculate_portfolio_value(
-    portfolio_name: str,
+    portfolio_uuid: str,  # Änderung: Name → UUID
     reference_date: datetime,
     db_path: Path
 ) -> Tuple[float, int]:
     """Berechnet den aktuellen Portfolio-Wert und die Anzahl aktiver Positionen."""
     
-    # Daten aus DB laden
-    portfolio = get_portfolio_by_name(db_path, portfolio_name)
+    portfolio = get_portfolio_by_uuid(db_path, portfolio_uuid)
     if not portfolio:
-        _LOGGER.error("Portfolio nicht gefunden: %s", portfolio_name)
+        _LOGGER.error("Portfolio nicht gefunden: %s", portfolio_uuid)
         return 0.0, 0
         
     transactions = get_transactions(db_path)
@@ -98,17 +98,16 @@ async def calculate_portfolio_value(
 
 
 async def calculate_purchase_sum(
-    portfolio_name: str,
-    reference_date: datetime,
+    portfolio_uuid: str,  # Änderung: Name → UUID
     db_path: Path
 ) -> float:
     """Berechnet die Kaufsumme für aktive Positionen (FIFO)."""
     
-    portfolio = get_portfolio_by_name(db_path, portfolio_name)
+    portfolio = get_portfolio_by_uuid(db_path, portfolio_uuid)
     if not portfolio:
-        _LOGGER.error("Portfolio nicht gefunden: %s", portfolio_name)
+        _LOGGER.error("Portfolio nicht gefunden: %s", portfolio_uuid)
         return 0.0
-        
+    
     transactions = get_transactions(db_path)
     securities_by_id = get_securities_by_id(db_path)
     

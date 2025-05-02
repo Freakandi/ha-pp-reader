@@ -16,16 +16,18 @@ class PortfolioPurchaseSensor(SensorEntity):
 
     should_poll = True
 
-    def __init__(self, hass, portfolio_name: str, db_path: Path):
+    def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
         """Initialisiere den Sensor.
         
         Args:
             hass: Home Assistant Instance
             portfolio_name: Name des Portfolios für die Anzeige
+            portfolio_uuid: UUID des Portfolios für interne Berechnungen
             db_path: Pfad zur SQLite Datenbank
         """
         self.hass = hass
-        self._portfolio_name = portfolio_name
+        self._portfolio_name = portfolio_name  # Für die Anzeige
+        self._portfolio_uuid = portfolio_uuid  # Für interne Berechnungen
         self._db_path = db_path
         self._purchase_sum = 0.0
 
@@ -39,18 +41,19 @@ class PortfolioPurchaseSensor(SensorEntity):
         return self._purchase_sum
 
     async def async_update(self):
-        """Aktualisiere die Kaufsumme aus der DB."""
+        """Aktualisiert den Sensorwert."""
         try:
-            # DB-Zugriff im executor
-            self._purchase_sum = await self.hass.async_add_executor_job(
-                calculate_purchase_sum,
-                self._portfolio_name,
+            self._purchase_sum = await calculate_purchase_sum(
+                self._portfolio_uuid,  # UUID statt Name
                 self._db_path
             )
+            self._attr_native_value = self._purchase_sum
+            self._attr_available = True
             _LOGGER.debug(
                 "✅ Neue Kaufsumme für %s: %.2f €", 
                 self._portfolio_name, 
                 self._purchase_sum
             )
         except Exception as e:
-            _LOGGER.error("❌ Fehler beim Update der Kaufsumme: %s", e)
+            _LOGGER.error("❌ Fehler beim Update der Kaufsumme: %s", str(e))
+            self._attr_available = False

@@ -97,31 +97,31 @@ async def async_setup_entry(
         portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
         _LOGGER.debug("📊 Gefundene Portfolios (%d): %s", len(portfolios),
                      ", ".join(f"{p.name}" for p in portfolios))
-        reference_date = datetime.fromtimestamp(os.path.getmtime(file_path))
 
         for portfolio in portfolios:
             if portfolio.is_retired:
                 continue
 
             # Depotwert-Sensor
-            value, count = await calculate_portfolio_value(
-                portfolio.uuid,
-                reference_date,
+            depot_sensor = PortfolioDepotSensor(
+                hass, 
+                portfolio.name,    # Name für Anzeige
+                portfolio.uuid,    # UUID für Berechnungen
                 db_path
             )
-            depot_sensor = PortfolioDepotSensor(hass, portfolio.name, value, count, file_path)
             sensors.append(depot_sensor)
 
             # Kaufsumme-Sensor
             purchase_sensor = PortfolioPurchaseSensor(
-                hass, 
-                portfolio.name,  # Name für die Anzeige
-                db_path         # Nur noch DB-Pfad übergeben
+                hass,
+                portfolio.name,    # Name für Anzeige
+                portfolio.uuid,    # UUID für Berechnungen
+                db_path
             )
             purchase_sensors.append(purchase_sensor)
             sensors.append(purchase_sensor)
 
-            # Kursgewinn-Sensoren
+            # Kursgewinn-Sensoren bleiben unverändert
             gain_abs_sensor = PortfolioGainAbsSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_abs_sensor)
 

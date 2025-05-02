@@ -53,16 +53,16 @@ class PortfolioAccountSensor(SensorEntity):
 class PortfolioDepotSensor(SensorEntity):
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
 
-    def __init__(self, hass, portfolio_name: str, value: float, count: int, file_path: str):
+    def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
         self.hass = hass
-        self._portfolio_name = portfolio_name
-        self._value = round(value, 2)
-        self._count = count
-        self._file_path = file_path
+        self._portfolio_name = portfolio_name  # Für die Anzeige
+        self._portfolio_uuid = portfolio_uuid  # Für interne Berechnungen
+        self._db_path = db_path
+        self._value = 0.0
+        self._count = 0
 
         self._attr_name = f"Depotwert {portfolio_name}"
-        base = os.path.basename(file_path)
-        self._attr_unique_id = f"{slugify(base)}_{slugify(portfolio_name)}_depot"
+        self._attr_unique_id = f"pp_reader_{slugify(portfolio_name)}_depot"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:finance"
 
@@ -72,43 +72,20 @@ class PortfolioDepotSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        try:
-            ts = os.path.getmtime(self._file_path)
-            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
-        except Exception as e:
-            _LOGGER.warning("Konnte Änderungsdatum nicht lesen: %s", e)
-            updated = None
-
         return {
-            "anzahl_wertpapiere": self._count,
-            "letzte_aktualisierung": updated,
-            "datenquelle": os.path.basename(self._file_path),
+            "anzahl_wertpapiere": self._count
         }
 
     async def async_update(self):
-        """Aktualisiert den Sensor-Wert basierend auf DB-Daten."""
         try:
-            # Daten aus der SQLite DB laden
-            db_path = Path(self._file_path).with_suffix('.db')
-            
-            portfolio = await self.hass.async_add_executor_job(
-                get_portfolio_by_name, db_path, self._portfolio_name
+            value, count = await calculate_portfolio_value(
+                self._portfolio_uuid,  # UUID statt Name
+                datetime.now(),
+                self._db_path
             )
-            
-            if portfolio:
-                # Berechne Depotwert aus DB-Daten
-                value, count = await calculate_portfolio_value(
-                    portfolio.uuid,
-                    datetime.fromtimestamp(os.path.getmtime(self._file_path)),
-                    db_path
-                )
-                self._value = round(value, 2)
-                self._count = count
-                self._attr_available = True
-            else:
-                _LOGGER.error("Portfolio %s nicht in DB gefunden", self._portfolio_name)
-                self._attr_available = False
-                
+            self._value = value
+            self._count = count
+            self._attr_available = True
         except Exception as e:
             _LOGGER.error("Fehler beim Update des Depotsensors: %s", e)
             self._attr_available = False

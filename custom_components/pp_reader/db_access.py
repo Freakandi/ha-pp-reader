@@ -125,6 +125,20 @@ def get_portfolio_by_name(db_path: Path, name: str) -> Optional[Portfolio]:
     finally:
         conn.close()
 
+def get_portfolio_by_uuid(db_path: Path, uuid: str) -> Optional[Portfolio]:
+    """Lädt ein Portfolio anhand seiner UUID aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT uuid, name, note, reference_account, COALESCE(is_retired, 0)
+            FROM portfolios 
+            WHERE uuid = ?
+        """, (uuid,))
+        row = cur.fetchone()
+        return Portfolio(*row) if row else None
+    finally:
+        conn.close()
+
 def get_accounts(db_path: Path) -> List[Account]:
     """Lädt alle Konten aus der DB."""
     conn = sqlite3.connect(str(db_path))
