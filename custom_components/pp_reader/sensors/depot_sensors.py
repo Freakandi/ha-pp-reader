@@ -36,7 +36,7 @@ class PortfolioAccountSensor(PortfolioSensor):
         self._attr_unique_id = f"pp_reader_kontostand_{slugify(name)}"
         self._attr_name = f"Kontostand {name}"  
         self._attr_native_unit_of_measurement = "€"
-        self._attr_icon = "mdi:piggy-bank"
+        self._attr_icon = "mdi:bank"
 
     @property
     def native_value(self):
