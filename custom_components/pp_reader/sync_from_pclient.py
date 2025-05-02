@@ -53,7 +53,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
         delete_missing_entries(conn, "accounts", "uuid", account_ids)
 
         for acc in client.accounts:
-            # Direkte Attributzugriffe für nicht-optionale Felder
             cur.execute("""
                 INSERT OR REPLACE INTO accounts 
                 (uuid, name, currency_code, note, is_retired, updated_at)
@@ -61,7 +60,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             """, (
                 acc.uuid,
                 acc.name,
-                acc.currencyCode,  # Kein HasField() mehr für currencyCode
+                acc.currencyCode,
                 acc.note if acc.HasField("note") else None,
                 1 if getattr(acc, "isRetired", False) else 0,
                 to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
@@ -73,7 +72,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
         for sec in client.securities:
-            # Symbol aus dem korrekten Protobuf-Feld tickerSymbol lesen
             cur.execute("""
                 INSERT OR REPLACE INTO securities (
                     uuid, name, currency_code, 
@@ -87,21 +85,21 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
                 sec.note if sec.HasField("note") else None,
                 sec.isin if sec.HasField("isin") else None,
                 sec.wkn if sec.HasField("wkn") else None,
-                sec.tickerSymbol if sec.HasField("tickerSymbol") else None,  # Korrigierter Feldname
+                sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
                 1 if getattr(sec, "isRetired", False) else 0,
                 to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
             ))
             stats["securities"] += 1
 
             # Latest price speichern falls vorhanden
-            if sec.HasField("latest") and sec.latest.HasField("close"):
+            if sec.HasField("latest"):  # Nur prüfen ob latest existiert
                 cur.execute("""
                     INSERT OR REPLACE INTO latest_prices 
                     (security_uuid, value, updated_at)
                     VALUES (?, ?, ?)
                 """, (
                     sec.uuid,
-                    sec.latest.close,
+                    sec.latest.close,  # close ist ein required field
                     to_iso8601(sec.latest.time) if sec.latest.HasField("time") else None
                 ))
 
