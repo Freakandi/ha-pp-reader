@@ -24,21 +24,27 @@ class PortfolioAccountSensor(PortfolioSensor):
     should_poll = True
     entity_category = None
     
-    def __init__(self, hass, name: str, value: float, file_path: str):
-        super().__init__()  # Basis-Klasse initialisieren
+    def __init__(self, hass, name: str, account_uuid: str, db_path: Path):
+        """Initialisiere den Kontosensor.
+        
+        Args:
+            hass: Home Assistant Instance
+            name: Name des Kontos für die Anzeige
+            account_uuid: UUID des Kontos für DB-Abfragen
+            db_path: Pfad zur SQLite Datenbank
+        """
+        super().__init__()
         self.hass = hass
         self._name = name
-        self._value = value
-        self._file_path = file_path
-        # Entity ID explizit setzen
-        self.entity_id = f"sensor.konto_{slugify(name)}"
-        self._attr_unique_id = f"pp_reader_account_{slugify(name)}"
-        self._attr_native_value = value
+        self._account_uuid = account_uuid
+        self._db_path = db_path
+        self._value = 0.0
 
-    @property
-    def name(self):
-        """Name des Sensors."""
-        return f"Konto {self._name}"
+        # Entity-Eigenschaften setzen
+        self._attr_name = f"Konto {self._name}"
+        self._attr_unique_id = f"pp_reader_account_{slugify(name)}"
+        self._attr_native_unit_of_measurement = "€"
+        self._attr_icon = "mdi:piggy-bank"
 
     @property
     def native_value(self):
@@ -47,18 +53,46 @@ class PortfolioAccountSensor(PortfolioSensor):
 
     async def _async_update_internal(self) -> None:
         """Update method implementation."""
-        # Account-Balance neu berechnen
-        transactions = await self.hass.async_add_executor_job(
-            get_transactions, 
-            Path(self._file_path).parent / "pp_reader_data/S-Depot.db"
-        )
-        new_value = await self.hass.async_add_executor_job(
-            calculate_account_balance,
-            self._account_uuid,
-            transactions
-        )
-        self._value = new_value
-        self._attr_native_value = new_value
+        try:
+            # Transaktionen für das Konto aus der DB laden
+            transactions = await self.hass.async_add_executor_job(
+                get_transactions,
+                self._db_path
+            )
+            
+            # Nur Transaktionen für dieses Konto filtern
+            account_transactions = [
+                tx for tx in transactions 
+                if tx.account == self._account_uuid
+            ]
+            
+            # Kontostand berechnen
+            balance = 0
+            for tx in account_transactions:
+                # Positiv: DEPOSIT, INTEREST, TAX_REFUND, FEE_REFUND
+                # Negativ: REMOVAL, INTEREST_CHARGE, TAX, FEE
+                if tx.type in [6, 9, 12, 14]:  # DEPOSIT, INTEREST, TAX_REFUND, FEE_REFUND
+                    balance += tx.amount
+                elif tx.type in [7, 10, 11, 13]:  # REMOVAL, INTEREST_CHARGE, TAX, FEE
+                    balance -= tx.amount
+                    
+            # Wert in Euro umrechnen (amount ist in Cent)
+            self._value = round(balance / 100.0, 2)
+            self._attr_native_value = self._value
+            
+            _LOGGER.debug(
+                "✅ Neuer Kontostand für %s: %.2f €", 
+                self._name,
+                self._value
+            )
+            
+        except Exception as e:
+            _LOGGER.error(
+                "❌ Fehler beim Laden des Kontostands für %s: %s",
+                self._name,
+                str(e)
+            )
+            raise
 
 class PortfolioDepotSensor(PortfolioSensor):  # Von PortfolioSensor erben
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""

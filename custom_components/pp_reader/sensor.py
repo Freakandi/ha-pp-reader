@@ -60,17 +60,18 @@ async def async_setup_entry(
         # Transaktionen einmalig laden
         transactions = await hass.async_add_executor_job(get_transactions, db_path)
         
+        # Kontosensoren erstellen
         for account in accounts:
             if account.is_retired:
                 continue
-
-            saldo = await hass.async_add_executor_job(
-                calculate_account_balance,
-                account.uuid,
-                transactions    # Hier die geladenen Transaktionen übergeben
+                
+            account_sensor = PortfolioAccountSensor(
+                hass,
+                account.name,
+                account.uuid,  # UUID statt Saldo übergeben
+                db_path       # DB-Pfad statt Datei-Pfad
             )
-            account_sensor = PortfolioAccountSensor(hass, account.name, saldo, file_path)
-            account_sensor.entity_registry_enabled_default = True  # Aktiviere Sensor standardmäßig
+            account_sensor.entity_registry_enabled_default = True
             sensors.append(account_sensor)
 
         # Depots und zusätzliche Sensoren
