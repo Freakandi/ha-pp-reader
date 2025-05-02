@@ -18,29 +18,35 @@ export async function prepareDashboardData() {
   const konten = states
     .filter(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_kontostand'))
     .map(s => ({
-      name: s.attributes.friendly_name.replace('Kontostand ', ''),
-      balance: parseFloat(s.state)
+      name: s.attributes.friendly_name.split('Kontostand ').pop(),
+      balance: parseFloat(s.state || 0)
     }));
 
   // Depotwerte
   const depots = states
     .filter(s => s.entity_id.startsWith('sensor.portfolio_performance_reader_depotwert'))
     .map(s => {
-      const name = s.attributes.friendly_name.replace('Depotwert ', '');
-      const slug = s.entity_id.split('_').pop(); // Letztes Segment der Entity-ID
+      const name = s.attributes.friendly_name.split('Depotwert ').pop();
+      const baseName = name.replace('Portfolio Performance Reader ', '');
       
       // Zugehörige Gewinn-Sensoren finden
-      const absId = `sensor.portfolio_performance_reader_kursgewinn_absolut_${slug}`;
-      const pctId = `sensor.portfolio_performance_reader_kursgewinn_${slug}`;
-      const gainAbsState = states.find(x => x.entity_id === absId);
-      const gainPctState = states.find(x => x.entity_id === pctId);
+      const gainAbsState = states.find(x => 
+        x.entity_id.startsWith('sensor.portfolio_performance_reader_kursgewinn_absolut_') &&
+        x.attributes.friendly_name.includes(baseName)
+      );
+      
+      const gainPctState = states.find(x => 
+        x.entity_id.startsWith('sensor.portfolio_performance_reader_kursgewinn_') &&
+        !x.entity_id.includes('absolut') &&
+        x.attributes.friendly_name.includes(baseName)
+      );
 
       return {
-        name: name,
-        count: s.attributes.anzahl_wertpapiere,
-        value: parseFloat(s.state),
-        gain_abs: gainAbsState ? parseFloat(gainAbsState.state) : 0,
-        gain_pct: gainPctState ? parseFloat(gainPctState.state) : 0
+        name: baseName,
+        count: s.attributes.anzahl_wertpapiere || 0,
+        value: parseFloat(s.state || 0),
+        gain_abs: gainAbsState ? parseFloat(gainAbsState.state || 0) : 0,
+        gain_pct: gainPctState ? parseFloat(gainPctState.state || 0) : 0
       };
     });
 
