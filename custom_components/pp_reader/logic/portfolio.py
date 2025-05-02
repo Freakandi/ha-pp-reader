@@ -119,6 +119,22 @@ async def calculate_purchase_sum(
     
     holdings: Dict[str, List[Tuple[float, float, datetime]]] = {}
     
+    # Vor der Transaktionsverarbeitung: Alle benötigten Währungen und Daten sammeln
+    fx_dates = set()
+    fx_currencies = set()
+    
+    for tx in portfolio_transactions:
+        if not tx.security:
+            continue
+        sec = securities_by_id.get(tx.security)
+        if sec and sec.currency_code != "EUR":
+            fx_currencies.add(sec.currency_code)
+            fx_dates.add(datetime.fromisoformat(tx.date))
+    
+    # Wechselkurse vorab laden
+    if fx_currencies:
+        await ensure_exchange_rates_for_dates(list(fx_dates), fx_currencies, db_path)
+    
     for tx in portfolio_transactions:
         if not tx.security:
             continue

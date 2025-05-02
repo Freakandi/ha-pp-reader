@@ -108,13 +108,28 @@ async def load_latest_rates(reference_date: datetime, db_path: Path) -> dict[str
     return await _load_rates_for_date(db_path, date_str)
 
 async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str], db_path: Path) -> None:
+    """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
     if not currencies:
         return
 
+    _LOGGER.debug("🔄 Prüfe Wechselkurse für %d Währungen an %d Daten", 
+                  len(currencies), len(dates))
+                  
     for dt in dates:
         date_str = dt.strftime("%Y-%m-%d")
         existing = await _load_rates_for_date(db_path, date_str)
-        if not currencies.issubset(set(existing.keys())):
-            _LOGGER.info("🔄 Lade historische Kurse für %s", date_str)
-            fetched = await _fetch_exchange_rates(date_str, currencies)
-            await _save_rates(db_path, date_str, fetched)
+        missing = currencies - set(existing.keys())
+        
+        if missing:
+            _LOGGER.info("📥 Lade fehlende Kurse (%s) für %s", 
+                        ", ".join(missing), date_str)
+            try:
+                fetched = await _fetch_exchange_rates(date_str, missing)
+                if fetched:
+                    await _save_rates(db_path, date_str, fetched)
+                    _LOGGER.debug("✅ Kurse gespeichert: %s", fetched)
+                else:
+                    _LOGGER.warning("⚠️ Keine Kurse erhalten für %s am %s",
+                                  missing, date_str)
+            except Exception as e:
+                _LOGGER.error("❌ Fehler beim Laden der Kurse: %s", str(e))
