@@ -73,26 +73,23 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
         for sec in client.securities:
-            # Direkte Attributzugriffe für nicht-optionale Felder
+            # Symbol aus dem korrekten Protobuf-Feld tickerSymbol lesen
             cur.execute("""
                 INSERT OR REPLACE INTO securities (
                     uuid, name, currency_code, 
                     note, isin, wkn, symbol,
-                    feed_url, latest_feed_url,
                     retired, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sec.uuid,
                 sec.name,
-                sec.currencyCode,  # Kein HasField() mehr für currencyCode
+                sec.currencyCode,
                 sec.note if sec.HasField("note") else None,
                 sec.isin if sec.HasField("isin") else None,
                 sec.wkn if sec.HasField("wkn") else None,
-                sec.symbol if sec.HasField("symbol") else None,
-                sec.feed if sec.HasField("feed") else None,
-                sec.latestFeed if sec.HasField("latestFeed") else None,
+                sec.tickerSymbol if sec.HasField("tickerSymbol") else None,  # Korrigierter Feldname
                 1 if getattr(sec, "isRetired", False) else 0,
-                to_iso8601(sec.updatedAt) if acc.HasField("updatedAt") else None
+                to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
             ))
             stats["securities"] += 1
 
