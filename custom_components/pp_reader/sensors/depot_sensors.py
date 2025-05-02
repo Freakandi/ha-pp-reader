@@ -40,9 +40,10 @@ class PortfolioAccountSensor(PortfolioSensor):
         self._db_path = db_path
         self._value = 0.0
 
-        # Entity-Eigenschaften setzen
-        self._attr_name = f"Konto {self._name}"
-        self._attr_unique_id = f"pp_reader_account_{slugify(name)}"
+        # Korrekte Entity-ID setzen
+        self.entity_id = f"sensor.kontostand_{slugify(name)}"
+        self._attr_unique_id = f"pp_reader_kontostand_{slugify(name)}"
+        self._attr_name = f"Kontostand {name}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:piggy-bank"
 
@@ -98,10 +99,12 @@ class PortfolioDepotSensor(PortfolioSensor):  # Von PortfolioSensor erben
         self._value = 0.0
         self._count = 0
 
+        # Korrekte Entity-ID setzen
+        self.entity_id = f"sensor.depotwert_{slugify(portfolio_name)}"
+        self._attr_unique_id = f"pp_reader_depotwert_{slugify(portfolio_name)}"
         self._attr_name = f"Depotwert {portfolio_name}"
-        self._attr_unique_id = f"pp_reader_{slugify(portfolio_name)}_depot"
         self._attr_native_unit_of_measurement = "€"
-        self._attr_icon = "mdi:finance"
+        self._attr_icon = "mdi:chart-line"
 
     @property
     def native_value(self):

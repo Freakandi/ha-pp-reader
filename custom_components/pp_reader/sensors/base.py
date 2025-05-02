@@ -13,6 +13,15 @@ class PortfolioSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = True
     
+    def __init__(self):
+        super().__init__()
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "pp_reader")},
+            name="Portfolio Performance Reader",
+            manufacturer="Portfolio Performance",
+            model="Sensor Hub"
+        )
+    
     @property
     def device_class(self):
         """Return the device class."""

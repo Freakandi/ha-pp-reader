@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
+import homeassistant.helpers.device_registry as dr
 
 from .const import DOMAIN
 from .logic.accounting import calculate_account_balance
@@ -33,6 +34,15 @@ async def async_setup_entry(
 ) -> bool:
     """Richte die Portfolio Performance Sensoren ein."""
     start_time = datetime.now()
+    
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, "pp_reader")},
+        name="Portfolio Performance Reader",
+        manufacturer="Portfolio Performance",
+        model="Sensor Hub"
+    )
     
     try:
         entry_data = hass.data[DOMAIN].get(config_entry.entry_id)
