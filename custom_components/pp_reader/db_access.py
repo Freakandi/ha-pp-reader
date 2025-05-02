@@ -27,8 +27,14 @@ class Security:
     uuid: str
     name: str
     currency_code: str
+    note: Optional[str] = None
+    isin: Optional[str] = None
+    wkn: Optional[str] = None
+    ticker_symbol: Optional[str] = None  # Anpassung an Schema
+    retired: bool = False
+    updated_at: Optional[str] = None
     latest_price: Optional[int] = None     # Preis in 10^-8 Einheiten
-    last_price_update: Optional[str] = None # ISO8601 Zeitstempel
+    last_price_date: Optional[str] = None  # Umbenennung wegen Schema-Änderung
 
 @dataclass  
 class Account:
@@ -74,13 +80,27 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
         # Join mit latest_prices für aktuelle Kursdaten
         cur = conn.execute("""
             SELECT s.uuid, s.name, s.currency_code, 
+                   s.note, s.isin, s.wkn, s.ticker_symbol,
+                   s.retired, s.updated_at,
                    p.value as latest_price,
-                   p.updated_at as last_price_update
+                   p.date as last_price_date
             FROM securities s
             LEFT JOIN latest_prices p ON s.uuid = p.security_uuid
             ORDER BY s.name
         """)
-        return {row[0]: Security(*row) for row in cur.fetchall()}
+        return {row[0]: Security(
+            uuid=row[0],
+            name=row[1],
+            currency_code=row[2],
+            note=row[3],
+            isin=row[4],
+            wkn=row[5],
+            ticker_symbol=row[6],
+            retired=bool(row[7]),
+            updated_at=row[8],
+            latest_price=row[9],
+            last_price_date=row[10]
+        ) for row in cur.fetchall()}
     except sqlite3.Error as e:
         _LOGGER.error("Fehler beim Laden der Wertpapiere: %s", str(e))
         return {}

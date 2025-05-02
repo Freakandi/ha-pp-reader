@@ -3,6 +3,7 @@ from .name.abuchen.portfolio import client_pb2  # Korrigierter Import mit vorang
 from google.protobuf.timestamp_pb2 import Timestamp
 import logging
 from typing import Optional
+from datetime import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
                 """, (
                     sec.uuid,
                     sec.latest.close,  # close ist ein required field
-                    to_iso8601(sec.latest.time) if sec.latest.HasField("time") else None
+                    datetime.fromtimestamp(sec.latest.date).isoformat()  # date statt time verwenden
                 ))
 
         # --- PORTFOLIOS ---
