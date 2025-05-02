@@ -76,7 +76,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             cur.execute("""
                 INSERT OR REPLACE INTO securities (
                     uuid, name, currency_code, 
-                    note, isin, wkn, symbol,
+                    note, isin, wkn, ticker_symbol,
                     retired, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
