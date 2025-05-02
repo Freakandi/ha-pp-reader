@@ -96,9 +96,9 @@ TRANSACTION_SCHEMA = [
         type INTEGER NOT NULL,         -- Explizit INTEGER
         amount INTEGER,                -- Cent-Betrag
         currency_code TEXT,
-        fx_amount INTEGER,             -- Cent-Betrag
-        fx_currency_code TEXT,
-        fx_rate_to_base REAL NOT NULL, -- Immer positiver Float
+        fx_amount INTEGER,             -- Optional: Cent-Betrag
+        fx_currency_code TEXT,         -- Optional
+        fx_rate_to_base REAL,         -- Optional: Float, NOT NULL constraint entfernt
         FOREIGN KEY (transaction_uuid) REFERENCES transactions(uuid)
     );
     """,

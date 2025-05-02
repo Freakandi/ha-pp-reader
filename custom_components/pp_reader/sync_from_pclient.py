@@ -153,11 +153,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             stats["transactions"] += 1
 
         # --- TRANSACTION_UNITS ---
-        # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
+# Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
         cur.execute("DELETE FROM transaction_units")
 
         for t in client.transactions:
             for u in t.units:
+                # fxRateToBase ist optional im Protobuf
                 fx_rate = None
                 if u.HasField("fxRateToBase"):
                     scale = u.fxRateToBase.scale
@@ -176,7 +177,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
                     u.currencyCode,
                     u.fxAmount if u.HasField("fxAmount") else None,
                     u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
-                    fx_rate
+                    fx_rate  # Kann nun None sein
                 ))
                 if u.HasField("fxAmount"):
                     stats["fx_transactions"] += 1
