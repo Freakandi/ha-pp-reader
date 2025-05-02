@@ -30,11 +30,11 @@ class Security:
     note: Optional[str] = None
     isin: Optional[str] = None
     wkn: Optional[str] = None
-    ticker_symbol: Optional[str] = None  # Anpassung an Schema
+    ticker_symbol: Optional[str] = None
     retired: bool = False
     updated_at: Optional[str] = None
-    latest_price: Optional[int] = None     # Preis in 10^-8 Einheiten
-    last_price_date: Optional[str] = None  # Umbenennung wegen Schema-Änderung
+    latest_price: Optional[int] = None  # Preis in 10^-8 Einheiten
+    price_date: Optional[str] = None    # Datum des letzten Kurses
 
 @dataclass  
 class Account:
@@ -83,7 +83,7 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
                    s.note, s.isin, s.wkn, s.ticker_symbol,
                    s.retired, s.updated_at,
                    p.value as latest_price,
-                   p.date as last_price_date
+                   p.date as price_date  # Angepasst an DB-Schema
             FROM securities s
             LEFT JOIN latest_prices p ON s.uuid = p.security_uuid
             ORDER BY s.name
@@ -99,7 +99,7 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
             retired=bool(row[7]),
             updated_at=row[8],
             latest_price=row[9],
-            last_price_date=row[10]
+            price_date=row[10]  # Angepasst an neue Feldbezeichnung
         ) for row in cur.fetchall()}
     except sqlite3.Error as e:
         _LOGGER.error("Fehler beim Laden der Wertpapiere: %s", str(e))

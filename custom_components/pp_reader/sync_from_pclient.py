@@ -96,7 +96,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             if sec.HasField("latest"):  # Nur prüfen ob latest existiert
                 cur.execute("""
                     INSERT OR REPLACE INTO latest_prices 
-                    (security_uuid, value, updated_at)
+                    (security_uuid, value, date)  # Korrigierter Spaltenname
                     VALUES (?, ?, ?)
                 """, (
                     sec.uuid,
