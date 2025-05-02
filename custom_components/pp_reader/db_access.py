@@ -34,7 +34,7 @@ class Security:
     retired: bool = False
     updated_at: Optional[str] = None
     latest_price: Optional[int] = None  # Preis in 10^-8 Einheiten
-    price_date: Optional[str] = None    # Datum des letzten Kurses
+    last_updated_at: Optional[str] = None  # für latest_prices.updated_at
 
 @dataclass  
 class Account:

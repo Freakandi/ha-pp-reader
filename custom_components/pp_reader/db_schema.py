@@ -30,7 +30,7 @@ SECURITIES_SCHEMA = [
         note TEXT,
         isin TEXT,
         wkn TEXT,
-        ticker_symbol TEXT,       -- Umbenennung von symbol zu ticker_symbol
+        ticker_symbol TEXT,
         retired INTEGER DEFAULT 0,
         updated_at TEXT
     );
@@ -38,8 +38,8 @@ SECURITIES_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS latest_prices (
         security_uuid TEXT PRIMARY KEY,
-        value INTEGER NOT NULL,  -- Preis in 10^-8 Einheiten
-        date TEXT NOT NULL,      -- Datum als ISO8601 Format
+        value INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
     """
