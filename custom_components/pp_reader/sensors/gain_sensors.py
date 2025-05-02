@@ -17,11 +17,13 @@ class PortfolioGainAbsSensor(PortfolioSensor):
     entity_category = None
 
     def __init__(self, depot_sensor, purchase_sensor):
+        super().__init__()
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
+        self._attr_native_value = 0.0  # Explizit initialisieren
 
         self._attr_name = f"Kursgewinn absolut {depot_sensor._portfolio_name}"
-        self._attr_unique_id = depot_sensor._attr_unique_id.replace("_depot", "_kursgewinn_abs")
+        self._attr_unique_id = depot_sensor._attr_unique_id.replace("_depotwert", "_kursgewinn_absolut")
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:chart-line-variant"
 
@@ -57,11 +59,13 @@ class PortfolioGainPctSensor(PortfolioSensor):
     entity_category = None
 
     def __init__(self, depot_sensor, purchase_sensor):
+        super().__init__()
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
+        self._attr_native_value = 0.0  # Explizit initialisieren
 
         self._attr_name = f"Kursgewinn % {depot_sensor._portfolio_name}"
-        self._attr_unique_id = depot_sensor._attr_unique_id.replace("_depot", "_kursgewinn_pct")
+        self._attr_unique_id = depot_sensor._attr_unique_id.replace("_depotwert", "_kursgewinn")
         self._attr_native_unit_of_measurement = "%"
         self._attr_icon = "mdi:percent"
 

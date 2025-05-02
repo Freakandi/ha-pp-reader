@@ -31,6 +31,7 @@ class PortfolioAccountSensor(PortfolioSensor):
         self._account_uuid = account_uuid
         self._db_path = db_path
         self._value = 0.0
+        self._attr_native_value = 0.0  # Explizit initialisieren
 
         # Entity-Eigenschaften
         self._attr_unique_id = f"pp_reader_kontostand_{slugify(name)}"
@@ -41,7 +42,7 @@ class PortfolioAccountSensor(PortfolioSensor):
     @property
     def native_value(self):
         """Wert des Sensors."""
-        return self._value
+        return self._attr_native_value  # Verwende attr_native_value statt _value
 
     async def _async_update_internal(self) -> None:
         """Update method implementation."""
@@ -88,6 +89,7 @@ class PortfolioDepotSensor(PortfolioSensor):
         self._db_path = db_path
         self._value = 0.0
         self._count = 0
+        self._attr_native_value = 0.0  # Explizit initialisieren
 
         # Entity-Eigenschaften
         self._attr_unique_id = f"pp_reader_depotwert_{slugify(portfolio_name)}"
@@ -97,7 +99,7 @@ class PortfolioDepotSensor(PortfolioSensor):
 
     @property
     def native_value(self):
-        return self._value
+        return self._attr_native_value  # Verwende attr_native_value statt _value
 
     @property
     def extra_state_attributes(self):

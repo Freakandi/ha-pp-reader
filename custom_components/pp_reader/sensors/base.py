@@ -17,6 +17,7 @@ class PortfolioSensor(SensorEntity):
     
     def __init__(self):
         super().__init__()
+        self._attr_available = True  # Sensor als verfügbar markieren
         # Device Info für Gruppierung der Sensoren
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, "pp_reader")},
