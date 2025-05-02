@@ -152,8 +152,40 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             ))
             stats["transactions"] += 1
 
+        # --- TRANSACTION_UNITS ---
+        # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
+        cur.execute("DELETE FROM transaction_units")
+
+        for t in client.transactions:
+            for u in t.units:
+                fx_rate = None
+                if u.HasField("fxRateToBase"):
+                    scale = u.fxRateToBase.scale
+                    value = int.from_bytes(u.fxRateToBase.value, byteorder='little', signed=True)
+                    fx_rate = abs(value / (10 ** scale))
+
+                cur.execute("""
+                    INSERT INTO transaction_units (
+                        transaction_uuid, type, amount, currency_code,
+                        fx_amount, fx_currency_code, fx_rate_to_base
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    t.uuid,
+                    u.type,
+                    u.amount,
+                    u.currencyCode,
+                    u.fxAmount if u.HasField("fxAmount") else None,
+                    u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
+                    fx_rate
+                ))
+                if u.HasField("fxAmount"):
+                    stats["fx_transactions"] += 1
+
         conn.commit()
-        _LOGGER.info("Synchronisation erfolgreich abgeschlossen")
+        _LOGGER.info(
+            "Import abgeschlossen: %d Wertpapiere, %d Transaktionen (%d mit Fremdwährung)",
+            stats["securities"], stats["transactions"], stats["fx_transactions"]
+        )
         
     except Exception as e:
         conn.rollback()
@@ -161,39 +193,3 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
         raise
     finally:
         cur.close()
-
-    # --- TRANSACTION_UNITS ---
-
-    # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
-    cur.execute("DELETE FROM transaction_units")
-
-    for t in client.transactions:
-        for u in t.units:
-            fx_rate = None
-            if u.HasField("fxRateToBase"):
-                # Korrigierte Wechselkurs-Extraktion
-                scale = u.fxRateToBase.scale
-                value = int.from_bytes(u.fxRateToBase.value, byteorder='little', signed=True)
-                fx_rate = abs(value / (10 ** scale))  # Immer positiver Wert
-
-            cur.execute("""
-                INSERT INTO transaction_units (
-                    transaction_uuid, type, amount, currency_code,
-                    fx_amount, fx_currency_code, fx_rate_to_base
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                t.uuid,
-                u.type,
-                u.amount,  # Cent-Beträge bleiben erhalten
-                u.currencyCode,
-                u.fxAmount if u.HasField("fxAmount") else None,  # Auch hier Cent
-                u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
-                fx_rate
-            ))
-            if u.HasField("fxAmount"):
-                stats["fx_transactions"] += 1
-
-    _LOGGER.info(
-        "Import abgeschlossen: %d Wertpapiere, %d Transaktionen (%d mit Fremdwährung)",
-        stats["securities"], stats["transactions"], stats["fx_transactions"]
-    )
