@@ -18,41 +18,47 @@ from .base import PortfolioSensor
 
 _LOGGER = logging.getLogger(__name__)
 
-class PortfolioAccountSensor(PortfolioSensor):  # Von Basis-Klasse erben
+class PortfolioAccountSensor(PortfolioSensor):
     """Sensor für Kontostände."""
+    
     should_poll = True
     entity_category = None
     
     def __init__(self, hass, name: str, value: float, file_path: str):
-        """Initialize the sensor."""
+        super().__init__()  # Basis-Klasse initialisieren
         self.hass = hass
         self._name = name
-        self._value = round(value, 2)
+        self._value = value
         self._file_path = file_path
-        
-        self._attr_name = f"Konto {name}"
-        base = os.path.basename(file_path)
-        self._attr_unique_id = f"{slugify(base)}_{slugify(name)}_account"
-        self._attr_native_unit_of_measurement = "€"
-        self._attr_icon = "mdi:bank"
+        # Entity ID explizit setzen
+        self.entity_id = f"sensor.konto_{slugify(name)}"
+        self._attr_unique_id = f"pp_reader_account_{slugify(name)}"
+        self._attr_native_value = value
+
+    @property
+    def name(self):
+        """Name des Sensors."""
+        return f"Konto {self._name}"
 
     @property
     def native_value(self):
+        """Wert des Sensors."""
         return self._value
 
-    @property
-    def extra_state_attributes(self):
-        try:
-            ts = os.path.getmtime(self._file_path)
-            updated = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
-        except Exception as e:
-            _LOGGER.warning("Konnte Änderungsdatum nicht lesen: %s", e)
-            updated = None
-
-        return {
-            "letzte_aktualisierung": updated,
-            "datenquelle": os.path.basename(self._file_path),
-        }
+    async def _async_update_internal(self) -> None:
+        """Update method implementation."""
+        # Account-Balance neu berechnen
+        transactions = await self.hass.async_add_executor_job(
+            get_transactions, 
+            Path(self._file_path).parent / "pp_reader_data/S-Depot.db"
+        )
+        new_value = await self.hass.async_add_executor_job(
+            calculate_account_balance,
+            self._account_uuid,
+            transactions
+        )
+        self._value = new_value
+        self._attr_native_value = new_value
 
 class PortfolioDepotSensor(PortfolioSensor):  # Von PortfolioSensor erben
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
