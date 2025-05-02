@@ -38,8 +38,8 @@ SECURITIES_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS latest_prices (
         security_uuid TEXT PRIMARY KEY,
-        value INTEGER NOT NULL,
-        updated_at TEXT NOT NULL,
+        value INTEGER NOT NULL,  -- Preis in 10^-8 Einheiten
+        date INTEGER NOT NULL,   -- Unix Timestamp wie im Protobuf
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
     """

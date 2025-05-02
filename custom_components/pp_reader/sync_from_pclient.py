@@ -131,7 +131,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
                     uuid, type, account, portfolio, other_account, other_portfolio,
                     other_uuid, other_updated_at, date, currency_code, amount,
                     shares, note, security, source, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 t.uuid,
                 t.type,
@@ -148,7 +148,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
                 t.note if t.HasField("note") else None,
                 t.security if t.HasField("security") else None,
                 t.source if t.HasField("source") else None,
-                to_iso8601(t.updatedAt) if t.HasField("updatedAt") else None
+                to_iso8601(t.updatedAt) if t.HasField("updatedAt") else None  # required field
             ))
             stats["transactions"] += 1
 
