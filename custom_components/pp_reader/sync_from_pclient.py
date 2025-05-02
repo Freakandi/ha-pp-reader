@@ -96,12 +96,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
             if sec.HasField("latest"):
                 cur.execute("""
                     INSERT OR REPLACE INTO latest_prices 
-                    (security_uuid, value, updated_at)
+                    (security_uuid, value, date)
                     VALUES (?, ?, ?)
                 """, (
                     sec.uuid,
                     sec.latest.close,
-                    datetime.fromtimestamp(sec.latest.date).isoformat()
+                    sec.latest.date  # Unix Timestamp direkt aus Protobuf verwenden
                 ))
 
         # --- PORTFOLIOS ---
@@ -133,22 +133,22 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection) -> N
                     shares, note, security, source, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                t.uuid,
-                t.type,
-                t.account if t.HasField("account") else None,
-                t.portfolio if t.HasField("portfolio") else None,
-                t.otherAccount if t.HasField("otherAccount") else None,
-                t.otherPortfolio if t.HasField("otherPortfolio") else None,
-                t.otherUuid if t.HasField("otherUuid") else None,
-                to_iso8601(t.otherUpdatedAt) if t.HasField("otherUpdatedAt") else None,
-                to_iso8601(t.date),
-                t.currencyCode,
-                normalize_amount(t.amount),
-                normalize_shares(t.shares) if t.HasField("shares") else None,
-                t.note if t.HasField("note") else None,
-                t.security if t.HasField("security") else None,
-                t.source if t.HasField("source") else None,
-                to_iso8601(t.updatedAt) if t.HasField("updatedAt") else None  # required field
+                t.uuid,                    # string -> TEXT
+                int(t.type),              # Explizit zu INTEGER konvertieren
+                t.account if t.HasField("account") else None,        # optional string -> TEXT
+                t.portfolio if t.HasField("portfolio") else None,    # optional string -> TEXT
+                t.otherAccount if t.HasField("otherAccount") else None,      # optional string -> TEXT
+                t.otherPortfolio if t.HasField("otherPortfolio") else None, # optional string -> TEXT
+                t.otherUuid if t.HasField("otherUuid") else None,   # optional string -> TEXT
+                to_iso8601(t.otherUpdatedAt) if t.HasField("otherUpdatedAt") else None, # Timestamp -> TEXT
+                to_iso8601(t.date),       # required Timestamp -> TEXT NOT NULL
+                t.currencyCode,           # string -> TEXT
+                normalize_amount(t.amount),  # int64 -> INTEGER (Cent-Betrag, normalisiert)
+                normalize_shares(t.shares) if t.HasField("shares") else None,  # optional int64 -> INTEGER (*10^8)
+                t.note if t.HasField("note") else None,             # optional string -> TEXT
+                t.security if t.HasField("security") else None,      # optional string -> TEXT
+                t.source if t.HasField("source") else None,         # optional string -> TEXT
+                to_iso8601(t.updatedAt)   # required Timestamp -> TEXT
             ))
             stats["transactions"] += 1
 
