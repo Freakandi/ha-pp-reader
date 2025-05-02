@@ -77,6 +77,10 @@ async def async_setup_entry(
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
         _LOGGER.debug("👥 Gefundene Accounts (%d): %s", len(accounts), 
                      ", ".join(f"{a.name} ({a.currency_code})" for a in accounts))
+
+        # Transaktionen einmalig laden
+        transactions = await hass.async_add_executor_job(get_transactions, db_path)
+        
         for account in accounts:
             if account.is_retired:
                 continue
@@ -84,7 +88,7 @@ async def async_setup_entry(
             saldo = await hass.async_add_executor_job(
                 calculate_account_balance,
                 account.uuid,
-                db_path
+                transactions    # Hier die geladenen Transaktionen übergeben
             )
             sensors.append(PortfolioAccountSensor(hass, account.name, saldo, file_path))
 
