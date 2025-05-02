@@ -54,36 +54,26 @@ class PortfolioAccountSensor(PortfolioSensor):
     async def _async_update_internal(self) -> None:
         """Update method implementation."""
         try:
-            # Transaktionen für das Konto aus der DB laden
+            # Transaktionen aus der DB laden
             transactions = await self.hass.async_add_executor_job(
                 get_transactions,
                 self._db_path
             )
             
-            # Nur Transaktionen für dieses Konto filtern
-            account_transactions = [
-                tx for tx in transactions 
-                if tx.account == self._account_uuid
-            ]
+            # Kontostand über vorhandene Funktion berechnen
+            new_value = await self.hass.async_add_executor_job(
+                calculate_account_balance,
+                self._account_uuid,
+                transactions
+            )
             
-            # Kontostand berechnen
-            balance = 0
-            for tx in account_transactions:
-                # Positiv: DEPOSIT, INTEREST, TAX_REFUND, FEE_REFUND
-                # Negativ: REMOVAL, INTEREST_CHARGE, TAX, FEE
-                if tx.type in [6, 9, 12, 14]:  # DEPOSIT, INTEREST, TAX_REFUND, FEE_REFUND
-                    balance += tx.amount
-                elif tx.type in [7, 10, 11, 13]:  # REMOVAL, INTEREST_CHARGE, TAX, FEE
-                    balance -= tx.amount
-                    
-            # Wert in Euro umrechnen (amount ist in Cent)
-            self._value = round(balance / 100.0, 2)
-            self._attr_native_value = self._value
+            self._value = new_value
+            self._attr_native_value = new_value
             
             _LOGGER.debug(
                 "✅ Neuer Kontostand für %s: %.2f €", 
                 self._name,
-                self._value
+                new_value
             )
             
         except Exception as e:
