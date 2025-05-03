@@ -36,61 +36,38 @@ async def async_setup_entry(
     start_time = datetime.now()
 
     try:
-        # DB-Pfad aus den Entry-Daten holen
-        entry_data = hass.data[DOMAIN].get(config_entry.entry_id)
-        db_path = Path(entry_data["db_path"])
-        
+        # Zugriff auf den Coordinator aus hass.data
+        coordinator: PPReaderCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+
         sensors = []
-        purchase_sensors = []  # Separate Liste für Purchase-Sensoren
+        depot_sensors = []  # Liste für Depot-Sensoren
+        purchase_sensors = []  # Liste für Kaufsummen-Sensoren
 
-        # 🔹 Kontostände aus DB laden und Sensoren erstellen
-        accounts = await hass.async_add_executor_job(get_accounts, db_path)
-        for account in accounts:
-            if account.is_retired:
-                continue
-                
-            sensors.append(PortfolioAccountSensor(
-                hass,
-                account.name,
-                account.uuid,
-                db_path
-            ))
+        # 🔹 Kontostands-Sensoren erstellen
+        for account_uuid in coordinator.data["accounts"]:
+            sensors.append(PortfolioAccountSensor(coordinator, account_uuid))
 
-        # 🔸 Depots und zusätzliche Sensoren
-        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-
-        for portfolio in portfolios:
-            if portfolio.is_retired:
-                continue
-
+        # 🔸 Depot- und Kaufsummen-Sensoren erstellen
+        for portfolio_uuid in coordinator.data["portfolios"]:
             # Depotwert-Sensor
-            depot_sensor = PortfolioDepotSensor(
-                hass, 
-                portfolio.name,
-                portfolio.uuid,
-                db_path
-            )
+            depot_sensor = PortfolioDepotSensor(coordinator, portfolio_uuid)
             sensors.append(depot_sensor)
+            depot_sensors.append(depot_sensor)
 
             # Kaufsumme-Sensor
-            purchase_sensor = PortfolioPurchaseSensor(
-                hass,
-                portfolio.name,
-                portfolio.uuid,
-                db_path
-            )
-            purchase_sensors.append(purchase_sensor)  # In separate Liste
+            purchase_sensor = PortfolioPurchaseSensor(coordinator, portfolio_uuid)
             sensors.append(purchase_sensor)
+            purchase_sensors.append(purchase_sensor)
 
-            # Gewinn-Sensoren
+        # 🔺 Gewinn-Sensoren erstellen (basierend auf Depot- und Kaufsummen-Sensoren)
+        for depot_sensor, purchase_sensor in zip(depot_sensors, purchase_sensors):
+            # Absoluter Gewinn-Sensor
             gain_abs_sensor = PortfolioGainAbsSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_abs_sensor)
 
+            # Prozentualer Gewinn-Sensor
             gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_pct_sensor)
-
-        # 🔥 Kaufsummen-Sensoren parallel initialisieren
-        await asyncio.gather(*(sensor.async_update() for sensor in purchase_sensors))
 
         # 🔥 Sensoren an HA übergeben
         async_add_entities(sensors)
