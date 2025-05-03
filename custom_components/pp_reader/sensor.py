@@ -16,7 +16,7 @@ import homeassistant.helpers.device_registry as dr
 from .const import DOMAIN
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
-from .coordinator import PPReaderCoordinator
+from .data.coordinator import PPReaderCoordinator
 from .db_access import get_transactions, get_accounts, get_securities, get_portfolios, Transaction, Account, Security, Portfolio  # Neuer Import
 
 from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
