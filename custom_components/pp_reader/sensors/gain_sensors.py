@@ -5,8 +5,6 @@ from custom_components.pp_reader.logic.portfolio import (
     calculate_unrealized_gain,
     calculate_unrealized_gain_pct,
 )
-from ..db_access import get_transactions, get_securities
-from .base import PortfolioSensor
 
 _LOGGER = logging.getLogger(__name__)
 
