@@ -170,3 +170,19 @@ def get_portfolios(db_path: Path) -> List[Portfolio]:
         return []
     finally:
         conn.close()
+
+def get_account_update_timestamp(db_path: Path, account_uuid: str) -> Optional[str]:
+    """Holt den letzten Update-Zeitstempel eines Kontos aus der DB."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute(
+            "SELECT updated_at FROM accounts WHERE uuid = ?",
+            (account_uuid,)
+        )
+        result = cur.fetchone()
+        return result[0] if result else None
+    except sqlite3.Error as e:
+        _LOGGER.error("DB-Fehler beim Lesen des Timestamps: %s", e)
+        return None
+    finally:
+        conn.close()

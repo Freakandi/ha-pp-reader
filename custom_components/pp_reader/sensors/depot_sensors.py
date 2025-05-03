@@ -11,65 +11,100 @@ from ..db_access import (
     get_transactions,
     get_accounts, 
     get_securities,
-    get_portfolio_by_name
+    get_portfolio_by_name,
+    get_account_update_timestamp  # Neuer Import
 )
 
 from .base import PortfolioSensor
 
 _LOGGER = logging.getLogger(__name__)
 
-class PortfolioAccountSensor(PortfolioSensor):
-    """Sensor für Kontostände."""
-    
-    should_poll = True
-    entity_category = None
-    
-    def __init__(self, hass, name: str, account_uuid: str, db_path: Path):
-        super().__init__()
+class PortfolioAccountSensor(SensorEntity):
+    """Sensor für den Kontostand eines aktiven Kontos."""
+
+    def __init__(self, hass, account_name: str, account_uuid: str, db_path: Path):
+        """Initialize the sensor."""
         self.hass = hass
-        self._name = name
+        self._account_name = account_name
         self._account_uuid = account_uuid
         self._db_path = db_path
         self._value = 0.0
-
-        # Entity-Eigenschaften
-        self._attr_unique_id = f"pp_reader_kontostand_{slugify(name)}"
-        self._attr_name = f"Kontostand {name}"  
+        self._last_update = None
+        
+        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
+        self._attr_name = f"Kontostand {account_name}"
+        self._attr_unique_id = f"kontostand_{slugify(account_name)}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:bank"
+        self._attr_should_poll = True
+        self._attr_available = True
 
     @property
     def native_value(self):
         """Wert des Sensors."""
         return self._value
 
-    async def _async_update_internal(self) -> None:
-        """Update method implementation."""
+    @property
+    def extra_state_attributes(self):
+        """Extra Attribute des Sensors."""
         try:
-            transactions = await self.hass.async_add_executor_job(
-                get_transactions,
-                self._db_path
+            # Zeitstempel aus der DB holen
+            updated = self.hass.async_add_executor_job(
+                get_account_update_timestamp,
+                self._db_path,
+                self._account_uuid
+            )
+            if not updated:
+                updated = "Unbekannt"
+        except Exception as e:
+            _LOGGER.warning("Konnte Aktualisierungsdatum nicht lesen: %s", e)
+            updated = "Unbekannt"
+
+        return {
+            "letzte_aktualisierung": updated,
+            "account_uuid": self._account_uuid
+        }
+
+    async def async_update(self):
+        """Update Methode für den Sensor."""
+        try:
+            # Aktuellen Zeitstempel prüfen
+            current_update = await self.hass.async_add_executor_job(
+                get_account_update_timestamp,
+                self._db_path,
+                self._account_uuid
             )
             
-            new_value = await self.hass.async_add_executor_job(
-                calculate_account_balance,
-                self._account_uuid,
-                transactions
-            )
-            
-            self._value = new_value
-            self._attr_native_value = new_value
-            
-            _LOGGER.debug(
-                "✅ Neuer Kontostand für %s: %.2f €", 
-                self._name,
-                new_value
-            )
+            # Update nur wenn sich das Datum geändert hat
+            if current_update != self._last_update:
+                # Transaktionen aus DB laden
+                transactions = await self.hass.async_add_executor_job(
+                    get_transactions,
+                    self._db_path
+                )
+                
+                # Kontostand berechnen mit externer Funktion
+                new_value = await self.hass.async_add_executor_job(
+                    calculate_account_balance,
+                    self._account_uuid,
+                    transactions
+                )
+                
+                # Wert aktualisieren und runden
+                self._value = round(new_value, 2)
+                self._last_update = current_update
+                
+                _LOGGER.debug(
+                    "✅ Neuer Kontostand für %s: %.2f € (Update: %s)", 
+                    self._account_name,
+                    self._value,
+                    current_update
+                )
             
         except Exception as e:
             _LOGGER.error(
                 "❌ Fehler beim Laden des Kontostands für %s: %s",
-                self._name,
+                self._account_name,
                 str(e)
             )
             raise
