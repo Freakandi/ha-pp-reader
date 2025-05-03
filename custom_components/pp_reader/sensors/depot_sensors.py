@@ -1,12 +1,7 @@
-import os
 import logging
-from datetime import datetime
-from pathlib import Path
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.util import slugify
 
-from ..logic.accounting import calculate_account_balance
-from ..logic.portfolio import calculate_portfolio_value
 from ..data.db_access import (
     get_transactions,
     get_account_update_timestamp
@@ -33,7 +28,7 @@ class PortfolioAccountSensor(SensorEntity):
         """Gibt den aktuellen Kontostand zurück."""
         account_data = self.coordinator.data["accounts"].get(self._account_uuid, {})
         balance = account_data.get("balance", 0.0)
-        return f"{balance:.2f}"  # Wert als String mit 2 Dezimalstellen zurückgeben
+        return round(balance, 2)
 
     @property
     def extra_state_attributes(self):
@@ -72,7 +67,7 @@ class PortfolioDepotSensor(SensorEntity):
         """Gibt den aktuellen Depotwert zurück."""
         portfolio_data = self.coordinator.data["portfolios"].get(self._portfolio_uuid, {})
         value = portfolio_data.get("value", 0.0)
-        return f"{value:.2f}"  # Wert als String mit 2 Dezimalstellen zurückgeben
+        return round(value, 2)
 
     @property
     def extra_state_attributes(self):

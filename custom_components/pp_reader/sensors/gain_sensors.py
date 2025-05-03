@@ -35,7 +35,7 @@ class PortfolioGainAbsSensor(SensorEntity):
                 self._depot_sensor.native_value,
                 self._purchase_sensor.native_value
             )
-            return f"{gain:.2f}"  # Wert als String mit 2 Dezimalstellen zurückgeben
+            return round(gain, 2)
         except Exception as e:
             _LOGGER.error(
                 "❌ Fehler beim Berechnen des Kursgewinns für %s: %s",
@@ -69,7 +69,7 @@ class PortfolioGainPctSensor(SensorEntity):
                 self._depot_sensor.native_value,
                 self._purchase_sensor.native_value
             )
-            return f"{gain:.2f}"  # Wert als String mit 2 Dezimalstellen zurückgeben
+            return round(gain, 2)
         except Exception as e:
             _LOGGER.error(
                 "❌ Fehler beim Berechnen des Kursgewinns (%) für %s: %s",
