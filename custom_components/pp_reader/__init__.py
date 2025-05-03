@@ -10,7 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 
-from .backup_db import setup_backup_system
+from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.reader import parse_data_portfolio
 from .data.db_init import initialize_database_schema
