@@ -24,7 +24,7 @@ class PortfolioAccountSensor(SensorEntity):
         self._account_uuid = account_uuid
         self._db_path = db_path
         self._value = 0.0
-        self._last_update = None
+        self._last_update = None  # Lokale Kopie des Timestamps
         
         # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
         self._attr_name = f"Kontostand {account_name}"
@@ -42,43 +42,30 @@ class PortfolioAccountSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         """Extra Attribute des Sensors."""
-        try:
-            # Zeitstempel aus der DB holen
-            updated = self.hass.async_add_executor_job(
-                get_account_update_timestamp,
-                self._db_path,
-                self._account_uuid
-            )
-            if not updated:
-                updated = "Unbekannt"
-        except Exception as e:
-            _LOGGER.warning("Konnte Aktualisierungsdatum nicht lesen: %s", e)
-            updated = "Unbekannt"
-
         return {
-            "letzte_aktualisierung": updated,
+            "letzte_aktualisierung": self._last_update or "Unbekannt",
             "account_uuid": self._account_uuid
         }
 
     async def async_update(self):
         """Update Methode für den Sensor."""
         try:
-            # Aktuellen Zeitstempel prüfen
-            current_update = await self.hass.async_add_executor_job(
+            # Zeitstempel synchron abrufen
+            self._last_update = await self.hass.async_add_executor_job(
                 get_account_update_timestamp,
                 self._db_path,
                 self._account_uuid
             )
             
-            # Update nur wenn sich das Datum geändert hat
-            if current_update != self._last_update:
+            # Nur updaten wenn sich das Datum geändert hat
+            if self._last_update:
                 # Transaktionen aus DB laden
                 transactions = await self.hass.async_add_executor_job(
                     get_transactions,
                     self._db_path
                 )
                 
-                # Kontostand berechnen mit externer Funktion
+                # Kontostand berechnen
                 new_value = await self.hass.async_add_executor_job(
                     calculate_account_balance,
                     self._account_uuid,
@@ -87,13 +74,12 @@ class PortfolioAccountSensor(SensorEntity):
                 
                 # Wert aktualisieren und runden
                 self._value = round(new_value, 2)
-                self._last_update = current_update
                 
                 _LOGGER.debug(
                     "✅ Neuer Kontostand für %s: %.2f € (Update: %s)", 
                     self._account_name,
                     self._value,
-                    current_update
+                    self._last_update
                 )
             
         except Exception as e:
