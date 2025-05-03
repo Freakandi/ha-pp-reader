@@ -30,7 +30,7 @@ class PortfolioPurchaseSensor(SensorEntity):
         """Gibt die aktuelle Kaufsumme zurück."""
         portfolio_data = self.coordinator.data["portfolios"].get(self._portfolio_uuid, {})
         purchase_sum = portfolio_data.get("purchase_sum", 0.0)
-        return round(purchase_sum, 2)  # Wert auf 2 Dezimalstellen runden
+        return f"{purchase_sum:.2f}"  # Wert als String mit 2 Dezimalstellen zurückgeben
 
     @property
     def extra_state_attributes(self):
