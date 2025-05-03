@@ -1,5 +1,5 @@
 import sqlite3
-from .name.abuchen.portfolio import client_pb2  # Korrigierter Import mit vorangestelltem .
+from ..name.abuchen.portfolio import client_pb2  # Korrigierter Import mit vorangestelltem .
 from google.protobuf.timestamp_pb2 import Timestamp
 import logging
 from typing import Optional

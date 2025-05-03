@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 import pytest
-from custom_components.pp_reader.reader import parse_data_portfolio
+from custom_components.pp_reader.data.reader import parse_data_portfolio
 from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 from datetime import datetime
 

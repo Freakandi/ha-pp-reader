@@ -5,7 +5,7 @@ from pathlib import Path
 from homeassistant import config_entries
 from homeassistant.core import callback
 from .const import DOMAIN, CONF_FILE_PATH, CONF_API_TOKEN, CONF_DB_PATH
-from .reader import parse_data_portfolio
+from .data.reader import parse_data_portfolio
 
 _LOGGER = logging.getLogger(__name__)
 
