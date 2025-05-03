@@ -44,8 +44,9 @@ async def async_setup_entry(
         purchase_sensors = []  # Liste für Kaufsummen-Sensoren
 
         # 🔹 Kontostands-Sensoren erstellen
-        for account_uuid in coordinator.data["accounts"]:
-            sensors.append(PortfolioAccountSensor(coordinator, account_uuid))
+        for account_uuid, account_data in coordinator.data["accounts"].items():
+            if not account_data.get("is_retired", False):  # Nur aktive Konten berücksichtigen
+                sensors.append(PortfolioAccountSensor(coordinator, account_uuid))
 
         # 🔸 Depot- und Kaufsummen-Sensoren erstellen
         for portfolio_uuid in coordinator.data["portfolios"]:

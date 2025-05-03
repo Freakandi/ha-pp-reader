@@ -83,7 +83,14 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                             
             # Speichere die Daten
             self.data = {
-                "accounts": {account.uuid: {"name": account.name, "balance": account_balances[account.uuid]} for account in accounts},
+                "accounts": {
+                    account.uuid: {
+                        "name": account.name,
+                        "balance": account_balances[account.uuid],
+                        "is_retired": account.is_retired  # Hinzufügen des is_retired-Attributs
+                    }
+                    for account in accounts
+                },
                 "portfolios": portfolio_data,
                 "transactions": transactions,
                 "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
