@@ -26,6 +26,7 @@ class PortfolioGainAbsSensor(SensorEntity):
         self._attr_icon = "mdi:chart-line-variant"
         self._attr_should_poll = True
         self._attr_available = True
+        self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
     def native_value(self):
@@ -60,6 +61,7 @@ class PortfolioGainPctSensor(SensorEntity):
         self._attr_icon = "mdi:percent"
         self._attr_should_poll = True
         self._attr_available = True
+        self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
     def native_value(self):

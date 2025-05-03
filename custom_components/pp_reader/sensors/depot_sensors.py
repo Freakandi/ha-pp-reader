@@ -22,6 +22,7 @@ class PortfolioAccountSensor(SensorEntity):
         self._attr_icon = "mdi:bank"
         self._attr_should_poll = False  # Keine direkte Abfrage, da Coordinator verwendet wird
         self._attr_available = True
+        self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
     def native_value(self):
@@ -59,8 +60,9 @@ class PortfolioDepotSensor(SensorEntity):
         self._attr_unique_id = f"{slugify(portfolio_uuid)}_depotwert"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:chart-line"
-        self._attr_should_poll = False  # Keine direkte Abfrage, da Coordinator verwendet wird
+        self._attr_should_poll = False
         self._attr_available = True
+        self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
     def native_value(self):
