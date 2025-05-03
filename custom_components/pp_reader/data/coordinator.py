@@ -65,6 +65,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 value, count = calculate_portfolio_value(portfolio.uuid, transactions)
                 purchase_sum = calculate_purchase_sum(portfolio.uuid, transactions)
                 portfolio_data[portfolio.uuid] = {
+                    "name": portfolio.name,
                     "value": value,
                     "count": count,
                     "purchase_sum": purchase_sum,
