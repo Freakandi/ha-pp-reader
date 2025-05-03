@@ -53,8 +53,13 @@ class PortfolioDepotSensor(SensorEntity):
         """Initialisiere den Sensor."""
         self.coordinator = coordinator
         self._portfolio_uuid = portfolio_uuid
+
+        # Portfolio-Daten aus dem Coordinator abrufen
         portfolio_data = self.coordinator.data["portfolios"].get(portfolio_uuid, {})
-        self._attr_name = f"Depotwert {portfolio_data.get('name', 'Unbekannt')}"
+        self._portfolio_name = portfolio_data.get("name", "Unbekannt")  # Name speichern
+
+        # Sensor-Attribute setzen
+        self._attr_name = f"Depotwert {self._portfolio_name}"
         self._attr_unique_id = f"{slugify(portfolio_uuid)}_depotwert"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:chart-line"
