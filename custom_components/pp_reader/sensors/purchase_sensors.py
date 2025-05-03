@@ -21,9 +21,9 @@ class PortfolioPurchaseSensor(SensorEntity):
         self._db_path = db_path
         self._value = 0.0
         
-        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
+        base = os.path.basename(db_path)
         self._attr_name = f"Kaufsumme {portfolio_name}"
-        self._attr_unique_id = f"kaufsumme_{slugify(portfolio_name)}"
+        self._attr_unique_id = f"{slugify(base)}_kaufsumme_{slugify(portfolio_name)}"  
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:cash"
         self._attr_should_poll = True

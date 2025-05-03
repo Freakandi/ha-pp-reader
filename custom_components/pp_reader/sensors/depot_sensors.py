@@ -26,9 +26,9 @@ class PortfolioAccountSensor(SensorEntity):
         self._value = 0.0
         self._last_update = None  # Lokale Kopie des Timestamps
         
-        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
+        base = os.path.basename(db_path)
         self._attr_name = f"Kontostand {account_name}"
-        self._attr_unique_id = f"kontostand_{slugify(account_name)}"
+        self._attr_unique_id = f"{slugify(base)}_{slugify(account_name)}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:bank"
         self._attr_should_poll = True
@@ -101,10 +101,10 @@ class PortfolioDepotSensor(SensorEntity):
         self._db_path = db_path
         self._value = 0.0
         self._count = 0
-
-        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
+        
+        base = os.path.basename(db_path)
         self._attr_name = f"Depotwert {portfolio_name}"
-        self._attr_unique_id = f"depotwert_{slugify(portfolio_name)}"
+        self._attr_unique_id = f"{slugify(base)}_{slugify(portfolio_name)}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:chart-line"
         self._attr_should_poll = True

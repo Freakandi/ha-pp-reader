@@ -1,4 +1,5 @@
 import logging
+import os
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.util import slugify
 
@@ -16,10 +17,10 @@ class PortfolioGainAbsSensor(SensorEntity):
         """Initialize the sensor."""
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
-
-        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
+        
+        base = os.path.basename(depot_sensor._db_path)
         self._attr_name = f"Kursgewinn absolut {depot_sensor._portfolio_name}"
-        self._attr_unique_id = f"kursgewinn_absolut_{slugify(depot_sensor._portfolio_name)}"
+        self._attr_unique_id = f"{slugify(base)}_kursgewinn_absolut_{slugify(depot_sensor._portfolio_name)}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:chart-line-variant"
         self._attr_should_poll = True
@@ -50,10 +51,10 @@ class PortfolioGainPctSensor(SensorEntity):
         """Initialize the sensor."""
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
-
-        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
+        
+        base = os.path.basename(depot_sensor._db_path)
         self._attr_name = f"Kursgewinn % {depot_sensor._portfolio_name}"
-        self._attr_unique_id = f"kursgewinn_{slugify(depot_sensor._portfolio_name)}"
+        self._attr_unique_id = f"{slugify(base)}_kursgewinn_prozent_{slugify(depot_sensor._portfolio_name)}"
         self._attr_native_unit_of_measurement = "%"
         self._attr_icon = "mdi:percent"
         self._attr_should_poll = True

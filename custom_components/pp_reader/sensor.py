@@ -41,6 +41,7 @@ async def async_setup_entry(
         db_path = Path(entry_data["db_path"])
         
         sensors = []
+        purchase_sensors = []  # Separate Liste für Purchase-Sensoren
 
         # 🔹 Kontostände aus DB laden und Sensoren erstellen
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
@@ -78,14 +79,18 @@ async def async_setup_entry(
                 portfolio.uuid,
                 db_path
             )
+            purchase_sensors.append(purchase_sensor)  # In separate Liste
             sensors.append(purchase_sensor)
 
-            # Gewinn-Sensoren (diese brauchen nur die Referenzen)
+            # Gewinn-Sensoren
             gain_abs_sensor = PortfolioGainAbsSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_abs_sensor)
 
             gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
             sensors.append(gain_pct_sensor)
+
+        # 🔥 Kaufsummen-Sensoren parallel initialisieren
+        await asyncio.gather(*(sensor.async_update() for sensor in purchase_sensors))
 
         # 🔥 Sensoren an HA übergeben
         async_add_entities(sensors)

@@ -32,54 +32,39 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
     try:
-        # Plattform-Import vor dem Event Loop
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None, 
-            partial(importlib.import_module, "custom_components.pp_reader.sensor")
-        )
-        
-        # Datei-Validierung
-        file_path = Path(entry.data[CONF_FILE_PATH])
-        if not file_path.exists():
-            raise ConfigEntryNotReady(f"Datei nicht gefunden: {file_path}")
-            
-        # DB-Pfad aus Config Entry verwenden
+        # DB-Pfad aus Config holen und DB initialisieren
+        file_path = entry.data[CONF_FILE_PATH]
         db_path = Path(entry.data[CONF_DB_PATH])
-        
-        # DB initialisieren
-        await hass.async_add_executor_job(initialize_database_schema, db_path)
-            
-        # Portfolio-Datei laden
+        token = entry.data.get(CONF_API_TOKEN)
+
+        # Datenbank initialisieren
+        try:
+            _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
+            initialize_database_schema(db_path)
+        except Exception as e:
+            _LOGGER.exception("❌ Fehler bei der DB-Initialisierung: %s", e)
+            raise ConfigEntryNotReady("Datenbank konnte nicht initialisiert werden")
+
+        # Portfolio-Datei laden und in DB synchronisieren
         data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
         if not data:
             raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
             
-        # Daten in die SQLite DB synchronisieren
         try:
             _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
-            
-            # DB-Synchronisation in einem eigenen Executor-Job
-            def sync_data():
-                conn = sqlite3.connect(str(db_path))
-                try:
-                    sync_from_pclient(data, conn)
-                finally:
-                    conn.close()
-                    
-            await hass.async_add_executor_job(sync_data)
-            
+            await hass.async_add_executor_job(sync_from_pclient, data, db_path)
         except Exception as e:
             _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
             raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
-        
+
         # Datenstruktur initialisieren - ohne Coordinator
         hass.data.setdefault(DOMAIN, {})
         hass.data[DOMAIN][entry.entry_id] = {
             "file_path": str(file_path),
-            "db_path": db_path
+            "db_path": db_path,
+            "api_token": token
         }
-        
+
         _LOGGER.info("Portfolio Daten erfolgreich initialisiert")
         
         # Plattformen laden
