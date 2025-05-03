@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
-from ..db_access import (
+from ..data.db_access import (
     get_securities,
     get_portfolio_by_name,
     get_portfolio_by_uuid,

@@ -17,7 +17,7 @@ from .const import DOMAIN
 from .logic.accounting import calculate_account_balance
 from .logic.portfolio import calculate_portfolio_value
 from .data.coordinator import PPReaderCoordinator
-from .db_access import get_transactions, get_accounts, get_securities, get_portfolios, Transaction, Account, Security, Portfolio  # Neuer Import
+from .data.db_access import get_transactions, get_accounts, get_securities, get_portfolios, Transaction, Account, Security, Portfolio  # Neuer Import
 
 from .sensors.depot_sensors import PortfolioDepotSensor, PortfolioAccountSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor

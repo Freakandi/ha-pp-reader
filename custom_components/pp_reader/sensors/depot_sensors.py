@@ -7,7 +7,7 @@ from homeassistant.util import slugify
 
 from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value
-from ..db_access import (
+from ..data.db_access import (
     get_transactions,
     get_account_update_timestamp
 )

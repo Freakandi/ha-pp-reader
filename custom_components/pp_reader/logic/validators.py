@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 from typing import Optional, Dict, Any, Union, Tuple
 from ..name.abuchen.portfolio import client_pb2  # Relativer Import aus dem custom_components Ordner
-from ..db_access import Transaction
+from ..data.db_access import Transaction
 
 _LOGGER = logging.getLogger(__name__)
 
