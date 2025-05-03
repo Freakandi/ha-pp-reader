@@ -1,5 +1,6 @@
 import logging
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.util import slugify
 
 from custom_components.pp_reader.logic.portfolio import (
     calculate_unrealized_gain,
