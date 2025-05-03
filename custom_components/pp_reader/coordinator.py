@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pathlib import Path
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -11,12 +11,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PPReaderCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, *, db_path: Path):
+    def __init__(self, hass, *, db_path: Path, file_path: Path):
         """Initialisiere den Coordinator.
 
         Args:
             hass: HomeAssistant Instanz
             db_path: Pfad zur SQLite-Datenbank
+            file_path: Pfad zur Portfolio-Datei
         """
         super().__init__(
             hass,
@@ -25,15 +26,21 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(minutes=5),  # Aktualisierung alle 5 Minuten
         )
         self.db_path = db_path
+        self.file_path = file_path
         self.data = {
             "accounts": [],
             "portfolios": [],
             "transactions": [],
+            "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
         }
 
     async def _async_update_data(self):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
         try:
+            # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
+            last_update = self.file_path.stat().st_mtime
+            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", datetime.fromtimestamp(last_update))
+
             # Lade Konten
             accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
             _LOGGER.debug("🔄 Konten geladen: %d", len(accounts))
@@ -68,6 +75,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "accounts": {account.uuid: {"name": account.name, "balance": account_balances[account.uuid]} for account in accounts},
                 "portfolios": portfolio_data,
                 "transactions": transactions,
+                "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
             }
 
             return self.data
