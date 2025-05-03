@@ -52,7 +52,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             
         try:
             _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
-            await hass.async_add_executor_job(sync_from_pclient, data, db_path)
+            
+            # DB-Synchronisation in einem eigenen Executor-Job
+            def sync_data():
+                conn = sqlite3.connect(str(db_path))
+                try:
+                    sync_from_pclient(data, conn)
+                finally:
+                    conn.close()
+                    
+            await hass.async_add_executor_job(sync_data)
+            
         except Exception as e:
             _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
             raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
