@@ -109,14 +109,11 @@ class PortfolioAccountSensor(SensorEntity):
             )
             raise
 
-class PortfolioDepotSensor(PortfolioSensor):
+class PortfolioDepotSensor(SensorEntity):
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
-    
-    should_poll = True
-    entity_category = None
-    
+
     def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
-        super().__init__()
+        """Initialize the sensor."""
         self.hass = hass
         self._portfolio_name = portfolio_name
         self._portfolio_uuid = portfolio_uuid
@@ -124,29 +121,51 @@ class PortfolioDepotSensor(PortfolioSensor):
         self._value = 0.0
         self._count = 0
 
-        # Entity-Eigenschaften
-        self._attr_unique_id = f"pp_reader_depotwert_{slugify(portfolio_name)}"
+        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
         self._attr_name = f"Depotwert {portfolio_name}"
+        self._attr_unique_id = f"depotwert_{slugify(portfolio_name)}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:chart-line"
+        self._attr_should_poll = True
+        self._attr_available = True
 
     @property
     def native_value(self):
+        """Wert des Sensors."""
         return self._value
 
     @property
     def extra_state_attributes(self):
+        """Extra Attribute des Sensors."""
         return {
             "anzahl_wertpapiere": self._count
         }
 
-    async def _async_update_internal(self) -> None:
-        """Update method implementation."""
-        value, count = await calculate_portfolio_value(
-            self._portfolio_uuid,
-            datetime.now(),
-            self._db_path
-        )
-        self._value = value
-        self._count = count
-        self._attr_native_value = value
+    async def async_update(self):
+        """Update Methode für den Sensor."""
+        try:
+            # Depotwert und Anzahl Wertpapiere berechnen
+            value, count = await calculate_portfolio_value(
+                self._portfolio_uuid,
+                datetime.now(),
+                self._db_path
+            )
+            
+            # Werte aktualisieren und runden
+            self._value = round(value, 2)
+            self._count = count
+
+            _LOGGER.debug(
+                "✅ Neuer Depotwert für %s: %.2f € (Positionen: %d)", 
+                self._portfolio_name,
+                self._value,
+                self._count
+            )
+            
+        except Exception as e:
+            _LOGGER.error(
+                "❌ Fehler beim Laden des Depotwerts für %s: %s",
+                self._portfolio_name,
+                str(e)
+            )
+            raise
