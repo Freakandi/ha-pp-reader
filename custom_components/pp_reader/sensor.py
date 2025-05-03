@@ -32,32 +32,30 @@ async def async_setup_entry(
     config_entry: ConfigEntry, 
     async_add_entities: AddEntitiesCallback,
 ) -> bool:
-    """Richte die Portfolio Performance Sensoren ein."""
+    """Initialisiere alle Sensoren für pp_reader."""
+    start_time = datetime.now()
+
     try:
+        # DB-Pfad aus den Entry-Daten holen
         entry_data = hass.data[DOMAIN].get(config_entry.entry_id)
         db_path = Path(entry_data["db_path"])
         
         sensors = []
-        purchase_sensors = []
 
-        # Kontostände aus DB laden
+        # 🔹 Kontostände aus DB laden und Sensoren erstellen
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
-        
-        # Kontosensoren erstellen
         for account in accounts:
             if account.is_retired:
                 continue
                 
-            account_sensor = PortfolioAccountSensor(
+            sensors.append(PortfolioAccountSensor(
                 hass,
                 account.name,
                 account.uuid,
                 db_path
-            )
-            account_sensor.entity_registry_enabled_default = True
-            sensors.append(account_sensor)
+            ))
 
-        # Depots und zusätzliche Sensoren
+        # 🔸 Depots und zusätzliche Sensoren
         portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
 
         for portfolio in portfolios:
@@ -71,7 +69,6 @@ async def async_setup_entry(
                 portfolio.uuid,
                 db_path
             )
-            depot_sensor.entity_registry_enabled_default = True
             sensors.append(depot_sensor)
 
             # Kaufsumme-Sensor
@@ -81,23 +78,24 @@ async def async_setup_entry(
                 portfolio.uuid,
                 db_path
             )
-            purchase_sensor.entity_registry_enabled_default = True
-            purchase_sensors.append(purchase_sensor)
             sensors.append(purchase_sensor)
 
-            # Gewinn-Sensoren
+            # Gewinn-Sensoren (diese brauchen nur die Referenzen)
             gain_abs_sensor = PortfolioGainAbsSensor(depot_sensor, purchase_sensor)
-            gain_abs_sensor.entity_registry_enabled_default = True
             sensors.append(gain_abs_sensor)
 
             gain_pct_sensor = PortfolioGainPctSensor(depot_sensor, purchase_sensor)
-            gain_pct_sensor.entity_registry_enabled_default = True
             sensors.append(gain_pct_sensor)
 
-        # Sensoren initialisieren und registrieren
+        # 🔥 Sensoren an HA übergeben
         async_add_entities(sensors)
-        return True
+
+        # ⏱️ Setup-Dauer messen und loggen
+        elapsed = (datetime.now() - start_time).total_seconds()
+        _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
         
+        return True
+
     except Exception as e:
         _LOGGER.exception("Fehler beim Setup der Sensoren: %s", e)
         return False
