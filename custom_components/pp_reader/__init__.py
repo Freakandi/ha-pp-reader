@@ -14,6 +14,7 @@ from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.reader import parse_data_portfolio
 from .data.db_init import initialize_database_schema
+from .data.coordinator import PPReaderCoordinator  # Import hinzufügen
 
 import asyncio
 from functools import partial
@@ -74,6 +75,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "db_path": db_path,
             "api_token": token
         }
+
+        # Coordinator initialisieren
+        coordinator = PPReaderCoordinator(
+            hass,
+            db_path=db_path,
+            file_path=Path(file_path),
+        )
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except Exception as e:
+            _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
+            raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")
+
+        # Coordinator in hass.data speichern
+        hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
 
         _LOGGER.info("Portfolio Daten erfolgreich initialisiert")
         
