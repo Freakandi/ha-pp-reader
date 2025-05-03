@@ -14,6 +14,15 @@ async function renderDashboard() {
       lastUpdated
     } = await prepareDashboardData();
 
+    // Zeitstempel für "fileUpdated" formatieren
+    const formattedFileUpdated = new Date(fileUpdated).toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
     const root = document.querySelector("pp-reader-dashboard");
     root.innerHTML = `
       <div class="card header-card">
@@ -48,7 +57,7 @@ async function renderDashboard() {
 
       <div class="card footer-card">
         <div class="meta">
-          <div>📂 Letzte Aktualisierung Datei: <strong>${fileUpdated}</strong></div>
+          <div>📂 Letzte Aktualisierung Datei: <strong>${formattedFileUpdated}</strong></div>
           <div>📈 Geprüft am: <strong>${lastUpdated}</strong></div>
         </div>
       </div>
