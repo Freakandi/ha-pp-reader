@@ -9,13 +9,8 @@ from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value
 from ..db_access import (
     get_transactions,
-    get_accounts, 
-    get_securities,
-    get_portfolio_by_name,
-    get_account_update_timestamp  # Neuer Import
+    get_account_update_timestamp
 )
-
-from .base import PortfolioSensor
 
 _LOGGER = logging.getLogger(__name__)
 

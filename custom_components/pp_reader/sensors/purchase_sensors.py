@@ -6,46 +6,56 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.util import slugify
 
 from ..logic.portfolio import calculate_purchase_sum
-from ..db_access import get_transactions, get_portfolio_by_name
-from .base import PortfolioSensor  # Import der Basis-Klasse
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class PortfolioPurchaseSensor(PortfolioSensor):
+class PortfolioPurchaseSensor(SensorEntity):
     """Sensor für die Kaufsumme eines Depots."""
 
-    should_poll = True
-    entity_category = None
-
     def __init__(self, hass, portfolio_name: str, portfolio_uuid: str, db_path: Path):
-        """Initialisiere den Sensor.
-        
-        Args:
-            hass: Home Assistant Instance
-            portfolio_name: Name des Portfolios für die Anzeige
-            portfolio_uuid: UUID des Portfolios für interne Berechnungen
-            db_path: Pfad zur SQLite Datenbank
-        """
+        """Initialize the sensor."""
         self.hass = hass
-        self._portfolio_name = portfolio_name  # Für die Anzeige
-        self._portfolio_uuid = portfolio_uuid  # Für interne Berechnungen
+        self._portfolio_name = portfolio_name
+        self._portfolio_uuid = portfolio_uuid
         self._db_path = db_path
-        self._purchase_sum = 0.0
-
+        self._value = 0.0
+        
+        # Entity-Eigenschaften direkt setzen ohne Basis-Klasse
         self._attr_name = f"Kaufsumme {portfolio_name}"
-        self._attr_unique_id = f"pp_reader_{slugify(portfolio_name)}_kaufsumme"
+        self._attr_unique_id = f"kaufsumme_{slugify(portfolio_name)}"
         self._attr_native_unit_of_measurement = "€"
         self._attr_icon = "mdi:cash"
+        self._attr_should_poll = True
+        self._attr_available = True
 
     @property
     def native_value(self):
-        return self._purchase_sum
+        """Wert des Sensors."""
+        return self._value
 
-    async def _async_update_internal(self) -> None:
-        """Update method implementation."""
-        self._purchase_sum = await calculate_purchase_sum(
-            self._portfolio_uuid,
-            self._db_path
-        )
-        self._attr_native_value = self._purchase_sum
+    async def async_update(self):
+        """Update Methode für den Sensor."""
+        try:
+            # Kaufsumme berechnen
+            new_value = await calculate_purchase_sum(
+                self._portfolio_uuid,
+                self._db_path
+            )
+            
+            # Wert aktualisieren und runden
+            self._value = round(new_value, 2)
+
+            _LOGGER.debug(
+                "✅ Neue Kaufsumme für %s: %.2f €", 
+                self._portfolio_name,
+                self._value
+            )
+            
+        except Exception as e:
+            _LOGGER.error(
+                "❌ Fehler beim Laden der Kaufsumme für %s: %s",
+                self._portfolio_name,
+                str(e)
+            )
+            raise
