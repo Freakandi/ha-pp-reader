@@ -32,7 +32,8 @@ class PortfolioAccountSensor(SensorEntity):
     def native_value(self):
         """Gibt den aktuellen Kontostand zurück."""
         account_data = self.coordinator.data["accounts"].get(self._account_uuid, {})
-        return account_data.get("balance", 0.0)
+        balance = account_data.get("balance", 0.0)
+        return round(balance, 2)  # Wert auf 2 Dezimalstellen runden
 
     @property
     def extra_state_attributes(self):
@@ -70,7 +71,8 @@ class PortfolioDepotSensor(SensorEntity):
     def native_value(self):
         """Gibt den aktuellen Depotwert zurück."""
         portfolio_data = self.coordinator.data["portfolios"].get(self._portfolio_uuid, {})
-        return portfolio_data.get("value", 0.0)
+        value = portfolio_data.get("value", 0.0)
+        return round(value, 2)  # Wert auf 2 Dezimalstellen runden
 
     @property
     def extra_state_attributes(self):
