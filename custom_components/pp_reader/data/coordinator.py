@@ -62,15 +62,25 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             # Berechne Depotwerte und Kaufsummen
             portfolio_data = {}
             for portfolio in portfolios:
-                value, count = calculate_portfolio_value(portfolio.uuid, transactions)
-                purchase_sum = calculate_purchase_sum(portfolio.uuid, transactions)
+                reference_date = datetime.now()  # Aktuelles Datum als Referenz
+                value, count = await calculate_portfolio_value(
+                    portfolio.uuid, reference_date, self.db_path
+                )
+                purchase_sum = await calculate_purchase_sum(portfolio.uuid, self.db_path)
                 portfolio_data[portfolio.uuid] = {
                     "name": portfolio.name,
                     "value": value,
                     "count": count,
                     "purchase_sum": purchase_sum,
                 }
-
+                _LOGGER.debug(
+                    "💰 Depot %s: Wert %.2f € (%d Positionen), Kaufsumme %.2f €",
+                    portfolio.name,
+                    value,
+                    count,
+                    purchase_sum,
+                )
+                            
             # Speichere die Daten
             self.data = {
                 "accounts": {account.uuid: {"name": account.name, "balance": account_balances[account.uuid]} for account in accounts},
