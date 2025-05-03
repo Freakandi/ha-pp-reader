@@ -19,7 +19,7 @@ class PortfolioGainAbsSensor(SensorEntity):
         self._purchase_sensor = purchase_sensor
         
         # db_path direkt vom Coordinator abrufen
-        base = os.path.basename(depot_sensor._coordinator.db_path)
+        base = os.path.basename(depot_sensor.coordinator.db_path)
         self._attr_name = f"Kursgewinn absolut {depot_sensor._portfolio_name}"
         self._attr_unique_id = f"{slugify(base)}_kursgewinn_absolut_{slugify(depot_sensor._portfolio_name)}"
         self._attr_native_unit_of_measurement = "€"
@@ -53,7 +53,7 @@ class PortfolioGainPctSensor(SensorEntity):
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
         
-        base = os.path.basename(depot_sensor._coordinator.db_path)
+        base = os.path.basename(depot_sensor.coordinator.db_path)
         self._attr_name = f"Kursgewinn % {depot_sensor._portfolio_name}"
         self._attr_unique_id = f"{slugify(base)}_kursgewinn_prozent_{slugify(depot_sensor._portfolio_name)}"
         self._attr_native_unit_of_measurement = "%"
