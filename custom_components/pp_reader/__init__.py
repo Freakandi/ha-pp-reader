@@ -13,7 +13,6 @@ from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 from .backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .reader import parse_data_portfolio
-from .coordinator import PPReaderCoordinator
 from .db_init import initialize_database_schema
 
 import asyncio
@@ -74,27 +73,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
             raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
         
-        # Coordinator erstellen
-        coordinator = PPReaderCoordinator(
-            hass=hass,
-            file_path=file_path,
-            db_path=db_path,
-            data=data
-        )
-        
-        # Erste Aktualisierung durchführen
-        await coordinator.async_config_entry_first_refresh()
-            
-        # Datenstruktur initialisieren
+        # Datenstruktur initialisieren - ohne Coordinator
         hass.data.setdefault(DOMAIN, {})
         hass.data[DOMAIN][entry.entry_id] = {
-            "data": data,
             "file_path": str(file_path),
-            "db_path": db_path,
-            "coordinator": coordinator  # Coordinator hinzufügen
+            "db_path": db_path
         }
         
-        _LOGGER.info("Portfolio Daten und Coordinator erfolgreich initialisiert")
+        _LOGGER.info("Portfolio Daten erfolgreich initialisiert")
         
         # Plattformen laden
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
