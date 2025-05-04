@@ -16,12 +16,11 @@ _LOGGER = logging.getLogger(__name__)
 class PPReaderCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, *, db_path: Path, file_path: Path):
         """Initialisiere den Coordinator."""
-        # Eigenen Logger erstellen
         self._logger = _LOGGER.getChild("coordinator")
         
         super().__init__(
             hass,
-            self._logger,  # Eigenen Logger verwenden
+            self._logger,
             name="pp_reader",
             update_interval=timedelta(minutes=1),
             update_method=self._async_update_data
@@ -32,12 +31,11 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             "accounts": {},
             "portfolios": {},
             "transactions": [],
-            "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
+            "last_file_update": None,  # Umbenennung zu spezifischerem Namen
         }
-        self._last_update = None  # Attribut für den letzten Änderungszeitstempel
-        self._last_file_update = None  # Initialisiere das Attribut für den letzten Änderungszeitstempel
+        self._last_file_update = None  # Nur noch dieses Attribut für File-Tracking
         
-        # Debug-Info für Update-Intervall
+# Debug-Info für Update-Intervall
         self._logger.info(
             "Coordinator initialisiert mit Update-Intervall: %s",
             self.update_interval
@@ -55,15 +53,15 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         )
         try:
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
-            last_update = self.file_path.stat().st_mtime
-            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei (st_mtime): %s", datetime.fromtimestamp(last_update))
+            last_file_update = self.file_path.stat().st_mtime
+            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei (st_mtime): %s", datetime.fromtimestamp(last_file_update))
             _LOGGER.debug("📂 Letzter bekannter Änderungszeitstempel (_last_file_update): %s",
                           datetime.fromtimestamp(self._last_file_update) if self._last_file_update else "None")
 
             # Wenn sich die Datei geändert hat, synchronisiere die Datenbank
-            if self._last_file_update is None or int(last_update) != int(self._last_file_update):
+            if self._last_file_update is None or int(last_file_update) != int(self._last_file_update):
                 _LOGGER.info("📂 Portfolio-Datei wurde geändert. Starte Synchronisation...")
-                self._last_file_update = last_update
+                self._last_file_update = last_file_update
 
                 # Portfolio-Datei in ein PClient-Objekt laden
                 client = await self.hass.async_add_executor_job(parse_data_portfolio, str(self.file_path))
@@ -137,7 +135,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 },
                 "portfolios": portfolio_data,
                 "transactions": transactions,
-                "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
+                "last_file_update": datetime.fromtimestamp(last_file_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
             }
             _LOGGER.debug("📂 Aktualisierte Datenstruktur mit last_update: %s", self.data["last_update"])
 

@@ -35,7 +35,7 @@ class PortfolioAccountSensor(SensorEntity):
     def extra_state_attributes(self):
         """Zusätzliche Attribute des Sensors."""
         return {
-            "letzte_aktualisierung": self.coordinator.data.get("last_update", "Unbekannt"),
+            "letzte_aktualisierung": self.coordinator.data.get("last_file_update", "Unbekannt"),
             "account_uuid": self._account_uuid,
         }
 
@@ -77,7 +77,7 @@ class PortfolioDepotSensor(SensorEntity):
         portfolio_data = self.coordinator.data["portfolios"].get(self._portfolio_uuid, {})
         return {
             "anzahl_wertpapiere": portfolio_data.get("count", 0),
-            "letzte_aktualisierung": self.coordinator.data.get("last_update", "Unbekannt"),
+            "letzte_aktualisierung": self.coordinator.data.get("last_file_update", "Unbekannt"),
             "portfolio_uuid": self._portfolio_uuid,
         }
 

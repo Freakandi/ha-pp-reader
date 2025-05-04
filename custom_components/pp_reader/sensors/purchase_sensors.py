@@ -37,7 +37,7 @@ class PortfolioPurchaseSensor(SensorEntity):
     def extra_state_attributes(self):
         """Zusätzliche Attribute des Sensors."""
         return {
-            "letzte_aktualisierung": self.coordinator.data.get("last_update", "Unbekannt"),
+            "letzte_aktualisierung": self.coordinator.data.get("last_file_update", "Unbekannt"),
             "portfolio_uuid": self._portfolio_uuid,
         }
 
