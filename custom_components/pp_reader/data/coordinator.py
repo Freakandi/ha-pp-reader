@@ -50,12 +50,14 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("📂 Portfolio-Datei wurde geändert. Starte Synchronisation...")
                 self._last_file_update = last_update
 
-                # Synchronisiere die Datenbank
-                await self.hass.async_add_executor_job(
-                    sync_from_pclient,  # Funktion zum Synchronisieren
-                    self.file_path,     # Portfolio-Datei
-                    self.db_path        # SQLite-Datenbank
-                )
+                # Öffne die SQLite-Datenbankverbindung
+                with sqlite3.connect(self.db_path) as conn:
+                    # Synchronisiere die Datenbank
+                    await self.hass.async_add_executor_job(
+                        sync_from_pclient,  # Funktion zum Synchronisieren
+                        self.file_path,     # Portfolio-Datei
+                        conn                # SQLite-Datenbankverbindung
+                    )
 
             # Lade Konten
             accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
