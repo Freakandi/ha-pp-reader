@@ -32,8 +32,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self.db_path = db_path
         self.file_path = file_path
         self.data = {
-            "accounts": [],
-            "portfolios": [],
+            "accounts": {},
+            "portfolios": {},
             "transactions": [],
             "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
         }
@@ -42,7 +42,11 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         
     async def _async_update_data(self):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
-        _LOGGER.debug("🔄 _async_update_data wurde aufgerufen.")
+        _LOGGER.debug(
+            "🔄 Update gestartet (Interval: %s, Letzte Aktualisierung: %s)",
+            self.update_interval,
+            self.last_update_success_time
+        )
         try:
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
             last_update = self.file_path.stat().st_mtime
