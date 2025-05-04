@@ -146,8 +146,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             return self.data
 
         except Exception as e:
-            self._logger.error("Fehler beim Laden der Daten: %s", e)
+            self.logger.error("Fehler beim Laden der Daten: %s", e)
             raise UpdateFailed(f"Update fehlgeschlagen: {e}")
         finally:
             duration = (datetime.now() - start_time).total_seconds()
-            self._logger.debug("Update abgeschlossen in %.3f Sekunden", duration)
+            self.logger.debug("Update abgeschlossen in %.3f Sekunden", duration)
