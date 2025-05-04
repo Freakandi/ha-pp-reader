@@ -1,13 +1,18 @@
 import { addSwipeEvents, goToTab } from './interaction/tab_control.js';
 import { renderDashboard } from './tabs/overview.js';
+import { renderTestTab } from './tabs/test_tab.js'; // Importiere den Test-Tab
 
 const tabs = [
   {
     title: 'Dashboard',
     index: 0,
     render: renderDashboard
+  },
+  {
+    title: 'Test Tab',
+    index: 1,
+    render: renderTestTab
   }
-  // Weitere Tabs können hier hinzugefügt werden
 ];
 
 let currentPage = 0;
