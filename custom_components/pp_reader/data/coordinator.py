@@ -4,6 +4,7 @@ from pathlib import Path
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .db_access import get_accounts, get_portfolios, get_transactions
+from .sync_from_pclient import sync_from_pclient
 from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
 
@@ -33,6 +34,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             "transactions": [],
             "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
         }
+        self._last_update = None  # Attribut für den letzten Änderungszeitstempel
+        self._update_interval = timedelta(minutes=1)
 
     async def _async_update_data(self):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
@@ -40,6 +43,18 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
             last_update = self.file_path.stat().st_mtime
             _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", datetime.fromtimestamp(last_update))
+
+            # Wenn sich die Datei geändert hat, synchronisiere die Datenbank
+            if self._last_file_update is None or last_update != self._last_file_update:
+                _LOGGER.info("📂 Portfolio-Datei wurde geändert. Starte Synchronisation...")
+                self._last_file_update = last_update
+
+                # Synchronisiere die Datenbank
+                await self.hass.async_add_executor_job(
+                    sync_from_pclient,  # Funktion zum Synchronisieren
+                    self.file_path,     # Portfolio-Datei
+                    self.db_path        # SQLite-Datenbank
+                )
 
             # Lade Konten
             accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
@@ -87,7 +102,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     account.uuid: {
                         "name": account.name,
                         "balance": account_balances[account.uuid],
-                        "is_retired": account.is_retired  # Hinzufügen des is_retired-Attributs
+                        "is_retired": account.is_retired
                     }
                     for account in accounts
                 },
