@@ -2,9 +2,7 @@ import { createThemeToggle } from './themeToggle.js';
 import { makeTable } from './elements.js';
 import { prepareDashboardData } from './data.js';
 
-console.log("📱 PP Reader Dashboard gestartet (modular)");
-
-async function renderDashboard() {
+export async function renderDashboard() {
   try {
     const {
       konten,
@@ -14,7 +12,6 @@ async function renderDashboard() {
       lastUpdated
     } = await prepareDashboardData();
 
-    // Zeitstempel für "fileUpdated" formatieren
     const formattedFileUpdated = new Date(fileUpdated).toLocaleString('de-DE', {
       day: '2-digit',
       month: '2-digit',
@@ -22,8 +19,7 @@ async function renderDashboard() {
       hour: '2-digit',
       minute: '2-digit'
     });
-
-    const root = document.querySelector("pp-reader-dashboard");
+    
     root.innerHTML = `
       <div class="card header-card">
         <h1>Übersicht</h1>
@@ -62,18 +58,16 @@ async function renderDashboard() {
         </div>
       </div>
     `;
-
-    createThemeToggle();
-
   } catch (err) {
     console.error("Fehler beim Laden des Dashboards:", err);
-    document.querySelector("pp-reader-dashboard").innerHTML =
-      `<p style="color:red">⚠️ Fehler beim Laden der Daten: ${err.message}</p>`;
+    return `<p style="color:red">⚠️ Fehler beim Laden der Daten: ${err.message}</p>`;
   }
 }
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
-  connectedCallback() {
-    renderDashboard();
+  async connectedCallback() {
+    const root = this.attachShadow({ mode: 'open' });
+    root.innerHTML = await renderDashboard();
+    createThemeToggle();
   }
 });

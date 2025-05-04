@@ -1,8 +1,15 @@
-import { mainTab } from '../tabs/mainTab.js';
-import { testTab } from '../tabs/testTab.js';
-import { addSwipeEvents } from './swipe.js';
+import { addSwipeEvents, goToTab } from './interaction/tab_control.js';
+import { renderDashboard } from './overview.js';
 
-const tabs = [mainTab, testTab].sort((a, b) => a.index - b.index);
+const tabs = [
+  {
+    title: 'Dashboard',
+    index: 0,
+    render: renderDashboard
+  }
+  // Weitere Tabs können hier hinzugefügt werden
+];
+
 let currentPage = 0;
 
 function renderHeaderCard(tab) {
@@ -21,52 +28,48 @@ function renderHeaderCard(tab) {
   `;
 }
 
-async function renderDashboard() {
-  // Beispiel: Daten können hier geladen und an Tabs übergeben werden
-  // const data = await fetchData();
-
+async function renderTab() {
   const tab = tabs[currentPage];
   let content = renderHeaderCard(tab);
-  content += tab.render({ /* data */ });
+  content += await tab.render();
 
   const root = document.querySelector("pp-reader-dashboard");
   root.innerHTML = content;
 
-  // Swipe- und Pfeil-Events
   const swipeCard = root.querySelector('.swipe-card');
   addSwipeEvents(
     swipeCard,
     () => { // onSwipeLeft
       if (currentPage < tabs.length - 1) {
         currentPage++;
-        renderDashboard();
+        renderTab();
       }
     },
     () => { // onSwipeRight
       if (currentPage > 0) {
         currentPage--;
-        renderDashboard();
+        renderTab();
       }
     }
   );
 
-  // Pfeil-Buttons
   swipeCard.querySelector('.swipe-arrow.left:not(.disabled)')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
-      renderDashboard();
+      renderTab();
     }
   });
+
   swipeCard.querySelector('.swipe-arrow.right:not(.disabled)')?.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
-      renderDashboard();
+      renderTab();
     }
   });
 }
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
-    renderDashboard();
+    renderTab();
   }
 });
