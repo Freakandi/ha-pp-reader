@@ -8,6 +8,7 @@ from .db_access import get_accounts, get_portfolios, get_transactions
 from .sync_from_pclient import sync_from_pclient
 from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
+from ..data.reader import parse_data_portfolio
 
 _LOGGER = logging.getLogger(__name__)
 
