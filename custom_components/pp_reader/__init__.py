@@ -68,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
             raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
 
-        # Datenstruktur initialisieren - ohne Coordinator
+        # Datenstruktur initialisieren
         hass.data.setdefault(DOMAIN, {})
         hass.data[DOMAIN][entry.entry_id] = {
             "file_path": str(file_path),
@@ -84,12 +84,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         try:
             await coordinator.async_config_entry_first_refresh()
+            _LOGGER.info("✅ Coordinator erfolgreich initialisiert und erste Aktualisierung abgeschlossen.")
         except Exception as e:
             _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
             raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")
 
         # Coordinator in hass.data speichern
         hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
+        _LOGGER.debug("✅ Coordinator in hass.data registriert: %s", coordinator)
 
         _LOGGER.info("Portfolio Daten erfolgreich initialisiert")
         
