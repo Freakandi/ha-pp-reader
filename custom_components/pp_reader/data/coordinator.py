@@ -36,7 +36,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         }
         self._last_update = None  # Attribut für den letzten Änderungszeitstempel
         self._update_interval = timedelta(minutes=1)
-
+        self._last_file_update = None  # Initialisiere das Attribut für den letzten Änderungszeitstempel
+        
     async def _async_update_data(self):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
         try:
