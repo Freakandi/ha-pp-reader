@@ -26,7 +26,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name="pp_reader",
-            update_interval=timedelta(minutes=5),  # Aktualisierung alle 5 Minuten
+            update_interval=timedelta(minutes=1),
         )
         self.db_path = db_path
         self.file_path = file_path
@@ -57,7 +57,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 # Portfolio-Datei in ein PClient-Objekt laden
                 client = await self.hass.async_add_executor_job(parse_data_portfolio, str(self.file_path))
                 if not client:
+                    _LOGGER.error("❌ Portfolio-Daten konnten nicht geladen werden.")
                     raise UpdateFailed("Portfolio-Daten konnten nicht geladen werden")
+                else:
+                    _LOGGER.info("✅ Portfolio-Daten erfolgreich geladen.")
 
                 # DB-Synchronisation in einem eigenen Executor-Job
                 def sync_data():
@@ -68,6 +71,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                         conn.close()
 
                 await self.hass.async_add_executor_job(sync_data)
+            else:
+                _LOGGER.debug("📂 Keine Änderung der Portfolio-Datei erkannt. Synchronisation wird übersprungen.")
 
             # Lade Konten
             accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
@@ -123,6 +128,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "transactions": transactions,
                 "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
             }
+            _LOGGER.debug("📂 Aktualisierte Datenstruktur mit last_update: %s", self.data["last_update"])
 
             return self.data
 
