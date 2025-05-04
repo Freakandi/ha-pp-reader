@@ -1,6 +1,7 @@
 import logging
 import os
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from custom_components.pp_reader.logic.portfolio import (
@@ -10,11 +11,12 @@ from custom_components.pp_reader.logic.portfolio import (
 
 _LOGGER = logging.getLogger(__name__)
 
-class PortfolioGainAbsSensor(SensorEntity):
+class PortfolioGainAbsSensor(CoordinatorEntity, SensorEntity):
     """Sensor für den Kursgewinn (absolut) eines Depots."""
 
     def __init__(self, depot_sensor, purchase_sensor):
         """Initialize the sensor."""
+        super().__init__(depot_sensor.coordinator)
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
         
@@ -46,11 +48,12 @@ class PortfolioGainAbsSensor(SensorEntity):
             return None
 
 
-class PortfolioGainPctSensor(SensorEntity):
+class PortfolioGainPctSensor(CoordinatorEntity, SensorEntity):
     """Sensor für den Kursgewinn (prozentual) eines Depots."""
 
     def __init__(self, depot_sensor, purchase_sensor):
         """Initialize the sensor."""
+        super().__init__(depot_sensor.coordinator)
         self._depot_sensor = depot_sensor
         self._purchase_sensor = purchase_sensor
         

@@ -3,6 +3,7 @@ import os
 import logging
 from pathlib import Path
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
 from ..logic.portfolio import calculate_purchase_sum
@@ -10,11 +11,12 @@ from ..logic.portfolio import calculate_purchase_sum
 _LOGGER = logging.getLogger(__name__)
 
 
-class PortfolioPurchaseSensor(SensorEntity):
+class PortfolioPurchaseSensor(CoordinatorEntity, SensorEntity):
     """Sensor für die Kaufsumme eines Depots."""
 
     def __init__(self, coordinator, portfolio_uuid: str):
         """Initialisiere den Sensor."""
+        super().__init__(coordinator)
         self.coordinator = coordinator
         self._portfolio_uuid = portfolio_uuid
         portfolio_data = self.coordinator.data["portfolios"].get(portfolio_uuid, {})
@@ -40,7 +42,3 @@ class PortfolioPurchaseSensor(SensorEntity):
             "letzte_aktualisierung": self.coordinator.data.get("last_update", "Unbekannt"),
             "portfolio_uuid": self._portfolio_uuid,
         }
-
-    async def async_update(self):
-        """Erzwinge ein Update über den Coordinator."""
-        await self.coordinator.async_request_refresh()

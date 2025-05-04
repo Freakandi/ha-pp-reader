@@ -1,19 +1,17 @@
 import logging
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-
-from ..data.db_access import (
-    get_transactions,
-    get_account_update_timestamp
-)
+from ..data.coordinator import PPReaderCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-class PortfolioAccountSensor(SensorEntity):
+class PortfolioAccountSensor(CoordinatorEntity, SensorEntity):
     """Sensor für den Kontostand eines aktiven Kontos."""
 
     def __init__(self, coordinator, account_uuid: str):
         """Initialisiere den Sensor."""
+        super().__init__(coordinator)
         self.coordinator = coordinator
         self._account_uuid = account_uuid
         self._attr_name = f"Kontostand {self.coordinator.data['accounts'][account_uuid]['name']}"
@@ -39,15 +37,12 @@ class PortfolioAccountSensor(SensorEntity):
             "account_uuid": self._account_uuid,
         }
 
-    async def async_update(self):
-        """Erzwinge ein Update über den Coordinator."""
-        await self.coordinator.async_request_refresh()
-
-class PortfolioDepotSensor(SensorEntity):
+class PortfolioDepotSensor(CoordinatorEntity, SensorEntity):
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
 
     def __init__(self, coordinator, portfolio_uuid: str):
         """Initialisiere den Sensor."""
+        super().__init__(coordinator)
         self.coordinator = coordinator
         self._portfolio_uuid = portfolio_uuid
 
@@ -80,7 +75,3 @@ class PortfolioDepotSensor(SensorEntity):
             "letzte_aktualisierung": self.coordinator.data.get("last_update", "Unbekannt"),
             "portfolio_uuid": self._portfolio_uuid,
         }
-
-    async def async_update(self):
-        """Erzwinge ein Update über den Coordinator."""
-        await self.coordinator.async_request_refresh()
