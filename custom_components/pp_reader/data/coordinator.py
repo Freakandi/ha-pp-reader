@@ -41,7 +41,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._last_file_update = None  # Initialisiere das Attribut für den letzten Änderungszeitstempel
         
         # Debug-Info für Update-Intervall
-        self._logger.info(
+        self.logger.info(
             "Coordinator initialisiert mit Update-Intervall: %s",
             self.update_interval
         )
