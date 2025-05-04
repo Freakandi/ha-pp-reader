@@ -63,11 +63,3 @@ export async function renderDashboard() {
     return `<p style="color:red">⚠️ Fehler beim Laden der Daten: ${err.message}</p>`;
   }
 }
-
-customElements.define('pp-reader-dashboard', class extends HTMLElement {
-  async connectedCallback() {
-    const root = this.attachShadow({ mode: 'open' });
-    root.innerHTML = await renderDashboard();
-    createThemeToggle();
-  }
-});

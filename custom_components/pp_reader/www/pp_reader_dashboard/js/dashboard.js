@@ -33,13 +33,37 @@ function renderHeaderCard(tab) {
   `;
 }
 
+function renderTabBar() {
+  return `
+    <div class="tab-bar">
+      ${tabs.map((tab, index) => `
+        <button class="tab-button ${index === currentPage ? 'active' : ''}" data-index="${index}">
+          ${tab.title}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
 async function renderTab() {
   const tab = tabs[currentPage];
-  let content = renderHeaderCard(tab);
+  let content = renderTabBar(); // Tab-Leiste hinzufügen
+  content += renderHeaderCard(tab);
   content += await tab.render();
 
   const root = document.querySelector("pp-reader-dashboard");
   root.innerHTML = content;
+
+  // Event-Listener für Tab-Wechsel
+  root.querySelectorAll('.tab-button').forEach(button => {
+    button.addEventListener('click', () => {
+      const index = parseInt(button.getAttribute('data-index'), 10);
+      if (index !== currentPage) {
+        currentPage = index;
+        renderTab();
+      }
+    });
+  });
 
   const swipeCard = root.querySelector('.swipe-card');
   addSwipeEvents(
