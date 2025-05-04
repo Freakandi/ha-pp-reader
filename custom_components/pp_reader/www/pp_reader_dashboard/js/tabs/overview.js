@@ -19,8 +19,8 @@ export async function renderDashboard() {
       hour: '2-digit',
       minute: '2-digit'
     });
-    
-    root.innerHTML = `
+
+    return `
       <div class="card header-card">
         <h1>Übersicht</h1>
         <div class="meta">
