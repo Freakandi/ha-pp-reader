@@ -51,11 +51,16 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("📂 Portfolio-Datei wurde geändert. Starte Synchronisation...")
                 self._last_file_update = last_update
 
+                # Portfolio-Datei in ein PClient-Objekt laden
+                client = await self.hass.async_add_executor_job(parse_data_portfolio, str(self.file_path))
+                if not client:
+                    raise UpdateFailed("Portfolio-Daten konnten nicht geladen werden")
+
                 # DB-Synchronisation in einem eigenen Executor-Job
                 def sync_data():
                     conn = sqlite3.connect(str(self.db_path))
                     try:
-                        sync_from_pclient(self.file_path, conn)
+                        sync_from_pclient(client, conn)
                     finally:
                         conn.close()
 
