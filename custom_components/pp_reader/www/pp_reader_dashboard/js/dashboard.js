@@ -26,7 +26,7 @@ async function renderDashboard() {
     const root = document.querySelector("pp-reader-dashboard");
     root.innerHTML = `
       <div class="card header-card">
-        <h1>Portfolio Dashboard</h1>
+        <h1>Übersicht</h1>
         <div class="meta">
           <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})}&nbsp;€</strong></div>
         </div>
