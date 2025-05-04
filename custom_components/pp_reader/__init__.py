@@ -84,7 +84,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         try:
             await coordinator.async_config_entry_first_refresh()
-            _LOGGER.info("✅ Coordinator erfolgreich initialisiert und erste Aktualisierung abgeschlossen.")
+            
+            # Debug-Info für Scheduler mit korrekten Attributen
+            _LOGGER.info(
+                "Coordinator Status - Update Interval: %s, Letztes Update: %s, Update erfolgreich: %s",
+                coordinator.update_interval,
+                coordinator.last_update,
+                coordinator.last_update_success
+            )
+            
         except Exception as e:
             _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
             raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")

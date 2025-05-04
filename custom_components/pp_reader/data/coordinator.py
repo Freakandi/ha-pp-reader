@@ -15,16 +15,13 @@ _LOGGER = logging.getLogger(__name__)
 
 class PPReaderCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, *, db_path: Path, file_path: Path):
-        """Initialisiere den Coordinator.
-
-        Args:
-            hass: HomeAssistant Instanz
-            db_path: Pfad zur SQLite-Datenbank
-            file_path: Pfad zur Portfolio-Datei
-        """
+        """Initialisiere den Coordinator."""
+        # Eigenen Logger erstellen
+        self._logger = _LOGGER.getChild("coordinator")
+        
         super().__init__(
             hass,
-            _LOGGER,
+            self._logger,  # Eigenen Logger verwenden
             name="pp_reader",
             update_interval=timedelta(minutes=1),
             update_method=self._async_update_data
@@ -41,7 +38,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._last_file_update = None  # Initialisiere das Attribut für den letzten Änderungszeitstempel
         
         # Debug-Info für Update-Intervall
-        self.logger.info(
+        self._logger.info(
             "Coordinator initialisiert mit Update-Intervall: %s",
             self.update_interval
         )
@@ -50,9 +47,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
         start_time = datetime.now()
 
-        _LOGGER.debug(
-            "🔄 Update gestartet (Interval: %s, Letzte Aktualisierung: %s)",
+        self._logger.debug(
+            "🔄 Update gestartet (Interval: %s, Letztes Update: %s, Update erfolgreich: %s)",
             self.update_interval,
+            self.last_update,
             self.last_update_success
         )
         try:
@@ -146,8 +144,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             return self.data
 
         except Exception as e:
-            self.logger.error("Fehler beim Laden der Daten: %s", e)
+            self._logger.error("Fehler beim Laden der Daten: %s", e)
             raise UpdateFailed(f"Update fehlgeschlagen: {e}")
         finally:
             duration = (datetime.now() - start_time).total_seconds()
-            self.logger.debug("Update abgeschlossen in %.3f Sekunden", duration)
+            self._logger.debug("Update abgeschlossen in %.3f Sekunden", duration)
