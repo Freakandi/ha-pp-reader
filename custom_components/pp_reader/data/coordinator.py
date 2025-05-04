@@ -3,19 +3,20 @@ import sqlite3
 from datetime import timedelta, datetime
 from pathlib import Path
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
+from homeassistant.core import HomeAssistant  # Importiere HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .db_access import get_accounts, get_portfolios, get_transactions
 from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
-from .data.reader import parse_data_portfolio
-from .data.sync_from_pclient import sync_from_pclient
+from .reader import parse_data_portfolio
+from .sync_from_pclient import sync_from_pclient
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class PPReaderCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, *, db_path: Path, file_path: Path):
+    def __init__(self, hass: HomeAssistant, *, db_path: Path, file_path: Path):
         """Initialisiere den Coordinator.
 
         Args:
@@ -31,6 +32,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         )
         self.db_path = db_path
         self.file_path = file_path
+        self.hass = hass  # Speichere die HomeAssistant-Instanz
         self.data = {
             "accounts": [],
             "portfolios": [],
@@ -51,26 +53,26 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
 
                 # Portfolio-Datei laden und in DB synchronisieren
-                data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
+                data = await self.hass.async_add_executor_job(parse_data_portfolio, str(self.file_path))
                 if not data:
-                    raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
+                    raise UpdateFailed("Portfolio-Daten konnten nicht geladen werden")
             
                 try:
                     _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
             
                     # DB-Synchronisation in einem eigenen Executor-Job
                     def sync_data():
-                        conn = sqlite3.connect(str(db_path))
+                        conn = sqlite3.connect(str(self.db_path))
                         try:
                             sync_from_pclient(data, conn)
                         finally:
                             conn.close()
                     
-                    await hass.async_add_executor_job(sync_data)
+                    await self.hass.async_add_executor_job(sync_data)
             
                 except Exception as e:
                     _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
-                    raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
+                    raise UpdateFailed("DB-Synchronisation fehlgeschlagen")
 
                 # Lade Konten
                 accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
