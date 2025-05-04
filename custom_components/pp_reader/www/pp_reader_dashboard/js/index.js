@@ -1,5 +1,5 @@
 import { addSwipeEvents, goToTab } from './interaction/tab_control.js';
-import { renderDashboard } from './overview.js';
+import { renderDashboard } from './tabs/overview.js';
 
 const tabs = [
   {
