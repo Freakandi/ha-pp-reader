@@ -28,7 +28,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name="pp_reader",
-            update_interval=timedelta(minutes=5),  # Aktualisierung alle 5 Minuten
+            update_interval=timedelta(minutes=1),
         )
         self.db_path = db_path
         self.file_path = file_path
