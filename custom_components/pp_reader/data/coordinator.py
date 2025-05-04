@@ -1,87 +1,45 @@
 import logging
-import sqlite3
 from datetime import timedelta, datetime
 from pathlib import Path
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .db_access import get_accounts, get_portfolios, get_transactions
-from .sync_from_pclient import sync_from_pclient
 from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
-from ..data.reader import parse_data_portfolio
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class PPReaderCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, *, db_path: Path, file_path: Path):
-        """Initialisiere den Coordinator."""
-        self._logger = _LOGGER.getChild("coordinator")
-        
+        """Initialisiere den Coordinator.
+
+        Args:
+            hass: HomeAssistant Instanz
+            db_path: Pfad zur SQLite-Datenbank
+            file_path: Pfad zur Portfolio-Datei
+        """
         super().__init__(
             hass,
-            self._logger,
+            _LOGGER,
             name="pp_reader",
-            update_interval=timedelta(minutes=1),
-            update_method=self._async_update_data
+            update_interval=timedelta(minutes=5),  # Aktualisierung alle 5 Minuten
         )
         self.db_path = db_path
         self.file_path = file_path
         self.data = {
-            "accounts": {},
-            "portfolios": {},
+            "accounts": [],
+            "portfolios": [],
             "transactions": [],
-            "last_file_update": None,  # Umbenennung zu spezifischerem Namen
+            "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
         }
-        self._last_file_update = None  # Nur noch dieses Attribut für File-Tracking
-        
-# Debug-Info für Update-Intervall
-        self._logger.info(
-            "Coordinator initialisiert mit Update-Intervall: %s",
-            self.update_interval
-        )
 
     async def _async_update_data(self):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
-        start_time = datetime.now()
-
-        self._logger.debug(
-            "🔄 Update gestartet (Interval: %s, Letztes Update: %s, Update erfolgreich: %s)",
-            self.update_interval,
-            self.last_update,
-            self.last_update_success
-        )
         try:
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
-            last_file_update = self.file_path.stat().st_mtime
-            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei (st_mtime): %s", datetime.fromtimestamp(last_file_update))
-            _LOGGER.debug("📂 Letzter bekannter Änderungszeitstempel (_last_file_update): %s",
-                          datetime.fromtimestamp(self._last_file_update) if self._last_file_update else "None")
-
-            # Wenn sich die Datei geändert hat, synchronisiere die Datenbank
-            if self._last_file_update is None or int(last_file_update) != int(self._last_file_update):
-                _LOGGER.info("📂 Portfolio-Datei wurde geändert. Starte Synchronisation...")
-                self._last_file_update = last_file_update
-
-                # Portfolio-Datei in ein PClient-Objekt laden
-                client = await self.hass.async_add_executor_job(parse_data_portfolio, str(self.file_path))
-                if not client:
-                    _LOGGER.error("❌ Portfolio-Daten konnten nicht geladen werden.")
-                    raise UpdateFailed("Portfolio-Daten konnten nicht geladen werden")
-                else:
-                    _LOGGER.info("✅ Portfolio-Daten erfolgreich geladen.")
-
-                # DB-Synchronisation in einem eigenen Executor-Job
-                def sync_data():
-                    conn = sqlite3.connect(str(self.db_path))
-                    try:
-                        sync_from_pclient(client, conn)
-                    finally:
-                        conn.close()
-
-                await self.hass.async_add_executor_job(sync_data)
-            else:
-                _LOGGER.debug("📂 Keine Änderung der Portfolio-Datei erkannt. Synchronisation wird übersprungen.")
+            last_update = self.file_path.stat().st_mtime
+            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", datetime.fromtimestamp(last_update))
 
             # Lade Konten
             accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
@@ -129,21 +87,17 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     account.uuid: {
                         "name": account.name,
                         "balance": account_balances[account.uuid],
-                        "is_retired": account.is_retired
+                        "is_retired": account.is_retired  # Hinzufügen des is_retired-Attributs
                     }
                     for account in accounts
                 },
                 "portfolios": portfolio_data,
                 "transactions": transactions,
-                "last_file_update": datetime.fromtimestamp(last_file_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
+                "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
             }
-            _LOGGER.debug("📂 Aktualisierte Datenstruktur mit last_update: %s", self.data["last_update"])
 
             return self.data
 
         except Exception as e:
-            self._logger.error("Fehler beim Laden der Daten: %s", e)
+            _LOGGER.error("Fehler beim Laden der Daten: %s", e)
             raise UpdateFailed(f"Update fehlgeschlagen: {e}")
-        finally:
-            duration = (datetime.now() - start_time).total_seconds()
-            self._logger.debug("Update abgeschlossen in %.3f Sekunden", duration)
