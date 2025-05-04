@@ -45,10 +45,12 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         try:
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
             last_update = self.file_path.stat().st_mtime
-            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", datetime.fromtimestamp(last_update))
+            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei (st_mtime): %s", datetime.fromtimestamp(last_update))
+            _LOGGER.debug("📂 Letzter bekannter Änderungszeitstempel (_last_file_update): %s",
+                          datetime.fromtimestamp(self._last_file_update) if self._last_file_update else "None")
 
             # Wenn sich die Datei geändert hat, synchronisiere die Datenbank
-            if self._last_file_update is None or last_update != self._last_file_update:
+            if self._last_file_update is None or int(last_update) != int(self._last_file_update):
                 _LOGGER.info("📂 Portfolio-Datei wurde geändert. Starte Synchronisation...")
                 self._last_file_update = last_update
 
