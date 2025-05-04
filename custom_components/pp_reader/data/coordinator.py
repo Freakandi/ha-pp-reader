@@ -1,11 +1,15 @@
 import logging
+import sqlite3
 from datetime import timedelta, datetime
 from pathlib import Path
+from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .db_access import get_accounts, get_portfolios, get_transactions
 from ..logic.accounting import calculate_account_balance
 from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
+from .data.reader import parse_data_portfolio
+from .data.sync_from_pclient import sync_from_pclient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +37,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             "transactions": [],
             "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
         }
+        self.last_file_update = None  # Initialisierung des Attributs
 
     async def _async_update_data(self):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
@@ -41,60 +46,92 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             last_update = self.file_path.stat().st_mtime
             _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", datetime.fromtimestamp(last_update))
 
-            # Lade Konten
-            accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
-            _LOGGER.debug("🔄 Konten geladen: %d", len(accounts))
+            # Vergleiche das aktuelle Änderungsdatum mit dem gespeicherten Wert
+            if self.last_file_update is None or last_update > self.last_file_update:
+                _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
 
-            # Lade Depots
-            portfolios = await self.hass.async_add_executor_job(get_portfolios, self.db_path)
-            _LOGGER.debug("🔄 Depots geladen: %d", len(portfolios))
+                # Portfolio-Datei laden und in DB synchronisieren
+                data = await hass.async_add_executor_job(parse_data_portfolio, str(file_path))
+                if not data:
+                    raise ConfigEntryNotReady("Portfolio-Daten konnten nicht geladen werden")
+            
+                try:
+                    _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
+            
+                    # DB-Synchronisation in einem eigenen Executor-Job
+                    def sync_data():
+                        conn = sqlite3.connect(str(db_path))
+                        try:
+                            sync_from_pclient(data, conn)
+                        finally:
+                            conn.close()
+                    
+                    await hass.async_add_executor_job(sync_data)
+            
+                except Exception as e:
+                    _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
+                    raise ConfigEntryNotReady("DB-Synchronisation fehlgeschlagen")
 
-            # Lade Transaktionen
-            transactions = await self.hass.async_add_executor_job(get_transactions, self.db_path)
-            _LOGGER.debug("🔄 Transaktionen geladen: %d", len(transactions))
+                # Lade Konten
+                accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
+                _LOGGER.debug("🔄 Konten geladen: %d", len(accounts))
 
-            # Berechne Kontostände
-            account_balances = {
-                account.uuid: calculate_account_balance(account.uuid, transactions)
-                for account in accounts
-            }
+                # Lade Depots
+                portfolios = await self.hass.async_add_executor_job(get_portfolios, self.db_path)
+                _LOGGER.debug("🔄 Depots geladen: %d", len(portfolios))
 
-            # Berechne Depotwerte und Kaufsummen
-            portfolio_data = {}
-            for portfolio in portfolios:
-                reference_date = datetime.now()  # Aktuelles Datum als Referenz
-                value, count = await calculate_portfolio_value(
-                    portfolio.uuid, reference_date, self.db_path
-                )
-                purchase_sum = await calculate_purchase_sum(portfolio.uuid, self.db_path)
-                portfolio_data[portfolio.uuid] = {
-                    "name": portfolio.name,
-                    "value": value,
-                    "count": count,
-                    "purchase_sum": purchase_sum,
-                }
-                _LOGGER.debug(
-                    "💰 Depot %s: Wert %.2f € (%d Positionen), Kaufsumme %.2f €",
-                    portfolio.name,
-                    value,
-                    count,
-                    purchase_sum,
-                )
-                            
-            # Speichere die Daten
-            self.data = {
-                "accounts": {
-                    account.uuid: {
-                        "name": account.name,
-                        "balance": account_balances[account.uuid],
-                        "is_retired": account.is_retired  # Hinzufügen des is_retired-Attributs
-                    }
+                # Lade Transaktionen
+                transactions = await self.hass.async_add_executor_job(get_transactions, self.db_path)
+                _LOGGER.debug("🔄 Transaktionen geladen: %d", len(transactions))
+
+                # Berechne Kontostände
+                account_balances = {
+                    account.uuid: calculate_account_balance(account.uuid, transactions)
                     for account in accounts
-                },
-                "portfolios": portfolio_data,
-                "transactions": transactions,
-                "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
-            }
+                }
+
+                # Berechne Depotwerte und Kaufsummen
+                portfolio_data = {}
+                for portfolio in portfolios:
+                    reference_date = datetime.now()  # Aktuelles Datum als Referenz
+                    value, count = await calculate_portfolio_value(
+                        portfolio.uuid, reference_date, self.db_path
+                    )
+                    purchase_sum = await calculate_purchase_sum(portfolio.uuid, self.db_path)
+                    portfolio_data[portfolio.uuid] = {
+                        "name": portfolio.name,
+                        "value": value,
+                        "count": count,
+                        "purchase_sum": purchase_sum,
+                    }
+                    _LOGGER.debug(
+                        "💰 Depot %s: Wert %.2f € (%d Positionen), Kaufsumme %.2f €",
+                        portfolio.name,
+                        value,
+                        count,
+                        purchase_sum,
+                    )
+
+                # Speichere die Daten
+                self.data = {
+                    "accounts": {
+                        account.uuid: {
+                            "name": account.name,
+                            "balance": account_balances[account.uuid],
+                            "is_retired": account.is_retired  # Hinzufügen des is_retired-Attributs
+                        }
+                        for account in accounts
+                    },
+                    "portfolios": portfolio_data,
+                    "transactions": transactions,
+                    "last_update": datetime.fromtimestamp(last_update).isoformat(),  # Speichere den Zeitstempel als ISO-String
+                }
+
+                # Aktualisiere das gespeicherte Änderungsdatum
+                self.last_file_update = last_update
+                _LOGGER.info("Daten erfolgreich aktualisiert.")
+            else:
+                _LOGGER.debug("Keine Dateiänderung erkannt, überspringe Datenaktualisierung.")
 
             return self.data
 
