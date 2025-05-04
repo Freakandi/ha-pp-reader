@@ -27,6 +27,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name="pp_reader",
             update_interval=timedelta(minutes=1),
+            update_method=self._async_update_data
         )
         self.db_path = db_path
         self.file_path = file_path
@@ -37,7 +38,6 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
         }
         self._last_update = None  # Attribut für den letzten Änderungszeitstempel
-        self._update_interval = timedelta(minutes=1)
         self._last_file_update = None  # Initialisiere das Attribut für den letzten Änderungszeitstempel
         
     async def _async_update_data(self):
