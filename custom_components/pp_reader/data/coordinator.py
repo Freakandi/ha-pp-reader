@@ -1,4 +1,5 @@
 import logging
+import sqlite3
 from datetime import timedelta, datetime
 from pathlib import Path
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
