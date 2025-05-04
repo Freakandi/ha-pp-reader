@@ -94,10 +94,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.debug("✅ Coordinator in hass.data registriert: %s", coordinator)
 
         _LOGGER.info("Portfolio Daten erfolgreich initialisiert")
-        
-        # Scheduler aktivieren
-        coordinator.async_start()
-        _LOGGER.debug("✅ Coordinator Update-Intervall aktiviert: %s", coordinator)
 
         # Plattformen laden
         try:
