@@ -88,6 +88,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
             raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")
+        
+        # Debug-Info für Scheduler
+        _LOGGER.info(
+            "Coordinator Status - Update Interval: %s, Nächstes Update: %s",
+            coordinator.update_interval,
+            coordinator._schedule_refresh
+        )
 
         # Coordinator in hass.data speichern
         hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
