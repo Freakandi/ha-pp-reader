@@ -1,6 +1,6 @@
 import { createThemeToggle } from '../interaction/themeToggle.js';
 import { makeTable } from '../content/elements.js';
-import { prepareDashboardData } from '../data.js';
+import { prepareDashboardData } from '../data/data.js';
 
 export async function renderDashboard() {
   try {
