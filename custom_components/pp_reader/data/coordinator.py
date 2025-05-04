@@ -45,7 +45,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         _LOGGER.debug(
             "🔄 Update gestartet (Interval: %s, Letzte Aktualisierung: %s)",
             self.update_interval,
-            self.last_update_success_time
+            self.last_update_success
         )
         try:
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
