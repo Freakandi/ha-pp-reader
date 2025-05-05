@@ -30,10 +30,19 @@
 .header-card {
   display: flex;
   flex-direction: column; /* Zur besseren Kontrolle der Elemente */
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  transition: padding 0.3s ease, box-shadow 0.3s ease;
+  box-sizing: border-box;
   gap: 0.3rem;
   padding: 0.75rem 1rem; /* Einheitliches Padding */
   overflow: visible; /* Erlaubt das Anzeigen der Navigation außerhalb der Card-Grenzen */
+}
+
+.header-card.sticky {
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 .header-card h1 {
@@ -56,6 +65,15 @@
   display: flex;
   justify-content: center; /* Horizontal zentrieren */
   text-align: center; /* Text zentrieren */
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 200px;
+  overflow: hidden;
+  opacity: 1;
+}
+
+.header-card.sticky .meta {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* Falls die obige Regel nicht funktioniert, versuche direkt die Kind-Elemente zu zentrieren */
@@ -127,4 +145,13 @@ tbody tr:hover {
 
 .negative {
   color: var(--error-color, #dc2626);
+}
+
+/* Das garantiert, dass der Header immer über anderen Elementen erscheint */
+.card.header-card {
+  background: var(--card-background-color, #fff);
+}
+
+html.dark-mode .card.header-card {
+  background: #2c2c2c;
 }

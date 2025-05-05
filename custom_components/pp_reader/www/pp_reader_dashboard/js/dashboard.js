@@ -20,7 +20,9 @@ async function renderTab() {
   root.innerHTML = content;
 
   // Erst aufrufen, wenn DOM vollständig geladen ist
-  setTimeout(() => setupNavigation(), 0);
+  setTimeout(() => {
+    setupNavigation();
+  }, 0);
 }
 
 function setupNavigation() {
@@ -45,7 +47,7 @@ function setupNavigation() {
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
         </svg>
       </button>
-      <h1 style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem;">${originalTitle}</h1>
+      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem; transition: font-size 0.3s ease;">${originalTitle}</h1>
       <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
@@ -73,6 +75,9 @@ function setupNavigation() {
       renderTab();
     }
   });
+  
+  // Scroll-Verhalten hinzufügen
+  setupScrollBehavior();
   
   // ----- DOT-NAVIGATION -----
   const dotNav = document.createElement('div');
@@ -117,6 +122,49 @@ function setupNavigation() {
     navigationElements: headerCard.querySelectorAll('.nav-arrow'),
     title: headerCard.querySelector('h1')
   });
+}
+
+// Funktion für das Scroll-Verhalten
+function setupScrollBehavior() {
+  const headerCard = document.querySelector('.header-card');
+  const headerTitle = document.getElementById('headerTitle');
+  if (!headerCard || !headerTitle) return;
+  
+  const initialPaddingTop = parseInt(getComputedStyle(headerCard).paddingTop);
+  const initialPaddingBottom = parseInt(getComputedStyle(headerCard).paddingBottom);
+  const initialTitleSize = parseInt(getComputedStyle(headerTitle).fontSize);
+  
+  let lastScrollTop = 0;
+  let ticking = false;
+
+  const onScroll = () => {
+    // In einem iFrame ist window.scrollY möglicherweise nicht zuverlässig
+    // Daher verwenden wir document.documentElement oder document.body
+    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
+    
+    // Mindestens 20px scrollen, bevor die Änderung aktiviert wird
+    if (scrollTop > 20) {
+      headerCard.classList.add('sticky');
+      headerTitle.style.fontSize = (initialTitleSize * 0.85) + 'px'; // Kleinerer Titel
+    } else {
+      headerCard.classList.remove('sticky');
+      headerTitle.style.fontSize = initialTitleSize + 'px';
+    }
+    
+    lastScrollTop = scrollTop;
+    ticking = false;
+  };
+
+  // Event-Listener für scroll-Ereignis
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      window.requestAnimationFrame(onScroll);
+      ticking = true;
+    }
+  });
+  
+  // Initialer Check, falls die Seite bereits gescrollt ist
+  onScroll();
 }
 
 createThemeToggle();
