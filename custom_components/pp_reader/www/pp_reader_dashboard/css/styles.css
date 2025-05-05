@@ -44,15 +44,58 @@
 
 /* Swipe-Pfeile für die Navigation */
 .swipe-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #555;
   cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #007bff;
-  padding: 0 10px;
-  user-select: none;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.swipe-arrow::after {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-style: solid;
+  border-color: white;
+  border-width: 0 3px 3px 0;
+}
+
+.swipe-arrow.left {
+  left: 10px;
+}
+
+.swipe-arrow.right {
+  right: 10px;
+}
+
+.swipe-arrow.left::after {
+  transform: rotate(135deg);
+  margin-left: 5px;
+}
+
+.swipe-arrow.right::after {
+  transform: rotate(-45deg);
+  margin-right: 5px;
 }
 
 .swipe-arrow.disabled {
-  color: #ccc;
+  background-color: #ccc;
   cursor: default;
+}
+
+/* Dark Mode Anpassungen für Pfeile */
+html.dark-mode .swipe-arrow {
+  background-color: #777;
+}
+
+html.dark-mode .swipe-arrow.disabled {
+  background-color: #444;
 }

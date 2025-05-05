@@ -17,54 +17,37 @@ const tabs = [
 
 let currentPage = 0;
 
-function renderDotNavigation() {
-  return `
-    <div class="dot-navigation">
-      ${tabs.map((tab, index) => `
-        <span class="nav-dot ${index === currentPage ? 'active' : ''}" data-index="${index}"></span>
-      `).join('')}
-    </div>
-  `;
-}
-
 async function renderTab() {
   const tab = tabs[currentPage];
   
   // Tab-Inhalt rendern (ohne Header-Card von dashboard.js)
   let content = await tab.render();
   
-  // Punkt-Navigation nach dem Inhalt einfügen
-  // Der Tab-Inhalt sollte eine Header-Card enthalten, die wir später ansprechen können
-  content += renderDotNavigation();
-
   const root = document.querySelector("pp-reader-dashboard");
   root.innerHTML = content;
 
-  // Event-Listener für die Punkt-Navigation
-  root.querySelectorAll('.nav-dot').forEach(dot => {
-    dot.addEventListener('click', () => {
-      const index = parseInt(dot.getAttribute('data-index'), 10);
-      if (index !== currentPage) {
-        currentPage = index;
-        renderTab();
-      }
-    });
-  });
-
-  // Die erste Header-Card im Tab-Inhalt finden und Swipe-Funktionalität hinzufügen
+  // Die erste Header-Card im Tab-Inhalt finden und Navigation hinzufügen
   const headerCard = root.querySelector('.header-card');
   if (headerCard) {
+    // Dot-Navigation direkt nach der Header-Card einfügen
+    const dotNav = document.createElement('div');
+    dotNav.className = 'dot-navigation';
+    dotNav.innerHTML = tabs.map((tab, index) => `
+      <span class="nav-dot ${index === currentPage ? 'active' : ''}" data-index="${index}"></span>
+    `).join('');
+    
+    // Dot-Navigation nach der Header-Card einfügen
+    headerCard.parentNode.insertBefore(dotNav, headerCard.nextSibling);
+    
     // Navigations-Pfeile hinzufügen
-    const leftArrow = document.createElement('span');
+    const leftArrow = document.createElement('div');
     leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
-    leftArrow.innerHTML = '&lt;';
     
-    const rightArrow = document.createElement('span');
+    const rightArrow = document.createElement('div');
     rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
-    rightArrow.innerHTML = '&gt;';
     
-    // Pfeile an den Anfang und das Ende der Header-Card einfügen
-    headerCard.insertBefore(leftArrow, headerCard.firstChild);
+    // Pfeile zur Header-Card hinzufügen
+    headerCard.prepend(leftArrow);
     headerCard.appendChild(rightArrow);
     
     // Swipe-Events hinzufügen
@@ -99,7 +82,20 @@ async function renderTab() {
       }
     });
   }
+  
+  // Event-Listener für die Punkt-Navigation
+  root.querySelectorAll('.nav-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const index = parseInt(dot.getAttribute('data-index'), 10);
+      if (index !== currentPage) {
+        currentPage = index;
+        renderTab();
+      }
+    });
+  });
 }
+
+// Die renderDotNavigation Funktion kann entfernt werden, da sie nicht mehr benötigt wird
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
