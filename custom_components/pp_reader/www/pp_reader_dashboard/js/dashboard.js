@@ -30,8 +30,12 @@ function setupNavigation() {
     return;
   }
 
-  // Original-Inhalte der Header-Card sichern und entfernen
+  // Originalinhalt speichern und Meta-Informationen ermitteln
   const originalContent = headerCard.innerHTML;
+  const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
+  const metaDiv = headerCard.querySelector('.meta');
+  
+  // Header-Card leeren
   headerCard.innerHTML = '';
 
   // Header-Navigation Container erstellen
@@ -49,9 +53,9 @@ function setupNavigation() {
     }
   });
 
-  // Titel
+  // Titel neu erstellen
   const title = document.createElement('h1');
-  title.textContent = tabs[currentPage].title || "Übersicht";
+  title.textContent = originalTitle;
 
   // Rechter Pfeil
   const rightArrow = document.createElement('button');
@@ -64,11 +68,16 @@ function setupNavigation() {
     }
   });
 
-  // Navigation zusammenbauen - geänderte Reihenfolge für bessere Positionierung
+  // Navigation zusammenbauen
   navHeader.appendChild(leftArrow);
   navHeader.appendChild(title);
   navHeader.appendChild(rightArrow);
   headerCard.appendChild(navHeader);
+  
+  // Meta-Div neu hinzufügen, falls vorhanden
+  if (metaDiv) {
+    headerCard.appendChild(metaDiv);
+  }
 
   // Content-Container für Meta-Informationen erstellen
   const contentContainer = document.createElement('div');
@@ -117,6 +126,26 @@ function setupNavigation() {
       }
     }
   );
+
+  // Debug-Information
+  console.log("Navigation eingerichtet:", {
+    headerCard: headerCard,
+    navigationElements: headerCard.querySelectorAll('.nav-arrow'),
+    title: headerCard.querySelector('h1')
+  });
+
+  // Inline-Styles für Debug erzwingen
+  const titleElement = headerCard.querySelector('h1');
+  if (titleElement) {
+    titleElement.style.textAlign = 'center';
+    titleElement.style.width = '100%';
+    titleElement.style.color = 'red'; // Temporär zur Überprüfung
+  }
+
+  const leftArrowElement = headerCard.querySelector('.nav-arrow.left');
+  if (leftArrowElement) {
+    leftArrowElement.style.backgroundColor = 'blue'; // Temporär zur Überprüfung
+  }
 }
 
 createThemeToggle();

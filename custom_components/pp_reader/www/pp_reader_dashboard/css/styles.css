@@ -1,62 +1,47 @@
 /* ===== NAVIGATION HEADER ===== */
 .header-nav {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
   align-items: center;
   width: 100%;
   margin-bottom: 0.5rem;
-  position: relative;
 }
 
-/* Erzwinge die Zentrierung der Überschrift */
+/* Zentrierung der Überschrift */
 .header-nav h1 {
-  flex-grow: 1;
   margin: 0;
   padding: 0.5rem 0;
-  text-align: center !important; /* Erzwingt die Zentrierung */
+  text-align: center;
   font-size: 1.5rem;
-  position: absolute; /* Absolute Positionierung zum Überschreiben der Flexbox-Ausrichtung */
-  width: 100%; /* Volle Breite des Containers */
-  left: 0; /* Links ausrichten */
-  z-index: 1; /* Stellt sicher, dass die Überschrift sichtbar bleibt */
+  grid-column: 2;
 }
 
-/* Erzwinge Priorität für Header- und Navigationsstile */
-.header-nav h1,
+/* Navigationspfeile */
 .nav-arrow {
-  all: unset;
-  display: block;
-}
-
-/* Navigationspfeile korrekt positionieren */
-.nav-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   background-color: rgba(85, 85, 85, 0.9);
   border: none;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background-color 0.3s;
-  z-index: 2; /* Erhöhter z-index um über dem Titel zu bleiben */
-  margin: 0 0.5rem; /* Seitlicher Abstand */
 }
 
 .nav-arrow.left {
-  left: 0.5rem;
+  grid-column: 1;
 }
 
 .nav-arrow.right {
-  right: 0.5rem;
+  grid-column: 3;
 }
 
 .nav-arrow svg {
   width: 24px;
   height: 24px;
   fill: white;
-  display: block; /* Wichtig für korrekte Darstellung */
 }
 
 .nav-arrow.disabled {
