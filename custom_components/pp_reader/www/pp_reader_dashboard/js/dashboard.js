@@ -16,33 +16,6 @@ async function renderTab() {
   // Tab-Inhalt rendern
   let content = await tab.render();
 
-  // Header-Card aktualisieren
-  const headerCard = document.querySelector('.header-card');
-  if (!headerCard) {
-    console.error("Header-Card nicht gefunden! Überprüfe, ob setupHeaderCard korrekt aufgerufen wurde.");
-    return;
-  }
-
-  // Sicherstellen, dass die Header-Card-Elemente existieren
-  const titleElement = headerCard.querySelector('h1');
-  const metaDiv = headerCard.querySelector('.meta');
-
-  if (!titleElement || !metaDiv) {
-    console.error("Header-Card-Elemente (h1 oder .meta) nicht gefunden!");
-    return;
-  }
-
-  try {
-    // Asynchroner Aufruf von getHeaderContent
-    const { title, meta } = await tab.getHeaderContent();
-
-    // Inhalte aktualisieren
-    titleElement.textContent = title || 'Kein Titel';
-    metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
-  } catch (error) {
-    console.error('Fehler beim Aktualisieren der Header-Card:', error);
-  }
-
   // Tab-Inhalte einfügen
   const root = document.querySelector("pp-reader-dashboard");
   if (!root) {
@@ -65,7 +38,7 @@ async function renderTab() {
   }, 0);
 }
 
-function setupHeaderCard() {
+async function setupHeaderCard() {
   const root = document.querySelector("pp-reader-dashboard");
   if (!root) {
     console.error("pp-reader-dashboard nicht gefunden!");
@@ -75,20 +48,25 @@ function setupHeaderCard() {
   // Header-Card erstellen
   const headerCard = document.createElement('div');
   headerCard.className = 'card header-card';
-  headerCard.innerHTML = `
-    <h1></h1>
-    <div class="meta"></div>
-  `;
+
+  // Inhalte des aktuellen Tabs abrufen
+  const tab = tabs[currentPage];
+  try {
+    const { title, meta } = await tab.getHeaderContent();
+    headerCard.innerHTML = `
+      <h1>${title || 'Kein Titel'}</h1>
+      <div class="meta">${meta || ''}</div>
+    `;
+  } catch (error) {
+    console.error('Fehler beim Initialisieren der Header-Card:', error);
+    headerCard.innerHTML = `
+      <h1>Fehler</h1>
+      <div class="meta">Fehler beim Laden der Header-Inhalte</div>
+    `;
+  }
 
   // Header-Card in den DOM einfügen
   root.prepend(headerCard);
-
-  // Debugging: Überprüfen, ob die Elemente korrekt erstellt wurden
-  const titleElement = headerCard.querySelector('h1');
-  const metaDiv = headerCard.querySelector('.meta');
-  if (!titleElement || !metaDiv) {
-    console.error("Fehler beim Erstellen der Header-Card-Unterelemente (h1 oder .meta)!");
-  }
 }
 
 function setupNavigation() {
@@ -175,7 +153,7 @@ createThemeToggle();
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
-    setupHeaderCard(); // Header-Card erstellen
+    await setupHeaderCard(); // Header-Card erstellen
     renderTab(); // Ersten Tab rendern
   }
 });
