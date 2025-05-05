@@ -32,7 +32,7 @@
   flex-wrap: wrap;
   align-items: center;
   position: relative;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
 .header-card h1 {
@@ -45,7 +45,8 @@
 /* Meta-Informationen sollten in der zweiten Zeile erscheinen */
 .header-card .meta {
   flex-basis: 100%; /* Volle Breite nehmen */
-  margin-top: 0.5rem; /* Abstand zur Überschrift */
+  align-items: center;
+  margin-top: 0.3rem; /* Abstand zur Überschrift */
 }
 
 /* Footer card kann separat bleiben */

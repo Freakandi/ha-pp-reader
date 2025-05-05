@@ -92,6 +92,8 @@ async function renderTab() {
   });
 }
 
+createThemeToggle();
+
 // Die renderDotNavigation Funktion kann entfernt werden, da sie nicht mehr benötigt wird
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
