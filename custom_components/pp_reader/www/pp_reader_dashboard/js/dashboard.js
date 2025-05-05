@@ -20,9 +20,7 @@ async function renderTab() {
   root.innerHTML = content;
 
   // Erst aufrufen, wenn DOM vollständig geladen ist
-  setTimeout(() => {
-    setupNavigation();
-  }, 0);
+  setTimeout(() => setupNavigation(), 0);
 }
 
 function setupNavigation() {
@@ -39,18 +37,17 @@ function setupNavigation() {
   // Header-Card leeren
   headerCard.innerHTML = '';
 
-  // Korrekte Header-Navigation entsprechend den CSS-Regeln in styles.css erstellen
-  // WICHTIG: Der Header-Nav-Container muss exakt dem in styles.css definierten Grid entsprechen
+  // Inline-HTML für Navigation mit reinem HTML und inline-Styles
   headerCard.innerHTML = `
-    <div class="header-nav">
-      <button id="nav-left" class="nav-arrow left${currentPage <= 0 ? ' disabled' : ''}">
-        <svg viewBox="0 0 24 24">
+    <div style="display: flex; width: 100%; align-items: center; justify-content: space-between;">
+      <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
+        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
         </svg>
       </button>
-      <h1 id="headerTitle">${originalTitle}</h1>
-      <button id="nav-right" class="nav-arrow right${currentPage >= tabs.length - 1 ? ' disabled' : ''}">
-        <svg viewBox="0 0 24 24">
+      <h1 style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem;">${originalTitle}</h1>
+      <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
+        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
         </svg>
       </button>
@@ -59,31 +56,45 @@ function setupNavigation() {
   
   // Meta-Div direkt hinzufügen, wenn vorhanden
   if (metaDiv) {
-    const metaContainer = document.createElement('div');
-    metaContainer.className = 'meta';
-    metaContainer.appendChild(metaDiv.cloneNode(true));
-    headerCard.appendChild(metaContainer);
+    headerCard.appendChild(metaDiv);
   }
 
-  // Event-Listener mit { passive: true } hinzufügen (behebt die Violation)
+  // Event-Listener direkt hinzufügen
   document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
       renderTab();
     }
-  }, { passive: true });
+  });
 
   document.getElementById('nav-right')?.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab();
     }
-  }, { passive: true });
+  });
   
-  // Scroll-Verhalten hinzufügen
-  setupScrollBehavior();
+  // ----- DOT-NAVIGATION -----
+  const dotNav = document.createElement('div');
+  dotNav.className = 'dot-navigation';
+  dotNav.innerHTML = tabs.map((tab, index) => `
+    <span class="nav-dot ${index === currentPage ? 'active' : ''}" data-index="${index}"></span>
+  `).join('');
   
-  // SWIPE-FUNKTIONALITÄT - Event als passiv markieren
+  headerCard.parentNode.insertBefore(dotNav, headerCard.nextSibling);
+  
+  // Event-Listener für Dots
+  dotNav.querySelectorAll('.nav-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const index = parseInt(dot.getAttribute('data-index'), 10);
+      if (index !== currentPage) {
+        currentPage = index;
+        renderTab();
+      }
+    });
+  });
+  
+  // ----- SWIPE-FUNKTIONALITÄT -----
   addSwipeEvents(
     headerCard,
     () => { // onSwipeLeft
@@ -99,81 +110,13 @@ function setupNavigation() {
       }
     }
   );
-}
 
-// Angepasste Funktion für das Scroll-Verhalten
-function setupScrollBehavior() {
-  const headerCard = document.querySelector('.header-card');
-  const headerTitle = document.getElementById('headerTitle');
-  if (!headerCard || !headerTitle) return;
-  
-  // Initialgröße merken
-  const initialTitleSize = parseFloat(getComputedStyle(headerTitle).fontSize || '24');
-  
-  let ticking = false;
-
-  const onScroll = () => {
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
-    
-    // Debug zur Fehlersuche
-    console.log(`Scroll: ${scrollTop}, Header: ${headerCard.classList.contains('sticky')}`);
-    
-    if (scrollTop > 20) {
-      // Nur Klasse hinzufügen, wenn sie noch nicht vorhanden ist
-      if (!headerCard.classList.contains('sticky')) {
-        headerCard.classList.add('sticky');
-        console.log("Header verkleinert", headerCard.classList);
-      }
-      headerTitle.style.fontSize = `${initialTitleSize * 0.85}px`;
-    } else {
-      // Nur Klasse entfernen, wenn sie vorhanden ist
-      if (headerCard.classList.contains('sticky')) {
-        headerCard.classList.remove('sticky');
-        console.log("Header normal", headerCard.classList);
-      }
-      headerTitle.style.fontSize = `${initialTitleSize}px`;
-    }
-    
-    ticking = false;
-  };
-
-  // Event-Listener für scroll-Ereignis mit { passive: true } (behebt die Violation)
-  window.addEventListener('scroll', () => {
-    if (!ticking) {
-      window.requestAnimationFrame(onScroll);
-      ticking = true;
-    }
-  }, { passive: true });
-  
-  // Auch auf dem document registrieren für iFrame-Umgebungen
-  document.addEventListener('scroll', () => {
-    if (!ticking) {
-      window.requestAnimationFrame(onScroll);
-      ticking = true;
-    }
-  }, { passive: true });
-  
-  // Initialer Check
-  setTimeout(onScroll, 100);
-}
-
-// iFrame-kompatible Scrollbehandlung
-function setupIframeCompatibility() {
-  // Dashboard-Container mit Inline-Styles versehen
-  const dashboardElement = document.querySelector('pp-reader-dashboard');
-  if (dashboardElement) {
-    dashboardElement.style.position = 'relative';
-    dashboardElement.style.display = 'block';
-    dashboardElement.style.maxHeight = '100vh';
-    dashboardElement.style.overflowY = 'auto';
-    dashboardElement.style.overflowX = 'hidden';
-  }
-  
-  // Body- und HTML-Styles für bessere iFrame-Integration
-  document.body.style.margin = '0';
-  document.body.style.padding = '0';
-  document.body.style.overflowX = 'hidden';
-  document.documentElement.style.overflowX = 'hidden';
+  // Debug-Information
+  console.log("Navigation eingerichtet:", {
+    headerCard: headerCard,
+    navigationElements: headerCard.querySelectorAll('.nav-arrow'),
+    title: headerCard.querySelector('h1')
+  });
 }
 
 createThemeToggle();
@@ -183,6 +126,3 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     renderTab();
   }
 });
-
-// Nach der Definition aufrufen
-setupIframeCompatibility();
