@@ -1,4 +1,5 @@
 import { addSwipeEvents, goToTab } from './interaction/tab_control.js';
+import { createThemeToggle } from './interaction/themeToggle.js';
 import { renderDashboard } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js'; // Importiere den Test-Tab
 
