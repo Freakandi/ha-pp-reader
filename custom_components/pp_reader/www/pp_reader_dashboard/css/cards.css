@@ -26,8 +26,10 @@
 }
 
 /* In cards.css - Grundlegende Card-Definitionen */
+/* Header-Card mit Anpassung für Navigation */
 .header-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   position: relative;
   gap: 0.5rem;
@@ -38,6 +40,12 @@
   text-align: center;
   margin: 0;
   font-size: 1.5rem;
+}
+
+/* Meta-Informationen sollten in der zweiten Zeile erscheinen */
+.header-card .meta {
+  flex-basis: 100%; /* Volle Breite nehmen */
+  margin-top: 0.5rem; /* Abstand zur Überschrift */
 }
 
 /* Footer card kann separat bleiben */

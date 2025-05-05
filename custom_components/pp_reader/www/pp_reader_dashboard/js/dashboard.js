@@ -29,25 +29,22 @@ async function renderTab() {
   // Die erste Header-Card im Tab-Inhalt finden und Navigation hinzufügen
   const headerCard = root.querySelector('.header-card');
   if (headerCard) {
-    // Navigations-Pfeile hinzufügen
+    // Navigations-Pfeile hinzufügen - als erstes Element in die Karte
     const leftArrow = document.createElement('div');
     leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
+    headerCard.insertBefore(leftArrow, headerCard.firstChild);
     
     const rightArrow = document.createElement('div');
     rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
-    
-    // Pfeile zur Header-Card hinzufügen
-    headerCard.appendChild(leftArrow);
     headerCard.appendChild(rightArrow);
     
-    // Dot-Navigation direkt nach der Header-Card einfügen
+    // Dot-Navigation nach der Header-Card einfügen, nicht innerhalb
     const dotNav = document.createElement('div');
     dotNav.className = 'dot-navigation';
     dotNav.innerHTML = tabs.map((tab, index) => `
       <span class="nav-dot ${index === currentPage ? 'active' : ''}" data-index="${index}"></span>
     `).join('');
     
-    // Dot-Navigation nach der Header-Card einfügen
     headerCard.parentNode.insertBefore(dotNav, headerCard.nextSibling);
     
     // Swipe-Events hinzufügen
