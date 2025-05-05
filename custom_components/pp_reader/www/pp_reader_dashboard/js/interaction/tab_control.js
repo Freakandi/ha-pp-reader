@@ -8,38 +8,54 @@ export function addSwipeEvents(element, onSwipeLeft, onSwipeRight) {
   let startX = null;
 
   // Touch-Events für Mobilgeräte
-  element.addEventListener('touchstart', e => {
-    if (e.touches.length === 1) {
-      startX = e.touches[0].clientX;
-    }
-  });
+  element.addEventListener(
+    'touchstart',
+    e => {
+      if (e.touches.length === 1) {
+        startX = e.touches[0].clientX;
+      }
+    },
+    { passive: true } // Passive Listener für bessere Performance
+  );
 
-  element.addEventListener('touchend', e => {
-    if (startX === null) return;
-    const deltaX = e.changedTouches[0].clientX - startX;
-    if (deltaX < -50) {
-      onSwipeLeft();
-    } else if (deltaX > 50) {
-      onSwipeRight();
-    }
-    startX = null;
-  });
+  element.addEventListener(
+    'touchend',
+    e => {
+      if (startX === null) return;
+      const deltaX = e.changedTouches[0].clientX - startX;
+      if (deltaX < -50) {
+        onSwipeLeft();
+      } else if (deltaX > 50) {
+        onSwipeRight();
+      }
+      startX = null;
+    },
+    { passive: true } // Passive Listener für bessere Performance
+  );
 
   // Maus-Events für Desktop
-  element.addEventListener('mousedown', e => {
-    startX = e.clientX;
-  });
+  element.addEventListener(
+    'mousedown',
+    e => {
+      startX = e.clientX;
+    },
+    { passive: true } // Passive Listener für bessere Performance
+  );
 
-  element.addEventListener('mouseup', e => {
-    if (startX === null) return;
-    const deltaX = e.clientX - startX;
-    if (deltaX < -50) {
-      onSwipeLeft();
-    } else if (deltaX > 50) {
-      onSwipeRight();
-    }
-    startX = null;
-  });
+  element.addEventListener(
+    'mouseup',
+    e => {
+      if (startX === null) return;
+      const deltaX = e.clientX - startX;
+      if (deltaX < -50) {
+        onSwipeLeft();
+      } else if (deltaX > 50) {
+        onSwipeRight();
+      }
+      startX = null;
+    },
+    { passive: true } // Passive Listener für bessere Performance
+  );
 }
 
 /**
