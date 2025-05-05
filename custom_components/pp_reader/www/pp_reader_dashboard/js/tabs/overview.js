@@ -58,8 +58,8 @@ export async function renderDashboard() {
         </div>
       </div>
     `;
-  } catch (err) {
-    console.error("Fehler beim Laden des Dashboards:", err);
-    return `<p style="color:red">⚠️ Fehler beim Laden der Daten: ${err.message}</p>`;
+  } catch (error) {
+    console.error('Fehler beim Rendern des Dashboards:', error);
+    return `<div class="card"><h2>Fehler beim Laden der Daten</h2><p>${error.message}</p></div>`;
   }
 }

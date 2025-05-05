@@ -56,6 +56,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 10; /* Stellen sicher, dass die Pfeile über anderen Elementen liegen */
 }
 
 .swipe-arrow::after {
