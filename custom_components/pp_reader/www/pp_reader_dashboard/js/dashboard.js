@@ -36,14 +36,18 @@ function setupNavigation() {
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
   const metaDiv = headerCard.querySelector('.meta');
   
-  // Inline-Styles für Sticky-Verhalten direkt hinzufügen - HIER WICHTIG!
-  headerCard.style.position = 'sticky';
-  headerCard.style.top = '0';
-  headerCard.style.zIndex = '100';
-  headerCard.style.transition = 'all 0.3s ease';
-  headerCard.style.padding = '16px';  // Ausgangswert für Padding
+  // Inline-Styles für Sticky-Verhalten direkt hinzufügen
+  // Setze Position als wichtigste Eigenschaft zuerst
+  headerCard.setAttribute('style', 'position: sticky !important; top: 0 !important; z-index: 100 !important;');
+  
+  // Erweitern wir die Styles (getrennt, um sicherzustellen, dass die wichtigsten zuerst angewendet werden)
   headerCard.style.boxSizing = 'border-box';
   headerCard.style.backgroundColor = 'var(--card-background-color, white)';
+  headerCard.style.padding = '16px';
+  
+  // Originales Padding für spätere Berechnungen speichern
+  const originalPadding = '16px';
+  const minPadding = '8px 16px';
   
   // Header-Card leeren
   headerCard.innerHTML = '';
@@ -56,7 +60,7 @@ function setupNavigation() {
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
         </svg>
       </button>
-      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem; transition: font-size 0.3s ease;">${originalTitle}</h1>
+      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem;">${originalTitle}</h1>
       <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
@@ -65,20 +69,16 @@ function setupNavigation() {
     </div>
   `;
   
-  // Meta-Container erstellen mit Inline-Styles für Animation
+  // Meta-Container erstellen ohne Transitions
   const metaContainer = document.createElement('div');
   metaContainer.id = 'metaContainer';
-  metaContainer.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
-  metaContainer.style.maxHeight = '200px'; 
-  metaContainer.style.overflow = 'hidden';
-  metaContainer.style.opacity = '1';
   
   if (metaDiv) {
     metaContainer.appendChild(metaDiv);
     headerCard.appendChild(metaContainer);
   }
 
-  // Event-Listener direkt hinzufügen
+  // Event-Listener
   document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
@@ -93,30 +93,34 @@ function setupNavigation() {
     }
   });
   
-  // Direkter Scroll-Event-Listener, ohne separate Funktion
-  let lastScrollTop = 0;
-  window.addEventListener('scroll', () => {
+  // Direkte Animation ohne CSS-Transitions (für bessere Kompatibilität)
+  let isSmall = false;
+  let scrollThreshold = 20;
+  
+  window.addEventListener('scroll', function() {
     const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
     const headerTitle = document.getElementById('headerTitle');
-    const metaContainer = document.getElementById('metaContainer');
     
-    // Wenn wir nach unten scrollen und über 20px sind
-    if (scrollTop > 20) {
-      // Verkleinerte Ansicht
-      headerCard.style.padding = '8px 16px'; // Reduziertes Padding
+    // Prüfen, ob wir den Status ändern müssen
+    if (scrollTop > scrollThreshold && !isSmall) {
+      // Zu kleiner Ansicht wechseln
+      headerCard.style.padding = minPadding;
       headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
       
       if (headerTitle) {
-        headerTitle.style.fontSize = '1.2rem'; // Kleinerer Titel
+        headerTitle.style.fontSize = '1.2rem';
       }
       
       if (metaContainer) {
-        metaContainer.style.maxHeight = '0';
-        metaContainer.style.opacity = '0';
+        metaContainer.style.display = 'none';
       }
-    } else {
-      // Normale Ansicht
-      headerCard.style.padding = '16px';
+      
+      isSmall = true;
+      console.log("Header verkleinert:", {scrollTop, isSmall});
+      
+    } else if (scrollTop <= scrollThreshold && isSmall) {
+      // Zurück zur normalen Ansicht
+      headerCard.style.padding = originalPadding;
       headerCard.style.boxShadow = 'none';
       
       if (headerTitle) {
@@ -124,23 +128,12 @@ function setupNavigation() {
       }
       
       if (metaContainer) {
-        metaContainer.style.maxHeight = '200px';
-        metaContainer.style.opacity = '1';
+        metaContainer.style.display = 'block';
       }
+      
+      isSmall = false;
+      console.log("Header normal:", {scrollTop, isSmall});
     }
-    
-    // Debugging-Ausgabe hinzufügen
-    console.log("Scroll-Position:", scrollTop, "Header-Styles:", {
-      position: headerCard.style.position,
-      top: headerCard.style.top,
-      padding: headerCard.style.padding,
-      fontSize: headerTitle?.style.fontSize,
-      metaHeight: metaContainer?.style.maxHeight,
-      isSticky: window.getComputedStyle(headerCard).position === 'sticky',
-      zIndex: headerCard.style.zIndex
-    });
-    
-    lastScrollTop = scrollTop;
   });
   
   // ----- DOT-NAVIGATION -----
@@ -180,23 +173,50 @@ function setupNavigation() {
     }
   );
 
-  // Debug-Information
-  console.log("Navigation eingerichtet:", {
-    headerCard: headerCard,
-    navigationElements: headerCard.querySelectorAll('.nav-arrow'),
-    title: headerCard.querySelector('h1'),
-    position: headerCard.style.position,
-    computedPosition: window.getComputedStyle(headerCard).position
-  });
+  // Initialer Scroll-Check durchführen
+  const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
+  console.log("Initiale Scroll-Position:", scrollTop);
   
-  // Versuch, durch erneutes Setzen der Eigenschaften den Sticky-Effekt zu erzwingen
-  setTimeout(() => {
-    headerCard.style.position = '';
-    setTimeout(() => {
-      headerCard.style.position = 'sticky';
-      console.log("Position neu gesetzt:", headerCard.style.position);
-    }, 10);
-  }, 10);
+  // Als letzten Versuch: Ein Hack für iFrames in bestimmten Umgebungen
+  // Füge eine kleine Menge JavaScript hinzu, die direkt ins iFrame injiziert wird
+  const scrollScript = document.createElement('script');
+  scrollScript.innerHTML = `
+    (function() {
+      const headerCard = document.querySelector('.header-card');
+      if (!headerCard) return;
+      
+      const originalPadding = '16px';
+      const minPadding = '8px 16px';
+      const metaContainer = document.getElementById('metaContainer');
+      const headerTitle = document.getElementById('headerTitle');
+      let isSmall = false;
+      
+      function checkScroll() {
+        const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
+        
+        if (scrollTop > 20 && !isSmall) {
+          headerCard.style.padding = minPadding;
+          headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+          if (headerTitle) headerTitle.style.fontSize = '1.2rem';
+          if (metaContainer) metaContainer.style.display = 'none';
+          isSmall = true;
+        } else if (scrollTop <= 20 && isSmall) {
+          headerCard.style.padding = originalPadding;
+          headerCard.style.boxShadow = 'none';
+          if (headerTitle) headerTitle.style.fontSize = '1.5rem';
+          if (metaContainer) metaContainer.style.display = 'block';
+          isSmall = false;
+        }
+      }
+      
+      // Initialen Zustand prüfen
+      checkScroll();
+      
+      // Event-Listener
+      window.addEventListener('scroll', checkScroll);
+    })();
+  `;
+  document.body.appendChild(scrollScript);
 }
 
 // iFrame-kompatible Scrollbehandlung
