@@ -19,10 +19,14 @@ async function renderTab() {
   // Header-Card aktualisieren
   const headerCard = document.querySelector('.header-card');
   if (headerCard) {
-    const { title, meta } = tab.getHeaderContent();
-    headerCard.querySelector('h1').textContent = title;
-    const metaDiv = headerCard.querySelector('.meta');
-    metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
+    try {
+      const { title, meta } = await tab.getHeaderContent(); // Asynchroner Aufruf
+      headerCard.querySelector('h1').textContent = title;
+      const metaDiv = headerCard.querySelector('.meta');
+      metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der Header-Card:', error);
+    }
   }
 
   // Tab-Inhalte einfügen
