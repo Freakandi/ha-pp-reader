@@ -39,9 +39,9 @@ function setupNavigation() {
   // Header-Card leeren
   headerCard.innerHTML = '';
 
-  // Header-Navigation erstellen - entsprechend dem Grid-Layout in styles.css
-  // KEIN position:absolute mehr verwenden!
-  const navHTML = `
+  // Korrekte Header-Navigation entsprechend den CSS-Regeln in styles.css erstellen
+  // WICHTIG: Der Header-Nav-Container muss exakt dem in styles.css definierten Grid entsprechen
+  headerCard.innerHTML = `
     <div class="header-nav">
       <button id="nav-left" class="nav-arrow left${currentPage <= 0 ? ' disabled' : ''}">
         <svg viewBox="0 0 24 24">
@@ -57,33 +57,33 @@ function setupNavigation() {
     </div>
   `;
   
-  // Navigation in die Header-Card einfügen
-  headerCard.insertAdjacentHTML('beforeend', navHTML);
-  
   // Meta-Div direkt hinzufügen, wenn vorhanden
   if (metaDiv) {
-    headerCard.appendChild(metaDiv);
+    const metaContainer = document.createElement('div');
+    metaContainer.className = 'meta';
+    metaContainer.appendChild(metaDiv.cloneNode(true));
+    headerCard.appendChild(metaContainer);
   }
 
-  // Event-Listener direkt hinzufügen
+  // Event-Listener mit { passive: true } hinzufügen (behebt die Violation)
   document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
       renderTab();
     }
-  });
+  }, { passive: true });
 
   document.getElementById('nav-right')?.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab();
     }
-  });
+  }, { passive: true });
   
   // Scroll-Verhalten hinzufügen
   setupScrollBehavior();
   
-  // SWIPE-FUNKTIONALITÄT
+  // SWIPE-FUNKTIONALITÄT - Event als passiv markieren
   addSwipeEvents(
     headerCard,
     () => { // onSwipeLeft
@@ -101,53 +101,60 @@ function setupNavigation() {
   );
 }
 
-// Funktion für das Scroll-Verhalten
+// Angepasste Funktion für das Scroll-Verhalten
 function setupScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
   const headerTitle = document.getElementById('headerTitle');
   if (!headerCard || !headerTitle) return;
   
-  const initialTitleSize = parseInt(getComputedStyle(headerTitle).fontSize);
+  // Initialgröße merken
+  const initialTitleSize = parseFloat(getComputedStyle(headerTitle).fontSize || '24');
   
-  let lastScrollTop = 0;
   let ticking = false;
 
   const onScroll = () => {
     const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
     
-    // Zeige Debug-Info, um das Problem zu verstehen
-    console.log("Scroll erkannt:", scrollTop, "Header-Card:", headerCard.classList.contains('sticky'));
+    // Debug zur Fehlersuche
+    console.log(`Scroll: ${scrollTop}, Header: ${headerCard.classList.contains('sticky')}`);
     
-    // Mindestens 20px scrollen, bevor die Änderung aktiviert wird
     if (scrollTop > 20) {
-      // Sticky-Klasse hinzufügen (sollte durch CSS die Verkleinerung auslösen)
-      headerCard.classList.add('sticky');
-      
-      // Direkte Style-Manipulation für die Font-Größe
-      headerTitle.style.fontSize = (initialTitleSize * 0.85) + 'px';
-      
-      // Debug-Ausgabe
-      console.log("Header verkleinert", headerCard.className);
+      // Nur Klasse hinzufügen, wenn sie noch nicht vorhanden ist
+      if (!headerCard.classList.contains('sticky')) {
+        headerCard.classList.add('sticky');
+        console.log("Header verkleinert", headerCard.classList);
+      }
+      headerTitle.style.fontSize = `${initialTitleSize * 0.85}px`;
     } else {
-      headerCard.classList.remove('sticky');
-      headerTitle.style.fontSize = initialTitleSize + 'px';
-      console.log("Header normal", headerCard.className);
+      // Nur Klasse entfernen, wenn sie vorhanden ist
+      if (headerCard.classList.contains('sticky')) {
+        headerCard.classList.remove('sticky');
+        console.log("Header normal", headerCard.classList);
+      }
+      headerTitle.style.fontSize = `${initialTitleSize}px`;
     }
     
-    lastScrollTop = scrollTop;
     ticking = false;
   };
 
-  // Event-Listener für scroll-Ereignis
+  // Event-Listener für scroll-Ereignis mit { passive: true } (behebt die Violation)
   window.addEventListener('scroll', () => {
     if (!ticking) {
       window.requestAnimationFrame(onScroll);
       ticking = true;
     }
-  });
+  }, { passive: true });
   
-  // Initialer Check, falls die Seite bereits gescrollt ist
-  onScroll();
+  // Auch auf dem document registrieren für iFrame-Umgebungen
+  document.addEventListener('scroll', () => {
+    if (!ticking) {
+      window.requestAnimationFrame(onScroll);
+      ticking = true;
+    }
+  }, { passive: true });
+  
+  // Initialer Check
+  setTimeout(onScroll, 100);
 }
 
 // iFrame-kompatible Scrollbehandlung
