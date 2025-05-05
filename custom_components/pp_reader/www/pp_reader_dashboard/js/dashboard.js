@@ -31,64 +31,48 @@ function setupNavigation() {
   }
 
   // Originalinhalt speichern und Meta-Informationen ermitteln
-  const originalContent = headerCard.innerHTML;
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
   const metaDiv = headerCard.querySelector('.meta');
   
   // Header-Card leeren
   headerCard.innerHTML = '';
 
-  // Header-Navigation Container erstellen
-  const navHeader = document.createElement('div');
-  navHeader.className = 'header-nav';
+  // Inline-HTML für Navigation mit reinem HTML und inline-Styles
+  headerCard.innerHTML = `
+    <div style="display: flex; width: 100%; align-items: center; justify-content: space-between;">
+      <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
+        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
+          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+        </svg>
+      </button>
+      <h1 style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem;">${originalTitle}</h1>
+      <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
+        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
+          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+        </svg>
+      </button>
+    </div>
+  `;
+  
+  // Meta-Div direkt hinzufügen, wenn vorhanden
+  if (metaDiv) {
+    headerCard.appendChild(metaDiv);
+  }
 
-  // Linker Pfeil
-  const leftArrow = document.createElement('button');
-  leftArrow.className = `nav-arrow left ${currentPage <= 0 ? 'disabled' : ''}`;
-  leftArrow.innerHTML = '<svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
-  leftArrow.addEventListener('click', () => {
+  // Event-Listener direkt hinzufügen
+  document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
       renderTab();
     }
   });
 
-  // Titel neu erstellen
-  const title = document.createElement('h1');
-  title.textContent = originalTitle;
-
-  // Rechter Pfeil
-  const rightArrow = document.createElement('button');
-  rightArrow.className = `nav-arrow right ${currentPage >= tabs.length - 1 ? 'disabled' : ''}`;
-  rightArrow.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
-  rightArrow.addEventListener('click', () => {
+  document.getElementById('nav-right')?.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab();
     }
   });
-
-  // Navigation zusammenbauen
-  navHeader.appendChild(leftArrow);
-  navHeader.appendChild(title);
-  navHeader.appendChild(rightArrow);
-  headerCard.appendChild(navHeader);
-  
-  // Meta-Div neu hinzufügen, falls vorhanden
-  if (metaDiv) {
-    headerCard.appendChild(metaDiv);
-  }
-
-  // Content-Container für Meta-Informationen erstellen
-  const contentContainer = document.createElement('div');
-  contentContainer.className = 'header-content';
-  contentContainer.innerHTML = originalContent;
-
-  // Alles außer <h1> entfernen (Titel haben wir schon verarbeitet)
-  const h1Element = contentContainer.querySelector('h1');
-  if (h1Element) h1Element.remove();
-
-  headerCard.appendChild(contentContainer);
   
   // ----- DOT-NAVIGATION -----
   const dotNav = document.createElement('div');
@@ -133,19 +117,6 @@ function setupNavigation() {
     navigationElements: headerCard.querySelectorAll('.nav-arrow'),
     title: headerCard.querySelector('h1')
   });
-
-  // Inline-Styles für Debug erzwingen
-  const titleElement = headerCard.querySelector('h1');
-  if (titleElement) {
-    titleElement.style.textAlign = 'center';
-    titleElement.style.width = '100%';
-    titleElement.style.color = 'red'; // Temporär zur Überprüfung
-  }
-
-  const leftArrowElement = headerCard.querySelector('.nav-arrow.left');
-  if (leftArrowElement) {
-    leftArrowElement.style.backgroundColor = 'blue'; // Temporär zur Überprüfung
-  }
 }
 
 createThemeToggle();
