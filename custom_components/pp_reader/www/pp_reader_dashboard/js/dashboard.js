@@ -87,6 +87,23 @@ function setupNavigation() {
   
   // Scroll-Verhalten hinzufügen
   setupScrollBehavior();
+  
+  // ----- SWIPE-FUNKTIONALITÄT ----- 
+  addSwipeEvents(
+    headerCard,  // Jetzt ist headerCard im Scope
+    () => { // onSwipeLeft
+      if (currentPage < tabs.length - 1) {
+        currentPage++;
+        renderTab();
+      }
+    },
+    () => { // onSwipeRight
+      if (currentPage > 0) {
+        currentPage--;
+        renderTab();
+      }
+    }
+  );
 }
 
 // Funktion für das Scroll-Verhalten
@@ -130,23 +147,6 @@ function setupScrollBehavior() {
   // Initialer Check, falls die Seite bereits gescrollt ist
   onScroll();
 }
-
-  // ----- SWIPE-FUNKTIONALITÄT -----
-  addSwipeEvents(
-    headerCard,
-    () => { // onSwipeLeft
-      if (currentPage < tabs.length - 1) {
-        currentPage++;
-        renderTab();
-      }
-    },
-    () => { // onSwipeRight
-      if (currentPage > 0) {
-        currentPage--;
-        renderTab();
-      }
-    }
-  );
 
 // iFrame-kompatible Scrollbehandlung
 function setupIframeCompatibility() {
