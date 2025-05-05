@@ -1,32 +1,65 @@
-.tab-bar {
+/* ===== NAVIGATION HEADER ===== */
+.header-nav {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  position: relative;
+}
+
+.header-nav h1 {
+  flex-grow: 1;
+  margin: 0;
+  padding: 0.5rem 0;
+  text-align: center;
+  font-size: 1.5rem;
+}
+
+/* Navigationspfeile */
+.nav-arrow {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  background-color: #f0f0f0;
-  padding: 10px;
-  border-bottom: 1px solid #ccc;
-}
-
-.tab-button {
-  background: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(85, 85, 85, 0.9);
   border: none;
-  padding: 10px 20px;
   cursor: pointer;
-  font-size: 16px;
+  transition: background-color 0.3s;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
 }
 
-.tab-button.active {
-  font-weight: bold;
-  border-bottom: 2px solid #007bff;
+.nav-arrow svg {
+  width: 24px;
+  height: 24px;
+  fill: white;
 }
 
-/* Punkt-Navigation */
+.nav-arrow.disabled {
+  background-color: rgba(204, 204, 204, 0.9);
+  cursor: default;
+}
+
+/* Dark Mode Anpassungen */
+html.dark-mode .nav-arrow {
+  background-color: rgba(120, 120, 120, 0.9);
+}
+
+html.dark-mode .nav-arrow.disabled {
+  background-color: rgba(70, 70, 70, 0.9);
+}
+
+/* ===== DOT NAVIGATION ===== */
 .dot-navigation {
   display: flex;
   justify-content: center;
   gap: 8px;
   padding: 8px 0;
-  margin: 0;
-  z-index: 999 !important;
+  margin-bottom: 1rem;
 }
 
 .nav-dot {
@@ -42,62 +75,4 @@
 .nav-dot.active {
   background-color: #007bff;
   transform: scale(1.25);
-}
-
-/* Verbesserte Swipe-Pfeile */
-.swipe-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: rgba(85, 85, 85, 0.9);
-  cursor: pointer;
-  transition: background-color 0.3s;
-  margin: 0 5px;
-  flex-shrink: 0;
-}
-
-.swipe-arrow svg {
-  fill: white;
-}
-
-.swipe-arrow.left {
-  order: -1;
-}
-
-.swipe-arrow.right {
-  order: 1;
-}
-
-.swipe-arrow.disabled {
-  background-color: rgba(204, 204, 204, 0.9);
-  cursor: default;
-}
-
-/* Dark Mode Anpassungen */
-html.dark-mode .swipe-arrow {
-  background-color: rgba(120, 120, 120, 0.9);
-}
-
-html.dark-mode .swipe-arrow.disabled {
-  background-color: rgba(70, 70, 70, 0.9);
-}
-
-/* Title-Navigation-Wrapper für die Pfeilpositionierung */
-.title-navigation-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  position: relative;
-  margin-bottom: 0.5rem;
-}
-
-.title-navigation-wrapper h1 {
-  flex-grow: 1;
-  text-align: center;
-  margin: 0;
-  padding: 0;
 }

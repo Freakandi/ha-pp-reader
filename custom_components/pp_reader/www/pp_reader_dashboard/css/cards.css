@@ -32,11 +32,10 @@
   flex-direction: column; /* Zur besseren Kontrolle der Elemente */
   position: relative;
   gap: 0.3rem;
+  padding: 0.75rem 1rem; /* Einheitliches Padding */
 }
 
 .header-card h1 {
-  flex-grow: 1;
-  text-align: center;
   margin: 0;
   font-size: 1.5rem;
 }
