@@ -105,12 +105,12 @@ html.dark-mode .swipe-arrow.disabled {
   margin: 0;
 }
 
-/* Pfeile im Wrapper - keine absolute Positionierung mehr nötig */
+/* Überschreibt die allgemeinen swipe-arrow Styles im Wrapper */
 .title-navigation-wrapper .swipe-arrow {
-  position: relative !important;
+  position: static !important; /* Wichtig: Überschreibt absolute */
   top: auto !important;
   transform: none !important;
-  margin: 0 10px;
+  margin: 0 5px;
+  width: 36px !important;
+  height: 36px !important;
 }
-
-/* Die anderen Swipe-Arrow Styles bleiben gleich */

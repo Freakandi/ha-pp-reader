@@ -44,15 +44,15 @@ function addNavigation(root) {
     const metaElement = headerCard.querySelector('.meta');
     
     if (titleElement && metaElement) {
-      // Beide Elemente aus der Header-Card entfernen
+      // Elemente entfernen und neu strukturieren
       titleElement.remove();
       metaElement.remove();
       
-      // Wrapper für die Navigation und den Titel erstellen
+      // Wrapper für Navigation erstellen
       const titleNavWrapper = document.createElement('div');
       titleNavWrapper.className = 'title-navigation-wrapper';
       
-      // Pfeile erstellen
+      // Navigations-Buttons
       const leftArrow = document.createElement('div');
       leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
       leftArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
@@ -61,16 +61,16 @@ function addNavigation(root) {
       rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
       rightArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
       
-      // Alles zusammensetzen
+      // Wrapper zusammenbauen
       titleNavWrapper.appendChild(leftArrow);
       titleNavWrapper.appendChild(titleElement);
       titleNavWrapper.appendChild(rightArrow);
       
-      // Wrapper und Meta-Info wieder in die Header-Card einfügen
-      headerCard.appendChild(titleNavWrapper);
+      // Alles wieder in die Card einfügen
+      headerCard.insertBefore(titleNavWrapper, headerCard.firstChild);
       headerCard.appendChild(metaElement);
       
-      // Klick-Events für die Pfeile
+      // Event-Handler hinzufügen...
       leftArrow.addEventListener('click', () => {
         if (currentPage > 0) {
           currentPage--;
