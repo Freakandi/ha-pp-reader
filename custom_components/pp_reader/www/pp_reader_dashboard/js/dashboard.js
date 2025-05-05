@@ -36,12 +36,14 @@ function setupNavigation() {
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
   const metaDiv = headerCard.querySelector('.meta');
   
-  // Inline-Styles für Sticky-Verhalten direkt hinzufügen
+  // Inline-Styles für Sticky-Verhalten direkt hinzufügen - HIER WICHTIG!
   headerCard.style.position = 'sticky';
   headerCard.style.top = '0';
   headerCard.style.zIndex = '100';
-  headerCard.style.transition = 'padding 0.3s ease, box-shadow 0.3s ease';
+  headerCard.style.transition = 'all 0.3s ease';
+  headerCard.style.padding = '16px';  // Ausgangswert für Padding
   headerCard.style.boxSizing = 'border-box';
+  headerCard.style.backgroundColor = 'var(--card-background-color, white)';
   
   // Header-Card leeren
   headerCard.innerHTML = '';
@@ -64,14 +66,14 @@ function setupNavigation() {
   `;
   
   // Meta-Container erstellen mit Inline-Styles für Animation
+  const metaContainer = document.createElement('div');
+  metaContainer.id = 'metaContainer';
+  metaContainer.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+  metaContainer.style.maxHeight = '200px'; 
+  metaContainer.style.overflow = 'hidden';
+  metaContainer.style.opacity = '1';
+  
   if (metaDiv) {
-    const metaContainer = document.createElement('div');
-    metaContainer.id = 'metaContainer';
-    metaContainer.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
-    metaContainer.style.maxHeight = '200px';
-    metaContainer.style.overflow = 'hidden';
-    metaContainer.style.opacity = '1';
-    
     metaContainer.appendChild(metaDiv);
     headerCard.appendChild(metaContainer);
   }
@@ -91,8 +93,55 @@ function setupNavigation() {
     }
   });
   
-  // Scroll-Verhalten hinzufügen
-  setupScrollBehavior();
+  // Direkter Scroll-Event-Listener, ohne separate Funktion
+  let lastScrollTop = 0;
+  window.addEventListener('scroll', () => {
+    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
+    const headerTitle = document.getElementById('headerTitle');
+    const metaContainer = document.getElementById('metaContainer');
+    
+    // Wenn wir nach unten scrollen und über 20px sind
+    if (scrollTop > 20) {
+      // Verkleinerte Ansicht
+      headerCard.style.padding = '8px 16px'; // Reduziertes Padding
+      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+      
+      if (headerTitle) {
+        headerTitle.style.fontSize = '1.2rem'; // Kleinerer Titel
+      }
+      
+      if (metaContainer) {
+        metaContainer.style.maxHeight = '0';
+        metaContainer.style.opacity = '0';
+      }
+    } else {
+      // Normale Ansicht
+      headerCard.style.padding = '16px';
+      headerCard.style.boxShadow = 'none';
+      
+      if (headerTitle) {
+        headerTitle.style.fontSize = '1.5rem';
+      }
+      
+      if (metaContainer) {
+        metaContainer.style.maxHeight = '200px';
+        metaContainer.style.opacity = '1';
+      }
+    }
+    
+    // Debugging-Ausgabe hinzufügen
+    console.log("Scroll-Position:", scrollTop, "Header-Styles:", {
+      position: headerCard.style.position,
+      top: headerCard.style.top,
+      padding: headerCard.style.padding,
+      fontSize: headerTitle?.style.fontSize,
+      metaHeight: metaContainer?.style.maxHeight,
+      isSticky: window.getComputedStyle(headerCard).position === 'sticky',
+      zIndex: headerCard.style.zIndex
+    });
+    
+    lastScrollTop = scrollTop;
+  });
   
   // ----- DOT-NAVIGATION -----
   const dotNav = document.createElement('div');
@@ -135,69 +184,19 @@ function setupNavigation() {
   console.log("Navigation eingerichtet:", {
     headerCard: headerCard,
     navigationElements: headerCard.querySelectorAll('.nav-arrow'),
-    title: headerCard.querySelector('h1')
-  });
-}
-
-// Verbesserte Funktion für das Scroll-Verhalten
-function setupScrollBehavior() {
-  const headerCard = document.querySelector('.header-card');
-  const headerTitle = document.getElementById('headerTitle');
-  const metaContainer = document.getElementById('metaContainer');
-  
-  if (!headerCard || !headerTitle) return;
-  
-  const initialPadding = parseFloat(getComputedStyle(headerCard).padding || '16px');
-  const initialTitleSize = parseFloat(getComputedStyle(headerTitle).fontSize || '24px');
-  
-  // Fallback-Werte, falls die CSS-Berechnung fehlschlägt
-  const basePadding = initialPadding || 16;
-  const baseFontSize = initialTitleSize || 24;
-  
-  let ticking = false;
-
-  const onScroll = () => {
-    // In einem iFrame ist window.scrollY nicht immer verfügbar
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
-    
-    // Mindestens 20px scrollen, bevor die Änderung aktiviert wird
-    if (scrollTop > 20) {
-      // Verkleinerten Zustand anwenden
-      headerCard.style.padding = `${basePadding * 0.5}px`;
-      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-      headerTitle.style.fontSize = `${baseFontSize * 0.85}px`;
-      
-      // Meta-Info ausblenden
-      if (metaContainer) {
-        metaContainer.style.maxHeight = '0';
-        metaContainer.style.opacity = '0';
-      }
-    } else {
-      // Normalen Zustand wiederherstellen
-      headerCard.style.padding = `${basePadding}px`;
-      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
-      headerTitle.style.fontSize = `${baseFontSize}px`;
-      
-      // Meta-Info anzeigen
-      if (metaContainer) {
-        metaContainer.style.maxHeight = '200px';
-        metaContainer.style.opacity = '1';
-      }
-    }
-    
-    ticking = false;
-  };
-
-  // Scroll-Event mit Debouncing
-  window.addEventListener('scroll', () => {
-    if (!ticking) {
-      window.requestAnimationFrame(onScroll);
-      ticking = true;
-    }
+    title: headerCard.querySelector('h1'),
+    position: headerCard.style.position,
+    computedPosition: window.getComputedStyle(headerCard).position
   });
   
-  // Initialer Check beim Laden
-  onScroll();
+  // Versuch, durch erneutes Setzen der Eigenschaften den Sticky-Effekt zu erzwingen
+  setTimeout(() => {
+    headerCard.style.position = '';
+    setTimeout(() => {
+      headerCard.style.position = 'sticky';
+      console.log("Position neu gesetzt:", headerCard.style.position);
+    }, 10);
+  }, 10);
 }
 
 // iFrame-kompatible Scrollbehandlung
