@@ -36,18 +36,13 @@ function setupNavigation() {
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
   const metaDiv = headerCard.querySelector('.meta');
   
-  // Inline-Styles für Sticky-Verhalten direkt hinzufügen
-  // Setze Position als wichtigste Eigenschaft zuerst
+  // Position als wichtigste Eigenschaft zuerst setzen (für sticky)
   headerCard.setAttribute('style', 'position: sticky !important; top: 0 !important; z-index: 100 !important;');
   
-  // Erweitern wir die Styles (getrennt, um sicherzustellen, dass die wichtigsten zuerst angewendet werden)
+  // Erweitern wir die Styles
   headerCard.style.boxSizing = 'border-box';
   headerCard.style.backgroundColor = 'var(--card-background-color, white)';
   headerCard.style.padding = '16px';
-  
-  // Originales Padding für spätere Berechnungen speichern
-  const originalPadding = '16px';
-  const minPadding = '8px 16px';
   
   // Header-Card leeren
   headerCard.innerHTML = '';
@@ -69,9 +64,10 @@ function setupNavigation() {
     </div>
   `;
   
-  // Meta-Container erstellen ohne Transitions
+  // Meta-Container erstellen
   const metaContainer = document.createElement('div');
   metaContainer.id = 'metaContainer';
+  metaContainer.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
   
   if (metaDiv) {
     metaContainer.appendChild(metaDiv);
@@ -93,48 +89,8 @@ function setupNavigation() {
     }
   });
   
-  // Direkte Animation ohne CSS-Transitions (für bessere Kompatibilität)
-  let isSmall = false;
-  let scrollThreshold = 20;
-  
-  window.addEventListener('scroll', function() {
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
-    const headerTitle = document.getElementById('headerTitle');
-    
-    // Prüfen, ob wir den Status ändern müssen
-    if (scrollTop > scrollThreshold && !isSmall) {
-      // Zu kleiner Ansicht wechseln
-      headerCard.style.padding = minPadding;
-      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-      
-      if (headerTitle) {
-        headerTitle.style.fontSize = '1.2rem';
-      }
-      
-      if (metaContainer) {
-        metaContainer.style.display = 'none';
-      }
-      
-      isSmall = true;
-      console.log("Header verkleinert:", {scrollTop, isSmall});
-      
-    } else if (scrollTop <= scrollThreshold && isSmall) {
-      // Zurück zur normalen Ansicht
-      headerCard.style.padding = originalPadding;
-      headerCard.style.boxShadow = 'none';
-      
-      if (headerTitle) {
-        headerTitle.style.fontSize = '1.5rem';
-      }
-      
-      if (metaContainer) {
-        metaContainer.style.display = 'block';
-      }
-      
-      isSmall = false;
-      console.log("Header normal:", {scrollTop, isSmall});
-    }
-  });
+  // Verbinde mit erfolgreichem Verkleinerungscode
+  setupScrollBehavior();
   
   // ----- DOT-NAVIGATION -----
   const dotNav = document.createElement('div');
@@ -172,51 +128,90 @@ function setupNavigation() {
       }
     }
   );
+}
 
-  // Initialer Scroll-Check durchführen
-  const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
-  console.log("Initiale Scroll-Position:", scrollTop);
+// Funktion mit dem erfolgreichen Verkleinerungscode
+function setupScrollBehavior() {
+  const headerCard = document.querySelector('.header-card');
+  const headerTitle = document.getElementById('headerTitle');
+  const metaContainer = document.getElementById('metaContainer');
   
-  // Als letzten Versuch: Ein Hack für iFrames in bestimmten Umgebungen
-  // Füge eine kleine Menge JavaScript hinzu, die direkt ins iFrame injiziert wird
-  const scrollScript = document.createElement('script');
-  scrollScript.innerHTML = `
-    (function() {
-      const headerCard = document.querySelector('.header-card');
-      if (!headerCard) return;
+  if (!headerCard || !headerTitle) return;
+  
+  const initialPaddingTop = parseInt(getComputedStyle(headerCard).paddingTop || '16');
+  const initialPaddingBottom = parseInt(getComputedStyle(headerCard).paddingBottom || '16');
+  const initialTitleSize = parseInt(getComputedStyle(headerTitle).fontSize || '24');
+  
+  let lastScrollTop = 0;
+  let ticking = false;
+
+  const onScroll = () => {
+    // In einem iFrame ist window.scrollY möglicherweise nicht zuverlässig
+    // Daher verwenden wir document.documentElement oder document.body
+    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
+    
+    // Mindestens 20px scrollen, bevor die Änderung aktiviert wird
+    if (scrollTop > 20) {
+      // Header verkleinern
+      headerCard.style.padding = `${Math.max(8, initialPaddingTop/2)}px ${initialPaddingTop}px`;
+      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+      headerTitle.style.fontSize = `${initialTitleSize * 0.85}px`;
       
-      const originalPadding = '16px';
-      const minPadding = '8px 16px';
-      const metaContainer = document.getElementById('metaContainer');
-      const headerTitle = document.getElementById('headerTitle');
-      let isSmall = false;
-      
-      function checkScroll() {
-        const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
-        
-        if (scrollTop > 20 && !isSmall) {
-          headerCard.style.padding = minPadding;
-          headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-          if (headerTitle) headerTitle.style.fontSize = '1.2rem';
-          if (metaContainer) metaContainer.style.display = 'none';
-          isSmall = true;
-        } else if (scrollTop <= 20 && isSmall) {
-          headerCard.style.padding = originalPadding;
-          headerCard.style.boxShadow = 'none';
-          if (headerTitle) headerTitle.style.fontSize = '1.5rem';
-          if (metaContainer) metaContainer.style.display = 'block';
-          isSmall = false;
-        }
+      // Meta-Container ausblenden
+      if (metaContainer) {
+        metaContainer.style.maxHeight = '0';
+        metaContainer.style.opacity = '0';
+        setTimeout(() => {
+          metaContainer.style.display = 'none';
+        }, 300);
       }
       
-      // Initialen Zustand prüfen
-      checkScroll();
+    } else {
+      // Header wieder vergrößern
+      headerCard.style.padding = `${initialPaddingTop}px ${initialPaddingTop}px`;
+      headerCard.style.boxShadow = 'none';
+      headerTitle.style.fontSize = `${initialTitleSize}px`;
       
-      // Event-Listener
-      window.addEventListener('scroll', checkScroll);
-    })();
-  `;
-  document.body.appendChild(scrollScript);
+      // Meta-Container wieder einblenden
+      if (metaContainer) {
+        metaContainer.style.display = 'block';
+        // Kurze Verzögerung für bessere Animation
+        setTimeout(() => {
+          metaContainer.style.maxHeight = '200px';
+          metaContainer.style.opacity = '1';
+        }, 10);
+      }
+    }
+    
+    lastScrollTop = scrollTop;
+    ticking = false;
+  };
+
+  // Event-Listener für scroll-Ereignis
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      window.requestAnimationFrame(onScroll);
+      ticking = true;
+    }
+  });
+  
+  // Initialer Check, falls die Seite bereits gescrollt ist
+  onScroll();
+  
+  // Debug-Ausgaben
+  console.log("ScrollBehavior eingerichtet:", {
+    headerCard: headerCard,
+    headerPositions: {
+      position: getComputedStyle(headerCard).position,
+      top: getComputedStyle(headerCard).top,
+      zIndex: getComputedStyle(headerCard).zIndex
+    },
+    initialValues: {
+      paddingTop: initialPaddingTop,
+      paddingBottom: initialPaddingBottom,
+      titleSize: initialTitleSize
+    }
+  });
 }
 
 // iFrame-kompatible Scrollbehandlung
