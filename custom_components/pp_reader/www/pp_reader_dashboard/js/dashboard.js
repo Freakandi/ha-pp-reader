@@ -23,18 +23,18 @@ async function renderTab() {
     return;
   }
 
+  // Sicherstellen, dass die Header-Card-Elemente existieren
+  const titleElement = headerCard.querySelector('h1');
+  const metaDiv = headerCard.querySelector('.meta');
+
+  if (!titleElement || !metaDiv) {
+    console.error("Header-Card-Elemente (h1 oder .meta) nicht gefunden!");
+    return;
+  }
+
   try {
     // Asynchroner Aufruf von getHeaderContent
     const { title, meta } = await tab.getHeaderContent();
-
-    // Sicherstellen, dass die Header-Card-Elemente existieren
-    const titleElement = headerCard.querySelector('h1');
-    const metaDiv = headerCard.querySelector('.meta');
-
-    if (!titleElement || !metaDiv) {
-      console.error("Header-Card-Elemente (h1 oder .meta) nicht gefunden!");
-      return;
-    }
 
     // Inhalte aktualisieren
     titleElement.textContent = title || 'Kein Titel';
@@ -72,13 +72,23 @@ function setupHeaderCard() {
     return;
   }
 
+  // Header-Card erstellen
   const headerCard = document.createElement('div');
   headerCard.className = 'card header-card';
   headerCard.innerHTML = `
     <h1></h1>
     <div class="meta"></div>
   `;
+
+  // Header-Card in den DOM einfügen
   root.prepend(headerCard);
+
+  // Debugging: Überprüfen, ob die Elemente korrekt erstellt wurden
+  const titleElement = headerCard.querySelector('h1');
+  const metaDiv = headerCard.querySelector('.meta');
+  if (!titleElement || !metaDiv) {
+    console.error("Fehler beim Erstellen der Header-Card-Unterelemente (h1 oder .meta)!");
+  }
 }
 
 function setupNavigation() {
