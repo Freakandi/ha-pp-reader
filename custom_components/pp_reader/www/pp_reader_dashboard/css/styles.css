@@ -8,15 +8,16 @@
   position: relative;
 }
 
+/* Zentrierung der Überschrift */
 .header-nav h1 {
   flex-grow: 1;
   margin: 0;
   padding: 0.5rem 0;
-  text-align: center;
+  text-align: center; /* Zentriert die Überschrift */
   font-size: 1.5rem;
 }
 
-/* Navigationspfeile */
+/* Navigationspfeile korrekt positionieren */
 .nav-arrow {
   display: flex;
   align-items: center;
@@ -31,12 +32,23 @@
   flex-shrink: 0;
   padding: 0;
   margin: 0;
+  position: absolute; /* Positionierung relativ zur Karte */
+  top: 50%; /* Vertikale Zentrierung */
+  transform: translateY(-50%);
+}
+
+.nav-arrow.left {
+  left: 0.5rem; /* Abstand vom linken Rand */
+}
+
+.nav-arrow.right {
+  right: 0.5rem; /* Abstand vom rechten Rand */
 }
 
 .nav-arrow svg {
   width: 24px;
   height: 24px;
-  fill: white;
+  fill: white; /* Farbe der Pfeile */
 }
 
 .nav-arrow.disabled {

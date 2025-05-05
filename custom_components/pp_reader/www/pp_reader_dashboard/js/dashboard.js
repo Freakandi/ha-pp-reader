@@ -31,15 +31,14 @@ function setupNavigation() {
     return;
   }
 
-  // ----- NAVIGATION-HEADER ERSTELLEN -----
   // Original-Inhalte der Header-Card sichern und entfernen
   const originalContent = headerCard.innerHTML;
   headerCard.innerHTML = '';
-  
+
   // Header-Navigation Container erstellen
   const navHeader = document.createElement('div');
   navHeader.className = 'header-nav';
-  
+
   // Linker Pfeil
   const leftArrow = document.createElement('button');
   leftArrow.className = `nav-arrow left ${currentPage <= 0 ? 'disabled' : ''}`;
@@ -50,11 +49,11 @@ function setupNavigation() {
       renderTab();
     }
   });
-  
+
   // Titel
   const title = document.createElement('h1');
   title.textContent = tabs[currentPage].title || "Übersicht";
-  
+
   // Rechter Pfeil
   const rightArrow = document.createElement('button');
   rightArrow.className = `nav-arrow right ${currentPage >= tabs.length - 1 ? 'disabled' : ''}`;
@@ -65,22 +64,22 @@ function setupNavigation() {
       renderTab();
     }
   });
-  
+
   // Navigation zusammenbauen
   navHeader.appendChild(leftArrow);
   navHeader.appendChild(title);
   navHeader.appendChild(rightArrow);
   headerCard.appendChild(navHeader);
-  
+
   // Content-Container für Meta-Informationen erstellen
   const contentContainer = document.createElement('div');
   contentContainer.className = 'header-content';
   contentContainer.innerHTML = originalContent;
-  
+
   // Alles außer <h1> behalten (Titel haben wir schon verarbeitet)
   const h1Element = contentContainer.querySelector('h1');
   if (h1Element) h1Element.remove();
-  
+
   headerCard.appendChild(contentContainer);
   
   // ----- DOT-NAVIGATION -----
