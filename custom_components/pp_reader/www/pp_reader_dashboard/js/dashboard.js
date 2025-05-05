@@ -36,6 +36,13 @@ function setupNavigation() {
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
   const metaDiv = headerCard.querySelector('.meta');
   
+  // Inline-Styles für Sticky-Verhalten direkt hinzufügen
+  headerCard.style.position = 'sticky';
+  headerCard.style.top = '0';
+  headerCard.style.zIndex = '100';
+  headerCard.style.transition = 'padding 0.3s ease, box-shadow 0.3s ease';
+  headerCard.style.boxSizing = 'border-box';
+  
   // Header-Card leeren
   headerCard.innerHTML = '';
 
@@ -56,9 +63,17 @@ function setupNavigation() {
     </div>
   `;
   
-  // Meta-Div direkt hinzufügen, wenn vorhanden
+  // Meta-Container erstellen mit Inline-Styles für Animation
   if (metaDiv) {
-    headerCard.appendChild(metaDiv);
+    const metaContainer = document.createElement('div');
+    metaContainer.id = 'metaContainer';
+    metaContainer.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+    metaContainer.style.maxHeight = '200px';
+    metaContainer.style.overflow = 'hidden';
+    metaContainer.style.opacity = '1';
+    
+    metaContainer.appendChild(metaDiv);
+    headerCard.appendChild(metaContainer);
   }
 
   // Event-Listener direkt hinzufügen
@@ -124,38 +139,56 @@ function setupNavigation() {
   });
 }
 
-// Funktion für das Scroll-Verhalten
+// Verbesserte Funktion für das Scroll-Verhalten
 function setupScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
   const headerTitle = document.getElementById('headerTitle');
+  const metaContainer = document.getElementById('metaContainer');
+  
   if (!headerCard || !headerTitle) return;
   
-  const initialPaddingTop = parseInt(getComputedStyle(headerCard).paddingTop);
-  const initialPaddingBottom = parseInt(getComputedStyle(headerCard).paddingBottom);
-  const initialTitleSize = parseInt(getComputedStyle(headerTitle).fontSize);
+  const initialPadding = parseFloat(getComputedStyle(headerCard).padding || '16px');
+  const initialTitleSize = parseFloat(getComputedStyle(headerTitle).fontSize || '24px');
   
-  let lastScrollTop = 0;
+  // Fallback-Werte, falls die CSS-Berechnung fehlschlägt
+  const basePadding = initialPadding || 16;
+  const baseFontSize = initialTitleSize || 24;
+  
   let ticking = false;
 
   const onScroll = () => {
-    // In einem iFrame ist window.scrollY möglicherweise nicht zuverlässig
-    // Daher verwenden wir document.documentElement oder document.body
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
+    // In einem iFrame ist window.scrollY nicht immer verfügbar
+    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY || 0;
     
     // Mindestens 20px scrollen, bevor die Änderung aktiviert wird
     if (scrollTop > 20) {
-      headerCard.classList.add('sticky');
-      headerTitle.style.fontSize = (initialTitleSize * 0.85) + 'px'; // Kleinerer Titel
+      // Verkleinerten Zustand anwenden
+      headerCard.style.padding = `${basePadding * 0.5}px`;
+      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+      headerTitle.style.fontSize = `${baseFontSize * 0.85}px`;
+      
+      // Meta-Info ausblenden
+      if (metaContainer) {
+        metaContainer.style.maxHeight = '0';
+        metaContainer.style.opacity = '0';
+      }
     } else {
-      headerCard.classList.remove('sticky');
-      headerTitle.style.fontSize = initialTitleSize + 'px';
+      // Normalen Zustand wiederherstellen
+      headerCard.style.padding = `${basePadding}px`;
+      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+      headerTitle.style.fontSize = `${baseFontSize}px`;
+      
+      // Meta-Info anzeigen
+      if (metaContainer) {
+        metaContainer.style.maxHeight = '200px';
+        metaContainer.style.opacity = '1';
+      }
     }
     
-    lastScrollTop = scrollTop;
     ticking = false;
   };
 
-  // Event-Listener für scroll-Ereignis
+  // Scroll-Event mit Debouncing
   window.addEventListener('scroll', () => {
     if (!ticking) {
       window.requestAnimationFrame(onScroll);
@@ -163,8 +196,27 @@ function setupScrollBehavior() {
     }
   });
   
-  // Initialer Check, falls die Seite bereits gescrollt ist
+  // Initialer Check beim Laden
   onScroll();
+}
+
+// iFrame-kompatible Scrollbehandlung
+function setupIframeCompatibility() {
+  // Dashboard-Container mit Inline-Styles versehen
+  const dashboardElement = document.querySelector('pp-reader-dashboard');
+  if (dashboardElement) {
+    dashboardElement.style.position = 'relative';
+    dashboardElement.style.display = 'block';
+    dashboardElement.style.maxHeight = '100vh';
+    dashboardElement.style.overflowY = 'auto';
+    dashboardElement.style.overflowX = 'hidden';
+  }
+  
+  // Body- und HTML-Styles für bessere iFrame-Integration
+  document.body.style.margin = '0';
+  document.body.style.padding = '0';
+  document.body.style.overflowX = 'hidden';
+  document.documentElement.style.overflowX = 'hidden';
 }
 
 createThemeToggle();
@@ -174,3 +226,6 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     renderTab();
   }
 });
+
+// Nach der Definition aufrufen
+setupIframeCompatibility();
