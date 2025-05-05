@@ -23,7 +23,6 @@ export async function renderDashboard() {
     return `
       <div class="card header-card">
         <h1>Übersicht</h1>
-        <div style="width: 100%;"></div>
         <div class="meta">
           <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})}&nbsp;€</strong></div>
         </div>

@@ -29,8 +29,7 @@
 /* Header-Card mit Anpassung für Navigation */
 .header-card {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column; /* Zur besseren Kontrolle der Elemente */
   position: relative;
   gap: 0.3rem;
 }
@@ -42,9 +41,10 @@
   font-size: 1.5rem;
 }
 
-/* Meta-Informationen sollten in der zweiten Zeile erscheinen */
+/* Meta-Informationen jetzt in einer eigenen Zeile */
 .header-card .meta {
-  flex-basis: 100%; /* Volle Breite nehmen */
+  text-align: center;
+  width: 100%;
   margin-top: 0.3rem; /* Abstand zur Überschrift */
   display: flex;
   justify-content: center; /* Horizontal zentrieren */
@@ -54,7 +54,6 @@
 /* Falls die obige Regel nicht funktioniert, versuche direkt die Kind-Elemente zu zentrieren */
 .header-card .meta > div {
   text-align: center;
-  width: 100%;
 }
 
 /* Footer card kann separat bleiben */

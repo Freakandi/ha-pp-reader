@@ -19,29 +19,29 @@
   border-bottom: 2px solid #007bff;
 }
 
-/* Verbesserte Punkt-Navigation */
+/* Punkt-Navigation */
 .dot-navigation {
-  display: flex !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  padding: 8px 0 !important;
-  margin: 0 !important;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 0;
+  margin: 0;
   z-index: 999 !important;
 }
 
 .nav-dot {
-  width: 10px !important;
-  height: 10px !important;
-  border-radius: 50% !important;
-  background-color: #ccc !important;
-  cursor: pointer !important;
-  transition: background-color 0.3s, transform 0.3s !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ccc;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 .nav-dot.active {
-  background-color: #007bff !important;
-  transform: scale(1.25) !important;
+  background-color: #007bff;
+  transform: scale(1.25);
 }
 
 /* Verbesserte Swipe-Pfeile */
@@ -60,6 +60,7 @@
   justify-content: center !important;
   z-index: 1000 !important; /* Sehr hoher z-index */
   color: white !important;
+  flex-shrink: 0;
 }
 
 .swipe-arrow svg {
@@ -79,13 +80,13 @@
   cursor: default !important;
 }
 
-/* Dark Mode Anpassungen für Pfeile */
+/* Dark Mode Anpassungen */
 html.dark-mode .swipe-arrow {
-  background-color: #777;
+  background-color: rgba(120, 120, 120, 0.9);
 }
 
 html.dark-mode .swipe-arrow.disabled {
-  background-color: #444;
+  background-color: rgba(70, 70, 70, 0.9);
 }
 
 /* Title-Navigation-Wrapper für die Pfeilpositionierung */
@@ -95,6 +96,7 @@ html.dark-mode .swipe-arrow.disabled {
   justify-content: space-between;
   width: 100%;
   position: relative;
+  margin-bottom: 0.5rem;
 }
 
 .title-navigation-wrapper h1 {
