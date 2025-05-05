@@ -12,26 +12,40 @@ let currentPage = 0;
 
 async function renderTab() {
   const tab = tabs[currentPage];
-  
+
   // Tab-Inhalt rendern
   let content = await tab.render();
-  
+
   // Header-Card aktualisieren
   const headerCard = document.querySelector('.header-card');
-  if (headerCard) {
-    try {
-      const { title, meta } = await tab.getHeaderContent(); // Asynchroner Aufruf
-      headerCard.querySelector('h1').textContent = title;
-      const metaDiv = headerCard.querySelector('.meta');
-      metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
-    } catch (error) {
-      console.error('Fehler beim Aktualisieren der Header-Card:', error);
-    }
+  if (!headerCard) {
+    console.error("Header-Card nicht gefunden! Überprüfe, ob setupHeaderCard korrekt aufgerufen wurde.");
+    return;
+  }
+
+  try {
+    const { title, meta } = await tab.getHeaderContent(); // Asynchroner Aufruf
+    headerCard.querySelector('h1').textContent = title;
+    const metaDiv = headerCard.querySelector('.meta');
+    metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren der Header-Card:', error);
   }
 
   // Tab-Inhalte einfügen
   const root = document.querySelector("pp-reader-dashboard");
-  root.querySelector('.tab-content').innerHTML = content;
+  if (!root) {
+    console.error("pp-reader-dashboard nicht gefunden!");
+    return;
+  }
+
+  const tabContent = root.querySelector('.tab-content');
+  if (!tabContent) {
+    console.error("Tab-Content-Container nicht gefunden!");
+    return;
+  }
+
+  tabContent.innerHTML = content;
 
   // Navigation und Sticky-Header aktivieren
   setTimeout(() => {
@@ -42,13 +56,18 @@ async function renderTab() {
 
 function setupHeaderCard() {
   const root = document.querySelector("pp-reader-dashboard");
+  if (!root) {
+    console.error("pp-reader-dashboard nicht gefunden!");
+    return;
+  }
+
   const headerCard = document.createElement('div');
   headerCard.className = 'card header-card';
   headerCard.innerHTML = `
     <h1></h1>
     <div class="meta"></div>
   `;
-  root.prepend(headerCard); // Header-Card an den Anfang einfügen
+  root.prepend(headerCard);
 }
 
 function setupNavigation() {
