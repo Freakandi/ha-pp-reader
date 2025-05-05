@@ -15,7 +15,9 @@
   padding: 0.5rem 0;
   text-align: center !important; /* Erzwingt die Zentrierung */
   font-size: 1.5rem;
-  position: relative; /* Verhindert Konflikte mit absoluten Positionierungen */
+  position: absolute; /* Absolute Positionierung zum Überschreiben der Flexbox-Ausrichtung */
+  width: 100%; /* Volle Breite des Containers */
+  left: 0; /* Links ausrichten */
   z-index: 1; /* Stellt sicher, dass die Überschrift sichtbar bleibt */
 }
 
@@ -38,24 +40,23 @@
   border: none;
   cursor: pointer;
   transition: background-color 0.3s;
-  position: absolute; /* Positionierung relativ zur Karte */
-  top: 50%; /* Vertikale Zentrierung */
-  transform: translateY(-50%);
-  z-index: 2; /* Stellt sicher, dass die Pfeile sichtbar bleiben */
+  z-index: 2; /* Erhöhter z-index um über dem Titel zu bleiben */
+  margin: 0 0.5rem; /* Seitlicher Abstand */
 }
 
 .nav-arrow.left {
-  left: 0.5rem; /* Abstand vom linken Rand */
+  left: 0.5rem;
 }
 
 .nav-arrow.right {
-  right: 0.5rem; /* Abstand vom rechten Rand */
+  right: 0.5rem;
 }
 
 .nav-arrow svg {
   width: 24px;
   height: 24px;
-  fill: white; /* Farbe der Pfeile */
+  fill: white;
+  display: block; /* Wichtig für korrekte Darstellung */
 }
 
 .nav-arrow.disabled {

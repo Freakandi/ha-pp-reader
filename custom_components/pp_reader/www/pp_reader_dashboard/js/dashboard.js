@@ -64,7 +64,7 @@ function setupNavigation() {
     }
   });
 
-  // Navigation zusammenbauen
+  // Navigation zusammenbauen - geänderte Reihenfolge für bessere Positionierung
   navHeader.appendChild(leftArrow);
   navHeader.appendChild(title);
   navHeader.appendChild(rightArrow);

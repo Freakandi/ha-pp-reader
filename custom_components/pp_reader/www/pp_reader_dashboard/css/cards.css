@@ -33,11 +33,19 @@
   position: relative;
   gap: 0.3rem;
   padding: 0.75rem 1rem; /* Einheitliches Padding */
+  overflow: visible; /* Erlaubt das Anzeigen der Navigation außerhalb der Card-Grenzen */
 }
 
 .header-card h1 {
   margin: 0;
   font-size: 1.5rem;
+}
+
+/* Speziell für die Header-Navigation */
+.header-card .header-nav {
+  position: relative;
+  width: 100%;
+  min-height: 36px; /* Mindesthöhe für Navigation */
 }
 
 /* Meta-Informationen jetzt in einer eigenen Zeile */
