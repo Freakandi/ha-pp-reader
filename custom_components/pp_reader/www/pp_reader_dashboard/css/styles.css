@@ -19,78 +19,64 @@
   border-bottom: 2px solid #007bff;
 }
 
-/* Punkt-Navigation */
+/* Verbesserte Punkt-Navigation */
 .dot-navigation {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding: 0.5rem 0;
-  margin: -0.5rem 0 1rem 0; /* Negativer margin-top um die Navigation näher an die Card zu bringen */
-  z-index: 50;
+  display: flex !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 8px 0 !important;
+  margin: 0 !important;
+  z-index: 999 !important;
 }
 
 .nav-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #ccc;
-  cursor: pointer;
-  transition: background-color 0.3s, transform 0.3s;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background-color: #ccc !important;
+  cursor: pointer !important;
+  transition: background-color 0.3s, transform 0.3s !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
 }
 
 .nav-dot.active {
-  background-color: #007bff;
-  transform: scale(1.25);
+  background-color: #007bff !important;
+  transform: scale(1.25) !important;
 }
 
-/* Swipe-Pfeile für die Navigation */
+/* Verbesserte Swipe-Pfeile */
 .swipe-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #555;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100; /* Höherer z-index um sicherzustellen, dass sie sichtbar sind */
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background-color: rgba(85, 85, 85, 0.9) !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1000 !important; /* Sehr hoher z-index */
+  color: white !important;
 }
 
-.swipe-arrow::after {
-  content: '';
-  display: block;
-  width: 14px;
-  height: 14px;
-  border-style: solid;
-  border-color: white;
-  border-width: 0 3px 3px 0;
+.swipe-arrow svg {
+  fill: white !important;
 }
 
 .swipe-arrow.left {
-  left: 10px;
+  left: 10px !important;
 }
 
 .swipe-arrow.right {
-  right: 10px;
-}
-
-.swipe-arrow.left::after {
-  transform: rotate(135deg);
-  margin-left: 5px;
-}
-
-.swipe-arrow.right::after {
-  transform: rotate(-45deg);
-  margin-right: 5px;
+  right: 10px !important;
 }
 
 .swipe-arrow.disabled {
-  background-color: #ccc;
-  cursor: default;
+  background-color: rgba(204, 204, 204, 0.9) !important;
+  cursor: default !important;
 }
 
 /* Dark Mode Anpassungen für Pfeile */

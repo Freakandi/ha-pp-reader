@@ -45,8 +45,16 @@
 /* Meta-Informationen sollten in der zweiten Zeile erscheinen */
 .header-card .meta {
   flex-basis: 100%; /* Volle Breite nehmen */
-  align-items: center;
   margin-top: 0.3rem; /* Abstand zur Überschrift */
+  display: flex;
+  justify-content: center; /* Horizontal zentrieren */
+  text-align: center; /* Text zentrieren */
+}
+
+/* Falls die obige Regel nicht funktioniert, versuche direkt die Kind-Elemente zu zentrieren */
+.header-card .meta > div {
+  text-align: center;
+  width: 100%;
 }
 
 /* Footer card kann separat bleiben */

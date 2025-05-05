@@ -55,7 +55,6 @@ export async function renderDashboard() {
       <div class="card footer-card">
         <div class="meta">
           <div>📂 Letzte Aktualisierung Datei: <strong>${formattedFileUpdated}</strong></div>
-          <div>📈 Geprüft am: <strong>${lastUpdated}</strong></div>
         </div>
       </div>
     `;

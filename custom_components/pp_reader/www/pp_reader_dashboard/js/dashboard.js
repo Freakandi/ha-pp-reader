@@ -27,19 +27,30 @@ async function renderTab() {
   const root = document.querySelector("pp-reader-dashboard");
   root.innerHTML = content;
 
-  // Die erste Header-Card im Tab-Inhalt finden und Navigation hinzufügen
+  // DOM vollständig laden lassen und dann Navigation hinzufügen
+  setTimeout(() => {
+    addNavigation(root);
+  }, 10);
+}
+
+function addNavigation(root) {
+  // Die erste Header-Card im Tab-Inhalt finden
   const headerCard = root.querySelector('.header-card');
   if (headerCard) {
-    // Navigations-Pfeile hinzufügen - als erstes Element in die Karte
+    console.log("Header-Card gefunden:", headerCard);
+    
+    // Navigations-Pfeile als DIVs mit Text hinzufügen für bessere Sichtbarkeit
     const leftArrow = document.createElement('div');
     leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
+    leftArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
     headerCard.insertBefore(leftArrow, headerCard.firstChild);
     
     const rightArrow = document.createElement('div');
     rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
+    rightArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
     headerCard.appendChild(rightArrow);
     
-    // Dot-Navigation nach der Header-Card einfügen, nicht innerhalb
+    // Dot-Navigation nach der Header-Card einfügen
     const dotNav = document.createElement('div');
     dotNav.className = 'dot-navigation';
     dotNav.innerHTML = tabs.map((tab, index) => `
@@ -79,18 +90,22 @@ async function renderTab() {
         renderTab();
       }
     });
-  }
-  
-  // Event-Listener für die Punkt-Navigation
-  root.querySelectorAll('.nav-dot').forEach(dot => {
-    dot.addEventListener('click', () => {
-      const index = parseInt(dot.getAttribute('data-index'), 10);
-      if (index !== currentPage) {
-        currentPage = index;
-        renderTab();
-      }
+
+    // Event-Listener für die Punkt-Navigation
+    root.querySelectorAll('.nav-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        const index = parseInt(dot.getAttribute('data-index'), 10);
+        if (index !== currentPage) {
+          currentPage = index;
+          renderTab();
+        }
+      });
     });
-  });
+
+    console.log("Navigation wurde hinzugefügt");
+  } else {
+    console.error("Header-Card nicht gefunden!");
+  }
 }
 
 createThemeToggle();
