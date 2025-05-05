@@ -24,7 +24,6 @@ async function renderTab() {
 }
 
 function setupNavigation() {
-  // Header-Card finden
   const headerCard = document.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
@@ -76,7 +75,7 @@ function setupNavigation() {
   contentContainer.className = 'header-content';
   contentContainer.innerHTML = originalContent;
 
-  // Alles außer <h1> behalten (Titel haben wir schon verarbeitet)
+  // Alles außer <h1> entfernen (Titel haben wir schon verarbeitet)
   const h1Element = contentContainer.querySelector('h1');
   if (h1Element) h1Element.remove();
 

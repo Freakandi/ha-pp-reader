@@ -8,13 +8,22 @@
   position: relative;
 }
 
-/* Zentrierung der Überschrift */
+/* Erzwinge die Zentrierung der Überschrift */
 .header-nav h1 {
   flex-grow: 1;
   margin: 0;
   padding: 0.5rem 0;
-  text-align: center; /* Zentriert die Überschrift */
+  text-align: center !important; /* Erzwingt die Zentrierung */
   font-size: 1.5rem;
+  position: relative; /* Verhindert Konflikte mit absoluten Positionierungen */
+  z-index: 1; /* Stellt sicher, dass die Überschrift sichtbar bleibt */
+}
+
+/* Erzwinge Priorität für Header- und Navigationsstile */
+.header-nav h1,
+.nav-arrow {
+  all: unset;
+  display: block;
 }
 
 /* Navigationspfeile korrekt positionieren */
@@ -29,12 +38,10 @@
   border: none;
   cursor: pointer;
   transition: background-color 0.3s;
-  flex-shrink: 0;
-  padding: 0;
-  margin: 0;
   position: absolute; /* Positionierung relativ zur Karte */
   top: 50%; /* Vertikale Zentrierung */
   transform: translateY(-50%);
+  z-index: 2; /* Stellt sicher, dass die Pfeile sichtbar bleiben */
 }
 
 .nav-arrow.left {
