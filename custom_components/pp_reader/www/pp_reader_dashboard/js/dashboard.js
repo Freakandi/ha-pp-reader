@@ -1,11 +1,11 @@
-import { addSwipeEvents, goToTab } from './interaction/tab_control.js';
+import { addSwipeEvents } from './interaction/tab_control.js';
 import { createThemeToggle } from './interaction/themeToggle.js';
-import { renderDashboard } from './tabs/overview.js';
-import { renderTestTab } from './tabs/test_tab.js';
+import { renderDashboard, getHeaderContent as getDashboardHeaderContent } from './tabs/overview.js';
+import { renderTestTab, getHeaderContent as getTestTabHeaderContent } from './tabs/test_tab.js';
 
 const tabs = [
-  { title: 'Dashboard', render: renderDashboard },
-  { title: 'Test Tab', render: renderTestTab }
+  { title: 'Dashboard', render: renderDashboard, getHeaderContent: getDashboardHeaderContent },
+  { title: 'Test Tab', render: renderTestTab, getHeaderContent: getTestTabHeaderContent }
 ];
 
 let currentPage = 0;
@@ -16,14 +16,35 @@ async function renderTab() {
   // Tab-Inhalt rendern
   let content = await tab.render();
   
-  const root = document.querySelector("pp-reader-dashboard");
-  root.innerHTML = content;
+  // Header-Card aktualisieren
+  const headerCard = document.querySelector('.header-card');
+  if (headerCard) {
+    const { title, meta } = tab.getHeaderContent();
+    headerCard.querySelector('h1').textContent = title;
+    const metaDiv = headerCard.querySelector('.meta');
+    metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
+  }
 
-  // Erst aufrufen, wenn DOM vollständig geladen ist
+  // Tab-Inhalte einfügen
+  const root = document.querySelector("pp-reader-dashboard");
+  root.querySelector('.tab-content').innerHTML = content;
+
+  // Navigation und Sticky-Header aktivieren
   setTimeout(() => {
     setupNavigation();
-    setupStickyHeader(); // Sticky-Header-Logik aktivieren
+    setupStickyHeader();
   }, 0);
+}
+
+function setupHeaderCard() {
+  const root = document.querySelector("pp-reader-dashboard");
+  const headerCard = document.createElement('div');
+  headerCard.className = 'card header-card';
+  headerCard.innerHTML = `
+    <h1></h1>
+    <div class="meta"></div>
+  `;
+  root.prepend(headerCard); // Header-Card an den Anfang einfügen
 }
 
 function setupNavigation() {
@@ -33,14 +54,9 @@ function setupNavigation() {
     return;
   }
 
-  // Originalinhalt speichern und Meta-Informationen ermitteln
+  // Navigation erstellen
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
-  const metaDiv = headerCard.querySelector('.meta');
-  
-  // Header-Card leeren
-  headerCard.innerHTML = '';
 
-  // Inline-HTML für Navigation mit reinem HTML und inline-Styles
   headerCard.innerHTML = `
     <div style="display: flex; width: 100%; align-items: center; justify-content: space-between;">
       <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
@@ -56,13 +72,8 @@ function setupNavigation() {
       </button>
     </div>
   `;
-  
-  // Meta-Div direkt hinzufügen, wenn vorhanden
-  if (metaDiv) {
-    headerCard.appendChild(metaDiv);
-  }
 
-  // Event-Listener direkt hinzufügen
+  // Event-Listener für Navigation
   document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
@@ -76,28 +87,8 @@ function setupNavigation() {
       renderTab();
     }
   });
-  
-  // ----- DOT-NAVIGATION -----
-  const dotNav = document.createElement('div');
-  dotNav.className = 'dot-navigation';
-  dotNav.innerHTML = tabs.map((tab, index) => `
-    <span class="nav-dot ${index === currentPage ? 'active' : ''}" data-index="${index}"></span>
-  `).join('');
-  
-  headerCard.parentNode.insertBefore(dotNav, headerCard.nextSibling);
-  
-  // Event-Listener für Dots
-  dotNav.querySelectorAll('.nav-dot').forEach(dot => {
-    dot.addEventListener('click', () => {
-      const index = parseInt(dot.getAttribute('data-index'), 10);
-      if (index !== currentPage) {
-        currentPage = index;
-        renderTab();
-      }
-    });
-  });
-  
-  // ----- SWIPE-FUNKTIONALITÄT -----
+
+  // Swipe-Funktionalität
   addSwipeEvents(
     headerCard,
     () => { // onSwipeLeft
@@ -113,13 +104,6 @@ function setupNavigation() {
       }
     }
   );
-
-  // Debug-Information
-  console.log("Navigation eingerichtet:", {
-    headerCard: headerCard,
-    navigationElements: headerCard.querySelectorAll('.nav-arrow'),
-    title: headerCard.querySelector('h1')
-  });
 }
 
 function setupStickyHeader() {
@@ -137,7 +121,7 @@ function setupStickyHeader() {
         headerCard.classList.remove('sticky');
       }
     },
-    { root: null, threshold: 0, rootMargin: "-1px 0px 0px 0px" }
+    { root: null, threshold: 0 }
   );
 
   observer.observe(headerCard);
@@ -147,6 +131,7 @@ createThemeToggle();
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
-    renderTab();
+    setupHeaderCard(); // Header-Card erstellen
+    renderTab(); // Ersten Tab rendern
   }
 });
