@@ -36,44 +36,41 @@ function setupNavigation() {
   const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
   const metaDiv = headerCard.querySelector('.meta');
   
-  // Einfaches Sticky-Verhalten ohne setAttribute
-  headerCard.style.position = 'sticky';
-  headerCard.style.top = '0';
-  headerCard.style.zIndex = '100';
-  headerCard.style.boxSizing = 'border-box';
-  headerCard.style.backgroundColor = 'var(--card-background-color, white)';
-  headerCard.style.padding = '16px';
+  // WICHTIG: KEIN Setzen von position: sticky mehr - ist bereits im CSS
+  // headerCard.style.position = 'sticky';
+  // headerCard.style.top = '0';
+  // headerCard.style.zIndex = '100';
   
   // Header-Card leeren
   headerCard.innerHTML = '';
 
+  // Container für die Navigation erstellen
+  const navContainer = document.createElement('div');
+  navContainer.className = 'header-nav';
+  
   // Inline-HTML für Navigation mit reinem HTML und inline-Styles
-  headerCard.innerHTML = `
-    <div style="display: flex; width: 100%; align-items: center; justify-content: space-between;">
-      <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
-        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
-          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
-        </svg>
-      </button>
-      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem;">${originalTitle}</h1>
-      <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
-        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
-          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-        </svg>
-      </button>
-    </div>
+  navContainer.innerHTML = `
+    <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center; position: absolute; left: 0;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
+      <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
+        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+      </svg>
+    </button>
+    <h1 id="headerTitle" style="margin: 0; text-align: center; width: 100%; font-size: 1.5rem; transition: font-size 0.3s ease;">${originalTitle}</h1>
+    <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center; position: absolute; right: 0;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
+      <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
+        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+      </svg>
+    </button>
   `;
   
-  // Meta-Container erstellen - EINFACH gehalten
-  const metaContainer = document.createElement('div');
-  metaContainer.id = 'metaContainer';
+  headerCard.appendChild(navContainer);
   
+  // Meta-Div direkt hinzufügen, wenn vorhanden
   if (metaDiv) {
-    metaContainer.appendChild(metaDiv);
-    headerCard.appendChild(metaContainer);
+    headerCard.appendChild(metaDiv);
   }
 
-  // Event-Listener
+  // Event-Listener direkt hinzufügen
   document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
@@ -88,68 +85,52 @@ function setupNavigation() {
     }
   });
   
-  // DIREKTER Scroll-Handler - ALLES in einer Funktion
-  window.addEventListener('scroll', () => {
+  // Scroll-Verhalten hinzufügen
+  setupScrollBehavior();
+}
+
+// Funktion für das Scroll-Verhalten
+function setupScrollBehavior() {
+  const headerCard = document.querySelector('.header-card');
+  const headerTitle = document.getElementById('headerTitle');
+  if (!headerCard || !headerTitle) return;
+  
+  const initialTitleSize = parseInt(getComputedStyle(headerTitle).fontSize);
+  
+  let lastScrollTop = 0;
+  let ticking = false;
+
+  const onScroll = () => {
+    // In einem iFrame ist window.scrollY möglicherweise nicht zuverlässig
+    // Daher verwenden wir document.documentElement oder document.body
     const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
-    const headerTitle = document.getElementById('headerTitle');
-    
-    // Debug
-    console.log("Scroll-Event:", scrollTop);
     
     // Mindestens 20px scrollen, bevor die Änderung aktiviert wird
     if (scrollTop > 20) {
-      // Die wichtigsten Styles direkt anwenden
-      headerCard.style.padding = '8px 16px';
-      headerCard.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-      
-      if (headerTitle) {
-        headerTitle.style.fontSize = '1.2rem';
-      }
-      
-      if (metaContainer) {
-        metaContainer.style.display = 'none';
-      }
+      // ENTSCHEIDENDER PUNKT: Wir verwenden die CSS-Klasse 'sticky'
+      headerCard.classList.add('sticky');
+      headerTitle.style.fontSize = (initialTitleSize * 0.85) + 'px'; // Kleinerer Titel
     } else {
-      // Normale Größe
-      headerCard.style.padding = '16px';
-      headerCard.style.boxShadow = 'none';
-      
-      if (headerTitle) {
-        headerTitle.style.fontSize = '1.5rem';
-      }
-      
-      if (metaContainer) {
-        metaContainer.style.display = 'block';
-      }
+      headerCard.classList.remove('sticky');
+      headerTitle.style.fontSize = initialTitleSize + 'px';
+    }
+    
+    lastScrollTop = scrollTop;
+    ticking = false;
+  };
+
+  // Event-Listener für scroll-Ereignis
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      window.requestAnimationFrame(onScroll);
+      ticking = true;
     }
   });
   
-  // Initialer Scroll-Check ausführen
-  setTimeout(() => {
-    const scrollEvent = new Event('scroll');
-    window.dispatchEvent(scrollEvent);
-  }, 100);
-  
-  // Dot-Navigation
-  const dotNav = document.createElement('div');
-  dotNav.className = 'dot-navigation';
-  dotNav.innerHTML = tabs.map((tab, index) => `
-    <span class="nav-dot ${index === currentPage ? 'active' : ''}" data-index="${index}"></span>
-  `).join('');
-  
-  headerCard.parentNode.insertBefore(dotNav, headerCard.nextSibling);
-  
-  // Event-Listener für Dots
-  dotNav.querySelectorAll('.nav-dot').forEach(dot => {
-    dot.addEventListener('click', () => {
-      const index = parseInt(dot.getAttribute('data-index'), 10);
-      if (index !== currentPage) {
-        currentPage = index;
-        renderTab();
-      }
-    });
-  });
-  
+  // Initialer Check, falls die Seite bereits gescrollt ist
+  onScroll();
+}
+
   // ----- SWIPE-FUNKTIONALITÄT -----
   addSwipeEvents(
     headerCard,
@@ -166,7 +147,6 @@ function setupNavigation() {
       }
     }
   );
-}
 
 // iFrame-kompatible Scrollbehandlung
 function setupIframeCompatibility() {
