@@ -27,10 +27,8 @@ async function renderTab() {
   const root = document.querySelector("pp-reader-dashboard");
   root.innerHTML = content;
 
-  // DOM vollständig laden lassen und dann Navigation hinzufügen
-  setTimeout(() => {
-    addNavigation(root);
-  }, 10);
+  // Navigation sofort hinzufügen
+  addNavigation(root);
 }
 
 function addNavigation(root) {
@@ -39,69 +37,77 @@ function addNavigation(root) {
   if (headerCard) {
     console.log("Header-Card gefunden:", headerCard);
     
-    // Den h1-Titel und Meta-Information finden
+    // Den h1-Titel finden
     const titleElement = headerCard.querySelector('h1');
-    const metaElement = headerCard.querySelector('.meta');
     
-    if (titleElement && metaElement) {
-      // Elemente entfernen und neu strukturieren
+    // Wrapper für Navigation erstellen
+    const titleNavWrapper = document.createElement('div');
+    titleNavWrapper.className = 'title-navigation-wrapper';
+    
+    // Navigations-Buttons
+    const leftArrow = document.createElement('div');
+    leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
+    leftArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+    
+    const rightArrow = document.createElement('div');
+    rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
+    rightArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
+    
+    // Verarbeite den Titel und baue den Wrapper
+    if (titleElement) {
+      // Titel aus Header-Card entfernen
       titleElement.remove();
-      metaElement.remove();
-      
-      // Wrapper für Navigation erstellen
-      const titleNavWrapper = document.createElement('div');
-      titleNavWrapper.className = 'title-navigation-wrapper';
-      
-      // Navigations-Buttons
-      const leftArrow = document.createElement('div');
-      leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
-      leftArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
-      
-      const rightArrow = document.createElement('div');
-      rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
-      rightArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
       
       // Wrapper zusammenbauen
       titleNavWrapper.appendChild(leftArrow);
       titleNavWrapper.appendChild(titleElement);
       titleNavWrapper.appendChild(rightArrow);
       
-      // Alles wieder in die Card einfügen
+      // Wrapper als erstes Element einfügen
       headerCard.insertBefore(titleNavWrapper, headerCard.firstChild);
-      headerCard.appendChild(metaElement);
+    } else {
+      // Falls kein Titel vorhanden ist, erstellen wir einen Default-Titel
+      const defaultTitle = document.createElement('h1');
+      defaultTitle.textContent = tabs[currentPage].title || "Tab " + (currentPage + 1);
       
-      // Event-Handler hinzufügen...
-      leftArrow.addEventListener('click', () => {
-        if (currentPage > 0) {
-          currentPage--;
-          renderTab();
-        }
-      });
+      titleNavWrapper.appendChild(leftArrow);
+      titleNavWrapper.appendChild(defaultTitle);
+      titleNavWrapper.appendChild(rightArrow);
+      
+      headerCard.insertBefore(titleNavWrapper, headerCard.firstChild);
+    }
+    
+    // Event-Handler für Links/Rechts-Navigation
+    leftArrow.addEventListener('click', () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderTab();
+      }
+    });
 
-      rightArrow.addEventListener('click', () => {
+    rightArrow.addEventListener('click', () => {
+      if (currentPage < tabs.length - 1) {
+        currentPage++;
+        renderTab();
+      }
+    });
+    
+    // Swipe-Events für die ganze Header-Card
+    addSwipeEvents(
+      headerCard,
+      () => { // onSwipeLeft
         if (currentPage < tabs.length - 1) {
           currentPage++;
           renderTab();
         }
-      });
-      
-      // Swipe-Events für die ganze Header-Card
-      addSwipeEvents(
-        headerCard,
-        () => {
-          if (currentPage < tabs.length - 1) {
-            currentPage++;
-            renderTab();
-          }
-        },
-        () => {
-          if (currentPage > 0) {
-            currentPage--;
-            renderTab();
-          }
+      },
+      () => { // onSwipeRight
+        if (currentPage > 0) {
+          currentPage--;
+          renderTab();
         }
-      );
-    }
+      }
+    );
     
     // Dot-Navigation nach der Header-Card
     const dotNav = document.createElement('div');
