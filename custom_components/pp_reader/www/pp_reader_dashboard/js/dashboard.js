@@ -20,7 +20,10 @@ async function renderTab() {
   root.innerHTML = content;
 
   // Erst aufrufen, wenn DOM vollständig geladen ist
-  setTimeout(() => setupNavigation(), 0);
+  setTimeout(() => {
+    setupNavigation();
+    setupStickyHeader(); // Sticky-Header-Logik aktivieren
+  }, 0);
 }
 
 function setupNavigation() {
@@ -117,6 +120,27 @@ function setupNavigation() {
     navigationElements: headerCard.querySelectorAll('.nav-arrow'),
     title: headerCard.querySelector('h1')
   });
+}
+
+function setupStickyHeader() {
+  const headerCard = document.querySelector('.header-card');
+  if (!headerCard) {
+    console.error("Header-Card nicht gefunden!");
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      if (!entry.isIntersecting) {
+        headerCard.classList.add('sticky');
+      } else {
+        headerCard.classList.remove('sticky');
+      }
+    },
+    { root: null, threshold: 0, rootMargin: "-1px 0px 0px 0px" }
+  );
+
+  observer.observe(headerCard);
 }
 
 createThemeToggle();

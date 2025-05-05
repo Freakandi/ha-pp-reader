@@ -33,7 +33,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  transition: padding 0.3s ease, box-shadow 0.3s ease;
+  transition: height 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease;
   box-sizing: border-box;
   gap: 0.3rem;
   padding: 0.75rem 1rem; /* Einheitliches Padding */
@@ -41,6 +41,7 @@
 }
 
 .header-card.sticky {
+  height: 50px; /* Reduzierte Höhe */
   padding: 0.5rem 1rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
@@ -74,6 +75,8 @@
 .header-card.sticky .meta {
   max-height: 0;
   opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
 }
 
 /* Falls die obige Regel nicht funktioniert, versuche direkt die Kind-Elemente zu zentrieren */
