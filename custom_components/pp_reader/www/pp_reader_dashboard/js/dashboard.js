@@ -39,16 +39,49 @@ function addNavigation(root) {
   if (headerCard) {
     console.log("Header-Card gefunden:", headerCard);
     
-    // Navigations-Pfeile als DIVs mit Text hinzufügen für bessere Sichtbarkeit
-    const leftArrow = document.createElement('div');
-    leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
-    leftArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
-    headerCard.insertBefore(leftArrow, headerCard.firstChild);
+    // Den h1-Titel finden
+    const titleElement = headerCard.querySelector('h1');
+    if (titleElement) {
+      // Einen Wrapper für den Titel und die Pfeile erstellen
+      const titleWrapper = document.createElement('div');
+      titleWrapper.className = 'title-navigation-wrapper';
+      
+      // Navigations-Pfeile erstellen
+      const leftArrow = document.createElement('div');
+      leftArrow.className = `swipe-arrow left ${currentPage > 0 ? '' : 'disabled'}`;
+      leftArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+      
+      const rightArrow = document.createElement('div');
+      rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
+      rightArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
+      
+      // Titel aus Header-Card entfernen
+      const originalTitle = titleElement.cloneNode(true);
+      titleElement.remove();
+      
+      // Elemente im Wrapper anordnen
+      titleWrapper.appendChild(leftArrow);
+      titleWrapper.appendChild(originalTitle);
+      titleWrapper.appendChild(rightArrow);
+      
+      // Wrapper als erstes Element in die Header-Card einfügen
+      headerCard.insertBefore(titleWrapper, headerCard.firstChild);
     
-    const rightArrow = document.createElement('div');
-    rightArrow.className = `swipe-arrow right ${currentPage < tabs.length - 1 ? '' : 'disabled'}`;
-    rightArrow.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
-    headerCard.appendChild(rightArrow);
+      // Click-Events für Pfeile
+      leftArrow.addEventListener('click', () => {
+        if (currentPage > 0) {
+          currentPage--;
+          renderTab();
+        }
+      });
+
+      rightArrow.addEventListener('click', () => {
+        if (currentPage < tabs.length - 1) {
+          currentPage++;
+          renderTab();
+        }
+      });
+    }
     
     // Dot-Navigation nach der Header-Card einfügen
     const dotNav = document.createElement('div');
@@ -76,21 +109,6 @@ function addNavigation(root) {
       }
     );
 
-    // Click-Events für Pfeile
-    leftArrow.addEventListener('click', () => {
-      if (currentPage > 0) {
-        currentPage--;
-        renderTab();
-      }
-    });
-
-    rightArrow.addEventListener('click', () => {
-      if (currentPage < tabs.length - 1) {
-        currentPage++;
-        renderTab();
-      }
-    });
-
     // Event-Listener für die Punkt-Navigation
     root.querySelectorAll('.nav-dot').forEach(dot => {
       dot.addEventListener('click', () => {
@@ -109,8 +127,6 @@ function addNavigation(root) {
 }
 
 createThemeToggle();
-
-// Die renderDotNavigation Funktion kann entfernt werden, da sie nicht mehr benötigt wird
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {

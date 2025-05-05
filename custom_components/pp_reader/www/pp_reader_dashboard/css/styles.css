@@ -87,3 +87,28 @@ html.dark-mode .swipe-arrow {
 html.dark-mode .swipe-arrow.disabled {
   background-color: #444;
 }
+
+/* Title-Navigation-Wrapper für die Pfeilpositionierung */
+.title-navigation-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  position: relative;
+}
+
+.title-navigation-wrapper h1 {
+  flex-grow: 1;
+  text-align: center;
+  margin: 0;
+}
+
+/* Pfeile im Wrapper - keine absolute Positionierung mehr nötig */
+.title-navigation-wrapper .swipe-arrow {
+  position: relative !important;
+  top: auto !important;
+  transform: none !important;
+  margin: 0 10px;
+}
+
+/* Die anderen Swipe-Arrow Styles bleiben gleich */
