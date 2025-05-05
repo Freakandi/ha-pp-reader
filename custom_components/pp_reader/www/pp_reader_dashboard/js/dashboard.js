@@ -24,9 +24,20 @@ async function renderTab() {
   }
 
   try {
-    const { title, meta } = await tab.getHeaderContent(); // Asynchroner Aufruf
-    headerCard.querySelector('h1').textContent = title;
+    // Asynchroner Aufruf von getHeaderContent
+    const { title, meta } = await tab.getHeaderContent();
+
+    // Sicherstellen, dass die Header-Card-Elemente existieren
+    const titleElement = headerCard.querySelector('h1');
     const metaDiv = headerCard.querySelector('.meta');
+
+    if (!titleElement || !metaDiv) {
+      console.error("Header-Card-Elemente (h1 oder .meta) nicht gefunden!");
+      return;
+    }
+
+    // Inhalte aktualisieren
+    titleElement.textContent = title || 'Kein Titel';
     metaDiv.innerHTML = meta || ''; // Meta-Inhalte aktualisieren
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Header-Card:', error);
