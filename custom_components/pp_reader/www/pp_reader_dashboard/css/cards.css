@@ -25,20 +25,32 @@
   border-radius: 4px;
 }
 
-.header-card,
+/* In cards.css - Grundlegende Card-Definitionen */
+.header-card {
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 0.5rem;
+}
+
+.header-card h2 {
+  flex-grow: 1;
+  text-align: center;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+/* Footer card kann separat bleiben */
 .footer-card {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .header-card h1 {
   margin: 0;
   font-size: 1.5rem;
-}
-
-.footer-card {
-  margin-top: 1rem;
 }
 
 .meta {

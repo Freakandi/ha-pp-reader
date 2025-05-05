@@ -18,3 +18,41 @@
   font-weight: bold;
   border-bottom: 2px solid #007bff;
 }
+
+/* Punkt-Navigation */
+.dot-navigation {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.5rem 0;
+  margin: 0 0 1rem 0;
+}
+
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ccc;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.3s;
+}
+
+.nav-dot.active {
+  background-color: #007bff;
+  transform: scale(1.25);
+}
+
+/* Swipe-Pfeile für die Navigation */
+.swipe-arrow {
+  cursor: pointer;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #007bff;
+  padding: 0 10px;
+  user-select: none;
+}
+
+.swipe-arrow.disabled {
+  color: #ccc;
+  cursor: default;
+}
