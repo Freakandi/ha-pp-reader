@@ -153,7 +153,10 @@ createThemeToggle();
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
-    await setupHeaderCard(); // Header-Card erstellen
-    renderTab(); // Ersten Tab rendern
+    // Asynchrone Initialisierung
+    (async () => {
+      await setupHeaderCard(); // Header-Card erstellen
+      renderTab(); // Ersten Tab rendern
+    })();
   }
 });
