@@ -14,7 +14,16 @@ export async function renderDashboard() {
     });
 
     return `
-      <div class="card">
+    <div class="header-card">
+      <h1>Übersicht</h1>
+      <div class="meta">
+        <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}&nbsp;€</strong></div>
+      </div>
+    </div>
+    <div class="card">
         <h2>Investment</h2>
         <div class="scroll-container">
           ${makeTable(depots, [
@@ -46,27 +55,5 @@ export async function renderDashboard() {
   } catch (error) {
     console.error('Fehler beim Rendern des Dashboards:', error);
     return `<div class="card"><h2>Fehler beim Laden der Daten</h2><p>${error.message}</p></div>`;
-  }
-}
-
-export async function getHeaderContent() {
-  try {
-    const { totalVermoegen } = await prepareDashboardData();
-
-    return {
-      title: 'Übersicht',
-      meta: `
-        <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })}&nbsp;€</strong></div>
-      `
-    };
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Header-Inhalte:', error);
-    return {
-      title: 'Übersicht',
-      meta: `<div>Fehler beim Laden der Daten</div>`
-    };
   }
 }
