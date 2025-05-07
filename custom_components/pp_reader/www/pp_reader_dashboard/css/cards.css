@@ -6,6 +6,7 @@
   margin-bottom: 1.5rem;
   overflow: auto;
   position: relative;
+  will-change: transform, opacity; /* Performance-Optimierung */
 }
 
 .card h2 {
@@ -38,6 +39,7 @@
   gap: 0.3rem;
   padding: 0.75rem 1rem; /* Einheitliches Padding */
   overflow: visible; /* Erlaubt das Anzeigen der Navigation außerhalb der Card-Grenzen */
+  background: var(--card-background-color, #fff); /* Sicherstellen, dass der Hintergrund korrekt ist */
 }
 
 .header-card.sticky {
@@ -51,13 +53,6 @@
   font-size: 1.5rem;
 }
 
-/* Speziell für die Header-Navigation */
-.header-card .header-nav {
-  position: relative;
-  width: 100%;
-  min-height: 36px; /* Mindesthöhe für Navigation */
-}
-
 /* Meta-Informationen jetzt in einer eigenen Zeile */
 .header-card .meta {
   text-align: center;
@@ -65,7 +60,6 @@
   margin-top: 0.3rem; /* Abstand zur Überschrift */
   display: flex;
   justify-content: center; /* Horizontal zentrieren */
-  text-align: center; /* Text zentrieren */
   transition: max-height 0.3s ease, opacity 0.3s ease;
   max-height: 200px;
   overflow: hidden;
@@ -77,11 +71,6 @@
   opacity: 0;
   overflow: hidden;
   transition: max-height 0.3s ease, opacity 0.3s ease;
-}
-
-/* Falls die obige Regel nicht funktioniert, versuche direkt die Kind-Elemente zu zentrieren */
-.header-card .meta > div {
-  text-align: center;
 }
 
 /* Footer card kann separat bleiben */
@@ -148,11 +137,6 @@ tbody tr:hover {
 
 .negative {
   color: var(--error-color, #dc2626);
-}
-
-/* Das garantiert, dass der Header immer über anderen Elementen erscheint */
-.card.header-card {
-  background: var(--card-background-color, #fff);
 }
 
 html.dark-mode .card.header-card {

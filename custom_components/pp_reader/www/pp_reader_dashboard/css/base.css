@@ -2,6 +2,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* Für natives Scrollen auf iOS */
 }
 
 pp-reader-dashboard {
@@ -14,7 +15,7 @@ pp-reader-dashboard {
 
 .scroll-container {
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch; /* Momentum-Scrolling aktivieren */
 }
 
 @media (max-width: 600px) {

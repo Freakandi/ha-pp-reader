@@ -1,7 +1,7 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { createThemeToggle } from './interaction/themeToggle.js';
-import { renderDashboard, getHeaderContent as getDashboardHeaderContent } from './tabs/overview.js';
-import { renderTestTab, getHeaderContent as getTestTabHeaderContent } from './tabs/test_tab.js';
+import { renderDashboard } from './tabs/overview.js';
+import { renderTestTab } from './tabs/test_tab.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
@@ -31,10 +31,28 @@ async function renderTab() {
 
   tabContent.innerHTML = content;
 
-  createThemeToggle()
+  createThemeToggle();
 
-  // Navigation aktivieren
-  setupNavigation();
+  // Scrollverhalten der Header Card einrichten
+  setupHeaderScrollBehavior();
+}
+
+function setupHeaderScrollBehavior() {
+  const headerCard = document.querySelector('.header-card');
+  if (!headerCard) return;
+
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      if (!entry.isIntersecting) {
+        headerCard.classList.add('sticky');
+      } else {
+        headerCard.classList.remove('sticky');
+      }
+    },
+    { threshold: 0.1 } // Beobachtet, ob die Header Card den oberen Rand erreicht
+  );
+
+  observer.observe(headerCard);
 }
 
 function setupNavigation() {
@@ -86,6 +104,11 @@ function setupNavigation() {
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
+    const root = document.createElement('div');
+    root.className = 'tab-content';
+    this.appendChild(root);
+
+    setupNavigation();
     renderTab(); // Ersten Tab rendern
   }
 });
