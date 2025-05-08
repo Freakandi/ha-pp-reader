@@ -23,6 +23,7 @@ export async function renderDashboard() {
         })}&nbsp;€</strong></div>
       </div>
     </div>
+    
     <div class="card">
       <h2>Investment</h2>
       <div class="scroll-container">

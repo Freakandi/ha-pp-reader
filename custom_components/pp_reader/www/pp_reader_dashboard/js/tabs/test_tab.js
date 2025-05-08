@@ -5,7 +5,8 @@ export async function renderTestTab() {
       <div class="meta">
         <div>Dies ist ein Test-Tab</div>
       </div>
-    </div>
+    
+      </div>
     <div class="card">
       <h2>Test Card</h2>
       <p>Inhalt des Test-Tabs...</p>
