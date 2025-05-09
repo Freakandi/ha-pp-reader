@@ -11,7 +11,7 @@ pp-reader-dashboard {
   box-sizing: border-box;
   font-family: 'Inter', sans-serif;
   position: relative;
-  height: 100%;
+  height: calc(100vh - );
   overflow: auto;
 }
 

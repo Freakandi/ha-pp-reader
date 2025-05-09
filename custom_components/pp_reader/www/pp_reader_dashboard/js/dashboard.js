@@ -45,8 +45,8 @@ async function renderTab() {
 
 function setupHeaderScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
-  const tabContent = document.querySelector('.tab-content'); // Container der Header-Card
-  if (!headerCard || !tabContent) return;
+  const scrollBorder = document.querySelector('pp-reader-dashboard');
+  if (!headerCard || !scrollBorder) return;
 
   const observer = new IntersectionObserver(
     ([entry]) => {
@@ -59,7 +59,7 @@ function setupHeaderScrollBehavior() {
       }
     },
     {
-      root: tabContent, // Beobachte die Sichtbarkeit relativ zu .tab-content
+      root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu .tab-content
       rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
       threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
     }
