@@ -1,0 +1,98 @@
+[
+  {
+    "Einschränkung": "Blockierte modale Dialoge (alert/confirm)",
+    "Typ": "JavaScript",
+    "Kategorie": "Sicherheit/Funktionalität",
+    "Status": "Bestätigt",
+    "Beleg": "MDN:contentReference[oaicite:57]{index=57}",
+    "Anmerkungen": "Keine Alerts/Prompts im iFrame wegen fehlendem allow-modals im sandbox-Attribut."
+  },
+  {
+    "Einschränkung": "Downloads unterbunden",
+    "Typ": "Browser/UI",
+    "Kategorie": "Sicherheit/Funktionalität",
+    "Status": "Bestätigt",
+    "Beleg": "Chrome83:contentReference[oaicite:58]{index=58}",
+    "Anmerkungen": "Chrome/Edge verlangen sandbox=\"... allow-downloads\" für Dateidownloads."
+  },
+  {
+    "Einschränkung": "Eingeschränkte Navigation",
+    "Typ": "Browser/UI",
+    "Kategorie": "Sicherheit",
+    "Status": "Bestätigt",
+    "Beleg": "HA Doku:contentReference[oaicite:59]{index=59}",
+    "Anmerkungen": "Externe Links öffnen nicht automatisch (allow-top-navigation by user activation nötig)."
+  },
+  {
+    "Einschränkung": "Mixed Content Verbot",
+    "Typ": "Netzwerk",
+    "Kategorie": "Sicherheit",
+    "Status": "Bestätigt",
+    "Beleg": "HA Doku:contentReference[oaicite:60]{index=60}",
+    "Anmerkungen": "HTTP-Inhalte werden nicht geladen, wenn HA per HTTPS läuft (Browser blockiert)."
+  },
+  {
+    "Einschränkung": "Session/Cookies isoliert",
+    "Typ": "Netzwerk/JS",
+    "Kategorie": "Sicherheit",
+    "Status": "Bestätigt",
+    "Beleg": "Forum:contentReference[oaicite:61]{index=61}",
+    "Anmerkungen": "Keine gemeinsame Auth-Session im iFrame -> Login nötig, App zeigt ggf. leer an."
+  },
+  {
+    "Einschränkung": "HTTP Basic Auth nicht möglich",
+    "Typ": "Netzwerk/UI",
+    "Kategorie": "Funktionalität",
+    "Status": "Bestätigt",
+    "Beleg": "GitHub:contentReference[oaicite:62]{index=62}",
+    "Anmerkungen": "Basic-Auth Loginfenster erscheint nicht (iOS leer, Android Absturz)."
+  },
+  {
+    "Einschränkung": "Gesperrte Web-APIs (Geo, Cam)",
+    "Typ": "JavaScript",
+    "Kategorie": "Sicherheit",
+    "Status": "Bestätigt",
+    "Beleg": "MDN/HA:contentReference[oaicite:63]{index=63}",
+    "Anmerkungen": "Geolocation, Kamera, etc. im iFrame standardmäßig deaktiviert (Permissions Policy)."
+  },
+  {
+    "Einschränkung": "Kein HA-Theme",
+    "Typ": "CSS/UI",
+    "Kategorie": "Styling",
+    "Status": "Bestätigt",
+    "Beleg": "–",
+    "Anmerkungen": "Styles/Theming der HA-Oberfläche werden nicht ins iFrame übernommen."
+  },
+  {
+    "Einschränkung": "Scroll-Probleme iOS",
+    "Typ": "UI",
+    "Kategorie": "Usability",
+    "Status": "Bestätigt",
+    "Beleg": "GitHub:contentReference[oaicite:64]{index=64}",
+    "Anmerkungen": "Iframe-Inhalt scrollt nicht/flackernd auf iOS (Safari WebView Bug)."
+  },
+  {
+    "Einschränkung": "Fokus/Tastatur iOS",
+    "Typ": "UI",
+    "Kategorie": "Usability",
+    "Status": "Vermutet",
+    "Beleg": "Apple Dev:contentReference[oaicite:65]{index=65}",
+    "Anmerkungen": "Eingabefokus im iFrame führt zu Sprüngen, Keyboard-Problemen auf iOS."
+  },
+  {
+    "Einschränkung": "Touch-/Gesten-Einschr.",
+    "Typ": "UI",
+    "Kategorie": "Usability",
+    "Status": "Vermutet",
+    "Beleg": "–",
+    "Anmerkungen": "Zoom via Pinch disabled, Wischgesten können vom HA-Hauptfenster abgefangen werden."
+  },
+  {
+    "Einschränkung": "Ereignis-Isolation",
+    "Typ": "Integration",
+    "Kategorie": "Funktionalität",
+    "Status": "Bestätigt",
+    "Beleg": "StackExc:contentReference[oaicite:66]{index=66}",
+    "Anmerkungen": "Keine direkte DOM/Event Kommunikation zw. iFrame und Elternseite (nur postMessage)."
+  }
+]
