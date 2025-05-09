@@ -50,7 +50,7 @@ function setupHeaderScrollBehavior() {
 
   const observer = new IntersectionObserver(
     ([entry]) => {
-      if (entry.boundingClientRect.top <= 56) {
+      if (entry.boundingClientRect.top <= 0) {
         // Sticky-Eigenschaft aktivieren
         headerCard.classList.add('sticky');
       } else {
@@ -60,7 +60,7 @@ function setupHeaderScrollBehavior() {
     },
     {
       root: tabContent, // Beobachte die Sichtbarkeit relativ zu .tab-content
-      rootMargin: `0px 0px -56px 0px`, // Berücksichtige den HA-Header
+      rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
       threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
     }
   );
