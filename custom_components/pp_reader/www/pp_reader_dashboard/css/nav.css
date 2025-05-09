@@ -6,9 +6,11 @@
   padding: 0.5rem 1rem;
   background-color: var(--card-background-color, #fff); /* Hintergrund passend zum Design */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Leichter Schatten für Abgrenzung */
-  position: sticky;
-  top: 0; /* Bleibt oben fixiert */
-  z-index: 101; /* Über der Header Card */
+  position: absolute; /* Absolut positioniert, um als Overlay zu fungieren */
+  top: 0; /* Direkt am oberen Rand */
+  left: 0;
+  right: 0;
+  z-index: 102; /* Über der Header-Card */
 }
 
 /* ===== NAVIGATION HEADER ===== */

@@ -36,6 +36,9 @@ async function renderTab() {
   // Scrollverhalten der Header Card einrichten
   setupHeaderScrollBehavior();
 
+  // Swipe-Funktionalität auf der Header-Card einrichten
+  setupSwipeOnHeaderCard();
+
   // Navigation aktualisieren
   updateNavigationState();
 }
@@ -47,18 +50,41 @@ function setupHeaderScrollBehavior() {
   const observer = new IntersectionObserver(
     ([entry]) => {
       if (!entry.isIntersecting) {
+        // Sticky-Eigenschaft aktivieren
         headerCard.classList.add('sticky');
       } else {
+        // Sticky-Eigenschaft deaktivieren
         headerCard.classList.remove('sticky');
       }
     },
     {
-      rootMargin: `-${56}px 0px 0px 0px`, // Höhe der HA-Kopfzeile berücksichtigen
-      threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante sichtbar ist
+      rootMargin: `56px 0px 0px 0px`, // Beobachtungsbereich nach unten verschieben
+      threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante den verschobenen Bereich erreicht
     }
   );
 
   observer.observe(headerCard);
+}
+
+function setupSwipeOnHeaderCard() {
+  const headerCard = document.querySelector('.header-card');
+  if (!headerCard) return;
+
+  addSwipeEvents(
+    headerCard,
+    () => {
+      if (currentPage < tabs.length - 1) {
+        currentPage++;
+        renderTab();
+      }
+    },
+    () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderTab();
+      }
+    }
+  );
 }
 
 function setupNavigation() {
