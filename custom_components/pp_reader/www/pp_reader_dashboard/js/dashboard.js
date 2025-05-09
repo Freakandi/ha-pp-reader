@@ -23,13 +23,8 @@ async function renderTab() {
     return;
   }
 
-  const tabContent = root.querySelector('.tab-content');
-  if (!tabContent) {
-    console.error("Tab-Content-Container nicht gefunden!");
-    return;
-  }
-
-  tabContent.innerHTML = content;
+  // Inhalte direkt in pp-reader-dashboard einfügen
+  root.innerHTML = content;
 
   createThemeToggle();
 
@@ -59,7 +54,7 @@ function setupHeaderScrollBehavior() {
       }
     },
     {
-      root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu .tab-content
+      root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
       rootMargin: `-15px 0px 0px 0px`, // Berücksichtige den HA-Header
       threshold: 0.3 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
     }
@@ -156,7 +151,7 @@ function updateNavigationState() {
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
     const root = document.createElement('div');
-    root.className = 'tab-content';
+    root.className = 'pp-reader-dashboard';
     this.appendChild(root);
 
     setupNavigation(); // Navigation einmalig erstellen
