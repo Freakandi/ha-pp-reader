@@ -51,7 +51,10 @@ function setupHeaderScrollBehavior() {
         headerCard.classList.remove('sticky');
       }
     },
-    { threshold: 3.0 } // Beobachtet, ob die Header Card den oberen Rand erreicht
+    {
+      rootMargin: `-${56}px 0px 0px 0px`, // Höhe der HA-Kopfzeile berücksichtigen
+      threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante sichtbar ist
+    }
   );
 
   observer.observe(headerCard);
