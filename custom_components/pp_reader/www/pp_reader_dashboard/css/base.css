@@ -21,8 +21,9 @@ pp-reader-dashboard {
 }
 
 .tab-content {
-  position: relative;
-  overflow: auto; /* Ermöglicht Scrollen bei großem Inhalt */
+  overflow: auto; /* Scrollen ermöglichen */
+  position: relative; /* Notwendig für Sticky-Elemente */
+  height: calc(100vh - 56px); /* Endet direkt unterhalb des HA-Headers */
 }
 
 @media (max-width: 600px) {
