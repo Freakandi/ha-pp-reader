@@ -47,7 +47,7 @@
 /* Sticky-Zustand bleibt unverändert */
 .header-card.sticky {
   position: sticky; /* Sticky-Eigenschaft */
-  top: 56px; /* Platz für den HA-Header */
+  top: 1px; 
   height: 50px; /* Reduzierte Höhe */
   padding: 0.5rem 1rem; /* Angepasste Innenabstände */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für Abgrenzung */
@@ -57,6 +57,13 @@
 .header-card h1 {
   margin: 0;
   font-size: 1.5rem;
+  text-align: center;
+}
+
+/* Überschrift bleibt unverändert */
+.header-card.sticky h1 {
+  margin: 0;
+  font-size: 1.0rem;
   text-align: center;
 }
 
