@@ -11,6 +11,8 @@ pp-reader-dashboard {
   box-sizing: border-box;
   font-family: 'Inter', sans-serif;
   position: relative;
+  height: 100%;
+  overflow: auto;
 }
 
 .scroll-container {
@@ -19,8 +21,7 @@ pp-reader-dashboard {
 }
 
 .tab-content {
-  padding: 1rem;
-  margin-top: 1rem; /* Abstand zur Navigation */
+  position: relative;
   overflow: auto; /* Ermöglicht Scrollen bei großem Inhalt */
 }
 
