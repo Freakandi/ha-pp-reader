@@ -51,7 +51,7 @@ function setupHeaderScrollBehavior() {
         headerCard.classList.remove('sticky');
       }
     },
-    { threshold: 0.1 } // Beobachtet, ob die Header Card den oberen Rand erreicht
+    { threshold: 3.0 } // Beobachtet, ob die Header Card den oberen Rand erreicht
   );
 
   observer.observe(headerCard);
