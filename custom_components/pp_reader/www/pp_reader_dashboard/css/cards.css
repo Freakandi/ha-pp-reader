@@ -27,41 +27,47 @@
 }
 
 /* In cards.css - Grundlegende Card-Definitionen */
-/* Header-Card mit Anpassung für Navigation */
+/* Angepasste Header-Card */
 .header-card {
+  background: var(--card-background-color, #fff); /* Hintergrundfarbe */
+  border-radius: 0.5rem; /* Abgerundete Ecken */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* Schatten */
+  padding: 1rem; /* Innenabstand */
+  margin-bottom: 1.5rem; /* Abstand nach unten */
+  overflow: auto; /* Scrollverhalten */
+  position: relative; /* Positionierung */
+  will-change: transform, opacity; /* Performance-Optimierung */
   display: flex;
-  flex-direction: column; /* Zur besseren Kontrolle der Elemente */
+  flex-direction: column; /* Beibehaltung der flexiblen Anordnung */
   top: 0;
   z-index: 100;
   transition: height 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease;
   box-sizing: border-box;
   gap: 0.3rem;
-  padding: 0.75rem 1rem; /* Einheitliches Padding */
-  margin-bottom: 1.5rem;
-  overflow: visible; /* Erlaubt das Anzeigen der Navigation außerhalb der Card-Grenzen */
-  background: var(--card-background-color, #fff); /* Sicherstellen, dass der Hintergrund korrekt ist */
 }
 
+/* Sticky-Zustand bleibt unverändert */
 .header-card.sticky {
   height: 50px; /* Reduzierte Höhe */
   position: sticky;
   padding: 0.5rem 1rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
+/* Überschrift bleibt unverändert */
 .header-card h1 {
   margin: 0;
   font-size: 1.5rem;
   text-align: center;
 }
 
-/* Meta-Informationen jetzt in einer eigenen Zeile */
+/* Meta-Informationen bleiben unverändert */
 .header-card .meta {
   text-align: center;
   width: 100%;
-  margin-top: 0.3rem; /* Abstand zur Überschrift */
+  margin-top: 0.3rem;
   display: flex;
-  justify-content: center; /* Horizontal zentrieren */
+  justify-content: center;
   transition: max-height 0.3s ease, opacity 0.3s ease;
   max-height: 200px;
   overflow: hidden;
