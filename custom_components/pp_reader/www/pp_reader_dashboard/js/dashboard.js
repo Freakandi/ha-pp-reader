@@ -61,7 +61,7 @@ function setupHeaderScrollBehavior() {
     {
       root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu .tab-content
       rootMargin: `-15px 0px 0px 0px`, // Berücksichtige den HA-Header
-      threshold: 0.1 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
+      threshold: 0.3 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
     }
   );
 
