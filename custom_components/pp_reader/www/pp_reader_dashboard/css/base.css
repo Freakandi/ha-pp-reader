@@ -18,6 +18,12 @@ pp-reader-dashboard {
   -webkit-overflow-scrolling: touch; /* Momentum-Scrolling aktivieren */
 }
 
+.tab-content {
+  padding: 1rem;
+  margin-top: 1rem; /* Abstand zur Navigation */
+  overflow: auto; /* Ermöglicht Scrollen bei großem Inhalt */
+}
+
 @media (max-width: 600px) {
   .meta {
     flex-direction: column;

@@ -150,3 +150,25 @@ html.dark-mode .nav-arrow.disabled {
   color: white;
 }
 
+/* ===== NAVIGATION BUTTON ===== */
+.nav-button {
+  background-color: var(--primary-button-color, #007bff); /* Standardfarbe */
+  color: #fff; /* Textfarbe */
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease, opacity 0.3s ease;
+}
+
+.nav-button:hover {
+  background-color: var(--primary-button-hover-color, #0056b3); /* Hover-Farbe */
+}
+
+.nav-button:disabled {
+  background-color: #ccc; /* Deaktivierte Farbe */
+  cursor: not-allowed; /* Kein Klick möglich */
+  opacity: 0.6; /* Transparenz für deaktivierte Buttons */
+}
+

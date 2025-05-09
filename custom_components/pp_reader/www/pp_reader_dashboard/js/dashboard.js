@@ -36,7 +36,8 @@ async function renderTab() {
   // Scrollverhalten der Header Card einrichten
   setupHeaderScrollBehavior();
 
-  setupNavigation();
+  // Navigation aktualisieren
+  updateNavigationState();
 }
 
 function setupHeaderScrollBehavior() {
@@ -67,44 +68,44 @@ function setupNavigation() {
     return;
   }
 
-  // Navigationspfeile erstellen
-  const navContainer = document.createElement('div');
-  navContainer.className = 'navigation-container';
-  navContainer.innerHTML = `
-    <button id="nav-left" class="nav-button">&lt;</button>
-    <button id="nav-right" class="nav-button">&gt;</button>
-  `;
+  // Navigationspfeile erstellen, falls noch nicht vorhanden
+  let navContainer = root.querySelector('.navigation-container');
+  if (!navContainer) {
+    navContainer = document.createElement('div');
+    navContainer.className = 'navigation-container';
+    navContainer.innerHTML = `
+      <button id="nav-left" class="nav-button">&lt;</button>
+      <button id="nav-right" class="nav-button">&gt;</button>
+    `;
+    root.prepend(navContainer);
 
-  // Event-Listener für Navigation
-  navContainer.querySelector('#nav-left').addEventListener('click', () => {
-    if (currentPage > 0) {
-      currentPage--;
-      renderTab();
-    }
-  });
+    // Event-Listener für Navigation
+    navContainer.querySelector('#nav-left').addEventListener('click', () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderTab();
+      }
+    });
 
-  navContainer.querySelector('#nav-right').addEventListener('click', () => {
-    if (currentPage < tabs.length - 1) {
-      currentPage++;
-      renderTab();
-    }
-  });
+    navContainer.querySelector('#nav-right').addEventListener('click', () => {
+      if (currentPage < tabs.length - 1) {
+        currentPage++;
+        renderTab();
+      }
+    });
+  }
+}
 
-  // Swipe-Funktionalität hinzufügen
-  addSwipeEvents(root, () => {
-    if (currentPage < tabs.length - 1) {
-      currentPage++;
-      renderTab();
-    }
-  }, () => {
-    if (currentPage > 0) {
-      currentPage--;
-      renderTab();
-    }
-  });
+function updateNavigationState() {
+  const navLeft = document.querySelector('#nav-left');
+  const navRight = document.querySelector('#nav-right');
 
-  // Navigationspfeile in den DOM einfügen
-  root.prepend(navContainer);
+  if (navLeft) {
+    navLeft.disabled = currentPage === 0; // Deaktivieren, wenn auf dem ersten Tab
+  }
+  if (navRight) {
+    navRight.disabled = currentPage === tabs.length - 1; // Deaktivieren, wenn auf dem letzten Tab
+  }
 }
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
@@ -113,6 +114,7 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     root.className = 'tab-content';
     this.appendChild(root);
 
+    setupNavigation(); // Navigation einmalig erstellen
     renderTab(); // Ersten Tab rendern
   }
 });
