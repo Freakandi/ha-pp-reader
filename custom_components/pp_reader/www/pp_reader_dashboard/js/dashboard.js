@@ -50,7 +50,7 @@ function setupHeaderScrollBehavior() {
 
   const observer = new IntersectionObserver(
     ([entry]) => {
-      if (entry.boundingClientRect.top <= 0) {
+      if (entry.isIntersecting) {
         // Sticky-Eigenschaft aktivieren
         headerCard.classList.add('sticky');
       } else {
