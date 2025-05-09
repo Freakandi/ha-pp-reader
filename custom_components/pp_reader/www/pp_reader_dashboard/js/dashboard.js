@@ -58,7 +58,7 @@ function setupHeaderScrollBehavior() {
       }
     },
     {
-      rootMargin: `112px 0px 0px 0px`, // Beobachtungsbereich nach unten verschieben
+      rootMargin: `56px 0px 0px 0px`, // Beobachtungsbereich nach unten verschieben
       threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante den verschobenen Bereich erreicht
     }
   );

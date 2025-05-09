@@ -34,12 +34,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* Schatten */
   padding: 1rem; /* Innenabstand */
   margin-bottom: 1.5rem; /* Abstand nach unten */
-  overflow: auto; /* Scrollverhalten */
-  position: relative; /* Positionierung */
+  position: relative; /* Standardposition */
   will-change: transform, opacity; /* Performance-Optimierung */
   display: flex;
   flex-direction: column; /* Beibehaltung der flexiblen Anordnung */
-  top: 0;
   z-index: 100;
   transition: height 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease;
   box-sizing: border-box;
@@ -48,10 +46,11 @@
 
 /* Sticky-Zustand bleibt unverändert */
 .header-card.sticky {
+  position: sticky; /* Sticky-Eigenschaft */
+  top: 56px; /* Platz für den HA-Header */
   height: 50px; /* Reduzierte Höhe */
-  position: sticky;
-  padding: 0.5rem 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 0.5rem 1rem; /* Angepasste Innenabstände */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für Abgrenzung */
 }
 
 /* Überschrift bleibt unverändert */
