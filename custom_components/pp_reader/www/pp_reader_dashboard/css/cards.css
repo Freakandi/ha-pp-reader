@@ -30,12 +30,12 @@
 /* Angepasste Header-Card */
 .header-card {
   background: var(--card-background-color, #fff); /* Hintergrundfarbe */
-  top: 3px; /* Abstand vom oberen Rand */
+  top: 1px; /* Abstand vom oberen Rand */
   border-radius: 0.5rem; /* Abgerundete Ecken */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* Schatten */
   padding: 1rem; /* Innenabstand */
   margin-bottom: 1.5rem; /* Abstand nach unten */
-  position: relative; /* Standardposition */
+  position: sticky; /* Standardposition */
   will-change: transform, opacity; /* Performance-Optimierung */
   display: flex;
   flex-direction: column; /* Beibehaltung der flexiblen Anordnung */
