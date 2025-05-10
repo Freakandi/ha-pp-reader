@@ -55,8 +55,8 @@ function setupHeaderScrollBehavior() {
     },
     {
       root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
-      rootMargin: `-15px 0px 0px 0px`, // Berücksichtige den HA-Header
-      threshold: 0.3 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
+      rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
+      threshold: 0 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
     }
   );
 
