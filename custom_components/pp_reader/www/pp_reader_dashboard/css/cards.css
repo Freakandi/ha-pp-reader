@@ -46,11 +46,12 @@
 }
 
 /* Sticky-Zustand bleibt unverändert */
-.header-card.sticky {
+.header-card.sticky{
   position: fixed; /* Sticky-Eigenschaft */
   top: 0px; 
   height: 50px; /* Reduzierte Höhe */
   width: 100%;
+  margin-right: 1rem;
   padding: 0.5rem 1rem; /* Angepasste Innenabstände */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für Abgrenzung */
 }
@@ -59,11 +60,12 @@
 .header-card h1 {
   margin: 0;
   font-size: 1.5rem;
+  transition: font-size 0.3s ease;
   text-align: center;
 }
 
 /* Überschrift bleibt unverändert */
-.header-card.sticky h1 {
+.header-card.sticky > h1 {
   margin: 0;
   font-size: 0.8rem;
   text-align: center;
