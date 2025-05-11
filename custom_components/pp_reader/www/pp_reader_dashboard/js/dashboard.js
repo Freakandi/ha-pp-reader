@@ -58,7 +58,7 @@ function setupHeaderScrollBehavior() {
 
   // Überprüfen, ob alle erforderlichen Elemente vorhanden sind
   if (!headerCard || !scrollBorder || !anchor) {
-    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
+    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder, anchor oder headerTitle.");
     return;
   }
 
@@ -73,9 +73,9 @@ function setupHeaderScrollBehavior() {
       }
     },
     {
-      root: null, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
-      rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
-      threshold: 0 // Sticky wird entfernt, sobald ein Pixel sichtbar ist
+      root: null, // Verwende den gesamten Viewport
+      rootMargin: `0px 0px 0px 0px`,
+      threshold: 0
     }
   );
 
@@ -125,7 +125,7 @@ function setupNavigation() {
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
         </svg>
       </button>
-      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem; transition: font-size 0.3s ease;">${originalTitle}</h1>
+      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; transition: font-size 0.3s ease;">${originalTitle}</h1>
       <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
