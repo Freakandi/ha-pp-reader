@@ -28,6 +28,17 @@ async function renderTab() {
 
   createThemeToggle();
 
+  // #anchor erstellen und vor der header-card platzieren
+  const headerCard = document.querySelector('.header-card');
+  if (headerCard) {
+    let anchor = document.getElementById('anchor');
+    if (!anchor) {
+      anchor = document.createElement('div');
+      anchor.id = 'anchor';
+      headerCard.parentNode.insertBefore(anchor, headerCard);
+    }
+  }
+
   // Scrollverhalten der Header Card einrichten
   setupHeaderScrollBehavior();
 
@@ -41,26 +52,21 @@ async function renderTab() {
 function setupHeaderScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
   const scrollBorder = document.querySelector('pp-reader-dashboard');
-  if (!headerCard || !scrollBorder) return;
+  const anchor = document.getElementById('anchor');
 
-  // Dynamisch den #anchor erstellen und vor der header-card einfügen
-  let anchor = document.getElementById('anchor');
-  if (!anchor) {
-    anchor = document.createElement('div');
-    anchor.id = 'anchor';
-    anchor.style.height = '1px'; // Unsichtbar, beeinflusst das Layout nicht
-    anchor.style.visibility = 'hidden';
-    headerCard.parentNode.insertBefore(anchor, headerCard);
+  // Überprüfen, ob alle erforderlichen Elemente vorhanden sind
+  if (!headerCard || !scrollBorder || !anchor) {
+    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
+    return;
   }
 
+  // IntersectionObserver einrichten
   const observer = new IntersectionObserver(
     ([entry]) => {
       if (!entry.isIntersecting) {
-        // Sticky-Eigenschaft aktivieren
-        headerCard.classList.add('sticky');
+        headerCard.classList.add('sticky'); // Sticky-Eigenschaft aktivieren
       } else {
-        // Sticky-Eigenschaft deaktivieren
-        headerCard.classList.remove('sticky');
+        headerCard.classList.remove('sticky'); // Sticky-Eigenschaft deaktivieren
       }
     },
     {
@@ -70,7 +76,7 @@ function setupHeaderScrollBehavior() {
     }
   );
 
-  observer.observe(anchor);
+  observer.observe(anchor); // Beobachtung des #anchor starten
 }
 
 function setupSwipeOnHeaderCard() {

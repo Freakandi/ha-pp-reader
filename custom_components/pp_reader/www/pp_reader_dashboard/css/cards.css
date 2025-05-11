@@ -35,7 +35,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); /* Schatten */
   padding: 1rem; /* Innenabstand */
   margin-bottom: 1.5rem; /* Abstand nach unten */
-  position: sticky; /* Standardposition */
+  position: relative; /* Standardposition */
   will-change: transform, opacity; /* Performance-Optimierung */
   display: flex;
   flex-direction: column; /* Beibehaltung der flexiblen Anordnung */
@@ -47,8 +47,8 @@
 
 /* Sticky-Zustand bleibt unverändert */
 .header-card.sticky {
-  position: fixed; /* Sticky-Eigenschaft */
-  top: 0px; 
+  position: sticky; /* Sticky-Eigenschaft */
+  top: 0.1px; 
   height: 50px; /* Reduzierte Höhe */
   padding: 0.5rem 1rem; /* Angepasste Innenabstände */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für Abgrenzung */
