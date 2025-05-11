@@ -69,7 +69,7 @@ function setupHeaderScrollBehavior() {
       console.log('IntersectionObserver Entry:', entry); // Debugging-Ausgabe
       if (!entry.isIntersecting) {
         headerCard.classList.add('sticky'); // Sticky-Eigenschaft aktivieren
-        headerTitle.style.fontSize = '0.8rem'; // Schriftgröße verkleinern
+        headerTitle.style.fontSize = '1.0rem'; // Schriftgröße verkleinern
       } else {
         headerCard.classList.remove('sticky'); // Sticky-Eigenschaft deaktivieren
         headerTitle.style.fontSize = '1.5rem'; // Schriftgröße zurücksetzen
