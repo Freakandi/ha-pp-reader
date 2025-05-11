@@ -9,6 +9,7 @@ const tabs = [
 ];
 
 let currentPage = 0;
+let observer; // Globale Variable für Debugging
 
 async function renderTab() {
   const tab = tabs[currentPage];
@@ -62,7 +63,7 @@ function setupHeaderScrollBehavior() {
   }
 
   // IntersectionObserver einrichten
-  const observer = new IntersectionObserver(
+  observer = new IntersectionObserver(
     ([entry]) => {
       console.log('IntersectionObserver Entry:', entry); // Debugging-Ausgabe
       if (!entry.isIntersecting) {
