@@ -40,7 +40,7 @@ async function renderTab() {
   }
 
   // Scrollverhalten der Header Card einrichten
-  setupHeaderScrollBehavior();
+  // setupHeaderScrollBehavior();
 
   // Navigation in die Header-Card einfügen
   setupNavigation();
@@ -172,5 +172,6 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     this.appendChild(root);
 
     renderTab(); // Ersten Tab rendern
+    setupHeaderScrollBehavior();
   }
 });
