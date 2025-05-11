@@ -40,10 +40,19 @@ async function renderTab() {
 
 function setupHeaderScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
-  const anchor = document.getElementById('anchor');
   const scrollBorder = document.querySelector('pp-reader-dashboard');
-  if (!anchor || !scrollBorder) return;
-  
+  if (!headerCard || !scrollBorder) return;
+
+  // Dynamisch den #anchor erstellen und vor der header-card einfügen
+  let anchor = document.getElementById('anchor');
+  if (!anchor) {
+    anchor = document.createElement('div');
+    anchor.id = 'anchor';
+    anchor.style.height = '1px'; // Unsichtbar, beeinflusst das Layout nicht
+    anchor.style.visibility = 'hidden';
+    headerCard.parentNode.insertBefore(anchor, headerCard);
+  }
+
   const observer = new IntersectionObserver(
     ([entry]) => {
       if (!entry.isIntersecting) {
