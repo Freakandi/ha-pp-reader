@@ -7,7 +7,9 @@ html, body {
 
 pp-reader-dashboard {
   display: block;
-  padding: 1rem;
+  padding-top: 0rem;
+  padding-bottom: 1rem;
+  padding-left: 1rem;
   box-sizing: border-box;
   font-family: 'Inter', sans-serif;
   position: relative;

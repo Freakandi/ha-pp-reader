@@ -176,5 +176,6 @@ html.dark-mode .nav-arrow.disabled {
 
 #anchor {
   height: 1px;
+  top: 1rem;
   visibility: hidden;  
 }
