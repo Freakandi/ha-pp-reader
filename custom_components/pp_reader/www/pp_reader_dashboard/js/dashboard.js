@@ -63,6 +63,7 @@ function setupHeaderScrollBehavior() {
   // IntersectionObserver einrichten
   const observer = new IntersectionObserver(
     ([entry]) => {
+      console.log('IntersectionObserver Entry:', entry); // Debugging-Ausgabe
       if (!entry.isIntersecting) {
         headerCard.classList.add('sticky'); // Sticky-Eigenschaft aktivieren
       } else {
@@ -72,7 +73,7 @@ function setupHeaderScrollBehavior() {
     {
       root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
       rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
-      threshold: 1.0 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
+      threshold: 0 // Sticky wird entfernt, sobald ein Pixel sichtbar ist
     }
   );
 
