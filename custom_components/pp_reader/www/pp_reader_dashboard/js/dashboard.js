@@ -36,17 +36,18 @@ async function renderTab() {
       anchor = document.createElement('div');
       anchor.id = 'anchor';
       headerCard.parentNode.insertBefore(anchor, headerCard);
+      console.log('Anchor wurde erstellt:', anchor); // Debugging-Ausgabe
     }
   }
-
-  // Scrollverhalten der Header Card einrichten
-  // setupHeaderScrollBehavior();
 
   // Navigation in die Header-Card einfügen
   setupNavigation();
 
   // Swipe-Funktionalität auf der Header-Card einrichten
   setupSwipeOnHeaderCard();
+
+  // Scrollverhalten der Header Card einrichten
+  setupHeaderScrollBehavior(); // Jetzt aufrufen, nachdem der #anchor erstellt wurde
 }
 
 function setupHeaderScrollBehavior() {
@@ -172,6 +173,5 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     this.appendChild(root);
 
     renderTab(); // Ersten Tab rendern
-    setupHeaderScrollBehavior();
   }
 });
