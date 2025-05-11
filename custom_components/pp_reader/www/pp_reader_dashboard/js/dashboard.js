@@ -73,7 +73,7 @@ function setupHeaderScrollBehavior() {
       }
     },
     {
-      root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
+      root: null, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
       rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
       threshold: 0 // Sticky wird entfernt, sobald ein Pixel sichtbar ist
     }
