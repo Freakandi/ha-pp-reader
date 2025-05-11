@@ -40,12 +40,13 @@ async function renderTab() {
 
 function setupHeaderScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
+  const anchor = document.getElementById('anchor');
   const scrollBorder = document.querySelector('pp-reader-dashboard');
-  if (!headerCard || !scrollBorder) return;
-
+  if (!anchor || !scrollBorder) return;
+  
   const observer = new IntersectionObserver(
     ([entry]) => {
-      if (entry.isIntersecting) {
+      if (!entry.isIntersecting) {
         // Sticky-Eigenschaft aktivieren
         headerCard.classList.add('sticky');
       } else {
@@ -56,11 +57,11 @@ function setupHeaderScrollBehavior() {
     {
       root: scrollBorder, // Beobachte die Sichtbarkeit relativ zu pp-reader-dashboard
       rootMargin: `0px 0px 0px 0px`, // Berücksichtige den HA-Header
-      threshold: 1.0 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
+      threshold: 0.0 // Sticky wird ausgelöst, sobald die Oberkante den Bereich erreicht
     }
   );
 
-  observer.observe(headerCard);
+  observer.observe(anchor);
 }
 
 function setupSwipeOnHeaderCard() {

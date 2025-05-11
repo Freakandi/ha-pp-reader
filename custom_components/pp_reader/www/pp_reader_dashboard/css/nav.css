@@ -174,3 +174,6 @@ html.dark-mode .nav-arrow.disabled {
   opacity: 0.6; /* Transparenz für deaktivierte Buttons */
 }
 
+#anchor {
+  height: 1px;
+}
