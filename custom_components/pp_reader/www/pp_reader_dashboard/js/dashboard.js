@@ -170,7 +170,6 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     root.className = 'pp-reader-dashboard';
     this.appendChild(root);
 
-    setupNavigation(); // Navigation einmalig erstellen
     renderTab(); // Ersten Tab rendern
   }
 });
