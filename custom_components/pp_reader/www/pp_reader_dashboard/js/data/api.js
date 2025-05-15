@@ -5,15 +5,28 @@ export async function fetchStates() {
 }
 
 export async function fetchDashboardDataWS() {
-  // Home Assistant Websocket-Verbindung holen
-  const conn = window.parent && window.parent.hassConnection
-    ? await window.parent.hassConnection
-    : null;
-  if (!conn) throw new Error("Keine Home Assistant Websocket-Verbindung gefunden!");
+  let conn = null;
+  if (window.parent && window.parent.hassConnection) {
+    conn = await window.parent.hassConnection;
+  } else if (window.hassConnection) {
+    conn = await window.hassConnection;
+  }
+  if (!conn) {
+    throw new Error("Keine gültige Home Assistant Websocket-Verbindung gefunden! Bitte das Dashboard als Panel in Home Assistant öffnen.");
+  }
 
-  // Websocket-API aufrufen
-  return conn.sendMessagePromise({
-    type: "pp_reader/get_dashboard_data"
-  });
+  // Neuere HA-Versionen: sendMessage statt sendMessagePromise
+  if (typeof conn.sendMessagePromise === "function") {
+    return conn.sendMessagePromise({
+      type: "pp_reader/get_dashboard_data"
+    });
+  } else if (typeof conn.sendMessage === "function") {
+    // sendMessage gibt ein Promise zurück
+    return conn.sendMessage({
+      type: "pp_reader/get_dashboard_data"
+    });
+  } else {
+    throw new Error("Websocket-Verbindung gefunden, aber keine passende sendMessage-Methode!");
+  }
 }
 
