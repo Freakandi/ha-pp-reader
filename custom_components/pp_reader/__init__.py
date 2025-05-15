@@ -194,7 +194,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as e:
                 connection.send_error(msg["id"], "db_error", str(e))
 
-        hass.components.websocket_api.async_register_command({
+        websocket_api.async_register_command(hass, {
             "type": "pp_reader/get_dashboard_data",
             "handler": ws_get_dashboard_data,
         })
