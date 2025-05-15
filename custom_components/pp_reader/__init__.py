@@ -10,6 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 from homeassistant.components import websocket_api
+from homeassistant.components.websocket_api import websocket_command
 
 from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
@@ -178,6 +179,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
 
         # --- Websocket-API für Dashboard ---
+        @websocket_command({"type": "pp_reader/get_dashboard_data"})
         async def ws_get_dashboard_data(hass, connection, msg):
             """Liefert Konten und Depots aus der SQLite-DB."""
             try:
@@ -194,10 +196,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as e:
                 connection.send_error(msg["id"], "db_error", str(e))
 
-        websocket_api.async_register_command(hass, {
-            "type": "pp_reader/get_dashboard_data",
-            "handler": ws_get_dashboard_data,
-        })
+        websocket_api.async_register_command(hass, ws_get_dashboard_data)
 
         return True
         
