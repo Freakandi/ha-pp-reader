@@ -40,7 +40,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         "module_url": "/pp_reader_dashboard/js/panel.js",
         "trust_external_script": True
     }
-    _LOGGER.warning("Panel-Registrierung (setup): %s", panel_config)
+
     frontend.async_register_built_in_panel(
         hass,
         component_name="custom",

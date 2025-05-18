@@ -17,13 +17,34 @@ import './dashboard.js'; // Importiere dein bestehendes Dashboard
 
 class PPReaderPanel extends HTMLElement {
   set hass(hass) {
-    // Dashboard-Root-Element einfügen (nur einmal)
+    this._hass = hass;
+    this._render();
+  }
+  set narrow(narrow) {
+    this._narrow = narrow;
+    this._render();
+  }
+  set route(route) {
+    this._route = route;
+    this._render();
+  }
+  set panel(panel) {
+    this._panel = panel;
+    this._render();
+  }
+
+  _render() {
     if (!this._initialized) {
       this.innerHTML = `<pp-reader-dashboard></pp-reader-dashboard>`;
       this._initialized = true;
     }
-    // Optional: Das hass-Objekt an die Dashboard-Komponente weiterreichen
-    this.querySelector('pp-reader-dashboard').hass = hass;
+    const dashboard = this.querySelector('pp-reader-dashboard');
+    if (dashboard) {
+      dashboard.hass = this._hass;
+      dashboard.narrow = this._narrow;
+      dashboard.route = this._route;
+      dashboard.panel = this._panel;
+    }
   }
 }
 
