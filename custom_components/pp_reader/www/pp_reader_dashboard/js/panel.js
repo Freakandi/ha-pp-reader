@@ -1,3 +1,18 @@
+// CSS dynamisch laden
+function loadCss(href) {
+  if (!document.querySelector(`link[href="${href}"]`)) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }
+}
+
+loadCss('/pp_reader_dashboard/css/base.css');
+loadCss('/pp_reader_dashboard/css/cards.css');
+loadCss('/pp_reader_dashboard/css/nav.css');
+loadCss('/pp_reader_dashboard/css/theme_dark.css');
+
 import './dashboard.js'; // Importiere dein bestehendes Dashboard
 
 class PPReaderPanel extends HTMLElement {
