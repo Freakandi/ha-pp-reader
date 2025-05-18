@@ -89,22 +89,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         ])
 
-        if "pp-reader" not in hass.data.get("frontend_panels", {}):
-            panel_config = {
-                "module_url": "/pp_reader_dashboard/js/panel.js",
-                "trust_external_script": True
-            }
-            _LOGGER.warning("Panel-Registrierung: %s", panel_config)
+        panel_config = {
+            "module_url": "/pp_reader_dashboard/js/panel.js",
+            "trust_external_script": True
+        }
+        _LOGGER.warning("Panel-Registrierung: %s", panel_config)
 
-            frontend.async_register_built_in_panel(
-                hass,
-                component_name="custom",
-                sidebar_title="Portfolio Dashboard",
-                sidebar_icon="mdi:finance",
-                frontend_url_path="pp-reader",
-                config=panel_config,
-                require_admin=False
-            )
+        frontend.async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title="Portfolio Dashboard",
+            sidebar_icon="mdi:finance",
+            frontend_url_path="ppreader",
+            config=panel_config,
+            require_admin=False
+        )
 
         # API-Proxy Implementierung
         class PPReaderAPI(HomeAssistantView):
