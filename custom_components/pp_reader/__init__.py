@@ -98,6 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 frontend_url_path="pp-reader",
                 config={
                     "module_url": "/pp_reader_dashboard/js/panel.js"  # Dein Einstiegspunkt für das Dashboard
+                    "trust_external_script": True
                 },
                 require_admin=False
             )
