@@ -92,12 +92,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if "pp-reader" not in hass.data.get("frontend_panels", {}):
             frontend.async_register_built_in_panel(
                 hass,
-                "iframe",
-                "Portfolio Dashboard",
-                "mdi:finance", 
-                "pp-reader",
-                {
-                    "url": "/pp_reader_dashboard/dashboard.html"
+                component_name="custom",  # Panel-Typ ist jetzt "custom"
+                sidebar_title="Portfolio Dashboard",
+                sidebar_icon="mdi:finance",
+                frontend_url_path="pp-reader",
+                config={
+                    "module_url": "/pp_reader_dashboard/js/panel.js"  # Dein Einstiegspunkt für das Dashboard
                 },
                 require_admin=False
             )
