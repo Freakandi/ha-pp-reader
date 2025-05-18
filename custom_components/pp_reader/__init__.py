@@ -44,9 +44,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     frontend.async_register_built_in_panel(
         hass,
         component_name="custom",
-        sidebar_title="Test Panel",
+        sidebar_title="Portfolio Dashboard",
         sidebar_icon="mdi:finance",
-        frontend_url_path="testpanel",
+        frontend_url_path="ppreader",
         config=panel_config,
         require_admin=True
     )
