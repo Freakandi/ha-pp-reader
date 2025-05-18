@@ -27,8 +27,30 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]  # Explizite Platform-Konstante ve
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    return True
+    # Dashboard-Dateien registrieren
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            "/pp_reader_dashboard",
+            hass.config.path("custom_components/pp_reader/www/pp_reader_dashboard"),
+            cache_headers=False
+        )
+    ])
 
+    panel_config = {
+        "module_url": "/pp_reader_dashboard/js/panel.js",
+        "trust_external_script": True
+    }
+    _LOGGER.warning("Panel-Registrierung (setup): %s", panel_config)
+    frontend.async_register_built_in_panel(
+        hass,
+        component_name="custom",
+        sidebar_title="Test Panel",
+        sidebar_icon="mdi:finance",
+        frontend_url_path="testpanel",
+        config=panel_config,
+        require_admin=True
+    )
+    return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
@@ -79,31 +101,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.error("❌ Fehler beim Sensor-Setup: %s", str(e))
             raise ConfigEntryNotReady("Sensor-Setup fehlgeschlagen")
-
-        # Dashboard-Dateien registrieren
-        await hass.http.async_register_static_paths([
-            StaticPathConfig(
-                "/pp_reader_dashboard",
-                hass.config.path("custom_components/pp_reader/www/pp_reader_dashboard"),
-                cache_headers=False
-            )
-        ])
-
-        panel_config = {
-            "module_url": "/pp_reader_dashboard/js/panel.js",
-            "trust_external_script": True
-        }
-        _LOGGER.warning("Panel-Registrierung: %s", panel_config)
-
-        frontend.async_register_built_in_panel(
-            hass,
-            component_name="custom",
-            sidebar_title="Portfolio Dashboard",
-            sidebar_icon="mdi:finance",
-            frontend_url_path="ppreader",
-            config=panel_config,
-            require_admin=False
-        )
 
         # API-Proxy Implementierung
         class PPReaderAPI(HomeAssistantView):
