@@ -11,26 +11,24 @@ const tabs = [
 let currentPage = 0;
 let observer; // Globale Variable für Debugging
 
-async function renderTab() {
+async function renderTab(dashboardElem) {
   const tab = tabs[currentPage];
 
   // Tab-Inhalt rendern
   let content = await tab.render();
 
-  // Tab-Inhalte einfügen
-  const root = document.querySelector("pp-reader-dashboard");
-  if (!root) {
-    console.error("pp-reader-dashboard nicht gefunden!");
+  // Inhalte direkt in das übergebene Element einfügen
+  if (!dashboardElem) {
+    console.error("Dashboard-Element nicht gefunden!");
     return;
   }
 
-  // Inhalte direkt in pp-reader-dashboard einfügen
-  root.innerHTML = content;
+  dashboardElem.innerHTML = content;
 
   createThemeToggle();
 
   // #anchor erstellen und vor der header-card platzieren
-  const headerCard = document.querySelector('.header-card');
+  const headerCard = dashboardElem.querySelector('.header-card');
   if (headerCard) {
     let anchor = document.getElementById('anchor');
     if (!anchor) {
@@ -176,6 +174,6 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     root.className = 'pp-reader-dashboard';
     this.appendChild(root);
 
-    renderTab(); // Ersten Tab rendern
+    renderTab(root); // Ersten Tab rendern und root übergeben
   }
 });
