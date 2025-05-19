@@ -47,15 +47,13 @@
 
 .header-card.sticky {
   position: fixed;
-  top: 0;
-  left: 1rem;   /* entspricht dem linken Padding von pp-reader-dashboard */
-  right: 1rem;  /* entspricht dem rechten Padding von pp-reader-dashboard */
-  width: auto;  /* passt sich an die neue Position an */
-  height: 50px;
-  padding: 0.5rem 1rem;
-  margin-right: 0; /* überschreibt evtl. gesetztes margin */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 200; /* ggf. erhöhen, damit sie über anderen Cards liegt */
+  top: 0; /* Bleibt am oberen Rand des Containers */
+  left: 0; /* Bleibt innerhalb des Containers */
+  right: 0; /* Bleibt innerhalb des Containers */
+  width: inherit;
+  z-index: 200; /* Sicherstellen, dass es über anderen Elementen liegt */
+  background: var(--card-background-color, #fff); /* Hintergrundfarbe */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für visuelle Abgrenzung */
 }
 
 /* Überschrift bleibt unverändert */
