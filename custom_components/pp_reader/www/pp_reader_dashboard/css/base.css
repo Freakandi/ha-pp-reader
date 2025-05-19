@@ -15,7 +15,7 @@ pp-reader-dashboard {
   font-family: 'Inter', sans-serif;
   position: relative;
   height: 100%; /* Wird automatisch unterhalb HA-Header positioniert */
-  overflow: auto;
+  overflow-y: auto;
 }
 
 .scroll-container {
