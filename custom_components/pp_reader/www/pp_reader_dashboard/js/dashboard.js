@@ -13,11 +13,8 @@ let observer; // Globale Variable für Debugging
 
 async function renderTab(dashboardElem) {
   const tab = tabs[currentPage];
-
-  // Tab-Inhalt rendern
   let content = await tab.render();
 
-  // Inhalte direkt in das übergebene Element einfügen
   if (!dashboardElem) {
     console.error("Dashboard-Element nicht gefunden!");
     return;
@@ -29,6 +26,11 @@ async function renderTab(dashboardElem) {
 
   // #anchor erstellen und vor der header-card platzieren
   const headerCard = dashboardElem.querySelector('.header-card');
+  if (!headerCard) {
+    console.error("Header-Card nicht gefunden!");
+    return;
+  }
+
   if (headerCard) {
     let anchor = document.getElementById('anchor');
     if (!anchor) {
