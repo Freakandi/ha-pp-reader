@@ -24,67 +24,66 @@ async function renderTab(dashboardElem) {
 
   createThemeToggle();
 
-  // #anchor erstellen und vor der header-card platzieren
-  setTimeout(() => {  
-    const headerCard = dashboardElem.querySelector('.header-card');
-    if (!headerCard) {
-      console.error("Header-Card nicht gefunden!");
-      return;
-    }
-
-    if (headerCard) {
-      let anchor = document.getElementById('anchor');
-      if (!anchor) {
-        anchor = document.createElement('div');
-        anchor.id = 'anchor';
-        headerCard.parentNode.insertBefore(anchor, headerCard);
-        console.log('Anchor wurde erstellt:', anchor); // Debugging-Ausgabe
+  // Warte, bis die `.header-card` im DOM verfügbar ist
+  const waitForHeaderCard = () => new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const headerCard = dashboardElem.querySelector('.header-card');
+      if (headerCard) {
+        clearInterval(interval);
+        resolve(headerCard);
       }
-    }
-  
-    // Navigation in die Header-Card einfügen
-    setupNavigation();
+    }, 50);
+  });
 
-    // Swipe-Funktionalität auf der Header-Card einrichten
-    setupSwipeOnHeaderCard();
+  const headerCard = await waitForHeaderCard();
+  if (!headerCard) {
+    console.error("Header-Card nicht gefunden!");
+    return;
+  }
 
-    // Scrollverhalten der Header Card einrichten
-    setupHeaderScrollBehavior(); // Jetzt aufrufen, nachdem der #anchor erstellt wurde
-  }, 0);
+  // #anchor erstellen und vor der header-card platzieren
+  let anchor = document.getElementById('anchor');
+  if (!anchor) {
+    anchor = document.createElement('div');
+    anchor.id = 'anchor';
+    headerCard.parentNode.insertBefore(anchor, headerCard);
+  }
+
+  // Navigation und Scrollverhalten einrichten
+  setupNavigation();
+  setupSwipeOnHeaderCard();
+  setupHeaderScrollBehavior();
 }
 
 function setupHeaderScrollBehavior() {
   const headerCard = document.querySelector('.header-card');
   const scrollBorder = document.querySelector('pp-reader-dashboard');
   const anchor = document.getElementById('anchor');
-  const headerTitle = document.getElementById('headerTitle'); // Das h1-Element
+  const headerTitle = document.getElementById('headerTitle');
 
-  // Überprüfen, ob alle erforderlichen Elemente vorhanden sind
   if (!headerCard || !scrollBorder || !anchor || !headerTitle) {
     console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder, anchor oder headerTitle.");
     return;
   }
 
-  // IntersectionObserver einrichten
   observer = new IntersectionObserver(
     ([entry]) => {
-      console.log('IntersectionObserver Entry:', entry); // Debugging-Ausgabe
       if (!entry.isIntersecting) {
-        headerCard.classList.add('sticky'); // Sticky-Eigenschaft aktivieren
-        headerTitle.style.fontSize = '1.0rem'; // Schriftgröße verkleinern
+        headerCard.classList.add('sticky');
+        headerTitle.style.fontSize = '1.0rem';
       } else {
-        headerCard.classList.remove('sticky'); // Sticky-Eigenschaft deaktivieren
-        headerTitle.style.fontSize = '1.5rem'; // Schriftgröße zurücksetzen
+        headerCard.classList.remove('sticky');
+        headerTitle.style.fontSize = '1.5rem';
       }
     },
     {
-      root: null, // Verwende den gesamten Viewport
+      root: null,
       rootMargin: `0px 0px 0px 0px`,
       threshold: 0
     }
   );
 
-  observer.observe(anchor); // Beobachtung des #anchor starten
+  observer.observe(anchor);
 }
 
 function setupSwipeOnHeaderCard() {
