@@ -25,30 +25,32 @@ async function renderTab(dashboardElem) {
   createThemeToggle();
 
   // #anchor erstellen und vor der header-card platzieren
-  const headerCard = dashboardElem.querySelector('.header-card');
-  if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
-    return;
-  }
-
-  if (headerCard) {
-    let anchor = document.getElementById('anchor');
-    if (!anchor) {
-      anchor = document.createElement('div');
-      anchor.id = 'anchor';
-      headerCard.parentNode.insertBefore(anchor, headerCard);
-      console.log('Anchor wurde erstellt:', anchor); // Debugging-Ausgabe
+  setTimeout(() => {  
+    const headerCard = dashboardElem.querySelector('.header-card');
+    if (!headerCard) {
+      console.error("Header-Card nicht gefunden!");
+      return;
     }
-  }
 
-  // Navigation in die Header-Card einfügen
-  setupNavigation();
+    if (headerCard) {
+      let anchor = document.getElementById('anchor');
+      if (!anchor) {
+        anchor = document.createElement('div');
+        anchor.id = 'anchor';
+        headerCard.parentNode.insertBefore(anchor, headerCard);
+        console.log('Anchor wurde erstellt:', anchor); // Debugging-Ausgabe
+      }
+    }
+  
+    // Navigation in die Header-Card einfügen
+    setupNavigation();
 
-  // Swipe-Funktionalität auf der Header-Card einrichten
-  setupSwipeOnHeaderCard();
+    // Swipe-Funktionalität auf der Header-Card einrichten
+    setupSwipeOnHeaderCard();
 
-  // Scrollverhalten der Header Card einrichten
-  setupHeaderScrollBehavior(); // Jetzt aufrufen, nachdem der #anchor erstellt wurde
+    // Scrollverhalten der Header Card einrichten
+    setupHeaderScrollBehavior(); // Jetzt aufrufen, nachdem der #anchor erstellt wurde
+  }, 0);
 }
 
 function setupHeaderScrollBehavior() {
