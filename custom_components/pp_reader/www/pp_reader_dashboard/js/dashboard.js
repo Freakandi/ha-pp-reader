@@ -50,16 +50,16 @@ async function renderTab(dashboardElem) {
   }
 
   // Navigation und Scrollverhalten einrichten
-  setupNavigation();
-  setupSwipeOnHeaderCard();
-  setupHeaderScrollBehavior();
+  setupNavigation(dashboardElem);
+  setupSwipeOnHeaderCard(dashboardElem);
+  setupHeaderScrollBehavior(dashboardElem);
 }
 
-function setupHeaderScrollBehavior() {
-  const headerCard = document.querySelector('.header-card');
-  const scrollBorder = document.querySelector('pp-reader-dashboard');
-  const anchor = document.getElementById('anchor');
-  const headerTitle = document.getElementById('headerTitle');
+function setupHeaderScrollBehavior(dashboardElem) {
+  const headerCard = dashboardElem.querySelector('.header-card');
+  const scrollBorder = dashboardElem;
+  const anchor = dashboardElem.querySelector('#anchor');
+  const headerTitle = dashboardElem.querySelector('#headerTitle');
 
   if (!headerCard || !scrollBorder || !anchor || !headerTitle) {
     console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder, anchor oder headerTitle.");
@@ -86,8 +86,8 @@ function setupHeaderScrollBehavior() {
   observer.observe(anchor);
 }
 
-function setupSwipeOnHeaderCard() {
-  const headerCard = document.querySelector('.header-card');
+function setupSwipeOnHeaderCard(dashboardElem) {
+  const headerCard = dashboardElem.querySelector('.header-card');
   if (!headerCard) return;
 
   addSwipeEvents(
@@ -95,20 +95,20 @@ function setupSwipeOnHeaderCard() {
     () => {
       if (currentPage < tabs.length - 1) {
         currentPage++;
-        renderTab();
+        renderTab(dashboardElem);
       }
     },
     () => {
       if (currentPage > 0) {
         currentPage--;
-        renderTab();
+        renderTab(dashboardElem);
       }
     }
   );
 }
 
-function setupNavigation() {
-  const headerCard = document.querySelector('.header-card');
+function setupNavigation(dashboardElem) {
+  const headerCard = dashboardElem.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
     return;
@@ -144,17 +144,17 @@ function setupNavigation() {
   }
 
   // Event-Listener für Navigationselemente hinzufügen
-  document.getElementById('nav-left')?.addEventListener('click', () => {
+  dashboardElem.querySelector('#nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
-      renderTab();
+      renderTab(dashboardElem);
     }
   });
 
-  document.getElementById('nav-right')?.addEventListener('click', () => {
+  dashboardElem.querySelector('#nav-right')?.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
-      renderTab();
+      renderTab(dashboardElem);
     }
   });
 }
