@@ -54,7 +54,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             frontend_url_path="ppreader",
             config={
                 "_panel_custom": {
-                    "name": "pp-reader-frontend",
+                    "name": "pp-reader-panel",
                     "embed_iframe": False,  # Kein IFrame verwenden
                     "module_url": "/pp_reader_dashboard/panel.js",
                     "trust_external": True,
