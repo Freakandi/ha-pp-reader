@@ -9,21 +9,30 @@ const tabs = [
 ];
 
 let currentPage = 0;
-let observer;
+let observer; // Globale Variable für Debugging
 
-async function renderTab(dashboardElem, hass) {
+async function renderTab() {
   const tab = tabs[currentPage];
+
+  // Tab-Inhalt rendern
   let content = await tab.render();
 
-  // Inhalte direkt in das eigene Element einfügen
-  dashboardElem.innerHTML = content;
+  // Tab-Inhalte einfügen
+  const root = document.querySelector("pp-reader-dashboard");
+  if (!root) {
+    console.error("pp-reader-dashboard nicht gefunden!");
+    return;
+  }
+
+  // Inhalte direkt in pp-reader-dashboard einfügen
+  root.innerHTML = content;
 
   createThemeToggle();
 
   // #anchor erstellen und vor der header-card platzieren
-  const headerCard = dashboardElem.querySelector('.header-card');
+  const headerCard = document.querySelector('.header-card');
   if (headerCard) {
-    let anchor = dashboardElem.getElementById('anchor');
+    let anchor = document.getElementById('anchor');
     if (!anchor) {
       anchor = document.createElement('div');
       anchor.id = 'anchor';
@@ -33,20 +42,20 @@ async function renderTab(dashboardElem, hass) {
   }
 
   // Navigation in die Header-Card einfügen
-  setupNavigation(dashboardElem);
+  setupNavigation();
 
   // Swipe-Funktionalität auf der Header-Card einrichten
-  setupSwipeOnHeaderCard(dashboardElem);
+  setupSwipeOnHeaderCard();
 
   // Scrollverhalten der Header Card einrichten
-  setupHeaderScrollBehavior(dashboardElem); // Jetzt aufrufen, nachdem der #anchor erstellt wurde
+  setupHeaderScrollBehavior(); // Jetzt aufrufen, nachdem der #anchor erstellt wurde
 }
 
-function setupHeaderScrollBehavior(dashboardElem) {
-  const headerCard = dashboardElem.querySelector('.header-card');
-  const scrollBorder = dashboardElem;
-  const anchor = dashboardElem.getElementById('anchor');
-  const headerTitle = dashboardElem.getElementById('headerTitle'); // Das h1-Element
+function setupHeaderScrollBehavior() {
+  const headerCard = document.querySelector('.header-card');
+  const scrollBorder = document.querySelector('pp-reader-dashboard');
+  const anchor = document.getElementById('anchor');
+  const headerTitle = document.getElementById('headerTitle'); // Das h1-Element
 
   // Überprüfen, ob alle erforderlichen Elemente vorhanden sind
   if (!headerCard || !scrollBorder || !anchor || !headerTitle) {
@@ -76,8 +85,8 @@ function setupHeaderScrollBehavior(dashboardElem) {
   observer.observe(anchor); // Beobachtung des #anchor starten
 }
 
-function setupSwipeOnHeaderCard(dashboardElem) {
-  const headerCard = dashboardElem.querySelector('.header-card');
+function setupSwipeOnHeaderCard() {
+  const headerCard = document.querySelector('.header-card');
   if (!headerCard) return;
 
   addSwipeEvents(
@@ -85,20 +94,20 @@ function setupSwipeOnHeaderCard(dashboardElem) {
     () => {
       if (currentPage < tabs.length - 1) {
         currentPage++;
-        renderTab(dashboardElem, dashboardElem._hass);
+        renderTab();
       }
     },
     () => {
       if (currentPage > 0) {
         currentPage--;
-        renderTab(dashboardElem, dashboardElem._hass);
+        renderTab();
       }
     }
   );
 }
 
-function setupNavigation(dashboardElem) {
-  const headerCard = dashboardElem.querySelector('.header-card');
+function setupNavigation() {
+  const headerCard = document.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
     return;
@@ -137,14 +146,14 @@ function setupNavigation(dashboardElem) {
   document.getElementById('nav-left')?.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
-      renderTab(dashboardElem, dashboardElem._hass);
+      renderTab();
     }
   });
 
   document.getElementById('nav-right')?.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
-      renderTab(dashboardElem, dashboardElem._hass);
+      renderTab();
     }
   });
 }
@@ -161,20 +170,12 @@ function updateNavigationState() {
   }
 }
 
-class PPReaderDashboard extends HTMLElement {
-  set hass(hass) {
-    this._hass = hass;
-    this.render();
-  }
-
+customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
-    this.render();
-  }
+    const root = document.createElement('div');
+    root.className = 'pp-reader-dashboard';
+    this.appendChild(root);
 
-  async render() {
-    await renderTab(this, this._hass);
-    // Passe ggf. weitere Methoden an, damit sie auf this statt document zugreifen
+    renderTab(); // Ersten Tab rendern
   }
-}
-
-customElements.define('pp-reader-dashboard', PPReaderDashboard);
+});
