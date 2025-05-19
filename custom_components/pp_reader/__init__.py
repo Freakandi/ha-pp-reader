@@ -37,8 +37,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     ])
 
     panel_config = {
-        "module_url": "/pp_reader_dashboard/panel.js",
-        "trust_external_script": True
+        "_panel_custom": {
+            "name": "pp-reader-frontend",
+            "embed_iframe": False,
+            "module_url": "/pp_reader_dashboard/panel.js",
+            "trust_external": True,
+        }
     }
 
     if "ppreader" not in hass.data.get("frontend_panels", {}):
@@ -51,7 +55,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             config={
                 "_panel_custom": {
                     "name": "pp-reader-frontend",
-                    "embed_iframe": True,
+                    "embed_iframe": False,  # Kein IFrame verwenden
                     "module_url": "/pp_reader_dashboard/panel.js",
                     "trust_external": True,
                 }
