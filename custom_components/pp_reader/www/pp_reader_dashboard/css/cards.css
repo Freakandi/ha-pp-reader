@@ -49,7 +49,7 @@
 .header-card.sticky {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Panel */
   z-index: 200;
   background: var(--card-background-color, #fff);
