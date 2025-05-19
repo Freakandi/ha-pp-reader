@@ -49,8 +49,8 @@
 .header-card.sticky {
   position: fixed;
   top: 0;
-  right: 0;
-  width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Panel */
+  right: 1rem; /* Zentrierung durch 1rem Abstand links */
+  width: calc(var(--panel-width, 100%) - 2rem); /* Dynamische Breite minus 2rem */
   z-index: 200;
   background: var(--card-background-color, #fff);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
