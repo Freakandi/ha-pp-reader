@@ -37,20 +37,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     ])
 
     panel_config = {
-        "module_url": "/pp_reader_dashboard/js/panel.js",
+        "module_url": "/pp_reader_dashboard/panel.js",
         "trust_external_script": True
     }
 
-    frontend.async_register_built_in_panel(
-        hass,
-        component_name="custom",
-        sidebar_title="Portfolio Dashboard",
-        sidebar_icon="mdi:finance",
-        frontend_url_path="ppreader",
-        module_url="/pp_reader_dashboard/js/panel.js",
-        trust_external_script=True,
-        require_admin=True
-    )
+    if "ppreader" not in hass.data.get("frontend_panels", {}):
+        frontend.async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title="Portfolio Dashboard",
+            sidebar_icon="mdi:finance",
+            frontend_url_path="ppreader",
+            config={
+                "_panel_custom": {
+                    "name": "pp-reader-frontend",
+                    "embed_iframe": True,
+                    "module_url": "/pp_reader_dashboard/js/panel.js",
+                }
+            },
+            require_admin=True,
+        )
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

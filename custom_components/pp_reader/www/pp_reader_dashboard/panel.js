@@ -13,7 +13,7 @@ loadCss('/pp_reader_dashboard/css/cards.css');
 loadCss('/pp_reader_dashboard/css/nav.css');
 loadCss('/pp_reader_dashboard/css/theme_dark.css');
 
-import './dashboard.js'; // Importiere dein bestehendes Dashboard
+import './js/dashboard.js'; // Importiere dein bestehendes Dashboard
 
 class PPReaderPanel extends HTMLElement {
   set hass(hass) {
