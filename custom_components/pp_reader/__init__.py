@@ -47,7 +47,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         sidebar_title="Portfolio Dashboard",
         sidebar_icon="mdi:finance",
         frontend_url_path="ppreader",
-        modul_url="/pp_reader_dashboard/js/panel.js",
+        module_url="/pp_reader_dashboard/js/panel.js",
         trust_external_script=True,
         require_admin=True
     )
