@@ -1,11 +1,18 @@
-import './js/dashboard.js'; // Importiere dein bestehendes Dashboard
+import './js/dashboard.js'; // Importiere das Dashboard
 
-// Shadow DOM für das Panel verwenden
 class PPReaderPanel extends HTMLElement {
   constructor() {
     super();
     // Shadow DOM erstellen
     this.attachShadow({ mode: 'open' });
+
+    // Wrapper-Struktur erstellen
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('wrapper');
+
+    // Dashboard-Container hinzufügen
+    const dashboard = document.createElement('pp-reader-dashboard');
+    wrapper.appendChild(dashboard);
 
     // CSS-Dateien ins Shadow DOM laden
     this._loadCss('/pp_reader_dashboard/css/base.css');
@@ -13,10 +20,12 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('/pp_reader_dashboard/css/nav.css');
     this._loadCss('/pp_reader_dashboard/css/theme_dark.css');
 
-    // Dashboard-Container hinzufügen
-    const container = document.createElement('div');
-    container.innerHTML = `<pp-reader-dashboard></pp-reader-dashboard>`;
-    this.shadowRoot.appendChild(container);
+    // Wrapper und Stile ins Shadow DOM einfügen
+    this.shadowRoot.appendChild(wrapper);
+
+    // ResizeObserver initialisieren
+    this._resizeObserver = new ResizeObserver(() => this._updateWidth());
+    this._resizeObserver.observe(this);
   }
 
   // Funktion zum Laden von CSS-Dateien ins Shadow DOM
@@ -25,6 +34,15 @@ class PPReaderPanel extends HTMLElement {
     link.rel = 'stylesheet';
     link.href = href;
     this.shadowRoot.appendChild(link);
+  }
+
+  // Dynamische Breitenanpassung
+  _updateWidth() {
+    const wrapper = this.shadowRoot.querySelector('.wrapper');
+    if (wrapper) {
+      const panelWidth = this.getBoundingClientRect().width;
+      wrapper.style.setProperty('--panel-width', `${panelWidth}px`);
+    }
   }
 
   // Setter für Home Assistant-Attribute
@@ -53,6 +71,13 @@ class PPReaderPanel extends HTMLElement {
       dashboard.narrow = this._narrow;
       dashboard.route = this._route;
       dashboard.panel = this._panel;
+    }
+  }
+
+  // Cleanup beim Entfernen des Elements
+  disconnectedCallback() {
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
     }
   }
 }

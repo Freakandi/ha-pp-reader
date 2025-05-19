@@ -45,15 +45,15 @@
   gap: 0.3rem;
 }
 
+/* Sticky Header-Card */
 .header-card.sticky {
   position: fixed;
-  top: 0; /* Bleibt am oberen Rand des Containers */
-  left: 0; /* Bleibt innerhalb des Containers */
-  right: 0; /* Bleibt innerhalb des Containers */
-  width: var(--dashboard-width); /* Breite des Containers */
-  z-index: 200; /* Sicherstellen, dass es über anderen Elementen liegt */
-  background: var(--card-background-color, #fff); /* Hintergrundfarbe */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für visuelle Abgrenzung */
+  top: 0;
+  left: 0;
+  width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Panel */
+  z-index: 200;
+  background: var(--card-background-color, #fff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Überschrift bleibt unverändert */

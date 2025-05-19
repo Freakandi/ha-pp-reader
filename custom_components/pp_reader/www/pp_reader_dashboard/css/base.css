@@ -1,16 +1,29 @@
+/* Host-Element (pp-reader-panel) */
+:host {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden; /* Verhindert ungewollte Scrollbars */
+}
+
+/* Wrapper-Struktur */
+.wrapper {
+  max-width: 100%; /* Begrenzung auf die Breite des Panels */
+  margin: 0 auto; /* Zentrierung */
+  width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
+  box-sizing: border-box;
+  overflow: hidden; /* Verhindert horizontale Scrollbars */
+}
+
+/* Dashboard-Inhalte */
 pp-reader-dashboard {
   display: block;
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  box-sizing: border-box;
-  font-family: 'Inter', sans-serif;
-  --dashboard-width: 100%;
-  position: relative;
-  width: var(--dashboard-width);
+  width: 100%;
   height: 100%;
+  box-sizing: border-box;
   overflow-y: auto;
+  padding: 1rem;
+  font-family: 'Inter', sans-serif;
 }
 
 .scroll-container {
