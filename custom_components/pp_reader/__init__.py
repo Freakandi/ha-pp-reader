@@ -52,7 +52,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 "_panel_custom": {
                     "name": "pp-reader-frontend",
                     "embed_iframe": True,
-                    "module_url": "/pp_reader_dashboard/js/panel.js",
+                    "module_url": "/pp_reader_dashboard/panel.js",
                 }
             },
             require_admin=True,
