@@ -123,7 +123,7 @@ function setupNavigation(dashboardElem) {
 
   // Navigationselemente und Titel einfügen
   headerCard.innerHTML = `
-    <div style="display: flex; width: 100%; margin-right: 1rem; align-items: center; justify-content: space-between;">
+    <div style="display: flex; width: inherit; margin-right: 1rem; align-items: center; justify-content: space-between;">
       <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>

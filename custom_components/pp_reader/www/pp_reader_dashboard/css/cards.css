@@ -50,7 +50,7 @@
   top: 0; /* Bleibt am oberen Rand des Containers */
   left: 0; /* Bleibt innerhalb des Containers */
   right: 0; /* Bleibt innerhalb des Containers */
-  width: inherit;
+  width: var(--dashboard-width); /* Breite des Containers */
   z-index: 200; /* Sicherstellen, dass es über anderen Elementen liegt */
   background: var(--card-background-color, #fff); /* Hintergrundfarbe */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Schatten für visuelle Abgrenzung */

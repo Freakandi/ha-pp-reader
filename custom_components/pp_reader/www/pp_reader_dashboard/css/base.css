@@ -6,8 +6,9 @@ pp-reader-dashboard {
   padding-right: 1rem;
   box-sizing: border-box;
   font-family: 'Inter', sans-serif;
+  --dashboard-width: 100%;
   position: relative;
-  width: 100%;
+  width: var(--dashboard-width);
   height: 100%;
   overflow-y: auto;
 }
