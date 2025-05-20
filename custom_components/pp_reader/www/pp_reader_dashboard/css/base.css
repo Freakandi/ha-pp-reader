@@ -14,7 +14,7 @@
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
   height: auto; /* wird durch flex geregelt */
   box-sizing: border-box;
-  overflow: hidden; /* Verhindert horizontales Scrollen */
+  overflow: hidden;
   flex: 1 1 auto;
   height: 0; /* Wichtig: damit flex die Höhe übernimmt */
   min-height: 0; /* Für flexbox overflow */
@@ -41,18 +41,18 @@ pp-reader-dashboard {
 
 /* Kopfleiste */
 .header {
-  display: fixed;
-  align-items: center;
-  justify-content: space-between;
-  width: calc(var(--panel-width, 100%));
+  display: flex;                /* Flexbox für horizontale Anordnung */
+  align-items: center;          /* Vertikal zentrieren */
+  justify-content: flex-start;  /* Linksbündig */
+  width: 100%;
   height: 56px;
   padding: 0 1rem;
-  background-color: var(--primary-color, #03a9f4); /* Standard-HA-Farbe */
+  background-color: var(--primary-color, #03a9f4);
   color: var(--text-primary-color, #fff);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 10; /* Über allen anderen Elementen */
-  position: sticky; /* Fixiert den Header innerhalb des Containers */
-  top: 0; /* Bleibt am oberen Rand des Containers */
+  z-index: 10;
+  position: fixed;
+  top: 0;
   box-sizing: border-box;
   flex: 0 0 auto;
   background: var(--primary-color, #03a9f4);
@@ -71,6 +71,7 @@ pp-reader-dashboard {
   padding: 0;
   margin: 0;
   color: var(--text-primary-color, #fff);
+  margin-right: 1rem;           /* Abstand zwischen Button und Titel */
 }
 
 .header .menu-icon {
@@ -87,7 +88,7 @@ pp-reader-dashboard {
   margin: 0;
   align-self: center;
   padding: 0;
-  flex-grow: 1;
+  flex-grow: 0;                 /* Kein zusätzliches Wachstum */
   text-align: left;
   color: var(--text-primary-color, #fff);
 }
