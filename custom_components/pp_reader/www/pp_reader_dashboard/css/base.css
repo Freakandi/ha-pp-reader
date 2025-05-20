@@ -2,8 +2,9 @@
 :host {
   display: block;
   width: 100%;
+  height: 100vh;      /* Panel darf nie höher als der Viewport sein */
   box-sizing: border-box;
-  overflow: hidden; /* Verhindert ungewollte Scrollbars */
+  overflow: hidden;   /* Keine Scrollbar am Panel */
 }
 
 /* Wrapper-Struktur */
@@ -17,6 +18,7 @@
   flex: 1 1 auto;
   height: 0; /* Wichtig: damit flex die Höhe übernimmt */
   min-height: 0; /* Für flexbox overflow */
+  min-width: 0;
 }
 
 /* Dashboard-Inhalte */
@@ -27,6 +29,7 @@ pp-reader-dashboard {
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   padding: 1rem;
   font-family: 'Inter', sans-serif;
 }
@@ -73,17 +76,19 @@ pp-reader-dashboard {
 .header .menu-icon {
   width: 24px;
   height: 24px;
+  align-self: center;
   fill: currentColor;
 }
 
 /* Titel */
 .header .title {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 500;
   margin: 0;
+  align-self: center;
   padding: 0;
   flex-grow: 1;
-  text-align: center;
+  text-align: left;
   color: var(--text-primary-color, #fff);
 }
 
@@ -99,8 +104,8 @@ pp-reader-dashboard {
 .panel-root {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* oder 100% falls das Panel nicht die volle Höhe braucht */
+  height: 100vh;      /* Füllt exakt den Viewport */
   width: 100%;
   box-sizing: border-box;
-  overflow: hidden; /* Verhindert, dass .panel-root selbst scrollbar ist */
+  overflow: hidden;   /* Keine Scrollbar am Root */
 }
