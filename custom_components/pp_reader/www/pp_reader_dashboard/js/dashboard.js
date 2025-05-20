@@ -22,8 +22,6 @@ async function renderTab(dashboardElem) {
 
   dashboardElem.innerHTML = content;
 
-  createThemeToggle(dashboardElem); // Übergib dashboardElem als Container
-
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
     const interval = setInterval(() => {
@@ -53,6 +51,7 @@ async function renderTab(dashboardElem) {
   setupNavigation(dashboardElem);
   setupSwipeOnHeaderCard(dashboardElem);
   setupHeaderScrollBehavior(dashboardElem);
+  createThemeToggle(dashboardElem); // Übergib dashboardElem als Container
 }
 
 function setupHeaderScrollBehavior(dashboardElem) {

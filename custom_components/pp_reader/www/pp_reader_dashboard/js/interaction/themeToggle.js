@@ -6,14 +6,14 @@ export function createThemeToggle(container) {
   checkbox.type = 'checkbox';
   checkbox.id = 'theme-toggle';
 
-  // Ziel für die Klasse bestimmen
+  // Ziel: pp-reader-dashboard im Shadow-DOM finden
   let target;
-  if (container && container.getRootNode && container.getRootNode().host) {
-    target = container.getRootNode().host;
-    _console.console.log('Container gefunden, Ziel gesetzt.');
-  } else {
-    target = document.documentElement;
-    _console.console.log('Container nicht gefunden, Standardziel verwendet.');
+  if (container) {
+    target = container.querySelector('pp-reader-dashboard');
+  }
+  if (!target) {
+    console.warn('pp-reader-dashboard nicht gefunden, ThemeToggle ohne Funktion.');
+    return;
   }
 
   // Zustand beim Laden wiederherstellen
@@ -30,6 +30,6 @@ export function createThemeToggle(container) {
   });
 
   toggleWrapper.appendChild(checkbox);
-  (container || document.body).appendChild(toggleWrapper);
+  container.appendChild(toggleWrapper);
 }
 
