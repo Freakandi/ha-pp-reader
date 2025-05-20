@@ -49,3 +49,7 @@
 .pp-reader-dashboard .header-card .meta div strong {
   color: #e0e0e0;
 }
+
+.pp-reader-dashboard.dark-mode .card.header-card {
+  background: #2c2c2c;
+}

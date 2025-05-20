@@ -6,10 +6,14 @@ export function createThemeToggle(container) {
   checkbox.type = 'checkbox';
   checkbox.id = 'theme-toggle';
 
-  // Ziel: das innere Div mit der Klasse .pp-reader-dashboard
+  // Ziel: container selbst, falls es die richtige Klasse hat, sonst darin suchen
   let target = null;
   if (container) {
-    target = container.querySelector('.pp-reader-dashboard');
+    if (container.classList && container.classList.contains('pp-reader-dashboard')) {
+      target = container;
+    } else {
+      target = container.querySelector('.pp-reader-dashboard');
+    }
   }
   if (!target) {
     console.warn('.pp-reader-dashboard nicht gefunden, ThemeToggle ohne Funktion.');
