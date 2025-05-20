@@ -51,7 +51,7 @@ async function renderTab(dashboardElem) {
   setupNavigation(dashboardElem);
   setupSwipeOnHeaderCard(dashboardElem);
   setupHeaderScrollBehavior(dashboardElem);
-  createThemeToggle(dashboardElem); // Übergib dashboardElem als Container
+  /*createThemeToggle(dashboardElem);*/ // Übergib dashboardElem als Container
 }
 
 function setupHeaderScrollBehavior(dashboardElem) {

@@ -1,3 +1,4 @@
+import { createHeaderCard } from '../content/elements.js';
 import { fetchDashboardDataWS } from '../data/api.js';
 
 export async function renderTestTab() {
@@ -13,13 +14,17 @@ export async function renderTestTab() {
     error = e.message;
   }
 
+  // Meta-Informationen für die Header-Card
+  const meta = `
+    <div>Dies ist ein Test-Tab</div>
+  `;
+
+  // Header-Card erstellen
+  const headerCard = createHeaderCard('Test Tab', meta);
+
+  // Tab-Inhalte zurückgeben
   return `
-    <div class="header-card">
-      <h1>Test Tab</h1>
-      <div class="meta">
-        <div>Dies ist ein Test-Tab</div>
-      </div>
-    </div>
+    ${headerCard.outerHTML}
     <div class="card">
       <h2>Konten aus DB</h2>
       ${error ? `<div style="color:red;">Fehler: ${error}</div>` : ""}
