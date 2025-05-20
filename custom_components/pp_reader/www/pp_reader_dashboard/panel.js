@@ -33,9 +33,6 @@ class PPReaderPanel extends HTMLElement {
     // Inhalte ins Shadow DOM einfügen
     this.shadowRoot.appendChild(container);
 
-    // Dark-Mode-Klasse setzen
-    this._applyDarkMode();
-
     // Event-Listener für den Menü-Button
     container.querySelector('.menu-button').addEventListener('click', () => {
       const haSidebar = document.querySelector('ha-sidebar');
@@ -80,6 +77,7 @@ class PPReaderPanel extends HTMLElement {
   // Setter für Home Assistant-Attribute
   set hass(hass) {
     this._hass = hass;
+    this._applyDarkMode();
     this._updateDashboard();
   }
   set narrow(narrow) {
