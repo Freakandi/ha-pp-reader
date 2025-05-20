@@ -13,7 +13,7 @@
   top: 56px; /* Abstand unter dem festen Header */
   max-width: 100%;
   margin: 0 auto;
-  width: var(--panel-width, 100%);
+  width: 100%;
   box-sizing: border-box;
   overflow: hidden;   /* Wrapper selbst nicht scrollbar */
   flex: 1 1 auto;
@@ -24,7 +24,7 @@
 /* Dashboard-Inhalte */
 pp-reader-dashboard {
   display: block;
-  width: 100%;
+  width: var(--panel-width, 100%);
   height: 100%;
   box-sizing: border-box;
   overflow-y: auto;
