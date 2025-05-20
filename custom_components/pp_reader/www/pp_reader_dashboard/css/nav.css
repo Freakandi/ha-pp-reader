@@ -65,11 +65,11 @@
 }
 
 /* Dark Mode Anpassungen */
-pp-reader-dashboard.dark-mode .nav-arrow {
+.pp-reader-dashboard.dark-mode .nav-arrow {
   background-color: rgba(120, 120, 120, 0.9);
 }
 
-pp-reader-dashboard.dark-mode .nav-arrow.disabled {
+.pp-reader-dashboard.dark-mode .nav-arrow.disabled {
   background-color: rgba(70, 70, 70, 0.9);
 }
 

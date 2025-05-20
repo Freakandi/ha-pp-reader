@@ -6,17 +6,13 @@ export function createThemeToggle(container) {
   checkbox.type = 'checkbox';
   checkbox.id = 'theme-toggle';
 
-  // Ziel: pp-reader-dashboard im Shadow-DOM finden oder container selbst verwenden
+  // Ziel: das innere Div mit der Klasse .pp-reader-dashboard
   let target = null;
   if (container) {
-    if (container.tagName === 'PP-READER-DASHBOARD') {
-      target = container;
-    } else {
-      target = container.querySelector('pp-reader-dashboard');
-    }
+    target = container.querySelector('.pp-reader-dashboard');
   }
   if (!target) {
-    console.warn('pp-reader-dashboard nicht gefunden, ThemeToggle ohne Funktion.');
+    console.warn('.pp-reader-dashboard nicht gefunden, ThemeToggle ohne Funktion.');
     return;
   }
 

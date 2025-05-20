@@ -1,51 +1,51 @@
-pp-reader-dashboard.dark-mode pp-reader-dashboard {
+.pp-reader-dashboard.dark-mode {
   background: #1e1e1e;
   color: #e0e0e0;
 }
 
-pp-reader-dashboard.dark-mode .card {
+.pp-reader-dashboard.dark-mode .card {
   background: #2c2c2c;
 }
 
-pp-reader-dashboard.dark-mode th {
+.pp-reader-dashboard.dark-mode th {
   background: #2c2c2c;
   color: #fafafa;
 }
 
-pp-reader-dashboard.dark-mode tbody tr:nth-child(odd) {
+.pp-reader-dashboard.dark-mode tbody tr:nth-child(odd) {
   background: #1a1a1a;
 }
 
-pp-reader-dashboard.dark-mode tbody tr:hover {
+.pp-reader-dashboard.dark-mode tbody tr:hover {
   background: #333333;
 }
 
-pp-reader-dashboard.dark-mode .footer-row td {
+.pp-reader-dashboard .footer-row td {
   background: #2c2c2c;
   color: #fafafa;
 }
 
-pp-reader-dashboard.dark-mode h2 {
+.pp-reader-dashboard h2 {
   border-left-color: #90caf9;
 }
 
-pp-reader-dashboard.dark-mode .positive {
+.pp-reader-dashboard .positive {
   color: #4caf50;
 }
 
-pp-reader-dashboard.dark-mode .negative {
+.pp-reader-dashboard .negative {
   color: #f44336;
 }
 
-pp-reader-dashboard.dark-mode .meta div strong {
+.pp-reader-dashboard .meta div strong {
   color: #e0e0e0;
 }
 
-pp-reader-dashboard.dark-mode .header-card {
+.pp-reader-dashboard .header-card {
   background: #2c2c2c;
   color: #fafafa;
 }
 
-pp-reader-dashboard.dark-mode .header-card .meta div strong {
+.pp-reader-dashboard .header-card .meta div strong {
   color: #e0e0e0;
 }
