@@ -9,6 +9,7 @@
 
 /* Wrapper-Struktur */
 .wrapper {
+  position: relative;
   max-width: 100%; /* Begrenzung auf die Breite des Panels */
   margin: 0 auto; /* Zentrierung */
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
