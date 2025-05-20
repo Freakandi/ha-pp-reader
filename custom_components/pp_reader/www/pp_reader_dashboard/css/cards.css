@@ -51,7 +51,7 @@
   top: 56px;
   right: 1rem; /* Zentrierung durch 1rem Abstand links */
   width: calc(var(--panel-width, 100%) - 2rem); /* Dynamische Breite minus 2rem */
-  height: 50%;
+  height: fit-content;
   z-index: 200;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
@@ -62,7 +62,7 @@
   top: 56px;
   right: 1rem; /* Zentrierung durch 1rem Abstand links */
   width: calc(var(--panel-width, 100%) - 2rem); /* Dynamische Breite minus 2rem */
-  height: 50%;
+  height: fit-content;
   z-index: 200;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -78,7 +78,7 @@
 /* Überschrift bleibt unverändert */
 .header-card.sticky > h1 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 1rem;
   text-align: center;
 }
 
