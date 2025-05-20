@@ -87,18 +87,20 @@ export function createHeaderCard(headerTitle, meta) {
   headerCard.className = 'header-card';
 
   headerCard.innerHTML = `
-    <button id="nav-left" class="nav-arrow" aria-label="Vorherige Seite">
-      <svg viewBox="0 0 24 24">
-        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
-      </svg>
-    </button>
-    <h1 id="headerTitle">${headerTitle}</h1>
+    <div class="header-content">
+      <button id="nav-left" class="nav-arrow" aria-label="Vorherige Seite">
+        <svg viewBox="0 0 24 24">
+          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
+        </svg>
+      </button>
+      <h1 id="headerTitle">${headerTitle}</h1>
+      <button id="nav-right" class="nav-arrow" aria-label="Nächste Seite">
+        <svg viewBox="0 0 24 24">
+          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
+        </svg>
+      </button>
+    </div>
     <div id="headerMeta" class="meta">${meta}</div>
-    <button id="nav-right" class="nav-arrow" aria-label="Nächste Seite">
-      <svg viewBox="0 0 24 24">
-        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
-      </svg>
-    </button>
   `;
 
   return headerCard;

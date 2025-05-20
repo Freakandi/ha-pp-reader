@@ -33,7 +33,6 @@ pp-reader-dashboard,
   display: block;
   width: 100%;
   height: 100%;
-  padding: 0.5rem;
   box-sizing: border-box;
   overflow-y: auto;   /* Nur hier darf gescrollt werden */
   overflow-x: hidden;
