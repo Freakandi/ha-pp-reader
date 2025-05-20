@@ -16,6 +16,8 @@
   overflow-y: auto; /* Ermöglicht vertikales Scrollen */
   overflow-x: hidden; /* Verhindert horizontales Scrollen */
   flex: 1 1 auto;
+  height: 0; /* Wichtig: damit flex die Höhe übernimmt */
+  min-height: 0; /* Für flexbox overflow */
 }
 
 /* Dashboard-Inhalte */
@@ -49,7 +51,7 @@ pp-reader-dashboard {
   top: 0; /* Bleibt am oberen Rand des Containers */
   box-sizing: border-box;
   flex: 0 0 auto;
-  background: var(--card-background-color, #fff);
+  background: var(--primary-color, #03a9f4);
 }
 
 /* Menü-Button */
@@ -99,4 +101,5 @@ pp-reader-dashboard {
   height: 100vh; /* oder 100% falls das Panel nicht die volle Höhe braucht */
   width: 100%;
   box-sizing: border-box;
+  overflow: hidden; /* Verhindert, dass .panel-root selbst scrollbar ist */
 }
