@@ -9,7 +9,7 @@
 
 /* Wrapper-Struktur */
 .wrapper {
-  position: fixed;
+  position: absolute;
   max-width: 100%; /* Begrenzung auf die Breite des Panels */
   margin: 0 auto; /* Zentrierung */
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
@@ -21,7 +21,6 @@
   height: 0; /* Wichtig: damit flex die Höhe übernimmt */
   min-height: 0; /* Für flexbox overflow */
   min-width: 0;
-  z-index: -1;
 }
 
 /* Dashboard-Inhalte */
