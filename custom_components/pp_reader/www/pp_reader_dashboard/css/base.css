@@ -13,6 +13,7 @@
   margin: 0 auto; /* Zentrierung */
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
   height: auto; /* wird durch flex geregelt */
+  top: 56px; /* unterhalb der Header-Leiste */
   box-sizing: border-box;
   overflow: hidden;
   flex: 1 1 auto;
