@@ -20,12 +20,12 @@
   background: #333333;
 }
 
-.pp-reader-dashboard .footer-row td {
+.pp-reader-dashboard.dark-mode .footer-row td {
   background: #2c2c2c;
   color: #fafafa;
 }
 
-.pp-reader-dashboard h2 {
+.pp-reader-dashboard.dark-mode h2 {
   border-left-color: #90caf9;
 }
 
@@ -41,7 +41,7 @@
   color: #e0e0e0;
 }
 
-.pp-reader-dashboard .header-card {
+.pp-reader-dashboard.dark-mode .header-card {
   background: #2c2c2c;
   color: #fafafa;
 }
