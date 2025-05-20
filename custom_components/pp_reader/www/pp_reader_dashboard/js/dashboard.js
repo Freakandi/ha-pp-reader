@@ -68,12 +68,25 @@ function setupHeaderScrollBehavior(dashboardElem) {
 
   observer = new IntersectionObserver(
     ([entry]) => {
+      const headerCard = dashboardElem.querySelector('.header-card');
+      let placeholder = dashboardElem.querySelector('.header-placeholder');
       if (!entry.isIntersecting) {
         headerCard.classList.add('sticky');
         headerTitle.style.fontSize = '1.0rem';
+        // Platzhalter einfügen, falls nicht vorhanden
+        if (!placeholder) {
+          placeholder = document.createElement('div');
+          placeholder.className = 'header-placeholder';
+          placeholder.style.height = `${headerCard.offsetHeight}px`;
+          headerCard.parentNode.insertBefore(placeholder, headerCard);
+        }
       } else {
         headerCard.classList.remove('sticky');
         headerTitle.style.fontSize = '1.5rem';
+        // Platzhalter entfernen
+        if (placeholder) {
+          placeholder.parentNode.removeChild(placeholder);
+        }
       }
     },
     {

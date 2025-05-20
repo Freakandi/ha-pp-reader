@@ -171,3 +171,13 @@ tbody tr:hover {
 html.dark-mode .card.header-card {
   background: #2c2c2c;
 }
+
+.header-placeholder {
+  width: 100%;
+  /* Höhe wird dynamisch per JS gesetzt */
+  pointer-events: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}

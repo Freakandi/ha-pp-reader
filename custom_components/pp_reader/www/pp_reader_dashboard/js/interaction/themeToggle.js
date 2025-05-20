@@ -6,21 +6,28 @@ export function createThemeToggle(container) {
   checkbox.type = 'checkbox';
   checkbox.id = 'theme-toggle';
 
+  // Ziel für die Klasse bestimmen
+  let target;
+  if (container && container.getRootNode && container.getRootNode().host) {
+    target = container.getRootNode().host;
+  } else {
+    target = document.documentElement;
+  }
+
   // Zustand beim Laden wiederherstellen
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
-    document.documentElement.classList.add('dark-mode');
+    target.classList.add('dark-mode');
     checkbox.checked = true;
   }
 
   checkbox.addEventListener('change', () => {
     const isDarkMode = checkbox.checked;
-    document.documentElement.classList.toggle('dark-mode', isDarkMode);
+    target.classList.toggle('dark-mode', isDarkMode);
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   });
 
   toggleWrapper.appendChild(checkbox);
-  // Neu: In das übergebene Container-Element einfügen
   (container || document.body).appendChild(toggleWrapper);
 }
 
