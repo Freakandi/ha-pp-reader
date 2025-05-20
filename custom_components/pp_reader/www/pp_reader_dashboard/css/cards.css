@@ -51,8 +51,19 @@
   top: 56px;
   right: 1rem; /* Zentrierung durch 1rem Abstand links */
   width: calc(var(--panel-width, 100%) - 2rem); /* Dynamische Breite minus 2rem */
+  height: 50%;
   z-index: 200;
-  background: var(--card-background-color, #fff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Verkleinerte Sticky Header-Card */
+.header-card.sticky.small {
+  position: fixed;
+  top: 56px;
+  right: 1rem; /* Zentrierung durch 1rem Abstand links */
+  width: calc(var(--panel-width, 100%) - 2rem); /* Dynamische Breite minus 2rem */
+  height: 50%;
+  z-index: 200;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 

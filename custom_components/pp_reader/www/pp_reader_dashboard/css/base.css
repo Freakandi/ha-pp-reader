@@ -9,17 +9,15 @@
 
 /* Wrapper-Struktur */
 .wrapper {
-  position: absolute;
-  max-width: 100%; /* Begrenzung auf die Breite des Panels */
-  margin: 0 auto; /* Zentrierung */
-  width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
-  height: auto; /* wird durch flex geregelt */
-  top: 56px; /* unterhalb der Header-Leiste */
+  position: relative;
+  top: 56px; /* Abstand unter dem festen Header */
+  max-width: 100%;
+  margin: 0 auto;
+  width: var(--panel-width, 100%);
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: hidden;   /* Wrapper selbst nicht scrollbar */
   flex: 1 1 auto;
-  height: 0; /* Wichtig: damit flex die Höhe übernimmt */
-  min-height: 0; /* Für flexbox overflow */
+  min-height: 0;      /* Für Flexbox-Overflow */
   min-width: 0;
 }
 
