@@ -55,7 +55,7 @@ class PPReaderPanel extends HTMLElement {
   }
 
   // Dark-Mode-Klasse anwenden
-  _applyDarkMode() {
+  /*_applyDarkMode() {
     const isDarkMode = this.hass.themes?.darkMode ?? false;
     const panelRoot = this.shadowRoot.querySelector(".panel-root");
     if (isDarkMode) {
@@ -63,7 +63,7 @@ class PPReaderPanel extends HTMLElement {
     } else {
       panelRoot.classList.remove("dark-mode");
     }
-  }
+  }*/
 
   // Dynamische Breitenanpassung
   _updateWidth() {
@@ -77,7 +77,6 @@ class PPReaderPanel extends HTMLElement {
   // Setter für Home Assistant-Attribute
   set hass(hass) {
     this._hass = hass;
-    this._applyDarkMode();
     this._updateDashboard();
   }
   set narrow(narrow) {
