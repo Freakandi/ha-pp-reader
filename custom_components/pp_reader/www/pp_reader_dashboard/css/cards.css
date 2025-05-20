@@ -47,13 +47,13 @@
 
 /* Sticky Header-Card */
 .header-card.sticky {
-  position: fixed;
+  position: sticky;
   top: 56px;
   right: 0.5rem; /* Zentrierung durch 1rem Abstand links */
-  width: var(--panel-width, 100%);
+  /*width: var(--panel-width, 100%);*/
   height: fit-content;
   z-index: 200;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Überschrift bleibt unverändert */

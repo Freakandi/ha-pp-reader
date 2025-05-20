@@ -1,4 +1,4 @@
-import { makeTable } from '../content/elements.js';
+import { createHeaderCard, makeTable } from '../content/elements.js';
 import { prepareDashboardData } from '../data/data.js';
 
 export async function renderDashboard() {
@@ -13,17 +13,17 @@ export async function renderDashboard() {
       minute: '2-digit'
     });
 
+    const headerMeta = `
+      <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}&nbsp;€</strong></div>
+    `;
+
+    const headerCard = createHeaderCard('Übersicht', headerMeta);
+
     return `
-    <div class="header-card">
-      <h1>Übersicht</h1>
-      <div class="meta">
-        <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })}&nbsp;€</strong></div>
-      </div>
-    </div>
-    
+    ${headerCard.outerHTML}
     <div class="card">
       <h2>Investment</h2>
       <div class="scroll-container">

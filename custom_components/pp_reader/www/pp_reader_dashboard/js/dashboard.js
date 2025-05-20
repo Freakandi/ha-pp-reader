@@ -58,34 +58,30 @@ function setupHeaderScrollBehavior(dashboardElem) {
   const headerCard = dashboardElem.querySelector('.header-card');
   const scrollBorder = dashboardElem;
   const anchor = dashboardElem.querySelector('#anchor');
-  const headerTitle = dashboardElem.querySelector('#headerTitle');
 
-  if (!headerCard || !scrollBorder || !anchor || !headerTitle) {
-    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder, anchor oder headerTitle.");
+  if (!headerCard || !scrollBorder || !anchor) {
+    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
     return;
   }
 
   observer = new IntersectionObserver(
     ([entry]) => {
-      const headerCard = dashboardElem.querySelector('.header-card');
       let placeholder = dashboardElem.querySelector('.header-placeholder');
       if (!entry.isIntersecting) {
         // Platzhalter einfügen, falls nicht vorhanden
-        if (!placeholder) {
+        /*if (!placeholder) {
           placeholder = document.createElement('div');
           placeholder.className = 'header-placeholder';
           placeholder.style.height = `${headerCard.offsetHeight}px`;
           headerCard.parentNode.insertBefore(placeholder, headerCard);
-        }
+        }*/
         headerCard.classList.add('sticky');
-        headerTitle.style.fontSize = '1.0rem';
       } else {
         headerCard.classList.remove('sticky');
-        headerTitle.style.fontSize = '1.5rem';
         // Platzhalter entfernen
-        if (placeholder) {
+        /*if (placeholder) {
           placeholder.parentNode.removeChild(placeholder);
-        }
+        }*/
       }
     },
     {
@@ -100,8 +96,12 @@ function setupHeaderScrollBehavior(dashboardElem) {
 
 function setupSwipeOnHeaderCard(dashboardElem) {
   const headerCard = dashboardElem.querySelector('.header-card');
-  if (!headerCard) return;
+  if (!headerCard) {
+    console.error("Header-Card nicht gefunden!");
+    return;
+  }
 
+  // Swipe-Events hinzufügen
   addSwipeEvents(
     headerCard,
     () => {
@@ -126,49 +126,32 @@ function setupNavigation(dashboardElem) {
     return;
   }
 
-  // Originalinhalt der Header-Card speichern
-  const originalTitle = headerCard.querySelector('h1')?.textContent || tabs[currentPage].title;
-  const metaDiv = headerCard.querySelector('.meta');
+  // Navigationselemente finden
+  const navLeft = headerCard.querySelector('#nav-left');
+  const navRight = headerCard.querySelector('#nav-right');
 
-  // Header-Card leeren
-  headerCard.innerHTML = '';
-
-  // Navigationselemente und Titel einfügen
-  headerCard.innerHTML = `
-    <div style="display: flex; margin-right: 1rem; align-items: center; justify-content: space-between;">
-      <button id="nav-left" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage <= 0 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage <= 0 ? ' disabled="disabled"' : ''}>
-        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
-          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
-        </svg>
-      </button>
-      <h1 id="headerTitle" style="margin: 0; text-align: center; flex-grow: 1; font-size: 1.5rem; transition: font-size 0.3s ease;">${originalTitle}</h1>
-      <button id="nav-right" style="width: 36px; height: 36px; border-radius: 50%; background-color: ${currentPage >= tabs.length - 1 ? 'rgba(204, 204, 204, 0.9)' : 'rgba(85, 85, 85, 0.9)'}; border: none; display: flex; align-items: center; justify-content: center;"${currentPage >= tabs.length - 1 ? ' disabled="disabled"' : ''}>
-        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: white;">
-          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-        </svg>
-      </button>
-    </div>
-  `;
-
-  // Meta-Div wieder hinzufügen, falls vorhanden
-  if (metaDiv) {
-    headerCard.appendChild(metaDiv);
+  if (!navLeft || !navRight) {
+    console.error("Navigationspfeile nicht gefunden!");
+    return;
   }
 
   // Event-Listener für Navigationselemente hinzufügen
-  dashboardElem.querySelector('#nav-left')?.addEventListener('click', () => {
+  navLeft.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
       renderTab(dashboardElem);
     }
   });
 
-  dashboardElem.querySelector('#nav-right')?.addEventListener('click', () => {
+  navRight.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab(dashboardElem);
     }
   });
+
+  // Navigationselemente aktualisieren
+  updateNavigationState();
 }
 
 function updateNavigationState() {
