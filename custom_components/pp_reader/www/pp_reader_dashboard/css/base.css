@@ -32,7 +32,7 @@ pp-reader-dashboard {
 }
 
 /* Kopfleiste */
-pp-reader-panel > .header {
+pp-reader-dashboard > .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -45,7 +45,7 @@ pp-reader-panel > .header {
 }
 
 /* Menü-Button */
-pp-reader-panel > .header .menu-button {
+pp-reader-dashboard > .header .menu-button {
   background: none;
   border: none;
   cursor: pointer;
@@ -59,14 +59,14 @@ pp-reader-panel > .header .menu-button {
   color: var(--text-primary-color, #fff);
 }
 
-pp-reader-panel > .header .menu-icon {
+pp-reader-dashboard > .header .menu-icon {
   width: 24px;
   height: 24px;
   fill: currentColor;
 }
 
 /* Titel */
-pp-reader-panel > .header .title {
+pp-reader-dashboard > .header .title {
   font-size: 1.25rem;
   font-weight: 500;
   margin: 0;
@@ -74,17 +74,6 @@ pp-reader-panel > .header .title {
   flex-grow: 1;
   text-align: center;
   color: var(--text-primary-color, #fff);
-}
-
-/* Wrapper unterhalb des Headers */
-pp-reader-panel > .wrapper {
-  max-width: 100%; /* Begrenzung auf die Breite des Panels */
-  margin: 0 auto; /* Zentrierung */
-  width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
-  height: calc(100% - 56px); /* Höhe des Wrappers abzüglich der Header-Höhe */
-  box-sizing: border-box;
-  overflow: hidden; /* Verhindert horizontale Scrollbars */
-  padding-top: 56px; /* Platz für den Header */
 }
 
 @media (max-width: 600px) {
