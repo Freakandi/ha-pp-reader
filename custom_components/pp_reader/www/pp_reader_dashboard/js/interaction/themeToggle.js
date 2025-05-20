@@ -10,9 +10,10 @@ export function createThemeToggle(container) {
   let target;
   if (container && container.getRootNode && container.getRootNode().host) {
     target = container.getRootNode().host;
+    _console.console.log('Container gefunden, Ziel gesetzt.');
   } else {
     target = document.documentElement;
-    _console.warn('Container nicht gefunden, Standardziel verwendet.');
+    _console.console.log('Container nicht gefunden, Standardziel verwendet.');
   }
 
   // Zustand beim Laden wiederherstellen

@@ -71,8 +71,6 @@ function setupHeaderScrollBehavior(dashboardElem) {
       const headerCard = dashboardElem.querySelector('.header-card');
       let placeholder = dashboardElem.querySelector('.header-placeholder');
       if (!entry.isIntersecting) {
-        headerCard.classList.add('sticky');
-        headerTitle.style.fontSize = '1.0rem';
         // Platzhalter einfügen, falls nicht vorhanden
         if (!placeholder) {
           placeholder = document.createElement('div');
@@ -80,6 +78,8 @@ function setupHeaderScrollBehavior(dashboardElem) {
           placeholder.style.height = `${headerCard.offsetHeight}px`;
           headerCard.parentNode.insertBefore(placeholder, headerCard);
         }
+        headerCard.classList.add('sticky');
+        headerTitle.style.fontSize = '1.0rem';
       } else {
         headerCard.classList.remove('sticky');
         headerTitle.style.fontSize = '1.5rem';
