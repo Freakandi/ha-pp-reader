@@ -16,8 +16,9 @@
   background: #1a1a1a;
 }
 
+/* Tabellenzeilen beim Mouseover im Dark-Mode */
 .pp-reader-dashboard.dark-mode tbody tr:hover {
-  background: #333333;
+  background-color: #4a4a4a; /* Helles Grau */
 }
 
 .pp-reader-dashboard.dark-mode .footer-row td {
@@ -37,19 +38,37 @@
   color: #f44336;
 }
 
-.pp-reader-dashboard .meta div strong {
+.pp-reader-dashboard.dark-mode .meta div strong {
   color: #e0e0e0;
 }
 
 .pp-reader-dashboard.dark-mode .header-card {
-  background: #2c2c2c;
+  background: #1b06db;
   color: #fafafa;
 }
 
-.pp-reader-dashboard .header-card .meta div strong {
+.pp-reader-dashboard.dark-mode .header-card .meta div strong {
   color: #e0e0e0;
 }
 
-.pp-reader-dashboard.dark-mode .card.header-card {
-  background: #2c2c2c;
+/* Header im Dark Mode */
+:host(.dark-mode) .header {
+  background-color: var(--app-header-background-color, #202C39); /* Dunkler Hintergrund */
+  color: var(--primary-text-color, #FFFFFF); /* Weiße Schrift */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); /* Dunklerer Schatten */
+}
+
+/* Menü-Button im Dark Mode */
+:host(.dark-mode) .header .menu-button {
+  color: var(--primary-text-color, #FFFFFF); /* Weiße Schrift */
+}
+
+/* Menü-Icon im Dark Mode */
+:host(.dark-mode) .header .menu-icon {
+  fill: var(--primary-text-color, #FFFFFF); /* Weiße Füllung */
+}
+
+/* Titel im Dark Mode */
+:host(.dark-mode) .header .title {
+  color: var(--primary-text-color, #FFFFFF); /* Weiße Schrift */
 }

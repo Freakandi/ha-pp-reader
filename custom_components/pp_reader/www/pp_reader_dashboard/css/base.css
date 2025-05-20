@@ -19,9 +19,9 @@
 /* Wrapper-Struktur */
 .wrapper {
   position: relative;
-  top: 56px; /* Abstand unter dem festen Header */
+  top: 48px; /* Abstand unter dem festen Header */
   width: 100%;
-  height: calc(100vh - 56px); /* Füllt den verbleibenden Platz unter dem Header */
+  height: calc(100vh - 48px); /* Füllt den verbleibenden Platz unter dem Header */
   box-sizing: border-box;
   overflow: hidden; /* Kein Scrollen auf Wrapper */
   display: block;
@@ -49,7 +49,7 @@ pp-reader-dashboard,
   align-items: center;          /* Vertikal zentrieren */
   justify-content: flex-start;  /* Linksbündig */
   width: 100%;
-  height: 56px;
+  height: 48px;
   padding: 0 1rem;
   background-color: var(--primary-color, #03a9f4);
   color: var(--text-primary-color, #fff);
