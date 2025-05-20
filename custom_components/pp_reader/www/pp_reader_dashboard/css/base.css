@@ -9,8 +9,7 @@
 
 /* Panel-Root */
 .panel-root {
-  display: flex;
-  flex-direction: column;
+  display: block;
   height: 100vh;
   width: 100%;
   box-sizing: border-box;
@@ -25,21 +24,18 @@
   height: calc(100vh - 56px); /* Füllt den verbleibenden Platz unter dem Header */
   box-sizing: border-box;
   overflow: hidden; /* Kein Scrollen auf Wrapper */
-  display: flex;
-  flex-direction: column;
+  display: block;
 }
 
 /* Dashboard-Inhalte */
 pp-reader-dashboard,
 .pp-reader-dashboard {
-  display: flex;
-  flex-direction: column;
+  display: block;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
   overflow-y: auto;   /* Nur hier darf gescrollt werden */
   overflow-x: hidden;
-  flex: 1 1 auto;
 }
 
 .scroll-container {
