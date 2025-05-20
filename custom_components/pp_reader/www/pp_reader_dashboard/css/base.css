@@ -21,6 +21,7 @@
   height: 0; /* Wichtig: damit flex die Höhe übernimmt */
   min-height: 0; /* Für flexbox overflow */
   min-width: 0;
+  z-index: -1;
 }
 
 /* Dashboard-Inhalte */
