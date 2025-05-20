@@ -12,6 +12,7 @@ export function createThemeToggle(container) {
     target = container.getRootNode().host;
   } else {
     target = document.documentElement;
+    _console.warn('Container nicht gefunden, Standardziel verwendet.');
   }
 
   // Zustand beim Laden wiederherstellen
