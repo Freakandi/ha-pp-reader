@@ -170,8 +170,14 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
   connectedCallback() {
     const root = document.createElement('div');
     root.className = 'pp-reader-dashboard';
-    this.appendChild(root);
 
+    // Dark-Mode-Klasse setzen
+    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (isDarkMode) {
+      root.classList.add('dark-mode');
+    }
+
+    this.appendChild(root);
     renderTab(root); // Ersten Tab rendern und root übergeben
   }
 });

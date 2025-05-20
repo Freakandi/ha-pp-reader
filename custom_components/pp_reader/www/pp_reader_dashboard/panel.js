@@ -33,6 +33,9 @@ class PPReaderPanel extends HTMLElement {
     // Inhalte ins Shadow DOM einfügen
     this.shadowRoot.appendChild(container);
 
+    // Dark-Mode-Klasse setzen
+    this._applyDarkMode();
+
     // Event-Listener für den Menü-Button
     container.querySelector('.menu-button').addEventListener('click', () => {
       const haSidebar = document.querySelector('ha-sidebar');
@@ -52,6 +55,14 @@ class PPReaderPanel extends HTMLElement {
     link.rel = 'stylesheet';
     link.href = href;
     this.shadowRoot.appendChild(link);
+  }
+
+  // Dark-Mode-Klasse anwenden
+  _applyDarkMode() {
+    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (isDarkMode) {
+      this.shadowRoot.querySelector('.panel-root').classList.add('dark-mode');
+    }
   }
 
   // Dynamische Breitenanpassung
