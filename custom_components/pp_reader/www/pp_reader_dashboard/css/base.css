@@ -11,8 +11,10 @@
   max-width: 100%; /* Begrenzung auf die Breite des Panels */
   margin: 0 auto; /* Zentrierung */
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
+  height: calc(100% - 56px); /* Höhe des Wrappers abzüglich der Header-Höhe */
   box-sizing: border-box;
-  overflow: hidden; /* Verhindert horizontale Scrollbars */
+  overflow-y: auto; /* Ermöglicht vertikales Scrollen */
+  overflow-x: hidden; /* Verhindert horizontales Scrollen */
 }
 
 /* Dashboard-Inhalte */
@@ -21,7 +23,7 @@ pp-reader-dashboard {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 1rem;
   font-family: 'Inter', sans-serif;
 }
@@ -32,7 +34,7 @@ pp-reader-dashboard {
 }
 
 /* Kopfleiste */
-pp-reader-dashboard > .header {
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -41,11 +43,14 @@ pp-reader-dashboard > .header {
   background-color: var(--primary-color, #03a9f4); /* Standard-HA-Farbe */
   color: var(--text-primary-color, #fff);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  z-index: 1000; /* Über allen anderen Elementen */
+  position: sticky; /* Fixiert den Header innerhalb des Containers */
+  top: 0; /* Bleibt am oberen Rand des Containers */
+  box-sizing: border-box;
 }
 
 /* Menü-Button */
-pp-reader-dashboard > .header .menu-button {
+.header .menu-button {
   background: none;
   border: none;
   cursor: pointer;
@@ -59,14 +64,14 @@ pp-reader-dashboard > .header .menu-button {
   color: var(--text-primary-color, #fff);
 }
 
-pp-reader-dashboard > .header .menu-icon {
+.header .menu-icon {
   width: 24px;
   height: 24px;
   fill: currentColor;
 }
 
 /* Titel */
-pp-reader-dashboard > .header .title {
+.header .title {
   font-size: 1.25rem;
   font-weight: 500;
   margin: 0;
