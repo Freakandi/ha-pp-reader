@@ -4,6 +4,9 @@ class PPReaderPanel extends HTMLElement {
   constructor() {
     super();
 
+    // Header im Light DOM erstellen
+    this._createHeader();
+
     // Shadow DOM für den dynamischen Inhalt erstellen
     this.attachShadow({ mode: 'open' });
 
@@ -23,9 +26,6 @@ class PPReaderPanel extends HTMLElement {
 
     // Wrapper ins Shadow DOM einfügen
     this.shadowRoot.appendChild(wrapper);
-
-    // Header im Light DOM erstellen
-    this._createHeader();
 
     // ResizeObserver initialisieren
     this._resizeObserver = new ResizeObserver(() => this._updateWidth());
