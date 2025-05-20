@@ -14,11 +14,9 @@
   max-width: 100%;
   margin: 0 auto;
   width: 100%;
+  height: 100%;
   box-sizing: border-box;
   overflow: hidden;   /* Wrapper selbst nicht scrollbar */
-  flex: 1 1 auto;
-  min-height: 0;      /* Für Flexbox-Overflow */
-  min-width: 0;
 }
 
 /* Dashboard-Inhalte */
