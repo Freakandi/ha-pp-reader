@@ -9,16 +9,18 @@ class PPReaderPanel extends HTMLElement {
     // Header und Wrapper erstellen
     const container = document.createElement('div');
     container.innerHTML = `
-      <header class="header">
-        <button class="menu-button" aria-label="Toggle Sidebar">
-          <svg viewBox="0 0 24 24" class="menu-icon">
-            <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path>
-          </svg>
-        </button>
-        <h1 class="title">Portfolio Dashboard</h1>
-      </header>
-      <div class="wrapper">
-        <pp-reader-dashboard></pp-reader-dashboard>
+      <div class="panel-root">
+        <header class="header">
+          <button class="menu-button" aria-label="Toggle Sidebar">
+            <svg viewBox="0 0 24 24" class="menu-icon">
+              <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path>
+            </svg>
+          </button>
+          <h1 class="title">Portfolio Dashboard</h1>
+        </header>
+        <div class="wrapper">
+          <pp-reader-dashboard></pp-reader-dashboard>
+        </div>
       </div>
     `;
 

@@ -11,10 +11,11 @@
   max-width: 100%; /* Begrenzung auf die Breite des Panels */
   margin: 0 auto; /* Zentrierung */
   width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
-  height: calc(100% - 56px); /* Höhe des Wrappers abzüglich der Header-Höhe */
+  height: auto; /* wird durch flex geregelt */
   box-sizing: border-box;
   overflow-y: auto; /* Ermöglicht vertikales Scrollen */
   overflow-x: hidden; /* Verhindert horizontales Scrollen */
+  flex: 1 1 auto;
 }
 
 /* Dashboard-Inhalte */
@@ -43,10 +44,12 @@ pp-reader-dashboard {
   background-color: var(--primary-color, #03a9f4); /* Standard-HA-Farbe */
   color: var(--text-primary-color, #fff);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 1000; /* Über allen anderen Elementen */
+  z-index: 10; /* Über allen anderen Elementen */
   position: sticky; /* Fixiert den Header innerhalb des Containers */
   top: 0; /* Bleibt am oberen Rand des Containers */
   box-sizing: border-box;
+  flex: 0 0 auto;
+  background: var(--card-background-color, #fff);
 }
 
 /* Menü-Button */
@@ -88,4 +91,12 @@ pp-reader-dashboard {
   table, th, td {
     font-size: 0.9rem;
   }
+}
+
+.panel-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* oder 100% falls das Panel nicht die volle Höhe braucht */
+  width: 100%;
+  box-sizing: border-box;
 }
