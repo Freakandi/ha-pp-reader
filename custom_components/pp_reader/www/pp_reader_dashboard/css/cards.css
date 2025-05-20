@@ -48,7 +48,7 @@
 /* Sticky Header-Card */
 .header-card.sticky {
   position: sticky;
-  top: 56px;
+  top: 0px;
   right: 0.5rem; /* Zentrierung durch 1rem Abstand links */
   /*width: var(--panel-width, 100%);*/
   height: fit-content;
