@@ -168,10 +168,6 @@ tbody tr:hover {
   color: var(--error-color, #dc2626);
 }
 
-html.dark-mode .card.header-card {
-  background: #2c2c2c;
-}
-
 .header-placeholder {
   width: 100%;
   right: 1rem;

@@ -30,7 +30,6 @@ pp-reader-dashboard {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 1rem;
   font-family: 'Inter', sans-serif;
 }
 
