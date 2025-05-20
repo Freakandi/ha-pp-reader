@@ -1,36 +1,3 @@
-/* ===== NAVIGATION CONTAINER ===== */
-.navigation-container {
-  display: flex;
-  justify-content: space-between; /* Pfeile links und rechts ausrichten */
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background-color: var(--card-background-color, #fff); /* Hintergrund passend zum Design */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Leichter Schatten für Abgrenzung */
-  position: absolute; /* Absolut positioniert, um als Overlay zu fungieren */
-  top: 0; /* Direkt am oberen Rand */
-  left: 0;
-  right: 0;
-  z-index: 102; /* Über der Header-Card */
-}
-
-/* ===== NAVIGATION HEADER ===== */
-.header-nav {
-  display: grid;
-  grid-template-columns: 36px 1fr 36px;
-  align-items: center;
-  width: 100%;
-  margin-bottom: 0.5rem;
-}
-
-/* Zentrierung der Überschrift */
-.header-nav h1 {
-  margin: 0;
-  padding: 0.5rem 0;
-  text-align: center;
-  font-size: 1.5rem;
-  grid-column: 2;
-}
-
 /* Navigationspfeile */
 .nav-arrow {
   width: 36px;
@@ -43,14 +10,6 @@
   align-items: center;
   justify-content: center;
   transition: background-color 0.3s;
-}
-
-.nav-arrow.left {
-  grid-column: 1;
-}
-
-.nav-arrow.right {
-  grid-column: 3;
 }
 
 .nav-arrow svg {
