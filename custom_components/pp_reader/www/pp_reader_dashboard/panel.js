@@ -59,9 +59,12 @@ class PPReaderPanel extends HTMLElement {
 
   // Dark-Mode-Klasse anwenden
   _applyDarkMode() {
-    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDarkMode = this.hass.themes?.darkMode ?? false;
+    const panelRoot = this.shadowRoot.querySelector(".panel-root");
     if (isDarkMode) {
-      this.shadowRoot.querySelector('.panel-root').classList.add('dark-mode');
+      panelRoot.classList.add("dark-mode");
+    } else {
+      panelRoot.classList.remove("dark-mode");
     }
   }
 
