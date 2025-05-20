@@ -1,4 +1,4 @@
-export function createThemeToggle() {
+export function createThemeToggle(container) {
   const toggleWrapper = document.createElement('div');
   toggleWrapper.id = 'theme-toggle-wrapper';
 
@@ -20,6 +20,7 @@ export function createThemeToggle() {
   });
 
   toggleWrapper.appendChild(checkbox);
-  document.body.appendChild(toggleWrapper);
+  // Neu: In das übergebene Container-Element einfügen
+  (container || document.body).appendChild(toggleWrapper);
 }
 

@@ -22,7 +22,7 @@ async function renderTab(dashboardElem) {
 
   dashboardElem.innerHTML = content;
 
-  createThemeToggle();
+  createThemeToggle(dashboardElem); // Übergib dashboardElem als Container
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
