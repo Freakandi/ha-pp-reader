@@ -3,10 +3,11 @@ import './js/dashboard.js'; // Importiere das Dashboard
 class PPReaderPanel extends HTMLElement {
   constructor() {
     super();
-    // Shadow DOM erstellen
+
+    // Shadow DOM für den dynamischen Inhalt erstellen
     this.attachShadow({ mode: 'open' });
 
-    // Wrapper-Struktur erstellen
+    // Wrapper-Struktur für das Dashboard erstellen
     const wrapper = document.createElement('div');
     wrapper.classList.add('wrapper');
 
@@ -20,12 +21,40 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('/pp_reader_dashboard/css/nav.css');
     this._loadCss('/pp_reader_dashboard/css/theme_dark.css');
 
-    // Wrapper und Stile ins Shadow DOM einfügen
+    // Wrapper ins Shadow DOM einfügen
     this.shadowRoot.appendChild(wrapper);
+
+    // Header im Light DOM erstellen
+    this._createHeader();
 
     // ResizeObserver initialisieren
     this._resizeObserver = new ResizeObserver(() => this._updateWidth());
     this._resizeObserver.observe(this);
+  }
+
+  // Funktion zum Erstellen des Headers im Light DOM
+  _createHeader() {
+    const header = document.createElement('header');
+    header.classList.add('header');
+    header.innerHTML = `
+      <button class="menu-button" aria-label="Toggle Sidebar">
+        <svg viewBox="0 0 24 24" class="menu-icon">
+          <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path>
+        </svg>
+      </button>
+      <h1 class="title">Portfolio Dashboard</h1>
+    `;
+
+    // Event-Listener für den Menü-Button
+    header.querySelector('.menu-button').addEventListener('click', () => {
+      const haSidebar = document.querySelector('ha-sidebar');
+      if (haSidebar) {
+        haSidebar.expanded = !haSidebar.expanded;
+      }
+    });
+
+    // Header ins Light DOM einfügen
+    this.prepend(header);
   }
 
   // Funktion zum Laden von CSS-Dateien ins Shadow DOM

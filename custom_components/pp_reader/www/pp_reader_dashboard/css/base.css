@@ -31,6 +31,62 @@ pp-reader-dashboard {
   -webkit-overflow-scrolling: touch; /* Momentum-Scrolling aktivieren */
 }
 
+/* Kopfleiste */
+pp-reader-panel > .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 1rem;
+  background-color: var(--primary-color, #03a9f4); /* Standard-HA-Farbe */
+  color: var(--text-primary-color, #fff);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+/* Menü-Button */
+pp-reader-panel > .header .menu-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  color: var(--text-primary-color, #fff);
+}
+
+pp-reader-panel > .header .menu-icon {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+/* Titel */
+pp-reader-panel > .header .title {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin: 0;
+  padding: 0;
+  flex-grow: 1;
+  text-align: center;
+  color: var(--text-primary-color, #fff);
+}
+
+/* Wrapper unterhalb des Headers */
+pp-reader-panel > .wrapper {
+  max-width: 100%; /* Begrenzung auf die Breite des Panels */
+  margin: 0 auto; /* Zentrierung */
+  width: var(--panel-width, 100%); /* Dynamische Breite basierend auf dem Host */
+  height: calc(100% - 56px); /* Höhe des Wrappers abzüglich der Header-Höhe */
+  box-sizing: border-box;
+  overflow: hidden; /* Verhindert horizontale Scrollbars */
+  padding-top: 56px; /* Platz für den Header */
+}
+
 @media (max-width: 600px) {
   .meta {
     flex-direction: column;
