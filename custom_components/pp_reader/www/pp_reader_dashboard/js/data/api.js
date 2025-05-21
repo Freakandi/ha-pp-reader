@@ -4,32 +4,11 @@ export async function fetchStates() {
   return await res.json();
 }
 
-export async function fetchDashboardDataWS() {
-  const waitForPanel = () =>
-    new Promise((resolve) => {
-      const checkPanel = () => {
-        const panel = document.querySelector('pp-reader-panel');
-        if (panel) {
-          resolve(panel);
-        } else {
-          console.warn("fetchDashboardDataWS: PPReaderPanel ist noch nicht verfügbar, warte...");
-          setTimeout(checkPanel, 100); // Überprüfe alle 100ms
-        }
-      };
-      checkPanel();
-    });
-
-  const panel = await waitForPanel();
-  console.log("fetchDashboardDataWS: Panel gefunden:", panel);
-
-  const dashboard = panel.shadowRoot.querySelector('pp-reader-dashboard');
-  console.log("fetchDashboardDataWS: Dashboard gefunden:", dashboard);
-
-  if (!dashboard || !dashboard._hass) {
-    throw new Error("Keine gültige Home Assistant Websocket-Verbindung gefunden! Bitte das Dashboard als Panel in Home Assistant öffnen.");
+export async function fetchDashboardDataWS(hass) {
+  if (!hass) {
+    throw new Error("Das hass-Objekt ist nicht verfügbar! Bitte sicherstellen, dass es korrekt übergeben wurde.");
   }
 
-  const hass = dashboard._hass;
   console.log("fetchDashboardDataWS: hass gefunden:", hass);
 
   // Websocket-Nachricht senden

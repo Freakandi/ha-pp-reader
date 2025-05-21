@@ -1,13 +1,13 @@
 import { createHeaderCard } from '../content/elements.js';
 import { fetchDashboardDataWS } from '../data/api.js';
 
-export async function renderTestTab() {
+export async function renderTestTab(hass) {
   let konten = [];
   let depots = [];
   let error = null;
 
   try {
-    const data = await fetchDashboardDataWS();
+    const data = await fetchDashboardDataWS(hass); // Übergib das hass-Objekt
     konten = data.accounts || [];
     depots = data.portfolios || [];
     console.debug("Empfangene Konten:", konten);
