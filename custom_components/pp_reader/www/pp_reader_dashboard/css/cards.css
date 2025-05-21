@@ -50,7 +50,7 @@
   top: 0px;
   right: 0.5rem; /* Zentrierung durch 1rem Abstand links */
   /*width: var(--panel-width, 100%);*/
-  height: fit-content;
+  height: min-content;
   z-index: 200;
 }
 
@@ -159,7 +159,7 @@ tbody tr:nth-child(odd) {
 }
 
 tbody tr:hover {
-  background-color: var(--accent-color); /* HA-Variable für Akzente */
+  background-color: var(--input-hover-line-color); /* HA-Variable für Akzente */
 }
 
 .footer-row td {

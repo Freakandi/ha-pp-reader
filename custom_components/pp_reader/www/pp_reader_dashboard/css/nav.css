@@ -29,7 +29,7 @@
 }
 
 .nav-arrow:hover {
-  background-color: var(--accent-color); /* HA-Variable für Akzentfarbe */
+  background-color: var(--input-hover-line-color); /* HA-Variable für Akzentfarbe */
   color: var(--primary-text-color); /* HA-Variable für Textfarbe */
 }
 
