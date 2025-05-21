@@ -1,4 +1,5 @@
 import logging
+import voluptuous as vol
 from pathlib import Path
 import aiohttp
 import os
@@ -11,11 +12,13 @@ from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import websocket_command
+from homeassistant.components.websocket_api import async_response, ActiveConnection
 
 from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.db_init import initialize_database_schema
 from .data.coordinator import PPReaderCoordinator  # Import hinzufügen
+from .websocket import ws_get_dashboard_data
 
 import asyncio
 from functools import partial
@@ -27,6 +30,7 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]  # Explizite Platform-Konstante ve
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Setup of your component."""
     # Dashboard-Dateien registrieren
     await hass.http.async_register_static_paths([
         StaticPathConfig(
@@ -36,15 +40,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
     ])
 
-    panel_config = {
-        "_panel_custom": {
-            "name": "pp-reader-frontend",
-            "embed_iframe": False,
-            "module_url": "/pp_reader_dashboard/panel.js",
-            "trust_external": True,
-        }
-    }
+    # Websocket-API registrieren
+    websocket_api.async_register_command(hass, ws_get_dashboard_data)
 
+    # Panel registrieren
     if "ppreader" not in hass.data.get("frontend_panels", {}):
         frontend.async_register_built_in_panel(
             hass,
@@ -55,12 +54,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             config={
                 "_panel_custom": {
                     "name": "pp-reader-panel",
-                    "embed_iframe": False,  # Kein IFrame verwenden
+                    "embed_iframe": False,
                     "module_url": "/pp_reader_dashboard/panel.js",
                     "trust_external": True,
                 }
             },
-            require_admin=True,
+            require_admin=False,
         )
     return True
 
@@ -189,30 +188,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await setup_backup_system(hass, db_path)
         except Exception as e:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
-
-        # --- Websocket-API für Dashboard ---
-        @websocket_command({"type": "pp_reader/get_dashboard_data"})
-        async def ws_get_dashboard_data(hass, connection, msg):
-            """Liefert Konten und Depots aus der SQLite-DB."""
-            try:
-                db_path = hass.data[DOMAIN][entry.entry_id]["db_path"]
-                # Lade Konten und Depots synchron (da DB-Access nicht async ist)
-                from .data.db_access import get_accounts, get_portfolios
-                accounts = await hass.async_add_executor_job(get_accounts, db_path)
-                portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-
-                # Debug-Log für die zurückgegebenen Daten
-                _LOGGER.debug("Websocket-Daten: Konten: %s, Depots: %s", accounts, portfolios)
-
-                connection.send_result(msg["id"], {
-                    "accounts": [a.__dict__ for a in accounts],
-                    "portfolios": [p.__dict__ for p in portfolios],
-                })
-            except Exception as e:
-                _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten: %s", e)
-                connection.send_error(msg["id"], "db_error", str(e))
-
-        websocket_api.async_register_command(hass, ws_get_dashboard_data)
 
         return True
         

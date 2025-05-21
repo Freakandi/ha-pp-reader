@@ -21,11 +21,11 @@ export async function fetchDashboardDataWS() {
   // Websocket-Nachricht senden
   try {
     const response = await hass.connection.sendMessagePromise({
-      type: "pp_reader/get_dashboard_data"
+      type: "pp_reader/get_dashboard_data",
+      entry_id: hass.config.entryId, // Falls erforderlich, den Entry-ID-Wert hinzufügen
     });
     return response;
   } catch (error) {
     throw new Error(`Fehler beim Abrufen der Dashboard-Daten: ${error.message}`);
   }
 }
-
