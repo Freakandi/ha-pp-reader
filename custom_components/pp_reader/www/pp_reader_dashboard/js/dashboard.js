@@ -172,6 +172,15 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     this._hass = hass;
     console.log("pp-reader-dashboard: hass gesetzt:", this._hass); // Debugging
   }
+  set narrow(narrow) {
+    this._narrow = narrow;
+  }
+  set route(route) {
+    this._route = route;
+  }
+  set panel(panel) {
+    this._panel = panel;
+  }
 
   connectedCallback() {
     const root = document.createElement('div');

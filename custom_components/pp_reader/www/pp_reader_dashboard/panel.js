@@ -78,8 +78,6 @@ class PPReaderPanel extends HTMLElement {
     this._updateDashboard();
   }
 
-  
-
   // Dashboard aktualisieren
   _updateDashboard() {
     const dashboard = this.shadowRoot.querySelector('pp-reader-dashboard');
