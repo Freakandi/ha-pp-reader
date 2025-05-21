@@ -68,20 +68,9 @@ function setupHeaderScrollBehavior(dashboardElem) {
     ([entry]) => {
       let placeholder = dashboardElem.querySelector('.header-placeholder');
       if (!entry.isIntersecting) {
-        // Platzhalter einfügen, falls nicht vorhanden
-        /*if (!placeholder) {
-          placeholder = document.createElement('div');
-          placeholder.className = 'header-placeholder';
-          placeholder.style.height = `${headerCard.offsetHeight}px`;
-          headerCard.parentNode.insertBefore(placeholder, headerCard);
-        }*/
         headerCard.classList.add('sticky');
       } else {
         headerCard.classList.remove('sticky');
-        // Platzhalter entfernen
-        /*if (placeholder) {
-          placeholder.parentNode.removeChild(placeholder);
-        }*/
       }
     },
     {
@@ -108,12 +97,14 @@ function setupSwipeOnHeaderCard(dashboardElem) {
       if (currentPage < tabs.length - 1) {
         currentPage++;
         renderTab(dashboardElem);
+        updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
       }
     },
     () => {
       if (currentPage > 0) {
         currentPage--;
         renderTab(dashboardElem);
+        updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
       }
     }
   );
@@ -140,6 +131,7 @@ function setupNavigation(dashboardElem) {
     if (currentPage > 0) {
       currentPage--;
       renderTab(dashboardElem);
+      updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
     }
   });
 
@@ -147,6 +139,7 @@ function setupNavigation(dashboardElem) {
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab(dashboardElem);
+      updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
     }
   });
 
@@ -159,10 +152,23 @@ function updateNavigationState() {
   const navRight = document.querySelector('#nav-right');
 
   if (navLeft) {
-    navLeft.disabled = currentPage === 0; // Deaktivieren, wenn auf dem ersten Tab
+    if (currentPage === 0) {
+      navLeft.disabled = true;
+      navLeft.classList.add('disabled');
+    } else {
+      navLeft.disabled = false;
+      navLeft.classList.remove('disabled');
+    }
   }
+
   if (navRight) {
-    navRight.disabled = currentPage === tabs.length - 1; // Deaktivieren, wenn auf dem letzten Tab
+    if (currentPage === tabs.length - 1) {
+      navRight.disabled = true;
+      navRight.classList.add('disabled');
+    } else {
+      navRight.disabled = false;
+      navRight.classList.remove('disabled');
+    }
   }
 }
 

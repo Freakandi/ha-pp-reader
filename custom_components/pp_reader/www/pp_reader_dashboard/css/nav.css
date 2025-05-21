@@ -10,7 +10,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s, color 0.3s, opacity 0.3s;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .nav-arrow svg {
@@ -22,6 +24,13 @@
 .nav-arrow.disabled {
   background-color: var(--disabled-color); /* HA-Variable für deaktivierte Buttons */
   cursor: default;
+  opacity: 0.5; /* Reduzierte Sichtbarkeit für deaktivierte Pfeile */
+  pointer-events: none; /* Keine Klicks möglich */
+}
+
+.nav-arrow:hover {
+  background-color: var(--primary-hover-background-color); /* HA-Variable für Hover-Hintergrund */
+  color: var(--primary-hover-text-color); /* HA-Variable für Hover-Textfarbe */
 }
 
 /* ===== DOT NAVIGATION ===== */
@@ -46,28 +55,6 @@
 .nav-dot.active {
   background-color: var(--accent-color); /* HA-Variable für aktive Punkte */
   transform: scale(1.25);
-}
-
-/* ===== NAVIGATION BUTTON ===== */
-.nav-button {
-  background-color: var(--primary-button-color); /* HA-Variable für Button-Hintergrund */
-  color: var(--primary-text-color); /* HA-Variable für Button-Text */
-  border: none;
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease, opacity 0.3s ease;
-}
-
-.nav-button:hover {
-  background-color: var(--primary-button-hover-color); /* HA-Variable für Hover-Farbe */
-}
-
-.nav-button:disabled {
-  background-color: var(--disabled-color); /* HA-Variable für deaktivierte Buttons */
-  cursor: not-allowed; /* Kein Klick möglich */
-  opacity: 0.6; /* Transparenz für deaktivierte Buttons */
 }
 
 #anchor {
