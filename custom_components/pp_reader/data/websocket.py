@@ -1,4 +1,4 @@
-from homeassistant import hass
+import hass
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import async_response, ActiveConnection
 import voluptuous as vol

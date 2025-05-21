@@ -169,16 +169,13 @@ function updateNavigationState(headerCard) {
 }
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
+  set hass(hass) {
+    this._hass = hass; // Speichere das hass-Objekt
+  }
+
   connectedCallback() {
     const root = document.createElement('div');
     root.className = 'pp-reader-dashboard';
-
-    // Dark-Mode-Klasse setzen
-    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (isDarkMode) {
-      root.classList.add('dark-mode');
-    }
-
     this.appendChild(root);
     renderTab(root); // Ersten Tab rendern und root übergeben
   }

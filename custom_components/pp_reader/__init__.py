@@ -1,10 +1,10 @@
+import hass
 import logging
 import voluptuous as vol
 from pathlib import Path
 import aiohttp
 import os
 from aiohttp import web
-from homeassistant import hass
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
