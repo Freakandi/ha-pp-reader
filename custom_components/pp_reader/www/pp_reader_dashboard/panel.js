@@ -28,7 +28,6 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('/pp_reader_dashboard/css/base.css');
     this._loadCss('/pp_reader_dashboard/css/cards.css');
     this._loadCss('/pp_reader_dashboard/css/nav.css');
-    this._loadCss('/pp_reader_dashboard/css/theme_dark.css');
 
     // Inhalte ins Shadow DOM einfügen
     this.shadowRoot.appendChild(container);
@@ -53,17 +52,6 @@ class PPReaderPanel extends HTMLElement {
     link.href = href;
     this.shadowRoot.appendChild(link);
   }
-
-  // Dark-Mode-Klasse anwenden
-  /*_applyDarkMode() {
-    const isDarkMode = this.hass.themes?.darkMode ?? false;
-    const panelRoot = this.shadowRoot.querySelector(".panel-root");
-    if (isDarkMode) {
-      panelRoot.classList.add("dark-mode");
-    } else {
-      panelRoot.classList.remove("dark-mode");
-    }
-  }*/
 
   // Dynamische Breitenanpassung
   _updateWidth() {
