@@ -39,6 +39,9 @@
   border-radius: 0.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   position: relative;
+  box-shadow: 0 2px 8px var(--divider-color); /* HA-Variable für Schatten */
+  background-color: var(--card-background-color); /* HA-Variable für Karten-Hintergrund */
+  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
   gap: 0.5rem;
 }
 
@@ -50,7 +53,6 @@
   /*width: var(--panel-width, 100%);*/
   height: fit-content;
   z-index: 200;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Neue Klasse für die Flexbox-Anordnung */
