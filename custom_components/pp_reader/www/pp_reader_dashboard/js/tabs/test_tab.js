@@ -1,8 +1,8 @@
 import { createHeaderCard } from '../content/elements.js';
 import { fetchDashboardDataWS } from '../data/api.js';
 
-export async function renderTestTab(hass) {
-  console.log("renderTestTab: Wird aufgerufen mit hass:", hass);
+export async function renderTestTab(hass, panelConfig) {
+  console.log("renderTestTab: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
 
   if (!hass) {
     console.error("renderTestTab: Das hass-Objekt ist nicht verfügbar!");
@@ -14,7 +14,7 @@ export async function renderTestTab(hass) {
   let error = null;
 
   try {
-    const data = await fetchDashboardDataWS(hass); // Übergib das hass-Objekt
+    const data = await fetchDashboardDataWS(hass, panelConfig); // Übergib hass und panelConfig
     konten = data.accounts || [];
     depots = data.portfolios || [];
     console.debug("renderTestTab: Empfangene Konten:", konten);

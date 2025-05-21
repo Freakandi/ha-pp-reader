@@ -4,21 +4,17 @@ export async function fetchStates() {
   return await res.json();
 }
 
-export async function fetchDashboardDataWS(hass) {
-  if (!hass) {
-    throw new Error("Das hass-Objekt ist nicht verfügbar! Bitte sicherstellen, dass es korrekt übergeben wurde.");
+export async function fetchDashboardDataWS(hass, panelConfig) {
+  const entry_id = panelConfig?.entry_id;
+  if (!hass || !entry_id) {
+    throw new Error(
+      `fetchDashboardDataWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
+    );
   }
+  console.debug("fetchDashboardDataWS: sende WS-Nachricht für Entry", entry_id);
 
-  console.log("fetchDashboardDataWS: hass gefunden:", hass);
-
-  // Websocket-Nachricht senden
-  try {
-    const response = await hass.connection.sendMessagePromise({
-      type: "pp_reader/get_dashboard_data",
-      entry_id: hass.config.entryId, // Falls erforderlich, den Entry-ID-Wert hinzufügen
-    });
-    return response;
-  } catch (error) {
-    throw new Error(`Fehler beim Abrufen der Dashboard-Daten: ${error.message}`);
-  }
+  return await hass.connection.sendMessagePromise({
+    type: "pp_reader/get_dashboard_data",
+    entry_id,
+  });
 }

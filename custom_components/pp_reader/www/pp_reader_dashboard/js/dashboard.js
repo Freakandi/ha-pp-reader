@@ -10,8 +10,8 @@ const tabs = [
 let currentPage = 0;
 let observer; // Globale Variable für Debugging
 
-async function renderTab(dashboardElem, hass) {
-  console.log("renderTab: Wird aufgerufen mit hass:", hass);
+async function renderTab(root, hass, panel) {
+  console.log("renderTab: Wird aufgerufen mit hass:", hass, "und panel:", panel);
 
   const tab = tabs[currentPage];
   if (!tab || !tab.render) {
@@ -21,25 +21,25 @@ async function renderTab(dashboardElem, hass) {
 
   let content;
   try {
-    content = await tab.render(hass); // Übergib das hass-Objekt an den Tab
+    content = await tab.render(this._hass, this._panel); // Übergib das hass-Objekt an den Tab
     console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
   } catch (error) {
     console.error("renderTab: Fehler beim Rendern des Tabs:", error);
     return;
   }
 
-  if (!dashboardElem) {
-    console.error("renderTab: Dashboard-Element nicht gefunden!");
+  if (!root) {
+    console.error("renderTab: Root-Element nicht gefunden!");
     return;
   }
 
-  dashboardElem.innerHTML = content;
-  console.log("renderTab: Inhalt wurde erfolgreich in das Dashboard-Element eingefügt.");
+  root.innerHTML = content;
+  console.log("renderTab: Inhalt wurde erfolgreich in das Root-Element eingefügt.");
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
     const interval = setInterval(() => {
-      const headerCard = dashboardElem.querySelector('.header-card');
+      const headerCard = root.querySelector('.header-card');
       if (headerCard) {
         clearInterval(interval);
         resolve(headerCard);
@@ -62,15 +62,15 @@ async function renderTab(dashboardElem, hass) {
   }
 
   // Navigation und Scrollverhalten einrichten
-  setupNavigation(dashboardElem);
-  setupSwipeOnHeaderCard(dashboardElem);
-  setupHeaderScrollBehavior(dashboardElem);
+  setupNavigation(root);
+  setupSwipeOnHeaderCard(root);
+  setupHeaderScrollBehavior(root);
 }
 
-function setupHeaderScrollBehavior(dashboardElem) {
-  const headerCard = dashboardElem.querySelector('.header-card');
-  const scrollBorder = dashboardElem;
-  const anchor = dashboardElem.querySelector('#anchor');
+function setupHeaderScrollBehavior(root) {
+  const headerCard = root.querySelector('.header-card');
+  const scrollBorder = root;
+  const anchor = root.querySelector('#anchor');
 
   if (!headerCard || !scrollBorder || !anchor) {
     console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
@@ -79,7 +79,6 @@ function setupHeaderScrollBehavior(dashboardElem) {
 
   observer = new IntersectionObserver(
     ([entry]) => {
-      let placeholder = dashboardElem.querySelector('.header-placeholder');
       if (!entry.isIntersecting) {
         headerCard.classList.add('sticky');
       } else {
@@ -96,8 +95,8 @@ function setupHeaderScrollBehavior(dashboardElem) {
   observer.observe(anchor);
 }
 
-function setupSwipeOnHeaderCard(dashboardElem) {
-  const headerCard = dashboardElem.querySelector('.header-card');
+function setupSwipeOnHeaderCard(root) {
+  const headerCard = root.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
     return;
@@ -108,22 +107,22 @@ function setupSwipeOnHeaderCard(dashboardElem) {
     () => {
       if (currentPage < tabs.length - 1) {
         currentPage++;
-        renderTab(dashboardElem);
+        renderTab(root, root._hass, root._panel);
         updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
       }
     },
     () => {
       if (currentPage > 0) {
         currentPage--;
-        renderTab(dashboardElem);
+        renderTab(root, root._hass, root._panel);
         updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
       }
     }
   );
 }
 
-function setupNavigation(dashboardElem) {
-  const headerCard = dashboardElem.querySelector('.header-card');
+function setupNavigation(root) {
+  const headerCard = root.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
     return;
@@ -140,7 +139,7 @@ function setupNavigation(dashboardElem) {
   navLeft.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
-      renderTab(dashboardElem);
+      renderTab(root, root._hass, root._panel);
       updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
     }
   });
@@ -148,7 +147,7 @@ function setupNavigation(dashboardElem) {
   navRight.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
-      renderTab(dashboardElem);
+      renderTab(root, root._hass, root._panel);
       updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
     }
   });
@@ -181,32 +180,46 @@ function updateNavigationState(headerCard) {
   }
 }
 
-customElements.define('pp-reader-dashboard', class extends HTMLElement {
+class PPReaderDashboard extends HTMLElement {
+  constructor() {
+    super();
+    this._root = document.createElement('div');
+    this._root.className = 'pp-reader-dashboard';
+    this.appendChild(this._root);
+  }
+
   set hass(hass) {
     this._hass = hass;
-    console.log("pp-reader-dashboard: hass gesetzt:", this._hass); // Debugging
+    this._render();
   }
-  set narrow(narrow) {
-    this._narrow = narrow;
-  }
-  set route(route) {
-    this._route = route;
-  }
+
   set panel(panel) {
     this._panel = panel;
+    this._render();
+  }
+
+  set narrow(narrow) {
+    this._narrow = narrow;
+    this._render();
+  }
+
+  set route(route) {
+    this._route = route;
+    this._render();
   }
 
   connectedCallback() {
-    console.log("pp-reader-dashboard: connectedCallback aufgerufen.");
-    const root = document.createElement('div');
-    root.className = 'pp-reader-dashboard';
-    this.appendChild(root);
-
-    if (!this._hass) {
-      console.error("pp-reader-dashboard: hass ist nicht verfügbar!");
-    } else {
-      console.log("pp-reader-dashboard: hass verfügbar, renderTab wird aufgerufen mit hass:", this._hass);
-      renderTab(root, this._hass); // Übergib das gespeicherte hass-Objekt
-    }
+    this._render();
   }
-});
+
+  _render() {
+    if (!this._hass) {
+      console.warn("pp-reader-dashboard: noch kein hass, überspringe _render()");
+      return;
+    }
+    this._root.innerHTML = ''; // Optional: Leeren vor dem Rendern
+    renderTab(this._root, this._hass, this._panel);
+  }
+}
+
+customElements.define('pp-reader-dashboard', PPReaderDashboard);

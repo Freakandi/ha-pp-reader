@@ -17,7 +17,7 @@ from homeassistant.components.websocket_api import async_response, ActiveConnect
 from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.db_init import initialize_database_schema
-from .data.coordinator import PPReaderCoordinator  # Import hinzufügen
+from .data.coordinator import PPReaderCoordinator
 from .data.websocket import ws_get_dashboard_data
 
 import asyncio
@@ -26,8 +26,7 @@ import importlib
 import sqlite3
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = [Platform.SENSOR]  # Explizite Platform-Konstante verwenden
-
+PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Setup of your component."""
@@ -47,24 +46,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     except Exception as e:
         _LOGGER.error("❌ Fehler bei der Registrierung des Websocket-Befehls: %s", str(e))
 
-    # Panel registrieren
-    if "ppreader" not in hass.data.get("frontend_panels", {}):
-        frontend.async_register_built_in_panel(
-            hass,
-            component_name="custom",
-            sidebar_title="Portfolio Dashboard",
-            sidebar_icon="mdi:finance",
-            frontend_url_path="ppreader",
-            config={
-                "_panel_custom": {
-                    "name": "pp-reader-panel",
-                    "embed_iframe": False,
-                    "module_url": "/pp_reader_dashboard/panel.js",
-                    "trust_external": True,
-                }
-            },
-            require_admin=False,
-        )
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -192,6 +173,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await setup_backup_system(hass, db_path)
         except Exception as e:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
+
+        # Panel hier registrieren
+        frontend.async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title="Portfolio Dashboard",
+            sidebar_icon="mdi:finance",
+            frontend_url_path="ppreader",
+            require_admin=False,
+            config={
+                "_panel_custom": {
+                    "name": "pp-reader-panel",
+                    "embed_iframe": False,
+                    "module_url": "/pp_reader_dashboard/panel.js",
+                    "trust_external": True,
+                    "config": {
+                        "entry_id": entry.entry_id
+                    }
+                }
+            },
+        )
 
         return True
         
