@@ -1,4 +1,3 @@
-import hass
 import logging
 import voluptuous as vol
 from pathlib import Path
