@@ -65,13 +65,16 @@ class PPReaderPanel extends HTMLElement {
   // Setter für Home Assistant-Attribute
   set hass(hass) {
     this._hass = hass;
+    this._updateDashboard();
     console.log("PPReaderPanel: hass gesetzt:", this._hass); // Debugging
   }
   set narrow(narrow) {
     this._narrow = narrow;
+    this._updateDashboard();
   }
   set route(route) {
     this._route = route;
+    this._updateDashboard();
   }
   set panel(panel) {
     this._panel = panel;
