@@ -5,14 +5,22 @@ export async function fetchStates() {
 }
 
 export async function fetchDashboardDataWS() {
-  console.log("fetchDashboardDataWS: Wird aufgerufen im Kontext:", document);
+  const waitForPanel = () =>
+    new Promise((resolve) => {
+      const checkPanel = () => {
+        const panel = document.querySelector('pp-reader-panel');
+        if (panel) {
+          resolve(panel);
+        } else {
+          console.warn("fetchDashboardDataWS: PPReaderPanel ist noch nicht verfügbar, warte...");
+          setTimeout(checkPanel, 100); // Überprüfe alle 100ms
+        }
+      };
+      checkPanel();
+    });
 
-  const panel = document.querySelector('pp-reader-panel');
+  const panel = await waitForPanel();
   console.log("fetchDashboardDataWS: Panel gefunden:", panel);
-
-  if (!panel) {
-    throw new Error("PPReaderPanel nicht gefunden! Bitte das Dashboard als Panel in Home Assistant öffnen.");
-  }
 
   const dashboard = panel.shadowRoot.querySelector('pp-reader-dashboard');
   console.log("fetchDashboardDataWS: Dashboard gefunden:", dashboard);
