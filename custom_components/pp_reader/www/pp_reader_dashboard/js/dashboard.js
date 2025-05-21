@@ -21,6 +21,31 @@ async function renderTab(dashboardElem, hass) {
 
   dashboardElem.innerHTML = content;
 
+  // Warte, bis die `.header-card` im DOM verfügbar ist
+  const waitForHeaderCard = () => new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const headerCard = dashboardElem.querySelector('.header-card');
+      if (headerCard) {
+        clearInterval(interval);
+        resolve(headerCard);
+      }
+    }, 50);
+  });
+
+  const headerCard = await waitForHeaderCard();
+  if (!headerCard) {
+    console.error("Header-Card nicht gefunden!");
+    return;
+  }
+
+  // #anchor erstellen und vor der header-card platzieren
+  let anchor = document.getElementById('anchor');
+  if (!anchor) {
+    anchor = document.createElement('div');
+    anchor.id = 'anchor';
+    headerCard.parentNode.insertBefore(anchor, headerCard);
+  }
+
   // Navigation und Scrollverhalten einrichten
   setupNavigation(dashboardElem);
   setupSwipeOnHeaderCard(dashboardElem);
@@ -160,24 +185,12 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     const root = document.createElement('div');
     root.className = 'pp-reader-dashboard';
     this.appendChild(root);
-
-    // Warte, bis das hass-Objekt gesetzt ist
-    const waitForHass = () =>
-      new Promise((resolve) => {
-        const checkHass = () => {
-          if (this._hass) {
-            resolve(this._hass);
-          } else {
-            console.warn("pp-reader-dashboard: hass ist noch nicht verfügbar, warte...");
-            setTimeout(checkHass, 100); // Überprüfe alle 100ms
-          }
-        };
-        checkHass();
-      });
-
-    waitForHass().then((hass) => {
+    if (!hass) {
+      console.error("pp-reader-dashboard: hass ist nicht verfügbar!");
+    }
+    else {
       console.log("pp-reader-dashboard: hass verfügbar, renderTab wird aufgerufen.");
       renderTab(root, hass); // Übergib das hass-Objekt an renderTab
-    });
+    };
   }
 });
