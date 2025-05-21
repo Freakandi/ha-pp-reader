@@ -37,7 +37,6 @@
   justify-content: center;
   padding: 1rem;
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   position: relative;
   box-shadow: 0 2px 8px var(--divider-color); /* HA-Variable für Schatten */
   background-color: var(--card-background-color); /* HA-Variable für Karten-Hintergrund */
@@ -63,7 +62,6 @@
   width: 100%;
 }
 
-/* Überschrift bleibt unverändert */
 .header-card h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -72,8 +70,21 @@
   flex-grow: 1;
 }
 
-/* Überschrift bleibt unverändert */
-.header-card.sticky > h1 {
+.header-card .header-content h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  transition: font-size 0.3s ease;
+  text-align: center;
+  flex-grow: 1;
+}
+
+.header-card.sticky .header-content h1 {
+  margin: 0;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.header-card.sticky h1 {
   margin: 0;
   font-size: 1rem;
   text-align: center;
@@ -148,8 +159,7 @@ tbody tr:nth-child(odd) {
 }
 
 tbody tr:hover {
-  background-color: var(--primary-hover-background-color); /* HA-Variable für Hover-Hintergrund */
-  color: var(--primary-hover-text-color); /* HA-Variable für Hover-Textfarbe */
+  background-color: var(--accent-color); /* HA-Variable für Akzente */
 }
 
 .footer-row td {

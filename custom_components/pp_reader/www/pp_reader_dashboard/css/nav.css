@@ -3,7 +3,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background-color: var(--primary-background-color); /* HA-Variable für Hintergrund */
+  background-color: var(--disabled-color); /* HA-Variable für deaktivierte Buttons */
   color: var(--primary-text-color); /* HA-Variable für Textfarbe */
   border: none;
   cursor: pointer;
@@ -22,15 +22,15 @@
 }
 
 .nav-arrow.disabled {
-  background-color: var(--disabled-color); /* HA-Variable für deaktivierte Buttons */
+  background-color: var(--primary-background-color); /* HA-Variable für Hintergrund */
   cursor: default;
   opacity: 0.5; /* Reduzierte Sichtbarkeit für deaktivierte Pfeile */
   pointer-events: none; /* Keine Klicks möglich */
 }
 
 .nav-arrow:hover {
-  background-color: var(--primary-hover-background-color); /* HA-Variable für Hover-Hintergrund */
-  color: var(--primary-hover-text-color); /* HA-Variable für Hover-Textfarbe */
+  background-color: var(--accent-color); /* HA-Variable für Akzentfarbe */
+  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
 }
 
 /* ===== DOT NAVIGATION ===== */
