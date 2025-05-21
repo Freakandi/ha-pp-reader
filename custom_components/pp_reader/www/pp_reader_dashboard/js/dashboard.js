@@ -185,12 +185,12 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
     const root = document.createElement('div');
     root.className = 'pp-reader-dashboard';
     this.appendChild(root);
-    if (!hass) {
+    if (!this._hass) {
       console.error("pp-reader-dashboard: hass ist nicht verfügbar!");
     }
     else {
       console.log("pp-reader-dashboard: hass verfügbar, renderTab wird aufgerufen.");
-      renderTab(root, hass); // Übergib das hass-Objekt an renderTab
+      renderTab(root, this._hass); // Übergib das hass-Objekt an renderTab
     };
   }
 });
