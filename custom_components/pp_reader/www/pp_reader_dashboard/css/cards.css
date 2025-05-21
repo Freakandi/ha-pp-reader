@@ -1,20 +1,23 @@
 .card {
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px var(--divider-color); /* HA-Variable für Schatten */
   padding: 1rem;
   margin-bottom: 1.5rem;
   overflow: auto;
   position: relative;
   will-change: transform, opacity; /* Performance-Optimierung */
+  background-color: var(--card-background-color); /* HA-Variable für Karten-Hintergrund */
+  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
 }
 
 .card h2 {
   position: sticky;
   top: 0;
-  background: inherit;
   z-index: 2;
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
+  background-color: var(--card-background-color); /* HA-Variable für Hintergrund */
+  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
 }
 
 .card::-webkit-scrollbar {
@@ -110,7 +113,7 @@
 }
 
 .meta div strong {
-  color: var(--primary-text-color, #111827);
+  color: var(--primary-text-color); /* HA-Variable für hervorgehobenen Text */
 }
 
 table {
@@ -153,11 +156,11 @@ tbody tr:hover {
 }
 
 .positive {
-  color: var(--state-icon-color, #16a34a);
+  color: var(--success-color); /* HA-Variable für positive Werte */
 }
 
 .negative {
-  color: var(--error-color, #dc2626);
+  color: var(--error-color); /* HA-Variable für negative Werte */
 }
 
 .header-placeholder {

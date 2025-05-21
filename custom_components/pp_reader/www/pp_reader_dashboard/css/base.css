@@ -51,9 +51,9 @@ pp-reader-dashboard,
   width: 100%;
   height: 48px;
   padding: 0 1rem;
-  background-color: var(--app-header-background-color, #ffffff); /* Hintergrundfarbe aus HA-Theme */
-  color: var(--app-header-text-color, #000000); /* Textfarbe aus HA-Theme */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: var(--app-header-background-color); /* HA-Variable für Header-Hintergrund */
+  color: var(--app-header-text-color); /* HA-Variable für Header-Text */
+  box-shadow: 0 2px 4px var(--divider-color); /* HA-Variable für Schatten */
   z-index: 150;
   position: fixed;
   top: 0;
@@ -73,15 +73,16 @@ pp-reader-dashboard,
   height: 40px;
   padding: 0;
   margin: 0;
-  color: var(--primary-text-color, #000000); /* Textfarbe aus HA-Theme */
+  color: var(--app-header-text-color); /* HA-Variable für Textfarbe */
   margin-right: 1rem;           /* Abstand zwischen Button und Titel */
 }
 
+/* Menü-Icon */
 .header .menu-icon {
   width: 24px;
   height: 24px;
   align-self: center;
-  fill: currentColor;
+  fill: var(--app-header-text-color); /* HA-Variable für Icon-Farbe */
 }
 
 /* Titel */
@@ -93,7 +94,7 @@ pp-reader-dashboard,
   padding: 0;
   flex-grow: 0;                 /* Kein zusätzliches Wachstum */
   text-align: left;
-  color: var(--primary-text-color, #000000); /* Textfarbe aus HA-Theme */
+  color: var(--app-header-text-color); /* HA-Variable für Titel-Farbe */
 }
 
 @media (max-width: 600px) {

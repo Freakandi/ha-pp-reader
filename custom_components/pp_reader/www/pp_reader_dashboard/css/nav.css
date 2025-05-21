@@ -3,7 +3,8 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background-color: rgba(85, 85, 85, 0.9);
+  background-color: var(--primary-background-color); /* HA-Variable für Hintergrund */
+  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
   border: none;
   cursor: pointer;
   display: flex;
@@ -15,21 +16,12 @@
 .nav-arrow svg {
   width: 24px;
   height: 24px;
-  fill: white;
+  fill: var(--primary-text-color); /* HA-Variable für Icon-Farbe */
 }
 
 .nav-arrow.disabled {
-  background-color: rgba(204, 204, 204, 0.9);
+  background-color: var(--disabled-color); /* HA-Variable für deaktivierte Buttons */
   cursor: default;
-}
-
-/* Dark Mode Anpassungen */
-.pp-reader-dashboard.dark-mode .nav-arrow {
-  background-color: rgba(120, 120, 120, 0.9);
-}
-
-.pp-reader-dashboard.dark-mode .nav-arrow.disabled {
-  background-color: rgba(70, 70, 70, 0.9);
 }
 
 /* ===== DOT NAVIGATION ===== */
@@ -45,76 +37,21 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: #ccc;
+  background-color: var(--divider-color); /* HA-Variable für neutrale Punkte */
   cursor: pointer;
   transition: background-color 0.3s, transform 0.3s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 3px var(--divider-color); /* HA-Variable für Schatten */
 }
 
 .nav-dot.active {
-  background-color: #007bff;
+  background-color: var(--accent-color); /* HA-Variable für aktive Punkte */
   transform: scale(1.25);
-}
-
-/* --- Neuer, halb so großer Theme-Toggle --- */
-#theme-toggle-wrapper {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  z-index: 1000;
-}
-
-#theme-toggle {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 40px; /* vorher 80px */
-  height: 20px; /* vorher 40px */
-  background: linear-gradient(to top, #87ceeb 50%, #ffffff 50%);
-  border-radius: 999px;
-  position: relative;
-  cursor: pointer;
-  transition: background 0.5s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-#theme-toggle::before {
-  content: "";
-  position: absolute;
-  top: 2px; /* vorher 5px */
-  left: 2px; /* vorher 5px */
-  width: 15px; /* vorher 30px */
-  height: 15px; /* vorher 30px */
-  background: yellow;
-  border-radius: 50%;
-  transition: all 0.5s ease;
-  box-shadow: 0 0 3px rgba(255,255,0,0.8);
-}
-
-/* Nachtmodus */
-#theme-toggle:checked {
-  background: linear-gradient(to top, #0b0c10 50%, #1f1f1f 50%);
-}
-
-#theme-toggle:checked::before {
-  background: #ccc;
-  left: 22px; /* angepasst von 45px auf 22px */
-  box-shadow: inset -2px -2px 0 0 #999;
-}
-
-/* Sterne im Nachtmodus */
-#theme-toggle:checked::after {
-  content: "✨";
-  position: absolute;
-  top: 4px; /* angepasst */
-  left: 7px; /* angepasst */
-  font-size: 7px; /* vorher 14px */
-  color: white;
 }
 
 /* ===== NAVIGATION BUTTON ===== */
 .nav-button {
-  background-color: var(--primary-button-color, #007bff); /* Standardfarbe */
-  color: #fff; /* Textfarbe */
+  background-color: var(--primary-button-color); /* HA-Variable für Button-Hintergrund */
+  color: var(--primary-text-color); /* HA-Variable für Button-Text */
   border: none;
   border-radius: 4px;
   padding: 0.5rem 1rem;
@@ -124,11 +61,11 @@
 }
 
 .nav-button:hover {
-  background-color: var(--primary-button-hover-color, #0056b3); /* Hover-Farbe */
+  background-color: var(--primary-button-hover-color); /* HA-Variable für Hover-Farbe */
 }
 
 .nav-button:disabled {
-  background-color: #ccc; /* Deaktivierte Farbe */
+  background-color: var(--disabled-color); /* HA-Variable für deaktivierte Buttons */
   cursor: not-allowed; /* Kein Klick möglich */
   opacity: 0.6; /* Transparenz für deaktivierte Buttons */
 }
@@ -140,4 +77,4 @@
   bottom: 0;
   opacity: 0;
   pointer-events: none;
-  }
+}
