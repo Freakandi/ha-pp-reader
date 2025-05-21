@@ -12,7 +12,7 @@ let observer; // Globale Variable für Debugging
 
 async function renderTab(dashboardElem, hass) {
   const tab = tabs[currentPage];
-  let content = await tab.render(hass); // Übergib das hass-Objekt an den Tab
+  let content = await tab.render(this._hass); // Übergib das hass-Objekt an den Tab
 
   if (!dashboardElem) {
     console.error("Dashboard-Element nicht gefunden!");
