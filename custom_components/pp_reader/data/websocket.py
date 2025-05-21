@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
     }
 )
 @websocket_api.async_response
-async def ws_get_dashboard_data(hass: HomeAssistant, connection: ActiveConnection, msg: dict) -> None:
+async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -> None:
     """Handle WebSocket command to get dashboard data."""
     try:
         # Zugriff auf die Datenbank
