@@ -66,30 +66,33 @@ class PPReaderPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     console.log("PPReaderPanel: hass gesetzt:", this._hass); // Debugging
-    this._updateDashboard();
   }
   set narrow(narrow) {
     this._narrow = narrow;
-    this._updateDashboard();
   }
   set route(route) {
     this._route = route;
-    this._updateDashboard();
   }
   set panel(panel) {
     this._panel = panel;
     this._updateDashboard();
   }
 
+  
+
   // Dashboard aktualisieren
   _updateDashboard() {
     const dashboard = this.shadowRoot.querySelector('pp-reader-dashboard');
     if (dashboard) {
-      console.log("PPReaderPanel: Dashboard gefunden, hass wird übergeben:", this._hass); // Debugging
-      dashboard.hass = this._hass;
-      dashboard.narrow = this._narrow;
-      dashboard.route = this._route;
-      dashboard.panel = this._panel;
+      if (this._hass) {
+        console.log("PPReaderPanel: Dashboard gefunden, hass wird übergeben:", this._hass);
+        dashboard.hass = this._hass;
+        dashboard.narrow = this._narrow;
+        dashboard.route = this._route;
+        dashboard.panel = this._panel;
+      } else {
+        console.warn("PPReaderPanel: hass ist noch nicht gesetzt, überspringe Übergabe.");
+      }
     } else {
       console.error("PPReaderPanel: Dashboard nicht gefunden!");
     }
