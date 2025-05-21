@@ -90,21 +90,20 @@ function setupSwipeOnHeaderCard(dashboardElem) {
     return;
   }
 
-  // Swipe-Events hinzufügen
   addSwipeEvents(
     headerCard,
     () => {
       if (currentPage < tabs.length - 1) {
         currentPage++;
         renderTab(dashboardElem);
-        updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
+        updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
       }
     },
     () => {
       if (currentPage > 0) {
         currentPage--;
         renderTab(dashboardElem);
-        updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
+        updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
       }
     }
   );
@@ -117,7 +116,6 @@ function setupNavigation(dashboardElem) {
     return;
   }
 
-  // Navigationselemente finden
   const navLeft = headerCard.querySelector('#nav-left');
   const navRight = headerCard.querySelector('#nav-right');
 
@@ -126,12 +124,11 @@ function setupNavigation(dashboardElem) {
     return;
   }
 
-  // Event-Listener für Navigationselemente hinzufügen
   navLeft.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
       renderTab(dashboardElem);
-      updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
+      updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
     }
   });
 
@@ -139,17 +136,16 @@ function setupNavigation(dashboardElem) {
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab(dashboardElem);
-      updateNavigationState(); // Zustand der Navigationspfeile aktualisieren
+      updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
     }
   });
 
-  // Navigationselemente aktualisieren
-  updateNavigationState();
+  updateNavigationState(headerCard); // Initialer Zustand der Navigationspfeile
 }
 
-function updateNavigationState() {
-  const navLeft = document.querySelector('#nav-left');
-  const navRight = document.querySelector('#nav-right');
+function updateNavigationState(headerCard) {
+  const navLeft = headerCard.querySelector('#nav-left');
+  const navRight = headerCard.querySelector('#nav-right');
 
   if (navLeft) {
     if (currentPage === 0) {
