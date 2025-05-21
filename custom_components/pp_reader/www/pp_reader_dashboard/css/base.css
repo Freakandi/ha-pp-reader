@@ -59,7 +59,6 @@ pp-reader-dashboard,
   top: 0;
   box-sizing: border-box;
   flex: 0 0 auto;
-  background: var(--primary-color, #03a9f4);
 }
 
 /* Menü-Button */
@@ -74,7 +73,7 @@ pp-reader-dashboard,
   height: 40px;
   padding: 0;
   margin: 0;
-  color: var(--text-primary-color, #fff);
+  color: var(--primary-text-color, #000000); /* Textfarbe aus HA-Theme */
   margin-right: 1rem;           /* Abstand zwischen Button und Titel */
 }
 
@@ -94,7 +93,7 @@ pp-reader-dashboard,
   padding: 0;
   flex-grow: 0;                 /* Kein zusätzliches Wachstum */
   text-align: left;
-  color: var(--text-primary-color, #fff);
+  color: var(--primary-text-color, #000000); /* Textfarbe aus HA-Theme */
 }
 
 @media (max-width: 600px) {
