@@ -11,15 +11,30 @@ let currentPage = 0;
 let observer; // Globale Variable für Debugging
 
 async function renderTab(dashboardElem, hass) {
+  console.log("renderTab: Wird aufgerufen mit hass:", hass);
+
   const tab = tabs[currentPage];
-  let content = await tab.render(this._hass); // Übergib das hass-Objekt an den Tab
+  if (!tab || !tab.render) {
+    console.error("renderTab: Kein gültiger Tab oder keine render-Methode gefunden!");
+    return;
+  }
+
+  let content;
+  try {
+    content = await tab.render(hass); // Übergib das hass-Objekt an den Tab
+    console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
+  } catch (error) {
+    console.error("renderTab: Fehler beim Rendern des Tabs:", error);
+    return;
+  }
 
   if (!dashboardElem) {
-    console.error("Dashboard-Element nicht gefunden!");
+    console.error("renderTab: Dashboard-Element nicht gefunden!");
     return;
   }
 
   dashboardElem.innerHTML = content;
+  console.log("renderTab: Inhalt wurde erfolgreich in das Dashboard-Element eingefügt.");
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
@@ -182,15 +197,16 @@ customElements.define('pp-reader-dashboard', class extends HTMLElement {
   }
 
   connectedCallback() {
+    console.log("pp-reader-dashboard: connectedCallback aufgerufen.");
     const root = document.createElement('div');
     root.className = 'pp-reader-dashboard';
     this.appendChild(root);
+
     if (!this._hass) {
       console.error("pp-reader-dashboard: hass ist nicht verfügbar!");
+    } else {
+      console.log("pp-reader-dashboard: hass verfügbar, renderTab wird aufgerufen mit hass:", this._hass);
+      renderTab(root, this._hass); // Übergib das gespeicherte hass-Objekt
     }
-    else {
-      console.log("pp-reader-dashboard: hass verfügbar, renderTab wird aufgerufen.");
-      renderTab(root, this._hass); // Übergib das hass-Objekt an renderTab
-    };
   }
 });
