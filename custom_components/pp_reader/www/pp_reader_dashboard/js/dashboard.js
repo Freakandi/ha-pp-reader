@@ -21,7 +21,7 @@ async function renderTab(root, hass, panel) {
 
   let content;
   try {
-    content = await tab.render(this._hass, this._panel); // Übergib das hass-Objekt an den Tab
+    content = await tab.render(hass, panel); // Verwende die lokalen Parameter hass und panel
     console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
   } catch (error) {
     console.error("renderTab: Fehler beim Rendern des Tabs:", error);
@@ -62,8 +62,8 @@ async function renderTab(root, hass, panel) {
   }
 
   // Navigation und Scrollverhalten einrichten
-  setupNavigation(root);
-  setupSwipeOnHeaderCard(root);
+  setupNavigation(root, hass, panel); // Lokale Parameter übergeben
+  setupSwipeOnHeaderCard(root, hass, panel); // Lokale Parameter übergeben
   setupHeaderScrollBehavior(root);
 }
 
@@ -95,7 +95,7 @@ function setupHeaderScrollBehavior(root) {
   observer.observe(anchor);
 }
 
-function setupSwipeOnHeaderCard(root) {
+function setupSwipeOnHeaderCard(root, hass, panel) {
   const headerCard = root.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
@@ -107,21 +107,21 @@ function setupSwipeOnHeaderCard(root) {
     () => {
       if (currentPage < tabs.length - 1) {
         currentPage++;
-        renderTab(root, root._hass, root._panel);
+        renderTab(root, hass, panel); // Lokale Parameter verwenden
         updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
       }
     },
     () => {
       if (currentPage > 0) {
         currentPage--;
-        renderTab(root, root._hass, root._panel);
+        renderTab(root, hass, panel); // Lokale Parameter verwenden
         updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
       }
     }
   );
 }
 
-function setupNavigation(root) {
+function setupNavigation(root, hass, panel) {
   const headerCard = root.querySelector('.header-card');
   if (!headerCard) {
     console.error("Header-Card nicht gefunden!");
@@ -139,7 +139,7 @@ function setupNavigation(root) {
   navLeft.addEventListener('click', () => {
     if (currentPage > 0) {
       currentPage--;
-      renderTab(root, root._hass, root._panel);
+      renderTab(root, hass, panel); // Lokale Parameter verwenden
       updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
     }
   });
@@ -147,7 +147,7 @@ function setupNavigation(root) {
   navRight.addEventListener('click', () => {
     if (currentPage < tabs.length - 1) {
       currentPage++;
-      renderTab(root, root._hass, root._panel);
+      renderTab(root, hass, panel); // Lokale Parameter verwenden
       updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
     }
   });
