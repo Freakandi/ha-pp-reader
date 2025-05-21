@@ -3,7 +3,7 @@
   "domains": ["integration"],
   "homeassistant": "2025.04.1",
   "hacs": "2.0.5",
-  "version": "0.8.93",
+  "version": "0.8.94",
   "content_in_root": false
 }
 
