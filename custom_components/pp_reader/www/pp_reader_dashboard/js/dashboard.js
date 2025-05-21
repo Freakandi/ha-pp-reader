@@ -1,5 +1,4 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
-import { createThemeToggle } from './interaction/themeToggle.js';
 import { renderDashboard } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
 
@@ -170,7 +169,8 @@ function updateNavigationState(headerCard) {
 
 customElements.define('pp-reader-dashboard', class extends HTMLElement {
   set hass(hass) {
-    this._hass = hass; // Speichere das hass-Objekt
+    this._hass = hass;
+    console.log("pp-reader-dashboard: hass gesetzt:", this._hass); // Debugging
   }
 
   connectedCallback() {

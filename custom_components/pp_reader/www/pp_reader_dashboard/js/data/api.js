@@ -6,11 +6,13 @@ export async function fetchStates() {
 
 export async function fetchDashboardDataWS() {
   const dashboard = document.querySelector('pp-reader-dashboard');
+  console.log("fetchDashboardDataWS: Dashboard gefunden:", dashboard); // Debugging
   if (!dashboard || !dashboard._hass) {
     throw new Error("Keine gültige Home Assistant Websocket-Verbindung gefunden! Bitte das Dashboard als Panel in Home Assistant öffnen.");
   }
 
   const hass = dashboard._hass;
+  console.log("fetchDashboardDataWS: hass gefunden:", hass); // Debugging
 
   // Websocket-Nachricht senden
   try {

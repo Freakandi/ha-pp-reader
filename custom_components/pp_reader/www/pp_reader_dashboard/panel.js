@@ -65,6 +65,7 @@ class PPReaderPanel extends HTMLElement {
   // Setter für Home Assistant-Attribute
   set hass(hass) {
     this._hass = hass;
+    console.log("PPReaderPanel: hass gesetzt:", this._hass); // Debugging
     this._updateDashboard();
   }
   set narrow(narrow) {
@@ -84,10 +85,13 @@ class PPReaderPanel extends HTMLElement {
   _updateDashboard() {
     const dashboard = this.shadowRoot.querySelector('pp-reader-dashboard');
     if (dashboard) {
+      console.log("PPReaderPanel: Dashboard gefunden, hass wird übergeben:", this._hass); // Debugging
       dashboard.hass = this._hass;
       dashboard.narrow = this._narrow;
       dashboard.route = this._route;
       dashboard.panel = this._panel;
+    } else {
+      console.error("PPReaderPanel: Dashboard nicht gefunden!");
     }
   }
 
