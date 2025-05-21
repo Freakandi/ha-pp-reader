@@ -10,6 +10,8 @@ export async function renderTestTab() {
     const data = await fetchDashboardDataWS();
     konten = data.accounts || [];
     depots = data.portfolios || [];
+    console.debug("Empfangene Konten:", konten);
+    console.debug("Empfangene Depots:", depots);
   } catch (e) {
     error = e.message;
   }

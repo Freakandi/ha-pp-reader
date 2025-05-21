@@ -200,12 +200,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 from .data.db_access import get_accounts, get_portfolios
                 accounts = await hass.async_add_executor_job(get_accounts, db_path)
                 portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-                # Optional: weitere Daten hinzufügen
+
+                # Debug-Log für die zurückgegebenen Daten
+                _LOGGER.debug("Websocket-Daten: Konten: %s, Depots: %s", accounts, portfolios)
+
                 connection.send_result(msg["id"], {
                     "accounts": [a.__dict__ for a in accounts],
                     "portfolios": [p.__dict__ for p in portfolios],
                 })
             except Exception as e:
+                _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten: %s", e)
                 connection.send_error(msg["id"], "db_error", str(e))
 
         websocket_api.async_register_command(hass, ws_get_dashboard_data)
