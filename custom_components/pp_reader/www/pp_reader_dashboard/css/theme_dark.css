@@ -3,6 +3,10 @@
   color: #e0e0e0;
 }
 
+.pp-reader-dashboard.dark-mode .card {
+  background: #2c2c2c;
+}
+
 .pp-reader-dashboard.dark-mode th {
   background: #2c2c2c;
   color: #fafafa;
@@ -14,7 +18,7 @@
 
 /* Tabellenzeilen beim Mouseover im Dark-Mode */
 .pp-reader-dashboard.dark-mode tbody tr:hover {
-  background-color: #6b6767; /* Helles Grau */
+  background-color: #4a4a4a; /* Helles Grau */
 }
 
 .pp-reader-dashboard.dark-mode .footer-row td {
@@ -38,18 +42,13 @@
   color: #e0e0e0;
 }
 
-.pp-reader-dashboard.dark-mode .header-card .meta div strong {
-  color: #e0e0e0;
+.pp-reader-dashboard.dark-mode .header-card {
+  background: #1b06db;
+  color: #fafafa;
 }
 
-/* Karten im Dark-Mode */
-.pp-reader-dashboard.dark-mode .card,
-.pp-reader-dashboard.dark-mode .header-card,
-.pp-reader-dashboard.dark-mode .footer-row {
-  border: 1px solid rgba(255, 255, 255, 0.1); /* Dezenter heller Rahmen */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6); /* Subtiler Schatten */
-  background: #2c2c2c; /* Hintergrund bleibt gleich */
-  color: #fafafa;
+.pp-reader-dashboard.dark-mode .header-card .meta div strong {
+  color: #e0e0e0;
 }
 
 /* Header im Dark Mode */
