@@ -1,3 +1,4 @@
+from homeassistant import hass
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import async_response, ActiveConnection
 import voluptuous as vol
@@ -8,11 +9,11 @@ _LOGGER = logging.getLogger(__name__)
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_dashboard_data",
-        vol.Required("entry_id"): str,  # Erwartet die entry_id
+        vol.Optional("entry_id"): str,  # Erwartet die entry_id
     }
 )
 @websocket_api.async_response
-async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -> None:
+async def ws_get_dashboard_data(hass: HomeAssistant, connection: ActiveConnection, msg: dict) -> None:
     """Handle WebSocket command to get dashboard data."""
     try:
         # Zugriff auf die Datenbank

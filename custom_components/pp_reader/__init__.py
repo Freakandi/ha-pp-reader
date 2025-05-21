@@ -4,6 +4,7 @@ from pathlib import Path
 import aiohttp
 import os
 from aiohttp import web
+from homeassistant import hass
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
@@ -18,7 +19,7 @@ from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.db_init import initialize_database_schema
 from .data.coordinator import PPReaderCoordinator  # Import hinzufügen
-from .websocket import ws_get_dashboard_data
+from .data.websocket import ws_get_dashboard_data
 
 import asyncio
 from functools import partial
