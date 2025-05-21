@@ -41,7 +41,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     ])
 
     # Websocket-API registrieren
-    websocket_api.async_register_command(hass, ws_get_dashboard_data)
+    try:
+        websocket_api.async_register_command(hass, ws_get_dashboard_data)
+        _LOGGER.debug("✅ Websocket-Befehl 'ws_get_dashboard_data' erfolgreich registriert.")
+    except Exception as e:
+        _LOGGER.error("❌ Fehler bei der Registrierung des Websocket-Befehls: %s", str(e))
 
     # Panel registrieren
     if "ppreader" not in hass.data.get("frontend_panels", {}):
