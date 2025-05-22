@@ -55,7 +55,8 @@ def db_calc_account_balance(account_uuid: str, transactions: List[Transaction]) 
     :return: Berechneter Kontostand (in Cent) als Integer.
     """
     saldo = 0
-
+    _LOGGER.debug("Berechnung für Konto %s mit Transaktionen: %s", account_uuid, transactions)
+    
     for tx in transactions:
         # Prüfe, ob die Transaktion das Konto betrifft
         if tx.account != account_uuid and tx.other_account != account_uuid:

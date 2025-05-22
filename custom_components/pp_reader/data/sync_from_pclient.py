@@ -136,13 +136,16 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 # Prüfe, ob das Konto "retired" ist
                 if getattr(acc, "isRetired", False):
                     balance = 0  # Retired-Konten haben immer Kontostand 0
+                    _LOGGER.debug("Gesetzter Kontostand für inaktives Konto %s: %d", acc.uuid, balance)
                 else:
                     # Filtere Transaktionen, die das Konto betreffen
+                    _LOGGER.debug("Verarbeite Konto: %s", acc.uuid)
                     account_transactions = [
                         tx for tx in all_transactions
                         if tx.account == acc.uuid or tx.other_account == acc.uuid
                     ]
                     balance = db_calc_account_balance(acc.uuid, account_transactions)
+                    _LOGGER.debug("Berechneter Kontostand für Konto %s: %d", acc.uuid, balance)
 
                 cur.execute("""
                     INSERT OR REPLACE INTO accounts 
