@@ -5,12 +5,13 @@ export async function fetchStates() {
 }
 
 export async function fetchDashboardDataWS(hass, panelConfig) {
+  console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
   const entry_id = panelConfig
     ?.config
     ?._panel_custom
     ?.config
     ?.entry_id;
-  
+
   if (!hass || !entry_id) {
     throw new Error(
       `fetchDashboardDataWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`

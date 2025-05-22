@@ -1,7 +1,7 @@
 import { createHeaderCard } from '../content/elements.js';
 import { fetchDashboardDataWS } from '../data/api.js';
 
-export async function renderTestTab(hass, panelConfig) {
+export async function renderTestTab(root, hass, panelConfig) {
   console.log("renderTestTab: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
 
   if (!hass) {

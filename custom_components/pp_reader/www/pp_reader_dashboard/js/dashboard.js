@@ -21,7 +21,7 @@ async function renderTab(root, hass, panel) {
 
   let content;
   try {
-    content = await tab.render(hass, panel); // Verwende die lokalen Parameter hass und panel
+    content = await tab.render(root, hass, panel); // Verwende die lokalen Parameter hass und panel
     console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
   } catch (error) {
     console.error("renderTab: Fehler beim Rendern des Tabs:", error);
