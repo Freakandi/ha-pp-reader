@@ -106,6 +106,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, new_transaction_data)
             stats["transactions"] += 1
 
+        # Transaktionen nach dem Einfügen bestätigen
+        conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
+        _LOGGER.debug("Transaktionen in der DB bestätigt.")
+
         # Transaktionen nach dem Einfügen erneut laden
         _LOGGER.debug("Lade Transaktionen aus der DB nach dem Einfügen...")
         all_transactions = get_transactions(conn)  # Lade alle Transaktionen erneut

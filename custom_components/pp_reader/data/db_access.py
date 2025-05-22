@@ -7,6 +7,12 @@ from typing import List, Optional, Dict
 _LOGGER = logging.getLogger(__name__)
 
 @dataclass
+class MetaData:
+    """Metadaten der DB"""
+    key: str
+    date: str  
+    
+@dataclass
 class Transaction:
     """Repräsentiert eine Transaktion in der Datenbank."""
     uuid: str
@@ -44,6 +50,7 @@ class Account:
     currency_code: str
     note: Optional[str] = None
     is_retired: bool = False
+    balance: int = 0  # Cent-Betrag
 
 @dataclass
 class Portfolio:
@@ -144,7 +151,7 @@ def get_accounts(db_path: Path) -> List[Account]:
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.execute("""
-            SELECT uuid, name, currency_code, note, COALESCE(is_retired, 0) 
+            SELECT uuid, name, currency_code, note, COALESCE(is_retired, 0), balance 
             FROM accounts 
             ORDER BY name
         """)
