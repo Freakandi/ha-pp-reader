@@ -8,7 +8,8 @@ ACCOUNT_SCHEMA = [
         currency_code TEXT NOT NULL,
         note TEXT,
         is_retired INTEGER,
-        updated_at TEXT
+        updated_at TEXT,
+        balance INTEGER DEFAULT 0  -- Kontostand in Cent
     );
     """,
     """

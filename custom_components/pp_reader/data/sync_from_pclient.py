@@ -5,6 +5,8 @@ import logging
 from typing import Optional
 from datetime import datetime
 from ..data.websocket import send_dashboard_update
+from ..logic.accounting import db_calc_account_balance
+from ..data.db_access import get_transactions
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +63,52 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             # Setze changes_detected auf True, wenn sich das Änderungsdatum geändert hat
             changes_detected = True
 
+        # --- TRANSACTIONS ---
+        _LOGGER.debug("Lade Transaktionen aus der DB...")
+        all_transactions = get_transactions(conn)  # Lade alle Transaktionen aus der DB
+
+        _LOGGER.debug("Synchronisiere Transaktionen...")
+        transaction_ids = {t.uuid for t in client.transactions}
+        delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
+
+        for t in client.transactions:
+            cur.execute("""
+                SELECT * FROM transactions WHERE uuid = ?
+            """, (t.uuid,))
+            existing_transaction = cur.fetchone()
+
+            new_transaction_data = (
+                t.uuid,
+                int(t.type),
+                t.account if t.HasField("account") else None,
+                t.portfolio if t.HasField("portfolio") else None,
+                t.otherAccount if t.HasField("otherAccount") else None,
+                t.otherPortfolio if t.HasField("otherPortfolio") else None,
+                t.otherUuid if t.HasField("otherUuid") else None,
+                to_iso8601(t.otherUpdatedAt) if t.HasField("otherUpdatedAt") else None,
+                to_iso8601(t.date),
+                t.currencyCode,
+                normalize_amount(t.amount),
+                normalize_shares(t.shares) if t.HasField("shares") else None,
+                t.note if t.HasField("note") else None,
+                t.security if t.HasField("security") else None,
+                t.source if t.HasField("source") else None,
+                to_iso8601(t.updatedAt)
+            )
+
+            if not existing_transaction or existing_transaction != new_transaction_data:
+                changes_detected = True
+                updated_data["transactions"].append(t.uuid)
+
+                cur.execute("""
+                    INSERT OR REPLACE INTO transactions (
+                        uuid, type, account, portfolio, other_account, other_portfolio,
+                        other_uuid, other_updated_at, date, currency_code, amount,
+                        shares, note, security, source, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, new_transaction_data)
+            stats["transactions"] += 1
+
         # --- ACCOUNTS ---
         _LOGGER.debug("Synchronisiere Konten...")
         account_ids = {acc.uuid for acc in client.accounts}
@@ -68,11 +116,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
         for acc in client.accounts:
             cur.execute("""
-                SELECT * FROM accounts WHERE uuid = ?
+                SELECT uuid, name, currency_code, note, is_retired, updated_at FROM accounts WHERE uuid = ?
             """, (acc.uuid,))
             existing_account = cur.fetchone()
 
-            # Prüfe, ob sich die Daten geändert haben
             new_account_data = (
                 acc.uuid,
                 acc.name,
@@ -86,11 +133,22 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 changes_detected = True
                 updated_data["accounts"].append(acc.uuid)
 
+                # Prüfe, ob das Konto "retired" ist
+                if getattr(acc, "isRetired", False):
+                    balance = 0  # Retired-Konten haben immer Kontostand 0
+                else:
+                    # Filtere Transaktionen, die das Konto betreffen
+                    account_transactions = [
+                        tx for tx in all_transactions
+                        if tx.account == acc.uuid or tx.other_account == acc.uuid
+                    ]
+                    balance = db_calc_account_balance(acc.uuid, account_transactions)
+
                 cur.execute("""
                     INSERT OR REPLACE INTO accounts 
-                    (uuid, name, currency_code, note, is_retired, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, new_account_data)
+                    (uuid, name, currency_code, note, is_retired, updated_at, balance)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (*new_account_data, balance))
 
         # --- SECURITIES ---
         _LOGGER.debug("Synchronisiere Wertpapiere...")
@@ -167,49 +225,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     INSERT OR REPLACE INTO portfolios (uuid, name, note, reference_account, is_retired, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, new_portfolio_data)
-
-        # --- TRANSACTIONS ---
-        _LOGGER.debug("Synchronisiere Transaktionen...")
-        transaction_ids = {t.uuid for t in client.transactions}
-        delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
-
-        for t in client.transactions:
-            cur.execute("""
-                SELECT * FROM transactions WHERE uuid = ?
-            """, (t.uuid,))
-            existing_transaction = cur.fetchone()
-
-            new_transaction_data = (
-                t.uuid,
-                int(t.type),
-                t.account if t.HasField("account") else None,
-                t.portfolio if t.HasField("portfolio") else None,
-                t.otherAccount if t.HasField("otherAccount") else None,
-                t.otherPortfolio if t.HasField("otherPortfolio") else None,
-                t.otherUuid if t.HasField("otherUuid") else None,
-                to_iso8601(t.otherUpdatedAt) if t.HasField("otherUpdatedAt") else None,
-                to_iso8601(t.date),
-                t.currencyCode,
-                normalize_amount(t.amount),
-                normalize_shares(t.shares) if t.HasField("shares") else None,
-                t.note if t.HasField("note") else None,
-                t.security if t.HasField("security") else None,
-                t.source if t.HasField("source") else None,
-                to_iso8601(t.updatedAt)
-            )
-
-            if not existing_transaction or existing_transaction != new_transaction_data:
-                changes_detected = True
-                updated_data["transactions"].append(t.uuid)
-
-                cur.execute("""
-                    INSERT OR REPLACE INTO transactions (
-                        uuid, type, account, portfolio, other_account, other_portfolio,
-                        other_uuid, other_updated_at, date, currency_code, amount,
-                        shares, note, security, source, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, new_transaction_data)
-            stats["transactions"] += 1
 
         # --- TRANSACTION_UNITS ---
 # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)

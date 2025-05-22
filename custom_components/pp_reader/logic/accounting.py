@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 from ..data.db_access import Transaction, get_transactions
 from ..logic.validators import PPDataValidator
 import logging
@@ -45,4 +45,36 @@ def calculate_account_balance(account_uuid: str, transactions: List[Transaction]
         _LOGGER.warning(result.message)
 
     return final_balance
+
+def db_calc_account_balance(account_uuid: str, transactions: List[Transaction]) -> int:
+    """
+    Berechnet den Kontostand eines spezifischen Kontos basierend auf den Transaktionen.
+    
+    :param account_uuid: Die UUID des Kontos, dessen Kontostand berechnet werden soll.
+    :param transactions: Liste der Transaktionen, die das Konto betreffen.
+    :return: Berechneter Kontostand (in Cent) als Integer.
+    """
+    saldo = 0
+
+    for tx in transactions:
+        # Prüfe, ob die Transaktion das Konto betrifft
+        if tx.account != account_uuid and tx.other_account != account_uuid:
+            continue
+
+        # CASH_TRANSFER separat behandeln
+        if tx.type == 5:  # CASH_TRANSFER
+            if tx.account == account_uuid:
+                saldo -= tx.amount
+            elif tx.other_account == account_uuid:
+                saldo += tx.amount
+            continue
+
+        # Berechnung für das Hauptkonto
+        if tx.account == account_uuid:
+            if tx.type in (6, 9, 8, 12, 1, 5, 14):  # Einzahlungen, Verkäufe, etc.
+                saldo += tx.amount
+            elif tx.type in (7, 13, 10, 11, 0, 5):  # Auszahlungen, Käufe, etc.
+                saldo -= tx.amount
+
+    return saldo
 
