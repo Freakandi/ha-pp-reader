@@ -19,6 +19,7 @@ from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.db_init import initialize_database_schema
 from .data.coordinator import PPReaderCoordinator
 from .data.websocket import ws_get_dashboard_data
+from .data.websocket import ws_get_accounts
 
 import asyncio
 from functools import partial
@@ -43,8 +44,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     try:
         websocket_api.async_register_command(hass, ws_get_dashboard_data)
         _LOGGER.debug("✅ Websocket-Befehl 'ws_get_dashboard_data' erfolgreich registriert.")
+
+        websocket_api.async_register_command(hass, ws_get_accounts)
+        _LOGGER.debug("✅ Websocket-Befehl 'ws_get_accounts' erfolgreich registriert.")
     except Exception as e:
-        _LOGGER.error("❌ Fehler bei der Registrierung des Websocket-Befehls: %s", str(e))
+        _LOGGER.error("❌ Fehler bei der Registrierung der Websocket-Befehle: %s", str(e))
 
     return True
 
