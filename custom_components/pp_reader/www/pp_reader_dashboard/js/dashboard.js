@@ -217,7 +217,6 @@ class PPReaderDashboard extends HTMLElement {
       console.warn("pp-reader-dashboard: noch kein hass, überspringe _render()");
       return;
     }
-    this._root.innerHTML = ''; // Optional: Leeren vor dem Rendern
     renderTab(this._root, this._hass, this._panel);
   }
 }
