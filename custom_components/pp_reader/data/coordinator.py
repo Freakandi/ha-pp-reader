@@ -56,7 +56,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 conn = sqlite3.connect(str(self.db_path))
                 try:
                     cur = conn.cursor()
-                    cur.execute("SELECT value FROM metadata WHERE key = 'last_file_update'")
+                    cur.execute("SELECT date FROM metadata WHERE key = 'last_file_update'")
                     result = cur.fetchone()
                     # Überprüfen, ob result[0] ein gültiger String ist
                     if result and result[0]:
