@@ -1,10 +1,17 @@
 import { createHeaderCard, makeTable } from '../content/elements.js';
 import { prepareDashboardData } from '../data/data.js';
+import { fetchAccountsWS } from '../data/api.js';
 
-export async function renderDashboard() {
+export async function renderDashboard(root, hass, panelConfig) {
   try {
-    const { konten, depots, fileUpdated, totalVermoegen } = await prepareDashboardData();
+    // Lade Depotdaten über prepareDashboardData
+    const { depots, fileUpdated, totalVermoegen } = await prepareDashboardData();
 
+    // Lade Kontodaten über WebSocket
+    const accountsResponse = await fetchAccountsWS(hass, panelConfig);
+    const konten = accountsResponse.accounts || [];
+
+    // Formatierte letzte Aktualisierung
     const formattedFileUpdated = new Date(fileUpdated).toLocaleString('de-DE', {
       day: '2-digit',
       month: '2-digit',
@@ -13,6 +20,7 @@ export async function renderDashboard() {
       minute: '2-digit'
     });
 
+    // Header-Metadaten
     const headerMeta = `
       <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE', {
         minimumFractionDigits: 2,
@@ -20,6 +28,7 @@ export async function renderDashboard() {
       })}&nbsp;€</strong></div>
     `;
 
+    // Header-Karte erstellen
     const headerCard = createHeaderCard('Übersicht', headerMeta);
 
     return `

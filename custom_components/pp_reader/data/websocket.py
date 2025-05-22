@@ -53,12 +53,51 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
         connection.send_error(msg["id"], "db_error", str(e))
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_accounts",
+        vol.Optional("entry_id"): str,  # Erwartet die entry_id
+    }
+)
+@websocket_api.async_response
+async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None:
+    """Handle WebSocket command to get account data (name and balance) for active accounts."""
+    try:
+        # Zugriff auf die Datenbank
+        entry_id = msg["entry_id"]
+        db_path = hass.data[DOMAIN][entry_id]["db_path"]
+        from .db_access import get_accounts
+
+        # Datenbankabfrage ausführen
+        accounts = await hass.async_add_executor_job(get_accounts, db_path)
+
+        # Nur aktive Konten (isRetired=0) und relevante Daten extrahieren
+        account_data = [
+            {"name": a.name, "balance": a.balance}
+            for a in accounts
+            if not a.is_retired  # Nur Konten mit isRetired=0
+        ]
+
+        # Antwort senden
+        connection.send_result(
+            msg["id"],
+            {
+                "accounts": account_data,
+            },
+        )
+        _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)
+
+    except Exception as e:
+        _LOGGER.exception("Fehler beim Abrufen der Kontodaten: %s", e)
+        connection.send_error(msg["id"], "db_error", str(e))
+
+
 def send_dashboard_update(hass, entry_id, updated_data):
     """Sendet ein Update-Event an alle verbundenen WebSocket-Clients."""
     # Sicherstellen, dass der Aufruf im Haupt-Event-Loop erfolgt
     def _send_update():
         async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry_id}", updated_data)
-        _LOGGER.debug("Update-Event für entry_id %s gesendet: %s", entry_id, updated_data)
+        _LOGGER.debug("Update-Event für entry_id %s gesendet", entry_id)
 
     # Verwende call_soon_threadsafe, um sicherzustellen, dass der Aufruf im Event-Loop erfolgt
     hass.loop.call_soon_threadsafe(_send_update)

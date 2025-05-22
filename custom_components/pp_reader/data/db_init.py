@@ -35,7 +35,6 @@ def initialize_database_schema(db_path: Path) -> None:
             """)
             
             conn.commit()
-            _LOGGER.info("📦 Datenbank erfolgreich initialisiert: %s", db_path)
             
         except Exception as e:
             conn.rollback()
@@ -44,6 +43,7 @@ def initialize_database_schema(db_path: Path) -> None:
             
         finally:
             conn.close()
+            _LOGGER.info("📦 Datenbank erfolgreich initialisiert: %s", db_path)
             
     except Exception as e:
         _LOGGER.exception("❌ Kritischer Fehler bei DB-Initialisierung")

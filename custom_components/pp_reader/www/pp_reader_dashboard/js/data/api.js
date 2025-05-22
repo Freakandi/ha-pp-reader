@@ -24,3 +24,29 @@ export async function fetchDashboardDataWS(hass, panelConfig) {
     entry_id,
   });
 }
+
+export async function fetchAccountsWS(hass, panelConfig) {
+  console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
+  const entry_id = panelConfig
+    ?.config
+    ?._panel_custom
+    ?.config
+    ?.entry_id;
+
+  if (!hass || !entry_id) {
+    throw new Error(
+      `fetchAccountsWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
+    );
+  }
+  console.debug("fetchAccountsWS: sende WS-Nachricht für Entry", entry_id);
+
+  // Sende die WebSocket-Nachricht, um die Kontodaten zu laden
+  const accounts = await hass.connection.sendMessagePromise({
+    type: "pp_reader/get_accounts",
+    entry_id,
+  });
+
+  console.debug("fetchAccountsWS: Kontodaten empfangen:", accounts);
+
+  return accounts;
+}
