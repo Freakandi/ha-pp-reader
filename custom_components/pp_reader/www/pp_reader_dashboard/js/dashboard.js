@@ -192,10 +192,13 @@ class PPReaderDashboard extends HTMLElement {
     this._lastRoute = null;
     this._lastPage = null;
     this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
+
+    this._updateListener = null; // WebSocket-Listener für Updates
   }
 
   set hass(hass) {
     this._hass = hass;
+    this._subscribeToUpdates(); // Abonniere Updates, wenn hass gesetzt wird
     this._render();
   }
 
@@ -216,6 +219,56 @@ class PPReaderDashboard extends HTMLElement {
 
   connectedCallback() {
     this._render();
+  }
+
+  disconnectedCallback() {
+    // Entferne den Listener, wenn das Dashboard entfernt wird
+    if (this._updateListener) {
+      this._hass.connection.unsubscribeEvents(this._updateListener);
+      this._updateListener = null;
+    }
+  }
+
+  _subscribeToUpdates() {
+    if (!this._hass || this._updateListener) {
+      return; // Bereits abonniert oder kein hass verfügbar
+    }
+
+    const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
+    if (!entryId) {
+      console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Update-Subscription.");
+      return;
+    }
+
+    // Abonniere das WebSocket-Event
+    this._updateListener = this._hass.connection.subscribeEvents(
+      (event) => this._handleUpdate(event),
+      `pp_reader/dashboard_data_updated`
+    );
+
+    console.log("PPReaderDashboard: Update-Subscription erfolgreich eingerichtet.");
+  }
+
+  _handleUpdate(event) {
+    console.log("PPReaderDashboard: Update erhalten:", event);
+
+    // Aktualisiere die Daten oder rendere das Dashboard neu
+    const updatedData = event.data;
+    if (updatedData) {
+      // Beispiel: Aktualisiere nur die geänderten Inhalte
+      this._updateContent(updatedData);
+    } else {
+      // Alternativ: Komplettes Neurendern
+      this._render();
+    }
+  }
+
+  _updateContent(updatedData) {
+    // Hier kannst du gezielt die Inhalte aktualisieren, die sich geändert haben
+    console.log("PPReaderDashboard: Aktualisiere Inhalte mit neuen Daten:", updatedData);
+
+    // Beispiel: Aktualisiere nur den aktuellen Tab
+    renderTab(this._root, this._hass, this._panel);
   }
 
   _render() {
