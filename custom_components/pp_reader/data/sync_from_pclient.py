@@ -56,7 +56,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         # Speichere das Änderungsdatum der Portfolio-Datei
         if last_file_update:
             cur.execute("""
-                INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_file_update', ?)
+                INSERT OR REPLACE INTO metadata (key, date) VALUES ('last_file_update', ?)
             """, (last_file_update,))
             _LOGGER.debug("📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
 
