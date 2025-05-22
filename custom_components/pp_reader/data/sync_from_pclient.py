@@ -113,7 +113,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
         # Transaktionen nach dem Einfügen erneut laden
         _LOGGER.debug("Lade Transaktionen aus der DB nach dem Einfügen...")
-        all_transactions = get_transactions(db_path)  # Übergib den Pfad zur DB
+        all_transactions = get_transactions(str(db_path))  # Übergib den Pfad zur DB
 
         # Verbindung erneut öffnen
         conn = sqlite3.connect(str(db_path))
