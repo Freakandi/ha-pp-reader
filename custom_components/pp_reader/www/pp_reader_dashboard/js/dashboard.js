@@ -207,13 +207,13 @@ class PPReaderDashboard extends HTMLElement {
     this._render();
   }
 
-  set narrow(n) {
-    this._narrow = n;
+  set narrow(narrow) {
+    this._narrow = narrow;
     this._render();
   }
 
-  set route(r) {
-    this._route = r;
+  set route(route) {
+    this._route = route;
     this._render();
   }
 
@@ -268,7 +268,7 @@ class PPReaderDashboard extends HTMLElement {
     console.log("PPReaderDashboard: Aktualisiere Inhalte mit neuen Daten:", updatedData);
 
     // Beispiel: Aktualisiere nur den aktuellen Tab
-    renderTab(this._root, this._hass, this._panel);
+    renderTab(root, hass, panel);
   }
 
   _render() {
