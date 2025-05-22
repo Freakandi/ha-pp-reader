@@ -223,11 +223,22 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   disconnectedCallback() {
-    // Entferne den Listener, wenn das Dashboard entfernt wird
-    if (this._updateListener) {
-      this._hass.connection.unsubscribeEvents(this._updateListener);
-      this._updateListener = null;
+    // Überprüfen, ob _hass und connection korrekt initialisiert sind
+    if (this._hass && this._hass.connection && this._updateListener) {
+      try {
+        this._hass.connection.unsubscribeEvents(this._updateListener);
+        console.log("PPReaderDashboard: Update-Listener erfolgreich entfernt.");
+      } catch (error) {
+        console.error("PPReaderDashboard: Fehler beim Entfernen des Update-Listeners:", error);
+      }
+    } else {
+      console.warn(
+        "PPReaderDashboard: _hass.connection oder _updateListener nicht verfügbar, kein Listener entfernt."
+      );
     }
+
+    // Rufe die Methode der übergeordneten Klasse auf, falls vorhanden
+    super.disconnectedCallback && super.disconnectedCallback();
   }
 
   _checkInitialization() {
