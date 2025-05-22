@@ -186,6 +186,9 @@ class PPReaderDashboard extends HTMLElement {
     this._root = document.createElement('div');
     this._root.className = 'pp-reader-dashboard';
     this.appendChild(this._root);
+
+    this._lastHass = null; // Speichert den letzten Zustand von hass
+    this._lastPanel = null; // Speichert den letzten Zustand von panel
   }
 
   set hass(hass) {
@@ -217,7 +220,25 @@ class PPReaderDashboard extends HTMLElement {
       console.warn("pp-reader-dashboard: noch kein hass, überspringe _render()");
       return;
     }
+
+    // Prüfen, ob sich hass oder panel geändert haben
+    if (this._hass === this._lastHass && this._panel === this._lastPanel) {
+      console.log("pp-reader-dashboard: Keine Änderungen, überspringe Rendern.");
+      return;
+    }
+
+    // Scroll-Position speichern
+    const scrollPosition = this._root.scrollTop;
+
+    // Rendern
     renderTab(this._root, this._hass, this._panel);
+
+    // Scroll-Position wiederherstellen
+    this._root.scrollTop = scrollPosition;
+
+    // Aktualisiere den letzten Zustand
+    this._lastHass = this._hass;
+    this._lastPanel = this._panel;
   }
 }
 
