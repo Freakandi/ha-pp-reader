@@ -187,8 +187,11 @@ class PPReaderDashboard extends HTMLElement {
     this._root.className = 'pp-reader-dashboard';
     this.appendChild(this._root);
 
-    this._lastHass = null; // Speichert den letzten Zustand von hass
-    this._lastPanel = null; // Speichert den letzten Zustand von panel
+    this._lastPanel = null;
+    this._lastNarrow = null;
+    this._lastRoute = null;
+    this._lastPage = null;
+    this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
   }
 
   set hass(hass) {
@@ -201,13 +204,13 @@ class PPReaderDashboard extends HTMLElement {
     this._render();
   }
 
-  set narrow(narrow) {
-    this._narrow = narrow;
+  set narrow(n) {
+    this._narrow = n;
     this._render();
   }
 
-  set route(route) {
-    this._route = route;
+  set route(r) {
+    this._route = r;
     this._render();
   }
 
@@ -221,24 +224,35 @@ class PPReaderDashboard extends HTMLElement {
       return;
     }
 
-    // Prüfen, ob sich hass oder panel geändert haben
-    if (this._hass === this._lastHass && this._panel === this._lastPanel) {
-      console.log("pp-reader-dashboard: Keine Änderungen, überspringe Rendern.");
+    // Prüfen, ob ein Render notwendig ist
+    const page = currentPage;
+    if (
+      this._panel === this._lastPanel &&
+      this._narrow === this._lastNarrow &&
+      this._route === this._lastRoute &&
+      this._lastPage === page
+    ) {
+      console.log("pp-reader-dashboard: keine Änderungen → skip render");
       return;
     }
 
-    // Scroll-Position speichern
-    const scrollPosition = this._root.scrollTop;
+    // Alte Scroll-Position merken (pro Tab)
+    if (this._lastPage != null) {
+      this._scrollPositions[this._lastPage] = this._root.scrollTop;
+    }
 
-    // Rendern
+    // Tatsächliches Rendern
     renderTab(this._root, this._hass, this._panel);
 
     // Scroll-Position wiederherstellen
-    this._root.scrollTop = scrollPosition;
+    const restore = this._scrollPositions[page] || 0;
+    this._root.scrollTop = restore;
 
-    // Aktualisiere den letzten Zustand
-    this._lastHass = this._hass;
+    // Neuen „Last“-Zustand merken
     this._lastPanel = this._panel;
+    this._lastNarrow = this._narrow;
+    this._lastRoute = this._route;
+    this._lastPage = page;
   }
 }
 
