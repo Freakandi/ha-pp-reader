@@ -1,6 +1,7 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { renderDashboard } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
+import { subscribeAccountUpdates } from './data/api.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
