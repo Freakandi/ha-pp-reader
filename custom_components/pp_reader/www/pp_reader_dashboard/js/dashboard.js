@@ -225,7 +225,7 @@ class PPReaderDashboard extends HTMLElement {
   disconnectedCallback() {
     // Entferne den Listener, wenn das Dashboard entfernt wird
     if (this._updateListener) {
-      this._hass.connection.unsubscribeEvents(this._updateListener);
+      hass.connection.unsubscribeEvents(this._updateListener);
       this._updateListener = null;
     }
   }
@@ -275,8 +275,10 @@ class PPReaderDashboard extends HTMLElement {
     // Aktualisiere die Daten oder rendere das Dashboard neu
     const updatedData = event.data;
     if (updatedData) {
+      // Beispiel: Aktualisiere nur die geänderten Inhalte
       this._updateContent(updatedData);
     } else {
+      // Alternativ: Komplettes Neurendern
       this._render();
     }
   }

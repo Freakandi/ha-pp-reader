@@ -58,6 +58,9 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             """, (last_file_update,))
             _LOGGER.debug("📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
 
+            # Setze changes_detected auf True, wenn sich das Änderungsdatum geändert hat
+            changes_detected = True
+
         # --- ACCOUNTS ---
         _LOGGER.debug("Synchronisiere Konten...")
         account_ids = {acc.uuid for acc in client.accounts}
