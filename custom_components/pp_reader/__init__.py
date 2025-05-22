@@ -131,7 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         async with session.get(api_url, headers=headers) as resp:
                             _LOGGER.debug("API Antwort Status: %s", resp.status)
                             
-                            if resp.status != 200:
+                            if (resp.status != 200):
                                 _LOGGER.error(
                                     "API Fehler: Status %s, Body: %s",
                                     resp.status,
@@ -176,26 +176,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
 
-        # Panel hier registrieren
-        frontend.async_register_built_in_panel(
-            hass,
-            component_name="custom",
-            sidebar_title="Portfolio Dashboard",
-            sidebar_icon="mdi:finance",
-            frontend_url_path="ppreader",
-            require_admin=False,
-            config={
-                "_panel_custom": {
-                    "name": "pp-reader-panel",
-                    "embed_iframe": False,
-                    "module_url": "/pp_reader_dashboard/panel.js",
-                    "trust_external": True,
-                    "config": {
-                        "entry_id": entry.entry_id
+        # Vor der Registrierung des Panels prüfen, ob es bereits existiert
+        if not any(panel["url_path"] == "ppreader" for panel in hass.data.get("frontend_panels", {}).values()):
+            frontend.async_register_built_in_panel(
+                hass,
+                component_name="custom",
+                sidebar_title="Portfolio Dashboard",
+                sidebar_icon="mdi:finance",
+                frontend_url_path="ppreader",
+                require_admin=False,
+                config={
+                    "_panel_custom": {
+                        "name": "pp-reader-panel",
+                        "embed_iframe": False,
+                        "module_url": "/pp_reader_dashboard/panel.js",
+                        "trust_external": True,
+                        "config": {
+                            "entry_id": entry.entry_id
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
+        else:
+            _LOGGER.warning("Das Panel 'ppreader' ist bereits registriert. Überspringe Registrierung.")
 
         return True
 
