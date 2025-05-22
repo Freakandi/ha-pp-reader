@@ -225,7 +225,7 @@ class PPReaderDashboard extends HTMLElement {
   disconnectedCallback() {
     // Entferne den Listener, wenn das Dashboard entfernt wird
     if (this._updateListener) {
-      hass.connection.unsubscribeEvents(this._updateListener);
+      this._hass.connection.unsubscribeEvents(this._updateListener);
       this._updateListener = null;
     }
   }

@@ -55,5 +55,10 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
 
 def send_dashboard_update(hass, entry_id, updated_data):
     """Sendet ein Update-Event an alle verbundenen WebSocket-Clients."""
-    async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry_id}", updated_data)
-    _LOGGER.debug("Update-Event für entry_id %s gesendet: %s", entry_id, updated_data)
+    # Sicherstellen, dass der Aufruf im Haupt-Event-Loop erfolgt
+    def _send_update():
+        async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry_id}", updated_data)
+        _LOGGER.debug("Update-Event für entry_id %s gesendet: %s", entry_id, updated_data)
+
+    # Verwende call_soon_threadsafe, um sicherzustellen, dass der Aufruf im Event-Loop erfolgt
+    hass.loop.call_soon_threadsafe(_send_update)
