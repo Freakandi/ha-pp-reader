@@ -195,6 +195,7 @@ class PPReaderDashboard extends HTMLElement {
 
     this._updateListener = null; // WebSocket-Listener für Updates
     this._initialized = false; // Initialisierungs-Flag
+    this._hasNewData = false; // Flag für neue Daten
   }
 
   set hass(hass) {
@@ -268,13 +269,14 @@ class PPReaderDashboard extends HTMLElement {
   _handleUpdate(event) {
     console.log("PPReaderDashboard: Update erhalten:", event);
 
+    // Setze das Flag für neue Daten
+    this._hasNewData = true;
+
     // Aktualisiere die Daten oder rendere das Dashboard neu
     const updatedData = event.data;
     if (updatedData) {
-      // Beispiel: Aktualisiere nur die geänderten Inhalte
       this._updateContent(updatedData);
     } else {
-      // Alternativ: Komplettes Neurendern
       this._render();
     }
   }
@@ -296,6 +298,7 @@ class PPReaderDashboard extends HTMLElement {
     // Prüfen, ob ein Render notwendig ist
     const page = currentPage;
     if (
+      !this._hasNewData && // Nur rendern, wenn neue Daten vorliegen
       this._panel === this._lastPanel &&
       this._narrow === this._lastNarrow &&
       this._route === this._lastRoute &&
@@ -322,6 +325,9 @@ class PPReaderDashboard extends HTMLElement {
     this._lastNarrow = this._narrow;
     this._lastRoute = this._route;
     this._lastPage = page;
+
+    // Setze das Flag für neue Daten zurück
+    this._hasNewData = false;
   }
 }
 
