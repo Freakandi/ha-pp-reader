@@ -101,3 +101,12 @@ def send_dashboard_update(hass, entry_id, updated_data):
 
     # Verwende call_soon_threadsafe, um sicherzustellen, dass der Aufruf im Event-Loop erfolgt
     hass.loop.call_soon_threadsafe(_send_update)
+
+
+def send_accounts_update(hass, entry_id, updated_data):
+    """Sendet ein Update-Event an alle verbundenen WebSocket-Clients für Kontodaten."""
+    def _send_update():
+        async_dispatcher_send(hass, f"{DOMAIN}_accounts_updated_{entry_id}", updated_data)
+        _LOGGER.debug("Kontodaten-Update-Event für entry_id %s gesendet", entry_id)
+
+    hass.loop.call_soon_threadsafe(_send_update)

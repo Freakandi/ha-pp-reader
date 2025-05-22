@@ -50,3 +50,22 @@ export async function fetchAccountsWS(hass, panelConfig) {
 
   return accounts;
 }
+
+export function subscribeAccountUpdates(hass, entry_id, callback) {
+  if (!hass || !entry_id) {
+    throw new Error(
+      `subscribeAccountUpdates: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
+    );
+  }
+
+  console.debug("subscribeAccountUpdates: Abonniere Updates für Entry", entry_id);
+
+  // WebSocket-Listener registrieren
+  return hass.connection.subscribeMessage((message) => {
+    console.debug("subscribeAccountUpdates: Update empfangen:", message);
+    callback(message);
+  }, {
+    type: "pp_reader/accounts_updated",
+    entry_id,
+  });
+}

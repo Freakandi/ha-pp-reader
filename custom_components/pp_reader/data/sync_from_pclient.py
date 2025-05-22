@@ -273,8 +273,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         # Sende das Update-Event, wenn Änderungen erkannt wurden
         _LOGGER.debug("Sende Dashboard-Update mit entry_id: %s", entry_id)
         if changes_detected and hass and entry_id:
+            # Sende das Update-Event für das Dashboard
             send_dashboard_update(hass, entry_id, updated_data)
-            _LOGGER.debug("📡 Update-Event gesendet: %s", updated_data)
+            _LOGGER.debug("📡 Dashboard-Update-Event gesendet: %s", updated_data)
+
+            # Sende das Update-Event für die Kontodaten
+            account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
+            send_accounts_update(hass, entry_id, account_data)
+            _LOGGER.debug("📡 Kontodaten-Update-Event gesendet: %s", account_data)
         else:
             # Logge die fehlenden Voraussetzungen
             _LOGGER.error(

@@ -48,7 +48,7 @@ export async function renderDashboard(root, hass, panelConfig) {
 
     <div class="card">
       <h2>Liquidität</h2>
-      <div class="scroll-container">
+      <div class="scroll-container account-table">
         ${makeTable(konten, [
           { key: 'name', label: 'Name' },
           { key: 'balance', label: 'Kontostand', align: 'right' }

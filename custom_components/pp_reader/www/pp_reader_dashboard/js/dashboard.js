@@ -194,6 +194,7 @@ class PPReaderDashboard extends HTMLElement {
     this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
 
     this._updateListener = null; // WebSocket-Listener für Updates
+    this._accountUpdateListener = null; // WebSocket-Listener für Kontodaten-Updates
     this._initialized = false; // Initialisierungs-Flag
     this._hasNewData = false; // Flag für neue Daten
   }
@@ -237,6 +238,20 @@ class PPReaderDashboard extends HTMLElement {
       );
     }
 
+    // Überprüfen, ob _hass und connection korrekt initialisiert sind
+    if (this._hass && this._hass.connection && this._accountUpdateListener) {
+      try {
+        this._hass.connection.unsubscribeEvents(this._accountUpdateListener);
+        console.log("PPReaderDashboard: Account-Update-Listener erfolgreich entfernt.");
+      } catch (error) {
+        console.error("PPReaderDashboard: Fehler beim Entfernen des Account-Update-Listeners:", error);
+      }
+    } else {
+      console.warn(
+        "PPReaderDashboard: _hass.connection oder _accountUpdateListener nicht verfügbar, kein Listener entfernt."
+      );
+    }
+
     // Rufe die Methode der übergeordneten Klasse auf, falls vorhanden
     super.disconnectedCallback && super.disconnectedCallback();
   }
@@ -246,6 +261,7 @@ class PPReaderDashboard extends HTMLElement {
     if (this._hass && this._panel && !this._initialized) {
       this._initialized = true; // Initialisierung abgeschlossen
       this._subscribeToUpdates(); // Abonniere Updates
+      this._subscribeToAccountUpdates(); // Abonniere Kontodaten-Updates
       this._render(); // Starte das erste Rendern
     }
   }
@@ -300,6 +316,49 @@ class PPReaderDashboard extends HTMLElement {
 
     // Beispiel: Aktualisiere nur den aktuellen Tab
     renderTab(root, hass, panel);
+  }
+
+  _subscribeToAccountUpdates() {
+    if (!this._hass || this._accountUpdateListener) {
+      return; // Bereits abonniert oder kein hass verfügbar
+    }
+
+    const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
+    if (!entryId) {
+      console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Account-Update-Subscription.");
+      return;
+    }
+
+    // Abonniere das WebSocket-Event für Kontodaten
+    this._accountUpdateListener = subscribeAccountUpdates(
+      this._hass,
+      entryId,
+      (update) => this._handleAccountUpdate(update)
+    );
+
+    console.log("PPReaderDashboard: Account-Update-Subscription erfolgreich eingerichtet.");
+  }
+
+  _handleAccountUpdate(update) {
+    console.log("PPReaderDashboard: Kontodaten-Update erhalten:", update);
+
+    // Aktualisiere die Kontodaten im Dashboard
+    const updatedAccounts = update.accounts || [];
+    this._updateAccountTable(updatedAccounts);
+  }
+
+  _updateAccountTable(accounts) {
+    const accountTable = this._root.querySelector('.account-table');
+    if (!accountTable) {
+      console.warn("PPReaderDashboard: Account-Tabelle nicht gefunden, überspringe Update.");
+      return;
+    }
+
+    // Aktualisiere die Tabelle mit den neuen Kontodaten
+    accountTable.innerHTML = makeTable(accounts, [
+      { key: 'name', label: 'Name' },
+      { key: 'balance', label: 'Kontostand', align: 'right' }
+    ], ['balance']);
   }
 
   _render() {
