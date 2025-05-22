@@ -177,7 +177,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
 
         # Vor der Registrierung des Panels prüfen, ob es bereits existiert
-        if not any(panel["url_path"] == "ppreader" for panel in hass.data.get("frontend_panels", {}).values()):
+        if not any(panel.frontend_url_path == "ppreader" for panel in hass.data.get("frontend_panels", {}).values()):
             frontend.async_register_built_in_panel(
                 hass,
                 component_name="custom",
