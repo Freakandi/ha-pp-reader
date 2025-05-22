@@ -81,6 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         try:
             await coordinator.async_config_entry_first_refresh()
+            _LOGGER.debug("Initialisiere Coordinator mit entry_id: %s", entry.entry_id)
         except Exception as e:
             _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
             raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")

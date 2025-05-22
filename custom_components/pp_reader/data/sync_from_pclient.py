@@ -166,6 +166,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, new_portfolio_data)
 
         # --- TRANSACTIONS ---
+        _LOGGER.debug("Synchronisiere Transaktionen...")
         transaction_ids = {t.uuid for t in client.transactions}
         delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
 
@@ -244,9 +245,24 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         )
 
         # Sende das Update-Event, wenn Änderungen erkannt wurden
+        _LOGGER.debug("Sende Dashboard-Update mit entry_id: %s", entry_id)
         if changes_detected and hass and entry_id:
             send_dashboard_update(hass, entry_id, updated_data)
-        
+            _LOGGER.debug("📡 Update-Event gesendet: %s", updated_data)
+        else:
+            # Logge die fehlenden Voraussetzungen
+            _LOGGER.error(
+                "❌ send_dashboard_update wurde nicht aufgerufen. Gründe:\n"
+                "  - changes_detected: %s\n"
+                "  - hass: %s\n"
+                "  - entry_id: %s\n"
+                "  - updated_data: %s",
+                changes_detected,
+                hass,
+                entry_id,
+                updated_data
+            )
+
     except Exception as e:
         conn.rollback()
         _LOGGER.error("Fehler während der Synchronisation: %s", str(e))

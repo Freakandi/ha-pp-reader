@@ -84,6 +84,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     def sync_data():
                         conn = sqlite3.connect(str(self.db_path))
                         try:
+                            _LOGGER.debug("Rufe sync_from_pclient auf mit entry_id: %s", self.entry_id)
                             sync_from_pclient(data, conn, self.hass, self.entry_id, last_update_truncated.isoformat())
                         finally:
                             conn.close()
