@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 from ..data.websocket import send_dashboard_update
+from ..data.websocket import send_accounts_update
 from ..logic.accounting import db_calc_account_balance
 from ..data.db_access import get_transactions
 
