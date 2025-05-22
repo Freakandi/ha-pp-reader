@@ -77,6 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass,
             db_path=db_path,
             file_path=Path(file_path),
+            entry_id=entry.entry_id,  # Entry-ID übergeben
         )
         try:
             await coordinator.async_config_entry_first_refresh()
@@ -196,11 +197,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
         return True
-        
+
     except Exception as e:
         _LOGGER.exception("Kritischer Fehler beim Setup: %s", str(e))
         return False
-
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""

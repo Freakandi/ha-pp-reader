@@ -16,13 +16,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PPReaderCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass: HomeAssistant, *, db_path: Path, file_path: Path):
+    def __init__(self, hass: HomeAssistant, *, db_path: Path, file_path: Path, entry_id: str):
         """Initialisiere den Coordinator.
 
         Args:
             hass: HomeAssistant Instanz
             db_path: Pfad zur SQLite-Datenbank
             file_path: Pfad zur Portfolio-Datei
+            entry_id: Die Entry-ID des Frontend-Panels für websocket-subscription
         """
         super().__init__(
             hass,
@@ -32,12 +33,13 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         )
         self.db_path = db_path
         self.file_path = file_path
-        self.hass = hass  # Speichere die HomeAssistant-Instanz
+        self.entry_id = entry_id
+        self.hass = hass
         self.data = {
             "accounts": [],
             "portfolios": [],
             "transactions": [],
-            "last_update": None,  # Neues Attribut für den letzten Änderungszeitstempel
+            "last_update": None,
         }
         self.last_file_update = None  # Initialisierung des Attributs
 
