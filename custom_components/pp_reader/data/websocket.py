@@ -18,7 +18,7 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
         # Zugriff auf die Datenbank
         entry_id = msg["entry_id"]
         db_path = hass.data["pp_reader"][entry_id]["db_path"]
-        from .data.db_access import get_accounts, get_portfolios
+        from .db_access import get_accounts, get_portfolios
 
         # Datenbankabfragen ausführen
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
