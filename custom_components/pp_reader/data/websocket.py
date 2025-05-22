@@ -1,9 +1,11 @@
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import async_response, ActiveConnection
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 import voluptuous as vol
 import logging
 
 _LOGGER = logging.getLogger(__name__)
+DOMAIN = "pp_reader"
 
 @websocket_api.websocket_command(
     {
@@ -17,7 +19,7 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
     try:
         # Zugriff auf die Datenbank
         entry_id = msg["entry_id"]
-        db_path = hass.data["pp_reader"][entry_id]["db_path"]
+        db_path = hass.data[DOMAIN][entry_id]["db_path"]
         from .db_access import get_accounts, get_portfolios
 
         # Datenbankabfragen ausführen
@@ -32,6 +34,26 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
                 "portfolios": [p.__dict__ for p in portfolios],
             },
         )
+
+        # Dispatcher-Listener für Updates registrieren
+        async_dispatcher_connect(
+            hass,
+            f"{DOMAIN}_updated_{entry_id}",
+            lambda new_data: connection.send_message(
+                {
+                    "id": msg["id"] + 1,
+                    "type": "pp_reader/dashboard_data_updated",
+                    "data": new_data,
+                }
+            ),
+        )
+
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten: %s", e)
         connection.send_error(msg["id"], "db_error", str(e))
+
+
+def send_dashboard_update(hass, entry_id, updated_data):
+    """Sendet ein Update-Event an alle verbundenen WebSocket-Clients."""
+    async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry_id}", updated_data)
+    _LOGGER.debug("Update-Event für entry_id %s gesendet: %s", entry_id, updated_data)
