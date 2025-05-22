@@ -194,31 +194,31 @@ class PPReaderDashboard extends HTMLElement {
     this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
 
     this._updateListener = null; // WebSocket-Listener für Updates
+    this._initialized = false; // Initialisierungs-Flag
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._subscribeToUpdates(); // Abonniere Updates, wenn hass gesetzt wird
-    this._render();
+    this._checkInitialization(); // Überprüfe die Initialisierung
   }
 
   set panel(panel) {
     this._panel = panel;
-    this._render();
+    this._checkInitialization(); // Überprüfe die Initialisierung
   }
 
   set narrow(narrow) {
     this._narrow = narrow;
-    this._render();
+    this._renderIfInitialized(); // Rendere nur, wenn initialisiert
   }
 
   set route(route) {
     this._route = route;
-    this._render();
+    this._renderIfInitialized(); // Rendere nur, wenn initialisiert
   }
 
   connectedCallback() {
-    this._render();
+    this._checkInitialization(); // Überprüfe die Initialisierung
   }
 
   disconnectedCallback() {
@@ -226,6 +226,22 @@ class PPReaderDashboard extends HTMLElement {
     if (this._updateListener) {
       this._hass.connection.unsubscribeEvents(this._updateListener);
       this._updateListener = null;
+    }
+  }
+
+  _checkInitialization() {
+    // Überprüfe, ob alle notwendigen Daten verfügbar sind
+    if (this._hass && this._panel && !this._initialized) {
+      this._initialized = true; // Initialisierung abgeschlossen
+      this._subscribeToUpdates(); // Abonniere Updates
+      this._render(); // Starte das erste Rendern
+    }
+  }
+
+  _renderIfInitialized() {
+    // Rendere nur, wenn die Initialisierung abgeschlossen ist
+    if (this._initialized) {
+      this._render();
     }
   }
 
