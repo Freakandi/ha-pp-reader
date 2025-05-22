@@ -29,6 +29,11 @@ def initialize_database_schema(db_path: Path) -> None:
                     # Falls einzelnes Statement
                     conn.execute(schema_group)
             
+            # Initialen Eintrag für das Änderungsdatum hinzufügen
+            conn.execute("""
+                INSERT OR IGNORE INTO metadata (key, value) VALUES ('last_file_update', NULL)
+            """)
+            
             conn.commit()
             _LOGGER.info("📦 Datenbank erfolgreich initialisiert: %s", db_path)
             

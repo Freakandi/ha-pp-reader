@@ -37,7 +37,7 @@ def extract_exchange_rate(pdecimal) -> float:
     value = int.from_bytes(pdecimal.value, byteorder='little', signed=True)
     return abs(value / (10 ** pdecimal.scale))
 
-def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None) -> None:
+def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None) -> None:
     """Synchronisiert Daten aus Portfolio Performance mit der lokalen SQLite DB."""
     cur = conn.cursor()
     stats = {
@@ -51,6 +51,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
     try:
         conn.execute("BEGIN TRANSACTION")
         
+        # Speichere das Änderungsdatum der Portfolio-Datei
+        if last_file_update:
+            cur.execute("""
+                INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_file_update', ?)
+            """, (last_file_update,))
+            _LOGGER.debug("📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
+
         # --- ACCOUNTS ---
         _LOGGER.debug("Synchronisiere Konten...")
         account_ids = {acc.uuid for acc in client.accounts}

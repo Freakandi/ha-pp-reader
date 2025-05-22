@@ -313,11 +313,20 @@ CREATE TABLE IF NOT EXISTS fx_rates (
 );
 """]
 
+METADATA_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
+    """
+]
 
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
     *SECURITIES_SCHEMA,
     *PORTFOLIO_SCHEMA,
     *TRANSACTION_SCHEMA,
-    *FX_SCHEMA
+    *FX_SCHEMA,
+    *METADATA_SCHEMA
 ]
