@@ -64,9 +64,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             changes_detected = True
 
         # --- TRANSACTIONS ---
-        _LOGGER.debug("Lade Transaktionen aus der DB...")
-        all_transactions = get_transactions(conn)  # Lade alle Transaktionen aus der DB
-
         _LOGGER.debug("Synchronisiere Transaktionen...")
         transaction_ids = {t.uuid for t in client.transactions}
         delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
@@ -108,6 +105,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, new_transaction_data)
             stats["transactions"] += 1
+
+        # Transaktionen nach dem Einfügen erneut laden
+        _LOGGER.debug("Lade Transaktionen aus der DB nach dem Einfügen...")
+        all_transactions = get_transactions(conn)  # Lade alle Transaktionen erneut
 
         # --- ACCOUNTS ---
         _LOGGER.debug("Synchronisiere Konten...")
