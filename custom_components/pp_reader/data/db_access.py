@@ -61,9 +61,13 @@ class Portfolio:
     reference_account: Optional[str] = None
     is_retired: bool = False
 
-def get_transactions(db_path: Path) -> List[Transaction]:
+def get_transactions(db_path: Optional[Path] = None, conn: Optional[sqlite3.Connection] = None) -> List[Transaction]:
     """Lädt alle Transaktionen aus der DB."""
-    conn = sqlite3.connect(str(db_path))
+    if conn is None:
+        if db_path is None:
+            raise ValueError("Entweder db_path oder conn muss angegeben werden.")
+        conn = sqlite3.connect(str(db_path))
+
     try:
         cur = conn.execute("""
             SELECT uuid, type, account, portfolio, 
@@ -78,7 +82,8 @@ def get_transactions(db_path: Path) -> List[Transaction]:
         _LOGGER.error("Fehler beim Laden der Transaktionen: %s", str(e))
         return []
     finally:
-        conn.close()
+        if db_path is not None:  # Schließe die Verbindung nur, wenn sie hier geöffnet wurde
+            conn.close()
 
 def get_securities(db_path: Path) -> Dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
