@@ -1,0 +1,20 @@
+{
+  "services": {
+    "trigger_backup_debug": {
+      "name": "Trigger Manual Backup",
+      "description": "Triggers a manual backup of the SQLite database."
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select Portfolio File",
+        "description": "Path to .portfolio-file (e. G. /config/portfolio/example.portfolio)",
+        "data": {
+          "path": "File path"
+        }
+      }
+    },
+    "error": {}
+  }
+}

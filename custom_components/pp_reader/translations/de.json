@@ -1,9 +1,15 @@
 {
+  "services": {
+    "trigger_backup_debug": {
+      "name": "Manuelles Backup auslösen",
+      "description": "Löst ein manuelles Backup der SQLite-Datenbank aus."
+    }
+  },
   "config": {
     "step": {
       "user": {
         "title": "Portfolio-Datei konfigurieren",
-        "description": "Pfad zur .portfolio-Datei (z. B. /config/portfolio/S-Depot.portfolio)",
+        "description": "Pfad zur .portfolio-Datei (z. B. /config/portfolio/Beispiel.portfolio)",
         "data": {
           "path": "Dateipfad"
         }
