@@ -73,7 +73,7 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
 
         # Nur aktive Konten (isRetired=0) und relevante Daten extrahieren
         account_data = [
-            {"name": a.name, "balance": a.balance}
+            {"name": a.name, "balance": a.balance / 100.0}  # Kontostand von Cent in Euro umrechnen
             for a in accounts
             if not a.is_retired  # Nur Konten mit isRetired=0
         ]
