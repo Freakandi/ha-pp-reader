@@ -56,7 +56,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     cur = conn.cursor()
                     cur.execute("SELECT value FROM metadata WHERE key = 'last_file_update'")
                     result = cur.fetchone()
-                    return datetime.fromisoformat(result[0]) if result else None
+                    # Überprüfen, ob result[0] ein gültiger String ist
+                    if result and result[0]:
+                        return datetime.fromisoformat(result[0])
+                    return None
                 finally:
                     conn.close()
 
