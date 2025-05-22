@@ -31,7 +31,7 @@ def initialize_database_schema(db_path: Path) -> None:
             
             # Initialen Eintrag für das Änderungsdatum hinzufügen
             conn.execute("""
-                INSERT OR IGNORE INTO metadata (key, value) VALUES ('last_file_update', NULL)
+                INSERT OR IGNORE INTO metadata (key, date) VALUES ('last_file_update', NULL)
             """)
             
             conn.commit()
