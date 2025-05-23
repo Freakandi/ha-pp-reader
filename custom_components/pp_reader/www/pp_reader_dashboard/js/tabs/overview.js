@@ -13,7 +13,7 @@ export async function renderDashboard(root, hass, panelConfig) {
 
     // Lade last_file_update über WebSocket
     const lastFileUpdateResponse = await fetchLastFileUpdateWS(hass, panelConfig);
-    const lastFileUpdate = lastFileUpdateResponse.last_file_update || 'Unbekannt';
+    const lastFileUpdate = lastFileUpdateResponse || 'Unbekannt';
 
     // Header-Metadaten
     const headerMeta = `
