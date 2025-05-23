@@ -264,7 +264,8 @@ class PPReaderDashboard extends HTMLElement {
 
       // Überprüfen, ob subscribeEvents verfügbar ist
       if (typeof this._hass.connection.subscribeEvents !== "function") {
-        console.error("PPReaderDashboard: subscribeEvents ist keine Funktion.");
+        console.error("PPReaderDashboard: subscribeEvents ist nicht verfügbar. Event-Listener können nicht registriert werden.");
+        console.debug("PPReaderDashboard: Verfügbare Methoden in hass.connection:", Object.keys(this._hass.connection));
         return;
       }
 
