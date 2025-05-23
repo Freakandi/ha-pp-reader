@@ -121,18 +121,21 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
         _LOGGER.debug("Transaktionen in der DB bestätigt.")
 
-        # Transaktionen nach dem Einfügen erneut laden
-        _LOGGER.debug("Lade Transaktionen aus der DB nach dem Einfügen...")
-        all_transactions = get_transactions(conn=conn)  # Lade alle Transaktionen erneut
-
         # --- ACCOUNTS ---
         _LOGGER.debug("Synchronisiere Konten...")
         account_ids = {acc.uuid for acc in client.accounts}
         delete_missing_entries(conn, "accounts", "uuid", account_ids)
 
+        # Berechne Transaktionen nur einmal, wenn Änderungen erkannt wurden
+        all_transactions = []
+        if transaction_changes_detected:
+            _LOGGER.debug("Transaktionen haben sich geändert, Kontostände werden neu berechnet.")
+            _LOGGER.debug("Lade Transaktionen aus der DB nach dem Einfügen...")
+            all_transactions = get_transactions(conn=conn)  # Lade alle Transaktionen erneut
+
         for acc in client.accounts:
             cur.execute("""
-                SELECT uuid, name, currency_code, note, is_retired, updated_at FROM accounts WHERE uuid = ?
+                SELECT uuid, name, currency_code, note, is_retired, updated_at, balance FROM accounts WHERE uuid = ?
             """, (acc.uuid,))
             existing_account = cur.fetchone()
 
@@ -145,11 +148,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
             )
 
-            if not existing_account or existing_account != new_account_data:
-                account_changes_detected = True
-                updated_data["accounts"].append(acc.uuid)
-
-                # Prüfe, ob das Konto "retired" ist
+            # Berechne den Kontostand nur, wenn Transaktionen geändert wurden
+            if transaction_changes_detected:
                 if getattr(acc, "isRetired", False):
                     balance = 0  # Retired-Konten haben immer Kontostand 0
                     _LOGGER.debug("Gesetzter Kontostand für inaktives Konto %s: %d", acc.uuid, balance)
@@ -162,6 +162,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     ]
                     balance = db_calc_account_balance(acc.uuid, account_transactions)
                     _LOGGER.debug("Berechneter Kontostand für Konto %s: %d", acc.uuid, balance)
+            else:
+                # Behalte den bestehenden Kontostand bei, wenn keine Transaktionen geändert wurden
+                balance = existing_account[-1] if existing_account else 0
+
+            # Aktualisiere das Konto, wenn sich der Kontostand geändert hat oder das Konto neu ist
+            if not existing_account or existing_account != new_account_data or balance != (existing_account[-1] if existing_account else None):
+                account_changes_detected = True
+                updated_data["accounts"].append(acc.uuid)
 
                 cur.execute("""
                     INSERT OR REPLACE INTO accounts 
