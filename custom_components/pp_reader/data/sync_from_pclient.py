@@ -69,13 +69,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             cur.execute("""
                 INSERT OR REPLACE INTO metadata (key, date) VALUES ('last_file_update', ?)
             """, (last_file_update,))
-            _LOGGER.debug("📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
+            _LOGGER.debug("sync_from_pclient: 📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
 
             # Setze das Flag für Änderungen
             last_file_update_change_detected = True
 
         # --- TRANSACTIONS ---
-        _LOGGER.debug("Synchronisiere Transaktionen...")
+        _LOGGER.debug("sync_from_pclient: Synchronisiere Transaktionen...")
         transaction_ids = {t.uuid for t in client.transactions}
         delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
 
@@ -119,18 +119,18 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
         # Transaktionen nach dem Einfügen bestätigen
         conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
-        _LOGGER.debug("Transaktionen in der DB bestätigt.")
+        _LOGGER.debug("sync_from_pclient: Transaktionen in der DB bestätigt.")
 
         # --- ACCOUNTS ---
-        _LOGGER.debug("Synchronisiere Konten...")
+        _LOGGER.debug("sync_from_pclient: Synchronisiere Konten...")
         account_ids = {acc.uuid for acc in client.accounts}
         delete_missing_entries(conn, "accounts", "uuid", account_ids)
 
         # Berechne Transaktionen nur einmal, wenn Änderungen erkannt wurden
         all_transactions = []
         if transaction_changes_detected:
-            _LOGGER.debug("Transaktionen haben sich geändert, Kontostände werden neu berechnet.")
-            _LOGGER.debug("Lade Transaktionen aus der DB nach dem Einfügen...")
+            _LOGGER.debug("sync_from_pclient: Transaktionen haben sich geändert, Kontostände werden neu berechnet.")
+            _LOGGER.debug("sync_from_pclient: Lade Transaktionen aus der DB nach dem Einfügen...")
             all_transactions = get_transactions(conn=conn)  # Lade alle Transaktionen erneut
 
         for acc in client.accounts:
@@ -152,16 +152,16 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             if transaction_changes_detected:
                 if getattr(acc, "isRetired", False):
                     balance = 0  # Retired-Konten haben immer Kontostand 0
-                    _LOGGER.debug("Gesetzter Kontostand für inaktives Konto %s: %d", acc.uuid, balance)
+                    _LOGGER.debug("sync_from_pclient: Gesetzter Kontostand für inaktives Konto %s: %d", acc.uuid, balance)
                 else:
                     # Filtere Transaktionen, die das Konto betreffen
-                    _LOGGER.debug("Verarbeite Konto: %s", acc.uuid)
+                    _LOGGER.debug("sync_from_pclient: Verarbeite Konto: %s", acc.uuid)
                     account_transactions = [
                         tx for tx in all_transactions
                         if tx.account == acc.uuid or tx.other_account == acc.uuid
                     ]
                     balance = db_calc_account_balance(acc.uuid, account_transactions)
-                    _LOGGER.debug("Berechneter Kontostand für Konto %s: %d", acc.uuid, balance)
+                    _LOGGER.debug("sync_from_pclient: Berechneter Kontostand für Konto %s: %d", acc.uuid, balance)
             else:
                 # Behalte den bestehenden Kontostand bei, wenn keine Transaktionen geändert wurden
                 balance = existing_account[-1] if existing_account else 0
@@ -178,7 +178,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, (*new_account_data, balance))
 
         # --- SECURITIES ---
-        _LOGGER.debug("Synchronisiere Wertpapiere...")
+        _LOGGER.debug("sync_from_pclient: Synchronisiere Wertpapiere...")
         security_ids = {sec.uuid for sec in client.securities}
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
@@ -254,7 +254,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, new_portfolio_data)
 
         # --- TRANSACTION_UNITS ---
-# Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
+        # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
         cur.execute("DELETE FROM transaction_units")
 
         for t in client.transactions:
@@ -284,39 +284,43 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     stats["fx_transactions"] += 1
 
         conn.commit()
-        _LOGGER.info(
-            "Import abgeschlossen: %d Wertpapiere, %d Transaktionen (%d mit Fremdwährung)",
-            stats["securities"], stats["transactions"], stats["fx_transactions"]
-        )
-
-        # Sende Updates für geänderte Tabellen
-        if hass and entry_id:
-            if account_changes_detected:
-                account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
-                ws_update_accounts(hass, entry_id, account_data)
-                _LOGGER.debug("📡 Kontodaten-Update-Event gesendet: %s", account_data)
-
-            if last_file_update_change_detected:
-                ws_update_last_file_update(hass, entry_id, last_file_update)
-                _LOGGER.debug("📡 last_file_update-Event gesendet: %s", last_file_update)
-
-        else:
-            # Logge die fehlenden Voraussetzungen
-            _LOGGER.error(
-                "❌ send_dashboard_update wurde nicht aufgerufen. Gründe:\n"
-                "  - changes_detected: %s\n"
-                "  - hass: %s\n"
-                "  - entry_id: %s\n"
-                "  - updated_data: %s",
-                changes_detected,
-                hass,
-                entry_id,
-                updated_data
-            )
-
+        
     except Exception as e:
         conn.rollback()
-        _LOGGER.error("Fehler während der Synchronisation: %s", str(e))
+        _LOGGER.error("sync_from_pclient: Fehler während der Synchronisation: %s", str(e))
+        account_changes_detected = False
+        transaction_changes_detected = False
+        security_changes_detected = False
+        last_file_update_change_detected = False
         raise
     finally:
         cur.close()
+        _LOGGER.info(
+            "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, %d Transaktionen (%d mit Fremdwährung)",
+            stats["securities"], stats["transactions"], stats["fx_transactions"]
+        )
+
+    # Sende Updates für geänderte Tabellen
+    if hass and entry_id:
+        if account_changes_detected:
+            account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
+            ws_update_accounts(hass, entry_id, account_data)
+            _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", account_data)
+
+        if last_file_update_change_detected:
+            ws_update_last_file_update(hass, entry_id, last_file_update)
+            _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", last_file_update)
+
+    else:
+        # Logge die fehlenden Voraussetzungen
+        _LOGGER.error(
+            "❌ sync_from_pclient: send_dashboard_update wurde nicht aufgerufen. Gründe:\n"
+            "  - changes_detected: %s\n"
+            "  - hass: %s\n"
+            "  - entry_id: %s\n"
+            "  - updated_data: %s",
+            changes_detected,
+            hass,
+            entry_id,
+            updated_data
+        )

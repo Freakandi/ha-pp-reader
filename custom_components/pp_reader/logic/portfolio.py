@@ -92,13 +92,6 @@ async def calculate_portfolio_value(
                 continue
                 
         total_value += qty * kurs
-
-    _LOGGER.debug(
-        "💰 Portfolio %s: Wert %.2f € (%d Positionen)", 
-        portfolio.name,
-        total_value,
-        len(active_securities)
-    )
         
     return round(total_value, 2), len(active_securities)
 

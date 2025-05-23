@@ -111,9 +111,6 @@ async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set
     """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
     if not currencies:
         return
-
-    _LOGGER.debug("🔄 Prüfe Wechselkurse für %d Währungen an %d Daten", 
-                  len(currencies), len(dates))
                   
     for dt in dates:
         date_str = dt.strftime("%Y-%m-%d")
@@ -127,7 +124,6 @@ async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set
                 fetched = await _fetch_exchange_rates(date_str, missing)
                 if fetched:
                     await _save_rates(db_path, date_str, fetched)
-                    _LOGGER.debug("✅ Kurse gespeichert: %s", fetched)
                 else:
                     _LOGGER.warning("⚠️ Keine Kurse erhalten für %s am %s",
                                   missing, date_str)

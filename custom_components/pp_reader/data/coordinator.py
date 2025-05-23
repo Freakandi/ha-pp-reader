@@ -131,14 +131,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     "count": count,
                     "purchase_sum": purchase_sum,
                 }
-                _LOGGER.debug(
-                    "💰 Depot %s: Wert %.2f € (%d Positionen), Kaufsumme %.2f €",
-                    portfolio.name,
-                    value,
-                    count,
-                    purchase_sum,
-                )
-
+                
             # Speichere die Daten
             self.data = {
                 "accounts": {
