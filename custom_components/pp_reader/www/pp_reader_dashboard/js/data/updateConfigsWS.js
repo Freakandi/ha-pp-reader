@@ -1,4 +1,3 @@
-import { subscribeAccounts, subscribeLastFileUpdate } from './api.js';
 import { makeTable } from '../content/elements.js';
 
 /**

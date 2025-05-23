@@ -7,11 +7,6 @@ from datetime import datetime
 from ..logic.accounting import db_calc_account_balance
 from ..data.db_access import get_transactions
 
-# WS-Update-Importe
-from ..data.websocket import send_dashboard_update
-from ..data.websocket import ws_update_accounts
-from ..data.websocket import ws_update_last_file_update
-
 from homeassistant.core import callback
 
 DOMAIN = "pp_reader"
