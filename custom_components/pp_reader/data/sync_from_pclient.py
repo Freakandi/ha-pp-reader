@@ -8,6 +8,7 @@ from ..logic.accounting import db_calc_account_balance
 from ..data.db_access import get_transactions
 
 from homeassistant.core import callback
+from functools import partial
 
 DOMAIN = "pp_reader"
 
@@ -45,9 +46,13 @@ def extract_exchange_rate(pdecimal) -> float:
 @callback
 def _push_update(hass, entry_id, data_type, data):
     """Schickt ein Event ins HA-Event-Bus."""
-    hass.bus.async_fire(
-        f"{DOMAIN}_dashboard_updated",  # Event-Name
-        {"entry_id": entry_id, "data_type": data_type, "data": data},
+    # Verwende call_soon_threadsafe, um sicherzustellen, dass async_fire im Event-Loop ausgeführt wird
+    hass.loop.call_soon_threadsafe(
+        partial(
+            hass.bus.async_fire,
+            f"{DOMAIN}_dashboard_updated",  # Event-Name
+            {"entry_id": entry_id, "data_type": data_type, "data": data},
+        )
     )
 
 def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None) -> None:
