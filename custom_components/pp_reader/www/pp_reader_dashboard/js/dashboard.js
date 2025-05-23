@@ -220,13 +220,12 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   connectedCallback() {
-    console.debug("PPReaderDashboard: Verbunden mit dem DOM.");
     this._checkInitialization();
   }
 
   disconnectedCallback() {
-    console.debug("PPReaderDashboard: Vom DOM getrennt.");
-    // Keine Event-Listener-Entfernung erforderlich, da keine explizite Subscription erfolgt
+    this._removeEventListeners(); // Event-Listener entfernen
+    super.disconnectedCallback && super.disconnectedCallback();
   }
 
   _checkInitialization() {
@@ -240,13 +239,13 @@ class PPReaderDashboard extends HTMLElement {
       }
 
       // Initialisiere alle Event-Listener
-      // this._initializeEventListeners(entryId);
+      this._initializeEventListeners(entryId);
 
       this._render(); // Starte das erste Rendern
     }
   }
 
-  /*_initializeEventListeners(entryId) {
+    _initializeEventListeners(entryId) {
     if (this._unsubscribeEvents) {
       console.warn("PPReaderDashboard: Event-Listener bereits registriert, entferne alte Listener.");
       this._removeEventListeners();
@@ -263,19 +262,21 @@ class PPReaderDashboard extends HTMLElement {
         return;
       }
 
-      // Verwende subscribeMessage, um das Kommando subscribe_events zu senden
-      const message = {
-        type: "subscribe_events",
-        event_type: "pp_reader_dashboard_updated" // Event-Typ
-      };
+      // Überprüfen, ob subscribeEvents verfügbar ist
+      if (typeof this._hass.connection.subscribeEvents !== "function") {
+        console.error("PPReaderDashboard: subscribeEvents ist nicht verfügbar. Event-Listener können nicht registriert werden.");
+        console.debug("PPReaderDashboard: Verfügbare Methoden in hass.connection:", Object.keys(this._hass.connection));
+        return;
+      }
 
-      this._unsubscribeEvents = this._hass.connection.subscribeMessage(
+      // Event-Bus-Listener registrieren
+      this._unsubscribeEvents = this._hass.connection.subscribeEvents(
         (msg) => this._handleBusEvent(msg),
-        message
+        "pp_reader_dashboard_updated" // Event-Name
       );
 
       if (typeof this._unsubscribeEvents !== "function") {
-        console.error("PPReaderDashboard: subscribeMessage hat keine gültige Funktion zurückgegeben.");
+        console.error("PPReaderDashboard: subscribeEvents hat keine gültige Funktion zurückgegeben.");
         this._unsubscribeEvents = null;
       } else {
         console.debug("PPReaderDashboard: Event-Listener erfolgreich registriert.");
@@ -284,9 +285,9 @@ class PPReaderDashboard extends HTMLElement {
       console.error("PPReaderDashboard: Fehler bei der Registrierung der Event-Listener:", error);
       this._unsubscribeEvents = null;
     }
-  }*/
+  }
 
-  /*_removeEventListeners() {
+  _removeEventListeners() {
     if (typeof this._unsubscribeEvents === "function") {
       try {
         this._unsubscribeEvents();
@@ -298,7 +299,7 @@ class PPReaderDashboard extends HTMLElement {
     } else {
       console.warn("PPReaderDashboard: Kein gültiger Event-Listener zum Entfernen gefunden.");
     }
-  }*/
+  }
 
   _handleBusEvent(event) {
     const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
