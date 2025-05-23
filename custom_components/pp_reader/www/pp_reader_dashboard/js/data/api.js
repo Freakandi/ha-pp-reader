@@ -52,25 +52,6 @@ export async function fetchAccountsWS(hass, panelConfig) {
   return accounts;
 }
 
-export function subscribeAccounts(hass, entry_id, callback) {
-  if (!hass || !entry_id) {
-    throw new Error(
-      `subscribeAccounts: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
-    );
-  }
-
-  console.debug("subscribeAccounts: Abonniere Updates für Entry", entry_id);
-
-  // WebSocket-Listener registrieren
-  return hass.connection.subscribeMessage((message) => {
-    console.debug("subscribeAccounts: Update empfangen:", message);
-    callback(message.data);
-  }, {
-    type: "pp_reader/get_accounts", // Direkt registrierter WebSocket-Command
-    entry_id,
-  });
-}
-
 // Websocket-API and subscription for last_file_update
 export async function fetchLastFileUpdateWS(hass, panelConfig) {
   console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
@@ -97,23 +78,3 @@ export async function fetchLastFileUpdateWS(hass, panelConfig) {
 
   return response.last_file_update;
 }
-
-export function subscribeLastFileUpdate(hass, entry_id, callback) {
-  if (!hass || !entry_id) {
-    throw new Error(
-      `subscribeLastFileUpdate: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
-    );
-  }
-
-  console.debug("subscribeLastFileUpdate: Abonniere Updates für Entry", entry_id);
-
-  // WebSocket-Listener registrieren
-  return hass.connection.subscribeMessage((message) => {
-    console.debug("subscribeLastFileUpdate: Update empfangen:", message);
-    callback(message.last_file_update);
-  }, {
-    type: "pp_reader/get_last_file_update",
-    entry_id,
-  });
-}
-

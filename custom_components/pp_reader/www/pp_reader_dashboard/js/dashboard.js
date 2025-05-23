@@ -1,7 +1,6 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { renderDashboard } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
-import { initializeUpdateListeners, removeUpdateListeners } from './data/updateConfigsWS.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
@@ -194,7 +193,7 @@ class PPReaderDashboard extends HTMLElement {
     this._lastPage = null;
     this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
 
-    this._updateListeners = null; // WebSocket-Listener für Updates
+    this._unsubscribeEvents = null; // Event-Bus-Listener für Updates
     this._initialized = false; // Initialisierungs-Flag
     this._hasNewData = false; // Flag für neue Daten
   }
@@ -224,7 +223,7 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this._removeUpdateListeners(); // Listener entfernen
+    this._removeEventListeners(); // Event-Listener entfernen
     super.disconnectedCallback && super.disconnectedCallback();
   }
 
@@ -234,43 +233,69 @@ class PPReaderDashboard extends HTMLElement {
 
       const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
       if (!entryId) {
-        console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Update-Subscription.");
+        console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Event-Subscription.");
         return;
       }
 
-      // Initialisiere alle Update-Listener
-      this._initializeUpdateListeners(entryId);
+      // Initialisiere alle Event-Listener
+      this._initializeEventListeners(entryId);
 
       this._render(); // Starte das erste Rendern
     }
   }
 
-  _initializeUpdateListeners(entryId) {
-    if (this._updateListeners) {
-      console.warn("PPReaderDashboard: Listener bereits registriert, entferne alte Listener.");
-      this._removeUpdateListeners();
+  _initializeEventListeners(entryId) {
+    if (this._unsubscribeEvents) {
+      console.warn("PPReaderDashboard: Event-Listener bereits registriert, entferne alte Listener.");
+      this._removeEventListeners();
     }
 
     try {
-      this._updateListeners = initializeUpdateListeners(this._hass, entryId, {
-        handleAccountUpdate: (update) => handleAccountUpdate(update, this._root),
-        handleLastFileUpdate: (update) => handleLastFileUpdate(update, this._root),
-      });
-      console.debug("PPReaderDashboard: Update-Listener erfolgreich registriert.");
+      // Event-Bus-Listener registrieren
+      this._unsubscribeEvents = this._hass.connection.subscribeEvents(
+        (msg) => this._handleBusEvent(msg),
+        "pp_reader_dashboard_updated" // Event-Name
+      );
+
+      console.debug("PPReaderDashboard: Event-Listener erfolgreich registriert.");
     } catch (error) {
-      console.error("PPReaderDashboard: Fehler bei der Registrierung der Update-Listener:", error);
+      console.error("PPReaderDashboard: Fehler bei der Registrierung der Event-Listener:", error);
     }
   }
 
-  _removeUpdateListeners() {
-    if (this._updateListeners) {
+  _removeEventListeners() {
+    if (this._unsubscribeEvents) {
       try {
-        removeUpdateListeners(this._updateListeners);
-        this._updateListeners = null;
-        console.debug("PPReaderDashboard: Update-Listener erfolgreich entfernt.");
+        this._unsubscribeEvents();
+        this._unsubscribeEvents = null;
+        console.debug("PPReaderDashboard: Event-Listener erfolgreich entfernt.");
       } catch (error) {
-        console.error("PPReaderDashboard: Fehler beim Entfernen der Update-Listener:", error);
+        console.error("PPReaderDashboard: Fehler beim Entfernen der Event-Listener:", error);
       }
+    }
+  }
+
+  _handleBusEvent(event) {
+    const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
+
+    // Filter nach entry_id
+    if (event.data.entry_id !== entryId) {
+      return;
+    }
+
+    console.debug("PPReaderDashboard: Bus-Update erhalten", event.data);
+
+    // Daten direkt ins Rendern einfließen lassen
+    this._doRender(event.data.data_type, event.data.data);
+  }
+
+  _doRender(dataType, pushedData) {
+    if (dataType === "accounts") {
+      handleAccountUpdate(pushedData, this._root);
+    } else if (dataType === "last_file_update") {
+      handleLastFileUpdate(pushedData, this._root);
+    } else {
+      console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
     }
   }
 

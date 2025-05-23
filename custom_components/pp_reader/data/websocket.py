@@ -54,16 +54,6 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
         _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten: %s", e)
         connection.send_error(msg["id"], "db_error", str(e))
 
-def send_dashboard_update(hass, entry_id, updated_data):
-    """Sendet ein Update-Event an alle verbundenen WebSocket-Clients."""
-    # Sicherstellen, dass der Aufruf im Haupt-Event-Loop erfolgt
-    def _send_update():
-        async_dispatcher_send(hass, f"{DOMAIN}_updated_{entry_id}", updated_data)
-        _LOGGER.debug("Update-Event für entry_id %s gesendet", entry_id)
-
-    # Verwende call_soon_threadsafe, um sicherzustellen, dass der Aufruf im Event-Loop erfolgt
-    hass.loop.call_soon_threadsafe(_send_update)
-
 # === Websocket Accounts-Data ===
 @websocket_api.websocket_command(
     {
@@ -99,40 +89,9 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
         )
         _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)
 
-        # Dispatcher-Listener für Updates registrieren
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_accounts_updated_{entry_id}",
-            lambda updated_data: connection.send_message(
-                {
-                    "id": msg["id"] + 1,
-                    "type": "pp_reader/accounts_updated",
-                    "data": updated_data,
-                }
-            ),
-        )
-
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten: %s", e)
         connection.send_error(msg["id"], "db_error", str(e))
-
-def ws_update_accounts(hass, entry_id, updated_data):
-    """Sendet ein Update-Event an alle verbundenen WebSocket-Clients für Kontodaten."""
-    def _send_update():
-        # Kontostände von Cent in Euro umrechnen
-        updated_data_in_euro = [
-            {"name": account["name"], "balance": account["balance"] / 100.0}
-            for account in updated_data
-        ]
-
-        # Update-Event direkt über WebSocket senden
-        hass.bus.async_fire(
-            f"{DOMAIN}_accounts_updated_{entry_id}",
-            {"type": "pp_reader/get_accounts", "data": updated_data_in_euro},
-        )
-        _LOGGER.debug("Kontodaten-Update-Event für entry_id %s gesendet: %s", entry_id, updated_data_in_euro)
-
-    hass.loop.call_soon_threadsafe(_send_update)
 
 # === Websocket FileUpdate-Timestamp ===
 @websocket_api.websocket_command(
@@ -176,15 +135,3 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update: %s", e)
         connection.send_error(msg["id"], "db_error", str(e))
-
-def ws_update_last_file_update(hass, entry_id, last_file_update):
-    """Sendet ein Update-Event an alle verbundenen WebSocket-Clients für last_file_update."""
-    def _send_update():
-        # Zeitstempel direkt über WebSocket senden
-        hass.bus.async_fire(
-            f"{DOMAIN}_last_file_update_updated_{entry_id}",
-            {"type": "pp_reader/get_last_file_update", "last_file_update": last_file_update},
-        )
-        _LOGGER.debug("Last file update-Event für entry_id %s gesendet: %s", entry_id, last_file_update)
-
-    hass.loop.call_soon_threadsafe(_send_update)

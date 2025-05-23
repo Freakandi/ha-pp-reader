@@ -2,54 +2,6 @@ import { subscribeAccounts, subscribeLastFileUpdate } from './api.js';
 import { makeTable } from '../content/elements.js';
 
 /**
- * Initialisiert alle Update-Listener.
- * @param {Object} hass - Home Assistant-Instanz.
- * @param {string} entryId - Entry-ID der Integration.
- * @param {Object} handlers - Objekt mit Handler-Funktionen für Updates.
- * @returns {Object} - Ein Objekt mit allen registrierten Listenern.
- */
-export function initializeUpdateListeners(hass, entryId, handlers) {
-  const listeners = {};
-
-  // Listener für Kontodaten
-  listeners.accounts = subscribeAccounts(hass, entryId, handlers.handleAccountUpdate);
-
-  // Listener für Last-File-Update
-  listeners.lastFileUpdate = subscribeLastFileUpdate(hass, entryId, handlers.handleLastFileUpdate);
-
-  console.log("updateConfigsWS: Update-Listener erfolgreich eingerichtet.");
-  return listeners;
-}
-
-/**
- * Entfernt alle registrierten Update-Listener.
- * @param {Object} listeners - Ein Objekt mit allen registrierten Listenern.
- */
-export function removeUpdateListeners(listeners) {
-  if (!listeners || typeof listeners !== 'object') {
-    console.warn("updateConfigsWS: Keine gültigen Listener gefunden, überspringe Entfernen.");
-    return;
-  }
-
-  Object.keys(listeners).forEach((key) => {
-    const unsubscribe = listeners[key];
-    if (typeof unsubscribe === 'function') {
-      try {
-        unsubscribe(); // Listener entfernen
-        listeners[key] = null; // Referenz zurücksetzen
-        console.debug(`updateConfigsWS: Listener '${key}' erfolgreich entfernt.`);
-      } catch (error) {
-        console.error(`updateConfigsWS: Fehler beim Entfernen des Listeners '${key}':`, error);
-      }
-    } else {
-      console.warn(`updateConfigsWS: Listener '${key}' ist keine gültige Funktion, überspringe.`);
-    }
-  });
-
-  console.log("updateConfigsWS: Alle registrierten Update-Listener erfolgreich entfernt.");
-}
-
-/**
  * Handler für Kontodaten-Updates.
  * @param {Object} update - Die empfangenen Kontodaten.
  * @param {HTMLElement} root - Das Root-Element des Dashboards.

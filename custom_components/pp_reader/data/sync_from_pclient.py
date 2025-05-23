@@ -12,6 +12,10 @@ from ..data.websocket import send_dashboard_update
 from ..data.websocket import ws_update_accounts
 from ..data.websocket import ws_update_last_file_update
 
+from homeassistant.core import callback
+
+DOMAIN = "pp_reader"
+
 _LOGGER = logging.getLogger(__name__)
 
 def to_iso8601(ts: Timestamp) -> str:
@@ -42,6 +46,14 @@ def extract_exchange_rate(pdecimal) -> float:
         return None
     value = int.from_bytes(pdecimal.value, byteorder='little', signed=True)
     return abs(value / (10 ** pdecimal.scale))
+
+@callback
+def _push_update(hass, entry_id, data_type, data):
+    """Schickt ein Event ins HA-Event-Bus."""
+    hass.bus.async_fire(
+        f"{DOMAIN}_dashboard_updated",  # Event-Name
+        {"entry_id": entry_id, "data_type": data_type, "data": data},
+    )
 
 def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None) -> None:
     """Synchronisiert Daten aus Portfolio Performance mit der lokalen SQLite DB."""
@@ -303,12 +315,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
     # Sende Updates für geänderte Tabellen
     if hass and entry_id:
         if account_changes_detected:
-            account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
-            ws_update_accounts(hass, entry_id, account_data)
-            _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", account_data)
+            updated_accounts = updated_data["accounts"]
+            _push_update(hass, entry_id, "accounts", updated_accounts)
+            _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", updated_accounts)
 
         if last_file_update_change_detected:
-            ws_update_last_file_update(hass, entry_id, last_file_update)
+            _push_update(hass, entry_id, "last_file_update", last_file_update)
             _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", last_file_update)
 
     else:
