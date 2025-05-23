@@ -252,6 +252,22 @@ class PPReaderDashboard extends HTMLElement {
     }
 
     try {
+      // Debugging-Logs hinzufügen
+      console.debug("PPReaderDashboard: hass:", this._hass);
+      console.debug("PPReaderDashboard: hass.connection:", this._hass?.connection);
+
+      // Überprüfen, ob die Verbindung verfügbar ist
+      if (!this._hass?.connection) {
+        console.error("PPReaderDashboard: Keine gültige Verbindung verfügbar.");
+        return;
+      }
+
+      // Überprüfen, ob subscribeEvents verfügbar ist
+      if (typeof this._hass.connection.subscribeEvents !== "function") {
+        console.error("PPReaderDashboard: subscribeEvents ist keine Funktion.");
+        return;
+      }
+
       // Event-Bus-Listener registrieren
       this._unsubscribeEvents = this._hass.connection.subscribeEvents(
         (msg) => this._handleBusEvent(msg),
