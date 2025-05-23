@@ -240,13 +240,13 @@ class PPReaderDashboard extends HTMLElement {
       }
 
       // Initialisiere alle Event-Listener
-      this._initializeEventListeners(entryId);
+      // this._initializeEventListeners(entryId);
 
       this._render(); // Starte das erste Rendern
     }
   }
 
-  _initializeEventListeners(entryId) {
+  /*_initializeEventListeners(entryId) {
     if (this._unsubscribeEvents) {
       console.warn("PPReaderDashboard: Event-Listener bereits registriert, entferne alte Listener.");
       this._removeEventListeners();
@@ -284,9 +284,9 @@ class PPReaderDashboard extends HTMLElement {
       console.error("PPReaderDashboard: Fehler bei der Registrierung der Event-Listener:", error);
       this._unsubscribeEvents = null;
     }
-  }
+  }*/
 
-  _removeEventListeners() {
+  /*_removeEventListeners() {
     if (typeof this._unsubscribeEvents === "function") {
       try {
         this._unsubscribeEvents();
@@ -298,7 +298,7 @@ class PPReaderDashboard extends HTMLElement {
     } else {
       console.warn("PPReaderDashboard: Kein gültiger Event-Listener zum Entfernen gefunden.");
     }
-  }
+  }*/
 
   _handleBusEvent(event) {
     const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
