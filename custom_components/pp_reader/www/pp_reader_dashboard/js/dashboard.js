@@ -262,21 +262,19 @@ class PPReaderDashboard extends HTMLElement {
         return;
       }
 
-      // Überprüfen, ob subscribeEvents verfügbar ist
-      if (typeof this._hass.connection.subscribeEvents !== "function") {
-        console.error("PPReaderDashboard: subscribeEvents ist nicht verfügbar. Event-Listener können nicht registriert werden.");
-        console.debug("PPReaderDashboard: Verfügbare Methoden in hass.connection:", Object.keys(this._hass.connection));
-        return;
-      }
+      // Verwende subscribeMessage, um das Kommando subscribe_events zu senden
+      const message = {
+        type: "subscribe_events",
+        event_type: "pp_reader_dashboard_updated" // Event-Typ
+      };
 
-      // Event-Bus-Listener registrieren
-      this._unsubscribeEvents = this._hass.connection.subscribeEvents(
+      this._unsubscribeEvents = this._hass.connection.subscribeMessage(
         (msg) => this._handleBusEvent(msg),
-        "pp_reader_dashboard_updated" // Event-Name
+        message
       );
 
       if (typeof this._unsubscribeEvents !== "function") {
-        console.error("PPReaderDashboard: subscribeEvents hat keine gültige Funktion zurückgegeben.");
+        console.error("PPReaderDashboard: subscribeMessage hat keine gültige Funktion zurückgegeben.");
         this._unsubscribeEvents = null;
       } else {
         console.debug("PPReaderDashboard: Event-Listener erfolgreich registriert.");
