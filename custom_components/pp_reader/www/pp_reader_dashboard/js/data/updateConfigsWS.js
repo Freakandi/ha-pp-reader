@@ -8,7 +8,7 @@ import { makeTable } from '../content/elements.js';
 export function handleAccountUpdate(update, root) {
   console.log("updateConfigsWS: Kontodaten-Update erhalten:", update);
 
-  const updatedAccounts = update.accounts || [];
+  const updatedAccounts = update || [];
   updateAccountTable(updatedAccounts, root);
 }
 
@@ -39,7 +39,7 @@ function updateAccountTable(accounts, root) {
 export function handleLastFileUpdate(update, root) {
   console.log("updateConfigsWS: Last-File-Update erhalten:", update);
 
-  const lastFileUpdate = update.last_file_update || "Unbekannt";
+  const lastFileUpdate = update || "Unbekannt";
   updateLastFileUpdate(lastFileUpdate, root);
 }
 
