@@ -26,12 +26,27 @@ export function initializeUpdateListeners(hass, entryId, handlers) {
  * @param {Object} listeners - Ein Objekt mit allen registrierten Listenern.
  */
 export function removeUpdateListeners(listeners) {
-  Object.values(listeners).forEach((unsubscribe) => {
-    if (unsubscribe) {
-      unsubscribe();
+  if (!listeners || typeof listeners !== 'object') {
+    console.warn("updateConfigsWS: Keine gültigen Listener gefunden, überspringe Entfernen.");
+    return;
+  }
+
+  Object.keys(listeners).forEach((key) => {
+    const unsubscribe = listeners[key];
+    if (typeof unsubscribe === 'function') {
+      try {
+        unsubscribe(); // Listener entfernen
+        listeners[key] = null; // Referenz zurücksetzen
+        console.debug(`updateConfigsWS: Listener '${key}' erfolgreich entfernt.`);
+      } catch (error) {
+        console.error(`updateConfigsWS: Fehler beim Entfernen des Listeners '${key}':`, error);
+      }
+    } else {
+      console.warn(`updateConfigsWS: Listener '${key}' ist keine gültige Funktion, überspringe.`);
     }
   });
-  console.log("updateConfigsWS: Update-Listener erfolgreich entfernt.");
+
+  console.log("updateConfigsWS: Alle registrierten Update-Listener erfolgreich entfernt.");
 }
 
 /**

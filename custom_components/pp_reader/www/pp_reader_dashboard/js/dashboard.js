@@ -224,11 +224,7 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   disconnectedCallback() {
-    if (this._updateListeners) {
-      removeUpdateListeners(this._updateListeners);
-      this._updateListeners = null;
-    }
-
+    this._removeUpdateListeners(); // Listener entfernen
     super.disconnectedCallback && super.disconnectedCallback();
   }
 
@@ -243,12 +239,38 @@ class PPReaderDashboard extends HTMLElement {
       }
 
       // Initialisiere alle Update-Listener
+      this._initializeUpdateListeners(entryId);
+
+      this._render(); // Starte das erste Rendern
+    }
+  }
+
+  _initializeUpdateListeners(entryId) {
+    if (this._updateListeners) {
+      console.warn("PPReaderDashboard: Listener bereits registriert, entferne alte Listener.");
+      this._removeUpdateListeners();
+    }
+
+    try {
       this._updateListeners = initializeUpdateListeners(this._hass, entryId, {
         handleAccountUpdate: (update) => handleAccountUpdate(update, this._root),
         handleLastFileUpdate: (update) => handleLastFileUpdate(update, this._root),
       });
+      console.debug("PPReaderDashboard: Update-Listener erfolgreich registriert.");
+    } catch (error) {
+      console.error("PPReaderDashboard: Fehler bei der Registrierung der Update-Listener:", error);
+    }
+  }
 
-      this._render(); // Starte das erste Rendern
+  _removeUpdateListeners() {
+    if (this._updateListeners) {
+      try {
+        removeUpdateListeners(this._updateListeners);
+        this._updateListeners = null;
+        console.debug("PPReaderDashboard: Update-Listener erfolgreich entfernt.");
+      } catch (error) {
+        console.error("PPReaderDashboard: Fehler beim Entfernen der Update-Listener:", error);
+      }
     }
   }
 
