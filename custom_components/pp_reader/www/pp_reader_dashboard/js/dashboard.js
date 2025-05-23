@@ -220,12 +220,13 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   connectedCallback() {
-    this._checkInitialization(); // Überprüfe die Initialisierung
+    console.debug("PPReaderDashboard: Verbunden mit dem DOM.");
+    this._checkInitialization();
   }
 
   disconnectedCallback() {
-    this._removeEventListeners(); // Event-Listener entfernen
-    super.disconnectedCallback && super.disconnectedCallback();
+    console.debug("PPReaderDashboard: Vom DOM getrennt.");
+    // Keine Event-Listener-Entfernung erforderlich, da keine explizite Subscription erfolgt
   }
 
   _checkInitialization() {
