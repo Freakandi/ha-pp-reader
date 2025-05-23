@@ -315,13 +315,23 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
     # Sende Updates für geänderte Tabellen
     if hass and entry_id:
         if account_changes_detected:
-            updated_accounts = updated_data["accounts"]
+            # Filtere nur aktive Konten (isRetired=False) und rechne Balance in Euro um
+            updated_accounts = [
+                {
+                    "name": account["name"],
+                    "balance": account["balance"] / 100.0  # Umrechnung von Cent in Euro
+                }
+                for account in updated_data["accounts"]
+                if account.get("is_retired", False) is False
+            ]
             _push_update(hass, entry_id, "accounts", updated_accounts)
             _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", updated_accounts)
 
         if last_file_update_change_detected:
-            _push_update(hass, entry_id, "last_file_update", last_file_update)
-            _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", last_file_update)
+            # Datum korrekt formatieren
+            formatted_last_file_update = datetime.strptime(last_file_update, "%Y-%m-%dT%H:%M:%S").strftime("%d.%m.%Y, %H:%M")
+            _push_update(hass, entry_id, "last_file_update", formatted_last_file_update)
+            _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", formatted_last_file_update)
 
     else:
         # Logge die fehlenden Voraussetzungen
