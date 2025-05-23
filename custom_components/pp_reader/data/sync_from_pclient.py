@@ -51,7 +51,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         "transactions": 0,
         "fx_transactions": 0
     }
-    changes_detected = False  # Flag, um Änderungen zu verfolgen
+
+    # Flags für Änderungen in den jeweiligen Tabellen
+    account_changes_detected = False
+    transaction_changes_detected = False
+    security_changes_detected = False
+    portfolio_changes_detected = False
+    last_file_update_change_detected = False
+
     updated_data = {"accounts": [], "securities": [], "portfolios": [], "transactions": []}
 
     try:
@@ -64,8 +71,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             """, (last_file_update,))
             _LOGGER.debug("📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
 
-            # Setze changes_detected auf True, wenn sich das Änderungsdatum geändert hat
-            changes_detected = True
+            # Setze das Flag für Änderungen
+            last_file_update_change_detected = True
 
         # --- TRANSACTIONS ---
         _LOGGER.debug("Synchronisiere Transaktionen...")
@@ -98,7 +105,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             )
 
             if not existing_transaction or existing_transaction != new_transaction_data:
-                changes_detected = True
+                transaction_changes_detected = True
                 updated_data["transactions"].append(t.uuid)
 
                 cur.execute("""
@@ -139,7 +146,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             )
 
             if not existing_account or existing_account != new_account_data:
-                changes_detected = True
+                account_changes_detected = True
                 updated_data["accounts"].append(acc.uuid)
 
                 # Prüfe, ob das Konto "retired" ist
@@ -186,7 +193,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             )
 
             if not existing_security or existing_security != new_security_data:
-                changes_detected = True
+                security_changes_detected = True
                 updated_data["securities"].append(sec.uuid)
 
                 cur.execute("""
@@ -274,21 +281,16 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             stats["securities"], stats["transactions"], stats["fx_transactions"]
         )
 
-        # Sende das Update-Event, wenn Änderungen erkannt wurden
-        _LOGGER.debug("Sende Dashboard-Update mit entry_id: %s", entry_id)
-        if changes_detected and hass and entry_id:
-            # Sende das Update-Event für das Dashboard
-            send_dashboard_update(hass, entry_id, updated_data)
-            _LOGGER.debug("📡 Dashboard-Update-Event gesendet: %s", updated_data)
+        # Sende Updates für geänderte Tabellen
+        if hass and entry_id:
+            if account_changes_detected:
+                account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
+                ws_update_accounts(hass, entry_id, account_data)
+                _LOGGER.debug("📡 Kontodaten-Update-Event gesendet: %s", account_data)
 
-            # Sende das Update-Event für die Kontodaten
-            account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
-            ws_update_accounts(hass, entry_id, account_data)
-            _LOGGER.debug("📡 Kontodaten-Update-Event gesendet: %s", account_data)
-
-            # Sende das Update-Event für last_file_update
-            ws_update_last_file_update(hass, entry_id, last_file_update)
-            _LOGGER.debug("📡 last_file_update-Event gesendet: %s", last_file_update)
+            if last_file_update_change_detected:
+                ws_update_last_file_update(hass, entry_id, last_file_update)
+                _LOGGER.debug("📡 last_file_update-Event gesendet: %s", last_file_update)
 
         else:
             # Logge die fehlenden Voraussetzungen

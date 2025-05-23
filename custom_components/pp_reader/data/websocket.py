@@ -145,7 +145,12 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
 
         # Zeitstempel formatieren
         if last_file_update_raw:
-            last_file_update = datetime.strptime(last_file_update_raw, "%Y-%m-%d %H:%M:%S").strftime("%d.%m.%Y, %H:%M")
+            try:
+                # Zeitstempel im ISO-8601-Format parsen und in das gewünschte Format umwandeln
+                last_file_update = datetime.strptime(last_file_update_raw, "%Y-%m-%dT%H:%M:%S").strftime("%d.%m.%Y, %H:%M")
+            except ValueError as e:
+                _LOGGER.error("Fehler beim Parsen des Zeitstempels: %s", e)
+                last_file_update = "Unbekannt"
         else:
             last_file_update = "Unbekannt"
 
