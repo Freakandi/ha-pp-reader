@@ -1,13 +1,16 @@
 import sqlite3
-from ..name.abuchen.portfolio import client_pb2  # Korrigierter Import mit vorangestelltem .
+from ..name.abuchen.portfolio import client_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 import logging
 from typing import Optional
 from datetime import datetime
-from ..data.websocket import send_dashboard_update
-from ..data.websocket import send_accounts_update
 from ..logic.accounting import db_calc_account_balance
 from ..data.db_access import get_transactions
+
+# WS-Update-Importe
+from ..data.websocket import send_dashboard_update
+from ..data.websocket import ws_update_accounts
+from ..data.websocket import ws_update_last_file_update
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -280,8 +283,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Sende das Update-Event für die Kontodaten
             account_data = [{"name": acc["name"], "balance": acc["balance"]} for acc in updated_data["accounts"]]
-            send_accounts_update(hass, entry_id, account_data)
+            ws_update_accounts(hass, entry_id, account_data)
             _LOGGER.debug("📡 Kontodaten-Update-Event gesendet: %s", account_data)
+
+            # Sende das Update-Event für last_file_update
+            ws_update_last_file_update(hass, entry_id, last_file_update)
+            _LOGGER.debug("📡 last_file_update-Event gesendet: %s", last_file_update)
+
         else:
             # Logge die fehlenden Voraussetzungen
             _LOGGER.error(

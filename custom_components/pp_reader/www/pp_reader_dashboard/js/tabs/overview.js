@@ -1,24 +1,19 @@
 import { createHeaderCard, makeTable } from '../content/elements.js';
 import { prepareDashboardData } from '../data/data.js';
-import { fetchAccountsWS } from '../data/api.js';
+import { fetchAccountsWS, fetchLastFileUpdateWS } from '../data/api.js';
 
 export async function renderDashboard(root, hass, panelConfig) {
   try {
     // Lade Depotdaten über prepareDashboardData
-    const { depots, fileUpdated, totalVermoegen } = await prepareDashboardData();
+    const { depots, totalVermoegen } = await prepareDashboardData();
 
     // Lade Kontodaten über WebSocket
     const accountsResponse = await fetchAccountsWS(hass, panelConfig);
     const konten = accountsResponse.accounts || [];
 
-    // Formatierte letzte Aktualisierung
-    const formattedFileUpdated = new Date(fileUpdated).toLocaleString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Lade last_file_update über WebSocket
+    const lastFileUpdateResponse = await fetchLastFileUpdateWS(hass, panelConfig);
+    const lastFileUpdate = lastFileUpdateResponse.last_file_update || 'Unbekannt';
 
     // Header-Metadaten
     const headerMeta = `
@@ -58,7 +53,7 @@ export async function renderDashboard(root, hass, panelConfig) {
 
     <div class="card footer-card">
       <div class="meta">
-        <div>📂 Letzte Aktualisierung Datei: <strong>${formattedFileUpdated}</strong></div>
+        <div class="last-file-update">📂 Letzte Aktualisierung Datei: <strong>${lastFileUpdate}</strong></div>
       </div>
     </div>
     `;

@@ -11,8 +11,6 @@ from homeassistant.const import Platform
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 from homeassistant.components import websocket_api
-from homeassistant.components.websocket_api import websocket_command
-from homeassistant.components.websocket_api import async_response, ActiveConnection
 
 from .data.backup_db import setup_backup_system
 from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
@@ -20,11 +18,11 @@ from .data.db_init import initialize_database_schema
 from .data.coordinator import PPReaderCoordinator
 from .data.websocket import ws_get_dashboard_data
 from .data.websocket import ws_get_accounts
+from .data.websocket import ws_get_last_file_update
 
 import asyncio
 from functools import partial
 import importlib
-import sqlite3
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -43,10 +41,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Websocket-API registrieren
     try:
         websocket_api.async_register_command(hass, ws_get_dashboard_data)
-        _LOGGER.debug("✅ Websocket-Befehl 'ws_get_dashboard_data' erfolgreich registriert.")
-
         websocket_api.async_register_command(hass, ws_get_accounts)
-        _LOGGER.debug("✅ Websocket-Befehl 'ws_get_accounts' erfolgreich registriert.")
+        websocket_api.async_register_command(hass, ws_get_last_file_update)
+        _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")
     except Exception as e:
         _LOGGER.error("❌ Fehler bei der Registrierung der Websocket-Befehle: %s", str(e))
 

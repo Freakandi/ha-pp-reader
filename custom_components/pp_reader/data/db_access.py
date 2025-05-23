@@ -198,3 +198,16 @@ def get_account_update_timestamp(db_path: Path, account_uuid: str) -> Optional[s
         return None
     finally:
         conn.close()
+
+def get_last_file_update(db_path: Path) -> Optional[str]:
+    """Liest das letzte Änderungsdatum der Portfolio-Datei aus der Datenbank."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("SELECT date FROM metadata WHERE key = 'last_file_update'")
+        row = cur.fetchone()
+        return row[0] if row else None
+    except sqlite3.Error as e:
+        _LOGGER.error("Fehler beim Abrufen von last_file_update: %s", str(e))
+        return None
+    finally:
+        conn.close()

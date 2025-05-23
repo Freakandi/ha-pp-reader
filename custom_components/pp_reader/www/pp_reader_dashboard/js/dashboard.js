@@ -1,7 +1,7 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { renderDashboard } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
-import { subscribeAccountUpdates } from './data/api.js';
+import { initializeUpdateListeners, removeUpdateListeners } from './data/updateConfigsWS.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
@@ -194,8 +194,7 @@ class PPReaderDashboard extends HTMLElement {
     this._lastPage = null;
     this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
 
-    this._updateListener = null; // WebSocket-Listener für Updates
-    this._accountUpdateListener = null; // WebSocket-Listener für Kontodaten-Updates
+    this._updateListeners = null; // WebSocket-Listener für Updates
     this._initialized = false; // Initialisierungs-Flag
     this._hasNewData = false; // Flag für neue Daten
   }
@@ -225,44 +224,30 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   disconnectedCallback() {
-    // Überprüfen, ob _hass und connection korrekt initialisiert sind
-    if (this._hass && this._hass.connection && this._updateListener) {
-      try {
-        this._hass.connection.unsubscribeEvents(this._updateListener);
-        console.log("PPReaderDashboard: Update-Listener erfolgreich entfernt.");
-      } catch (error) {
-        console.error("PPReaderDashboard: Fehler beim Entfernen des Update-Listeners:", error);
-      }
-    } else {
-      console.warn(
-        "PPReaderDashboard: _hass.connection oder _updateListener nicht verfügbar, kein Listener entfernt."
-      );
+    if (this._updateListeners) {
+      removeUpdateListeners(this._updateListeners);
+      this._updateListeners = null;
     }
 
-    // Überprüfen, ob _hass und connection korrekt initialisiert sind
-    if (this._hass && this._hass.connection && this._accountUpdateListener) {
-      try {
-        this._hass.connection.unsubscribeEvents(this._accountUpdateListener);
-        console.log("PPReaderDashboard: Account-Update-Listener erfolgreich entfernt.");
-      } catch (error) {
-        console.error("PPReaderDashboard: Fehler beim Entfernen des Account-Update-Listeners:", error);
-      }
-    } else {
-      console.warn(
-        "PPReaderDashboard: _hass.connection oder _accountUpdateListener nicht verfügbar, kein Listener entfernt."
-      );
-    }
-
-    // Rufe die Methode der übergeordneten Klasse auf, falls vorhanden
     super.disconnectedCallback && super.disconnectedCallback();
   }
 
   _checkInitialization() {
-    // Überprüfe, ob alle notwendigen Daten verfügbar sind
     if (this._hass && this._panel && !this._initialized) {
-      this._initialized = true; // Initialisierung abgeschlossen
-      this._subscribeToUpdates(); // Abonniere Updates
-      this._subscribeToAccountUpdates(); // Abonniere Kontodaten-Updates
+      this._initialized = true;
+
+      const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
+      if (!entryId) {
+        console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Update-Subscription.");
+        return;
+      }
+
+      // Initialisiere alle Update-Listener
+      this._updateListeners = initializeUpdateListeners(this._hass, entryId, {
+        handleAccountUpdate: (update) => handleAccountUpdate(update, this._root),
+        handleLastFileUpdate: (update) => handleLastFileUpdate(update, this._root),
+      });
+
       this._render(); // Starte das erste Rendern
     }
   }
@@ -272,94 +257,6 @@ class PPReaderDashboard extends HTMLElement {
     if (this._initialized) {
       this._render();
     }
-  }
-
-  _subscribeToUpdates() {
-    if (!this._hass || this._updateListener) {
-      return; // Bereits abonniert oder kein hass verfügbar
-    }
-
-    const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
-    if (!entryId) {
-      console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Update-Subscription.");
-      return;
-    }
-
-    // Abonniere das WebSocket-Event
-    this._updateListener = this._hass.connection.subscribeEvents(
-      (event) => this._handleUpdate(event),
-      `pp_reader/dashboard_data_updated`
-    );
-
-    console.log("PPReaderDashboard: Update-Subscription erfolgreich eingerichtet.");
-  }
-
-  _handleUpdate(event) {
-    console.log("PPReaderDashboard: Update erhalten:", event);
-
-    // Setze das Flag für neue Daten
-    this._hasNewData = true;
-
-    // Aktualisiere die Daten oder rendere das Dashboard neu
-    const updatedData = event.data;
-    if (updatedData) {
-      // Beispiel: Aktualisiere nur die geänderten Inhalte
-      this._updateContent(updatedData);
-    } else {
-      // Alternativ: Komplettes Neurendern
-      this._render();
-    }
-  }
-
-  _updateContent(updatedData) {
-    // Hier kannst du gezielt die Inhalte aktualisieren, die sich geändert haben
-    console.log("PPReaderDashboard: Aktualisiere Inhalte mit neuen Daten:", updatedData);
-
-    // Beispiel: Aktualisiere nur den aktuellen Tab
-    renderTab(root, hass, panel);
-  }
-
-  _subscribeToAccountUpdates() {
-    if (!this._hass || this._accountUpdateListener) {
-      return; // Bereits abonniert oder kein hass verfügbar
-    }
-
-    const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
-    if (!entryId) {
-      console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Account-Update-Subscription.");
-      return;
-    }
-
-    // Abonniere das WebSocket-Event für Kontodaten
-    this._accountUpdateListener = subscribeAccountUpdates(
-      this._hass,
-      entryId,
-      (update) => this._handleAccountUpdate(update)
-    );
-
-    console.log("PPReaderDashboard: Account-Update-Subscription erfolgreich eingerichtet.");
-  }
-
-  _handleAccountUpdate(update) {
-    console.log("PPReaderDashboard: Kontodaten-Update erhalten:", update);
-
-    // Aktualisiere die Kontodaten im Dashboard
-    const updatedAccounts = update.accounts || [];
-    this._updateAccountTable(updatedAccounts);
-  }
-
-  _updateAccountTable(accounts) {
-    const accountTable = this._root.querySelector('.account-table');
-    if (!accountTable) {
-      console.warn("PPReaderDashboard: Account-Tabelle nicht gefunden, überspringe Update.");
-      return;
-    }
-
-    // Aktualisiere die Tabelle mit den neuen Kontodaten
-    accountTable.innerHTML = makeTable(accounts, [
-      { key: 'name', label: 'Name' },
-      { key: 'balance', label: 'Kontostand', align: 'right' }
-    ], ['balance']);
   }
 
   _render() {
