@@ -119,8 +119,18 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
 def ws_update_accounts(hass, entry_id, updated_data):
     """Sendet ein Update-Event an alle verbundenen WebSocket-Clients für Kontodaten."""
     def _send_update():
-        async_dispatcher_send(hass, f"{DOMAIN}_accounts_updated_{entry_id}", updated_data)
-        _LOGGER.debug("Kontodaten-Update-Event für entry_id %s gesendet", entry_id)
+        # Kontostände von Cent in Euro umrechnen
+        updated_data_in_euro = [
+            {"name": account["name"], "balance": account["balance"] / 100.0}
+            for account in updated_data
+        ]
+
+        # Update-Event direkt über WebSocket senden
+        hass.bus.async_fire(
+            f"{DOMAIN}_accounts_updated_{entry_id}",
+            {"type": "pp_reader/get_accounts", "data": updated_data_in_euro},
+        )
+        _LOGGER.debug("Kontodaten-Update-Event für entry_id %s gesendet: %s", entry_id, updated_data_in_euro)
 
     hass.loop.call_soon_threadsafe(_send_update)
 
@@ -163,19 +173,6 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
         )
         _LOGGER.debug("Last file update erfolgreich abgerufen: %s", last_file_update)
 
-        # Dispatcher-Listener für Updates registrieren
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_last_file_update_updated_{entry_id}",
-            lambda new_data: connection.send_message(
-                {
-                    "id": msg["id"] + 1,
-                    "type": "pp_reader/last_file_update_updated",
-                    "data": new_data,
-                }
-            ),
-        )
-
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update: %s", e)
         connection.send_error(msg["id"], "db_error", str(e))
@@ -183,10 +180,10 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
 def ws_update_last_file_update(hass, entry_id, last_file_update):
     """Sendet ein Update-Event an alle verbundenen WebSocket-Clients für last_file_update."""
     def _send_update():
-        async_dispatcher_send(
-            hass,
+        # Zeitstempel direkt über WebSocket senden
+        hass.bus.async_fire(
             f"{DOMAIN}_last_file_update_updated_{entry_id}",
-            {"last_file_update": last_file_update},
+            {"type": "pp_reader/get_last_file_update", "last_file_update": last_file_update},
         )
         _LOGGER.debug("Last file update-Event für entry_id %s gesendet: %s", entry_id, last_file_update)
 

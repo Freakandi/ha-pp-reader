@@ -64,9 +64,9 @@ export function subscribeAccounts(hass, entry_id, callback) {
   // WebSocket-Listener registrieren
   return hass.connection.subscribeMessage((message) => {
     console.debug("subscribeAccounts: Update empfangen:", message);
-    callback(message);
+    callback(message.data);
   }, {
-    type: "pp_reader/accounts_updated",
+    type: "pp_reader/get_accounts", // Direkt registrierter WebSocket-Command
     entry_id,
   });
 }
@@ -110,9 +110,9 @@ export function subscribeLastFileUpdate(hass, entry_id, callback) {
   // WebSocket-Listener registrieren
   return hass.connection.subscribeMessage((message) => {
     console.debug("subscribeLastFileUpdate: Update empfangen:", message);
-    callback(message.data.last_file_update);
+    callback(message.last_file_update);
   }, {
-    type: "pp_reader/last_file_update_updated",
+    type: "pp_reader/get_last_file_update",
     entry_id,
   });
 }
