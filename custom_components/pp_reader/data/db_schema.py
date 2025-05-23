@@ -318,7 +318,7 @@ METADATA_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS metadata (
         key TEXT PRIMARY KEY,
-        date TEXT NOT NULL -- ISO8601 Format
+        date TEXT NOT NULL
     );
     """
 ]
