@@ -169,7 +169,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             # Aktualisiere das Konto, wenn sich der Kontostand geändert hat oder das Konto neu ist
             if not existing_account or existing_account != new_account_data or balance != (existing_account[-1] if existing_account else None):
                 account_changes_detected = True
-                updated_data["accounts"].append(acc.uuid)
+                updated_data["accounts"].append({"name": acc.name, "balance": balance})  # Speichere vollständige Kontodaten
 
                 cur.execute("""
                     INSERT OR REPLACE INTO accounts 
