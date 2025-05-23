@@ -258,14 +258,20 @@ class PPReaderDashboard extends HTMLElement {
         "pp_reader_dashboard_updated" // Event-Name
       );
 
-      console.debug("PPReaderDashboard: Event-Listener erfolgreich registriert.");
+      if (typeof this._unsubscribeEvents !== "function") {
+        console.error("PPReaderDashboard: subscribeEvents hat keine gültige Funktion zurückgegeben.");
+        this._unsubscribeEvents = null;
+      } else {
+        console.debug("PPReaderDashboard: Event-Listener erfolgreich registriert.");
+      }
     } catch (error) {
       console.error("PPReaderDashboard: Fehler bei der Registrierung der Event-Listener:", error);
+      this._unsubscribeEvents = null;
     }
   }
 
   _removeEventListeners() {
-    if (this._unsubscribeEvents) {
+    if (typeof this._unsubscribeEvents === "function") {
       try {
         this._unsubscribeEvents();
         this._unsubscribeEvents = null;
@@ -273,6 +279,8 @@ class PPReaderDashboard extends HTMLElement {
       } catch (error) {
         console.error("PPReaderDashboard: Fehler beim Entfernen der Event-Listener:", error);
       }
+    } else {
+      console.warn("PPReaderDashboard: Kein gültiger Event-Listener zum Entfernen gefunden.");
     }
   }
 
