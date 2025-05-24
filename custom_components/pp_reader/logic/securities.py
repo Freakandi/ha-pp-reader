@@ -1,5 +1,6 @@
 from typing import Dict, List, Tuple
 from datetime import datetime
+from pathlib import Path
 from ..data.db_access import Transaction
 from ..logic.portfolio import normalize_shares, normalize_price
 from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
