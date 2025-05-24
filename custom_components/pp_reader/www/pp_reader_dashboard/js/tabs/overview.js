@@ -1,11 +1,24 @@
 import { createHeaderCard, makeTable } from '../content/elements.js';
-import { prepareDashboardData } from '../data/data.js';
-import { fetchAccountsWS, fetchLastFileUpdateWS } from '../data/api.js';
+import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS } from '../data/api.js';
 
 export async function renderDashboard(root, hass, panelConfig) {
   try {
-    // Lade Depotdaten über prepareDashboardData
-    const { depots, totalVermoegen } = await prepareDashboardData();
+    // Lade Depotdaten über WebSocket
+    const portfoliosResponse = await fetchPortfoliosWS(hass, panelConfig);
+    const depots = portfoliosResponse.portfolios || [];
+
+    // Berechne absolute und prozentuale Gewinne für jedes Depot
+    const depotsWithGains = depots.map(depot => {
+      const gainAbs = depot.current_value - depot.purchase_sum; // Absoluter Gewinn
+      const gainPct = depot.purchase_sum > 0
+        ? (gainAbs / depot.purchase_sum) * 100 // Prozentualer Gewinn
+        : 0; // Verhindere Division durch 0
+      return {
+        ...depot,
+        gain_abs: gainAbs,
+        gain_pct: gainPct,
+      };
+    });
 
     // Lade Kontodaten über WebSocket
     const accountsResponse = await fetchAccountsWS(hass, panelConfig);
@@ -14,6 +27,11 @@ export async function renderDashboard(root, hass, panelConfig) {
     // Lade last_file_update über WebSocket
     const lastFileUpdateResponse = await fetchLastFileUpdateWS(hass, panelConfig);
     const lastFileUpdate = lastFileUpdateResponse || 'Unbekannt';
+
+    // Berechne Gesamtvermögen
+    const totalKonten = konten.reduce((acc, k) => acc + (isNaN(k.balance) ? 0 : k.balance), 0);
+    const totalDepots = depotsWithGains.reduce((acc, d) => acc + (isNaN(d.current_value) ? 0 : d.current_value), 0);
+    const totalVermoegen = totalKonten + totalDepots;
 
     // Header-Metadaten
     const headerMeta = `
@@ -31,13 +49,13 @@ export async function renderDashboard(root, hass, panelConfig) {
     <div class="card">
       <h2>Investment</h2>
       <div class="scroll-container">
-        ${makeTable(depots, [
+        ${makeTable(depotsWithGains, [
           { key: 'name', label: 'Name' },
-          { key: 'count', label: 'Anzahl Positionen', align: 'right' },
-          { key: 'value', label: 'Aktueller Wert', align: 'right' },
+          { key: 'position_count', label: 'Anzahl Positionen', align: 'right' },
+          { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
           { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
           { key: 'gain_pct', label: '%', align: 'right' }
-        ], ['count', 'value', 'gain_abs'])}
+        ], ['position_count', 'current_value', 'gain_abs'])}
       </div>
     </div>
 

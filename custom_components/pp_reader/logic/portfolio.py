@@ -7,25 +7,20 @@ from typing import Dict, List, Tuple
 
 from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 from ..data.db_access import (
-    get_securities,
-    get_portfolio_by_name,
     get_portfolio_by_uuid,
     get_transactions,
     get_securities_by_id,
-    Security,
-    Transaction
+    Transaction,
+    get_portfolio_securities
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-
 def normalize_price(raw_price: int) -> float:
     return raw_price / 10**8  # Kurswerte mit 8 Nachkommastellen
 
-
 def normalize_shares(raw_shares: int) -> float:
     return raw_shares / 10**8  # Stückzahlen mit 8 Nachkommastellen
-
 
 def calculate_holdings(transactions: List[Transaction]) -> Dict[str, float]:
     """Berechnet aktuelle Bestände aus Transaktionen."""
@@ -195,3 +190,93 @@ def calculate_unrealized_gain_pct(current_value: float, purchase_sum: float) -> 
     if purchase_sum == 0:
         return 0.0
     return round(((current_value - purchase_sum) / purchase_sum) * 100, 2)
+
+
+def db_calculate_portfolio_value_and_count(
+    portfolio_uuid: str,
+    db_path: Path
+) -> Tuple[float, int]:
+    """
+    Berechnet den aktuellen Wert eines Depots und die Anzahl der darin enthaltenen Wertpapiere.
+
+    Args:
+        portfolio_uuid (str): Die UUID des Depots.
+        db_path (Path): Pfad zur SQLite-Datenbank.
+
+    Returns:
+        Tuple[float, int]: Der aktuelle Wert des Depots (in EUR) und die Anzahl der enthaltenen Wertpapiere.
+    """
+    # Lade die Wertpapiere des Depots aus der Tabelle portfolio_securities
+    portfolio_securities = get_portfolio_securities(db_path, portfolio_uuid)
+
+    total_value = 0.0
+    active_securities_count = 0
+
+    for ps in portfolio_securities:
+        if ps.current_value and ps.current_value > 0:
+            total_value += ps.current_value / 100  # Cent -> EUR
+            active_securities_count += 1
+
+    return round(total_value, 2), active_securities_count
+
+
+def db_calculate_portfolio_value_only(
+    portfolio_uuid: str,
+    db_path: Path
+) -> float:
+    """
+    Berechnet nur den aktuellen Wert eines Depots.
+
+    Args:
+        portfolio_uuid (str): Die UUID des Depots.
+        db_path (Path): Pfad zur SQLite-Datenbank.
+
+    Returns:
+        float: Der aktuelle Wert des Depots (in EUR).
+    """
+    total_value, _ = db_calculate_portfolio_value_and_count(portfolio_uuid, db_path)
+    return total_value
+
+
+def db_calculate_portfolio_securities_count(
+    portfolio_uuid: str,
+    db_path: Path
+) -> int:
+    """
+    Berechnet nur die Anzahl der Wertpapiere in einem Depot.
+
+    Args:
+        portfolio_uuid (str): Die UUID des Depots.
+        db_path (Path): Pfad zur SQLite-Datenbank.
+
+    Returns:
+        int: Die Anzahl der Wertpapiere im Depot.
+    """
+    _, securities_count = db_calculate_portfolio_value_and_count(portfolio_uuid, db_path)
+    return securities_count
+
+
+def db_calculate_portfolio_purchase_sum(
+    portfolio_uuid: str,
+    db_path: Path
+) -> float:
+    """
+    Berechnet die Kaufsumme (purchase_sum) für ein Depot basierend auf den Kaufpreisen
+    der darin enthaltenen Wertpapiere.
+
+    Args:
+        portfolio_uuid (str): Die UUID des Depots.
+        db_path (Path): Pfad zur SQLite-Datenbank.
+
+    Returns:
+        float: Die Kaufsumme des Depots (in EUR).
+    """
+    # Lade die Wertpapiere des Depots aus der Tabelle portfolio_securities
+    portfolio_securities = get_portfolio_securities(db_path, portfolio_uuid)
+
+    total_purchase_sum = 0.0
+    for ps in portfolio_securities:
+        if ps.purchase_value and ps.purchase_value > 0:
+            total_purchase_sum += ps.purchase_value / 100  # Cent -> EUR
+
+    return round(total_purchase_sum, 2)

@@ -67,6 +67,36 @@ PORTFOLIO_SCHEMA = [
     """
 ]
 
+PORTFOLIO_SECURITIES_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS portfolio_securities (
+        portfolio_uuid TEXT NOT NULL,       -- UUID des Depots
+        security_uuid TEXT NOT NULL,        -- UUID des Wertpapiers
+        current_holdings REAL DEFAULT 0.0, -- Aktueller Bestand des Wertpapiers im Depot
+        purchase_value INTEGER DEFAULT 0,  -- Gesamter Kaufpreis des Bestands in Cent
+        avg_price REAL GENERATED ALWAYS AS (
+            CASE 
+                WHEN current_holdings > 0 THEN purchase_value / current_holdings
+                ELSE NULL
+            END
+        ) STORED,                          -- Durchschnittlicher Kaufpreis in Cent
+        current_value REAL GENERATED ALWAYS AS (
+            CASE
+                WHEN current_holdings > 0 THEN current_holdings * (
+                    SELECT value / 100000000.0  -- Normalisierung des Preises
+                    FROM latest_prices
+                    WHERE latest_prices.security_uuid = portfolio_securities.security_uuid
+                )
+                ELSE NULL
+            END
+        ) STORED,                          -- Aktueller Wert des Bestands in Cent
+        PRIMARY KEY (portfolio_uuid, security_uuid),
+        FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid),
+        FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
+    );
+    """
+]
+
 TRANSACTION_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS transactions (
@@ -327,6 +357,7 @@ ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
     *SECURITIES_SCHEMA,
     *PORTFOLIO_SCHEMA,
+    *PORTFOLIO_SECURITIES_SCHEMA,
     *TRANSACTION_SCHEMA,
     *FX_SCHEMA,
     *METADATA_SCHEMA

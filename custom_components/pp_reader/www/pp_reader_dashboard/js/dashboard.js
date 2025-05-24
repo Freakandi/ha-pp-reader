@@ -1,7 +1,7 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { renderDashboard } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
-import { handleAccountUpdate, handleLastFileUpdate } from './data/updateConfigsWS.js';
+import { handleAccountUpdate, handleLastFileUpdate, handlePortfolioUpdate } from './data/updateConfigsWS.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
@@ -315,6 +315,8 @@ class PPReaderDashboard extends HTMLElement {
       handleAccountUpdate(pushedData, this._root);
     } else if (dataType === "last_file_update") {
       handleLastFileUpdate(pushedData, this._root);
+    } else if (dataType === "portfolio_securities") {
+      handlePortfolioUpdate(pushedData, this._root);
     } else {
       console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
     }

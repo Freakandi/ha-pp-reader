@@ -61,6 +61,16 @@ class Portfolio:
     reference_account: Optional[str] = None
     is_retired: bool = False
 
+@dataclass
+class PortfolioSecurity:
+    """Repräsentiert die Zuordnung eines Wertpapiers zu einem Depot."""
+    portfolio_uuid: str
+    security_uuid: str
+    current_holdings: float  # Aktueller Bestand des Wertpapiers im Depot
+    purchase_value: int  # Gesamter Kaufpreis des Bestands in Cent
+    avg_price: Optional[float] = None  # Durchschnittlicher Kaufpreis in Cent
+    current_value: Optional[float] = None  # Aktueller Wert des Bestands in Cent
+
 def get_transactions(db_path: Optional[Path] = None, conn: Optional[sqlite3.Connection] = None) -> List[Transaction]:
     """Lädt alle Transaktionen aus der DB."""
     if conn is None:
@@ -128,7 +138,7 @@ def get_portfolio_by_name(db_path: Path, name: str) -> Optional[Portfolio]:
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.execute("""
-            SELECT uuid, name, note, reference_account, is_retired
+            SELECT uuid, name, note, reference_account, COALESCE(is_retired, 0)
             FROM portfolios 
             WHERE name = ?
         """, (name,))
@@ -209,5 +219,38 @@ def get_last_file_update(db_path: Path) -> Optional[str]:
     except sqlite3.Error as e:
         _LOGGER.error("Fehler beim Abrufen von last_file_update: %s", str(e))
         return None
+    finally:
+        conn.close()
+
+def get_portfolio_securities(db_path: Path, portfolio_uuid: str) -> List[PortfolioSecurity]:
+    """Lädt alle Wertpapiere eines Depots aus der Tabelle portfolio_securities."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT portfolio_uuid, security_uuid, current_holdings, 
+                   purchase_value, avg_price, current_value
+            FROM portfolio_securities
+            WHERE portfolio_uuid = ?
+        """, (portfolio_uuid,))
+        return [PortfolioSecurity(*row) for row in cur.fetchall()]
+    except sqlite3.Error as e:
+        _LOGGER.error("Fehler beim Laden der Wertpapiere für das Depot %s: %s", portfolio_uuid, str(e))
+        return []
+    finally:
+        conn.close()
+
+def get_all_portfolio_securities(db_path: Path) -> List[PortfolioSecurity]:
+    """Lädt alle Einträge aus der Tabelle portfolio_securities."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute("""
+            SELECT portfolio_uuid, security_uuid, current_holdings, 
+                   purchase_value, avg_price, current_value
+            FROM portfolio_securities
+        """)
+        return [PortfolioSecurity(*row) for row in cur.fetchall()]
+    except sqlite3.Error as e:
+        _LOGGER.error("Fehler beim Laden aller Wertpapiere aus portfolio_securities: %s", str(e))
+        return []
     finally:
         conn.close()

@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 from ..logic.accounting import db_calc_account_balance
+from ..logic.securities import db_calculate_current_holdings, db_calculate_sec_purchase_value
 from ..data.db_access import get_transactions
 
 from homeassistant.core import callback
@@ -70,7 +71,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
     security_changes_detected = False
     portfolio_changes_detected = False
     last_file_update_change_detected = False
-
+    sec_port_changes_detected = False
+    
     updated_data = {"accounts": [], "securities": [], "portfolios": [], "transactions": []}
 
     try:
@@ -202,6 +204,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             """, (sec.uuid,))
             existing_security = cur.fetchone()
 
+            # Einheitliche Darstellung von retired (immer 0 oder 1)
+            retired = 1 if getattr(sec, "isRetired", False) else 0
+
+            # Einheitliches Format für updated_at
+            updated_at = to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
+
             new_security_data = (
                 sec.uuid,
                 sec.name,
@@ -210,8 +218,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 sec.isin if sec.HasField("isin") else None,
                 sec.wkn if sec.HasField("wkn") else None,
                 sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
-                1 if getattr(sec, "isRetired", False) else 0,
-                to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
+                retired,  # Konsistente Darstellung
+                updated_at   # Konsistentes Format
             )
 
             if not existing_security or existing_security != new_security_data:
@@ -249,13 +257,19 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             """, (p.uuid,))
             existing_portfolio = cur.fetchone()
 
+            # Einheitliche Darstellung von is_retired (immer 0 oder 1)
+            is_retired = 1 if getattr(p, "isRetired", False) else 0
+
+            # Einheitliches Format für updated_at
+            updated_at = to_iso8601(p.updatedAt) if p.HasField("updatedAt") else None
+
             new_portfolio_data = (
                 p.uuid,
                 p.name,
                 p.note if p.HasField("note") else None,
                 p.referenceAccount if p.HasField("referenceAccount") else None,
-                int(p.isRetired),
-                to_iso8601(p.updatedAt) if p.HasField("updatedAt") else None
+                is_retired,  # Konsistente Darstellung
+                updated_at   # Konsistentes Format
             )
 
             if not existing_portfolio or existing_portfolio != new_portfolio_data:
@@ -297,8 +311,60 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 if u.HasField("fxAmount"):
                     stats["fx_transactions"] += 1
 
-        conn.commit()
-        
+        conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
+        _LOGGER.debug("sync_from_pclient: Transaktionen, Wertpapiere und Portfolios in der DB bestätigt.")
+
+        # --- NEUE LOGIK: Befüllen der Tabelle portfolio_securities ---
+        if transaction_changes_detected or security_changes_detected:
+            _LOGGER.debug("sync_from_pclient: Berechne und synchronisiere portfolio_securities...")
+
+            # Lade alle Transaktionen aus der DB
+            all_transactions = get_transactions(conn=conn)
+
+            # Berechne current_holdings und purchase_value
+            current_holdings = db_calculate_current_holdings(all_transactions)
+            purchase_values = db_calculate_sec_purchase_value(all_transactions)
+
+            # Aktualisiere die Tabelle portfolio_securities
+            portfolio_security_keys = set()
+            for (portfolio_uuid, security_uuid), holdings in current_holdings.items():
+                purchase_value = purchase_values.get((portfolio_uuid, security_uuid), 0)
+
+                # Rundung und Konsistenz sicherstellen
+                holdings = round(holdings, 4)  # Maximal 4 Nachkommastellen für Bestände
+                purchase_value = round(purchase_value, 2)  # Maximal 2 Nachkommastellen für Kaufpreise
+
+                portfolio_security_keys.add((portfolio_uuid, security_uuid))
+
+                cur.execute("""
+                    SELECT current_holdings, purchase_value FROM portfolio_securities
+                    WHERE portfolio_uuid = ? AND security_uuid = ?
+                """, (portfolio_uuid, security_uuid))
+                existing_entry = cur.fetchone()
+
+                if not existing_entry or existing_entry != (holdings, purchase_value * 100):  # EUR -> Cent
+                    sec_port_changes_detected = True
+                    cur.execute("""
+                        INSERT OR REPLACE INTO portfolio_securities (
+                            portfolio_uuid, security_uuid, current_holdings, purchase_value
+                        ) VALUES (?, ?, ?, ?)
+                    """, (portfolio_uuid, security_uuid, holdings, int(purchase_value * 100)))  # EUR -> Cent
+
+            # Entferne veraltete Einträge aus portfolio_securities
+            cur.execute("""
+                DELETE FROM portfolio_securities
+                WHERE (portfolio_uuid, security_uuid) NOT IN (
+                    SELECT portfolio_uuid, security_uuid FROM portfolio_securities
+                )
+            """)
+            if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
+                sec_port_changes_detected = True
+
+            conn.commit()
+            _LOGGER.debug("sync_from_pclient: portfolio_securities erfolgreich synchronisiert.")
+        else:
+            _LOGGER.debug("sync_from_pclient: Keine Änderungen an portfolio_securities erforderlich.")
+
     except Exception as e:
         conn.rollback()
         _LOGGER.error("sync_from_pclient: Fehler während der Synchronisation: %s", str(e))
@@ -306,6 +372,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         transaction_changes_detected = False
         security_changes_detected = False
         last_file_update_change_detected = False
+        sec_port_changes_detected = False
         raise
     finally:
         cur.close()
@@ -336,6 +403,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             _push_update(hass, entry_id, "last_file_update", formatted_last_file_update)
             _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", formatted_last_file_update)
 
+        if sec_port_changes_detected:
+            # Sende ein Event für Änderungen an portfolio_securities
+            _push_update(hass, entry_id, "portfolio_securities", {"updated": True})
+            _LOGGER.debug("sync_from_pclient: 📡 portfolio_securities-Update-Event gesendet.")
     else:
         # Logge die fehlenden Voraussetzungen
         _LOGGER.error(
@@ -344,7 +415,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             "  - hass: %s\n"
             "  - entry_id: %s\n"
             "  - updated_data: %s",
-            changes_detected,
             hass,
             entry_id,
             updated_data

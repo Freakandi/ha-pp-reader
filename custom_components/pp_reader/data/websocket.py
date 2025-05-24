@@ -135,3 +135,63 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update: %s", e)
         connection.send_error(msg["id"], "db_error", str(e))
+
+# === Websocket Portfolio-Data ===
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_portfolio_data",
+        vol.Optional("entry_id"): str,  # Erwartet die entry_id
+    }
+)
+@websocket_api.async_response
+async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -> None:
+    """Handle WebSocket command to get portfolio data."""
+    try:
+        # Zugriff auf die Datenbank
+        entry_id = msg["entry_id"]
+        db_path = hass.data[DOMAIN][entry_id]["db_path"]
+        from ..logic.portfolio import (
+            db_calculate_portfolio_value_and_count,
+            db_calculate_portfolio_purchase_sum,
+        )
+        from ..data.db_access import get_portfolios
+
+        # Lade alle aktiven Depots
+        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
+        active_portfolios = [p for p in portfolios if not p.is_retired]
+
+        # Berechne die Werte für jedes aktive Depot
+        portfolio_data = []
+        for portfolio in active_portfolios:
+            portfolio_uuid = portfolio.uuid
+
+            # Berechne den aktuellen Wert und die Anzahl der Positionen
+            value, position_count = await hass.async_add_executor_job(
+                db_calculate_portfolio_value_and_count, portfolio_uuid, db_path
+            )
+
+            # Berechne die Kaufpreissumme
+            purchase_sum = await hass.async_add_executor_job(
+                db_calculate_portfolio_purchase_sum, portfolio_uuid, db_path
+            )
+
+            # Füge die berechneten Daten hinzu
+            portfolio_data.append({
+                "name": portfolio.name,
+                "position_count": position_count,
+                "current_value": value,
+                "purchase_sum": purchase_sum,
+            })
+
+        # Antwort senden
+        connection.send_result(
+            msg["id"],
+            {
+                "portfolios": portfolio_data,
+            },
+        )
+        _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)
+
+    except Exception as e:
+        _LOGGER.exception("Fehler beim Abrufen der Depotdaten: %s", e)
+        connection.send_error(msg["id"], "db_error", str(e))
