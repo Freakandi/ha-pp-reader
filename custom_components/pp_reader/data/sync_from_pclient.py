@@ -323,7 +323,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Berechne current_holdings und purchase_value
             current_holdings = db_calculate_current_holdings(all_transactions)
-            purchase_values = db_calculate_sec_purchase_value(all_transactions)
+            purchase_values = db_calculate_sec_purchase_value(all_transactions, db_path)
 
             # Aktualisiere die Tabelle portfolio_securities
             portfolio_security_keys = set()
