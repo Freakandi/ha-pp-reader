@@ -2,7 +2,6 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 from pathlib import Path
 from ..data.db_access import Transaction
-from ..logic.portfolio import normalize_shares, normalize_price
 from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
 
 def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple[str, str], float]:
@@ -23,7 +22,7 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
             continue  # Überspringe Transaktionen ohne zugeordnetes Wertpapier oder Depot
 
         key = (tx.portfolio, tx.security)
-        shares = normalize_shares(tx.shares) if tx.shares else 0  # Stückzahlen normalisieren
+        shares = tx.shares if tx.shares else 0  # Direkt die Stückzahlen verwenden
 
         # Transaktionstypen auswerten
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
@@ -71,7 +70,7 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
             continue
 
         key = (tx.portfolio, tx.security)
-        shares = normalize_shares(tx.shares) if tx.shares else 0
+        shares = tx.shares if tx.shares else 0  # Direkt die Stückzahlen verwenden
         amount = tx.amount / 100  # Cent -> EUR
         tx_date = datetime.fromisoformat(tx.date)
 
