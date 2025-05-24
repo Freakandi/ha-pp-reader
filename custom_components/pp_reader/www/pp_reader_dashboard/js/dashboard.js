@@ -271,7 +271,7 @@ class PPReaderDashboard extends HTMLElement {
 
       // Event-Bus-Listener registrieren
       this._unsubscribeEvents = this._hass.connection.subscribeEvents(
-        (msg) => this._handleBusEvent(msg),
+        this._handleBusEvent.bind(this),
         "pp_reader_dashboard_updated" // Event-Name
       );
 
