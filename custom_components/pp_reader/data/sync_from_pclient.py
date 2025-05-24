@@ -350,7 +350,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                         SELECT value FROM latest_prices WHERE security_uuid = ?
                     """, (security_uuid,))
                     latest_price_row = cur.fetchone()
-                    latest_price = latest_price_row[0] / 100000000.0 if latest_price_row else 0.0
+                    latest_price = latest_price_row[0] if latest_price_row else 0.0
 
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
