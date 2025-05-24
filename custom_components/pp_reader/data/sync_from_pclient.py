@@ -151,18 +151,24 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             """, (acc.uuid,))
             existing_account = cur.fetchone()
 
+            # Einheitliche Darstellung von is_retired (immer 0 oder 1)
+            is_retired = 1 if getattr(acc, "isRetired", False) else 0
+
+            # Einheitliches Format für updated_at
+            updated_at = to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
+
             new_account_data = (
                 acc.uuid,
                 acc.name,
                 acc.currencyCode,
                 acc.note if acc.HasField("note") else None,
-                1 if getattr(acc, "isRetired", False) else 0,  # Setze is_retired korrekt
-                to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
+                is_retired,  # Konsistente Darstellung
+                updated_at   # Konsistentes Format
             )
 
             # Berechne den Kontostand nur, wenn Transaktionen geändert wurden
             if transaction_changes_detected:
-                if getattr(acc, "isRetired", False):
+                if is_retired:
                     balance = 0  # Retired-Konten haben immer Kontostand 0
                 else:
                     account_transactions = [
@@ -174,9 +180,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 # Behalte den bestehenden Kontostand bei, wenn keine Transaktionen geändert wurden
                 balance = existing_account[-1] if existing_account else 0
 
-            if not existing_account or existing_account != new_account_data or balance != (existing_account[-1] if existing_account else None):
+            # Vergleiche die Daten, um Änderungen zu erkennen
+            if not existing_account or existing_account[:-2] != new_account_data[:-2] or balance != (existing_account[-1] if existing_account else None):
                 account_changes_detected = True
-                updated_data["accounts"].append({"name": acc.name, "balance": balance, "is_retired": getattr(acc, "isRetired", False)})
+                updated_data["accounts"].append({"name": acc.name, "balance": balance, "is_retired": is_retired})
 
                 cur.execute("""
                     INSERT OR REPLACE INTO accounts 
@@ -252,7 +259,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             )
 
             if not existing_portfolio or existing_portfolio != new_portfolio_data:
-                changes_detected = True
+                portfolio_changes_detected = True
                 updated_data["portfolios"].append(p.uuid)
 
                 cur.execute("""
