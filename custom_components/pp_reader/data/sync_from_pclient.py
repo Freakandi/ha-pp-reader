@@ -156,7 +156,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 acc.name,
                 acc.currencyCode,
                 acc.note if acc.HasField("note") else None,
-                1 if getattr(acc, "isRetired", False) else 0,
+                1 if getattr(acc, "isRetired", False) else 0,  # Setze is_retired korrekt
                 to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
             )
 
@@ -164,24 +164,19 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             if transaction_changes_detected:
                 if getattr(acc, "isRetired", False):
                     balance = 0  # Retired-Konten haben immer Kontostand 0
-                    _LOGGER.debug("sync_from_pclient: Gesetzter Kontostand für inaktives Konto %s: %d", acc.uuid, balance)
                 else:
-                    # Filtere Transaktionen, die das Konto betreffen
-                    _LOGGER.debug("sync_from_pclient: Verarbeite Konto: %s", acc.uuid)
                     account_transactions = [
                         tx for tx in all_transactions
                         if tx.account == acc.uuid or tx.other_account == acc.uuid
                     ]
                     balance = db_calc_account_balance(acc.uuid, account_transactions)
-                    _LOGGER.debug("sync_from_pclient: Berechneter Kontostand für Konto %s: %d", acc.uuid, balance)
             else:
                 # Behalte den bestehenden Kontostand bei, wenn keine Transaktionen geändert wurden
                 balance = existing_account[-1] if existing_account else 0
 
-            # Aktualisiere das Konto, wenn sich der Kontostand geändert hat oder das Konto neu ist
             if not existing_account or existing_account != new_account_data or balance != (existing_account[-1] if existing_account else None):
                 account_changes_detected = True
-                updated_data["accounts"].append({"name": acc.name, "balance": balance})  # Speichere vollständige Kontodaten
+                updated_data["accounts"].append({"name": acc.name, "balance": balance, "is_retired": getattr(acc, "isRetired", False)})
 
                 cur.execute("""
                     INSERT OR REPLACE INTO accounts 
@@ -324,8 +319,9 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 for account in updated_data["accounts"]
                 if account.get("is_retired", False) is False
             ]
-            _push_update(hass, entry_id, "accounts", updated_accounts)
-            _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", updated_accounts)
+            if updated_accounts:
+                _push_update(hass, entry_id, "accounts", updated_accounts)
+                _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", updated_accounts)
 
         if last_file_update_change_detected:
             # Datum korrekt formatieren
