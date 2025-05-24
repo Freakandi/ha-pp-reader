@@ -80,16 +80,7 @@ PORTFOLIO_SECURITIES_SCHEMA = [
                 ELSE NULL
             END
         ) STORED,                          -- Durchschnittlicher Kaufpreis in Cent
-        current_value REAL GENERATED ALWAYS AS (
-            CASE
-                WHEN current_holdings > 0 THEN current_holdings * (
-                    SELECT value / 100000000.0  -- Normalisierung des Preises
-                    FROM latest_prices
-                    WHERE latest_prices.security_uuid = portfolio_securities.security_uuid
-                )
-                ELSE NULL
-            END
-        ) STORED,                          -- Aktueller Wert des Bestands in Cent
+        current_value REAL DEFAULT 0.0,    -- Aktueller Wert des Bestands in Cent
         PRIMARY KEY (portfolio_uuid, security_uuid),
         FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
