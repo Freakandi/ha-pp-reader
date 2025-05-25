@@ -7,7 +7,7 @@ from datetime import datetime
 from ..logic.accounting import db_calc_account_balance
 from ..logic.securities import db_calculate_current_holdings, db_calculate_sec_purchase_value
 from ..data.db_access import get_transactions
-from ..currencies.fx import load_latest_rates_sync  # Importiere die Funktion für Wechselkurse
+from ..currencies.fx import load_latest_rates_sync,ensure_exchange_rates_for_dates_sync  # Importiere die Funktion für Wechselkurse
 from ..logic.portfolio import normalize_price  # Importiere normalize_price
 
 from homeassistant.core import callback
