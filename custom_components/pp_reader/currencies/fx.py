@@ -112,6 +112,9 @@ def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str,
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            # Sicherstellen, dass reference_date ein datetime-Objekt ist
+            if isinstance(reference_date, str):
+                reference_date = datetime.strptime(reference_date, "%Y-%m-%d")
             return loop.run_until_complete(load_latest_rates(reference_date, db_path))
         finally:
             loop.close()

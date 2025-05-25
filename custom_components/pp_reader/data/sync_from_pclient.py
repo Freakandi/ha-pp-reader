@@ -358,9 +358,9 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     currency_code = currency_row[0] if currency_row else "EUR"
 
                     if currency_code != "EUR":
-                        # Stelle sicher, dass das Datum im Format 'YYYY-MM-DD' vorliegt
-                        today = datetime.now().strftime("%Y-%m-%d")
-                        
+                        # Stelle sicher, dass das Datum als datetime-Objekt vorliegt
+                        today = datetime.now()  # Erstelle ein datetime-Objekt für das aktuelle Datum
+
                         # Lade die aktuellen Wechselkurse
                         fx_rates = load_latest_rates_sync(today, db_path)
                         
