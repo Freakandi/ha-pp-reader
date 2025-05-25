@@ -7,6 +7,7 @@ from datetime import datetime
 from ..logic.accounting import db_calc_account_balance
 from ..logic.securities import db_calculate_current_holdings, db_calculate_sec_purchase_value
 from ..data.db_access import get_transactions
+from ..currencies.fx import load_latest_rates_sync  # Importiere die Funktion für Wechselkurse
 from ..logic.portfolio import normalize_price  # Importiere normalize_price
 
 from homeassistant.core import callback
@@ -348,6 +349,18 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     """, (security_uuid,))
                     latest_price_row = cur.fetchone()
                     latest_price = normalize_price(latest_price_row[0]) if latest_price_row else 0.0  # Normalisiere den Preis
+
+                    # Lade den Wechselkurs, falls die Währung nicht EUR ist
+                    cur.execute("""
+                        SELECT currency_code FROM securities WHERE uuid = ?
+                    """, (security_uuid,))
+                    currency_row = cur.fetchone()
+                    currency_code = currency_row[0] if currency_row else "EUR"
+
+                    if currency_code != "EUR":
+                        fx_rates = load_latest_rates_sync(datetime.now(), db_path)  # Lade die aktuellen Wechselkurse
+                        exchange_rate = fx_rates.get(currency_code, 1.0)  # Standardmäßig 1.0, falls kein Kurs verfügbar
+                        latest_price /= exchange_rate  # Wende den Wechselkurs an
 
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
