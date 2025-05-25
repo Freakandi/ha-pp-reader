@@ -142,3 +142,15 @@ async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set
                                   missing, date_str)
             except Exception as e:
                 _LOGGER.error("❌ Fehler beim Laden der Kurse: %s", str(e))
+
+def ensure_exchange_rates_for_dates_sync(dates: list[datetime], currencies: set[str], db_path: Path) -> None:
+    """Synchroner Wrapper für ensure_exchange_rates_for_dates."""
+    def run_async_task(dates: list[datetime], currencies: set[str], db_path: Path):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(ensure_exchange_rates_for_dates(dates, currencies, db_path))
+        finally:
+            loop.close()
+
+    run_async_task(dates, currencies, db_path)

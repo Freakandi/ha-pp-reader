@@ -323,8 +323,37 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             current_holdings = db_calculate_current_holdings(all_transactions)
             purchase_values = db_calculate_sec_purchase_value(all_transactions, db_path)
 
-            # Aktualisiere die Tabelle portfolio_securities
-            portfolio_security_keys = set()
+            # Sammle alle benötigten Währungen und das Datum
+            today = datetime.now()  # Erstelle ein datetime-Objekt für das aktuelle Datum
+            needed_currencies = set()
+
+            for (portfolio_uuid, security_uuid), holdings in current_holdings.items():
+                cur.execute("""
+                    SELECT currency_code FROM securities WHERE uuid = ?
+                """, (security_uuid,))
+                currency_row = cur.fetchone()
+                currency_code = currency_row[0] if currency_row else "EUR"
+
+                if currency_code != "EUR":
+                    needed_currencies.add(currency_code)
+
+            # Stelle sicher, dass die Wechselkurse verfügbar sind
+            ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path)
+
+            # Lade die Wechselkurse einmalig
+            fx_rates = load_latest_rates_sync(today, db_path)
+
+            cur.execute("SELECT security_uuid, value FROM latest_prices")
+            latest_prices = {
+                row[0]: row[1] for row in cur.fetchall()
+            }
+
+            cur.execute("SELECT uuid, currency_code FROM securities")
+            securities = {
+                row[0]: row[1] for row in cur.fetchall()
+            }
+
+            # Iteriere über die Wertpapiere und berechne die Werte
             for (portfolio_uuid, security_uuid), holdings in current_holdings.items():
                 purchase_value = purchase_values.get((portfolio_uuid, security_uuid), 0)
 
@@ -334,57 +363,29 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
                 portfolio_security_keys.add((portfolio_uuid, security_uuid))
 
-                cur.execute("""
-                    SELECT current_holdings, purchase_value FROM portfolio_securities
-                    WHERE portfolio_uuid = ? AND security_uuid = ?
-                """, (portfolio_uuid, security_uuid))
-                existing_entry = cur.fetchone()
+                # Hole den aktuellen Preis aus dem vorbereiteten Dictionary
+                latest_price = normalize_price(latest_prices.get(security_uuid, 0.0))
 
-                if not existing_entry or existing_entry != (holdings, purchase_value * 100):  # EUR -> Cent
-                    sec_port_changes_detected = True
+                # Hole die Währung aus dem vorbereiteten Dictionary
+                currency_code = securities.get(security_uuid, "EUR")
 
-                    # Berechne current_value basierend auf current_holdings und dem aktuellen Preis aus latest_prices
-                    cur.execute("""
-                        SELECT value FROM latest_prices WHERE security_uuid = ?
-                    """, (security_uuid,))
-                    latest_price_row = cur.fetchone()
-                    latest_price = normalize_price(latest_price_row[0]) if latest_price_row else 0.0  # Normalisiere den Preis
-
-                    # Lade den Wechselkurs, falls die Währung nicht EUR ist
-                    cur.execute("""
-                        SELECT currency_code FROM securities WHERE uuid = ?
-                    """, (security_uuid,))
-                    currency_row = cur.fetchone()
-                    currency_code = currency_row[0] if currency_row else "EUR"
-
-                    if currency_code != "EUR":
-                        # Stelle sicher, dass das Datum als datetime-Objekt vorliegt
-                        today = datetime.now()  # Erstelle ein datetime-Objekt für das aktuelle Datum
-
-                        # Lade die aktuellen Wechselkurse
-                        fx_rates = load_latest_rates_sync(today, db_path)
-                        
-                        # Prüfe, ob der Wechselkurs für die Währung verfügbar ist
-                        if currency_code in fx_rates:
-                            exchange_rate = fx_rates.get(currency_code)
-                            latest_price /= exchange_rate  # Wende den Wechselkurs an
-                            _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, exchange_rate)
-                        else:
-                            _LOGGER.warning(
-                                "⚠️ Kein Wechselkurs gefunden für Währung '%s'. Standardwert 1.0 wird verwendet.",
-                                currency_code
-                            )
-                            exchange_rate = 1.0
-                            latest_price /= exchange_rate  # Standardmäßig keine Umrechnung
+                if currency_code != "EUR":
+                    rate = fx_rates.get(currency_code)
+                    if rate:
+                        latest_price /= rate  # Wende den Wechselkurs an
+                        _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, rate)
                     else:
-                        exchange_rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
+                        _LOGGER.warning("⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.", currency_code)
+                        continue  # Überspringe die Berechnung für diese Währung
+                else:
+                    rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
 
-                    current_value = holdings * latest_price  # Berechnung des aktuellen Werts
+                current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
-                    _LOGGER.debug(
-                        "Berechne current_value: security_uuid=%s, holdings=%f, latest_price=%f, current_value=%f, exchange_rate=%f",
-                        security_uuid, holdings, latest_price, current_value, exchange_rate
-                    )
+                # Vergleiche mit den berechneten Werten aus current_holdings und purchase_values
+                existing_entry = (holdings, purchase_value * 100)  # EUR -> Cent
+                if existing_entry != (holdings, purchase_value * 100):  # Vergleich mit den berechneten Werten
+                    sec_port_changes_detected = True
 
                     cur.execute("""
                         INSERT OR REPLACE INTO portfolio_securities (
