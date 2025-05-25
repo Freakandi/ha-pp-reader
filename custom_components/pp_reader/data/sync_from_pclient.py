@@ -385,9 +385,15 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
                 current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
-                # Vergleiche mit den berechneten Werten aus current_holdings und purchase_values
-                existing_entry = (holdings, purchase_value * 100)  # EUR -> Cent
-                if existing_entry != (holdings, purchase_value * 100):  # Vergleich mit den berechneten Werten
+                # Lade den aktuellen Eintrag aus der Tabelle portfolio_securities
+                cur.execute("""
+                    SELECT current_holdings, purchase_value, current_value FROM portfolio_securities
+                    WHERE portfolio_uuid = ? AND security_uuid = ?
+                """, (portfolio_uuid, security_uuid))
+                existing_entry = cur.fetchone()
+
+                # Vergleiche mit den berechneten Werten aus current_holdings, purchase_values und current_value
+                if not existing_entry or existing_entry != (holdings, purchase_value * 100, int(current_value * 100)):  # EUR -> Cent
                     sec_port_changes_detected = True
 
                     cur.execute("""
