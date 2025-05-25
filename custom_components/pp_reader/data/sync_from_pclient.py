@@ -56,7 +56,7 @@ def _push_update(hass, entry_id, data_type, data):
         )
     )
 
-def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None) -> None:
+def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None, db_path=None) -> None:
     """Synchronisiert Daten aus Portfolio Performance mit der lokalen SQLite DB."""
     cur = conn.cursor()
     stats = {
