@@ -86,7 +86,7 @@ class PPReaderPanel extends HTMLElement {
     const dashboard = this.shadowRoot.querySelector('pp-reader-dashboard');
     if (dashboard) {
       if (this._hass) {
-        console.log("PPReaderPanel: Dashboard gefunden, hass wird übergeben:", this._hass);
+        // console.log("PPReaderPanel: Dashboard gefunden, hass wird übergeben:", this._hass);
         dashboard.hass = this._hass;
         dashboard.narrow = this._narrow;
         dashboard.route = this._route;
