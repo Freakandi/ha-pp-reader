@@ -358,13 +358,17 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     currency_code = currency_row[0] if currency_row else "EUR"
 
                     if currency_code != "EUR":
+                        # Stelle sicher, dass das Datum im Format 'YYYY-MM-DD' vorliegt
+                        today = datetime.now().strftime("%Y-%m-%d")
+                        
                         # Lade die aktuellen Wechselkurse
-                        fx_rates = load_latest_rates_sync(datetime.now(), db_path)
+                        fx_rates = load_latest_rates_sync(today, db_path)
                         
                         # Prüfe, ob der Wechselkurs für die Währung verfügbar ist
                         if currency_code in fx_rates:
                             exchange_rate = fx_rates[currency_code]
                             latest_price /= exchange_rate  # Wende den Wechselkurs an
+                            _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, exchange_rate)
                         else:
                             _LOGGER.warning(
                                 "⚠️ Kein Wechselkurs gefunden für Währung '%s'. Standardwert 1.0 wird verwendet.",
