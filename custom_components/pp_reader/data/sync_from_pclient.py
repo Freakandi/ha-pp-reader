@@ -358,25 +358,26 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     currency_code = currency_row[0] if currency_row else "EUR"
 
                     if currency_code != "EUR":
-                        fx_rates = load_latest_rates_sync(datetime.now(), db_path)  # Lade die aktuellen Wechselkurse
-                        exchange_rate = fx_rates.get(currency_code, 1.0)  # Standardmäßig 1.0, falls kein Kurs verfügbar
-                        latest_price /= exchange_rate  # Wende den Wechselkurs an
+                        # Lade die aktuellen Wechselkurse
+                        fx_rates = load_latest_rates_sync(datetime.now(), db_path)
+                        
+                        # Prüfe, ob der Wechselkurs für die Währung verfügbar ist
+                        if currency_code in fx_rates:
+                            exchange_rate = fx_rates[currency_code]
+                            latest_price /= exchange_rate  # Wende den Wechselkurs an
+                        else:
+                            _LOGGER.warning(
+                                "⚠️ Kein Wechselkurs gefunden für Währung '%s'. Standardwert 1.0 wird verwendet.",
+                                currency_code
+                            )
+                            exchange_rate = 1.0
+                            latest_price /= exchange_rate  # Standardmäßig keine Umrechnung
 
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
                     _LOGGER.debug(
-                        "Schreibe in portfolio_securities: portfolio_uuid=%s, security_uuid=%s, current_holdings=%f, purchase_value=%d, current_value=%d",
-                        portfolio_uuid, security_uuid, holdings, int(purchase_value * 100), int(current_value * 100)
-                    )
-
-                    _LOGGER.debug(
                         "Berechne current_value: security_uuid=%s, holdings=%f, latest_price=%f, current_value=%f",
                         security_uuid, holdings, latest_price, current_value
-                    )
-
-                    _LOGGER.debug(
-                        "Überprüfe Werte vor dem Schreiben: portfolio_uuid=%s, security_uuid=%s, holdings=%f, purchase_value=%f, current_value=%f",
-                        portfolio_uuid, security_uuid, holdings, purchase_value, current_value
                     )
 
                     cur.execute("""

@@ -99,7 +99,6 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
     conn = sqlite3.connect(str(db_path))
     try:
-        _LOGGER.debug("Lese alle Wertpapiere aus der Datenbank")
         # Join mit latest_prices für aktuelle Kursdaten
         cur = conn.execute("""
             SELECT s.uuid, s.name, s.currency_code, 
