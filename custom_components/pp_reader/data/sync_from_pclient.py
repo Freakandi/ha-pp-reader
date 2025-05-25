@@ -376,6 +376,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                             )
                             exchange_rate = 1.0
                             latest_price /= exchange_rate  # Standardmäßig keine Umrechnung
+                    else:
+                        exchange_rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
 
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
