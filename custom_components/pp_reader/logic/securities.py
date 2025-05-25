@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from ..data.db_access import Transaction
 from ..currencies.fx import ensure_exchange_rates_for_dates, load_latest_rates_sync
+from ..logic.portfolio import normalize_shares  # Importiere normalize_shares
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
             continue  # Überspringe Transaktionen ohne zugeordnetes Wertpapier oder Depot
 
         key = (tx.portfolio, tx.security)
-        shares = tx.shares if tx.shares else 0  # Direkt die Stückzahlen verwenden
+        shares = normalize_shares(tx.shares) if tx.shares else 0  # Wende normalize_shares an
 
         _LOGGER.debug(
             "Berechne current_holdings: portfolio_uuid=%s, security_uuid=%s, shares=%f",
@@ -78,7 +79,7 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
             continue
 
         key = (tx.portfolio, tx.security)
-        shares = tx.shares if tx.shares else 0  # Direkt die Stückzahlen verwenden
+        shares = normalize_shares(tx.shares) if tx.shares else 0  # Wende normalize_shares an
         amount = tx.amount / 100  # Cent -> EUR
         tx_date = datetime.fromisoformat(tx.date)
 
