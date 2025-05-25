@@ -360,6 +360,11 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                         security_uuid, holdings, latest_price, current_value
                     )
 
+                    _LOGGER.debug(
+                        "Überprüfe Werte vor dem Schreiben: portfolio_uuid=%s, security_uuid=%s, holdings=%f, purchase_value=%f, current_value=%f",
+                        portfolio_uuid, security_uuid, holdings, purchase_value, current_value
+                    )
+
                     cur.execute("""
                         INSERT OR REPLACE INTO portfolio_securities (
                             portfolio_uuid, security_uuid, current_holdings, purchase_value, current_value

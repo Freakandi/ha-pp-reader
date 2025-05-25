@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 from pathlib import Path
 from ..data.db_access import Transaction
-from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
+from ..currencies.fx import ensure_exchange_rates_for_dates, load_latest_rates_sync
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,8 +82,8 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
         amount = tx.amount / 100  # Cent -> EUR
         tx_date = datetime.fromisoformat(tx.date)
 
-        # Wechselkurs laden
-        fx_rates = load_latest_rates(tx_date, db_path)
+        # Wechselkurs laden (synchron)
+        fx_rates = load_latest_rates_sync(tx_date, db_path)
         rate = fx_rates.get(tx.currency_code) if tx.currency_code != "EUR" else 1.0
 
         if not rate:

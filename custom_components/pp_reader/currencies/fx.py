@@ -106,6 +106,16 @@ async def load_latest_rates(reference_date: datetime, db_path: Path) -> dict[str
     date_str = reference_date.strftime("%Y-%m-%d")
     return await _load_rates_for_date(db_path, date_str)
 
+def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
+    """Synchroner Wrapper für load_latest_rates."""
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        # Falls bereits ein Event-Loop läuft, führe die Funktion in einem Thread aus
+        return loop.run_until_complete(load_latest_rates(reference_date, db_path))
+    else:
+        # Falls kein Event-Loop läuft, starte einen neuen
+        return asyncio.run(load_latest_rates(reference_date, db_path))
+
 async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str], db_path: Path) -> None:
     """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
     if not currencies:
