@@ -104,9 +104,7 @@ async def get_exchange_rates(client, reference_date: datetime, db_path: Path) ->
 
 async def load_latest_rates(reference_date: datetime, db_path: Path) -> dict[str, float]:
     date_str = reference_date.strftime("%Y-%m-%d")
-    _LOGGER.debug("SQL-Abfrage für Wechselkurse: Datum=%s", date_str)
     rates = await _load_rates_for_date(db_path, date_str)
-    _LOGGER.debug("Ergebnisse der SQL-Abfrage: %s", rates)
     return rates
 
 def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
@@ -117,9 +115,7 @@ def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str,
         try:
             if isinstance(ref_date, str):
                 ref_date = datetime.strptime(ref_date, "%Y-%m-%d")
-            _LOGGER.debug("Lade Wechselkurse für Datum: %s", ref_date.strftime("%Y-%m-%d"))
             result = loop.run_until_complete(load_latest_rates(ref_date, db_path))
-            _LOGGER.debug("Geladene Wechselkurse: %s", result)
             return result
         finally:
             loop.close()

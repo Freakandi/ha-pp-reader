@@ -366,7 +366,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                         
                         # Prüfe, ob der Wechselkurs für die Währung verfügbar ist
                         if currency_code in fx_rates:
-                            exchange_rate = fx_rates[currency_code]
+                            exchange_rate = fx_rates.get(currency_code)
                             latest_price /= exchange_rate  # Wende den Wechselkurs an
                             _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, exchange_rate)
                         else:
@@ -380,8 +380,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
                     _LOGGER.debug(
-                        "Berechne current_value: security_uuid=%s, holdings=%f, latest_price=%f, current_value=%f",
-                        security_uuid, holdings, latest_price, current_value
+                        "Berechne current_value: security_uuid=%s, holdings=%f, latest_price=%f, current_value=%f, exchange_rate=%f",
+                        security_uuid, holdings, latest_price, current_value, exchange_rate
                     )
 
                     cur.execute("""
