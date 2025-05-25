@@ -87,6 +87,18 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
         fx_rates = load_latest_rates_sync(tx_date, db_path)
         rate = fx_rates.get(tx.currency_code) if tx.currency_code != "EUR" else 1.0
 
+        if tx.currency_code != "EUR":
+            if rate:
+                _LOGGER.debug(
+                    "Wechselkurs gefunden: Datum=%s, Währung=%s, Kurs=%f",
+                    tx_date.strftime("%Y-%m-%d"), tx.currency_code, rate
+                )
+            else:
+                _LOGGER.warning(
+                    "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
+                    tx_date.strftime("%Y-%m-%d"), tx.currency_code
+                )
+
         if not rate:
             continue  # Überspringe Transaktionen ohne gültigen Wechselkurs
 

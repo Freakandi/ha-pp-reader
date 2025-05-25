@@ -104,7 +104,10 @@ async def get_exchange_rates(client, reference_date: datetime, db_path: Path) ->
 
 async def load_latest_rates(reference_date: datetime, db_path: Path) -> dict[str, float]:
     date_str = reference_date.strftime("%Y-%m-%d")
-    return await _load_rates_for_date(db_path, date_str)
+    _LOGGER.debug("SQL-Abfrage für Wechselkurse: Datum=%s", date_str)
+    rates = await _load_rates_for_date(db_path, date_str)
+    _LOGGER.debug("Ergebnisse der SQL-Abfrage: %s", rates)
+    return rates
 
 def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
     """Synchroner Wrapper für load_latest_rates."""
@@ -112,10 +115,12 @@ def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str,
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            # Sicherstellen, dass ref_date ein datetime-Objekt ist
             if isinstance(ref_date, str):
                 ref_date = datetime.strptime(ref_date, "%Y-%m-%d")
-            return loop.run_until_complete(load_latest_rates(ref_date, db_path))
+            _LOGGER.debug("Lade Wechselkurse für Datum: %s", ref_date.strftime("%Y-%m-%d"))
+            result = loop.run_until_complete(load_latest_rates(ref_date, db_path))
+            _LOGGER.debug("Geladene Wechselkurse: %s", result)
+            return result
         finally:
             loop.close()
 
