@@ -98,18 +98,13 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 # Aktualisiere den internen Zeitstempel
                 self.last_file_update = last_update_truncated
                 _LOGGER.info("Daten erfolgreich aktualisiert.")
-            else:
-                _LOGGER.debug("Keine Dateiänderung erkannt, überspringe Datenaktualisierung.")
 
             # Lade Konten, Depots und Transaktionen (bestehende Funktionalität bleibt unverändert)
             accounts = await self.hass.async_add_executor_job(get_accounts, self.db_path)
-            _LOGGER.debug("🔄 Konten geladen: %d", len(accounts))
 
             portfolios = await self.hass.async_add_executor_job(get_portfolios, self.db_path)
-            _LOGGER.debug("🔄 Depots geladen: %d", len(portfolios))
 
             transactions = await self.hass.async_add_executor_job(get_transactions, self.db_path)
-            _LOGGER.debug("🔄 Transaktionen geladen: %d", len(transactions))
 
             # Berechne Kontostände
             account_balances = {

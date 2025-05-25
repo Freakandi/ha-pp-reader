@@ -1,8 +1,11 @@
+import logging
 from typing import Dict, List, Tuple
 from datetime import datetime
 from pathlib import Path
 from ..data.db_access import Transaction
 from ..currencies.fx import load_latest_rates, ensure_exchange_rates_for_dates
+
+_LOGGER = logging.getLogger(__name__)
 
 def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple[str, str], float]:
     """
@@ -23,6 +26,11 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
 
         key = (tx.portfolio, tx.security)
         shares = tx.shares if tx.shares else 0  # Direkt die Stückzahlen verwenden
+
+        _LOGGER.debug(
+            "Berechne current_holdings: portfolio_uuid=%s, security_uuid=%s, shares=%f",
+            tx.portfolio, tx.security, shares
+        )
 
         # Transaktionstypen auswerten
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
@@ -110,5 +118,10 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
             if qty > 0:
                 total_purchase += qty * price
         portfolio_securities_purchase_values[key] = round(total_purchase, 2)
+
+        _LOGGER.debug(
+            "Berechne purchase_value: portfolio_uuid=%s, security_uuid=%s, total_purchase=%f",
+            key[0], key[1], total_purchase
+        )
 
     return portfolio_securities_purchase_values

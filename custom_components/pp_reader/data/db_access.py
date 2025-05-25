@@ -99,6 +99,7 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
     conn = sqlite3.connect(str(db_path))
     try:
+        _LOGGER.debug("Lese alle Wertpapiere aus der Datenbank")
         # Join mit latest_prices für aktuelle Kursdaten
         cur = conn.execute("""
             SELECT s.uuid, s.name, s.currency_code, 
@@ -226,6 +227,7 @@ def get_portfolio_securities(db_path: Path, portfolio_uuid: str) -> List[Portfol
     """Lädt alle Wertpapiere eines Depots aus der Tabelle portfolio_securities."""
     conn = sqlite3.connect(str(db_path))
     try:
+        _LOGGER.debug("Lese portfolio_securities für portfolio_uuid=%s", portfolio_uuid)
         cur = conn.execute("""
             SELECT portfolio_uuid, security_uuid, current_holdings, 
                    purchase_value, avg_price, current_value

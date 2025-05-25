@@ -96,7 +96,6 @@ async def get_exchange_rates(client, reference_date: datetime, db_path: Path) ->
     needed = get_required_currencies(client)
 
     if not needed.issubset(set(rates.keys())):
-        _LOGGER.info("🔄 Lade fehlende Kurse für %s", date_str)
         fetched = await _fetch_exchange_rates(date_str, needed)
         await _save_rates(db_path, date_str, fetched)
         rates.update(fetched)
@@ -118,8 +117,6 @@ async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set
         missing = currencies - set(existing.keys())
         
         if missing:
-            _LOGGER.info("📥 Lade fehlende Kurse (%s) für %s", 
-                        ", ".join(missing), date_str)
             try:
                 fetched = await _fetch_exchange_rates(date_str, missing)
                 if fetched:

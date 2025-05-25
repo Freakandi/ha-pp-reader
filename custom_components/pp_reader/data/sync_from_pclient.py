@@ -83,7 +83,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             cur.execute("""
                 INSERT OR REPLACE INTO metadata (key, date) VALUES ('last_file_update', ?)
             """, (last_file_update,))
-            _LOGGER.debug("sync_from_pclient: 📅 Änderungsdatum der Portfolio-Datei gespeichert: %s", last_file_update)
 
             # Setze das Flag für Änderungen
             last_file_update_change_detected = True
@@ -136,15 +135,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         _LOGGER.debug("sync_from_pclient: Transaktionen in der DB bestätigt.")
 
         # --- ACCOUNTS ---
-        _LOGGER.debug("sync_from_pclient: Synchronisiere Konten...")
         account_ids = {acc.uuid for acc in client.accounts}
         delete_missing_entries(conn, "accounts", "uuid", account_ids)
 
         # Berechne Transaktionen nur einmal, wenn Änderungen erkannt wurden
         all_transactions = []
         if transaction_changes_detected:
-            _LOGGER.debug("sync_from_pclient: Transaktionen haben sich geändert, Kontostände werden neu berechnet.")
-            _LOGGER.debug("sync_from_pclient: Lade Transaktionen aus der DB nach dem Einfügen...")
             all_transactions = get_transactions(conn=conn)  # Lade alle Transaktionen erneut
 
         for acc in client.accounts:
@@ -353,6 +349,16 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     latest_price = latest_price_row[0] if latest_price_row else 0.0
 
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
+
+                    _LOGGER.debug(
+                        "Schreibe in portfolio_securities: portfolio_uuid=%s, security_uuid=%s, current_holdings=%f, purchase_value=%d, current_value=%d",
+                        portfolio_uuid, security_uuid, holdings, int(purchase_value * 100), int(current_value * 100)
+                    )
+
+                    _LOGGER.debug(
+                        "Berechne current_value: security_uuid=%s, holdings=%f, latest_price=%f, current_value=%f",
+                        security_uuid, holdings, latest_price, current_value
+                    )
 
                     cur.execute("""
                         INSERT OR REPLACE INTO portfolio_securities (
