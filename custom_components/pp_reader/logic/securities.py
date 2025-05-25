@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from ..data.db_access import Transaction
 from ..currencies.fx import ensure_exchange_rates_for_dates, load_latest_rates_sync
-from ..logic.portfolio import normalize_shares  # Importiere normalize_shares
+from ..logic.portfolio import normalize_shares
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -7,6 +7,7 @@ from datetime import datetime
 from ..logic.accounting import db_calc_account_balance
 from ..logic.securities import db_calculate_current_holdings, db_calculate_sec_purchase_value
 from ..data.db_access import get_transactions
+from ..logic.portfolio import normalize_price  # Importiere normalize_price
 
 from homeassistant.core import callback
 from functools import partial
@@ -346,7 +347,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                         SELECT value FROM latest_prices WHERE security_uuid = ?
                     """, (security_uuid,))
                     latest_price_row = cur.fetchone()
-                    latest_price = latest_price_row[0] if latest_price_row else 0.0
+                    latest_price = normalize_price(latest_price_row[0]) if latest_price_row else 0.0  # Normalisiere den Preis
 
                     current_value = holdings * latest_price  # Berechnung des aktuellen Werts
 
