@@ -392,6 +392,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, (portfolio_uuid, security_uuid))
                 existing_entry = cur.fetchone()
 
+                # Debug-Log für Vergleich
+                _LOGGER.debug(
+                    "Vergleiche existing_entry=%s mit (holdings=%f, purchase_value=%d, current_value=%d)",
+                    existing_entry, holdings, int(purchase_value * 100), int(current_value * 100)
+                )
+
                 # Vergleiche mit den berechneten Werten aus current_holdings, purchase_values und current_value
                 if not existing_entry or existing_entry != (holdings, purchase_value * 100, int(current_value * 100)):  # EUR -> Cent
                     sec_port_changes_detected = True
@@ -401,14 +407,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                             portfolio_uuid, security_uuid, current_holdings, purchase_value, current_value
                         ) VALUES (?, ?, ?, ?, ?)
                     """, (portfolio_uuid, security_uuid, holdings, int(purchase_value * 100), int(current_value * 100)))  # EUR -> Cent
+                    _LOGGER.debug("sync_from_pclient: portfolio_securities Daten eingefügt.")
 
             # Entferne veraltete Einträge aus portfolio_securities
-            cur.execute("""
+            placeholders = ', '.join(['?'] * len(portfolio_security_keys))
+            cur.execute(f"""
                 DELETE FROM portfolio_securities
-                WHERE (portfolio_uuid, security_uuid) NOT IN (
-                    SELECT portfolio_uuid, security_uuid FROM portfolio_securities
-                )
-            """)
+                WHERE (portfolio_uuid, security_uuid) NOT IN ({placeholders})
+            """, list(portfolio_security_keys))
             if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
                 sec_port_changes_detected = True
 
