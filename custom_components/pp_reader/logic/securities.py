@@ -2,9 +2,10 @@ import logging
 from typing import Dict, List, Tuple
 from datetime import datetime
 from pathlib import Path
+import sqlite3
 from ..data.db_access import Transaction
-from ..currencies.fx import ensure_exchange_rates_for_dates, load_latest_rates_sync
-from ..logic.portfolio import normalize_shares
+from ..currencies.fx import ensure_exchange_rates_for_dates, load_latest_rates_sync, ensure_exchange_rates_for_dates_sync
+from ..logic.portfolio import normalize_shares, normalize_price
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,3 +139,82 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
         )
 
     return portfolio_securities_purchase_values
+
+def db_calculate_holdings_value(
+    db_path: Path,
+    conn: sqlite3.Connection,
+    current_hold_pur: Dict[Tuple[str, str], Dict[str, float]]
+) -> Dict[Tuple[str, str], Dict[str, float]]:
+    """
+    Berechnet den aktuellen Wert (current_value) für jede Position in current_holdings.
+
+    Args:
+        db_path (Path): Pfad zur SQLite-Datenbank.
+        conn (sqlite3.Connection): Bestehende Verbindung zur SQLite-Datenbank.
+        current_holdings (Dict[Tuple[str, str], Dict[str, float]]): Dictionary mit Beständen und Kaufwerten.
+
+    Returns:
+        Dict[Tuple[str, str], Dict[str, float]]: Das ursprüngliche Dictionary, ergänzt um den aktuellen Wert (current_value).
+    """
+    _LOGGER.debug("db_calculate_holdings_value: Berechnung des aktuellen Werts gestartet.")
+
+    # Sammle alle benötigten Währungen
+    needed_currencies = set()
+    cur = conn.cursor()
+
+    for (portfolio_uuid, security_uuid), data in current_hold_pur.items():
+        cur.execute("""
+            SELECT currency_code FROM securities WHERE uuid = ?
+        """, (security_uuid,))
+        currency_row = cur.fetchone()
+        currency_code = currency_row[0] if currency_row else "EUR"
+
+        if (currency_code != "EUR"):
+            needed_currencies.add(currency_code)
+
+    # Stelle sicher, dass die Wechselkurse verfügbar sind
+    today = datetime.now()
+    ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path)
+
+    # Lade die Wechselkurse
+    fx_rates = load_latest_rates_sync(today, db_path)
+
+    # Lade die aktuellen Preise der Wertpapiere
+    cur.execute("SELECT security_uuid, value FROM latest_prices")
+    latest_prices = {row[0]: row[1] for row in cur.fetchall()}
+
+    # Lade die Währungen der Wertpapiere
+    cur.execute("SELECT uuid, currency_code FROM securities")
+    securities = {row[0]: row[1] for row in cur.fetchall()}
+
+    # Berechne den aktuellen Wert für jede Position
+    for (portfolio_uuid, security_uuid), data in current_hold_pur.items():
+        holdings = data.get("current_holdings", 0)
+
+        # Hole den aktuellen Preis
+        latest_price = normalize_price(latest_prices.get(security_uuid, 0.0))
+
+        # Hole die Währung
+        currency_code = securities.get(security_uuid, "EUR")
+
+        if currency_code != "EUR":
+            rate = fx_rates.get(currency_code)
+            if rate:
+                latest_price /= rate  # Wende den Wechselkurs an
+                _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, rate)
+            else:
+                _LOGGER.warning("⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.", currency_code)
+                continue  # Überspringe die Berechnung für diese Währung
+        else:
+            rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
+
+        # Berechne den aktuellen Wert
+        current_value = holdings * latest_price
+        current_hold_pur[(portfolio_uuid, security_uuid)]["current_value"] = round(current_value, 2)
+
+        _LOGGER.debug(
+            "Berechneter Wert: portfolio_uuid=%s, security_uuid=%s, current_value=%f",
+            portfolio_uuid, security_uuid, current_value
+        )
+
+    return current_hold_pur

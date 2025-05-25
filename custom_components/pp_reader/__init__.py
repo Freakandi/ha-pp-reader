@@ -42,7 +42,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         websocket_api.async_register_command(hass, ws_get_accounts)
         websocket_api.async_register_command(hass, ws_get_last_file_update)
         websocket_api.async_register_command(hass, ws_get_portfolio_data)
-        _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")
+        # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")
     except Exception as e:
         _LOGGER.error("❌ Fehler bei der Registrierung der Websocket-Befehle: %s", str(e))
 
@@ -81,7 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         try:
             await coordinator.async_config_entry_first_refresh()
-            _LOGGER.debug("Initialisiere Coordinator mit entry_id: %s", entry.entry_id)
+            # _LOGGER.debug("Initialisiere Coordinator mit entry_id: %s", entry.entry_id)
         except Exception as e:
             _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
             raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")
@@ -110,7 +110,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             def __init__(self, token):
                 """Initialisiere API mit Token."""
                 self._token = token  # Token privat speichern
-                _LOGGER.debug("API initialisiert mit Token")
+                # _LOGGER.debug("API initialisiert mit Token")
 
             async def get(self, request):
                 """Handle GET requests."""
@@ -123,13 +123,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
                 try:
                     async with aiohttp.ClientSession() as session:
-                        _LOGGER.debug("Starte API Abruf mit Token: %s", self._token[:5] + "...")
+                        # _LOGGER.debug("Starte API Abruf mit Token: %s", self._token[:5] + "...")
                         
                         api_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/api/states"
                         headers = {"Authorization": f"Bearer {self._token}"}
                         
                         async with session.get(api_url, headers=headers) as resp:
-                            _LOGGER.debug("API Antwort Status: %s", resp.status)
+                            # _LOGGER.debug("API Antwort Status: %s", resp.status)
                             
                             if (resp.status != 200):
                                 _LOGGER.error(

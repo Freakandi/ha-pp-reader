@@ -315,7 +315,7 @@ class PPReaderDashboard extends HTMLElement {
       handleAccountUpdate(pushedData, this._root);
     } else if (dataType === "last_file_update") {
       handleLastFileUpdate(pushedData, this._root);
-    } else if (dataType === "portfolio_securities") {
+    } else if (dataType === "portfolio_values") {
       handlePortfolioUpdate(pushedData, this._root);
     } else {
       console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
@@ -344,7 +344,7 @@ class PPReaderDashboard extends HTMLElement {
       this._route === this._lastRoute &&
       this._lastPage === page
     ) {
-      console.log("pp-reader-dashboard: keine Änderungen → skip render");
+      // console.log("pp-reader-dashboard: keine Änderungen → skip render");
       return;
     }
 

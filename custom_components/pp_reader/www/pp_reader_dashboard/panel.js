@@ -66,7 +66,7 @@ class PPReaderPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     this._updateDashboard();
-    console.log("PPReaderPanel: hass gesetzt:", this._hass); // Debugging
+    // console.log("PPReaderPanel: hass gesetzt:", this._hass); // Debugging
   }
   set narrow(narrow) {
     this._narrow = narrow;

@@ -59,7 +59,7 @@ def _push_update(hass, entry_id, data_type, data):
     )
 
 def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None, db_path=None) -> None:
-    """Synchronisiert Daten aus Portfolio Performance mit der lokalen SQLite DB."""
+    """Synchronisiere Daten aus Portfolio Performance mit der lokalen SQLite DB."""
     cur = conn.cursor()
     stats = {
         "securities": 0,
@@ -323,93 +323,63 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             current_holdings = db_calculate_current_holdings(all_transactions)
             purchase_values = db_calculate_sec_purchase_value(all_transactions, db_path)
 
-            # Sammle alle benötigten Währungen und das Datum
-            today = datetime.now()  # Erstelle ein datetime-Objekt für das aktuelle Datum
-            needed_currencies = set()
+            current_hold_pur = {}  # Dictionary für aktuelle Bestände und Kaufwerte
 
-            for (portfolio_uuid, security_uuid), holdings in current_holdings.items():
-                cur.execute("""
-                    SELECT currency_code FROM securities WHERE uuid = ?
-                """, (security_uuid,))
-                currency_row = cur.fetchone()
-                currency_code = currency_row[0] if currency_row else "EUR"
+            # Füge purchase_value zu current_holdings hinzu
+            for key, purchase_value in purchase_values.items():
+                if key in current_holdings:
+                    current_hold_pur[key] = {
+                        "current_holdings": current_holdings[key],
+                        "purchase_value": purchase_value
+                    }
 
-                if currency_code != "EUR":
-                    needed_currencies.add(currency_code)
+            # Berechne den aktuellen Wert (current_value)
+            current_holdings_values = db_calculate_holdings_value(db_path, conn, current_hold_pur)
 
-            # Stelle sicher, dass die Wechselkurse verfügbar sind
-            ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path)
-
-            # Lade die Wechselkurse einmalig
-            fx_rates = load_latest_rates_sync(today, db_path)
-
-            cur.execute("SELECT security_uuid, value FROM latest_prices")
-            latest_prices = {
-                row[0]: row[1] for row in cur.fetchall()
-            }
-
-            cur.execute("SELECT uuid, currency_code FROM securities")
-            securities = {
-                row[0]: row[1] for row in cur.fetchall()
-            }
-
-            # Initialisiere das Set für portfolio_security_keys
-            portfolio_security_keys = set()
-
-            # Iteriere über die Wertpapiere und berechne die Werte
-            for (portfolio_uuid, security_uuid), holdings in current_holdings.items():
-                purchase_value = purchase_values.get((portfolio_uuid, security_uuid), 0)
-
-                # Rundung und Konsistenz sicherstellen
-                holdings = round(holdings, 4)  # Maximal 4 Nachkommastellen für Bestände
-                purchase_value = round(purchase_value, 2)  # Maximal 2 Nachkommastellen für Kaufpreise
-
-                portfolio_security_keys.add((portfolio_uuid, security_uuid))
-
-                # Hole den aktuellen Preis aus dem vorbereiteten Dictionary
-                latest_price = normalize_price(latest_prices.get(security_uuid, 0.0))
-
-                # Hole die Währung aus dem vorbereiteten Dictionary
-                currency_code = securities.get(security_uuid, "EUR")
-
-                if currency_code != "EUR":
-                    rate = fx_rates.get(currency_code)
-                    if rate:
-                        latest_price /= rate  # Wende den Wechselkurs an
-                        _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, rate)
-                    else:
-                        _LOGGER.warning("⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.", currency_code)
-                        continue  # Überspringe die Berechnung für diese Währung
-                else:
-                    rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
-
-                current_value = holdings * latest_price  # Berechnung des aktuellen Werts
+            # Iteriere über die berechneten Werte und vergleiche mit der DB
+            for (portfolio_uuid, security_uuid), data in current_holdings_values.items():
+                current_holdings = data.get("current_holdings", 0)
+                purchase_value = data.get("purchase_value", 0)
+                current_value = data.get("current_value", 0)
 
                 # Lade den aktuellen Eintrag aus der Tabelle portfolio_securities
                 cur.execute("""
-                    SELECT current_holdings, purchase_value, current_value FROM portfolio_securities
+                    SELECT current_holdings, purchase_value, current_value 
+                    FROM portfolio_securities
                     WHERE portfolio_uuid = ? AND security_uuid = ?
                 """, (portfolio_uuid, security_uuid))
                 existing_entry = cur.fetchone()
 
                 # Debug-Log für Vergleich
                 _LOGGER.debug(
-                    "Vergleiche existing_entry=%s mit (holdings=%f, purchase_value=%d, current_value=%d)",
-                    existing_entry, holdings, int(purchase_value * 100), int(current_value * 100)
+                    "Vergleiche existing_entry=%s mit (current_holdings=%f, purchase_value=%d, current_value=%d)",
+                    existing_entry, current_holdings, int(purchase_value * 100), int(current_value * 100)
                 )
 
-                # Vergleiche mit den berechneten Werten aus current_holdings, purchase_values und current_value
-                if not existing_entry or existing_entry != (holdings, purchase_value * 100, int(current_value * 100)):  # EUR -> Cent
+                # Vergleiche mit den berechneten Werten
+                if not existing_entry or existing_entry != (
+                    current_holdings, 
+                    int(purchase_value * 100),  # EUR -> Cent
+                    int(current_value * 100)   # EUR -> Cent
+                ):
                     sec_port_changes_detected = True
 
+                    # Aktualisiere oder füge den Eintrag in die Tabelle ein
                     cur.execute("""
                         INSERT OR REPLACE INTO portfolio_securities (
                             portfolio_uuid, security_uuid, current_holdings, purchase_value, current_value
                         ) VALUES (?, ?, ?, ?, ?)
-                    """, (portfolio_uuid, security_uuid, holdings, int(purchase_value * 100), int(current_value * 100)))  # EUR -> Cent
-                    _LOGGER.debug("sync_from_pclient: portfolio_securities Daten eingefügt.")
+                    """, (
+                        portfolio_uuid, 
+                        security_uuid, 
+                        current_holdings, 
+                        int(purchase_value * 100),  # EUR -> Cent
+                        int(current_value * 100)   # EUR -> Cent
+                    ))
+                    _LOGGER.debug("sync_from_pclient: portfolio_securities Daten eingefügt oder aktualisiert.")
 
             # Entferne veraltete Einträge aus portfolio_securities
+            portfolio_security_keys = set(current_holdings_values.keys())
             placeholders = ', '.join(['?'] * len(portfolio_security_keys))
             cur.execute(f"""
                 DELETE FROM portfolio_securities
@@ -417,6 +387,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             """, list(portfolio_security_keys))
             if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
                 sec_port_changes_detected = True
+                _LOGGER.debug("sync_from_pclient: Veraltete Einträge aus portfolio_securities entfernt.")
 
             conn.commit()
             _LOGGER.debug("sync_from_pclient: portfolio_securities erfolgreich synchronisiert.")
@@ -462,9 +433,48 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", formatted_last_file_update)
 
         if sec_port_changes_detected:
-            # Sende ein Event für Änderungen an portfolio_securities
-            _push_update(hass, entry_id, "portfolio_securities", {"updated": True})
-            _LOGGER.debug("sync_from_pclient: 📡 portfolio_securities-Update-Event gesendet.")
+            # Bereite die Daten für das Update vor
+            portfolio_data = {}
+
+            # Iteriere über die berechneten Werte in current_holdings_values
+            for (portfolio_uuid, security_uuid), data in current_holdings_values.items():
+                current_value = data.get("current_value", 0)
+                purchase_value = data.get("purchase_value", 0)
+
+                # Initialisiere das Portfolio, falls es noch nicht im Dictionary ist
+                if portfolio_uuid not in portfolio_data:
+                    portfolio_data[portfolio_uuid] = {
+                        "name": None,  # Der Name des Portfolios wird später gesetzt
+                        "position_count": 0,
+                        "current_value": 0.0,
+                        "purchase_sum": 0.0,
+                    }
+
+                # Aktualisiere die Werte für das Portfolio
+                portfolio_data[portfolio_uuid]["position_count"] += 1
+                portfolio_data[portfolio_uuid]["current_value"] += current_value
+                portfolio_data[portfolio_uuid]["purchase_sum"] += purchase_value
+
+            # Setze die Namen der Portfolios
+            cur.execute("SELECT uuid, name FROM portfolios")
+            portfolio_names = {row[0]: row[1] for row in cur.fetchall()}
+            for portfolio_uuid in portfolio_data:
+                portfolio_data[portfolio_uuid]["name"] = portfolio_names.get(portfolio_uuid, "Unbekannt")
+
+            # Konvertiere die Werte in das gewünschte Format
+            portfolio_values = [
+                {
+                    "name": data["name"],
+                    "position_count": data["position_count"],
+                    "current_value": round(data["current_value"], 2),
+                    "purchase_sum": round(data["purchase_sum"], 2),
+                }
+                for data in portfolio_data.values()
+            ]
+
+            # Sende das Event für portfolio_values
+            _push_update(hass, entry_id, "portfolio_values", portfolio_values)
+            _LOGGER.debug("sync_from_pclient: 📡 portfolio_values-Update-Event gesendet: %s", portfolio_values)
     else:
         # Logge die fehlenden Voraussetzungen
         _LOGGER.error(

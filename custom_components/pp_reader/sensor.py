@@ -75,7 +75,7 @@ async def async_setup_entry(
 
         # ⏱️ Setup-Dauer messen und loggen
         elapsed = (datetime.now() - start_time).total_seconds()
-        _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
+        # _LOGGER.info("✅ pp_reader Setup abgeschlossen in %.2f Sekunden", elapsed)
         
         return True
 

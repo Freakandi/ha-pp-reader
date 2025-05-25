@@ -60,9 +60,9 @@ export function makeTable(rows, cols, sumColumns = []) {
     }
   });
 
-  if ('gain_abs' in sums && 'value' in sums) {
+  if ('gain_abs' in sums && 'current_value' in sums) {
     // Gesamtprozent berechnen: (Summe Gewinn absolut / Summe Wert) * 100
-    sums['gain_pct'] = (sums['gain_abs'] / sums['value']) * 100;
+    sums['gain_pct'] = (sums['gain_abs'] / sums['current_value']) * 100;
   }
 
   html += '<tr class="footer-row">';

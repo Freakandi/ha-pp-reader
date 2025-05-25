@@ -27,7 +27,7 @@ export async function fetchDashboardDataWS(hass, panelConfig) {
 
 // Websocket-API and subscription for accounts
 export async function fetchAccountsWS(hass, panelConfig) {
-  console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
+  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
   const entry_id = panelConfig
     ?.config
     ?._panel_custom
@@ -39,7 +39,7 @@ export async function fetchAccountsWS(hass, panelConfig) {
       `fetchAccountsWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
     );
   }
-  console.debug("fetchAccountsWS: sende WS-Nachricht für Entry", entry_id);
+  // console.debug("fetchAccountsWS: sende WS-Nachricht für Entry", entry_id);
 
   // Sende die WebSocket-Nachricht, um die Kontodaten zu laden
   const accounts = await hass.connection.sendMessagePromise({
@@ -66,7 +66,7 @@ export async function fetchLastFileUpdateWS(hass, panelConfig) {
       `fetchLastFileUpdateWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
     );
   }
-  console.debug("fetchLastFileUpdateWS: sende WS-Nachricht für Entry", entry_id);
+  //console.debug("fetchLastFileUpdateWS: sende WS-Nachricht für Entry", entry_id);
 
   // Sende die WebSocket-Nachricht, um das letzte Änderungsdatum zu laden
   const response = await hass.connection.sendMessagePromise({
