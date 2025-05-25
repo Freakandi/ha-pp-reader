@@ -108,18 +108,18 @@ async def load_latest_rates(reference_date: datetime, db_path: Path) -> dict[str
 
 def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
     """Synchroner Wrapper für load_latest_rates."""
-    def run_async_task():
+    def run_async_task(ref_date: datetime):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            # Sicherstellen, dass reference_date ein datetime-Objekt ist
-            if isinstance(reference_date, str):
-                reference_date = datetime.strptime(reference_date, "%Y-%m-%d")
-            return loop.run_until_complete(load_latest_rates(reference_date, db_path))
+            # Sicherstellen, dass ref_date ein datetime-Objekt ist
+            if isinstance(ref_date, str):
+                ref_date = datetime.strptime(ref_date, "%Y-%m-%d")
+            return loop.run_until_complete(load_latest_rates(ref_date, db_path))
         finally:
             loop.close()
 
-    return run_async_task()
+    return run_async_task(reference_date)
 
 async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str], db_path: Path) -> None:
     """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
