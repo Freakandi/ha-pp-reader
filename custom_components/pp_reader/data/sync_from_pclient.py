@@ -353,6 +353,9 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 row[0]: row[1] for row in cur.fetchall()
             }
 
+            # Initialisiere das Set für portfolio_security_keys
+            portfolio_security_keys = set()
+
             # Iteriere über die Wertpapiere und berechne die Werte
             for (portfolio_uuid, security_uuid), holdings in current_holdings.items():
                 purchase_value = purchase_values.get((portfolio_uuid, security_uuid), 0)
