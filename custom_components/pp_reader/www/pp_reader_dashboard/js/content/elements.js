@@ -8,9 +8,9 @@ export function formatValue(key, value) {
     }) + `&nbsp;${symbol}`;
     const cls = value >= 0 ? 'positive' : 'negative';
     return `<span class="${cls}">${formatted}</span>`;
-  } else if (key === 'count') {
+  } else if (key === 'position_count') {
     formatted = value.toLocaleString('de-DE');
-  } else if (['balance', 'value'].includes(key)) {
+  } else if (['balance', 'current_value'].includes(key)) {
     formatted = value.toLocaleString('de-DE', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
