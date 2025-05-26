@@ -4,7 +4,7 @@ import voluptuous as vol
 from pathlib import Path
 from homeassistant import config_entries
 from homeassistant.core import callback
-from .const import DOMAIN, CONF_FILE_PATH, CONF_API_TOKEN, CONF_DB_PATH
+from .const import DOMAIN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.reader import parse_data_portfolio
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,7 +19,6 @@ class PortfolioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             file_path = user_input[CONF_FILE_PATH]
-            token = user_input[CONF_API_TOKEN]
             db_use_default = user_input.get("db_use_default", True)
 
             if not os.path.isfile(file_path):
@@ -33,7 +32,6 @@ class PortfolioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     else:
                         self.context.update({
                             CONF_FILE_PATH: file_path,
-                            CONF_API_TOKEN: token,
                             "db_use_default": db_use_default,
                         })
 
@@ -45,7 +43,6 @@ class PortfolioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 title=os.path.basename(file_path),
                                 data={
                                     CONF_FILE_PATH: file_path,
-                                    CONF_API_TOKEN: token,
                                     CONF_DB_PATH: str(db_path)
                                 }
                             )
@@ -57,7 +54,6 @@ class PortfolioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         data_schema = vol.Schema({
             vol.Required(CONF_FILE_PATH): str,
-            vol.Required(CONF_API_TOKEN): str,
             vol.Required("db_use_default", default=True): bool,
         })
 
@@ -84,7 +80,6 @@ class PortfolioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title=os.path.basename(self.context[CONF_FILE_PATH]),
                     data={
                         CONF_FILE_PATH: self.context[CONF_FILE_PATH],
-                        CONF_API_TOKEN: self.context[CONF_API_TOKEN],
                         CONF_DB_PATH: str(db_path)
                     }
                 )

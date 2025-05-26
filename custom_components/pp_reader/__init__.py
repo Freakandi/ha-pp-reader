@@ -54,7 +54,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # DB-Pfad aus Config holen und DB initialisieren
         file_path = entry.data[CONF_FILE_PATH]
         db_path = Path(entry.data[CONF_DB_PATH])
-        token = entry.data.get(CONF_API_TOKEN)
 
         # Datenbank initialisieren
         try:
@@ -99,76 +98,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.error("❌ Fehler beim Sensor-Setup: %s", str(e))
             raise ConfigEntryNotReady("Sensor-Setup fehlgeschlagen")
-
-        # API-Proxy Implementierung
-        class PPReaderAPI(HomeAssistantView):
-            """API View für den PP Reader."""
-            url = "/pp_reader_api/states"
-            name = "pp_reader_api"
-            requires_auth = False
-
-            def __init__(self, token):
-                """Initialisiere API mit Token."""
-                self._token = token  # Token privat speichern
-                # _LOGGER.debug("API initialisiert mit Token")
-
-            async def get(self, request):
-                """Handle GET requests."""
-                if not self._token:
-                    _LOGGER.error("Kein API-Token konfiguriert")
-                    return web.Response(
-                        status=500,
-                        text="API Token nicht konfiguriert"
-                    )
-
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        # _LOGGER.debug("Starte API Abruf mit Token: %s", self._token[:5] + "...")
-                        
-                        api_url = f"{request.url.scheme}://{request.url.host}:{request.url.port}/api/states"
-                        headers = {"Authorization": f"Bearer {self._token}"}
-                        
-                        async with session.get(api_url, headers=headers) as resp:
-                            # _LOGGER.debug("API Antwort Status: %s", resp.status)
-                            
-                            if (resp.status != 200):
-                                _LOGGER.error(
-                                    "API Fehler: Status %s, Body: %s",
-                                    resp.status,
-                                    await resp.text()
-                                )
-                                return web.Response(
-                                    status=resp.status,
-                                    text=f"API Error: {resp.status}"
-                                )
-                                
-                            data = await resp.text()
-                            return web.Response(
-                                status=200,
-                                body=data,
-                                content_type="application/json"
-                            )
-
-                except Exception as e:
-                    _LOGGER.exception("Kritischer API Fehler: %s", str(e))
-                    return web.Response(
-                        status=500,
-                        text=f"Internal Server Error: {str(e)}"
-                    )
-
-        # API registrieren
-        try:
-            api_token = entry.data.get(CONF_API_TOKEN)
-            if not api_token:
-                _LOGGER.error("API Token fehlt in der Konfiguration")
-                raise ConfigEntryNotReady("API Token nicht konfiguriert")
-                
-            _LOGGER.info("Registriere API mit Token")
-            hass.http.register_view(PPReaderAPI(api_token))
-            
-        except Exception as e:
-            _LOGGER.exception("Fehler bei API-Registrierung: %s", str(e))
-            raise ConfigEntryNotReady("API-Setup fehlgeschlagen")
 
         # Backup-System starten
         try:
