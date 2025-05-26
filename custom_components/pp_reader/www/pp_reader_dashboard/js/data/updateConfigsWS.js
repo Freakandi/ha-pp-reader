@@ -13,9 +13,15 @@ export function handleAccountUpdate(update, root) {
 
   // Lade die aktuellen Depotdaten aus der Tabelle
   const portfolioTable = root.querySelector('.portfolio-table');
-  const portfolios = portfolioTable ? Array.from(portfolioTable.rows).map(row => ({
-    current_value: parseFloat(row.cells[2]?.textContent.replace(/[^\d.-]/g, '')) || 0
-  })) : [];
+  const portfolios = portfolioTable
+    ? Array.from(portfolioTable.querySelectorAll('tbody tr:not(.footer-row)')).map(row => ({
+        current_value: parseFloat(
+          row.cells[2]?.textContent.replace(/[^\d.-]/g, '')
+        ) || 0
+      }))
+    : [];
+
+  console.log("handleAccountUpdate: Portfolios aus Tabelle geladen:", portfolios);
 
   // Aktualisiere das Gesamtvermögen
   updateTotalWealth(updatedAccounts, portfolios, root);
@@ -80,10 +86,16 @@ export function handlePortfolioUpdate(update, root) {
   updatePortfolioTable(updatedPortfolios, root);
 
   // Lade die aktuellen Kontodaten aus der Tabelle
-  const accountTable = root.querySelector('.account-table');
-  const accounts = accountTable ? Array.from(accountTable.rows).map(row => ({
-    balance: parseFloat(row.cells[1]?.textContent.replace(/[^\d.-]/g, '')) || 0
-  })) : [];
+  const accountTable = root.querySelector('.account-table table');
+  const accounts = accountTable
+    ? Array.from(accountTable.querySelectorAll('tbody tr:not(.footer-row)')).map(row => ({
+        balance: parseFloat(
+          row.cells[1]?.textContent.replace(/[^\d.-]/g, '')
+        ) || 0
+      }))
+    : [];
+
+  console.log("handlePortfolioUpdate: Accounts aus Tabelle geladen:", accounts);
 
   // Aktualisiere das Gesamtvermögen
   updateTotalWealth(accounts, updatedPortfolios, root);
