@@ -402,15 +402,15 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     _LOGGER.debug("sync_from_pclient: portfolio_securities Daten eingefügt oder aktualisiert.")
 
             # Entferne veraltete Einträge aus portfolio_securities
-            portfolio_security_keys = list(portfolio_security_keys)  # Konvertiere die Menge in eine Liste
-            if portfolio_security_keys:
-                cur.executemany("""
-                    DELETE FROM portfolio_securities
-                    WHERE portfolio_uuid = ? AND security_uuid = ?
-                """, portfolio_security_keys)
-                if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
-                    sec_port_changes_detected = True
-                    _LOGGER.debug("sync_from_pclient: Veraltete Einträge aus portfolio_securities entfernt.")
+            portfolio_security_keys = set(current_holdings_values.keys())
+            placeholders = ', '.join(['?'] * len(portfolio_security_keys))
+            cur.execute(f"""
+                DELETE FROM portfolio_securities
+                WHERE (portfolio_uuid, security_uuid) NOT IN ({placeholders})
+            """, list(portfolio_security_keys))
+            if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
+                sec_port_changes_detected = True
+                _LOGGER.debug("sync_from_pclient: Veraltete Einträge aus portfolio_securities entfernt.")
 
             conn.commit()
             _LOGGER.debug("sync_from_pclient: portfolio_securities erfolgreich synchronisiert.")
