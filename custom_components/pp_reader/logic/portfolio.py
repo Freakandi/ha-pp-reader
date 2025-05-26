@@ -74,10 +74,10 @@ async def calculate_portfolio_value(
     total_value = 0.0
     for sid, qty in active_securities.items():
         sec = securities_by_id.get(sid)
-        if not sec or not sec.latest_price:
+        if not sec or not sec.last_price:
             continue
             
-        kurs = normalize_price(sec.latest_price)
+        kurs = normalize_price(sec.last_price)
         if sec.currency_code != "EUR":
             rate = fx_rates.get(sec.currency_code)
             if rate:
