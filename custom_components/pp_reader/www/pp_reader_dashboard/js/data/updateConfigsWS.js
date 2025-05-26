@@ -16,7 +16,7 @@ export function handleAccountUpdate(update, root) {
   const portfolios = portfolioTable
     ? Array.from(portfolioTable.querySelectorAll('tbody tr:not(.footer-row)')).map(row => ({
         current_value: parseFloat(
-          row.cells[2]?.textContent.replace(/[^\d.-]/g, '')
+          row.cells[1]?.textContent.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
         ) || 0
       }))
     : [];
@@ -90,7 +90,7 @@ export function handlePortfolioUpdate(update, root) {
   const accounts = accountTable
     ? Array.from(accountTable.querySelectorAll('tbody tr:not(.footer-row)')).map(row => ({
         balance: parseFloat(
-          row.cells[1]?.textContent.replace(/[^\d.-]/g, '')
+          row.cells[1]?.textContent.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
         ) || 0
       }))
     : [];
