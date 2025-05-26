@@ -429,12 +429,6 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         last_file_update_change_detected = False
         sec_port_changes_detected = False
         raise
-    finally:
-        cur.close()
-        _LOGGER.info(
-            "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, %d Transaktionen (%d mit Fremdwährung)",
-            stats["securities"], stats["transactions"], stats["fx_transactions"]
-        )
 
     # Sende Updates für geänderte Tabellen
     if hass and entry_id:
@@ -513,3 +507,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             entry_id,
             updated_data
         )
+
+    # Schließe den Cursor und logge den Abschluss der Synchronisation
+    cur.close()
+    _LOGGER.info(
+        "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, %d Transaktionen (%d mit Fremdwährung)",
+        stats["securities"], stats["transactions"], stats["fx_transactions"]
+    )
