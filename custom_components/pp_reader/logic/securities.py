@@ -179,8 +179,8 @@ def db_calculate_holdings_value(
     # Lade die Wechselkurse
     fx_rates = load_latest_rates_sync(today, db_path)
 
-    # Lade die aktuellen Preise der Wertpapiere
-    cur.execute("SELECT security_uuid, value FROM latest_prices")
+    # Lade die aktuellen Preise der Wertpapiere aus der Tabelle "securities"
+    cur.execute("SELECT uuid, last_price FROM securities")
     latest_prices = {row[0]: row[1] for row in cur.fetchall()}
 
     # Lade die Währungen der Wertpapiere

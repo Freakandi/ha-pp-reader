@@ -33,14 +33,20 @@ SECURITIES_SCHEMA = [
         wkn TEXT,
         ticker_symbol TEXT,
         retired INTEGER DEFAULT 0,
-        updated_at TEXT
+        updated_at TEXT,
+        last_price INTEGER,           -- Letzter Preis in 10^-8 Einheiten
+        last_price_date INTEGER       -- Datum des letzten Preises (Unix-Timestamp)
     );
     """,
     """
-    CREATE TABLE IF NOT EXISTS latest_prices (
-        security_uuid TEXT PRIMARY KEY,
-        value INTEGER NOT NULL,  -- Preis in 10^-8 Einheiten
-        date INTEGER NOT NULL,   -- Unix Timestamp wie im Protobuf
+    CREATE TABLE IF NOT EXISTS historical_prices (
+        security_uuid TEXT NOT NULL,  -- UUID des Wertpapiers
+        date INTEGER NOT NULL,        -- Unix-Timestamp (epoch day)
+        close INTEGER NOT NULL,       -- Schlusskurs in 10^-8 Einheiten
+        high INTEGER,                 -- Höchstkurs in 10^-8 Einheiten
+        low INTEGER,                  -- Tiefstkurs in 10^-8 Einheiten
+        volume INTEGER,               -- Handelsvolumen
+        PRIMARY KEY (security_uuid, date),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
     """

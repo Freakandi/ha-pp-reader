@@ -49,7 +49,7 @@ export async function renderDashboard(root, hass, panelConfig) {
     
     <div class="card">
       <h2>Investment</h2>
-      <div class="scroll-container">
+      <div class="scroll-container portfolio-table">
         ${makeTable(depotsWithGains, [
           { key: 'name', label: 'Name' },
           { key: 'position_count', label: 'Anzahl Positionen', align: 'right' },

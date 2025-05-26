@@ -10,6 +10,15 @@ export function handleAccountUpdate(update, root) {
 
   const updatedAccounts = update || [];
   updateAccountTable(updatedAccounts, root);
+
+  // Lade die aktuellen Depotdaten aus der Tabelle
+  const portfolioTable = root.querySelector('.portfolio-table');
+  const portfolios = portfolioTable ? Array.from(portfolioTable.rows).map(row => ({
+    current_value: parseFloat(row.cells[2]?.textContent.replace(/[^\d.-]/g, '')) || 0
+  })) : [];
+
+  // Aktualisiere das Gesamtvermögen
+  updateTotalWealth(updatedAccounts, portfolios, root);
 }
 
 /**
@@ -69,6 +78,15 @@ export function handlePortfolioUpdate(update, root) {
 
   const updatedPortfolios = update || [];
   updatePortfolioTable(updatedPortfolios, root);
+
+  // Lade die aktuellen Kontodaten aus der Tabelle
+  const accountTable = root.querySelector('.account-table');
+  const accounts = accountTable ? Array.from(accountTable.rows).map(row => ({
+    balance: parseFloat(row.cells[1]?.textContent.replace(/[^\d.-]/g, '')) || 0
+  })) : [];
+
+  // Aktualisiere das Gesamtvermögen
+  updateTotalWealth(accounts, updatedPortfolios, root);
 }
 
 /**
@@ -77,7 +95,7 @@ export function handlePortfolioUpdate(update, root) {
  * @param {HTMLElement} root - Das Root-Element des Dashboards.
  */
 function updatePortfolioTable(portfolios, root) {
-  const portfolioTable = root.querySelector('.scroll-container table');
+  const portfolioTable = root.querySelector('.portfolio-table');
   if (!portfolioTable) {
     console.warn("updateConfigsWS: Depot-Tabelle nicht gefunden, überspringe Update.");
     return;
@@ -104,4 +122,30 @@ function updatePortfolioTable(portfolios, root) {
     { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
     { key: 'gain_pct', label: '%', align: 'right' }
   ], ['position_count', 'current_value', 'gain_abs']);
+}
+
+/**
+ * Aktualisiert die Gesamtvermögensanzeige in der Header-Card.
+ * @param {Array} accounts - Die aktuellen Kontodaten.
+ * @param {Array} portfolios - Die aktuellen Depotdaten.
+ * @param {HTMLElement} root - Das Root-Element des Dashboards.
+ */
+function updateTotalWealth(accounts, portfolios, root) {
+  const totalKonten = accounts.reduce((acc, k) => acc + (isNaN(k.balance) ? 0 : k.balance), 0);
+  const totalDepots = portfolios.reduce((acc, d) => acc + (isNaN(d.current_value) ? 0 : d.current_value), 0);
+  const totalVermoegen = totalKonten + totalDepots;
+
+  const headerMeta = `
+    <div>💰 Gesamtvermögen: <strong>${totalVermoegen.toLocaleString('de-DE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}&nbsp;€</strong></div>
+  `;
+
+  const headerCard = root.querySelector('.header-card .meta');
+  if (headerCard) {
+    headerCard.innerHTML = headerMeta;
+  } else {
+    console.warn("updateTotalWealth: Header-Card nicht gefunden, überspringe Update.");
+  }
 }

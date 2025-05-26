@@ -39,8 +39,8 @@ class Security:
     ticker_symbol: Optional[str] = None
     retired: bool = False
     updated_at: Optional[str] = None
-    latest_price: Optional[int] = None  # Preis in 10^-8 Einheiten
-    latest_price_date: Optional[int] = None  # Unix Timestamp aus Protobuf
+    last_price: Optional[int] = None  # Preis in 10^-8 Einheiten
+    last_price_date: Optional[int] = None  # Unix Timestamp aus Protobuf
 
 @dataclass  
 class Account:
@@ -99,16 +99,13 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
     conn = sqlite3.connect(str(db_path))
     try:
-        # Join mit latest_prices für aktuelle Kursdaten
         cur = conn.execute("""
-            SELECT s.uuid, s.name, s.currency_code, 
-                   s.note, s.isin, s.wkn, s.ticker_symbol,
-                   s.retired, s.updated_at,
-                   p.value as latest_price,
-                   p.date as latest_price_date
-            FROM securities s
-            LEFT JOIN latest_prices p ON s.uuid = p.security_uuid
-            ORDER BY s.name
+            SELECT uuid, name, currency_code, 
+                   note, isin, wkn, ticker_symbol,
+                   retired, updated_at,
+                   last_price, last_price_date
+            FROM securities
+            ORDER BY name
         """)
         return {row[0]: Security(
             uuid=row[0],
@@ -120,8 +117,8 @@ def get_securities(db_path: Path) -> Dict[str, Security]:
             ticker_symbol=row[6],
             retired=bool(row[7]),
             updated_at=row[8],
-            latest_price=row[9],
-            latest_price_date=row[10]
+            last_price=row[9],
+            last_price_date=row[10]
         ) for row in cur.fetchall()}
     except sqlite3.Error as e:
         _LOGGER.error("Fehler beim Laden der Wertpapiere: %s", str(e))

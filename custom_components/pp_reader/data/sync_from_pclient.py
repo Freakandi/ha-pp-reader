@@ -195,6 +195,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
         for sec in client.securities:
+            # Lade den bestehenden Eintrag aus der Tabelle securities
             cur.execute("""
                 SELECT * FROM securities WHERE uuid = ?
             """, (sec.uuid,))
@@ -206,6 +207,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             # Einheitliches Format für updated_at
             updated_at = to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
 
+            # Neue Daten für das Wertpapier
             new_security_data = (
                 sec.uuid,
                 sec.name,
@@ -215,10 +217,11 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 sec.wkn if sec.HasField("wkn") else None,
                 sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
                 retired,  # Konsistente Darstellung
-                updated_at   # Konsistentes Format
+                updated_at  # Konsistentes Format
             )
 
-            if not existing_security or existing_security != new_security_data:
+            # Aktualisiere die Tabelle securities, wenn sich die Daten geändert haben
+            if not existing_security or existing_security[:-2] != new_security_data:
                 security_changes_detected = True
                 updated_data["securities"].append(sec.uuid)
 
@@ -229,19 +232,41 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                         retired, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, new_security_data)
-            stats["securities"] += 1
 
-            # Latest price speichern falls vorhanden
-            if sec.HasField("latest"):
+            # Aktualisiere die Tabelle historical_prices
+            if sec.prices:
+                for price in sec.prices:
+                    # Konvertiere das Datum aus epoch day in ISO-8601
+                    price_date_iso = to_iso8601(Timestamp(seconds=price.date * 86400))  # epoch day -> seconds -> ISO-8601
+                    cur.execute("""
+                        INSERT OR REPLACE INTO historical_prices (
+                            security_uuid, date, close, high, low, volume
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        sec.uuid,
+                        price_date_iso,  # Datum im ISO-8601-Format
+                        price.close,  # Schlusskurs
+                        price.high if hasattr(price, "high") else None,  # Höchstkurs
+                        price.low if hasattr(price, "low") else None,  # Tiefstkurs
+                        price.volume if hasattr(price, "volume") else None  # Handelsvolumen
+                    ))
+
+            # Aktualisiere den letzten Preis und das Datum in der Tabelle securities
+            if sec.prices:
+                security_changes_detected = True
+                latest_price = max(sec.prices, key=lambda p: p.date)
+                latest_price_date_iso = to_iso8601(Timestamp(seconds=latest_price.date * 86400))  # epoch day -> seconds -> ISO-8601
                 cur.execute("""
-                    INSERT OR REPLACE INTO latest_prices 
-                    (security_uuid, value, date)
-                    VALUES (?, ?, ?)
+                    UPDATE securities
+                    SET last_price = ?, last_price_date = ?
+                    WHERE uuid = ?
                 """, (
-                    sec.uuid,
-                    sec.latest.close,
-                    sec.latest.date  # Unix Timestamp direkt aus Protobuf verwenden
+                    latest_price.close,  # Letzter Preis
+                    latest_price_date_iso,  # Datum des letzten Preises im ISO-8601-Format
+                    sec.uuid
                 ))
+
+            stats["securities"] += 1
 
         # --- PORTFOLIOS ---
         portfolio_ids = {p.uuid for p in client.portfolios}
