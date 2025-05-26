@@ -142,10 +142,12 @@ function updateTotalWealth(accounts, portfolios, root) {
     })}&nbsp;€</strong></div>
   `;
 
-  const headerCard = root.querySelector('.header-card .meta');
+  // Suche das Element mit der ID "headerMeta"
+  const headerCard = root.querySelector('#headerMeta');
   if (headerCard) {
     headerCard.innerHTML = headerMeta;
+    console.log("updateTotalWealth: Header-Card erfolgreich aktualisiert:", headerMeta);
   } else {
-    console.warn("updateTotalWealth: Header-Card nicht gefunden, überspringe Update.");
+    console.warn("updateTotalWealth: Header-Card mit ID 'headerMeta' nicht gefunden, überspringe Update.");
   }
 }
