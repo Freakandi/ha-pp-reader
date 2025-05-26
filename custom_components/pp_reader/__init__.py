@@ -105,26 +105,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
 
         # Vor der Registrierung des Panels prüfen, ob es bereits existiert
-        if not any(panel.frontend_url_path == "ppreader" for panel in hass.data.get("frontend_panels", {}).values()):
-            frontend.async_register_built_in_panel(
-                hass,
-                component_name="custom",
-                sidebar_title="Portfolio Dashboard",
-                sidebar_icon="mdi:finance",
-                frontend_url_path="ppreader",
-                require_admin=False,
-                config={
-                    "_panel_custom": {
-                        "name": "pp-reader-panel",
-                        "embed_iframe": False,
-                        "module_url": "/pp_reader_dashboard/panel.js",
-                        "trust_external": True,
-                        "config": {
-                            "entry_id": entry.entry_id
+        if not any(
+            panel.frontend_url_path == "ppreader"
+            for panel in hass.data.get("frontend_panels", {}).values()
+        ):
+            try:
+                frontend.async_register_built_in_panel(
+                    hass,
+                    component_name="custom",
+                    sidebar_title="Portfolio Dashboard",
+                    sidebar_icon="mdi:finance",
+                    frontend_url_path="ppreader",
+                    require_admin=False,
+                    config={
+                        "_panel_custom": {
+                            "name": "pp-reader-panel",
+                            "embed_iframe": False,
+                            "module_url": "/pp_reader_dashboard/panel.js",
+                            "trust_external": True,
+                            "config": {
+                                "entry_id": entry.entry_id
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
+                _LOGGER.info("✅ Custom Panel 'ppreader' erfolgreich registriert.")
+            except Exception as e:
+                _LOGGER.error("❌ Fehler bei der Registrierung des Panels: %s", str(e))
         else:
             _LOGGER.warning("Das Panel 'ppreader' ist bereits registriert. Überspringe Registrierung.")
 
