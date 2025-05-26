@@ -31,7 +31,7 @@ def parse_data_portfolio(path: str):
         if raw_data.startswith(b'PPPBV1'):
             prefix_end = 8  # 'PPPBV1' + 1 Byte für Version/Flag
             raw_data = raw_data[prefix_end:]
-            _LOGGER.debug("ℹ️ PPPBV1-Header erkannt und entfernt")
+            # _LOGGER.debug("ℹ️ PPPBV1-Header erkannt und entfernt")
 
         # Direktes Parsen als PClient
         try:

@@ -29,10 +29,10 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
         key = (tx.portfolio, tx.security)
         shares = normalize_shares(tx.shares) if tx.shares else 0  # Wende normalize_shares an
 
-        _LOGGER.debug(
-            "Berechne current_holdings: portfolio_uuid=%s, security_uuid=%s, shares=%f",
-            tx.portfolio, tx.security, shares
-        )
+        # _LOGGER.debug(
+        #     "Berechne current_holdings: portfolio_uuid=%s, security_uuid=%s, shares=%f",
+        #     tx.portfolio, tx.security, shares
+        # )
 
         # Transaktionstypen auswerten
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
@@ -89,16 +89,16 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
         rate = fx_rates.get(tx.currency_code) if tx.currency_code != "EUR" else 1.0
 
         if tx.currency_code != "EUR":
-            if rate:
-                _LOGGER.debug(
-                    "Wechselkurs gefunden: Datum=%s, Währung=%s, Kurs=%f",
-                    tx_date.strftime("%Y-%m-%d"), tx.currency_code, rate
-                )
-            else:
+            if not rate:
                 _LOGGER.warning(
                     "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
                     tx_date.strftime("%Y-%m-%d"), tx.currency_code
                 )
+            # else:
+            #     _LOGGER.debug(
+            #         "Wechselkurs gefunden: Datum=%s, Währung=%s, Kurs=%f",
+            #         tx_date.strftime("%Y-%m-%d"), tx.currency_code, rate
+            #     )
 
         if not rate:
             continue  # Überspringe Transaktionen ohne gültigen Wechselkurs
@@ -133,10 +133,10 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
                 total_purchase += qty * price
         portfolio_securities_purchase_values[key] = round(total_purchase, 2)
 
-        _LOGGER.debug(
-            "Berechne purchase_value: portfolio_uuid=%s, security_uuid=%s, total_purchase=%f",
-            key[0], key[1], total_purchase
-        )
+        # _LOGGER.debug(
+        #     "Berechne purchase_value: portfolio_uuid=%s, security_uuid=%s, total_purchase=%f",
+        #     key[0], key[1], total_purchase
+        # )
 
     return portfolio_securities_purchase_values
 
@@ -156,7 +156,7 @@ def db_calculate_holdings_value(
     Returns:
         Dict[Tuple[str, str], Dict[str, float]]: Das ursprüngliche Dictionary, ergänzt um den aktuellen Wert (current_value).
     """
-    _LOGGER.debug("db_calculate_holdings_value: Berechnung des aktuellen Werts gestartet.")
+    # _LOGGER.debug("db_calculate_holdings_value: Berechnung des aktuellen Werts gestartet.")
 
     # Sammle alle benötigten Währungen
     needed_currencies = set()
@@ -201,7 +201,7 @@ def db_calculate_holdings_value(
             rate = fx_rates.get(currency_code)
             if rate:
                 latest_price /= rate  # Wende den Wechselkurs an
-                _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, rate)
+                # _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, rate)
             else:
                 _LOGGER.warning("⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.", currency_code)
                 continue  # Überspringe die Berechnung für diese Währung
@@ -212,9 +212,9 @@ def db_calculate_holdings_value(
         current_value = holdings * latest_price
         current_hold_pur[(portfolio_uuid, security_uuid)]["current_value"] = round(current_value, 2)
 
-        _LOGGER.debug(
-            "Berechneter Wert: portfolio_uuid=%s, security_uuid=%s, current_value=%f",
-            portfolio_uuid, security_uuid, current_value
-        )
+        # _LOGGER.debug(
+        #     "Berechneter Wert: portfolio_uuid=%s, security_uuid=%s, current_value=%f",
+        #     portfolio_uuid, security_uuid, current_value
+        # )
 
     return current_hold_pur

@@ -49,7 +49,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
             last_update = self.file_path.stat().st_mtime
             last_update_truncated = datetime.fromtimestamp(last_update).replace(second=0, microsecond=0)
-            _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", last_update_truncated)
+            # _LOGGER.debug("📂 Letzte Änderung der Portfolio-Datei: %s", last_update_truncated)
 
             # Vergleiche das aktuelle Änderungsdatum mit dem gespeicherten Wert in der DB
             def get_last_db_update():
@@ -66,7 +66,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     conn.close()
 
             last_db_update = await self.hass.async_add_executor_job(get_last_db_update)
-            _LOGGER.debug("📂 Letzter gespeicherter Zeitstempel in der DB: %s", last_db_update)
+            # _LOGGER.debug("📂 Letzter gespeicherter Zeitstempel in der DB: %s", last_db_update)
 
             # Synchronisiere nur, wenn der Zeitstempel sich geändert hat
             if not last_db_update or last_update_truncated > last_db_update:
@@ -84,7 +84,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     def sync_data():
                         conn = sqlite3.connect(str(self.db_path))
                         try:
-                            _LOGGER.debug("Rufe sync_from_pclient auf mit entry_id: %s", self.entry_id)
+                            # _LOGGER.debug("Rufe sync_from_pclient auf mit entry_id: %s", self.entry_id)
                             sync_from_pclient(data, conn, self.hass, self.entry_id, last_update_truncated.isoformat(), self.db_path)
                         finally:
                             conn.close()

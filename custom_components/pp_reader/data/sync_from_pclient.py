@@ -88,7 +88,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             last_file_update_change_detected = True
 
         # --- TRANSACTIONS ---
-        _LOGGER.debug("sync_from_pclient: Synchronisiere Transaktionen...")
+        # _LOGGER.debug("sync_from_pclient: Synchronisiere Transaktionen...")
         transaction_ids = {t.uuid for t in client.transactions}
         delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
 
@@ -132,7 +132,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
         # Transaktionen nach dem Einfügen bestätigen
         conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
-        _LOGGER.debug("sync_from_pclient: Transaktionen in der DB bestätigt.")
+        # _LOGGER.debug("sync_from_pclient: Transaktionen in der DB bestätigt.")
 
         # --- ACCOUNTS ---
         account_ids = {acc.uuid for acc in client.accounts}
@@ -190,7 +190,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, (*new_account_data, balance))
 
         # --- SECURITIES ---
-        _LOGGER.debug("sync_from_pclient: Synchronisiere Wertpapiere...")
+        # _LOGGER.debug("sync_from_pclient: Synchronisiere Wertpapiere...")
         security_ids = {sec.uuid for sec in client.securities}
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
@@ -333,11 +333,11 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     stats["fx_transactions"] += 1
 
         conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
-        _LOGGER.debug("sync_from_pclient: Transaktionen, Wertpapiere und Portfolios in der DB bestätigt.")
+        # _LOGGER.debug("sync_from_pclient: Transaktionen, Wertpapiere und Portfolios in der DB bestätigt.")
 
         # --- NEUE LOGIK: Befüllen der Tabelle portfolio_securities ---
         if transaction_changes_detected or security_changes_detected:
-            _LOGGER.debug("sync_from_pclient: Berechne und synchronisiere portfolio_securities...")
+            # _LOGGER.debug("sync_from_pclient: Berechne und synchronisiere portfolio_securities...")
 
             # Lade alle Transaktionen aus der DB
             all_transactions = get_transactions(conn=conn)
@@ -374,10 +374,10 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 existing_entry = cur.fetchone()
 
                 # Debug-Log für Vergleich
-                _LOGGER.debug(
-                    "Vergleiche existing_entry=%s mit (current_holdings=%f, purchase_value=%d, current_value=%d)",
-                    existing_entry, current_holdings, int(purchase_value * 100), int(current_value * 100)
-                )
+                # _LOGGER.debug(
+                #     "Vergleiche existing_entry=%s mit (current_holdings=%f, purchase_value=%d, current_value=%d)",
+                #     existing_entry, current_holdings, int(purchase_value * 100), int(current_value * 100)
+                # )
 
                 # Vergleiche mit den berechneten Werten
                 if not existing_entry or existing_entry != (
@@ -399,7 +399,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                         int(purchase_value * 100),  # EUR -> Cent
                         int(current_value * 100)   # EUR -> Cent
                     ))
-                    _LOGGER.debug("sync_from_pclient: portfolio_securities Daten eingefügt oder aktualisiert.")
+                    # _LOGGER.debug("sync_from_pclient: portfolio_securities Daten eingefügt oder aktualisiert.")
 
             # Entferne veraltete Einträge aus portfolio_securities
             portfolio_security_keys = set(current_holdings_values.keys())  # Aktuelle Schlüssel als Set
@@ -417,14 +417,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 """, keys_to_delete)
                 if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
                     sec_port_changes_detected = True
-                    _LOGGER.debug("sync_from_pclient: Veraltete Einträge aus portfolio_securities entfernt: %s", keys_to_delete)
-            else:
-                _LOGGER.debug("sync_from_pclient: Keine veralteten Einträge in portfolio_securities gefunden.")
+                    # _LOGGER.debug("sync_from_pclient: Veraltete Einträge aus portfolio_securities entfernt: %s", keys_to_delete)
+            # else:
+                # _LOGGER.debug("sync_from_pclient: Keine veralteten Einträge in portfolio_securities gefunden.")
 
             conn.commit()
-            _LOGGER.debug("sync_from_pclient: portfolio_securities erfolgreich synchronisiert.")
-        else:
-            _LOGGER.debug("sync_from_pclient: Keine Änderungen an portfolio_securities erforderlich.")
+            # _LOGGER.debug("sync_from_pclient: portfolio_securities erfolgreich synchronisiert.")
+        # else:
+            # _LOGGER.debug("sync_from_pclient: Keine Änderungen an portfolio_securities erforderlich.")
 
     except Exception as e:
         conn.rollback()
@@ -450,13 +450,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             ]
             if updated_accounts:
                 _push_update(hass, entry_id, "accounts", updated_accounts)
-                _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", updated_accounts)
+                # _LOGGER.debug("sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s", updated_accounts)
 
         if last_file_update_change_detected:
             # Datum korrekt formatieren
             formatted_last_file_update = datetime.strptime(last_file_update, "%Y-%m-%dT%H:%M:%S").strftime("%d.%m.%Y, %H:%M")
             _push_update(hass, entry_id, "last_file_update", formatted_last_file_update)
-            _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", formatted_last_file_update)
+            # _LOGGER.debug("sync_from_pclient: 📡 last_file_update-Event gesendet: %s", formatted_last_file_update)
 
         if sec_port_changes_detected:
             # Bereite die Daten für das Update vor
@@ -500,7 +500,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Sende das Event für portfolio_values
             _push_update(hass, entry_id, "portfolio_values", portfolio_values)
-            _LOGGER.debug("sync_from_pclient: 📡 portfolio_values-Update-Event gesendet: %s", portfolio_values)
+            # _LOGGER.debug("sync_from_pclient: 📡 portfolio_values-Update-Event gesendet: %s", portfolio_values)
     else:
         # Logge die fehlenden Voraussetzungen
         _LOGGER.error(

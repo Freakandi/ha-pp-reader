@@ -87,7 +87,7 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
                 "accounts": account_data,
             },
         )
-        _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)
+        # _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)
 
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten: %s", e)
@@ -130,7 +130,7 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
                 "last_file_update": last_file_update,
             },
         )
-        _LOGGER.debug("Last file update erfolgreich abgerufen: %s", last_file_update)
+        # _LOGGER.debug("Last file update erfolgreich abgerufen: %s", last_file_update)
 
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update: %s", e)
@@ -190,7 +190,7 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
                 "portfolios": portfolio_data,
             },
         )
-        _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)
+        # _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)
 
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Depotdaten: %s", e)
