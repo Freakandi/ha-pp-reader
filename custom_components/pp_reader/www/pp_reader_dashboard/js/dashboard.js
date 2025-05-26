@@ -12,7 +12,7 @@ let currentPage = 0;
 let observer; // Globale Variable für Debugging
 
 async function renderTab(root, hass, panel) {
-  console.log("renderTab: Wird aufgerufen mit hass:", hass, "und panel:", panel);
+  // console.log("renderTab: Wird aufgerufen mit hass:", hass, "und panel:", panel);
 
   const tab = tabs[currentPage];
   if (!tab || !tab.render) {
@@ -23,7 +23,7 @@ async function renderTab(root, hass, panel) {
   let content;
   try {
     content = await tab.render(root, hass, panel); // Verwende die lokalen Parameter hass und panel
-    console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
+    // console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
   } catch (error) {
     console.error("renderTab: Fehler beim Rendern des Tabs:", error);
     return;
@@ -35,7 +35,7 @@ async function renderTab(root, hass, panel) {
   }
 
   root.innerHTML = content;
-  console.log("renderTab: Inhalt wurde erfolgreich in das Root-Element eingefügt.");
+  // console.log("renderTab: Inhalt wurde erfolgreich in das Root-Element eingefügt.");
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
@@ -227,7 +227,7 @@ class PPReaderDashboard extends HTMLElement {
     // Wenn das Element aus dem DOM fliegt, sauber abmelden
     if (typeof this._unsubscribeEvents === "function") {
       this._unsubscribeEvents();
-      console.debug("PPReaderDashboard: Event-Listener entfernt");
+      // console.debug("PPReaderDashboard: Event-Listener entfernt");
       this._unsubscribeEvents = null;
     }
     super.disconnectedCallback && super.disconnectedCallback();
@@ -272,7 +272,7 @@ class PPReaderDashboard extends HTMLElement {
       .then(unsub => {
         if (typeof unsub === "function") {
           this._unsubscribeEvents = unsub;
-          console.debug("PPReaderDashboard: Event-Listener registriert, unsubscribe ist", unsub);
+          // console.debug("PPReaderDashboard: Event-Listener registriert, unsubscribe ist", unsub);
         } else {
           console.error("PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func:", unsub);
         }
@@ -287,7 +287,7 @@ class PPReaderDashboard extends HTMLElement {
       try {
         this._unsubscribeEvents();
         this._unsubscribeEvents = null;
-        console.debug("PPReaderDashboard: Event-Listener erfolgreich entfernt.");
+        // console.debug("PPReaderDashboard: Event-Listener erfolgreich entfernt.");
       } catch (error) {
         console.error("PPReaderDashboard: Fehler beim Entfernen der Event-Listener:", error);
       }

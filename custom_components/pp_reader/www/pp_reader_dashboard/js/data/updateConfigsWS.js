@@ -52,7 +52,7 @@ function updateAccountTable(accounts, root) {
  * @param {HTMLElement} root - Das Root-Element des Dashboards.
  */
 export function handleLastFileUpdate(update, root) {
-  console.log("updateConfigsWS: Last-File-Update erhalten:", update);
+  // console.log("updateConfigsWS: Last-File-Update erhalten:", update);
 
   const lastFileUpdate = update || "Unbekannt";
   updateLastFileUpdate(lastFileUpdate, root);

@@ -17,8 +17,8 @@ export async function renderTestTab(root, hass, panelConfig) {
     const data = await fetchDashboardDataWS(hass, panelConfig); // Übergib hass und panelConfig
     konten = data.accounts || [];
     depots = data.portfolios || [];
-    console.debug("renderTestTab: Empfangene Konten:", konten);
-    console.debug("renderTestTab: Empfangene Depots:", depots);
+    // console.debug("renderTestTab: Empfangene Konten:", konten);
+    // console.debug("renderTestTab: Empfangene Depots:", depots);
   } catch (e) {
     error = e.message;
     console.error("renderTestTab: Fehler beim Abrufen der Dashboard-Daten:", error);

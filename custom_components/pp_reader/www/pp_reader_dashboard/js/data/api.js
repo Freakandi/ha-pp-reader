@@ -1,5 +1,5 @@
 export async function fetchDashboardDataWS(hass, panelConfig) {
-  console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
+  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
   const entry_id = panelConfig
     ?.config
     ?._panel_custom
@@ -11,7 +11,7 @@ export async function fetchDashboardDataWS(hass, panelConfig) {
       `fetchDashboardDataWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
     );
   }
-  console.debug("fetchDashboardDataWS: sende WS-Nachricht für Entry", entry_id);
+  // console.debug("fetchDashboardDataWS: sende WS-Nachricht für Entry", entry_id);
 
   return await hass.connection.sendMessagePromise({
     type: "pp_reader/get_dashboard_data",
@@ -41,14 +41,14 @@ export async function fetchAccountsWS(hass, panelConfig) {
     entry_id,
   });
 
-  console.debug("fetchAccountsWS: Kontodaten empfangen:", accounts);
+  // console.debug("fetchAccountsWS: Kontodaten empfangen:", accounts);
 
   return accounts;
 }
 
 // Websocket-API and subscription for last_file_update
 export async function fetchLastFileUpdateWS(hass, panelConfig) {
-  console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
+  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
   const entry_id = panelConfig
     ?.config
     ?._panel_custom
@@ -68,14 +68,14 @@ export async function fetchLastFileUpdateWS(hass, panelConfig) {
     entry_id,
   });
 
-  console.debug("fetchLastFileUpdateWS: Last file update empfangen:", response);
+  // console.debug("fetchLastFileUpdateWS: Last file update empfangen:", response);
 
   return response.last_file_update;
 }
 
 // Websocket-API and subscription for portfolios
 export async function fetchPortfoliosWS(hass, panelConfig) {
-  console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
+  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
   const entry_id = panelConfig
     ?.config
     ?._panel_custom
@@ -87,7 +87,7 @@ export async function fetchPortfoliosWS(hass, panelConfig) {
       `fetchPortfoliosWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
     );
   }
-  console.debug("fetchPortfoliosWS: sende WS-Nachricht für Entry", entry_id);
+  // console.debug("fetchPortfoliosWS: sende WS-Nachricht für Entry", entry_id);
 
   // Sende die WebSocket-Nachricht, um die Depotdaten zu laden
   const portfolios = await hass.connection.sendMessagePromise({
@@ -95,7 +95,7 @@ export async function fetchPortfoliosWS(hass, panelConfig) {
     entry_id,
   });
 
-  console.debug("fetchPortfoliosWS: Depotdaten empfangen:", portfolios);
+  // console.debug("fetchPortfoliosWS: Depotdaten empfangen:", portfolios);
 
   return portfolios;
 }
