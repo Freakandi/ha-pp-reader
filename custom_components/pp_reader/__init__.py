@@ -13,7 +13,7 @@ from homeassistant.components.http import StaticPathConfig, HomeAssistantView
 from homeassistant.components import websocket_api
 
 from .data.backup_db import setup_backup_system
-from .const import DOMAIN, CONF_API_TOKEN, CONF_FILE_PATH, CONF_DB_PATH
+from .const import DOMAIN, CONF_FILE_PATH, CONF_DB_PATH
 from .data.db_init import initialize_database_schema
 from .data.coordinator import PPReaderCoordinator
 from .data.websocket import ws_get_dashboard_data, ws_get_accounts, ws_get_last_file_update, ws_get_portfolio_data
