@@ -68,7 +68,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN][entry.entry_id] = {
             "file_path": str(file_path),
             "db_path": db_path,
-            "api_token": token
         }
 
         # Coordinator initialisieren
