@@ -1,0 +1,13 @@
+{
+  "name": "HA Integration Dev",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "homeassistant",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "type=bind,source=${localWorkspaceFolder},target=/workspace",
+  "extensions": [
+    "ms-python.python",
+    "ms-azuretools.vscode-docker",
+    "redhat.vscode-yaml"
+  ],
+  "postStartCommand": "pip install --upgrade pip && pip install -r requirements.txt"
+}

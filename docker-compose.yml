@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: hass_dev
+    network_mode: host           # damit discovery, Zigbee, mDNS etc. problemlos laufen
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ./configuration.yaml:/config/configuration.yaml:ro
+      - ./custom_components:/config/custom_components:rw
+    restart: unless-stopped

@@ -1,0 +1,15 @@
+homeassistant:
+  name: HADevTests
+  latitude: 53.51330731382579
+  longitude: 10.24093419313431
+  elevation: 0
+  unit_system: metric
+  external_url: http://localhost:8123
+
+custom_components:
+  - pp_reader
+
+logger:
+  default: info
+  logs:
+    custom_components.pp_reader: debug
