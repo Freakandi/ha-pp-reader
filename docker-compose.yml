@@ -7,7 +7,7 @@ services:
     environment:
       - TZ=Europe/Berlin
     volumes:
-      - ./config:/config/configuration.yaml:ro
+      - ./config:/config/:rw
       - ./custom_components:/config/custom_components:rw
     restart: unless-stopped
 
