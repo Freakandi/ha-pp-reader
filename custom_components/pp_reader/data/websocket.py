@@ -1,9 +1,19 @@
-from homeassistant.components import websocket_api
-from homeassistant.components.websocket_api import async_response, ActiveConnection
-from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-import voluptuous as vol
+"""
+WebSocket handlers for the pp_reader integration.
+
+This module provides WebSocket commands to retrieve dashboard data,
+account information, portfolio data, and file update timestamps.
+"""
+
 import logging
 from datetime import datetime
+
+import voluptuous as vol
+from homeassistant.components import websocket_api
+from homeassistant.components.websocket_api import ActiveConnection
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+)
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
@@ -51,7 +61,7 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
         )
 
     except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten: %s", e)
+        _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten")
         connection.send_error(msg["id"], "db_error", str(e))
 
 # === Websocket Accounts-Data ===
@@ -87,10 +97,10 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
                 "accounts": account_data,
             },
         )
-        # _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)
+        # _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)  # noqa: ERA001
 
     except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Kontodaten: %s", e)
+        _LOGGER.exception("Fehler beim Abrufen der Kontodaten")
         connection.send_error(msg["id"], "db_error", str(e))
 
 # === Websocket FileUpdate-Timestamp ===
@@ -117,8 +127,8 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
             try:
                 # Zeitstempel im ISO-8601-Format "%Y-%m-%dT%H:%M:%S" parsen und in das gewünschte Format umwandeln
                 last_file_update = datetime.strptime(last_file_update_raw, "%Y-%m-%dT%H:%M:%S").strftime("%d.%m.%Y, %H:%M")
-            except ValueError as e:
-                _LOGGER.error("Fehler beim Parsen des Zeitstempels: %s", e)
+            except ValueError:
+                _LOGGER.exception("Fehler beim Parsen des Zeitstempels")
                 last_file_update = "Unbekannt"
         else:
             last_file_update = "Unbekannt"
@@ -130,10 +140,10 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
                 "last_file_update": last_file_update,
             },
         )
-        # _LOGGER.debug("Last file update erfolgreich abgerufen: %s", last_file_update)
+        # _LOGGER.debug("Last file update erfolgreich abgerufen: %s", last_file_update)  # noqa: ERA001
 
     except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen von last_file_update: %s", e)
+        _LOGGER.exception("Fehler beim Abrufen von last_file_update")
         connection.send_error(msg["id"], "db_error", str(e))
 
 # === Websocket Portfolio-Data ===
@@ -150,11 +160,11 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
         # Zugriff auf die Datenbank
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from ..logic.portfolio import (
-            db_calculate_portfolio_value_and_count,
-            db_calculate_portfolio_purchase_sum,
-        )
         from ..data.db_access import get_portfolios
+        from ..logic.portfolio import (
+            db_calculate_portfolio_purchase_sum,
+            db_calculate_portfolio_value_and_count,
+        )
 
         # Lade alle aktiven Depots
         portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
@@ -190,8 +200,8 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
                 "portfolios": portfolio_data,
             },
         )
-        # _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)
+        # _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)  # noqa: ERA001
 
     except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Depotdaten: %s", e)
+        _LOGGER.exception("Fehler beim Abrufen der Depotdaten")
         connection.send_error(msg["id"], "db_error", str(e))

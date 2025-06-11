@@ -1,85 +1,22 @@
-# 📊 Portfolio Performance Reader – Home Assistant Integration
+dev Repo for pp_reader
 
-**Portfolio Performance Reader** ist eine benutzerdefinierte Home Assistant Integration zur Auswertung von `.portfolio`-Dateien, die mit [Portfolio Performance](https://www.portfolio-performance.info/) erstellt wurden.
+## Development
 
-Die Integration liest direkt die gepackte `.portfolio`-Datei (inkl. proprietärem Header) und zeigt ausgewählte Kennzahlen aus deinem Depot als Sensoren in Home Assistant an – z. B.:
-
-- Anzahl gehaltener Wertpapiere
-- Gesamtwert des Portfolios
-- Dividendenzahlungen
-- Realisierte/unrealisierte Gewinne (in Entwicklung)
-
----
-
-## 🚀 Installation über HACS
-
-1. Öffne **HACS → Integrationen**
-2. Klicke auf „…“ (3 Punkte oben rechts) → **Benutzerdefinierte Repositories**
-3. Gib folgendes Repository ein: https://github.com/Freakandi/ha-pp-reader
-Wähle Typ: **Integration**, und bestätige mit „Hinzufügen“
-4. Danach erscheint die Integration unter den HACS-Integrationen → **Installieren**
-5. Nach dem Neustart in Home Assistant unter „Integrationen“ hinzufügen
-
----
-
-## ⚙️ Einrichtung
-
-Die Integration fragt per UI den Pfad zur `.portfolio`-Datei ab.  
-Diese Datei muss:
-
-- im Dateisystem von Home Assistant verfügbar sein  
-(z. B. per Samba, NFS, USB oder `/media`-Freigabe)
-- im Originalformat (gepackt) vorliegen
-
-**Beispielpfad:**
-/media/Daten/Beispiel.portfolio
-
----
-
-## 🧩 Aktuell enthaltene Sensoren
-
-| Sensorname                      | Beschreibung                          |
-|----------------------------------|----------------------------------------|
-| `sensor.depot_anzahl_wertpapiere` | Zählt alle aktuell enthaltenen Wertpapiere |
-
----
-
-## 🔧 Entwicklung
-
-Dieses Projekt befindet sich in aktiver Entwicklung.
-
-Geplante Erweiterungen:
-
-- Sensor für **Gesamtwert** (nach Währung)
-- Sensor für **Performance p.a.**
-- Sensor für **realisierte Gewinne / Verluste**
-- Sensor für **Dividendenzahlungen**
-- Darstellung als Lovelace-Dashboard (Tabellen, Grafiken)
-- Live-Berechnung von Metriken wie **Volatilität** oder **Sharpe Ratio**
-
----
-
-## 🧪 Lokale Entwicklung & Tests
-
-Für Tests außerhalb von Home Assistant steht ein separates Tooling unter `/tools` zur Verfügung.
-Beispiel:
+Run `./scripts/setup_container` once to create the virtual environment and
+install dependencies. Activate the environment before running any other
+scripts:
 
 ```bash
-python3 tools/parser.py /pfad/zur/S-Depot.portfolio
+source .venv/bin/activate
 ```
 
-## 🛡️  Sicherheit & Datenschutz
+Home Assistant can then be started with:
 
-Diese Integration verarbeitet deine .portfolio-Datei ausschließlich lokal.
-Die enthaltenen Depotdaten, Kontoinformationen und Transaktionen werden nicht nach außen gesendet.
+```bash
+./scripts/develop
+```
 
-Für die Währungsumrechnung wird jedoch einzelner Zugriff auf die öffentliche API von frankfurter.app benötigt, um tagesaktuelle EUR-Wechselkurse abzurufen (z. B. SEK, USD, CHF).
-Dieser Abruf ist anonym und enthält keine personenbezogenen oder Depotdaten.
-
-Die abgerufenen Kurse werden lokal im Cache (fxrates.json) gespeichert, sodass wiederholte Anfragen vermieden werden.
-
-## 📜 Lizenz
-
-MIT License
-
-© Freakandi
+In Codex environments the setup script cannot keep the virtual
+environment active. Run `source .venv/bin/activate` after the container
+starts or use `./scripts/codex_develop` which directly runs the Hass
+binary from the virtual environment.

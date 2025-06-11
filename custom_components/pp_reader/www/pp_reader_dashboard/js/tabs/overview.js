@@ -46,7 +46,7 @@ export async function renderDashboard(root, hass, panelConfig) {
 
     return `
     ${headerCard.outerHTML}
-    
+
     <div class="card">
       <h2>Investment</h2>
       <div class="scroll-container portfolio-table">

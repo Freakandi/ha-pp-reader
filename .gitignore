@@ -1,26 +1,18 @@
-# 🔹 Virtuelle Umgebung
-.venv/
+# artifacts
+__pycache__
+.pytest*
+*.egg-info
+*/build/*
+*/dist/*
 
-# 🔹 Python Bytecode & Caches
-__pycache__/
-*.pyc
-*.so
-*.egg-info/
 
-# 🔹 Tools-Ausgabe & temporäre Artefakte
-tools/__pycache__/
-*.bak
-*.log
-*.tmp
-*.swp
-*~
-.DS_Store
+# misc
+.coverage
+.vscode
+coverage.xml
+.ruff_cache
 
-# 🔹 Sicherungsdateien aus Editoren (z. B. nano, vim)
-*~
 
-# Ignoriere alle Inhalte im cache-Verzeichnis
-custom_components/pp_reader/cache/*
-
-# Aber tracke den Ordner selbst (wird mit .gitkeep oder leerer Datei erzwingbar)
-!custom_components/pp_reader/cache/.gitkeep
+# Home Assistant configuration
+config/*
+!config/configuration.yaml

@@ -1,12 +1,23 @@
+"""
+Provide functionality for managing and fetching foreign exchange rates.
+
+Includes:
+- Functions to fetch exchange rates from an external API.
+- Database operations for storing and retrieving exchange rates.
+- Utilities for ensuring required exchange rates are available for specific dates.
+"""
+
 # custom_components/pp_reader/currencies/fx.py
 
-import sqlite3
-import aiohttp
 import asyncio
 import logging
-import json
-from pathlib import Path
+import sqlite3
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -14,7 +25,8 @@ API_URL = "https://api.frankfurter.app"
 
 # --- Hilfsfunktionen ---
 
-async def _execute_db(fn, *args, **kwargs):
+
+async def _execute_db(fn: Callable, *args: Any, **kwargs: Any) -> Any:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, fn, *args, **kwargs)
 
@@ -55,20 +67,38 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     timeout = aiohttp.ClientTimeout(total=10)
 
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    _LOGGER.warning("⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d", date, response.status)
+        async with aiohttp.ClientSession(timeout=timeout) as session, \
+                session.get(url) as response:
+                if response.status != 200:  # noqa: PLR2004
+                    _LOGGER.warning(
+                        "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                        date,
+                        response.status,
+                    )
                     return {}
                 data = await response.json()
                 return {k: float(v) for k, v in data.get("rates", {}).items()}
-    except Exception as e:
-        _LOGGER.error("❌ Fehler beim Abruf der Wechselkurse: %s", e)
+    except Exception:
+        _LOGGER.exception("❌ Fehler beim Abruf der Wechselkurse")
         return {}
 
 # --- Öffentliche Funktionen ---
 
-def get_required_currencies(client) -> set[str]:
+def get_required_currencies(client: Any) -> set[str]:
+    """
+    Determine required currencies based on transactions and securities.
+
+    Parameters
+    ----------
+    client : object
+        The client object containing transactions and securities data.
+
+    Returns
+    -------
+    set[str]
+        A set of currency codes required for the client's holdings.
+
+    """
     holdings: dict[str, float] = {}
     for tx in client.transactions:
         if not tx.HasField("security"):
@@ -89,7 +119,27 @@ def get_required_currencies(client) -> set[str]:
                 currencies.add(sec.currencyCode)
     return currencies
 
-async def get_exchange_rates(client, reference_date: datetime, db_path: Path) -> dict[str, float]:
+async def get_exchange_rates(
+    client: Any, reference_date: datetime, db_path: Path
+) -> dict[str, float]:
+    """
+    Fetch exchange rates for the required currencies on a specific date.
+
+    Parameters
+    ----------
+    client : object
+        The client object containing transactions and securities data.
+    reference_date : datetime
+        The date for which exchange rates are required.
+    db_path : Path
+        Path to the database file storing exchange rates.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary mapping currency codes to their exchange rates.
+
+    """
     date_str = reference_date.strftime("%Y-%m-%d")
     rates = await _load_rates_for_date(db_path, date_str)
 
@@ -102,36 +152,54 @@ async def get_exchange_rates(client, reference_date: datetime, db_path: Path) ->
 
     return rates
 
-async def load_latest_rates(reference_date: datetime, db_path: Path) -> dict[str, float]:
+async def load_latest_rates(
+    reference_date: datetime, db_path: Path
+) -> dict[str, float]:
+    """
+    Load the latest exchange rates for a specific date from the database.
+
+    Parameters
+    ----------
+    reference_date : datetime
+        The date for which exchange rates are required.
+    db_path : Path
+        Path to the database file storing exchange rates.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary mapping currency codes to their exchange rates.
+
+    """
     date_str = reference_date.strftime("%Y-%m-%d")
-    rates = await _load_rates_for_date(db_path, date_str)
-    return rates
+    return await _load_rates_for_date(db_path, date_str)
 
 def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
-    """Synchroner Wrapper für load_latest_rates."""
-    def run_async_task(ref_date: datetime):
+    """Provide a synchronous wrapper for load_latest_rates."""
+    def run_async_task(ref_date: datetime) -> dict[str, float]:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             if isinstance(ref_date, str):
-                ref_date = datetime.strptime(ref_date, "%Y-%m-%d")
-            result = loop.run_until_complete(load_latest_rates(ref_date, db_path))
-            return result
+                ref_date = datetime.strptime(ref_date, "%Y-%m-%d")  # noqa: DTZ007
+            return loop.run_until_complete(load_latest_rates(ref_date, db_path))
         finally:
             loop.close()
 
     return run_async_task(reference_date)
 
-async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set[str], db_path: Path) -> None:
+async def ensure_exchange_rates_for_dates(
+    dates: list[datetime], currencies: set[str], db_path: Path
+) -> None:
     """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
     if not currencies:
         return
-                  
+
     for dt in dates:
         date_str = dt.strftime("%Y-%m-%d")
         existing = await _load_rates_for_date(db_path, date_str)
         missing = currencies - set(existing.keys())
-        
+
         if missing:
             try:
                 fetched = await _fetch_exchange_rates(date_str, missing)
@@ -140,16 +208,22 @@ async def ensure_exchange_rates_for_dates(dates: list[datetime], currencies: set
                 else:
                     _LOGGER.warning("⚠️ Keine Kurse erhalten für %s am %s",
                                   missing, date_str)
-            except Exception as e:
-                _LOGGER.error("❌ Fehler beim Laden der Kurse: %s", str(e))
+            except Exception:
+                _LOGGER.exception("❌ Fehler beim Laden der Kurse")
 
-def ensure_exchange_rates_for_dates_sync(dates: list[datetime], currencies: set[str], db_path: Path) -> None:
-    """Synchroner Wrapper für ensure_exchange_rates_for_dates."""
-    def run_async_task(dates: list[datetime], currencies: set[str], db_path: Path):
+def ensure_exchange_rates_for_dates_sync(
+    dates: list[datetime], currencies: set[str], db_path: Path
+) -> None:
+    """Stelle sicher, dass alle benötigten Wechselkurse verfügbar sind."""
+    def run_async_task(
+        dates: list[datetime], currencies: set[str], db_path: Path
+    ) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(ensure_exchange_rates_for_dates(dates, currencies, db_path))
+            loop.run_until_complete(
+                ensure_exchange_rates_for_dates(dates, currencies, db_path)
+            )
         finally:
             loop.close()
 

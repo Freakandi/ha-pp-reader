@@ -1,40 +1,50 @@
+"""
+Portfolio Performance Reader custom component for Home Assistant.
+
+This component integrates Portfolio Performance data into Home Assistant,
+providing sensors and a dashboard.
+"""
+
 import logging
-import voluptuous as vol
 from pathlib import Path
-import aiohttp
-import os
-from aiohttp import web
-from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
+
+from homeassistant.components import frontend, websocket_api
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.components import frontend
-from homeassistant.components.http import StaticPathConfig, HomeAssistantView
-from homeassistant.components import websocket_api
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.typing import ConfigType
 
+from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from .data.backup_db import setup_backup_system
-from .const import DOMAIN, CONF_FILE_PATH, CONF_DB_PATH
-from .data.db_init import initialize_database_schema
 from .data.coordinator import PPReaderCoordinator
-from .data.websocket import ws_get_dashboard_data, ws_get_accounts, ws_get_last_file_update, ws_get_portfolio_data
-
-import asyncio
-from functools import partial
-import importlib
+from .data.db_init import initialize_database_schema
+from .data.websocket import (
+    ws_get_accounts,
+    ws_get_dashboard_data,
+    ws_get_last_file_update,
+    ws_get_portfolio_data,
+)
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Setup of your component."""
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
+    """Set up your component."""
     # Dashboard-Dateien registrieren
-    await hass.http.async_register_static_paths([
-        StaticPathConfig(
-            "/pp_reader_dashboard",
-            hass.config.path("custom_components/pp_reader/www/pp_reader_dashboard"),
-            cache_headers=False
-        )
-    ])
+    this_dir = Path(__file__).parent
+    dashboard_folder = this_dir / "www" / "pp_reader_dashboard"
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                path=hass.config.path(str(dashboard_folder)),
+                url_path="/pp_reader_dashboard",
+                cache_headers=False,
+            )
+        ]
+    )
 
     # Websocket-API registrieren
     try:
@@ -42,11 +52,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         websocket_api.async_register_command(hass, ws_get_accounts)
         websocket_api.async_register_command(hass, ws_get_last_file_update)
         websocket_api.async_register_command(hass, ws_get_portfolio_data)
-        # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")
-    except Exception as e:
-        _LOGGER.error("❌ Fehler bei der Registrierung der Websocket-Befehle: %s", str(e))
+        # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
+    except TypeError:
+        _LOGGER.exception(
+            "❌ Fehler bei der Registrierung der Websocket-Befehle"
+        )
 
     return True
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
@@ -59,9 +72,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
             initialize_database_schema(db_path)
-        except Exception as e:
-            _LOGGER.exception("❌ Fehler bei der DB-Initialisierung: %s", e)
-            raise ConfigEntryNotReady("Datenbank konnte nicht initialisiert werden")
+        except Exception as exc:
+            _LOGGER.exception("❌ Fehler bei der DB-Initialisierung")
+            msg = "Datenbank konnte nicht initialisiert werden"
+            raise ConfigEntryNotReady(msg) from exc
 
         # Datenstruktur initialisieren
         hass.data.setdefault(DOMAIN, {})
@@ -79,30 +93,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         try:
             await coordinator.async_config_entry_first_refresh()
-            # _LOGGER.debug("Initialisiere Coordinator mit entry_id: %s", entry.entry_id)
-        except Exception as e:
-            _LOGGER.error("❌ Fehler beim ersten Datenabruf des Coordinators: %s", str(e))
-            raise ConfigEntryNotReady("Coordinator konnte nicht initialisiert werden")
+            # _LOGGER.debug(
+            #     "Initialisiere Coordinator mit entry_id: %s",  # noqa: ERA001
+            #     entry.entry_id,
+            # )  # noqa: ERA001, RUF100
+        except Exception as exc:
+            _LOGGER.exception(
+                "❌ Fehler beim ersten Datenabruf des Coordinators"
+            )
+            msg = "Coordinator konnte nicht initialisiert werden"
+            raise ConfigEntryNotReady(msg) from exc
 
         # Coordinator in hass.data speichern
         hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
 
         _LOGGER.info("Portfolio Daten erfolgreich initialisiert")
-        
+
         # Plattformen laden
         try:
             _LOGGER.info("🔄 Starte Sensor-Setup...")
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
             _LOGGER.info("✅ Sensor-Setup abgeschlossen")
-        except Exception as e:
-            _LOGGER.error("❌ Fehler beim Sensor-Setup: %s", str(e))
-            raise ConfigEntryNotReady("Sensor-Setup fehlgeschlagen")
+        except Exception as exc:
+            _LOGGER.exception("❌ Fehler beim Sensor-Setup")
+            msg = "Sensor-Setup fehlgeschlagen"
+            raise ConfigEntryNotReady(msg) from exc
 
         # Backup-System starten
         try:
             await setup_backup_system(hass, db_path)
-        except Exception as e:
-            _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems: %s", e)
+        except Exception:
+            _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems")
 
         # Vor der Registrierung des Panels prüfen, ob es bereits existiert
         if not any(
@@ -123,23 +144,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             "embed_iframe": False,
                             "module_url": "/pp_reader_dashboard/panel.js",
                             "trust_external": True,
-                            "config": {
-                                "entry_id": entry.entry_id
-                            }
+                            "config": {"entry_id": entry.entry_id},
                         }
                     },
                 )
                 _LOGGER.info("✅ Custom Panel 'ppreader' erfolgreich registriert.")
-            except Exception as e:
-                _LOGGER.error("❌ Fehler bei der Registrierung des Panels: %s", str(e))
+            except ValueError:
+                _LOGGER.exception(
+                    "❌ Fehler bei der Registrierung des Panels"
+                )
         else:
-            _LOGGER.warning("Das Panel 'ppreader' ist bereits registriert. Überspringe Registrierung.")
+            _LOGGER.warning(
+                "Das Panel 'ppreader' ist bereits registriert. "
+                "Überspringe Registrierung."
+            )
 
-        return True
+        return True  # noqa: TRY300
 
-    except Exception as e:
-        _LOGGER.exception("Kritischer Fehler beim Setup: %s", str(e))
+    except Exception:
+        _LOGGER.exception("Kritischer Fehler beim Setup")
         return False
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
