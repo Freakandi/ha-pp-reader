@@ -15,7 +15,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_track_time_interval
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,19 +24,24 @@ BACKUP_SUBDIR = "backups"
 
 # === Public Entry Point ===
 
-async def setup_backup_system(hass: HomeAssistant, db_path: Path):
+async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
     """Initialisiere zyklische Backups innerhalb von Home Assistant."""
     interval = timedelta(hours=6)
 
-    async def _periodic_backup(now):
+    async def _periodic_backup(_now: datetime) -> None:
         await hass.async_add_executor_job(run_backup_cycle, db_path)
 
     async_track_time_interval(hass, _periodic_backup, interval)
 
-    async def async_trigger_debug_backup(call: ServiceCall):
+    async def async_trigger_debug_backup(_call: ServiceCall) -> None:
         await hass.async_add_executor_job(run_backup_cycle, db_path)
 
-    async def register_backup_service(event=None):
+    async def register_backup_service(_event: Event) -> None:
+        """
+        Register the backup service in Home Assistant.
+
+        :param _event: Event object passed by Home Assistant when triggered, unused.
+        """
         try:
             hass.services.async_register(
                 "pp_reader",
@@ -52,7 +57,7 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path):
 
     # 🧠 Hier innerhalb der Funktion prüfen und reagieren
     if hass.is_running:
-        await register_backup_service()
+        await register_backup_service(Event("dummy_event", {}))
     else:
         hass.bus.async_listen_once("homeassistant_started", register_backup_service)
 
@@ -190,8 +195,9 @@ def cleanup_old_backups(backup_dir: Path) -> None:
         try:
             dt_str = "_".join(b.stem.split("_")[-2:])  # 20250430_1430
             dt = datetime.strptime(dt_str, "%Y%m%d_%H%M%S")  # noqa: DTZ007
-        except Exception:
-            continue
+        except ValueError as exc:
+            # Replace ValueError with the specific exception expected
+            _LOGGER.warning("⚠️ Fehler beim Verarbeiten des Backups: %s", exc)
 
         key = dt.date()
         age = (now - dt).days  # Alter des Backups in Tagen berechnen
