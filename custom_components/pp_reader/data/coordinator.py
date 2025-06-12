@@ -2,7 +2,6 @@ import logging
 import sqlite3
 from datetime import timedelta, datetime
 from pathlib import Path
-from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.core import HomeAssistant  # Importiere HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -76,10 +75,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 data = await self.hass.async_add_executor_job(parse_data_portfolio, str(self.file_path))
                 if not data:
                     raise UpdateFailed("Portfolio-Daten konnten nicht geladen werden")
-            
+
                 try:
                     _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
-            
+
                     # DB-Synchronisation in einem eigenen Executor-Job
                     def sync_data():
                         conn = sqlite3.connect(str(self.db_path))
@@ -88,9 +87,9 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                             sync_from_pclient(data, conn, self.hass, self.entry_id, last_update_truncated.isoformat(), self.db_path)
                         finally:
                             conn.close()
-                    
+
                     await self.hass.async_add_executor_job(sync_data)
-            
+
                 except Exception as e:
                     _LOGGER.exception("❌ Fehler bei der DB-Synchronisation: %s", str(e))
                     raise UpdateFailed("DB-Synchronisation fehlgeschlagen")
@@ -126,7 +125,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     "count": count,
                     "purchase_sum": purchase_sum,
                 }
-                
+
             # Speichere die Daten
             self.data = {
                 "accounts": {
