@@ -4,7 +4,9 @@
   "version": "0.9.4",
   "documentation": "https://github.com/Freakandi/ha-pp-reader",
   "dependencies": [],
-  "codeowners": ["@Freakandi"],
+  "codeowners": [
+    "@Freakandi"
+  ],
   "requirements": [
     "protobuf>=4.25.0",
     "pandas>=2.2.0",
@@ -12,6 +14,7 @@
   ],
   "config_flow": true,
   "iot_class": "local_polling",
-  "loggers": ["custom_components.pp_reader"]
+  "loggers": [
+    "custom_components.pp_reader"
+  ]
 }
-

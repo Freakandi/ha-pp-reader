@@ -267,7 +267,7 @@ class PPReaderDashboard extends HTMLElement {
     conn
       .subscribeEvents(
         this._handleBusEvent.bind(this),
-        "pp_reader_dashboard_updated"
+        "EVENT_PANELS_UPDATED"
       )
       .then(unsub => {
         if (typeof unsub === "function") {

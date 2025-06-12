@@ -102,6 +102,6 @@ pp-reader-dashboard,
     flex-direction: column;
   }
   table, th, td {
-    font-size: 0.9rem;
+    font-size: 1rem;
   }
 }

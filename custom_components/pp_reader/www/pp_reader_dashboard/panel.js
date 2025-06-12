@@ -34,9 +34,13 @@ class PPReaderPanel extends HTMLElement {
 
     // Event-Listener für den Menü-Button
     container.querySelector('.menu-button').addEventListener('click', () => {
-      const haSidebar = document.querySelector('ha-sidebar');
-      if (haSidebar) {
-        haSidebar.expanded = !haSidebar.expanded;
+      // Access the home-assistant-main element
+      const homeAssistantMain = document.querySelector('home-assistant').shadowRoot.querySelector('home-assistant-main');
+      if (homeAssistantMain) {
+        homeAssistantMain.dispatchEvent(new CustomEvent('hass-toggle-menu', { bubbles: true, composed: true }));
+        console.log('Sidebar toggle event fired.');
+      } else {
+        console.error('home-assistant-main element not found!');
       }
     });
 
