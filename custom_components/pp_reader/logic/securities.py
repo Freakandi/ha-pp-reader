@@ -1,15 +1,27 @@
+"""
+Provide functions for various calculations.
+
+Holdings, purchase values, and current values of securities
+in a portfolio. Includes utilities for handling transactions,
+exchange rates, and database interactions.
+"""
+
 import logging
-from typing import Dict, List, Tuple
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-import sqlite3
-from ..data.db_access import Transaction
-from ..currencies.fx import ensure_exchange_rates_for_dates, load_latest_rates_sync, ensure_exchange_rates_for_dates_sync
-from ..logic.portfolio import normalize_shares, normalize_price
+
+# Removed deprecated typing.List
+from pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates_sync,
+    load_latest_rates_sync,
+)
+from pp_reader.data.db_access import Transaction
+from pp_reader.logic.portfolio import normalize_price, normalize_shares
 
 _LOGGER = logging.getLogger(__name__)
 
-def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple[str, str], float]:
+def db_calculate_current_holdings(transactions: list[Transaction]) -> dict[tuple[str, str], float]:
     """
     Berechnet die aktuell im Bestand befindliche Anzahl pro Wertpapier (security) und Depot (portfolio).
 
@@ -19,8 +31,9 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
     Returns:
         Dict[Tuple[str, str], float]: Ein Dictionary, das die Kombination aus Depot-UUID (`portfolio_uuid`)
                                       und Wertpapier-UUID (`security_uuid`) den aktuellen Beständen (`current_holdings`) zuordnet.
+
     """
-    portfolio_securities_holdings: Dict[Tuple[str, str], float] = {}
+    portfolio_securities_holdings: dict[tuple[str, str], float] = {}
 
     for tx in transactions:
         if not tx.security or not tx.portfolio:
@@ -30,9 +43,10 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
         shares = normalize_shares(tx.shares) if tx.shares else 0  # Wende normalize_shares an
 
         # _LOGGER.debug(
-        #     "Berechne current_holdings: portfolio_uuid=%s, security_uuid=%s, shares=%f",
-        #     tx.portfolio, tx.security, shares
-        # )
+        #     "Berechne current_holdings: portfolio_uuid=%s,",  # noqa: ERA001
+        #     security_uuid=%s, shares=%f tx.portfolio,
+        #     tx.security, shares
+        # )  # noqa: ERA001, RUF100
 
         # Transaktionstypen auswerten
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
@@ -41,11 +55,9 @@ def db_calculate_current_holdings(transactions: List[Transaction]) -> Dict[Tuple
             portfolio_securities_holdings[key] = portfolio_securities_holdings.get(key, 0) - shares
 
     # Entferne Einträge mit einem Bestand von 0 oder weniger
-    portfolio_securities_holdings = {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
+    return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
 
-    return portfolio_securities_holdings
-
-def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Path) -> Dict[Tuple[str, str], float]:
+def db_calculate_sec_purchase_value(transactions: list[Transaction], db_path: Path) -> dict[tuple[str, str], float]:
     """
     Berechnet den gesamten Kaufpreis des aktuellen Bestands pro Wertpapier (FIFO) und Depot.
 
@@ -56,9 +68,10 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
     Returns:
         Dict[Tuple[str, str], float]: Ein Dictionary, das die Kombination aus Depot-UUID (`portfolio_uuid`)
                                       und Wertpapier-UUID (`security_uuid`) den gesamten Kaufpreisen (`purchase_value`) zuordnet.
+
     """
-    portfolio_securities_purchase_values: Dict[Tuple[str, str], float] = {}
-    holdings: Dict[Tuple[str, str], List[Tuple[float, float, datetime]]] = {}  # FIFO-Liste pro Depot und Wertpapier
+    portfolio_securities_purchase_values: dict[tuple[str, str], float] = {}
+    holdings: dict[tuple[str, str], list[tuple[float, float, datetime]]] = {}  # FIFO-Liste pro Depot und Wertpapier
 
     # Vor der Transaktionsverarbeitung: Alle benötigten Währungen und Daten sammeln
     fx_dates = set()
@@ -73,7 +86,7 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
 
     # Wechselkurse vorab laden
     if fx_currencies:
-        ensure_exchange_rates_for_dates(list(fx_dates), fx_currencies, db_path)
+        ensure_exchange_rates_for_dates_sync(list(fx_dates), fx_currencies, db_path)
 
     for tx in transactions:
         if not tx.security or not tx.portfolio:
@@ -143,8 +156,8 @@ def db_calculate_sec_purchase_value(transactions: List[Transaction], db_path: Pa
 def db_calculate_holdings_value(
     db_path: Path,
     conn: sqlite3.Connection,
-    current_hold_pur: Dict[Tuple[str, str], Dict[str, float]]
-) -> Dict[Tuple[str, str], Dict[str, float]]:
+    current_hold_pur: dict[tuple[str, str], dict[str, float]]
+) -> dict[tuple[str, str], dict[str, float]]:
     """
     Berechnet den aktuellen Wert (current_value) für jede Position in current_holdings.
 
@@ -173,7 +186,7 @@ def db_calculate_holdings_value(
             needed_currencies.add(currency_code)
 
     # Stelle sicher, dass die Wechselkurse verfügbar sind
-    today = datetime.now()
+    today = datetime.now()  # noqa: DTZ005
     ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path)
 
     # Lade die Wechselkurse
