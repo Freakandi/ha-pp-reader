@@ -87,20 +87,29 @@ def extract_exchange_rate(pdecimal) -> float:
 
 @callback
 def _push_update(hass, entry_id, data_type, data):
-    """Sendet strukturierte Updates über den Event-Bus und speichert im hass.data Cache."""
-    if hass is None:
+    """Thread-sicheres Pushen eines Update-Events in den HA Event Loop."""
+    if not hass or not entry_id:
         return
-    store = hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
-    store[data_type] = data
-    hass.bus.async_fire(
-        EVENT_PANELS_UPDATED,
-        {"domain": DOMAIN, "entry_id": entry_id, "type": data_type, "data": data},
-    )
-    _LOGGER.debug(
-        "Push Update: %s (%d Elemente)",
-        data_type,
-        0 if data is None else (len(data) if isinstance(data, list) else 1),
-    )
+
+    payload = {
+        "domain": DOMAIN,
+        "entry_id": entry_id,
+        "type": data_type,
+        "data": data,
+    }
+
+    def _fire():
+        # async_fire ist async; Task im Loop erzeugen
+        hass.async_create_task(hass.bus.async_fire(EVENT_PANELS_UPDATED, payload))
+
+    # Thread-safe in den Loop schieben (wir laufen in einem Executor-Thread)
+    try:
+        hass.loop.call_soon_threadsafe(_fire)
+    except RuntimeError:
+        # Fallback (z.B. beim Shutdown): nur noch loggen
+        _LOGGER.warning(
+            "Konnte Event nicht mehr schedulen (Loop evtl. geschlossen): %s", payload
+        )
 
 
 def sync_from_pclient(
