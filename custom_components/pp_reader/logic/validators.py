@@ -6,8 +6,8 @@ from datetime import (
 )  # Ensure timezone is imported if used for future date checks
 import logging
 from typing import Optional, Dict, Any, Union, Tuple
-from pp_reader.name.abuchen.portfolio import client_pb2
-from pp_reader.data.db_access import (
+from ..name.abuchen.portfolio import client_pb2
+from ..data.db_access import (
     Transaction,
 )  # This import remains for the type hint
 
