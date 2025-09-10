@@ -40,8 +40,8 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
         # FX Vorbereitung
         try:
             from ..currencies.fx import (
-                ensure_exchange_rates_for_dates_sync,
-                load_latest_rates_sync,
+                ensure_exchange_rates_for_dates,
+                load_latest_rates,
             )
 
             active_fx_currencies = {
@@ -51,10 +51,10 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
             }
             if active_fx_currencies:
                 today = datetime.now()
-                ensure_exchange_rates_for_dates_sync(
+                await ensure_exchange_rates_for_dates(
                     [today], active_fx_currencies, db_path
                 )
-                fx_rates = load_latest_rates_sync(today, db_path)
+                fx_rates = await load_latest_rates(today, db_path)
             else:
                 fx_rates = {}
         except Exception:  # noqa: BLE001
@@ -131,8 +131,8 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
         # FX laden
         try:
             from ..currencies.fx import (
-                ensure_exchange_rates_for_dates_sync,
-                load_latest_rates_sync,
+                ensure_exchange_rates_for_dates,
+                load_latest_rates,
             )
 
             active_fx_currencies = {
@@ -142,10 +142,10 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
             }
             if active_fx_currencies:
                 today = datetime.now()
-                ensure_exchange_rates_for_dates_sync(
+                await ensure_exchange_rates_for_dates(
                     [today], active_fx_currencies, db_path
                 )
-                fx_rates = load_latest_rates_sync(today, db_path)
+                fx_rates = await load_latest_rates(today, db_path)
             else:
                 fx_rates = {}
         except Exception:  # noqa: BLE001

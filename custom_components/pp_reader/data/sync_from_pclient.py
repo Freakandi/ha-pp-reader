@@ -90,26 +90,17 @@ def _push_update(hass, entry_id, data_type, data):
     """Thread-sicheres Pushen eines Update-Events in den HA Event Loop."""
     if not hass or not entry_id:
         return
-
     payload = {
         "domain": DOMAIN,
         "entry_id": entry_id,
-        "type": data_type,
+        "data_type": data_type,
         "data": data,
     }
-
-    def _fire():
-        # async_fire ist async; Task im Loop erzeugen
-        hass.async_create_task(hass.bus.async_fire(EVENT_PANELS_UPDATED, payload))
-
-    # Thread-safe in den Loop schieben (wir laufen in einem Executor-Thread)
     try:
-        hass.loop.call_soon_threadsafe(_fire)
-    except RuntimeError:
-        # Fallback (z.B. beim Shutdown): nur noch loggen
-        _LOGGER.warning(
-            "Konnte Event nicht mehr schedulen (Loop evtl. geschlossen): %s", payload
-        )
+        # Direkter thread-sicherer Aufruf der synchronen fire-Methode
+        hass.loop.call_soon_threadsafe(hass.bus.fire, EVENT_PANELS_UPDATED, payload)
+    except Exception:
+        _LOGGER.exception("Fehler beim Schedulen des Events %s", data_type)
 
 
 def sync_from_pclient(
@@ -264,6 +255,15 @@ def sync_from_pclient(
                         "fx_currency_code": fx_ccy,
                     },
                 )
+
+        # Alle Transaktionen einmal laden (wird für Account-Balances und später für portfolio_securities wiederverwendet)
+        try:
+            all_transactions = get_transactions(conn=conn)
+        except Exception:
+            all_transactions = []
+            _LOGGER.exception(
+                "sync_from_pclient: Konnte Transaktionen nicht laden (all_transactions leer)."
+            )
 
         # --- ACCOUNTS ---
         account_ids = {acc.uuid for acc in client.accounts}
@@ -537,10 +537,7 @@ def sync_from_pclient(
                 "sync_from_pclient: Berechne und synchronisiere portfolio_securities..."
             )
 
-            # Lade alle Transaktionen aus der DB
-            all_transactions = get_transactions(conn=conn)
-
-            # Berechne current_holdings und purchase_value
+            # all_transactions ist bereits zuvor geladen; kein erneutes get_transactions nötig
             current_holdings = db_calculate_current_holdings(all_transactions)
             purchase_values = db_calculate_sec_purchase_value(all_transactions, db_path)
 
