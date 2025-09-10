@@ -42,4 +42,6 @@
     "vscode-edge-devtools.pathMapping": {
         "http://localhost:8123/pp_reader_dashboard/": "${workspaceFolder}/custom_components/pp_reader/www/pp_reader_dashboard/"
     },
+    "cursorpyright.analysis.autoImportCompletions": true,
+    "cursorpyright.analysis.typeCheckingMode": "basic",
 }

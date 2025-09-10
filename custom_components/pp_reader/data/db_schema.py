@@ -1,3 +1,11 @@
+"""
+Database schema definitions for the pp_reader component.
+
+This module contains SQL schema definitions for various entities such as accounts,
+securities, portfolios, transactions, and more. These schemas are used to create
+and manage the database structure for the pp_reader application.
+"""
+
 # db_schema.py
 
 ACCOUNT_SCHEMA = [
@@ -81,7 +89,7 @@ PORTFOLIO_SECURITIES_SCHEMA = [
         current_holdings REAL DEFAULT 0.0, -- Aktueller Bestand des Wertpapiers im Depot
         purchase_value INTEGER DEFAULT 0,  -- Gesamter Kaufpreis des Bestands in Cent
         avg_price REAL GENERATED ALWAYS AS (
-            CASE 
+            CASE
                 WHEN current_holdings > 0 THEN purchase_value / current_holdings
                 ELSE NULL
             END
@@ -131,11 +139,11 @@ TRANSACTION_SCHEMA = [
     );
     """,
     """
-    CREATE INDEX IF NOT EXISTS idx_transactions_security 
+    CREATE INDEX IF NOT EXISTS idx_transactions_security
     ON transactions(security);
     """,
     """
-    CREATE INDEX IF NOT EXISTS idx_transaction_units_currency 
+    CREATE INDEX IF NOT EXISTS idx_transaction_units_currency
     ON transaction_units(fx_currency_code);
     """
 ]

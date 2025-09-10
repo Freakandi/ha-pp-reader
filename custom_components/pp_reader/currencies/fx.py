@@ -30,15 +30,14 @@ async def _execute_db(fn: Callable, *args: Any, **kwargs: Any) -> Any:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, fn, *args, **kwargs)
 
+
 def _load_rates_for_date_sync(db_path: Path, date: str) -> dict[str, float]:
     conn = sqlite3.connect(str(db_path))
-    cursor = conn.execute(
-        "SELECT currency, rate FROM fx_rates WHERE date = ?",
-        (date,)
-    )
+    cursor = conn.execute("SELECT currency, rate FROM fx_rates WHERE date = ?", (date,))
     result = {row[0]: row[1] for row in cursor.fetchall()}
     conn.close()
     return result
+
 
 def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
     if not rates:
@@ -47,16 +46,19 @@ def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
     inserts = [(date, currency, rate) for currency, rate in rates.items()]
     conn.executemany(
         "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
-        inserts
+        inserts,
     )
     conn.commit()
     conn.close()
 
+
 async def _load_rates_for_date(db_path: Path, date: str) -> dict[str, float]:
     return await _execute_db(_load_rates_for_date_sync, db_path, date)
 
+
 async def _save_rates(db_path: Path, date: str, rates: dict[str, float]) -> None:
     await _execute_db(_save_rates_sync, db_path, date, rates)
+
 
 async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
     if not currencies:
@@ -67,22 +69,26 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     timeout = aiohttp.ClientTimeout(total=10)
 
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session, \
-                session.get(url) as response:
-                if response.status != 200:  # noqa: PLR2004
-                    _LOGGER.warning(
-                        "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
-                        date,
-                        response.status,
-                    )
-                    return {}
-                data = await response.json()
-                return {k: float(v) for k, v in data.get("rates", {}).items()}
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.get(url) as response,
+        ):
+            if response.status != 200:  # noqa: PLR2004
+                _LOGGER.warning(
+                    "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                    date,
+                    response.status,
+                )
+                return {}
+            data = await response.json()
+            return {k: float(v) for k, v in data.get("rates", {}).items()}
     except Exception:
         _LOGGER.exception("❌ Fehler beim Abruf der Wechselkurse")
         return {}
 
+
 # --- Öffentliche Funktionen ---
+
 
 def get_required_currencies(client: Any) -> set[str]:
     """
@@ -119,6 +125,7 @@ def get_required_currencies(client: Any) -> set[str]:
                 currencies.add(sec.currencyCode)
     return currencies
 
+
 async def get_exchange_rates(
     client: Any, reference_date: datetime, db_path: Path
 ) -> dict[str, float]:
@@ -152,6 +159,7 @@ async def get_exchange_rates(
 
     return rates
 
+
 async def load_latest_rates(
     reference_date: datetime, db_path: Path
 ) -> dict[str, float]:
@@ -174,8 +182,10 @@ async def load_latest_rates(
     date_str = reference_date.strftime("%Y-%m-%d")
     return await _load_rates_for_date(db_path, date_str)
 
+
 def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
     """Provide a synchronous wrapper for load_latest_rates."""
+
     def run_async_task(ref_date: datetime) -> dict[str, float]:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -187,6 +197,7 @@ def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str,
             loop.close()
 
     return run_async_task(reference_date)
+
 
 async def ensure_exchange_rates_for_dates(
     dates: list[datetime], currencies: set[str], db_path: Path
@@ -206,25 +217,33 @@ async def ensure_exchange_rates_for_dates(
                 if fetched:
                     await _save_rates(db_path, date_str, fetched)
                 else:
-                    _LOGGER.warning("⚠️ Keine Kurse erhalten für %s am %s",
-                                  missing, date_str)
+                    _LOGGER.warning(
+                        "⚠️ Keine Kurse erhalten für %s am %s", missing, date_str
+                    )
             except Exception:
                 _LOGGER.exception("❌ Fehler beim Laden der Kurse")
+
 
 def ensure_exchange_rates_for_dates_sync(
     dates: list[datetime], currencies: set[str], db_path: Path
 ) -> None:
-    """Stelle sicher, dass alle benötigten Wechselkurse verfügbar sind."""
+    """Stelle sicher, dass alle benötigten Wechselkurse verfügbar sind (synchroner Wrapper)."""
+
     def run_async_task(
         dates: list[datetime], currencies: set[str], db_path: Path
     ) -> None:
         loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
+            asyncio.set_event_loop(loop)
             loop.run_until_complete(
                 ensure_exchange_rates_for_dates(dates, currencies, db_path)
             )
         finally:
-            loop.close()
+            try:
+                loop.close()
+            except Exception:
+                pass
+        asyncio.set_event_loop(None)
 
-    run_async_task(dates, currencies, db_path)
+    if currencies and dates:
+        run_async_task(dates, currencies, db_path)
