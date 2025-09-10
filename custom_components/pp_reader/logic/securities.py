@@ -12,12 +12,12 @@ from datetime import datetime
 from pathlib import Path
 
 # Removed deprecated typing.List
-from pp_reader.currencies.fx import (
+from ..currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
     load_latest_rates_sync,
 )
-from pp_reader.data.db_access import Transaction
-from pp_reader.logic.portfolio import normalize_price, normalize_shares
+from ..data.db_access import Transaction
+from ..logic.portfolio import normalize_price, normalize_shares
 
 _LOGGER = logging.getLogger(__name__)
 

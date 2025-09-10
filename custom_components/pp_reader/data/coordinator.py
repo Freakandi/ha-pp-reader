@@ -17,8 +17,8 @@ from pathlib import Path
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from pp_reader.logic.accounting import calculate_account_balance
-from pp_reader.logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
+from ..logic.accounting import calculate_account_balance
+from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
 
 from .db_access import get_accounts, get_portfolios, get_transactions
 from .reader import parse_data_portfolio
