@@ -217,6 +217,31 @@ def sync_from_pclient(
                 conn=conn
             )  # Lade alle Transaktionen erneut
 
+        # Vor Berechnung der Konten: Mapping für Währungen & FX-Units vorbereiten
+        cur.execute("SELECT uuid, currency_code FROM accounts")
+        accounts_currency_map = {row[0]: row[1] or "EUR" for row in cur.fetchall()}
+
+        cur.execute(
+            """
+            SELECT transaction_uuid, fx_amount, fx_currency_code
+            FROM transaction_units
+            WHERE fx_amount IS NOT NULL
+            """
+        )
+        tx_units = {}
+        for row in cur.fetchall():
+            tx_uuid, fx_amount, fx_ccy = row
+            # Speichere nur, falls sinnvoller Datensatz
+            if fx_amount and fx_ccy:
+                # Ersetze nicht vorhandene; bei Mehrfacheinträgen einfache Priorität erster Eintrag
+                tx_units.setdefault(
+                    tx_uuid,
+                    {
+                        "fx_amount": fx_amount,
+                        "fx_currency_code": fx_ccy,
+                    },
+                )
+
         for acc in client.accounts:
             cur.execute(
                 """
@@ -255,7 +280,12 @@ def sync_from_pclient(
                         for tx in all_transactions
                         if tx.account == acc.uuid or tx.other_account == acc.uuid
                     ]
-                    balance = db_calc_account_balance(acc.uuid, account_transactions)
+                    balance = db_calc_account_balance(
+                        acc.uuid,
+                        account_transactions,
+                        accounts_currency_map=accounts_currency_map,
+                        tx_units=tx_units,
+                    )
             else:
                 # Behalte den bestehenden Kontostand bei,
                 # wenn keine Transaktionen geändert wurden
@@ -264,8 +294,9 @@ def sync_from_pclient(
             # Vergleiche die Daten, um Änderungen zu erkennen
             if (
                 not existing_account
-                or existing_account[:-2] != new_account_data[:-2]
-                or balance != (existing_account[-1] if existing_account else None)
+                or existing_account[1:6] != new_account_data[1:]  # name..updated_at
+                or balance
+                != (existing_account[6] if existing_account else None)  # balance
             ):
                 account_changes_detected = True
                 updated_data["accounts"].append(
@@ -754,17 +785,30 @@ def sync_from_pclient(
                 portfolio_values,
             )
     else:
-        # Logge die fehlenden Voraussetzungen
+        # Aggregierten Änderungsstatus berechnen (nur für Debug)
+        changes_detected = any(
+            [
+                account_changes_detected,
+                transaction_changes_detected,
+                security_changes_detected,
+                portfolio_changes_detected,
+                last_file_update_change_detected,
+                sec_port_changes_detected,
+            ]
+        )
         _LOGGER.error(
-            "❌ sync_from_pclient: send_dashboard_update"
-            "wurde nicht aufgerufen. Gründe:\n"
+            "❌ sync_from_pclient: Kein Event gesendet. Gründe:\n"
             "  - changes_detected: %s\n"
-            "  - hass: %s\n"
-            "  - entry_id: %s\n"
-            "  - updated_data: %s",
-            hass,
-            entry_id,
-            updated_data,
+            "  - hass vorhanden: %s\n"
+            "  - entry_id vorhanden: %s\n"
+            "  - updated_data(accounts=%d, securities=%d, portfolios=%d, transactions=%d)",
+            changes_detected,
+            bool(hass),
+            bool(entry_id),
+            len(updated_data["accounts"]),
+            len(updated_data["securities"]),
+            len(updated_data["portfolios"]),
+            len(updated_data["transactions"]),
         )
 
     # Schließe den Cursor und logge den Abschluss der Synchronisation
