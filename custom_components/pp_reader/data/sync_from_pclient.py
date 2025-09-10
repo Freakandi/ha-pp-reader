@@ -206,21 +206,38 @@ def sync_from_pclient(
         #     "sync_from_pclient: Transaktionen in der DB bestätigt."  # noqa: ERA001
         # )  # noqa: ERA001, RUF100
 
-        # --- ACCOUNTS ---
-        account_ids = {acc.uuid for acc in client.accounts}
-        delete_missing_entries(conn, "accounts", "uuid", account_ids)
+        # --- TRANSACTION_UNITS (vor Accounts, damit FX bei CASH_TRANSFER korrekt ist) ---
+        cur.execute("DELETE FROM transaction_units")
+        for t in client.transactions:
+            for u in t.units:
+                fx_rate = None
+                if u.HasField("fxRateToBase"):
+                    scale = u.fxRateToBase.scale
+                    value = int.from_bytes(
+                        u.fxRateToBase.value, byteorder="little", signed=True
+                    )
+                    fx_rate = abs(value / (10**scale))
+                cur.execute(
+                    """
+                    INSERT INTO transaction_units (
+                        transaction_uuid, type, amount, currency_code,
+                        fx_amount, fx_currency_code, fx_rate_to_base
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        t.uuid,
+                        u.type,
+                        u.amount,
+                        u.currencyCode,
+                        u.fxAmount if u.HasField("fxAmount") else None,
+                        u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
+                        fx_rate,
+                    ),
+                )
+                if u.HasField("fxAmount"):
+                    stats["fx_transactions"] += 1
 
-        # Berechne Transaktionen nur einmal, wenn Änderungen erkannt wurden
-        all_transactions = []
-        if transaction_changes_detected:
-            all_transactions = get_transactions(
-                conn=conn
-            )  # Lade alle Transaktionen erneut
-
-        # Vor Berechnung der Konten: Mapping für Währungen & FX-Units vorbereiten
-        cur.execute("SELECT uuid, currency_code FROM accounts")
-        accounts_currency_map = {row[0]: row[1] or "EUR" for row in cur.fetchall()}
-
+        # FX-Units jetzt aktuell verfügbar für Kontostände
         cur.execute(
             """
             SELECT transaction_uuid, fx_amount, fx_currency_code
@@ -229,11 +246,8 @@ def sync_from_pclient(
             """
         )
         tx_units = {}
-        for row in cur.fetchall():
-            tx_uuid, fx_amount, fx_ccy = row
-            # Speichere nur, falls sinnvoller Datensatz
-            if fx_amount and fx_ccy:
-                # Ersetze nicht vorhandene; bei Mehrfacheinträgen einfache Priorität erster Eintrag
+        for tx_uuid, fx_amount, fx_ccy in cur.fetchall():
+            if fx_amount is not None and fx_ccy:
                 tx_units.setdefault(
                     tx_uuid,
                     {
@@ -242,13 +256,23 @@ def sync_from_pclient(
                     },
                 )
 
+        # --- ACCOUNTS ---
+        account_ids = {acc.uuid for acc in client.accounts}
+        delete_missing_entries(conn, "accounts", "uuid", account_ids)
+
+        # Mapping vorhandener Accounts aus DB laden (kann durch Löschung eben geleert sein)
+        cur.execute("SELECT uuid, currency_code FROM accounts")
+        accounts_currency_map = {row[0]: row[1] or "EUR" for row in cur.fetchall()}
+
         for acc in client.accounts:
+            # Sicherstellen, dass jede Account-Währung im Mapping ist (auch für neue Accounts)
+            accounts_currency_map.setdefault(acc.uuid, acc.currencyCode or "EUR")
             cur.execute(
                 """
                 SELECT uuid, name, currency_code, note, is_retired, updated_at, balance
                 FROM accounts
                 WHERE uuid = ?
-            """,
+                """,
                 (acc.uuid,),
             )
             existing_account = cur.fetchone()
