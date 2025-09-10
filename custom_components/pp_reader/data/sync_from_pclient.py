@@ -17,6 +17,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import callback
 
+from ..currencies.fx import ensure_exchange_rates_for_dates_sync, load_latest_rates_sync
 from ..data.db_access import get_transactions  # noqa: TID252
 from ..logic.accounting import db_calc_account_balance  # noqa: TID252
 from ..logic.securities import (  # noqa: TID252
@@ -29,6 +30,7 @@ from ..name.abuchen.portfolio import client_pb2  # noqa: TID252
 DOMAIN = "pp_reader"
 
 _LOGGER = logging.getLogger(__name__)
+
 
 def to_iso8601(ts: Timestamp) -> str:
     """
@@ -48,77 +50,70 @@ def to_iso8601(ts: Timestamp) -> str:
     """
     return ts.ToDatetime().isoformat() if ts is not None and ts.seconds != 0 else None
 
+
 def delete_missing_entries(
-    conn: sqlite3.Connection,
-    table: str,
-    id_column: str,
-    current_ids: set
+    conn: sqlite3.Connection, table: str, id_column: str, current_ids: set
 ) -> None:
-    """
-    Delete obsolete entries from the SQLite database.
-
-    Parameters
-    ----------
-    conn : sqlite3.Connection
-        SQLite database connection object.
-    table : str
-        Name of the table from which entries will be deleted.
-    id_column : str
-        Name of the column containing unique identifiers.
-    current_ids : set
-        Set of current IDs to retain in the table.
-
-    Returns
-    -------
-    None
-
-    """
+    """Löscht veraltete Einträge aus einer Tabelle (Differenzabgleich)."""
     cur = conn.cursor()
     if not current_ids:
+        # Wenn keine aktuellen IDs existieren, alles löschen
+        _LOGGER.debug("Lösche alle Einträge aus %s (keine aktuellen IDs)", table)
         cur.execute(f"DELETE FROM {table}")
     else:
-        placeholders = ",".join(["?"] * len(current_ids))
-        cur.execute(
-            f"DELETE FROM {table} WHERE {id_column} NOT IN ({placeholders})",
-            list(current_ids)
-        )
+        placeholders = ",".join("?" for _ in current_ids)
+        sql = f"DELETE FROM {table} WHERE {id_column} NOT IN ({placeholders})"
+        cur.execute(sql, list(current_ids))
+    conn.commit()
+
 
 def normalize_shares(shares: int) -> int:
     """Stellt sicher dass Shares als Integer gespeichert werden."""
     return int(shares) if shares is not None else None
 
+
 def normalize_amount(amount: int) -> int:
     """Stellt sicher dass Beträge als Cent-Integer gespeichert werden."""
     return int(amount) if amount is not None else None
+
 
 def extract_exchange_rate(pdecimal) -> float:
     """Extrahiert einen positiven Wechselkurs aus PDecimalValue."""
     if not pdecimal or not pdecimal.HasField("value"):
         return None
     value = int.from_bytes(pdecimal.value, byteorder="little", signed=True)
-    return abs(value / (10 ** pdecimal.scale))
+    return abs(value / (10**pdecimal.scale))
+
 
 @callback
 def _push_update(hass, entry_id, data_type, data):
-    """Schickt ein Event ins HA-Event-Bus."""
-    # Verwende call_soon_threadsafe, um sicherzustellen, dass
-    # async_fire im Event-Loop ausgeführt wird
-    hass.loop.call_soon_threadsafe(
-        partial(
-            hass.bus.async_fire,
-            EVENT_PANELS_UPDATED,  # Event-Name
-            {"entry_id": entry_id, "data_type": data_type, "data": data},
-        )
+    """Sendet strukturierte Updates über den Event-Bus und speichert im hass.data Cache."""
+    if hass is None:
+        return
+    store = hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
+    store[data_type] = data
+    hass.bus.async_fire(
+        EVENT_PANELS_UPDATED,
+        {"domain": DOMAIN, "entry_id": entry_id, "type": data_type, "data": data},
+    )
+    _LOGGER.debug(
+        "Push Update: %s (%d Elemente)",
+        data_type,
+        0 if data is None else (len(data) if isinstance(data, list) else 1),
     )
 
-def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass=None, entry_id=None, last_file_update=None, db_path=None) -> None:
+
+def sync_from_pclient(
+    client: client_pb2.PClient,
+    conn: sqlite3.Connection,
+    hass=None,
+    entry_id=None,
+    last_file_update=None,
+    db_path=None,
+) -> None:
     """Synchronisiere Daten aus Portfolio Performance mit der lokalen SQLite DB."""
     cur = conn.cursor()
-    stats = {
-        "securities": 0,
-        "transactions": 0,
-        "fx_transactions": 0
-    }
+    stats = {"securities": 0, "transactions": 0, "fx_transactions": 0}
 
     # Flags für Änderungen in den jeweiligen Tabellen
     account_changes_detected = False
@@ -140,13 +135,16 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
         # Speichere das Änderungsdatum der Portfolio-Datei
         if last_file_update:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT OR REPLACE INTO metadata (
                     key, date
                 ) VALUES (
                     'last_file_update', ?
                 )
-            """, (last_file_update,))
+            """,
+                (last_file_update,),
+            )
 
             # Setze das Flag für Änderungen
             last_file_update_change_detected = True
@@ -159,9 +157,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
 
         for t in client.transactions:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT * FROM transactions WHERE uuid = ?
-            """, (t.uuid,))
+            """,
+                (t.uuid,),
+            )
             existing_transaction = cur.fetchone()
 
             new_transaction_data = (
@@ -180,20 +181,23 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 t.note if t.HasField("note") else None,
                 t.security if t.HasField("security") else None,
                 t.source if t.HasField("source") else None,
-                to_iso8601(t.updatedAt)
+                to_iso8601(t.updatedAt),
             )
 
             if not existing_transaction or existing_transaction != new_transaction_data:
                 transaction_changes_detected = True
                 updated_data["transactions"].append(t.uuid)
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT OR REPLACE INTO transactions (
                         uuid, type, account, portfolio, other_account, other_portfolio,
                         other_uuid, other_updated_at, date, currency_code, amount,
                         shares, note, security, source, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, new_transaction_data)
+                """,
+                    new_transaction_data,
+                )
             stats["transactions"] += 1
 
         # Transaktionen nach dem Einfügen bestätigen
@@ -214,11 +218,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             )  # Lade alle Transaktionen erneut
 
         for acc in client.accounts:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT uuid, name, currency_code, note, is_retired, updated_at, balance
                 FROM accounts
                 WHERE uuid = ?
-            """, (acc.uuid,))
+            """,
+                (acc.uuid,),
+            )
             existing_account = cur.fetchone()
 
             # Einheitliche Darstellung von is_retired (immer 0 oder 1)
@@ -226,9 +233,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Einheitliches Format für updated_at
             updated_at = (
-                to_iso8601(acc.updatedAt)
-                if acc.HasField("updatedAt")
-                else None
+                to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
             )
 
             new_account_data = (
@@ -237,7 +242,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 acc.currencyCode,
                 acc.note if acc.HasField("note") else None,
                 is_retired,  # Konsistente Darstellung
-                updated_at   # Konsistentes Format
+                updated_at,  # Konsistentes Format
             )
 
             # Berechne den Kontostand nur, wenn Transaktionen geändert wurden
@@ -246,7 +251,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     balance = 0  # Retired-Konten haben immer Kontostand 0
                 else:
                     account_transactions = [
-                        tx for tx in all_transactions
+                        tx
+                        for tx in all_transactions
                         if tx.account == acc.uuid or tx.other_account == acc.uuid
                     ]
                     balance = db_calc_account_balance(acc.uuid, account_transactions)
@@ -257,22 +263,28 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Vergleiche die Daten, um Änderungen zu erkennen
             if (
-                not existing_account or
-                existing_account[:-2] != new_account_data[:-2] or
-                balance != (existing_account[-1] if existing_account else None)
+                not existing_account
+                or existing_account[:-2] != new_account_data[:-2]
+                or balance != (existing_account[-1] if existing_account else None)
             ):
                 account_changes_detected = True
-                updated_data["accounts"].append({
-                    "name": acc.name,
-                    "balance": balance,
-                    "is_retired": is_retired
-                })
+                updated_data["accounts"].append(
+                    {
+                        "name": acc.name,
+                        "balance": balance,  # Cent in Original-Währung
+                        "currency_code": acc.currencyCode,
+                        "is_retired": is_retired,
+                    }
+                )
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT OR REPLACE INTO accounts
                     (uuid, name, currency_code, note, is_retired, updated_at, balance)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (*new_account_data, balance))
+                """,
+                    (*new_account_data, balance),
+                )
 
         # --- SECURITIES ---
         _LOGGER.debug("sync_from_pclient: Synchronisiere Wertpapiere...")
@@ -281,9 +293,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
         for sec in client.securities:
             # Lade den bestehenden Eintrag aus der Tabelle securities
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT * FROM securities WHERE uuid = ?
-            """, (sec.uuid,))
+            """,
+                (sec.uuid,),
+            )
             existing_security = cur.fetchone()
 
             # Einheitliche Darstellung von retired (immer 0 oder 1)
@@ -291,9 +306,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Einheitliches Format für updated_at
             updated_at = (
-                to_iso8601(sec.updatedAt)
-                if sec.HasField("updatedAt")
-                else None
+                to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
             )
 
             # Neue Daten für das Wertpapier
@@ -306,7 +319,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 sec.wkn if sec.HasField("wkn") else None,
                 sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
                 retired,  # Konsistente Darstellung
-                updated_at  # Konsistentes Format
+                updated_at,  # Konsistentes Format
             )
 
             # Aktualisiere die Tabelle securities, wenn sich die Daten geändert haben
@@ -314,13 +327,16 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 security_changes_detected = True
                 updated_data["securities"].append(sec.uuid)
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT OR REPLACE INTO securities (
                         uuid, name, currency_code,
                         note, isin, wkn, ticker_symbol,
                         retired, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, new_security_data)
+                """,
+                    new_security_data,
+                )
 
             # Aktualisiere die Tabelle historical_prices
             if sec.prices:
@@ -329,20 +345,25 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                     price_date_iso = to_iso8601(
                         Timestamp(seconds=price.date * 86400)
                     )  # epoch day -> seconds -> ISO-8601
-                    cur.execute("""
+                    cur.execute(
+                        """
                         INSERT OR REPLACE INTO historical_prices (
                             security_uuid, date, close, high, low, volume
                         ) VALUES (?, ?, ?, ?, ?, ?)
-                    """, (
-                        sec.uuid,
-                        price_date_iso,  # Datum im ISO-8601-Format
-                        price.close,  # Schlusskurs
-                        price.high if hasattr(price, "high") else None,  # Höchstkurs
-                        price.low if hasattr(price, "low") else None,  # Tiefstkurs
-                        price.volume
-                        if hasattr(price, "volume")
-                        else None  # Handelsvolumen
-                    ))
+                    """,
+                        (
+                            sec.uuid,
+                            price_date_iso,  # Datum im ISO-8601-Format
+                            price.close,  # Schlusskurs
+                            price.high
+                            if hasattr(price, "high")
+                            else None,  # Höchstkurs
+                            price.low if hasattr(price, "low") else None,  # Tiefstkurs
+                            price.volume
+                            if hasattr(price, "volume")
+                            else None,  # Handelsvolumen
+                        ),
+                    )
 
             # Aktualisiere den letzten Preis und das Datum in der Tabelle securities
             if sec.prices:
@@ -351,15 +372,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 latest_price_date_iso = to_iso8601(
                     Timestamp(seconds=latest_price.date * 86400)
                 )  # epoch day -> seconds -> ISO-8601
-                cur.execute("""
+                cur.execute(
+                    """
                     UPDATE securities
                     SET last_price = ?, last_price_date = ?
                     WHERE uuid = ?
-                """, (
-                    latest_price.close,
-                    latest_price_date_iso,
-                    sec.uuid
-                ))
+                """,
+                    (latest_price.close, latest_price_date_iso, sec.uuid),
+                )
 
             stats["securities"] += 1
 
@@ -368,9 +388,12 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
         delete_missing_entries(conn, "portfolios", "uuid", portfolio_ids)
 
         for p in client.portfolios:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT * FROM portfolios WHERE uuid = ?
-            """, (p.uuid,))
+            """,
+                (p.uuid,),
+            )
             existing_portfolio = cur.fetchone()
 
             # Einheitliche Darstellung von is_retired (immer 0 oder 1)
@@ -385,19 +408,22 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 p.note if p.HasField("note") else None,
                 p.referenceAccount if p.HasField("referenceAccount") else None,
                 is_retired,  # Konsistente Darstellung
-                updated_at   # Konsistentes Format
+                updated_at,  # Konsistentes Format
             )
 
             if not existing_portfolio or existing_portfolio != new_portfolio_data:
                 portfolio_changes_detected = True
                 updated_data["portfolios"].append(p.uuid)
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT OR REPLACE INTO portfolios (
                         uuid, name, note, reference_account, is_retired, updated_at
                     )
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, new_portfolio_data)
+                """,
+                    new_portfolio_data,
+                )
 
         # --- TRANSACTION_UNITS ---
         # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
@@ -410,26 +436,27 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 if u.HasField("fxRateToBase"):
                     scale = u.fxRateToBase.scale
                     value = int.from_bytes(
-                        u.fxRateToBase.value,
-                        byteorder="little",
-                        signed=True
+                        u.fxRateToBase.value, byteorder="little", signed=True
                     )
-                    fx_rate = abs(value / (10 ** scale))
+                    fx_rate = abs(value / (10**scale))
 
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO transaction_units (
                         transaction_uuid, type, amount, currency_code,
                         fx_amount, fx_currency_code, fx_rate_to_base
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    t.uuid,
-                    u.type,
-                    u.amount,
-                    u.currencyCode,
-                    u.fxAmount if u.HasField("fxAmount") else None,
-                    u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
-                    fx_rate  # Kann nun None sein
-                ))
+                """,
+                    (
+                        t.uuid,
+                        u.type,
+                        u.amount,
+                        u.currencyCode,
+                        u.fxAmount if u.HasField("fxAmount") else None,
+                        u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
+                        fx_rate,  # Kann nun None sein
+                    ),
+                )
                 if u.HasField("fxAmount"):
                     stats["fx_transactions"] += 1
 
@@ -460,7 +487,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 if key in current_holdings:
                     current_hold_pur[key] = {
                         "current_holdings": current_holdings[key],
-                        "purchase_value": purchase_value
+                        "purchase_value": purchase_value,
                     }
 
             # Berechne den aktuellen Wert (current_value)
@@ -470,18 +497,22 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Iteriere über die berechneten Werte und vergleiche mit der DB
             for (
-                portfolio_uuid, security_uuid
+                portfolio_uuid,
+                security_uuid,
             ), data in current_holdings_values.items():
                 current_holdings = data.get("current_holdings", 0)
                 purchase_value = data.get("purchase_value", 0)
                 current_value = data.get("current_value", 0)
 
                 # Lade den aktuellen Eintrag aus der Tabelle portfolio_securities
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT current_holdings, purchase_value, current_value
                     FROM portfolio_securities
                     WHERE portfolio_uuid = ? AND security_uuid = ?
-                """, (portfolio_uuid, security_uuid))
+                """,
+                    (portfolio_uuid, security_uuid),
+                )
                 existing_entry = cur.fetchone()
 
                 # Debug-Log für Vergleich
@@ -501,12 +532,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                 if not existing_entry or existing_entry != (
                     current_holdings,
                     int(purchase_value * 100),  # EUR -> Cent
-                    int(current_value * 100)   # EUR -> Cent
+                    int(current_value * 100),  # EUR -> Cent
                 ):
                     sec_port_changes_detected = True
 
                     # Aktualisiere oder füge den Eintrag in die Tabelle ein
-                    cur.execute("""
+                    cur.execute(
+                        """
                         INSERT OR REPLACE INTO portfolio_securities (
                             portfolio_uuid,
                             security_uuid,
@@ -514,13 +546,15 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                             purchase_value,
                             current_value
                         ) VALUES (?, ?, ?, ?, ?)
-                    """, (
-                        portfolio_uuid,
-                        security_uuid,
-                        current_holdings,
-                        int(purchase_value * 100),  # EUR -> Cent
-                        int(current_value * 100)   # EUR -> Cent
-                    ))
+                    """,
+                        (
+                            portfolio_uuid,
+                            security_uuid,
+                            current_holdings,
+                            int(purchase_value * 100),  # EUR -> Cent
+                            int(current_value * 100),  # EUR -> Cent
+                        ),
+                    )
                     _LOGGER.debug(
                         "sync_from_pclient: "
                         "portfolio_securities Daten eingefügt oder aktualisiert."
@@ -529,8 +563,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             # Entferne veraltete Einträge aus portfolio_securities
             portfolio_security_keys = set(current_holdings_values.keys())
             cur.execute(
-                "SELECT portfolio_uuid, security_uuid "
-                "FROM portfolio_securities"
+                "SELECT portfolio_uuid, security_uuid FROM portfolio_securities"
             )
             existing_keys = set(cur.fetchall())  # Alle vorhandenen Schlüssel
 
@@ -539,10 +572,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             if keys_to_delete:
                 # Lösche nur die veralteten Einträge
-                cur.executemany("""
+                cur.executemany(
+                    """
                     DELETE FROM portfolio_securities
                     WHERE portfolio_uuid = ? AND security_uuid = ?
-                """, keys_to_delete)
+                """,
+                    keys_to_delete,
+                )
                 if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
                     sec_port_changes_detected = True
                     _LOGGER.debug(
@@ -550,13 +586,13 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
                             "sync_from_pclient: Veraltete Einträge aus "
                             "portfolio_securities entfernt: %s"
                         ),
-                        keys_to_delete
+                        keys_to_delete,
                     )
             # else:  # noqa: ERA001
-                # _LOGGER.debug(
-                #     "sync_from_pclient: Keine veralteten Einträge in "  # noqa: ERA001
-                #     "portfolio_securities gefunden."
-                # )  # noqa: ERA001, RUF100
+            # _LOGGER.debug(
+            #     "sync_from_pclient: Keine veralteten Einträge in "  # noqa: ERA001
+            #     "portfolio_securities gefunden."
+            # )  # noqa: ERA001, RUF100
 
             conn.commit()
             # _LOGGER.debug(
@@ -564,16 +600,14 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             #     "synchronisiert."  # noqa: ERA001
             # )  # noqa: ERA001, RUF100
         # else:  # noqa: ERA001
-            # _LOGGER.debug(
-            #     "sync_from_pclient: Keine Änderungen an "  # noqa: ERA001
-            #     "portfolio_securities erforderlich."
-            # )  # noqa: ERA001, RUF100
+        # _LOGGER.debug(
+        #     "sync_from_pclient: Keine Änderungen an "  # noqa: ERA001
+        #     "portfolio_securities erforderlich."
+        # )  # noqa: ERA001, RUF100
 
     except Exception:
         conn.rollback()
-        _LOGGER.exception(
-            "sync_from_pclient: Fehler während der Synchronisation"
-        )
+        _LOGGER.exception("sync_from_pclient: Fehler während der Synchronisation")
         account_changes_detected = False
         transaction_changes_detected = False
         security_changes_detected = False
@@ -584,20 +618,75 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
     # Sende Updates für geänderte Tabellen
     if hass and entry_id:
         if account_changes_detected:
-            # Filtere nur aktive Konten (isRetired=False) und rechne Balance in Euro um
-            updated_accounts = [
+            # Lade alle aktiven Konten aus der DB (vollständige Liste fürs Frontend)
+            cur.execute(
+                """
+                SELECT name, currency_code, balance
+                FROM accounts
+                WHERE is_retired = 0
+                ORDER BY name
+                """
+            )
+            db_accounts = [
                 {
-                    "name": account["name"],
-                    "balance": account["balance"] / 100.0  # Umrechnung von Cent in Euro
+                    "name": row[0],
+                    "currency_code": row[1] or "EUR",
+                    "raw_balance": row[2],  # Cent in Original-Währung
                 }
-                for account in updated_data["accounts"]
-                if account.get("is_retired", False) is False
+                for row in cur.fetchall()
             ]
+
+            # Bestimme benötigte Fremdwährungen
+            fx_currencies = {
+                acc["currency_code"]
+                for acc in db_accounts
+                if acc["currency_code"] and acc["currency_code"] != "EUR"
+            }
+
+            fx_rates = {}
+            if fx_currencies:
+                try:
+                    today = datetime.now()
+                    ensure_exchange_rates_for_dates_sync(
+                        [today], fx_currencies, db_path
+                    )
+                    fx_rates = load_latest_rates_sync(today, db_path)
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception(
+                        "FX: Fehler beim Laden der Wechselkurse – Fremdwährungskonten werden mit EUR=0 gesendet."
+                    )
+
+            # Transformiere Accounts: orig_balance (Original), balance (EUR)
+            updated_accounts = []
+            for acc in db_accounts:
+                currency = acc["currency_code"]
+                orig_balance = acc["raw_balance"] / 100.0  # Cent -> Original-Betrag
+                if currency != "EUR":
+                    rate = fx_rates.get(currency)
+                    if rate:
+                        eur_balance = orig_balance / rate
+                    else:
+                        eur_balance = 0.0
+                        _LOGGER.warning(
+                            "FX: Kein Kurs für %s – setze EUR-Wert=0", currency
+                        )
+                else:
+                    eur_balance = orig_balance
+
+                updated_accounts.append(
+                    {
+                        "name": acc["name"],
+                        "currency_code": currency,
+                        "orig_balance": round(orig_balance, 2),
+                        "balance": round(eur_balance, 2),  # EUR-Wert für Frontend
+                    }
+                )
+
             if updated_accounts:
                 _push_update(hass, entry_id, "accounts", updated_accounts)
                 _LOGGER.debug(
                     "sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s",
-                    updated_accounts
+                    updated_accounts,
                 )
 
         if last_file_update_change_detected:
@@ -610,7 +699,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             _push_update(hass, entry_id, "last_file_update", formatted_last_file_update)
             _LOGGER.debug(
                 "sync_from_pclient: 📡 last_file_update-Event gesendet: %s",
-                formatted_last_file_update
+                formatted_last_file_update,
             )
 
         if sec_port_changes_detected:
@@ -619,7 +708,8 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
 
             # Iteriere über die berechneten Werte in current_holdings_values
             for (
-                portfolio_uuid, security_uuid
+                portfolio_uuid,
+                security_uuid,
             ), data in current_holdings_values.items():
                 current_value = data.get("current_value", 0)
                 purchase_value = data.get("purchase_value", 0)
@@ -643,8 +733,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             portfolio_names = {row[0]: row[1] for row in cur.fetchall()}
             for portfolio_uuid, portfolio_info in portfolio_data.items():
                 portfolio_info["name"] = portfolio_names.get(
-                    portfolio_uuid,
-                    "Unbekannt"
+                    portfolio_uuid, "Unbekannt"
                 )
 
             # Konvertiere die Werte in das gewünschte Format
@@ -662,7 +751,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             _push_update(hass, entry_id, "portfolio_values", portfolio_values)
             _LOGGER.debug(
                 "sync_from_pclient: 📡 portfolio_values-Update-Event gesendet: %s",
-                portfolio_values
+                portfolio_values,
             )
     else:
         # Logge die fehlenden Voraussetzungen
@@ -675,7 +764,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
             "  - updated_data: %s",
             hass,
             entry_id,
-            updated_data
+            updated_data,
         )
 
     # Schließe den Cursor und logge den Abschluss der Synchronisation
@@ -683,5 +772,7 @@ def sync_from_pclient(client: client_pb2.PClient, conn: sqlite3.Connection, hass
     _LOGGER.info(
         "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, "
         "%d Transaktionen (%d mit Fremdwährung)",
-        stats["securities"], stats["transactions"], stats["fx_transactions"]
+        stats["securities"],
+        stats["transactions"],
+        stats["fx_transactions"],
     )

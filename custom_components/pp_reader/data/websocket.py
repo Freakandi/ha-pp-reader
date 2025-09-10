@@ -18,36 +18,82 @@ from homeassistant.helpers.dispatcher import (
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
+
 # === Dashboard Websocket Test-Command ===
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_dashboard_data",
-        vol.Optional("entry_id"): str,  # Erwartet die entry_id
+        vol.Optional("entry_id"): str,
     }
 )
 @websocket_api.async_response
 async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -> None:
-    """Handle WebSocket command to get dashboard data."""
+    """Handle WebSocket command to get dashboard data (accounts + portfolios, incl. FX)."""
     try:
-        # Zugriff auf die Datenbank
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
         from .db_access import get_accounts, get_portfolios
 
-        # Datenbankabfragen ausführen
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
         portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
 
-        # Antwort senden
+        # FX Vorbereitung
+        try:
+            from ..currencies.fx import (
+                ensure_exchange_rates_for_dates_sync,
+                load_latest_rates_sync,
+            )
+
+            active_fx_currencies = {
+                getattr(a, "currency_code", "EUR")
+                for a in accounts
+                if not a.is_retired and getattr(a, "currency_code", "EUR") != "EUR"
+            }
+            if active_fx_currencies:
+                today = datetime.now()
+                ensure_exchange_rates_for_dates_sync(
+                    [today], active_fx_currencies, db_path
+                )
+                fx_rates = load_latest_rates_sync(today, db_path)
+            else:
+                fx_rates = {}
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse – setze Fremdwährungswerte=0 EUR."
+            )
+            fx_rates = {}
+
+        # Accounts transformieren (gleiches Format wie ws_get_accounts)
+        accounts_payload = []
+        for a in accounts:
+            if a.is_retired:
+                continue
+            currency = getattr(a, "currency_code", "EUR") or "EUR"
+            orig_balance = a.balance / 100.0  # Originalbetrag in Konto-Währung
+            if currency != "EUR":
+                rate = fx_rates.get(currency)
+                eur_balance = (orig_balance / rate) if rate else 0.0
+            else:
+                eur_balance = orig_balance
+            accounts_payload.append(
+                {
+                    "name": a.name,
+                    "currency_code": currency,
+                    "orig_balance": round(orig_balance, 2),
+                    "balance": round(
+                        eur_balance, 2
+                    ),  # EUR-Wert (Abwärtskompatibilität)
+                }
+            )
+
         connection.send_result(
             msg["id"],
             {
-                "accounts": [a.__dict__ for a in accounts],
+                "accounts": accounts_payload,
                 "portfolios": [p.__dict__ for p in portfolios],
             },
         )
 
-        # Dispatcher-Listener für Updates registrieren
         async_dispatcher_connect(
             hass,
             f"{DOMAIN}_updated_{entry_id}",
@@ -60,48 +106,85 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
             ),
         )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten")
         connection.send_error(msg["id"], "db_error", str(e))
+
 
 # === Websocket Accounts-Data ===
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_accounts",
-        vol.Optional("entry_id"): str,  # Erwartet die entry_id
+        vol.Optional("entry_id"): str,
     }
 )
 @websocket_api.async_response
 async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None:
-    """Handle WebSocket command to get account data (name and balance) for active accounts."""
+    """Return active accounts with original and EUR-converted balance (FX)."""
     try:
-        # Zugriff auf die Datenbank
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
         from .db_access import get_accounts
 
-        # Datenbankabfrage ausführen
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
 
-        # Nur aktive Konten (isRetired=0) und relevante Daten extrahieren
-        account_data = [
-            {"name": a.name, "balance": a.balance / 100.0}  # Kontostand von Cent in Euro umrechnen
-            for a in accounts
-            if not a.is_retired  # Nur Konten mit isRetired=0
-        ]
+        # FX laden
+        try:
+            from ..currencies.fx import (
+                ensure_exchange_rates_for_dates_sync,
+                load_latest_rates_sync,
+            )
 
-        # Antwort senden
+            active_fx_currencies = {
+                getattr(a, "currency_code", "EUR")
+                for a in accounts
+                if not a.is_retired and getattr(a, "currency_code", "EUR") != "EUR"
+            }
+            if active_fx_currencies:
+                today = datetime.now()
+                ensure_exchange_rates_for_dates_sync(
+                    [today], active_fx_currencies, db_path
+                )
+                fx_rates = load_latest_rates_sync(today, db_path)
+            else:
+                fx_rates = {}
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse – setze Fremdwährungswerte=0 EUR."
+            )
+            fx_rates = {}
+
+        account_data = []
+        for a in accounts:
+            if a.is_retired:
+                continue
+            currency = getattr(a, "currency_code", "EUR") or "EUR"
+            orig_balance = a.balance / 100.0  # Originalbetrag (Konto-Währung)
+            if currency != "EUR":
+                rate = fx_rates.get(currency)
+                eur_balance = (orig_balance / rate) if rate else 0.0
+            else:
+                eur_balance = orig_balance
+            account_data.append(
+                {
+                    "name": a.name,
+                    "currency_code": currency,
+                    "orig_balance": round(orig_balance, 2),
+                    "balance": round(eur_balance, 2),  # EUR-Wert
+                }
+            )
+
         connection.send_result(
             msg["id"],
             {
                 "accounts": account_data,
             },
         )
-        # _LOGGER.debug("Kontodaten für aktive Konten erfolgreich abgerufen und gesendet: %s", account_data)  # noqa: ERA001
 
-    except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Kontodaten")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))
+
 
 # === Websocket FileUpdate-Timestamp ===
 @websocket_api.websocket_command(
@@ -111,7 +194,9 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
     }
 )
 @websocket_api.async_response
-async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict) -> None:
+async def ws_get_last_file_update(
+    hass, connection: ActiveConnection, msg: dict
+) -> None:
     """Handle WebSocket command to get the last file update timestamp."""
     try:
         # Zugriff auf die Datenbank
@@ -120,13 +205,17 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
         from .db_access import get_last_file_update
 
         # Datenbankabfrage ausführen
-        last_file_update_raw = await hass.async_add_executor_job(get_last_file_update, db_path)
+        last_file_update_raw = await hass.async_add_executor_job(
+            get_last_file_update, db_path
+        )
 
         # Zeitstempel formatieren
         if last_file_update_raw:
             try:
                 # Zeitstempel im ISO-8601-Format "%Y-%m-%dT%H:%M:%S" parsen und in das gewünschte Format umwandeln
-                last_file_update = datetime.strptime(last_file_update_raw, "%Y-%m-%dT%H:%M:%S").strftime("%d.%m.%Y, %H:%M")
+                last_file_update = datetime.strptime(
+                    last_file_update_raw, "%Y-%m-%dT%H:%M:%S"
+                ).strftime("%d.%m.%Y, %H:%M")
             except ValueError:
                 _LOGGER.exception("Fehler beim Parsen des Zeitstempels")
                 last_file_update = "Unbekannt"
@@ -145,6 +234,7 @@ async def ws_get_last_file_update(hass, connection: ActiveConnection, msg: dict)
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update")
         connection.send_error(msg["id"], "db_error", str(e))
+
 
 # === Websocket Portfolio-Data ===
 @websocket_api.websocket_command(
@@ -186,12 +276,14 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
             )
 
             # Füge die berechneten Daten hinzu
-            portfolio_data.append({
-                "name": portfolio.name,
-                "position_count": position_count,
-                "current_value": value,
-                "purchase_sum": purchase_sum,
-            })
+            portfolio_data.append(
+                {
+                    "name": portfolio.name,
+                    "position_count": position_count,
+                    "current_value": value,
+                    "purchase_sum": purchase_sum,
+                }
+            )
 
         # Antwort senden
         connection.send_result(
