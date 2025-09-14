@@ -99,3 +99,36 @@ export async function fetchPortfoliosWS(hass, panelConfig) {
 
   return portfolios;
 }
+
+// NEU: Lazy Load der Wertpapier-Positionen für ein einzelnes Depot
+export async function fetchPortfolioPositionsWS(hass, panelConfig, portfolio_uuid) {
+  const entry_id = panelConfig
+    ?.config
+    ?._panel_custom
+    ?.config
+    ?.entry_id;
+
+  if (!hass || !entry_id) {
+    throw new Error(
+      `fetchPortfolioPositionsWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
+    );
+  }
+  if (!portfolio_uuid) {
+    throw new Error("fetchPortfolioPositionsWS: fehlendes portfolio_uuid");
+  }
+
+  const response = await hass.connection.sendMessagePromise({
+    type: "pp_reader/get_portfolio_positions",
+    entry_id,
+    portfolio_uuid,
+  });
+
+  // Erwartetes Response-Format:
+  // {
+  //   portfolio_uuid: "...",
+  //   positions: [
+  //     { security_uuid, name, current_holdings, purchase_value, current_value, gain_abs, gain_pct }
+  //   ]
+  // }
+  return response;
+}

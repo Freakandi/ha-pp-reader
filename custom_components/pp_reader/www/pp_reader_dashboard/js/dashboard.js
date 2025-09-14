@@ -1,7 +1,7 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
-import { renderDashboard } from './tabs/overview.js';
+import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
-import { handleAccountUpdate, handleLastFileUpdate, handlePortfolioUpdate } from './data/updateConfigsWS.js';
+import { handleAccountUpdate, handleLastFileUpdate, handlePortfolioUpdate, handlePortfolioPositionsUpdate } from './data/updateConfigsWS.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
@@ -35,7 +35,11 @@ async function renderTab(root, hass, panel) {
   }
 
   root.innerHTML = content;
-  // console.log("renderTab: Inhalt wurde erfolgreich in das Root-Element eingefügt.");
+
+  // NEU (Section 6): Scoped Listener für Portfolio-Expand nur für Overview-Tab (Index 0 / Titel 'Dashboard')
+  if (tabs[currentPage]?.render === renderDashboard) {
+    attachPortfolioToggleHandler(root);
+  }
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
@@ -317,6 +321,9 @@ class PPReaderDashboard extends HTMLElement {
       handleLastFileUpdate(pushedData, this._root);
     } else if (dataType === "portfolio_values") {
       handlePortfolioUpdate(pushedData, this._root);
+    } else if (dataType === "portfolio_positions") {
+      // NEU: Einzelpositions-Update für ein bestimmtes Depot
+      handlePortfolioPositionsUpdate(pushedData, this._root);
     } else {
       console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
     }

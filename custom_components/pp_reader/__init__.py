@@ -20,12 +20,9 @@ from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from .data.backup_db import setup_backup_system
 from .data.coordinator import PPReaderCoordinator
 from .data.db_init import initialize_database_schema
-from .data.websocket import (
-    ws_get_accounts,
-    ws_get_dashboard_data,
-    ws_get_last_file_update,
-    ws_get_portfolio_data,
-)
+from .data import (
+    websocket,
+)  # Neu: Registrierung neuer WebSocket-Commands (portfolio positions)
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -54,9 +51,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, ws_get_portfolio_data)
         # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
-        _LOGGER.exception(
-            "❌ Fehler bei der Registrierung der Websocket-Befehle"
-        )
+        _LOGGER.exception("❌ Fehler bei der Registrierung der Websocket-Befehle")
 
     return True
 
@@ -98,9 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             #     entry.entry_id,
             # )  # noqa: ERA001, RUF100
         except Exception as exc:
-            _LOGGER.exception(
-                "❌ Fehler beim ersten Datenabruf des Coordinators"
-            )
+            _LOGGER.exception("❌ Fehler beim ersten Datenabruf des Coordinators")
             msg = "Coordinator konnte nicht initialisiert werden"
             raise ConfigEntryNotReady(msg) from exc
 
@@ -150,14 +143,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
                 _LOGGER.info("✅ Custom Panel 'ppreader' erfolgreich registriert.")
             except ValueError:
-                _LOGGER.exception(
-                    "❌ Fehler bei der Registrierung des Panels"
-                )
+                _LOGGER.exception("❌ Fehler bei der Registrierung des Panels")
         else:
             _LOGGER.warning(
                 "Das Panel 'ppreader' ist bereits registriert. "
                 "Überspringe Registrierung."
             )
+
+        # WebSocket-Commands registrieren (inkl. neuem pp_reader/get_portfolio_positions)
+        try:
+            websocket.async_register_commands(hass)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Fehler bei Registrierung der WebSocket-Commands")
 
         return True  # noqa: TRY300
 

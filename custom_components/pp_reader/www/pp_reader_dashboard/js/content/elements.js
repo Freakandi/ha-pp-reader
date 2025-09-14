@@ -1,24 +1,41 @@
 export function formatValue(key, value) {
   let formatted;
+
+  // Zahlen absichern
+  const safeNumber = (v, minFrac = 2, maxFrac = 2) =>
+    (isNaN(v) ? 0 : v).toLocaleString('de-DE', {
+      minimumFractionDigits: minFrac,
+      maximumFractionDigits: maxFrac
+    });
+
   if (['gain_abs', 'gain_pct'].includes(key)) {
     const symbol = key === 'gain_pct' ? '%' : '€';
-    formatted = value.toLocaleString('de-DE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }) + `&nbsp;${symbol}`;
-    const cls = value >= 0 ? 'positive' : 'negative';
+    const num = isNaN(value) ? 0 : value;
+    formatted = safeNumber(num) + `&nbsp;${symbol}`;
+    const cls = num >= 0 ? 'positive' : 'negative';
     return `<span class="${cls}">${formatted}</span>`;
   } else if (key === 'position_count') {
-    formatted = value.toLocaleString('de-DE');
-  } else if (['balance', 'current_value'].includes(key)) {
-    formatted = value.toLocaleString('de-DE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }) + '&nbsp;€';
+    formatted = (isNaN(value) ? 0 : value).toLocaleString('de-DE');
+  } else if (['balance', 'current_value', 'purchase_value'].includes(key)) {
+    // Währungswerte (EUR)
+    const num = isNaN(value) ? 0 : value;
+    formatted = safeNumber(num) + '&nbsp;€';
+  } else if (key === 'current_holdings') {
+    // Bestände (Anzahl Anteile) – etwas mehr Präzision (bis 4 Nachkommastellen), aber ohne unnötige Nullen
+    const num = isNaN(value) ? 0 : value;
+    const hasFraction = Math.abs(num % 1) > 0;
+    formatted = num.toLocaleString('de-DE', {
+      minimumFractionDigits: hasFraction ? 2 : 0,
+      maximumFractionDigits: 4
+    });
   } else {
-    // HIER wird abgeschnitten:
     formatted = value;
     if (typeof formatted === 'string') {
+      const MAX_LEN = 60;
+      if (formatted.length > MAX_LEN) {
+        formatted = formatted.slice(0, MAX_LEN - 1) + '…';
+      }
+      // Entferne frühere Präfixe (Abwärtskompatibilität)
       if (formatted.startsWith('Kontostand ')) {
         formatted = formatted.substring('Kontostand '.length);
       } else if (formatted.startsWith('Depotwert ')) {
@@ -48,21 +65,27 @@ export function makeTable(rows, cols, sumColumns = []) {
 
   // Summen berechnen
   const sums = {};
-  let totalGainAbs = 0;
-  let totalValue = 0;
-
   cols.forEach(c => {
-    if (c.align === 'right' && sumColumns.includes(c.key)) {
+    if (sumColumns.includes(c.key)) {
       sums[c.key] = rows.reduce((acc, row) => {
         const v = row[c.key];
-        return acc + (typeof v === 'number' ? v : 0);
+        return acc + (typeof v === 'number' && !isNaN(v) ? v : 0);
       }, 0);
     }
   });
 
-  if ('gain_abs' in sums && 'current_value' in sums) {
-    // Gesamtprozent berechnen: (Summe Gewinn absolut / Summe Wert) * 100
-    sums['gain_pct'] = (sums['gain_abs'] / sums['current_value']) * 100;
+  // Ableitung Summenfelder:
+  // Wenn purchase_value existiert und gain_abs nicht übergeben wurde, kann der Aufrufer es selber liefern.
+  // gain_pct Logik:
+  //   Falls purchase_value (Summe) vorhanden -> (gain_abs / purchase_value) * 100
+  //   Sonst (Fallback) falls current_value vorhanden -> (gain_abs / current_value) * 100
+  if ('gain_abs' in sums) {
+    if ('purchase_value' in sums && sums.purchase_value > 0) {
+      sums['gain_pct'] = (sums['gain_abs'] / sums['purchase_value']) * 100;
+    } else if ('current_value' in sums && sums.current_value !== 0) {
+      sums['gain_pct'] = (sums['gain_abs'] / (sums['current_value'] - sums['gain_abs'])) * 100;
+      // Der obige Ausdruck rekonstruiert purchase_sum ~ current_value - gain_abs (kompatibel zu Portfolio-Formel)
+    }
   }
 
   html += '<tr class="footer-row">';
@@ -72,6 +95,8 @@ export function makeTable(rows, cols, sumColumns = []) {
       html += `<td${alignClass}>Summe</td>`;
     } else if (sums[c.key] != null) {
       html += `<td${alignClass}>${formatValue(c.key, sums[c.key])}</td>`;
+    } else if (c.key === 'gain_pct' && sums['gain_pct'] != null) {
+      html += `<td${alignClass}>${formatValue('gain_pct', sums['gain_pct'])}</td>`;
     } else {
       html += '<td></td>';
     }
@@ -104,4 +129,24 @@ export function createHeaderCard(headerTitle, meta) {
   `;
 
   return headerCard;
+}
+
+// === NEU: Vereinheitlichte Format-Helfer für andere Module (z.B. overview.js) ===
+export function formatNumber(value, minFrac = 2, maxFrac = 2) {
+  return (isNaN(value) ? 0 : value).toLocaleString('de-DE', {
+    minimumFractionDigits: minFrac,
+    maximumFractionDigits: maxFrac
+  });
+}
+
+export function formatGain(value) {
+  const num = isNaN(value) ? 0 : value;
+  const cls = num >= 0 ? 'positive' : 'negative';
+  return `<span class="${cls}">${formatNumber(num)}&nbsp;€</span>`;
+}
+
+export function formatGainPct(value) {
+  const num = isNaN(value) ? 0 : value;
+  const cls = num >= 0 ? 'positive' : 'negative';
+  return `<span class="${cls}">${formatNumber(num)}&nbsp;%</span>`;
 }
