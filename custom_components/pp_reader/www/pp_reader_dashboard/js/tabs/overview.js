@@ -272,6 +272,11 @@ export function attachPortfolioPositionsSorting(root, portfolioUuid) {
   });
 }
 
+// Exponiere zentrale Sortier-Funktion global für Push-Handler (Race-frei wiederverwendbar)
+if (!window.__ppReaderAttachPortfolioPositionsSorting) {
+  window.__ppReaderAttachPortfolioPositionsSorting = attachPortfolioPositionsSorting;
+}
+
 // NEU: Funktion zum erneuten Laden der Positionsdaten
 async function reloadPortfolioPositions(portfolioUuid, containerEl, root) {
   if (!portfolioUuid || !_hassRef || !_panelConfigRef) return;

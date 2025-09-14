@@ -200,7 +200,7 @@ export function handlePortfolioPositionsUpdate(update, root) {
   }
   const { portfolio_uuid, positions, error } = update;
 
-  // Cache aktualisieren
+  // Cache aktualisieren (unverändert)
   try {
     const cache = window.__ppReaderPortfolioPositionsCache;
     if (cache && typeof cache.set === 'function' && !error) {
@@ -210,7 +210,6 @@ export function handlePortfolioPositionsUpdate(update, root) {
     console.warn("handlePortfolioPositionsUpdate: Konnte Cache nicht aktualisieren:", e);
   }
 
-  // Globale Pending-Map initialisieren (für Events vor Initialrender der Tabelle)
   if (!window.__ppReaderPendingPositions) {
     window.__ppReaderPendingPositions = new Map();
   }
@@ -219,12 +218,11 @@ export function handlePortfolioPositionsUpdate(update, root) {
     `.portfolio-table .portfolio-details[data-portfolio="${portfolio_uuid}"]`
   );
 
-  // Falls Tabelle/Zeile noch nicht existiert (z.B. Event kommt sehr früh), merken und später anwenden
+  // Falls Detailzeile noch nicht existiert → merken + Retry wie bisher
   if (!detailsRow) {
     window.__ppReaderPendingPositions.set(portfolio_uuid, { positions, error });
-    // Retry-Mechanismus: Versuche kurzzeitig, ob Zeile inzwischen gerendert wurde
     let attempts = 0;
-    const maxAttempts = 10;        // ~5s bei 500ms Intervall
+    const maxAttempts = 10;
     const interval = 500;
     const retry = () => {
       attempts += 1;
@@ -232,13 +230,18 @@ export function handlePortfolioPositionsUpdate(update, root) {
         `.portfolio-table .portfolio-details[data-portfolio="${portfolio_uuid}"]`
       );
       if (rowNow) {
-        // Wenn inzwischen vorhanden und Nutzer das Depot bereits aufgeklappt hat
         const containerNow = rowNow.querySelector('.positions-container');
         if (containerNow && !rowNow.classList.contains('hidden')) {
-          if (error) {
-            containerNow.innerHTML = `<div class="error">${error} <button class="retry-pos" data-portfolio="${portfolio_uuid}">Erneut laden</button></div>`;
-          } else {
-            containerNow.innerHTML = renderPositionsTableInline(positions || []);
+          // Beim erstmaligen sichtbaren Mount Standard-Rendering,
+          // Sortierung wird anschließend per globaler Funktion gesetzt.
+          containerNow.innerHTML = error
+            ? `<div class="error">${error} <button class="retry-pos" data-portfolio="${portfolio_uuid}">Erneut laden</button></div>`
+            : renderPositionsTableInline(positions || []);
+          try {
+            // User- oder Default-Sort wieder anwenden
+            restoreSortAndInit(containerNow, root, portfolio_uuid);
+          } catch (e) {
+            console.warn("handlePortfolioPositionsUpdate(retry): Sort-Restore fehlerhaft:", e);
           }
         }
         window.__ppReaderPendingPositions.delete(portfolio_uuid);
@@ -246,6 +249,8 @@ export function handlePortfolioPositionsUpdate(update, root) {
       }
       if (attempts < maxAttempts) {
         setTimeout(retry, interval);
+      } else {
+        window.__ppReaderPendingPositions.delete(portfolio_uuid);
       }
     };
     setTimeout(retry, interval);
@@ -260,34 +265,50 @@ export function handlePortfolioPositionsUpdate(update, root) {
     return;
   }
 
+  // --- NEU: Sortzustand erhalten ---
+  const prevKey = container.dataset.sortKey;
+  const prevDir = container.dataset.sortDir;
+
+  // Rebuild Tabelle
   container.innerHTML = renderPositionsTableInline(positions || []);
 
-  // === Wiederanwendung Sortierung + Click-Binding (refaktoriert auf Helper) ===
-  (function restoreAndBindSort(containerEl) {
+  try {
+    // Zustand zurückschreiben (falls vorhanden)
+    if (prevKey) container.dataset.sortKey = prevKey;
+    if (prevDir) container.dataset.sortDir = prevDir;
+
+    restoreSortAndInit(container, root, portfolio_uuid);
+  } catch (e) {
+    console.warn("handlePortfolioPositionsUpdate: Fehler bei Sort-Restore:", e);
+  }
+
+  function restoreSortAndInit(containerEl, rootEl, pid) {
     const table = containerEl.querySelector('table.sortable-positions');
     if (!table) return;
 
-    // Sortierung anwenden
-    reapplyPositionsSort(containerEl);
+    // Falls kein vorheriger Zustand → Defaults vom <table>
+    const key = containerEl.dataset.sortKey || table.dataset.defaultSort || 'name';
+    const dir = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
+    containerEl.dataset.sortKey = key;
+    containerEl.dataset.sortDir = dir;
 
-    // Click-Listener einmalig binden
-    if (!table.__ppReaderSortingBound) {
-      table.__ppReaderSortingBound = true;
-      table.addEventListener('click', (e) => {
-        const th = e.target.closest('th[data-sort-key]');
-        if (!th || !table.contains(th)) return;
-        const newKey = th.getAttribute('data-sort-key');
-        if (!newKey) return;
-        let newDir = 'asc';
-        if (containerEl.dataset.sortKey === newKey) {
-          newDir = containerEl.dataset.sortDir === 'asc' ? 'desc' : 'asc';
-        }
-        containerEl.dataset.sortKey = newKey;
-        containerEl.dataset.sortDir = newDir;
-        sortTableRows(table, newKey, newDir, true);
-      });
+    // Anwenden über generische Utility (Positions-Tabelle → isPositions=true)
+    try {
+      // sortTableRows existiert, da oben importiert
+      sortTableRows(table, key, dir, true);
+    } catch (e) {
+      console.warn("restoreSortAndInit: sortTableRows Fehler:", e);
     }
-  })(container);
+
+    // Zentrale Sortier-Klick-Logik (einheitlich zur Lazy-Variante) benutzen
+    try {
+      if (window.__ppReaderAttachPortfolioPositionsSorting) {
+        window.__ppReaderAttachPortfolioPositionsSorting(rootEl, pid);
+      }
+    } catch (e) {
+      console.warn("restoreSortAndInit: attachPortfolioPositionsSorting Fehler:", e);
+    }
+  }
 }
 
 /* ------------------ Hilfsfunktionen (lokal) ------------------ */
