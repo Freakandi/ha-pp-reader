@@ -1,13 +1,17 @@
 .card {
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px var(--divider-color); /* HA-Variable für Schatten */
+  box-shadow: 0 2px 8px var(--divider-color);
+  /* HA-Variable für Schatten */
   padding: 1rem;
   margin-bottom: 1.5rem;
   overflow: auto;
   position: relative;
-  will-change: transform, opacity; /* Performance-Optimierung */
-  background-color: var(--card-background-color); /* HA-Variable für Karten-Hintergrund */
-  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
+  will-change: transform, opacity;
+  /* Performance-Optimierung */
+  background-color: var(--card-background-color);
+  /* HA-Variable für Karten-Hintergrund */
+  color: var(--primary-text-color);
+  /* HA-Variable für Textfarbe */
 }
 
 .card h2 {
@@ -17,15 +21,18 @@
   font-size: 1.35rem;
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
-  background-color: var(--card-background-color); /* HA-Variable für Hintergrund */
-  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
+  background-color: var(--card-background-color);
+  /* HA-Variable für Hintergrund */
+  color: var(--primary-text-color);
+  /* HA-Variable für Textfarbe */
 }
 
 .card::-webkit-scrollbar {
   height: 8px;
 }
+
 .card::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
 }
 
@@ -39,9 +46,12 @@
   padding: 1rem;
   border-radius: 0.5rem;
   position: relative;
-  box-shadow: 0 2px 8px var(--divider-color); /* HA-Variable für Schatten */
-  background-color: var(--card-background-color); /* HA-Variable für Karten-Hintergrund */
-  color: var(--primary-text-color); /* HA-Variable für Textfarbe */
+  box-shadow: 0 2px 8px var(--divider-color);
+  /* HA-Variable für Schatten */
+  background-color: var(--card-background-color);
+  /* HA-Variable für Karten-Hintergrund */
+  color: var(--primary-text-color);
+  /* HA-Variable für Textfarbe */
   gap: 0.5rem;
 }
 
@@ -49,7 +59,8 @@
 .header-card.sticky {
   position: sticky;
   top: 0px;
-  right: 0.5rem; /* Zentrierung durch 1rem Abstand links */
+  right: 0.5rem;
+  /* Zentrierung durch 1rem Abstand links */
   /*width: var(--panel-width, 100%);*/
   height: min-content;
   z-index: 200;
@@ -127,7 +138,8 @@
 }
 
 .meta div strong {
-  color: var(--primary-text-color); /* HA-Variable für hervorgehobenen Text */
+  color: var(--primary-text-color);
+  /* HA-Variable für hervorgehobenen Text */
 }
 
 table {
@@ -138,7 +150,8 @@ table {
   margin: 0;
 }
 
-th, td {
+th,
+td {
   padding: 0.75rem 1rem;
   font-size: 1.25rem;
 }
@@ -161,7 +174,8 @@ tbody tr:nth-child(odd) {
 }
 
 tbody tr:hover {
-  background-color: var(--outline-hover-color); /* HA-Variable für Akzente */
+  background-color: var(--outline-hover-color);
+  /* HA-Variable für Akzente */
 }
 
 .footer-row td {
@@ -171,9 +185,174 @@ tbody tr:hover {
 }
 
 .positive {
-  color: var(--success-color); /* HA-Variable für positive Werte */
+  color: var(--success-color);
+  /* HA-Variable für positive Werte */
 }
 
 .negative {
-  color: var(--error-color); /* HA-Variable für negative Werte */
+  color: var(--error-color);
+  /* HA-Variable für negative Werte */
+}
+
+/* ===== Expandierbare Depot-Tabelle ===== */
+.expandable-portfolio-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.expandable-portfolio-table th,
+.expandable-portfolio-table td {
+  padding: 0.6rem 0.8rem;
+  font-size: 1.05rem;
+}
+
+.portfolio-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--primary-text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+}
+
+.portfolio-toggle:hover .portfolio-name {
+  text-decoration: underline;
+}
+
+.portfolio-toggle .caret {
+  display: inline-block;
+  width: 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  transition: transform 0.2s ease;
+  color: var(--primary-text-color);
+}
+
+.portfolio-toggle.expanded .caret {
+  transform: rotate(0deg);
+}
+
+.portfolio-details {
+  background: var(--card-background-color);
+  transition: background-color 0.25s ease;
+}
+
+.portfolio-details.hidden {
+  display: none;
+}
+
+.positions-container {
+  padding: 0.25rem 0.25rem 0.75rem 0.25rem;
+}
+
+.positions-container .loading,
+.positions-container .error,
+.positions-container .no-positions {
+  font-size: 0.9rem;
+  opacity: 0.85;
+  padding: 0.4rem 0.25rem;
+}
+
+.positions-container .error {
+  color: var(--error-color);
+}
+
+.positions-container table {
+  margin-top: 0.25rem;
+}
+
+.positions-container table th {
+  font-size: 0.85rem;
+}
+
+.positions-container table td {
+  font-size: 0.85rem;
+}
+
+/* Kleinere Screens: etwas kompakter */
+@media (max-width: 800px) {
+
+  .expandable-portfolio-table th,
+  .expandable-portfolio-table td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .positions-container table th,
+  .positions-container table td {
+    font-size: 0.75rem;
+  }
+}
+
+/* === Sortierbare Tabellen (Änderung 9) ===
+   Nutzt Klassen/Zustände die JS setzt:
+   - th[data-sort-key] (generisch)
+   - .sort-active + .dir-asc | .dir-desc
+   - Optional vorhandene Klasse .sortable-col
+*/
+th[data-sort-key],
+th.sortable-header,
+th.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+th[data-sort-key]:hover,
+th.sortable-header:hover,
+th.sortable-col:hover {
+  background-color: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
+}
+
+/* Visuelles Icon via Pseudo-Element (kein zusätzliches Markup nötig) */
+th[data-sort-key]::after,
+th.sortable-header::after,
+th.sortable-col::after {
+  content: '▲';
+  /* Basis-Pfeil (wird für desc rotiert) */
+  font-size: 0.55em;
+  margin-left: 6px;
+  opacity: 0;
+  display: inline-block;
+  transform: translateY(-1px) rotate(0deg);
+  transition: opacity 0.15s ease, transform 0.2s ease;
+  color: var(--primary-text-color);
+}
+
+/* Aktive Spalte hervorheben */
+th[data-sort-key].sort-active,
+th.sortable-header.sort-active,
+th.sortable-col.sort-active {
+  background-color: var(--primary-background-color, rgba(0, 0, 0, 0.06));
+  box-shadow: inset 0 -2px 0 var(--accent-color, #03a9f4);
+  font-weight: 700;
+}
+
+/* Icon einblenden wenn aktiv */
+th[data-sort-key].sort-active::after,
+th.sortable-header.sort-active::after,
+th.sortable-col.sort-active::after {
+  opacity: 0.85;
+}
+
+/* Abwärts: Pfeil um 180° drehen */
+th[data-sort-key].sort-active.dir-desc::after,
+th.sortable-header.sort-active.dir-desc::after,
+th.sortable-col.sort-active.dir-desc::after {
+  transform: translateY(-1px) rotate(180deg);
+}
+
+/* Optional etwas helleres Icon bei inaktivem Hover für Hinweis */
+th[data-sort-key]:hover::after,
+th.sortable-header:hover::after,
+th.sortable-col:hover::after {
+  opacity: 0.35;
 }

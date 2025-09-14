@@ -1,12 +1,9 @@
-import './js/dashboard.js'; // Importiere das Dashboard
+import './js/dashboard.js?v=20250914b'; // Cache-Bust Version
 
 class PPReaderPanel extends HTMLElement {
   constructor() {
     super();
-    // Shadow DOM erstellen
     this.attachShadow({ mode: 'open' });
-
-    // Header und Wrapper erstellen
     const container = document.createElement('div');
     container.innerHTML = `
       <div class="panel-root">
@@ -23,28 +20,29 @@ class PPReaderPanel extends HTMLElement {
         </div>
       </div>
     `;
-
-    // CSS-Dateien ins Shadow DOM laden
     this._loadCss('/pp_reader_dashboard/css/base.css');
     this._loadCss('/pp_reader_dashboard/css/cards.css');
     this._loadCss('/pp_reader_dashboard/css/nav.css');
-
-    // Inhalte ins Shadow DOM einfügen
     this.shadowRoot.appendChild(container);
 
-    // Event-Listener für den Menü-Button
+    // NEU: Referenz auf das Dashboard-Element sichern
+    this._dashboardEl = container.querySelector('pp-reader-dashboard');
+    if (!this._dashboardEl) {
+      console.error("[pp_reader] Dashboard Element nicht gefunden – Rendering unmöglich.");
+    } else {
+      console.debug("[pp_reader] Dashboard Element referenziert.");
+    }
+
     container.querySelector('.menu-button').addEventListener('click', () => {
-      // Access the home-assistant-main element
-      const homeAssistantMain = document.querySelector('home-assistant').shadowRoot.querySelector('home-assistant-main');
-      if (homeAssistantMain) {
-        homeAssistantMain.dispatchEvent(new CustomEvent('hass-toggle-menu', { bubbles: true, composed: true }));
-        console.log('Sidebar toggle event fired.');
-      } else {
-        console.error('home-assistant-main element not found!');
+      const haMain = document
+        .querySelector('home-assistant')
+        ?.shadowRoot
+        ?.querySelector('home-assistant-main');
+      if (haMain) {
+        haMain.dispatchEvent(new CustomEvent('hass-toggle-menu', { bubbles: true, composed: true }));
       }
     });
 
-    // ResizeObserver initialisieren
     this._resizeObserver = new ResizeObserver(() => this._updateWidth());
     this._resizeObserver.observe(this);
   }
@@ -87,20 +85,15 @@ class PPReaderPanel extends HTMLElement {
 
   // Dashboard aktualisieren
   _updateDashboard() {
-    const dashboard = this.shadowRoot.querySelector('pp-reader-dashboard');
-    if (dashboard) {
-      if (this._hass) {
-        // console.log("PPReaderPanel: Dashboard gefunden, hass wird übergeben:", this._hass);
-        dashboard.hass = this._hass;
-        dashboard.narrow = this._narrow;
-        dashboard.route = this._route;
-        dashboard.panel = this._panel;
-      } else {
-        console.warn("PPReaderPanel: hass ist noch nicht gesetzt, überspringe Übergabe.");
-      }
-    } else {
-      console.error("PPReaderPanel: Dashboard nicht gefunden!");
+    // Fallback: falls beim ersten Setter noch nicht gesetzt, jetzt versuchen
+    if (!this._dashboardEl) {
+      this._dashboardEl = this.shadowRoot?.querySelector('pp-reader-dashboard') || null;
+      if (!this._dashboardEl) return; // nichts zu tun
     }
+    if (this._hass) this._dashboardEl.hass = this._hass;
+    if (this._panel) this._dashboardEl.panel = this._panel;
+    if (this._narrow !== undefined) this._dashboardEl.narrow = this._narrow;
+    if (this._route) this._dashboardEl.route = this._route;
   }
 
   // Cleanup beim Entfernen des Elements

@@ -1,101 +1,92 @@
-export async function fetchDashboardDataWS(hass, panelConfig) {
-  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
-  const entry_id = panelConfig
-    ?.config
-    ?._panel_custom
-    ?.config
-    ?.entry_id;
+function deriveEntryId(hass, panelConfig) {
+  // Direkt gesetzte einfache Variante
+  let entry_id = panelConfig?.config?.entry_id;
 
-  if (!hass || !entry_id) {
-    throw new Error(
-      `fetchDashboardDataWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
-    );
+  // Legacy verschachtelte Struktur (panel_custom)
+  if (!entry_id) {
+    entry_id = panelConfig?.config?._panel_custom?.config?.entry_id;
   }
-  // console.debug("fetchDashboardDataWS: sende WS-Nachricht für Entry", entry_id);
 
+  // Fallback: aus hass.panels suchen
+  if (!entry_id && hass?.panels) {
+    const candidate =
+      hass.panels.ppreader ||
+      hass.panels.pp_reader ||
+      Object.values(hass.panels).find(p => p?.webcomponent_name === 'pp-reader-panel');
+    entry_id =
+      candidate?.config?.entry_id ||
+      candidate?.config?._panel_custom?.config?.entry_id;
+  }
+
+  return entry_id;
+}
+
+// Export für andere Module (Dashboard/Event-Filter)
+export function getEntryId(hass, panelConfig) {
+  return deriveEntryId(hass, panelConfig);
+}
+
+// Dashboard Data
+export async function fetchDashboardDataWS(hass, panelConfig) {
+  const entry_id = deriveEntryId(hass, panelConfig);
+  if (!hass || !entry_id) {
+    throw new Error(`fetchDashboardDataWS: fehlendes hass oder entry_id (${entry_id})`);
+  }
   return await hass.connection.sendMessagePromise({
     type: "pp_reader/get_dashboard_data",
     entry_id,
   });
 }
 
-// Websocket-API and subscription for accounts
+// Accounts
 export async function fetchAccountsWS(hass, panelConfig) {
-  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
-  const entry_id = panelConfig
-    ?.config
-    ?._panel_custom
-    ?.config
-    ?.entry_id;
-
+  const entry_id = deriveEntryId(hass, panelConfig);
   if (!hass || !entry_id) {
-    throw new Error(
-      `fetchAccountsWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
-    );
+    throw new Error(`fetchAccountsWS: fehlendes hass oder entry_id (${entry_id})`);
   }
-  // console.debug("fetchAccountsWS: sende WS-Nachricht für Entry", entry_id);
-
-  // Sende die WebSocket-Nachricht, um die Kontodaten zu laden
-  const accounts = await hass.connection.sendMessagePromise({
+  return await hass.connection.sendMessagePromise({
     type: "pp_reader/get_accounts",
     entry_id,
   });
-
-  // console.debug("fetchAccountsWS: Kontodaten empfangen:", accounts);
-
-  return accounts;
 }
 
-// Websocket-API and subscription for last_file_update
+// Last file update
 export async function fetchLastFileUpdateWS(hass, panelConfig) {
-  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
-  const entry_id = panelConfig
-    ?.config
-    ?._panel_custom
-    ?.config
-    ?.entry_id;
-
+  const entry_id = deriveEntryId(hass, panelConfig);
   if (!hass || !entry_id) {
-    throw new Error(
-      `fetchLastFileUpdateWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
-    );
+    throw new Error(`fetchLastFileUpdateWS: fehlendes hass oder entry_id (${entry_id})`);
   }
-  //console.debug("fetchLastFileUpdateWS: sende WS-Nachricht für Entry", entry_id);
-
-  // Sende die WebSocket-Nachricht, um das letzte Änderungsdatum zu laden
   const response = await hass.connection.sendMessagePromise({
     type: "pp_reader/get_last_file_update",
     entry_id,
   });
-
-  // console.debug("fetchLastFileUpdateWS: Last file update empfangen:", response);
-
-  return response.last_file_update;
+  return response?.last_file_update || response || '';
 }
 
-// Websocket-API and subscription for portfolios
+// Portfolios
 export async function fetchPortfoliosWS(hass, panelConfig) {
-  // console.log("api.js: Wird aufgerufen mit hass:", hass, "und panelConfig:", panelConfig);
-  const entry_id = panelConfig
-    ?.config
-    ?._panel_custom
-    ?.config
-    ?.entry_id;
-
+  const entry_id = deriveEntryId(hass, panelConfig);
   if (!hass || !entry_id) {
-    throw new Error(
-      `fetchPortfoliosWS: fehlendes hass oder entry_id (hass: ${hass}, entry_id: ${entry_id})`
-    );
+    throw new Error(`fetchPortfoliosWS: fehlendes hass oder entry_id (${entry_id})`);
   }
-  // console.debug("fetchPortfoliosWS: sende WS-Nachricht für Entry", entry_id);
-
-  // Sende die WebSocket-Nachricht, um die Depotdaten zu laden
-  const portfolios = await hass.connection.sendMessagePromise({
+  return await hass.connection.sendMessagePromise({
     type: "pp_reader/get_portfolio_data",
     entry_id,
   });
+}
 
-  // console.debug("fetchPortfoliosWS: Depotdaten empfangen:", portfolios);
-
-  return portfolios;
+// Positions (lazy)
+export async function fetchPortfolioPositionsWS(hass, panelConfig, portfolio_uuid) {
+  const entry_id = deriveEntryId(hass, panelConfig);
+  if (!hass || !entry_id) {
+    throw new Error(`fetchPortfolioPositionsWS: fehlendes hass oder entry_id (${entry_id})`);
+  }
+  if (!portfolio_uuid) {
+    throw new Error("fetchPortfolioPositionsWS: fehlendes portfolio_uuid");
+  }
+  return await hass.connection.sendMessagePromise({
+    type: "pp_reader/get_portfolio_positions",
+    entry_id,
+    portfolio_uuid,
+  });
 }

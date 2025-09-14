@@ -7,13 +7,17 @@ account information, portfolio data, and file update timestamps.
 
 import logging
 from datetime import datetime
+from pathlib import Path  # sicherstellen vorhanden
+import sqlite3
 
 import voluptuous as vol
+import homeassistant.helpers.config_validation as cv
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import ActiveConnection
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
 )
+from .db_access import get_portfolio_positions  # Neu: Positions-Abfrage
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
@@ -250,7 +254,7 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
         # Zugriff auf die Datenbank
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from ..data.db_access import get_portfolios
+        from .db_access import get_portfolios
         from ..logic.portfolio import (
             db_calculate_portfolio_purchase_sum,
             db_calculate_portfolio_value_and_count,
@@ -264,20 +268,15 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
         portfolio_data = []
         for portfolio in active_portfolios:
             portfolio_uuid = portfolio.uuid
-
-            # Berechne den aktuellen Wert und die Anzahl der Positionen
             value, position_count = await hass.async_add_executor_job(
                 db_calculate_portfolio_value_and_count, portfolio_uuid, db_path
             )
-
-            # Berechne die Kaufpreissumme
             purchase_sum = await hass.async_add_executor_job(
                 db_calculate_portfolio_purchase_sum, portfolio_uuid, db_path
             )
-
-            # Füge die berechneten Daten hinzu
             portfolio_data.append(
                 {
+                    "uuid": portfolio_uuid,  # <-- hinzugefügt
                     "name": portfolio.name,
                     "position_count": position_count,
                     "current_value": value,
@@ -285,7 +284,6 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
                 }
             )
 
-        # Antwort senden
         connection.send_result(
             msg["id"],
             {
@@ -297,3 +295,88 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Depotdaten")
         connection.send_error(msg["id"], "db_error", str(e))
+
+
+# Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen oder analog zu anderen)
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_portfolio_positions",
+        vol.Required("entry_id"): str,
+        vol.Required("portfolio_uuid"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_portfolio_positions(hass, connection, msg):
+    """
+    Liefert die Wertpapier-Positionen eines Depots (lazy load beim Aufklappen im Frontend).
+    Bei Fehler oder unbekanntem Depot wird ein 'error' Feld zurückgegeben.
+    """
+    entry_id = msg.get("entry_id")
+    portfolio_uuid = msg.get("portfolio_uuid")
+
+    config_entry = hass.config_entries.async_get_entry(entry_id)
+    if not config_entry:
+        connection.send_error(
+            msg["id"], "not_found", f"Config entry {entry_id} nicht gefunden"
+        )
+        return
+
+    db_path = Path(config_entry.data.get("db_path"))
+
+    def _portfolio_exists() -> bool:
+        try:
+            conn = sqlite3.connect(str(db_path))
+            try:
+                cur = conn.execute(
+                    "SELECT 1 FROM portfolios WHERE uuid = ? LIMIT 1", (portfolio_uuid,)
+                )
+                return cur.fetchone() is not None
+            finally:
+                conn.close()
+        except Exception:  # noqa: BLE001
+            return False
+
+    exists = await hass.async_add_executor_job(_portfolio_exists)
+    if not exists:
+        # Explizite Fehlerrückgabe statt leerer Liste
+        connection.send_result(
+            msg["id"],
+            {
+                "portfolio_uuid": portfolio_uuid,
+                "positions": [],
+                "error": "Unbekanntes Depot oder nicht (mehr) vorhanden.",
+            },
+        )
+        return
+
+    try:
+        positions = await hass.async_add_executor_job(
+            get_portfolio_positions, db_path, portfolio_uuid
+        )
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Laden der Positionen für Portfolio %s",
+            portfolio_uuid,
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "portfolio_uuid": portfolio_uuid,
+                "positions": [],
+                "error": "Fehler beim Laden der Positionsdaten.",
+            },
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        {
+            "portfolio_uuid": portfolio_uuid,
+            "positions": positions,
+        },
+    )
+
+
+def async_register_commands(hass):
+    """Registriert alle WebSocket-Commands dieses Modules."""
+    websocket_api.async_register_command(hass, ws_get_portfolio_positions)

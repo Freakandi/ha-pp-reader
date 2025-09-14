@@ -1,7 +1,13 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
-import { renderDashboard } from './tabs/overview.js';
+import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview.js';
 import { renderTestTab } from './tabs/test_tab.js';
-import { handleAccountUpdate, handleLastFileUpdate, handlePortfolioUpdate } from './data/updateConfigsWS.js';
+import {
+  handleAccountUpdate,
+  handleLastFileUpdate,
+  handlePortfolioUpdate,
+  handlePortfolioPositionsUpdate
+} from './data/updateConfigsWS.js';
+import { getEntryId } from './data/api.js';
 
 const tabs = [
   { title: 'Dashboard', render: renderDashboard },
@@ -12,7 +18,17 @@ let currentPage = 0;
 let observer; // Globale Variable für Debugging
 
 async function renderTab(root, hass, panel) {
-  // console.log("renderTab: Wird aufgerufen mit hass:", hass, "und panel:", panel);
+  // Fallback: Panel-Konfiguration aus hass.panels ableiten, falls panel undefined
+  let effectivePanel = panel;
+  if (!effectivePanel && hass?.panels) {
+    // Versuche spezifische Keys
+    effectivePanel =
+      hass.panels.ppreader ||
+      hass.panels.pp_reader ||
+      // Suche nach unserem Webcomponent
+      Object.values(hass.panels).find(p => p?.webcomponent_name === 'pp-reader-panel') ||
+      null;
+  }
 
   const tab = tabs[currentPage];
   if (!tab || !tab.render) {
@@ -22,10 +38,10 @@ async function renderTab(root, hass, panel) {
 
   let content;
   try {
-    content = await tab.render(root, hass, panel); // Verwende die lokalen Parameter hass und panel
-    // console.log("renderTab: Tab-Inhalt erfolgreich gerendert.");
+    content = await tab.render(root, hass, effectivePanel); // effectivePanel statt panel
   } catch (error) {
     console.error("renderTab: Fehler beim Rendern des Tabs:", error);
+    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${(error && error.message) || error}</pre></div>`;
     return;
   }
 
@@ -35,7 +51,11 @@ async function renderTab(root, hass, panel) {
   }
 
   root.innerHTML = content;
-  // console.log("renderTab: Inhalt wurde erfolgreich in das Root-Element eingefügt.");
+
+  // NEU (Section 6): Scoped Listener für Portfolio-Expand nur für Overview-Tab (Index 0 / Titel 'Dashboard')
+  if (tabs[currentPage]?.render === renderDashboard) {
+    attachPortfolioToggleHandler(root);
+  }
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
   const waitForHeaderCard = () => new Promise((resolve) => {
@@ -206,7 +226,9 @@ class PPReaderDashboard extends HTMLElement {
 
   set panel(panel) {
     this._panel = panel;
-    this._checkInitialization(); // Überprüfe die Initialisierung
+    // Debug
+    // console.debug("PPReaderDashboard: panel setter", panel);
+    this._checkInitialization();
   }
 
   set narrow(narrow) {
@@ -234,20 +256,26 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   _checkInitialization() {
-    if (this._hass && this._panel && !this._initialized) {
-      this._initialized = true;
+    if (!this._hass || this._initialized) return;
 
-      const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
-      if (!entryId) {
-        console.warn("PPReaderDashboard: Keine entry_id verfügbar, überspringe Event-Subscription.");
-        return;
-      }
-
-      // Initialisiere alle Event-Listener
-      this._initializeEventListeners(entryId);
-
-      this._render(); // Starte das erste Rendern
+    // Panel-Fallback falls nicht gesetzt
+    if (!this._panel && this._hass.panels) {
+      this._panel =
+        this._hass.panels.ppreader ||
+        this._hass.panels.pp_reader ||
+        Object.values(this._hass.panels).find(p => p?.config?._panel_custom?.module_url?.includes('pp_reader_dashboard')) ||
+        null;
     }
+
+    const entryId = getEntryId(this._hass, this._panel);
+    if (entryId) {
+      console.debug("PPReaderDashboard: entry_id (fallback) =", entryId);
+    } else {
+      console.warn("PPReaderDashboard: kein entry_id ermittelbar – versuche dennoch Initialisierung (API wirft dann klaren Fehler).");
+    }
+    this._initialized = true;
+    this._initializeEventListeners(entryId || '');
+    this._render();
   }
 
   _initializeEventListeners(entryId) {
@@ -297,12 +325,8 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   _handleBusEvent(event) {
-    const entryId = this._panel?.config?._panel_custom?.config?.entry_id;
-
-    // Filter nach entry_id
-    if (event.data.entry_id !== entryId) {
-      return;
-    }
+    const currentEntryId = getEntryId(this._hass, this._panel);
+    if (!currentEntryId || event.data.entry_id !== currentEntryId) return;
 
     console.debug("PPReaderDashboard: Bus-Update erhalten", event.data);
 
@@ -317,6 +341,9 @@ class PPReaderDashboard extends HTMLElement {
       handleLastFileUpdate(pushedData, this._root);
     } else if (dataType === "portfolio_values") {
       handlePortfolioUpdate(pushedData, this._root);
+    } else if (dataType === "portfolio_positions") {
+      // NEU: Einzelpositions-Update für ein bestimmtes Depot
+      handlePortfolioPositionsUpdate(pushedData, this._root);
     } else {
       console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
     }
@@ -332,6 +359,10 @@ class PPReaderDashboard extends HTMLElement {
   _render() {
     if (!this._hass) {
       console.warn("pp-reader-dashboard: noch kein hass, überspringe _render()");
+      return;
+    }
+    if (!this._initialized) {
+      console.debug("pp-reader-dashboard: _render aufgerufen bevor initialisiert");
       return;
     }
 
@@ -372,3 +403,5 @@ class PPReaderDashboard extends HTMLElement {
 }
 
 customElements.define('pp-reader-dashboard', PPReaderDashboard);
+
+console.log("PPReader dashboard.js v20250914b geladen");

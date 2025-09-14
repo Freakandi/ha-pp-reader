@@ -12,13 +12,20 @@ import sqlite3
 from datetime import datetime
 from functools import partial
 from zoneinfo import ZoneInfo
+from pathlib import (
+    Path,
+)  # Fix: wurde verwendet (db_path / fetch_positions_for_portfolios) aber nicht importiert
+from typing import Any  # Fix: Dict/List Typannotationen with Any (Positionen) verwenden
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import callback
 
 from ..currencies.fx import ensure_exchange_rates_for_dates_sync, load_latest_rates_sync
-from ..data.db_access import get_transactions  # noqa: TID252
+from .db_access import (
+    get_transactions,  # noqa: TID252
+    get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
+)
 from ..logic.accounting import db_calc_account_balance  # noqa: TID252
 from ..logic.securities import (  # noqa: TID252
     db_calculate_current_holdings,
@@ -122,6 +129,8 @@ def sync_from_pclient(
     portfolio_changes_detected = False
     last_file_update_change_detected = False
     sec_port_changes_detected = False
+    # Neu: Track geänderte Portfolios (optional – falls granularer Versand gewünscht)
+    changed_portfolios: set[str] = set()
 
     updated_data = {
         "accounts": [],
@@ -592,8 +601,8 @@ def sync_from_pclient(
                 # Vergleiche mit den berechneten Werten
                 if not existing_entry or existing_entry != (
                     current_holdings,
-                    int(purchase_value * 100),  # EUR -> Cent
-                    int(current_value * 100),  # EUR -> Cent
+                    int(purchase_value * 100),
+                    int(current_value * 100),
                 ):
                     sec_port_changes_detected = True
 
@@ -640,15 +649,11 @@ def sync_from_pclient(
                 """,
                     keys_to_delete,
                 )
-                if cur.rowcount > 0:  # Wenn Einträge gelöscht wurden
+                if cur.rowcount > 0:
                     sec_port_changes_detected = True
-                    _LOGGER.debug(
-                        (
-                            "sync_from_pclient: Veraltete Einträge aus "
-                            "portfolio_securities entfernt: %s"
-                        ),
-                        keys_to_delete,
-                    )
+                    # Alle gelöschten Keys zu changed_portfolios hinzufügen
+                    for pk, _sk in keys_to_delete:
+                        changed_portfolios.add(pk)
             # else:  # noqa: ERA001
             # _LOGGER.debug(
             #     "sync_from_pclient: Keine veralteten Einträge in "  # noqa: ERA001
@@ -800,20 +805,89 @@ def sync_from_pclient(
             # Konvertiere die Werte in das gewünschte Format
             portfolio_values = [
                 {
+                    "uuid": pid,  # <-- hinzugefügt
                     "name": data["name"],
                     "position_count": data["position_count"],
                     "current_value": round(data["current_value"], 2),
                     "purchase_sum": round(data["purchase_sum"], 2),
                 }
-                for data in portfolio_data.values()
+                for pid, data in portfolio_data.items()
             ]
-
             # Sende das Event für portfolio_values
             _push_update(hass, entry_id, "portfolio_values", portfolio_values)
             _LOGGER.debug(
                 "sync_from_pclient: 📡 portfolio_values-Update-Event gesendet: %s",
                 portfolio_values,
             )
+
+            # Neu: Positionsdaten-Push für geänderte Portfolios (granular)
+            try:
+                # changed_portfolios wurde bereits befüllt (nur UUIDs behalten)
+                valid_changed = {
+                    pid
+                    for pid in changed_portfolios
+                    if isinstance(pid, str) and len(pid) >= 8 and "-" in pid
+                }
+
+                # Schritt 23: Erweiterte Debug-Logs zur Nachverfolgung
+                if changed_portfolios and not valid_changed:
+                    _LOGGER.debug(
+                        "sync_from_pclient: changed_portfolios vorhanden (%d), aber keine gültigen UUIDs nach Filter: %s",
+                        len(changed_portfolios),
+                        list(changed_portfolios)[:10],
+                    )
+                else:
+                    _LOGGER.debug(
+                        "sync_from_pclient: Kandidaten für portfolio_positions Push (valid_changed=%d): %s",
+                        len(valid_changed),
+                        list(valid_changed)[:10],
+                    )
+
+                if not valid_changed:
+                    _LOGGER.debug(
+                        "sync_from_pclient: Keine gültigen changed_portfolios → Überspringe portfolio_positions Push."
+                    )
+                else:
+                    # Lädt alle Positionslisten (1 DB Query pro Depot – akzeptabel bei kleiner Anzahl)
+                    positions_map = fetch_positions_for_portfolios(
+                        db_path, valid_changed
+                    )
+
+                    # Schritt 24: Verbesserte Fehler-/Leere-Diagnostik vor Versand
+                    empty_lists = [pid for pid, pos in positions_map.items() if not pos]
+                    if empty_lists:
+                        _LOGGER.debug(
+                            "sync_from_pclient: %d Portfolios ohne Positionen (werden trotzdem gesendet): %s",
+                            len(empty_lists),
+                            empty_lists[:10],
+                        )
+
+                    # Einzelnes Event pro Depot (bewusst granular für gezieltes UI-Update ohne großen Payload)
+                    for pid, positions in positions_map.items():
+                        try:
+                            _push_update(
+                                hass,
+                                entry_id,
+                                "portfolio_positions",
+                                {
+                                    "portfolio_uuid": pid,
+                                    "positions": positions,
+                                },
+                            )
+                            _LOGGER.debug(
+                                "sync_from_pclient: 📡 portfolio_positions-Event für %s gesendet (%d Positionen)",
+                                pid,
+                                len(positions),
+                            )
+                        except Exception:  # noqa: BLE001
+                            _LOGGER.exception(
+                                "sync_from_pclient: Fehler beim Senden des portfolio_positions Events für %s",
+                                pid,
+                            )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception(
+                    "sync_from_pclient: Allgemeiner Fehler beim Push der portfolio_positions Events"
+                )
     else:
         # Aggregierten Änderungsstatus berechnen (nur für Debug)
         changes_detected = any(
@@ -850,3 +924,33 @@ def sync_from_pclient(
         stats["transactions"],
         stats["fx_transactions"],
     )
+
+
+def fetch_positions_for_portfolios(
+    db_path: Path, portfolio_ids: set[str]
+) -> dict[str, list[dict]]:
+    """
+    Hilfsfunktion: Lädt Positionslisten für mehrere Portfolios.
+    Gibt Dict { portfolio_uuid: [ {position...}, ... ] } zurück.
+
+    Hinweise:
+      - Reihenfolge der Positionen ist jetzt alphabetisch nach Name (ORDER BY s.name ASC),
+        siehe SQL in db_access.get_portfolio_positions (früher: aktueller Wert DESC).
+      - Werte sind bereits in EUR normalisiert und auf 2 Nachkommastellen gerundet.
+    """
+    result: dict[str, list[dict]] = {}
+    for pid in portfolio_ids:
+        try:
+            result[pid] = get_portfolio_positions(db_path, pid)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception(
+                "fetch_positions_for_portfolios: Fehler beim Laden der Positionen für %s",
+                pid,
+            )
+            result[pid] = []
+    return result
+
+
+# (Sicherstellen, dass am Modulende kein ausführbarer Code steht – nur Funktions-/Konstantendefinitionen)
+# Entferne ggf. versehentlich hinzugefügte Debug- oder Testaufrufe wie:
+# sync_from_pclient(...), print(...), o.Ä.
