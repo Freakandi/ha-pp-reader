@@ -1,4 +1,5 @@
 import { makeTable } from '../content/elements.js';
+import { sortTableRows } from '../content/elements.js'; // NEU: generische Sortier-Utility
 
 /**
  * Handler für Kontodaten-Updates (Accounts, inkl. FX).
@@ -112,6 +113,22 @@ export function handlePortfolioUpdate(update, root) {
       } else {
         tbody.insertAdjacentHTML('beforeend', main + detail);
       }
+
+      // Änderung 12:
+      // Für neu hinzugefügte Portfolios (noch keine Positionsdaten geladen) merken wir
+      // den Default-Sortierzustand vor, damit beim späteren ersten Aufklappen (Lazy Load)
+      // ein ggf. global gespeicherter Zustand nicht verloren geht bzw. klar definierte
+      // Defaults existieren (name asc). Bestehende Container (mit user sort) werden nicht
+      // angerührt, da wir nur im "Neuanlage"-Pfad sind.
+      try {
+        const detailRow = tbody.querySelector(`tr.portfolio-details[data-portfolio="${p.uuid}"]`);
+        const posContainer = detailRow?.querySelector('.positions-container');
+        if (posContainer && !posContainer.dataset.sortKey) {
+          posContainer.dataset.sortKey = 'name';
+          posContainer.dataset.sortDir = 'asc';
+        }
+      } catch (_) { /* noop */ }
+
       return; // Footer wird später aktualisiert
     }
 
@@ -244,21 +261,44 @@ export function handlePortfolioPositionsUpdate(update, root) {
   }
 
   container.innerHTML = renderPositionsTableInline(positions || []);
+
+  // === Wiederanwendung Sortierung + Click-Binding (refaktoriert auf Helper) ===
+  (function restoreAndBindSort(containerEl) {
+    const table = containerEl.querySelector('table.sortable-positions');
+    if (!table) return;
+
+    // Sortierung anwenden
+    reapplyPositionsSort(containerEl);
+
+    // Click-Listener einmalig binden
+    if (!table.__ppReaderSortingBound) {
+      table.__ppReaderSortingBound = true;
+      table.addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-sort-key]');
+        if (!th || !table.contains(th)) return;
+        const newKey = th.getAttribute('data-sort-key');
+        if (!newKey) return;
+        let newDir = 'asc';
+        if (containerEl.dataset.sortKey === newKey) {
+          newDir = containerEl.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+        }
+        containerEl.dataset.sortKey = newKey;
+        containerEl.dataset.sortDir = newDir;
+        sortTableRows(table, newKey, newDir, true);
+      });
+    }
+  })(container);
 }
 
 /* ------------------ Hilfsfunktionen (lokal) ------------------ */
 
 function renderPositionsTableInline(positions) {
   // Konsistenz Push vs Lazy:
-  // Falls overview.js bereits eine zentrale Render-Funktion bereitstellt, nutze diese,
-  // damit Lazy Load (WS) und Push (Event) identisches Markup erzeugen.
   try {
     if (window.__ppReaderRenderPositionsTable) {
       return window.__ppReaderRenderPositionsTable(positions);
     }
-  } catch (_) {
-    // Fallback auf lokale Implementierung unten
-  }
+  } catch (_) { }
 
   if (!positions || !positions.length) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
@@ -271,7 +311,9 @@ function renderPositionsTableInline(positions) {
     gain_abs: p.gain_abs,
     gain_pct: p.gain_pct
   }));
-  return makeTable(
+
+  // Basis HTML
+  const raw = makeTable(
     rows,
     [
       { key: 'name', label: 'Wertpapier' },
@@ -283,6 +325,30 @@ function renderPositionsTableInline(positions) {
     ],
     ['purchase_value', 'current_value', 'gain_abs']
   );
+
+  // Sortier-Metadaten wie in overview.js renderPositionsTable injizieren
+  try {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = raw.trim();
+    const table = tpl.content.querySelector('table');
+    if (table) {
+      table.classList.add('sortable-positions');
+      const ths = table.querySelectorAll('thead th');
+      const colKeys = ['name', 'current_holdings', 'purchase_value', 'current_value', 'gain_abs', 'gain_pct'];
+      ths.forEach((th, i) => {
+        const key = colKeys[i];
+        if (!key) return;
+        th.setAttribute('data-sort-key', key);
+        th.classList.add('sortable-col');
+      });
+      table.dataset.defaultSort = 'name';
+      table.dataset.defaultDir = 'asc';
+      return table.outerHTML;
+    }
+  } catch (e) {
+    console.warn("renderPositionsTableInline: Sortier-Metadaten Injection fehlgeschlagen:", e);
+  }
+  return raw;
 }
 
 function updatePortfolioFooter(table) {
@@ -410,9 +476,14 @@ export function handleLastFileUpdate(update, root) {
     return;
   }
 
-  let el = root.querySelector('.last-file-update');
+  // Bevorzugt Footer-Karte, sonst erste passende Stelle
+  let el = root.querySelector('.footer-card .last-file-update') ||
+    root.querySelector('.last-file-update');
+
   if (!el) {
+    // Fallback: existierende Meta-Hosts durchsuchen
     const metaHost =
+      root.querySelector('.footer-card .meta') ||
       root.querySelector('#headerMeta') ||
       root.querySelector('.header-card .meta') ||
       root.querySelector('.header-card');
@@ -425,8 +496,36 @@ export function handleLastFileUpdate(update, root) {
     metaHost.appendChild(el);
   }
 
-  el.textContent = value
-    ? `📂 Letzte Aktualisierung: ${value}`
-    : '📂 Letzte Aktualisierung: Unbekannt';
+  // Format abhängig vom Ort (Footer behält <strong>)
+  if (el.closest('.footer-card')) {
+    el.innerHTML = value
+      ? `📂 Letzte Aktualisierung Datei: <strong>${value}</strong>`
+      : `📂 Letzte Aktualisierung Datei: <strong>Unbekannt</strong>`;
+  } else {
+    // Header/Meta-Version (schlichter Text)
+    el.textContent = value
+      ? `📂 Letzte Aktualisierung: ${value}`
+      : '📂 Letzte Aktualisierung: Unbekannt';
+  }
 }
 /// END handleLastFileUpdate (canonical)
+
+/**
+ * NEUER HELPER (Änderung 8):
+ * Re-applied die gespeicherte Sortierung einer Positions-Tabelle.
+ * Liest container.dataset.sortKey / sortDir oder Default-Werte vom <table>.
+ * Nutzt sortTableRows(..., true) für Positions-Mapping.
+ * @param {HTMLElement} containerEl .positions-container
+ */
+export function reapplyPositionsSort(containerEl) {
+  if (!containerEl) return;
+  const table = containerEl.querySelector('table.sortable-positions');
+  if (!table) return;
+  const key = containerEl.dataset.sortKey || table.dataset.defaultSort || 'name';
+  const dir = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  // Persistiere (falls erstmalig)
+  containerEl.dataset.sortKey = key;
+  containerEl.dataset.sortDir = dir;
+  sortTableRows(table, key, dir, true);
+}
+window.__ppReaderReapplyPositionsSort = reapplyPositionsSort; // Optional global für Lazy-Load-Code

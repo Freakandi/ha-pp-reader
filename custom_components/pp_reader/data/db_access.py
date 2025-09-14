@@ -335,7 +335,7 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             FROM portfolio_securities ps
             JOIN securities s ON s.uuid = ps.security_uuid
             WHERE ps.portfolio_uuid = ?
-            ORDER BY ps.current_value DESC
+            ORDER BY s.name ASC   -- Alphabetische Standardsortierung (vorher: aktueller Wert DESC)
             """,
             (portfolio_uuid,),
         )

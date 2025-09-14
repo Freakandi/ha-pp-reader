@@ -934,8 +934,9 @@ def fetch_positions_for_portfolios(
     Gibt Dict { portfolio_uuid: [ {position...}, ... ] } zurück.
 
     Hinweise:
-      - Reihenfolge der Positionen ist nach aktuellem Wert DESC (siehe SQL in db_access.get_portfolio_positions)
-      - Werte sind bereits in EUR normalisiert und auf 2 Nachkommastellen gerundet
+      - Reihenfolge der Positionen ist jetzt alphabetisch nach Name (ORDER BY s.name ASC),
+        siehe SQL in db_access.get_portfolio_positions (früher: aktueller Wert DESC).
+      - Werte sind bereits in EUR normalisiert und auf 2 Nachkommastellen gerundet.
     """
     result: dict[str, list[dict]] = {}
     for pid in portfolio_ids:

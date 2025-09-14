@@ -18,6 +18,14 @@ function renderPositionsTable(positions) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
   // Mapping für makeTable
+  const cols = [
+    { key: 'name', label: 'Wertpapier' },
+    { key: 'current_holdings', label: 'Bestand' },
+    { key: 'purchase_value', label: 'Kaufwert', align: 'right' },
+    { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
+    { key: 'gain_abs', label: '+/-', align: 'right' },
+    { key: 'gain_pct', label: '%', align: 'right' }
+  ];
   const rows = positions.map(p => ({
     name: p.name,
     current_holdings: p.current_holdings,
@@ -27,18 +35,34 @@ function renderPositionsTable(positions) {
     gain_pct: p.gain_pct
   }));
 
-  return makeTable(
-    rows,
-    [
-      { key: 'name', label: 'Wertpapier' },
-      { key: 'current_holdings', label: 'Bestand' },
-      { key: 'purchase_value', label: 'Kaufwert', align: 'right' },
-      { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
-      { key: 'gain_abs', label: '+/-', align: 'right' },
-      { key: 'gain_pct', label: '%', align: 'right' }
-    ],
-    ['purchase_value', 'current_value', 'gain_abs']
-  );
+  // Basis-HTML über makeTable erzeugen
+  const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'gain_abs']);
+
+  // Header um data-sort-key ergänzen + sortable Klasse setzen
+  try {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = raw.trim();
+    const table = tpl.content.querySelector('table');
+    if (table) {
+      table.classList.add('sortable-positions');
+      const ths = table.querySelectorAll('thead th');
+      cols.forEach((c, i) => {
+        const th = ths[i];
+        if (th) {
+          th.setAttribute('data-sort-key', c.key);
+          th.classList.add('sortable-col');
+        }
+      });
+      // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
+      table.dataset.defaultSort = 'name';
+      table.dataset.defaultDir = 'asc';
+      return table.outerHTML;
+    }
+  } catch (e) {
+    // Fallback: unverändertes Markup
+    console.warn("renderPositionsTable: Konnte Sortier-Metadaten nicht injizieren:", e);
+  }
+  return raw;
 }
 
 // NEU: Export / Global bereitstellen für Push-Handler (Konsistenz Push vs Lazy)
@@ -155,8 +179,101 @@ export function setExpandedPortfolios(portfolioIds) {
   }
 }
 
+// NEU: Helper zum Anhängen der Sortier-Logik an eine Positions-Tabelle eines bestimmten Portfolios
+export function attachPortfolioPositionsSorting(root, portfolioUuid) {
+  if (!root || !portfolioUuid) return;
+  const detailsRow = root.querySelector(`.portfolio-details[data-portfolio="${portfolioUuid}"]`);
+  if (!detailsRow) return;
+  const container = detailsRow.querySelector('.positions-container');
+  if (!container) return;
+  const table = container.querySelector('table.sortable-positions');
+  if (!table || table.__ppReaderSortingBound) return;
+
+  table.__ppReaderSortingBound = true;
+
+  const applySort = (key, dir) => {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'))
+      .filter(r => !r.classList.contains('footer-row'));
+    const footer = tbody.querySelector('tr.footer-row');
+
+    const parseNum = (txt) => {
+      if (txt == null) return 0;
+      // Entferne Währungs-/Prozent-Symbole, geschützte Leerzeichen
+      return parseFloat(
+        txt.replace(/\u00A0/g, ' ')
+          .replace(/[%€]/g, '')
+          .replace(/\./g, '')
+          .replace(',', '.')
+          .replace(/[^\d.-]/g, '')
+      ) || 0;
+    };
+
+    rows.sort((a, b) => {
+      const idxMap = {
+        name: 0,
+        current_holdings: 1,
+        purchase_value: 2,
+        current_value: 3,
+        gain_abs: 4,
+        gain_pct: 5
+      };
+      const colIdx = idxMap[key];
+      if (colIdx == null) return 0;
+      const aCell = a.cells[colIdx]?.textContent.trim() || '';
+      const bCell = b.cells[colIdx]?.textContent.trim() || '';
+
+      let comp;
+      if (key === 'name') {
+        comp = aCell.localeCompare(bCell, 'de', { sensitivity: 'base' });
+      } else if (key === 'gain_pct') {
+        comp = parseNum(aCell) - parseNum(bCell);
+      } else {
+        comp = parseNum(aCell) - parseNum(bCell);
+      }
+      return dir === 'asc' ? comp : -comp;
+    });
+
+    // Visuelle Indikatoren zurücksetzen
+    table.querySelectorAll('thead th.sort-active').forEach(th => {
+      th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+    });
+
+    // Aktives TH markieren
+    const th = table.querySelector(`thead th[data-sort-key="${key}"]`);
+    if (th) {
+      th.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
+    }
+
+    // Neu einfügen
+    rows.forEach(r => tbody.appendChild(r));
+    if (footer) tbody.appendChild(footer);
+  };
+
+  // Initial ggf. gespeicherten Zustand anwenden
+  const currentKey = container.dataset.sortKey || table.dataset.defaultSort || 'name';
+  const currentDir = container.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  applySort(currentKey, currentDir);
+
+  table.addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-sort-key]');
+    if (!th || !table.contains(th)) return;
+    const key = th.getAttribute('data-sort-key');
+    if (!key) return;
+
+    let dir = 'asc';
+    if (container.dataset.sortKey === key) {
+      dir = container.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+    }
+    container.dataset.sortKey = key;
+    container.dataset.sortDir = dir;
+    applySort(key, dir);
+  });
+}
+
 // NEU: Funktion zum erneuten Laden der Positionsdaten
-async function reloadPortfolioPositions(portfolioUuid, containerEl) {
+async function reloadPortfolioPositions(portfolioUuid, containerEl, root) {
   if (!portfolioUuid || !_hassRef || !_panelConfigRef) return;
   if (containerEl) {
     containerEl.innerHTML = '<div class="loading">Neu laden...</div>';
@@ -173,6 +290,12 @@ async function reloadPortfolioPositions(portfolioUuid, containerEl) {
     portfolioPositionsCache.set(portfolioUuid, positions);
     if (containerEl) {
       containerEl.innerHTML = renderPositionsTable(positions);
+      // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
+      try {
+        attachPortfolioPositionsSorting(root, portfolioUuid);
+      } catch (e) {
+        console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", e);
+      }
     }
   } catch (e) {
     if (containerEl) {
@@ -229,7 +352,7 @@ export function attachPortfolioToggleHandler(root) {
           const pid = retryBtn.getAttribute('data-portfolio');
           const detailsRow = root.querySelector(`.portfolio-details[data-portfolio="${pid}"]`);
           const cont = detailsRow?.querySelector('.positions-container');
-          await reloadPortfolioPositions(pid, cont);
+          await reloadPortfolioPositions(pid, cont, root);
           return;
         }
 
@@ -267,6 +390,12 @@ export function attachPortfolioToggleHandler(root) {
               portfolioPositionsCache.set(portfolioUuid, positions);
               if (containerEl) {
                 containerEl.innerHTML = renderPositionsTable(positions);
+                // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
+                try {
+                  attachPortfolioPositionsSorting(root, portfolioUuid);
+                } catch (e) {
+                  console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", e);
+                }
               }
             } catch (err) {
               const containerEl = detailsRow.querySelector('.positions-container');
@@ -279,6 +408,7 @@ export function attachPortfolioToggleHandler(root) {
             const containerEl = detailsRow.querySelector('.positions-container');
             if (containerEl) {
               containerEl.innerHTML = renderPositionsTable(portfolioPositionsCache.get(portfolioUuid));
+              attachPortfolioPositionsSorting(root, portfolioUuid);
             }
           }
         } else {
@@ -316,7 +446,7 @@ export function ensurePortfolioRowFallbackListener(root) {
 export async function renderDashboard(root, hass, panelConfig) {
   _hassRef = hass;
   _panelConfigRef = panelConfig;
-  console.debug("renderDashboard: start – panelConfig:", panelConfig?.config, "derived entry_id?", panelConfig?.config?.entry_id || panelConfig?.config?._panel_custom?.config?.entry_id);
+  console.debug("renderDashboard: start – panelConfig:", panelConfig?.config, "derived entry_id?", panelConfig?.config?._panel_custom?.config?.entry_id);
 
   const accountsResp = await fetchAccountsWS(hass, panelConfig);
   const accounts = (accountsResp && accountsResp.accounts) || [];
@@ -351,11 +481,10 @@ export async function renderDashboard(root, hass, panelConfig) {
   const totalDepots = depots.reduce((s, d) => s + (isNaN(d.current_value) ? 0 : d.current_value), 0);
   const totalWealth = totalAccounts + totalDepots;
 
-  // 5. Header (falls createHeaderCard vorhanden)
+  // 5. Header (ohne Last-File-Update – kommt jetzt wieder in Footer-Karte)
   const headerMeta = `
     <div id="headerMeta">
       <div>💰 Gesamtvermögen: <strong>${formatNumber(totalWealth)}&nbsp;€</strong></div>
-      ${lastFileUpdate ? `<div class="last-file-update">📂 Letzte Aktualisierung: ${lastFileUpdate}</div>` : ''}
     </div>
   `;
   const headerCard = createHeaderCard('Übersicht', headerMeta);
@@ -402,7 +531,17 @@ export async function renderDashboard(root, hass, panelConfig) {
       </div>` : ''}
   `;
 
-  // 8. Gesamtes Markup zurückgeben
+  // 8. Footer-Karte mit letztem Datei-Änderungszeitpunkt (reintroduziert)
+  const footerCard = `
+    <div class="card footer-card">
+      <div class="meta">
+        <div class="last-file-update">
+          📂 Letzte Aktualisierung Datei: <strong>${lastFileUpdate || 'Unbekannt'}</strong>
+        </div>
+      </div>
+    </div>
+  `;
+
   const markup = `
     ${headerCard.outerHTML}
     <div class="card">
@@ -412,6 +551,7 @@ export async function renderDashboard(root, hass, panelConfig) {
       </div>
     </div>
     ${accountsHtml}
+    ${footerCard}
   `;
 
   // Nach Render prüfen ob Buttons vorhanden; sonst Recovery (z.B. falls alte Funktion überschrieben)
@@ -428,6 +568,18 @@ export async function renderDashboard(root, hass, panelConfig) {
       }
       attachPortfolioToggleHandler(root);
       ensurePortfolioRowFallbackListener(root);
+
+      // NEU (Sortier-Hook für bereits expandierte Depots mit gecachten Positionen)
+      expandedPortfolios.forEach(pid => {
+        try {
+          if (portfolioPositionsCache.has(pid)) {
+            attachPortfolioPositionsSorting(root, pid);
+          }
+        } catch (e) {
+          console.warn("Init-Sortierung für expandiertes Depot fehlgeschlagen:", pid, e);
+        }
+      });
+
       console.debug("renderDashboard: portfolio-toggle Buttons:", wrapper.querySelectorAll('.portfolio-toggle').length);
     } catch (e) {
       console.error("renderDashboard: Fehler bei Recovery/Listener", e);

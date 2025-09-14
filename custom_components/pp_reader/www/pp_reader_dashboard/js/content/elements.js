@@ -46,11 +46,25 @@ export function formatValue(key, value) {
   return formatted;
 }
 
-export function makeTable(rows, cols, sumColumns = []) {
+export function makeTable(rows, cols, sumColumns = [], options = {}) {
+  /**
+   * Erweiterung (optional):
+   * options.sortable    -> true | false (default false)
+   * options.defaultSort -> { key: 'name', dir: 'asc' } (nur wirksam falls sortable)
+   *
+   * Bestehende Aufrufer (3 Parameter) bleiben kompatibel.
+   */
+  const { sortable = false, defaultSort = { key: '', dir: 'asc' } } = options || {};
+
   let html = '<table><thead><tr>';
   cols.forEach(c => {
     const alignClass = c.align === 'right' ? ' class="align-right"' : '';
-    html += `<th${alignClass}>${c.label}</th>`;
+    // Falls sortable: th data-sort-key setzen (nur wenn key vorhanden)
+    if (sortable && c.key) {
+      html += `<th${alignClass} data-sort-key="${c.key}">${c.label}</th>`;
+    } else {
+      html += `<th${alignClass}>${c.label}</th>`;
+    }
   });
   html += '</tr></thead><tbody>';
 
@@ -63,7 +77,7 @@ export function makeTable(rows, cols, sumColumns = []) {
     html += '</tr>';
   });
 
-  // Summen berechnen
+  // Summen berechnen (unverändert)
   const sums = {};
   cols.forEach(c => {
     if (sumColumns.includes(c.key)) {
@@ -74,17 +88,11 @@ export function makeTable(rows, cols, sumColumns = []) {
     }
   });
 
-  // Ableitung Summenfelder:
-  // Wenn purchase_value existiert und gain_abs nicht übergeben wurde, kann der Aufrufer es selber liefern.
-  // gain_pct Logik:
-  //   Falls purchase_value (Summe) vorhanden -> (gain_abs / purchase_value) * 100
-  //   Sonst (Fallback) falls current_value vorhanden -> (gain_abs / current_value) * 100
   if ('gain_abs' in sums) {
     if ('purchase_value' in sums && sums.purchase_value > 0) {
       sums['gain_pct'] = (sums['gain_abs'] / sums['purchase_value']) * 100;
     } else if ('current_value' in sums && sums.current_value !== 0) {
       sums['gain_pct'] = (sums['gain_abs'] / (sums['current_value'] - sums['gain_abs'])) * 100;
-      // Der obige Ausdruck rekonstruiert purchase_sum ~ current_value - gain_abs (kompatibel zu Portfolio-Formel)
     }
   }
 
@@ -104,6 +112,26 @@ export function makeTable(rows, cols, sumColumns = []) {
   html += '</tr>';
 
   html += '</tbody></table>';
+
+  // Falls sortable: Default-Sort-Metadaten injizieren (nicht doppelt parsen falls nicht nötig)
+  if (sortable) {
+    try {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html.trim();
+      const table = tpl.content.querySelector('table');
+      if (table) {
+        table.classList.add('sortable-table');
+        if (defaultSort?.key) {
+          table.dataset.defaultSort = defaultSort.key;
+          table.dataset.defaultDir = defaultSort.dir === 'desc' ? 'desc' : 'asc';
+        }
+        return table.outerHTML;
+      }
+    } catch (e) {
+      console.warn("makeTable(sortable): Injection fehlgeschlagen:", e);
+    }
+  }
+
   return html;
 }
 
@@ -149,4 +177,102 @@ export function formatGainPct(value) {
   const num = isNaN(value) ? 0 : value;
   const cls = num >= 0 ? 'positive' : 'negative';
   return `<span class="${cls}">${formatNumber(num)}&nbsp;%</span>`;
+}
+
+/**
+ * Neue Utility: sortTableRows
+ * Sortiert die Datenzeilen (<tr>) einer Tabelle anhand eines Keys.
+ *
+ * @param {HTMLTableElement} tableEl  Ziel-Tabelle
+ * @param {string} key                Daten-Key (muss mit data-sort-key im TH oder Positions-Mapping übereinstimmen)
+ * @param {'asc'|'desc'} dir          Sortierrichtung
+ * @param {boolean} isPositions       true => Positions-Spalten-Mapping verwenden
+ * @returns {HTMLTableRowElement[]}   Array der neu angeordneten Daten-Zeilen (ohne Footer)
+ *
+ * Erkennung Zahl vs. String:
+ *  - Entfernt NBSP, €, %, Tausenderpunkte
+ *  - Wandelt Komma in Punkt
+ *  - Wenn parseFloat ein valides Zahlenergebnis liefert und der ursprüngliche Text
+ *    nicht komplett alphabetisch ist -> numerischer Vergleich; sonst localeCompare.
+ *
+ * Footer-Zeile ('.footer-row') bleibt am Ende erhalten.
+ */
+export function sortTableRows(tableEl, key, dir = 'asc', isPositions = false) {
+  if (!tableEl) return [];
+  const tbody = tableEl.querySelector('tbody');
+  if (!tbody) return [];
+
+  const footer = tbody.querySelector('tr.footer-row');
+  const rows = Array
+    .from(tbody.querySelectorAll('tr'))
+    .filter(r => r !== footer);
+
+  // Spaltenindex bestimmen
+  let colIdx = -1;
+  if (isPositions) {
+    const posMap = {
+      name: 0,
+      current_holdings: 1,
+      purchase_value: 2,
+      current_value: 3,
+      gain_abs: 4,
+      gain_pct: 5
+    };
+    colIdx = posMap[key];
+  } else {
+    // Generisch über thead th[data-sort-key]
+    const ths = Array.from(tableEl.querySelectorAll('thead th'));
+    for (let i = 0; i < ths.length; i++) {
+      if (ths[i].getAttribute('data-sort-key') === key) {
+        colIdx = i;
+        break;
+      }
+    }
+  }
+  if (colIdx == null || colIdx < 0) return rows;
+
+  const toNumber = (txt) => {
+    if (txt == null) return NaN;
+    const cleaned = txt
+      .replace(/\u00A0/g, ' ')
+      .replace(/[%€]/g, '')
+      .replace(/\./g, '')
+      .replace(/,/g, '.')
+      .replace(/[^\d.-]/g, '')
+      .trim();
+    if (!cleaned) return NaN;
+    const num = parseFloat(cleaned);
+    return Number.isFinite(num) ? num : NaN;
+  };
+
+  rows.sort((a, b) => {
+    const aTxt = a.cells[colIdx]?.textContent.trim() || '';
+    const bTxt = b.cells[colIdx]?.textContent.trim() || '';
+
+    const aNum = toNumber(aTxt);
+    const bNum = toNumber(bTxt);
+
+    let cmp;
+    if (!isNaN(aNum) && !isNaN(bNum) && (aTxt.match(/[0-9]/) || bTxt.match(/[0-9]/))) {
+      cmp = aNum - bNum;
+    } else {
+      cmp = aTxt.localeCompare(bTxt, 'de', { sensitivity: 'base' });
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+
+  // Re-Anordnung im DOM
+  rows.forEach(r => tbody.appendChild(r));
+  if (footer) tbody.appendChild(footer);
+
+  // Visuelle Indikatoren aktualisieren (optional generisch)
+  tableEl.querySelectorAll('thead th.sort-active').forEach(th => {
+    th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+  });
+  const activeTh = tableEl.querySelector(`thead th[data-sort-key="${key}"]`);
+  if (activeTh) {
+    activeTh.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
+  }
+
+  return rows;
 }
