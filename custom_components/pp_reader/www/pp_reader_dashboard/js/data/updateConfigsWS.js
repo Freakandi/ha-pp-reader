@@ -397,3 +397,36 @@ function createPortfolioRowHtml(p, expanded = false) {
       </tr>`
   };
 }
+
+// ==== Last File Update Handler (canonical) ====
+// (Ändere zu export function, damit unten kein Sammel-Export nötig ist)
+export function handleLastFileUpdate(update, root) {
+  const value = typeof update === 'string'
+    ? update
+    : (update && update.last_file_update) || '';
+
+  if (!root) {
+    console.warn("handleLastFileUpdate: root fehlt");
+    return;
+  }
+
+  let el = root.querySelector('.last-file-update');
+  if (!el) {
+    const metaHost =
+      root.querySelector('#headerMeta') ||
+      root.querySelector('.header-card .meta') ||
+      root.querySelector('.header-card');
+    if (!metaHost) {
+      console.warn("handleLastFileUpdate: Kein Einfügepunkt gefunden.");
+      return;
+    }
+    el = document.createElement('div');
+    el.className = 'last-file-update';
+    metaHost.appendChild(el);
+  }
+
+  el.textContent = value
+    ? `📂 Letzte Aktualisierung: ${value}`
+    : '📂 Letzte Aktualisierung: Unbekannt';
+}
+/// END handleLastFileUpdate (canonical)

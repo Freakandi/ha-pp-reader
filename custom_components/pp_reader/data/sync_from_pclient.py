@@ -12,6 +12,10 @@ import sqlite3
 from datetime import datetime
 from functools import partial
 from zoneinfo import ZoneInfo
+from pathlib import (
+    Path,
+)  # Fix: wurde verwendet (db_path / fetch_positions_for_portfolios) aber nicht importiert
+from typing import Any  # Fix: Dict/List Typannotationen with Any (Positionen) verwenden
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from homeassistant.const import EVENT_PANELS_UPDATED
@@ -944,3 +948,8 @@ def fetch_positions_for_portfolios(
             )
             result[pid] = []
     return result
+
+
+# (Sicherstellen, dass am Modulende kein ausführbarer Code steht – nur Funktions-/Konstantendefinitionen)
+# Entferne ggf. versehentlich hinzugefügte Debug- oder Testaufrufe wie:
+# sync_from_pclient(...), print(...), o.Ä.

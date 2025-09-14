@@ -6,9 +6,13 @@ providing sensors and a dashboard.
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from homeassistant.components import frontend, websocket_api
+from homeassistant.components.panel_custom import (
+    async_register_panel as panel_custom_async_register_panel,
+)
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -20,8 +24,12 @@ from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from .data.backup_db import setup_backup_system
 from .data.coordinator import PPReaderCoordinator
 from .data.db_init import initialize_database_schema
-from .data import (
-    websocket,
+from .data.websocket import (
+    ws_get_dashboard_data,
+    ws_get_accounts,
+    ws_get_last_file_update,
+    ws_get_portfolio_data,
+    ws_get_portfolio_positions,
 )  # Neu: Registrierung neuer WebSocket-Commands (portfolio positions)
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,6 +57,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, ws_get_accounts)
         websocket_api.async_register_command(hass, ws_get_last_file_update)
         websocket_api.async_register_command(hass, ws_get_portfolio_data)
+        websocket_api.async_register_command(hass, ws_get_portfolio_positions)
         # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
         _LOGGER.exception("❌ Fehler bei der Registrierung der Websocket-Befehle")
@@ -124,37 +133,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             for panel in hass.data.get("frontend_panels", {}).values()
         ):
             try:
-                frontend.async_register_built_in_panel(
+                cache_bust = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                await panel_custom_async_register_panel(
                     hass,
-                    component_name="custom",
-                    sidebar_title="Portfolio Dashboard",
-                    sidebar_icon="mdi:finance",
                     frontend_url_path="ppreader",
+                    webcomponent_name="pp-reader-panel",
+                    module_url=f"/pp_reader_dashboard/panel.js?v={cache_bust}",
+                    sidebar_title="PP Reader",
+                    sidebar_icon="mdi:chart-line",
                     require_admin=False,
-                    config={
-                        "_panel_custom": {
-                            "name": "pp-reader-panel",
-                            "embed_iframe": False,
-                            "module_url": "/pp_reader_dashboard/panel.js",
-                            "trust_external": True,
-                            "config": {"entry_id": entry.entry_id},
-                        }
-                    },
+                    config={"entry_id": entry.entry_id},
                 )
-                _LOGGER.info("✅ Custom Panel 'ppreader' erfolgreich registriert.")
+                _LOGGER.info(
+                    "✅ Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
+                    cache_bust,
+                    entry.entry_id,
+                )
             except ValueError:
                 _LOGGER.exception("❌ Fehler bei der Registrierung des Panels")
+            except AttributeError:
+                _LOGGER.exception(
+                    "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+                )
         else:
             _LOGGER.warning(
                 "Das Panel 'ppreader' ist bereits registriert. "
                 "Überspringe Registrierung."
             )
-
-        # WebSocket-Commands registrieren (inkl. neuem pp_reader/get_portfolio_positions)
-        try:
-            websocket.async_register_commands(hass)
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Fehler bei Registrierung der WebSocket-Commands")
 
         return True  # noqa: TRY300
 
