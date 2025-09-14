@@ -138,7 +138,7 @@ class PPDataValidator:
         else:
             actual_tx_fqn = self._get_object_fqn(tx)
             if actual_tx_fqn == EXPECTED_DB_TRANSACTION_FQN:
-                _LOGGER.debug(f"Validating DB Transaction by FQN: {actual_tx_fqn}")
+                # _LOGGER.debug(f"Validating DB Transaction by FQN: {actual_tx_fqn}")
                 missing = [
                     f
                     for f in required_fields
