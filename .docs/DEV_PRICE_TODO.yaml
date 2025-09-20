@@ -3,282 +3,141 @@ meta:
   source_doc: "nextGoals.md"
   version: 1
   legend:
-    - status: todo
-      meaning: "Offen"
-    - status: wip
-      meaning: "In Arbeit"
-    - status: done
-      meaning: "Erledigt"
-    - status: hold
-      meaning: "Blockiert / Klärung"
+    - { status: todo, meaning: "Offen" }
+    - { status: wip,  meaning: "In Arbeit" }
+    - { status: done, meaning: "Erledigt" }
+    - { status: hold, meaning: "Blockiert / Klärung" }
 phases:
   - id: schema
     title: "Schema / Migration"
     items:
-      - id: add_columns
-        desc: "Spalten last_price_source, last_price_fetched_at zu securities hinzufügen (DDL + ALL_SCHEMAS)."
-        files: ["custom_components/pp_reader/data/db_schema.py"]
-        status: todo
-      - id: runtime_alter_guard
-        desc: "Fallback ALTER TABLE bei bestehender DB (try/except, ignorieren falls vorhanden)."
-        files: ["custom_components/pp_reader/data/db_init.py"]
-        status: todo
+      - { id: add_columns, desc: "Spalten last_price_source, last_price_fetched_at zu securities hinzufügen (DDL + ALL_SCHEMAS).", files: ["custom_components/pp_reader/data/db_schema.py"], status: todo }
+      - { id: runtime_alter_guard, desc: "Fallback ALTER TABLE bei bestehender DB (try/except, ignorieren falls vorhanden).", files: ["custom_components/pp_reader/data/db_init.py"], status: todo }
+
   - id: provider_base
     title: "Provider Abstraktion"
     items:
-      - id: quote_dataclass
-        desc: "Dataclass Quote definieren."
-        files: ["custom_components/pp_reader/prices/provider_base.py"]
-        status: todo
-      - id: price_provider_protocol
-        desc: "Protocol PriceProvider.fetch(List[str]) -> Dict[str, Quote]."
-        files: ["custom_components/pp_reader/prices/provider_base.py"]
-        status: todo
+      - { id: quote_dataclass, desc: "Dataclass Quote definieren.", files: ["custom_components/pp_reader/prices/provider_base.py"], status: todo }
+      - { id: price_provider_protocol, desc: "Protocol PriceProvider.fetch(List[str]) -> Dict[str, Quote].", files: ["custom_components/pp_reader/prices/provider_base.py"], status: todo }
+
   - id: yahoo_provider
     title: "YahooQuery Provider"
     items:
-      - id: impl_provider
-        desc: "Implementierung yahooquery_provider (CHUNK_SIZE=50, Mapping, Filter price>0)."
-        files: ["custom_components/pp_reader/prices/yahooquery_provider.py"]
-        status: todo
-      - id: executor_wrapper
-        desc: "Blocking-Aufruf via Executor + Timeout."
-        files: ["custom_components/pp_reader/prices/yahooquery_provider.py"]
-        status: todo
-      - id: error_handling
-        desc: "Chunk Fehler → verwerfen, Logging."
-        files: ["custom_components/pp_reader/prices/yahooquery_provider.py"]
-        status: todo
-      - id: dependency_manifest
-        desc: "Abhängigkeit yahooquery==2.3.7 im manifest."
-        files: ["custom_components/pp_reader/manifest.json"]
-        status: todo
-  - id: symbol_discovery
-    title: "Symbol Autodiscovery"
-    items:
-      - id: query_symbols
-        desc: "SELECT uuid,ticker_symbol ... retired=0, Filter leer."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: mapping_multi
-        desc: "Mapping symbol -> [uuids]; Deduplikation."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: empty_info_once
-        desc: "Einmaliges INFO bei leerer Liste (Lifecycle)."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
+      - { id: impl_provider, desc: "Implementierung yahooquery_provider (CHUNK_SIZE=50, Mapping, Filter price>0).", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: todo }
+      - { id: executor_wrapper, desc: "Blocking-Aufruf via Executor + Timeout.", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: todo }
+      - { id: error_handling, desc: "Chunk Fehler → verwerfen, Logging.", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: todo }
+
   - id: orchestrator
     title: "Preis-Service Orchestrator"
     items:
-      - id: state_handles
-        desc: "price_lock, price_task_cancel, price_error_counter, price_currency_drift_logged."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: cycle_flow
-        desc: "Zyklus Schritte 1–11 implementieren."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: batch_timeout
-        desc: "asyncio.wait_for pro Batch."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: watchdog
-        desc: "WARN >25s Zyklusdauer."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: overlap_skip
-        desc: "Lock / Skip bei laufendem Zyklus."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
+      - { id: state_vars, desc: "price_lock, price_task_cancel, price_error_counter, price_currency_drift_logged.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: cycle_flow, desc: "Zyklus Schritte 1–11 implementieren.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: batch_timeout, desc: "asyncio.wait_for pro Batch.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: watchdog, desc: "WARN >25s Zyklusdauer (inkl. Revaluation).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: overlap_skip, desc: "Lock / Skip bei laufendem Zyklus.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: metadata_fields, desc: "Metadata Log Keys (symbols_total,batches,quotes_returned,changed,errors,duration_ms,skipped_running).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: error_counter_reset, desc: "Reset error counter nach Erfolg.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+
   - id: change_detection
     title: "Change Detection & DB Updates"
     items:
-      - id: load_old_prices
-        desc: "Alte last_price Werte laden."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: scale_round
-        desc: "int(round(price*1e8)) Bankers Rounding."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: selective_update
-        desc: "Nur geänderte UUIDs transaktional updaten."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: timestamp_format
-        desc: "UTC ISO8601 ohne ms (YYYY-MM-DDTHH:MM:SSZ)."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: zero_quotes_error
-        desc: "0 Quotes → Fehlerzähler++."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
+      - { id: load_old_prices, desc: "Alte last_price Werte laden.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: scale_round, desc: "int(round(price*1e8)) Bankers Rounding.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: selective_update, desc: "Nur geänderte UUIDs transaktional updaten.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: timestamp_format, desc: "UTC ISO8601 ohne ms (YYYY-MM-DDTHH:MM:SSZ).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: zero_quotes_error, desc: "0 Quotes → Fehlerzähler++.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: set_price_source, desc: "last_price_source='yahoo' beim Update.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: skip_invalid_prices, desc: "Prices None/<=0 nicht updaten.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+
   - id: currency_drift
     title: "Currency Drift"
     items:
-      - id: compare_currency
-        desc: "Quote.currency vs securities.currency_code."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: once_per_symbol
-        desc: "WARN nur einmal pro Symbol (Set)."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
+      - { id: drift_once, desc: "Warnung pro Symbol nur einmal.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: skip_none_currency, desc: "Keine Drift-WARN wenn currency None.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+
   - id: revaluation
-    title: "Partielle Revaluation"
+    title: "Revaluation"
     items:
-      - id: implement_func
-        desc: "revalue_after_price_updates(...) Rückgabe portfolio_values / positions."
-        files: ["custom_components/pp_reader/prices/revaluation.py"]
-        status: todo
-      - id: reuse_agg
-        desc: "Aggregation bestehender Logik wiederverwenden."
-        files: ["custom_components/pp_reader/logic/*.py"]
-        status: todo
-      - id: detect_portfolios
-        desc: "Betroffene Portfolios ermitteln (JOIN)."
-        files: ["custom_components/pp_reader/prices/revaluation.py"]
-        status: todo
+      - { id: revalue_helper, desc: "Partielle Revaluation implementieren.", files: ["custom_components/pp_reader/prices/revaluation.py"], status: todo }
+      - { id: portfolio_aggregation_reuse, desc: "Vorhandene Aggregationsfunktionen wiederverwenden.", files: ["custom_components/pp_reader/logic/"], status: todo }
+
   - id: events
     title: "Event Push"
     items:
-      - id: order_values_then_positions
-        desc: "Reihenfolge: portfolio_values → einzelne portfolio_positions."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: only_on_change
-        desc: "Events nur bei ≥1 Preisänderung."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
+      - { id: order_values_then_positions, desc: "Reihenfolge: portfolio_values → einzelne portfolio_positions.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: only_on_change, desc: "Events nur bei ≥1 Preisänderung.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+
   - id: options_flow
     title: "Options / Konfiguration"
     items:
-      - id: add_options_flow
-        desc: "OptionsFlowHandler erweitern/erstellen."
-        files: ["custom_components/pp_reader/config_flow.py"]
-        status: todo
-      - id: interval_option
-        desc: "price_update_interval_seconds (>=300, default 900)."
-        files: ["custom_components/pp_reader/config_flow.py"]
-        status: todo
-      - id: debug_option
-        desc: "enable_price_debug."
-        files: ["custom_components/pp_reader/config_flow.py"]
-        status: todo
-      - id: apply_on_change
-        desc: "Intervall-Neuplanung bei Änderung."
-        files: ["custom_components/pp_reader/__init__.py"]
-        status: todo
-      - id: logger_adjust
-        desc: "Namespace custom_components.pp_reader.prices.* auf DEBUG setzen."
-        files: ["custom_components/pp_reader/__init__.py"]
-        status: todo
+      - { id: add_options_flow, desc: "OptionsFlowHandler erweitern/erstellen.", files: ["custom_components/pp_reader/config_flow.py"], status: todo }
+      - { id: interval_option, desc: "price_update_interval_seconds (>=300, default 900).", files: ["custom_components/pp_reader/config_flow.py"], status: todo }
+      - { id: debug_option, desc: "enable_price_debug.", files: ["custom_components/pp_reader/config_flow.py"], status: todo }
+
   - id: setup_unload
     title: "Setup / Unload Integration"
     items:
-      - id: initial_run
-        desc: "Initiallauf direkt nach async_setup_entry."
-        files: ["custom_components/pp_reader/__init__.py"]
-        status: todo
-      - id: schedule_task
-        desc: "Intervall-Task planen & Cancel-Handle speichern."
-        files: ["custom_components/pp_reader/__init__.py"]
-        status: todo
-      - id: unload_cleanup
-        desc: "Task cancel + state cleanup."
-        files: ["custom_components/pp_reader/__init__.py"]
-        status: todo
-      - id: reload_behavior
-        desc: "Reload startet neuen Initiallauf."
-        files: ["custom_components/pp_reader/__init__.py"]
-        status: todo
+      - { id: initial_run, desc: "Initiallauf direkt nach async_setup_entry.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
+      - { id: schedule_task, desc: "Intervall-Task planen & Cancel-Handle speichern.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
+      - { id: unload_cleanup, desc: "Task cancel + state cleanup.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
+      - { id: reload_behavior, desc: "Reload startet neuen Initiallauf.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
+
   - id: logging
     title: "Logging"
     items:
-      - id: info_cycle
-        desc: "INFO Zyklus-Metadatenzeile."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: warn_conditions
-        desc: "Chunk Fail, Watchdog, Drift, repeated failures."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
-      - id: debug_details
-        desc: "Batch Start/Ende, Accept/Drop, Skip Overlap."
-        files: ["custom_components/pp_reader/prices/price_service.py"]
-        status: todo
+      - { id: info_cycle, desc: "INFO Zyklus-Metadatenzeile.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: warn_conditions, desc: "Chunk Fail, Watchdog, Drift, repeated failures, Zero-Quotes.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: debug_details, desc: "Batch Start/Ende, Accept/Drop, Skip Overlap.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: warn_zero_quotes, desc: "WARN bei Gesamt-0-Quotes (dedupliziert).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: import_error_disable, desc: "ERROR bei yahooquery Importfehler → deaktivieren.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+
   - id: i18n
     title: "Internationalisierung"
     items:
-      - id: add_keys
-        desc: "Neue Keys in de.json & en.json."
-        files: ["custom_components/pp_reader/translations/en.json", "custom_components/pp_reader/translations/de.json"]
-        status: todo
+      - { id: add_keys, desc: "Neue Keys in de.json & en.json.", files: ["custom_components/pp_reader/translations/en.json", "custom_components/pp_reader/translations/de.json"], status: todo }
+
   - id: tests
     title: "Tests"
     items:
-      - id: provider_tests
-        desc: "test_yahooquery_provider (Mapping, Filter, Fehlerszenarien)."
-        files: ["tests/prices/test_yahooquery_provider.py"]
-        status: todo
-      - id: service_tests
-        desc: "test_price_service (Change, NoChange, Overlap, Drift, Fehlerzählung)."
-        files: ["tests/prices/test_price_service.py"]
-        status: todo
-      - id: e2e_test
-        desc: "E2E Preisänderung → Events → Aggregat konsistent."
-        files: ["tests/prices/test_e2e_prices.py"]
-        status: todo
-      - id: migration_test
-        desc: "Spalten vorhanden / Migration robust."
-        files: ["tests/prices/test_migration.py"]
-        status: todo
+      - { id: provider_tests, desc: "test_yahooquery_provider (Mapping, Filter, Fehlerszenarien).", files: ["tests/prices/test_yahooquery_provider.py"], status: todo }
+      - { id: service_tests, desc: "test_price_service (Change, NoChange, Overlap, Drift, Fehlerzählung).", files: ["tests/prices/test_price_service.py"], status: todo }
+      - { id: e2e_test, desc: "E2E Preisänderung → Events → Aggregat konsistent.", files: ["tests/prices/test_e2e_prices.py"], status: todo }
+      - { id: migration_test, desc: "Spalten vorhanden / Migration robust.", files: ["tests/prices/test_migration.py"], status: todo }
+      - { id: test_warn_zero_quotes, desc: "Total-0 Quotes → WARN + Fehlerzähler.", files: ["tests/prices/test_price_service.py"], status: todo }
+      - { id: test_error_counter_reset, desc: "Erfolg nach Fehlerkette setzt Zähler zurück.", files: ["tests/prices/test_price_service.py"], status: todo }
+      - { id: test_no_drift_none_currency, desc: "Keine Drift-WARN bei fehlender Währung.", files: ["tests/prices/test_price_service.py"], status: todo }
+      - { id: test_metadata_log, desc: "Metadata Log Schlüssel vorhanden.", files: ["tests/prices/test_price_service.py"], status: todo }
+      - { id: test_no_events_no_change, desc: "Keine Events ohne Preisänderungen.", files: ["tests/prices/test_price_service.py"], status: todo }
+      - { id: test_watchdog, desc: "Watchdog triggert bei künstlicher Verzögerung.", files: ["tests/prices/test_price_service.py"], status: todo }
+
   - id: docs_changelog
     title: "Dokumentation & Changelog"
     items:
-      - id: readme_section
-        desc: "README Abschnitt Live Kurse (YahooQuery)."
-        files: ["README.md"]
-        status: todo
-      - id: changelog_entry
-        desc: "CHANGELOG Eintrag (Added live price fetch)."
-        files: ["CHANGELOG.md"]
-        status: todo
+      - { id: readme_section, desc: "README Abschnitt Live Kurse (YahooQuery).", files: ["README.md"], status: todo }
+      - { id: changelog_entry, desc: "CHANGELOG Eintrag (Added live price fetch).", files: ["CHANGELOG.md"], status: todo }
+
   - id: cleanup
     title: "Altcode Entfernen"
     items:
-      - id: remove_legacy_providers
-        desc: "Alte Provider/Rotation entfernen."
-        files: ["custom_components/pp_reader/"]
-        status: todo
-      - id: ensure_no_extra_persist
-        desc: "Keine Persistenz nicht freigegebener Quote-Felder."
-        files: ["custom_components/pp_reader/prices/"]
-        status: todo
+      - { id: remove_legacy_providers, desc: "Alte Provider/Rotation entfernen.", files: ["custom_components/pp_reader/"], status: todo }
+      - { id: ensure_no_extra_persist, desc: "Keine Persistenz nicht freigegebener Quote-Felder.", files: ["custom_components/pp_reader/prices/"], status: todo }
+
   - id: qa
     title: "QA / Manuelle Checks"
     items:
-      - id: offline_start
-        desc: "Start ohne Internet → Importfehler Logging."
-        files: []
-        status: todo
-      - id: interval_change_runtime
-        desc: "Intervalländerung cancelt alten Task."
-        files: []
-        status: todo
-      - id: reload_init
-        desc: "Reload triggert Initiallauf + Logs."
-        files: []
-        status: todo
-      - id: perf_watchdog
-        desc: "Zyklusdauer <25s bei Testdaten."
-        files: []
-        status: todo
+      - { id: offline_start, desc: "Start ohne Internet → Importfehler Logging.", files: [], status: todo }
+      - { id: interval_change_runtime, desc: "Intervalländerung cancelt alten Task.", files: [], status: todo }
+      - { id: reload_init, desc: "Reload triggert Initiallauf + Logs.", files: [], status: todo }
+      - { id: perf_watchdog, desc: "Zyklusdauer <25s bei Testdaten.", files: [], status: todo }
+      - { id: drift_cache_behavior, desc: "Drift-WARN nur einmal pro Symbol.", files: [], status: todo }
+      - { id: zero_quotes_warn_visible, desc: "Einmalige WARN bei Zero-Quotes validiert.", files: [], status: todo }
+      - { id: error_counter_reset_visible, desc: "Reset Fehlerzähler nach Erfolg sichtbar.", files: [], status: todo }
+      - { id: debug_scope_check, desc: "Debug-Logs nur Preis-Namespace.", files: [], status: todo }
+
 tracking:
   progress:
-    total_items: null   # kann beim ersten Durchlauf berechnet werden
+    total_items: null
     done: 0
     wip: 0
     todo: 0
-  updated: null         # ISO8601 beim ersten Update setzen
+  updated: null

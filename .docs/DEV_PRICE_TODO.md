@@ -28,22 +28,26 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
 
 ## 5. Orchestrator / Preis-Service
 - [ ] Neu: `custom_components/pp_reader/prices/price_service.py`
-  - State: price_lock, price_task_cancel, price_error_counter, price_currency_drift_logged
+  - State: `price_lock`, `price_task_cancel`, `price_error_counter`, `price_currency_drift_logged`
   - Ablauf-Zyklus 1–11 (siehe nextGoals)
-  - Timeout pro Batch (asyncio.wait_for)
-  - Watchdog >25s WARN
-  - Metadaten-Objekt Log (INFO)
+  - Timeout pro Batch (`asyncio.wait_for`)
+  - Watchdog >25s WARN (gesamter Zyklus inkl. Revaluation)
+  - Metadaten-Objekt Log (INFO) mit Keys: `symbols_total`, `batches`, `quotes_returned`, `changed`, `errors`, `duration_ms`, `skipped_running`
+  - [ ] Fehlerzähler Reset nach erstem erfolgreichen Zyklus (wenn ≥1 Quote verarbeitet)
 
 ## 6. Change Detection & DB Update
-- [ ] Laden alter last_price Werte
-- [ ] Skalierung int(round(price * 1e8))
+- [ ] Laden alter `last_price` Werte
+- [ ] Skalierung `int(round(price * 1e8))`
 - [ ] Nur geänderte UUIDs updaten (Transaktion)
-- [ ] Timestamp Format UTC ohne ms: YYYY-MM-DDTHH:MM:SSZ
+- [ ] Timestamp Format UTC ohne ms: `YYYY-MM-DDTHH:MM:SSZ`
 - [ ] Fehlerfall (0 Quotes) → Fehlerzähler++
-
+- [ ] `last_price_source='yahoo'` beim Update setzen
+- [ ] Preise `None` oder `<=0` NICHT updaten (skip)
+  
 ## 7. Currency Drift
-- [ ] Vergleich Quote.currency vs persistierte securities.currency_code
-- [ ] Pro Symbol nur einmal WARN (Set-Cache)
+- [ ] Vergleich Quote.currency vs persistierte `currency_code`
+- [ ] Pro Symbol nur einmal WARN
+- [ ] Fehlende Currency (`None`) → keine Drift-Prüfung (skip)
 
 ## 8. Revaluation (partiell)
 - [ ] Neu: `custom_components/pp_reader/prices/revaluation.py`
@@ -85,10 +89,14 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
   - Version bump minor
 
 ## 12. Logging
-- [ ] Logger Namespace anlegen: custom_components.pp_reader.prices.*
-- [ ] INFO Zykluszeile
-- [ ] WARN Bedingungen (Chunk, Watchdog, Drift, wiederholte Fehler)
+- [ ] Logger Namespace anlegen: `custom_components.pp_reader.prices.*`
+- [ ] INFO Zykluszeile (siehe definierte Keys)
+- [ ] WARN Bedingungen (Chunk, Watchdog, Drift, wiederholte Fehler, Zero-Quotes)
+- [ ] WARN bei Gesamt-0-Quotes (dedupliziert, max 1× / 30min)
+- [ ] ERROR Importfehler `yahooquery` → Feature deaktivieren
 - [ ] DEBUG (Batch Start/Ende, Accept/Drop Symbol, Skip Overlap)
+- [ ] Fehlerzähler Reset Log bei Rückkehr zu Erfolg
+- [ ] Keine Drift-WARN wenn Currency fehlt
 
 ## 13. Internationalisierung
 - [ ] translations/de.json & en.json neue Keys:
@@ -102,22 +110,27 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
   - warn.repeated_batch_failures
 
 ## 14. Tests
-- [ ] tests/prices/test_yahooquery_provider.py
-  - Normal Batch
-  - Preis <=0 filter
-  - Fehlendes Symbol
-- [ ] tests/prices/test_price_service.py
-  - Chunk Fehler isoliert
-  - Wiederholte Fehler → WARN ab 3
-  - Keine Änderungen → keine Events
-  - Änderungen → selektive Updates + Events Reihenfolge
-  - Currency Drift einmalig
-  - Leere Symbol-Liste Logging Verhalten
-  - Overlap Skip
-  - Total-Fehlschlag zählt als Fehler
-  - Migration: neue Spalten vorhanden
-- [ ] E2E (Integrationstest) Preise ändern → Events → UI kompatibel
-- [ ] Fixture: temporäre DB-Datei (Kopie) für Migration
+- [ ] `tests/prices/test_yahooquery_provider.py`
+- [ ] `tests/prices/test_price_service.py`
+- [ ] Normaler Batch
+- [ ] Null-/0-Preis Filter
+- [ ] Fehlendes Symbol
+- [ ] Chunk Fehler → andere verarbeitet
+- [ ] Wiederholte Fehler → WARN ab 3
+- [ ] Keine Änderungen → keine Events
+- [ ] Änderungen → selektive Updates + Events
+- [ ] Currency Drift Warn nur einmal
+- [ ] Migration vorhanden / neu
+- [ ] Skip bei laufendem Zyklus
+- [ ] Leere Symbol-Liste (INFO nur erster Lauf)
+- [ ] Total-Fehlschlag zählt als Fehler
+- [ ] WARN bei 0 Gesamtquotes + Fehlerzähler++
+- [ ] Fehlerzähler Reset nach Erfolg
+- [ ] Keine Drift-WARN bei fehlender Currency
+- [ ] Metadata Log vollständige Keys vorhanden
+- [ ] Keine Events wenn wirklich keine Preisänderung
+- [ ] Watchdog greift bei künstlicher Verzögerung >25s
+- [ ] Reload startet Initiallauf erneut (Preis-Service)
 
 ## 15. Dokumentation / Changelog
 - [ ] README Abschnitt “Live Kurse (YahooQuery)”
@@ -130,10 +143,15 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
 - [ ] Sicherstellen: Keine Persistenz nicht vorgesehener Quote-Felder
 
 ## 17. QA / Manuelle Checks
-- [ ] HA Neustart ohne Internet: Provider Import Fehler → Feature deaktiviert (ERROR einmalig)
-- [ ] Interval Change während Lauf → alter Task cancel + neuer Task geplant
-- [ ] Reload Config Entry → Initiallauf (Erwartete Logs)
-- [ ] Performance: Zyklus <25s bei ~N Symbolen (Testfall definieren)
+- [ ] HA Neustart ohne Internet → Importfehler (`yahooquery`) → einmal ERROR, Feature aus
+- [ ] Intervalländerung während Lauf → alter Task cancel + neuer Task geplant
+- [ ] Reload Config Entry → Initiallauf + erwartete Logs
+- [ ] Performance: Zyklus (inkl. Revaluation) <25s bei Test-N Symbolen
+- [ ] Zero-Quotes Szenario erzeugt deduplizierte WARN
+- [ ] Drift-WARN erscheint nicht erneut nach erstem Symbol
+- [ ] Reset Fehlerzähler sichtbar nach erfolgreichem Zyklus
+- [ ] Debug-Option begrenzt Logs auf Preis-Namespace
+- [ ] Keine Persistenz zusätzlicher Quote-Felder (nur last_price/source/fetched_at)
 
 ---
 
