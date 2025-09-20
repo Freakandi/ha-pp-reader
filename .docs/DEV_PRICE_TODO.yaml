@@ -11,32 +11,32 @@ phases:
   - id: schema
     title: "Schema / Migration"
     items:
-      - { id: add_columns, desc: "Spalten last_price_source, last_price_fetched_at zu securities hinzufügen (DDL + ALL_SCHEMAS).", files: ["custom_components/pp_reader/data/db_schema.py"], status: todo }
-      - { id: runtime_alter_guard, desc: "Fallback ALTER TABLE bei bestehender DB (try/except, ignorieren falls vorhanden).", files: ["custom_components/pp_reader/data/db_init.py"], status: todo }
+      - { id: add_columns, desc: "Spalten last_price_source, last_price_fetched_at zu securities hinzufügen (DDL + ALL_SCHEMAS).", files: ["custom_components/pp_reader/data/db_schema.py"], status: done }
+      - { id: runtime_alter_guard, desc: "Fallback ALTER TABLE bei bestehender DB (try/except, ignorieren falls vorhanden).", files: ["custom_components/pp_reader/data/db_init.py"], status: done }
 
   - id: provider_base
     title: "Provider Abstraktion"
     items:
-      - { id: quote_dataclass, desc: "Dataclass Quote definieren.", files: ["custom_components/pp_reader/prices/provider_base.py"], status: todo }
-      - { id: price_provider_protocol, desc: "Protocol PriceProvider.fetch(List[str]) -> Dict[str, Quote].", files: ["custom_components/pp_reader/prices/provider_base.py"], status: todo }
+      - { id: quote_dataclass, desc: "Dataclass Quote definieren.", files: ["custom_components/pp_reader/prices/provider_base.py"], status: done }
+      - { id: price_provider_protocol, desc: "Protocol PriceProvider.fetch(List[str]) -> Dict[str, Quote].", files: ["custom_components/pp_reader/prices/provider_base.py"], status: done }
 
   - id: yahoo_provider
     title: "YahooQuery Provider"
     items:
-      - { id: impl_provider, desc: "Implementierung yahooquery_provider (CHUNK_SIZE=50, Mapping, Filter price>0).", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: todo }
-      - { id: executor_wrapper, desc: "Blocking-Aufruf via Executor + Timeout.", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: todo }
-      - { id: error_handling, desc: "Chunk Fehler → verwerfen, Logging.", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: todo }
+      - { id: impl_provider, desc: "Implementierung yahooquery_provider (CHUNK_SIZE=50, Mapping, Filter price>0).", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: done }
+      - { id: executor_wrapper, desc: "Blocking-Aufruf via Executor + Timeout.", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: done }
+      - { id: error_handling, desc: "Chunk Fehler → verwerfen, Logging.", files: ["custom_components/pp_reader/prices/yahooquery_provider.py"], status: done }
 
   - id: orchestrator
     title: "Preis-Service Orchestrator"
     items:
-      - { id: state_vars, desc: "price_lock, price_task_cancel, price_error_counter, price_currency_drift_logged.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: cycle_flow, desc: "Zyklus Schritte 1–11 implementieren.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: batch_timeout, desc: "asyncio.wait_for pro Batch.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: watchdog, desc: "WARN >25s Zyklusdauer (inkl. Revaluation).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: overlap_skip, desc: "Lock / Skip bei laufendem Zyklus.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: metadata_fields, desc: "Metadata Log Keys (symbols_total,batches,quotes_returned,changed,errors,duration_ms,skipped_running).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: error_counter_reset, desc: "Reset error counter nach Erfolg.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: state_vars, desc: "price_lock, price_task_cancel, price_error_counter, price_currency_drift_logged.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: cycle_flow, desc: "Zyklus Schritte 1–11 implementieren.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: batch_timeout, desc: "asyncio.wait_for pro Batch.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: watchdog, desc: "WARN >25s Zyklusdauer (inkl. Revaluation).", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: overlap_skip, desc: "Lock / Skip bei laufendem Zyklus.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: metadata_fields, desc: "Metadata Log Keys (symbols_total,batches,quotes_returned,changed,errors,duration_ms,skipped_running).", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: error_counter_reset, desc: "Reset error counter nach Erfolg.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
 
   - id: change_detection
     title: "Change Detection & DB Updates"
@@ -133,6 +133,13 @@ phases:
       - { id: zero_quotes_warn_visible, desc: "Einmalige WARN bei Zero-Quotes validiert.", files: [], status: todo }
       - { id: error_counter_reset_visible, desc: "Reset Fehlerzähler nach Erfolg sichtbar.", files: [], status: todo }
       - { id: debug_scope_check, desc: "Debug-Logs nur Preis-Namespace.", files: [], status: todo }
+
+  - id: symbol_autodiscovery
+    title: "Symbol Autodiscovery"
+    items:
+      - { id: sql_query, desc: "SQL Query aktive Securities laden.", files: ["custom_components/pp_reader/prices/symbols.py"], status: done }
+      - { id: dedup_mapping, desc: "Mapping symbol->[uuids] erstellen.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: empty_info_once, desc: "Einmaliges INFO bei leerer Liste.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
 
 tracking:
   progress:

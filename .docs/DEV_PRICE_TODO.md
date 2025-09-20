@@ -3,18 +3,18 @@
 Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
 
 ## 1. Schema / Migration
-- [ ] (DB) Spalten hinzufügen falls fehlend: securities.last_price_source, securities.last_price_fetched_at
+- [x] (DB) Spalten hinzufügen falls fehlend: securities.last_price_source, securities.last_price_fetched_at
   - Datei ändern: [custom_components/pp_reader/data/db_schema.py](custom_components/pp_reader/data/db_schema.py) (DDL aufnehmen in ALL_SCHEMAS)
   - Datei prüfen/ergänzen: [custom_components/pp_reader/data/db_init.py](custom_components/pp_reader/data/db_init.py) (nichts brechen)
-- [ ] (Migration Fallback) Try/Except ALTER bei Laufzeit falls Spalten fehlen (optional – falls nicht über Schema-Neuaufbau abgedeckt)
+- [x] (Migration Fallback) Try/Except ALTER bei Laufzeit falls Spalten fehlen (optional – falls nicht über Schema-Neuaufbau abgedeckt)
 
 ## 2. Provider Abstraktion
-- [ ] Neu: `custom_components/pp_reader/prices/provider_base.py`
+- [x] Neu: `custom_components/pp_reader/prices/provider_base.py`
   - Klasse: Quote (Dataclass)
   - Protocol: PriceProvider.fetch(symbols) -> dict[symbol, Quote]
 
 ## 3. YahooQuery Provider
-- [ ] Neu: `custom_components/pp_reader/prices/yahooquery_provider.py`
+- [x] Neu: `custom_components/pp_reader/prices/yahooquery_provider.py`
   - CHUNK_SIZE=50
   - Mapping Felder (regularMarketPrice → price, usw.)
   - Filter: price > 0
@@ -22,18 +22,18 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
   - Fehlerbehandlung (Chunk komplett verwerfen)
 
 ## 4. Symbol-Autodiscovery
-- [ ] SQL Query implementieren (SELECT uuid, ticker_symbol FROM securities WHERE retired=0 ...)
-- [ ] Deduplikation + Mapping symbol→[uuids]
-- [ ] Einmaliges INFO bei leerer Liste je Laufzeit (State-Flag in hass.data)
+- [x] SQL Query implementieren (SELECT uuid, ticker_symbol FROM securities WHERE retired=0 ...)
+- [x] Deduplikation + Mapping symbol→[uuids]
+- [x] Einmaliges INFO bei leerer Liste je Laufzeit (State-Flag in hass.data)
 
 ## 5. Orchestrator / Preis-Service
-- [ ] Neu: `custom_components/pp_reader/prices/price_service.py`
+- [x] Neu: `custom_components/pp_reader/prices/price_service.py`
   - State: `price_lock`, `price_task_cancel`, `price_error_counter`, `price_currency_drift_logged`
   - Ablauf-Zyklus 1–11 (siehe nextGoals)
   - Timeout pro Batch (`asyncio.wait_for`)
   - Watchdog >25s WARN (gesamter Zyklus inkl. Revaluation)
   - Metadaten-Objekt Log (INFO) mit Keys: `symbols_total`, `batches`, `quotes_returned`, `changed`, `errors`, `duration_ms`, `skipped_running`
-  - [ ] Fehlerzähler Reset nach erstem erfolgreichen Zyklus (wenn ≥1 Quote verarbeitet)
+  - ☑ Fehlerzähler Reset nach erstem erfolgreichen Zyklus (wenn ≥1 Quote verarbeitet)
 
 ## 6. Change Detection & DB Update
 - [ ] Laden alter `last_price` Werte
@@ -43,7 +43,7 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
 - [ ] Fehlerfall (0 Quotes) → Fehlerzähler++
 - [ ] `last_price_source='yahoo'` beim Update setzen
 - [ ] Preise `None` oder `<=0` NICHT updaten (skip)
-  
+
 ## 7. Currency Drift
 - [ ] Vergleich Quote.currency vs persistierte `currency_code`
 - [ ] Pro Symbol nur einmal WARN

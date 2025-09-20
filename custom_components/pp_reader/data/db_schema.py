@@ -27,23 +27,25 @@ ACCOUNT_SCHEMA = [
         value TEXT,
         FOREIGN KEY (account_uuid) REFERENCES accounts(uuid)
     );
-    """
+    """,
 ]
 
-SECURITIES_SCHEMA = [
+SECURITY_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS securities (
         uuid TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        currency_code TEXT NOT NULL,
-        note TEXT,
         isin TEXT,
         wkn TEXT,
         ticker_symbol TEXT,
-        retired INTEGER DEFAULT 0,
+        feed TEXT,
+        currency_code TEXT,
+        retired INTEGER,
         updated_at TEXT,
         last_price INTEGER,           -- Letzter Preis in 10^-8 Einheiten
-        last_price_date INTEGER       -- Datum des letzten Preises (Unix-Timestamp)
+        last_price_date INTEGER,      -- Datum des letzten Preises (Unix-Timestamp)
+        last_price_source TEXT,       -- Quelle des zuletzt geholten Preises (z.B. 'yahoo')
+        last_price_fetched_at TEXT    -- UTC Zeitstempel (YYYY-MM-DDTHH:MM:SSZ) des letzten Fetch
     );
     """,
     """
@@ -57,7 +59,7 @@ SECURITIES_SCHEMA = [
         PRIMARY KEY (security_uuid, date),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
-    """
+    """,
 ]
 
 PORTFOLIO_SCHEMA = [
@@ -78,7 +80,7 @@ PORTFOLIO_SCHEMA = [
         value TEXT,
         FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid)
     );
-    """
+    """,
 ]
 
 PORTFOLIO_SECURITIES_SCHEMA = [
@@ -145,7 +147,7 @@ TRANSACTION_SCHEMA = [
     """
     CREATE INDEX IF NOT EXISTS idx_transaction_units_currency
     ON transaction_units(fx_currency_code);
-    """
+    """,
 ]
 
 """
@@ -340,14 +342,16 @@ EXCHANGE_SCHEMA = [
 ]
 """
 
-FX_SCHEMA = ["""
+FX_SCHEMA = [
+    """
 CREATE TABLE IF NOT EXISTS fx_rates (
     date TEXT NOT NULL,
     currency TEXT NOT NULL,
     rate REAL NOT NULL,
     PRIMARY KEY (date, currency)
 );
-"""]
+"""
+]
 
 METADATA_SCHEMA = [
     """
@@ -360,10 +364,10 @@ METADATA_SCHEMA = [
 
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
-    *SECURITIES_SCHEMA,
+    *SECURITY_SCHEMA,
     *PORTFOLIO_SCHEMA,
     *PORTFOLIO_SECURITIES_SCHEMA,
     *TRANSACTION_SCHEMA,
     *FX_SCHEMA,
-    *METADATA_SCHEMA
+    *METADATA_SCHEMA,
 ]
