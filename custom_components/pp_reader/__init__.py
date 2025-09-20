@@ -139,7 +139,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     frontend_url_path="ppreader",
                     webcomponent_name="pp-reader-panel",
                     module_url=f"/pp_reader_dashboard/panel.js?v={cache_bust}",
-                    sidebar_title="PP Reader",
+                    sidebar_title="Portfolio Dashboard",
                     sidebar_icon="mdi:chart-line",
                     require_admin=False,
                     config={"entry_id": entry.entry_id},
