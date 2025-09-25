@@ -10,22 +10,20 @@ event bus when changes are detected.
 import logging
 import sqlite3
 from datetime import datetime
-from functools import partial
-from zoneinfo import ZoneInfo
 from pathlib import (
     Path,
-)  # Fix: wurde verwendet (db_path / fetch_positions_for_portfolios) aber nicht importiert
-from typing import Any  # Fix: Dict/List Typannotationen with Any (Positionen) verwenden
+)
+from zoneinfo import ZoneInfo
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import callback
 
-from ..currencies.fx import ensure_exchange_rates_for_dates_sync, load_latest_rates_sync
-from .db_access import (
-    get_transactions,  # noqa: TID252
-    get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
+from pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates_sync,
+    load_latest_rates_sync,
 )
+
 from ..logic.accounting import db_calc_account_balance  # noqa: TID252
 from ..logic.securities import (  # noqa: TID252
     db_calculate_current_holdings,
@@ -33,6 +31,10 @@ from ..logic.securities import (  # noqa: TID252
     db_calculate_sec_purchase_value,
 )
 from ..name.abuchen.portfolio import client_pb2  # noqa: TID252
+from .db_access import (
+    get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
+    get_transactions,
+)
 
 DOMAIN = "pp_reader"
 
@@ -582,6 +584,9 @@ def sync_from_pclient(
                 db_path, conn, current_hold_pur
             )
 
+            # NEU: Zähler statt Spam pro Eintrag
+            portfolio_sec_processed = 0
+
             # Iteriere über die berechneten Werte und vergleiche mit der DB
             for (
                 portfolio_uuid,
@@ -601,19 +606,6 @@ def sync_from_pclient(
                     (portfolio_uuid, security_uuid),
                 )
                 existing_entry = cur.fetchone()
-
-                # Debug-Log für Vergleich
-                # _LOGGER.debug(
-                #     "Vergleiche existing_entry=%s mit
-                #     (current_holdings=%f, "
-                #     "purchase_value=%d, current_value=%d)",  # noqa: ERA001
-                #     "purchase_value=%d, current_value=%d)",  # noqa: ERA001
-                #     "purchase_value=%d, current_value=%d)",  # noqa: ERA001
-                #     "purchase_value=%d, current_value=%d)",  # noqa: ERA001
-                #     existing_entry, current_holdings,
-                #     int(purchase_value * 100),  # noqa: ERA001
-                #     int(current_value * 100)  # noqa: ERA001
-                # )  # noqa: ERA001, RUF100
 
                 # Vergleiche mit den berechneten Werten
                 if not existing_entry or existing_entry != (
@@ -642,10 +634,7 @@ def sync_from_pclient(
                             int(current_value * 100),  # EUR -> Cent
                         ),
                     )
-                    _LOGGER.debug(
-                        "sync_from_pclient: "
-                        "portfolio_securities Daten eingefügt oder aktualisiert."
-                    )
+                    portfolio_sec_processed += 1  # NEU: zählen statt pro Zeile loggen
 
             # Entferne veraltete Einträge aus portfolio_securities
             portfolio_security_keys = set(current_holdings_values.keys())
@@ -671,17 +660,16 @@ def sync_from_pclient(
                     # Alle gelöschten Keys zu changed_portfolios hinzufügen
                     for pk, _sk in keys_to_delete:
                         changed_portfolios.add(pk)
-            # else:  # noqa: ERA001
-            # _LOGGER.debug(
-            #     "sync_from_pclient: Keine veralteten Einträge in "  # noqa: ERA001
-            #     "portfolio_securities gefunden."
-            # )  # noqa: ERA001, RUF100
+
+            # NEU: Zusammenfassendes Debug statt vieler Einzelzeilen
+            _LOGGER.debug(
+                "sync_from_pclient: portfolio_securities upsert summary: upserts=%d deletions=%d changes_flag=%s",
+                portfolio_sec_processed,
+                len(keys_to_delete),
+                sec_port_changes_detected,
+            )
 
             conn.commit()
-            # _LOGGER.debug(
-            #     "sync_from_pclient: portfolio_securities erfolgreich "  # noqa: ERA001
-            #     "synchronisiert."  # noqa: ERA001
-            # )  # noqa: ERA001, RUF100
         # else:  # noqa: ERA001
         # _LOGGER.debug(
         #     "sync_from_pclient: Keine Änderungen an "  # noqa: ERA001

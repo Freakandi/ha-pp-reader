@@ -34,6 +34,10 @@ from ..data.sync_from_pclient import (
     fetch_positions_for_portfolios,
 )  # Reuse bestehender Event-Push & Positions-Loader
 from .yahooquery_provider import YahooQueryProvider, has_import_error, CHUNK_SIZE
+from ..logic.portfolio import (
+    db_calculate_portfolio_value_and_count,
+    db_calculate_portfolio_purchase_sum,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -339,6 +343,33 @@ def _process_currency_drift_mismatches(
     store["price_currency_drift_logged"] = drift_logged
 
 
+def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
+    """
+    Transformiert das Dict-Format der Revaluation in die erwartete Event-Payload
+    (identisch zur File-Sync Struktur).
+    """
+    payload: list[dict] = []
+    for pid, data in pv_dict.items():
+        try:
+            payload.append(
+                {
+                    "uuid": pid,
+                    "name": data.get("name", pid),
+                    "position_count": data.get("count", 0) or 0,
+                    "current_value": round(data.get("value", 0.0) or 0.0, 2),
+                    "purchase_sum": round(data.get("purchase_sum", 0.0) or 0.0, 2),
+                }
+            )
+        except Exception:
+            _LOGGER.debug(
+                "prices_cycle: Fehler beim Aufbau der portfolio_values Zeile pid=%s data=%r",
+                pid,
+                data,
+                exc_info=True,
+            )
+    return payload
+
+
 async def _run_price_cycle(hass, entry_id: str):
     cycle_start_ts = time.time()
     store = hass.data[DOMAIN][entry_id]
@@ -561,67 +592,146 @@ async def _run_price_cycle(hass, entry_id: str):
                             )
                     except Exception:
                         _LOGGER.warning(
-                            "prices_cycle: Fehler in partielle Revaluation",
+                            "prices_cycle: Fehler bei partieller Revaluation",
                             exc_info=True,
                         )
 
             # Events
             if changed_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
-                if pv_dict:
+
+                # Fallback: Wenn Revaluation nichts liefert, aber Preise geändert → aggregiere betroffene Portfolios direkt
+                if not pv_dict:
                     try:
-                        portfolio_values_payload = [
-                            {
-                                "uuid": pid,
-                                "name": pdata.get("name", pid),
-                                "position_count": pdata.get("count", 0),
-                                "current_value": round(pdata.get("value", 0.0), 2),
-                                "purchase_sum": round(
-                                    pdata.get("purchase_sum", 0.0), 2
-                                ),
-                            }
-                            for pid, pdata in pv_dict.items()
-                        ]
-                        if portfolio_values_payload:
-                            _push_update(
-                                hass,
-                                entry_id,
-                                "portfolio_values",
-                                portfolio_values_payload,
+                        affected_portfolios: set[str] = set()
+                        with sqlite3.connect(str(db_path)) as conn:
+                            cur = conn.execute(
+                                f"""
+                                SELECT DISTINCT portfolio_uuid
+                                FROM portfolio_securities
+                                WHERE security_uuid IN ({",".join("?" for _ in scaled_updates)})
+                                """,
+                                tuple(scaled_updates.keys()),
                             )
-                        affected_portfolios = {
-                            p["uuid"] for p in portfolio_values_payload
-                        }
-                        try:
-                            positions_map = await hass.async_add_executor_job(
-                                fetch_positions_for_portfolios,
-                                db_path,
-                                affected_portfolios,
-                            )
-                            for pid, positions in positions_map.items():
+                            affected_portfolios.update(r for (r,) in cur.fetchall())
+
+                        if affected_portfolios:
+                            fallback = {}
+                            for pid in affected_portfolios:
                                 try:
-                                    _push_update(
-                                        hass,
-                                        entry_id,
-                                        "portfolio_positions",
-                                        {"portfolio_uuid": pid, "positions": positions},
-                                    )
-                                except Exception:
-                                    _LOGGER.exception(
-                                        "prices_cycle: Fehler beim Senden portfolio_positions für %s",
+                                    val, cnt = await hass.async_add_executor_job(
+                                        db_calculate_portfolio_value_and_count,
                                         pid,
+                                        db_path,
                                     )
-                        except Exception:
-                            _LOGGER.warning(
-                                "prices_cycle: Fehler beim Laden der Positionsdaten für Event-Push",
-                                exc_info=True,
-                            )
+                                    purch = await hass.async_add_executor_job(
+                                        db_calculate_portfolio_purchase_sum,
+                                        pid,
+                                        db_path,
+                                    )
+                                    fallback[pid] = {
+                                        "name": pid,
+                                        "value": val,
+                                        "count": cnt,
+                                        "purchase_sum": purch,
+                                    }
+                                except Exception:
+                                    _LOGGER.debug(
+                                        "prices_cycle: Fehler im Fallback-Aggregat pid=%s",
+                                        pid,
+                                        exc_info=True,
+                                    )
+                            if fallback:
+                                pv_dict = fallback
+                                _LOGGER.debug(
+                                    "prices_cycle: Revaluation leer – Fallback Aggregation genutzt (portfolios=%d)",
+                                    len(fallback),
+                                )
                     except Exception:
-                        _LOGGER.warning(
-                            "prices_cycle: Fehler im Event-Push (portfolio_values / positions)",
+                        _LOGGER.debug(
+                            "prices_cycle: Fallback Aggregation fehlgeschlagen",
                             exc_info=True,
                         )
 
+                if pv_dict:
+                    try:
+                        pv_payload = _build_portfolio_values_payload(pv_dict)
+
+                        # Diff-Logging (alter vs neuer Wert) – nur DEBUG
+                        if _LOGGER.isEnabledFor(logging.DEBUG):
+                            try:
+                                with sqlite3.connect(str(db_path)) as diff_conn:
+                                    cur = diff_conn.execute(
+                                        "SELECT uuid FROM portfolios WHERE uuid IN ({})".format(
+                                            ",".join("?" for _ in pv_dict)
+                                        ),
+                                        tuple(pv_dict.keys()),
+                                    )
+                                    present = {r[0] for r in cur.fetchall()}
+                                for row in pv_payload:
+                                    pid = row["uuid"]
+                                    if pid not in present:
+                                        _LOGGER.debug(
+                                            "prices_cycle: pv_event WARN fehlendes Portfolio in DB pid=%s",
+                                            pid,
+                                        )
+                            except Exception:
+                                _LOGGER.debug(
+                                    "prices_cycle: Diff-Check Fehler", exc_info=True
+                                )
+
+                        if pv_payload:
+                            _LOGGER.debug(
+                                "prices_cycle: pv_event push count=%d changed_secs=%d payload=%s",
+                                len(pv_payload),
+                                detected_changes,
+                                pv_payload,
+                            )
+                            _push_update(hass, entry_id, "portfolio_values", pv_payload)
+                        else:
+                            _LOGGER.warning(
+                                "prices_cycle: Geänderte Preise (%s) aber leere pv_payload nach Transformation",
+                                changed_count,
+                            )
+                    except Exception:
+                        _LOGGER.warning(
+                            "prices_cycle: Fehler beim portfolio_values Event-Push",
+                            exc_info=True,
+                        )
+
+                else:
+                    _LOGGER.debug(
+                        "prices_cycle: Keine portfolio_values (revaluation leer) obwohl changed=%s",
+                        changed_count,
+                    )
+
+                # Positions: reuse falls vorhanden, sonst load
+                try:
+                    positions_map = revaluation_result.get("portfolio_positions")
+                    if not positions_map and pv_dict:
+                        # Fallback positions (synchroner Loader)
+                        affected = set(pv_dict.keys())
+                        positions_map = fetch_positions_for_portfolios(
+                            db_path, affected
+                        )
+                    if positions_map:
+                        for pid, positions in positions_map.items():
+                            _push_update(
+                                hass,
+                                entry_id,
+                                "portfolio_positions",
+                                {"portfolio_uuid": pid, "positions": positions},
+                            )
+                    else:
+                        _LOGGER.debug(
+                            "prices_cycle: Keine positions_map (skip push) changed=%s",
+                            changed_count,
+                        )
+                except Exception:
+                    _LOGGER.warning(
+                        "prices_cycle: Fehler beim Push portfolio_positions",
+                        exc_info=True,
+                    )
             meta = {
                 "symbols_total": len(symbols),
                 "batches": batches_count,

@@ -1,9 +1,23 @@
-
 # Changelog
 Alle erwähnenswerten Änderungen an diesem Projekt werden in dieser Datei festgehalten.
 
 Format orientiert sich an: Keep a Changelog
 Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Changes).
+
+## [0.10.5] - 2025-09-25
+### Fixed
+- Frontend erhielt zwar `panels_updated` Events, abonnierte aber den falschen Literal-Eventnamen (`EVENT_PANELS_UPDATED`) → keine Live-Aktualisierung der Depotwerte. Subscription in `dashboard.js` korrigiert.
+- Inkrementelle Depot-Updates wurden nicht gepatcht, da initiale Tabelle `value` nutzte, Events aber `current_value` senden. Normalisierung (`current_value`/`value`, `purchase_sum`/`purchaseSum`, `count`/`position_count`) in `handlePortfolioUpdate`.
+- Key-Mismatch bei `portfolio_values` aus partielle Revaluation (Mapping `value`→`current_value`, `count`→`position_count`) führte zu ignorierten Updates – Transformations- & Fallback-Logik im Preiszyklus ergänzt.
+
+### Added
+- Erweiterte Debug-Logs für Price-Cycle (`pv_event push`, Payload-Länge, Fallback-Indikatoren).
+- Visuelles Highlight (CSS-Klasse `flash-update`) beim Aktualisieren einzelner Depotzeilen.
+
+### Internal
+- Robustere DOM-Selektion & defensive Parser für numerische Werte in `updateConfigsWS.js`.
+- Fallback-Aggregation, falls Revaluation keine `portfolio_values` liefert, obwohl Preisänderungen vorliegen.
+- Kein Breaking Change der bestehenden Daten-/Event-Contracts; ausschließlich Patch-Verhalten verbessert.
 
 ## [0.10.4] - 2025-09-25
 ### Fixed
@@ -59,7 +73,7 @@ Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Change
 - Events nur bei tatsächlicher Preisänderung (Reduktion unnötiger Frontend Updates).
 
 ### Internal
-- Neue Module: [`prices.provider_base`](custom_components/pp_reader/prices/provider_base.py), [`prices.yahooquery_provider`](custom_components/pp_reader/prices/yahooquery_provider.py), [`prices.price_service`](custom_components/pp_reader/prices/price_service.py), [`prices.revaluation`](custom_components/pp_reader/prices/revaluation.py).
+- Neue Module: `prices.provider_base`, `prices.yahooquery_provider`, `prices.price_service`, `prices.revaluation`.
 - Laufzeit-State isoliert unter `hass.data[DOMAIN][entry_id]` (Lock, Fehlerzähler, Drift-Cache, Intervall-Handle).
 
 ## [0.9.x] - Vorher
