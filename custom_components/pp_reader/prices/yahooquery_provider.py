@@ -37,6 +37,11 @@ CHUNK_SIZE = 50  # Sicherheitskonstante (primär durch Orchestrator genutzt)
 _YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
 
 
+def has_import_error() -> bool:
+    """Expose globalen Importfehler-Status für Orchestrator (Feature-Deaktivierung)."""
+    return _YAHOOQUERY_IMPORT_ERROR
+
+
 def _fetch_quotes_blocking(symbols: List[str]) -> dict:
     """
     Blocking Helper für Executor.
@@ -102,7 +107,7 @@ class YahooQueryProvider(PriceProvider):
         for sym in symbols:
             data = raw_quotes.get(sym)
             if not data:
-                # Symbol fehlt im Resultat → still überspringen
+                _LOGGER.debug("YahooQuery: skip symbol=%s (keine Daten im Resultat)", sym)
                 continue
 
             price = data.get("regularMarketPrice")
@@ -124,5 +129,11 @@ class YahooQueryProvider(PriceProvider):
                 source=self.source,
             )
             result[sym] = quote
+            _LOGGER.debug(
+                "YahooQuery: accept symbol=%s price=%s currency=%s",
+                sym,
+                price,
+                quote.currency,
+            )
 
         return result

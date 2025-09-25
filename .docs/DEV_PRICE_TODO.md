@@ -36,66 +36,64 @@ Legende: ☐ offen | ⟳ in Arbeit | ☑ fertig | ⚠ prüfen
   - ☑ Fehlerzähler Reset nach erstem erfolgreichen Zyklus (wenn ≥1 Quote verarbeitet)
 
 ## 6. Change Detection & DB Update
-- [ ] Laden alter `last_price` Werte
-- [ ] Skalierung `int(round(price * 1e8))`
-- [ ] Nur geänderte UUIDs updaten (Transaktion)
-- [ ] Timestamp Format UTC ohne ms: `YYYY-MM-DDTHH:MM:SSZ`
-- [ ] Fehlerfall (0 Quotes) → Fehlerzähler++
-- [ ] `last_price_source='yahoo'` beim Update setzen
-- [ ] Preise `None` oder `<=0` NICHT updaten (skip)
+- [x] Laden alter `last_price` Werte
+- [x] Skalierung `int(round(price * 1e8))`
+- [x] Nur geänderte UUIDs updaten (Transaktion)
+- [x] Timestamp Format UTC ohne ms: `YYYY-MM-DDTHH:MM:SSZ`
+- [x] Fehlerfall (0 Quotes) → Fehlerzähler++
+- [x] `last_price_source='yahoo'` beim Update setzen
+- [x] Preise `None` oder `<=0` NICHT updaten (skip)
 
 ## 7. Currency Drift
-- [ ] Vergleich Quote.currency vs persistierte `currency_code`
-- [ ] Pro Symbol nur einmal WARN
-- [ ] Fehlende Currency (`None`) → keine Drift-Prüfung (skip)
+- [x] Vergleich Quote.currency vs persistierte `currency_code`
+- [x] Pro Symbol nur einmal WARN
+- [x] Fehlende Currency (`None`) → keine Drift-Prüfung (skip)
 
 ## 8. Revaluation (partiell)
-- [ ] Neu: `custom_components/pp_reader/prices/revaluation.py`
+- [x] Neu: `custom_components/pp_reader/prices/revaluation.py`
   - Funktion: revalue_after_price_updates(hass, conn, updated_security_uuids)
-  - Ermittelt betroffene Portfolios (JOIN securities ↔ portfolio_securities/transactions)
-  - Re-Use vorhandener Aggregationen:
-    - Portfolio-Wert & Count: [custom_components/pp_reader/logic/portfolio.py](custom_components/pp_reader/logic/portfolio.py)
-    - Purchase Sum: calculate_purchase_sum
+  - Ermittelt betroffene Portfolios (JOIN / UNION)
+  - Re-Use vorhandener Aggregationen (value, count, purchase_sum)
   - Rückgabeformat:
     {
       "portfolio_values": { uuid: { name,value,count,purchase_sum }, ... } | None,
-      "portfolio_positions": { uuid: [ {name,current_holdings,purchase_value,current_value,gain_abs,gain_pct}, ...], ... } | None
+      "portfolio_positions": None (TODO)
     }
+- [ ] Positionsdaten (pro betroffenem Portfolio) ergänzen
 
 ## 9. Event-Push
-- [ ] Integration-Glue im Orchestrator:
-  - Wenn Änderungen >0:
-    - Erst portfolio_values Event (bestehendes Format wie Coordinator)
-    - Danach je Portfolio ein portfolio_positions Event
-  - Handler existieren: [custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js](custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js)
+- [x] Integration-Glue im Orchestrator:
+  - Nur bei `changed_count > 0`
+  - Reihenfolge: zuerst `portfolio_values`, danach je Portfolio `portfolio_positions`
+  - Reuse `_push_update` + `fetch_positions_for_portfolios`
+  - 2‑Dezimal Rundung identisch zum File-Sync Pfad
 
 ## 10. OptionsFlow & Konfiguration
-- [ ] Erweiterung: [custom_components/pp_reader/config_flow.py](custom_components/pp_reader/config_flow.py)
-  - OptionsFlowHandler falls noch nicht vorhanden
+- [x] Erweiterung: [custom_components/pp_reader/config_flow.py](custom_components/pp_reader/config_flow.py)
   - Felder:
-    - price_update_interval_seconds (int ≥300, default 900)
-    - enable_price_debug (bool)
-- [ ] Anwendung der Optionen beim Reload
-- [ ] Debug setzt Logger-Level namespace custom_components.pp_reader.prices.*
+    - [x] price_update_interval_seconds (int ≥300, default 900)
+    - [x] enable_price_debug (bool)
+- [x] Anwendung der Optionen beim Reload
+- [x] Debug setzt Logger-Level namespace custom_components.pp_reader.prices.*
 
 ## 11. Setup / Unload Integration
 - [ ] In [custom_components/pp_reader/__init__.py](custom_components/pp_reader/__init__.py):
-  - Initialer Start: create task (Initiallauf sofort)
-  - Speicherung cancel-callback
-  - Unload: Task cancel + Cleanup price_* Keys
-  - Reload: neuer Initiallauf
-- [ ] manifest.json Abhängigkeit ergänzen: yahooquery==2.3.7
+  - [x] Initialer Start: create task (Initiallauf sofort)
+  - [x] Speicherung cancel-callback
+  - [x] Unload: Task cancel + Cleanup price_* Keys
+  - [x] Reload: neuer Initiallauf
+- [x] manifest.json Abhängigkeit ergänzen: yahooquery==2.3.7
   - Datei: [custom_components/pp_reader/manifest.json](custom_components/pp_reader/manifest.json)
   - Version bump minor
 
 ## 12. Logging
-- [ ] Logger Namespace anlegen: `custom_components.pp_reader.prices.*`
-- [ ] INFO Zykluszeile (siehe definierte Keys)
-- [ ] WARN Bedingungen (Chunk, Watchdog, Drift, wiederholte Fehler, Zero-Quotes)
-- [ ] WARN bei Gesamt-0-Quotes (dedupliziert, max 1× / 30min)
-- [ ] ERROR Importfehler `yahooquery` → Feature deaktivieren
-- [ ] DEBUG (Batch Start/Ende, Accept/Drop Symbol, Skip Overlap)
-- [ ] Fehlerzähler Reset Log bei Rückkehr zu Erfolg
+- [x] Logger Namespace anlegen: `custom_components.pp_reader.prices.*`
+- [x] INFO Zykluszeile (siehe definierte Keys)
+- [x] WARN Bedingungen (Chunk, Watchdog, Drift, wiederholte Fehler, Zero-Quotes)
+- [x] WARN bei Gesamt-0-Quotes (dedupliziert, max 1× / 30min)
+- [x] ERROR Importfehler `yahooquery` → Feature deaktivieren
+- [x] DEBUG (Batch Start/Ende, Accept/Drop Symbol, Skip Overlap)
+- [x] Fehlerzähler Reset Log bei Rückkehr zu Erfolg
 - [ ] Keine Drift-WARN wenn Currency fehlt
 
 ## 13. Internationalisierung

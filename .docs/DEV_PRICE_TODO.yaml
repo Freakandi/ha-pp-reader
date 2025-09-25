@@ -41,55 +41,59 @@ phases:
   - id: change_detection
     title: "Change Detection & DB Updates"
     items:
-      - { id: load_old_prices, desc: "Alte last_price Werte laden.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: scale_round, desc: "int(round(price*1e8)) Bankers Rounding.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: selective_update, desc: "Nur geänderte UUIDs transaktional updaten.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: timestamp_format, desc: "UTC ISO8601 ohne ms (YYYY-MM-DDTHH:MM:SSZ).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: zero_quotes_error, desc: "0 Quotes → Fehlerzähler++.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: set_price_source, desc: "last_price_source='yahoo' beim Update.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: skip_invalid_prices, desc: "Prices None/<=0 nicht updaten.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: load_old_prices, desc: "Alte last_price Werte laden.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: scale_round, desc: "int(round(price*1e8)) Bankers Rounding.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: selective_update, desc: "Nur geänderte UUIDs transaktional updaten.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: timestamp_format, desc: "UTC ISO8601 ohne ms (YYYY-MM-DDTHH:MM:SSZ).", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: zero_quotes_error, desc: "0 Quotes → Fehlerzähler++.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: set_price_source, desc: "last_price_source='yahoo' beim Update.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: skip_invalid_prices, desc: "Prices None/<=0 nicht updaten.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
 
   - id: currency_drift
     title: "Currency Drift"
     items:
-      - { id: drift_once, desc: "Warnung pro Symbol nur einmal.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: skip_none_currency, desc: "Keine Drift-WARN wenn currency None.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: drift_once, desc: "Warnung pro Symbol nur einmal.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: skip_none_currency, desc: "Keine Drift-WARN wenn currency None.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
 
   - id: revaluation
     title: "Revaluation"
     items:
-      - { id: revalue_helper, desc: "Partielle Revaluation implementieren.", files: ["custom_components/pp_reader/prices/revaluation.py"], status: todo }
-      - { id: portfolio_aggregation_reuse, desc: "Vorhandene Aggregationsfunktionen wiederverwenden.", files: ["custom_components/pp_reader/logic/"], status: todo }
+      - { id: revalue_helper, desc: "Partielle Revaluation implementieren.", files: ["custom_components/pp_reader/prices/revaluation.py"], status: done }
+      - { id: portfolio_aggregation_reuse, desc: "Vorhandene Aggregationsfunktionen wiederverwenden.", files: ["custom_components/pp_reader/logic/"], status: done }
 
   - id: events
     title: "Event Push"
     items:
-      - { id: order_values_then_positions, desc: "Reihenfolge: portfolio_values → einzelne portfolio_positions.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: only_on_change, desc: "Events nur bei ≥1 Preisänderung.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: only_on_change, desc: "Events nur bei ≥1 Preisänderung.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
 
   - id: options_flow
     title: "Options / Konfiguration"
     items:
-      - { id: add_options_flow, desc: "OptionsFlowHandler erweitern/erstellen.", files: ["custom_components/pp_reader/config_flow.py"], status: todo }
-      - { id: interval_option, desc: "price_update_interval_seconds (>=300, default 900).", files: ["custom_components/pp_reader/config_flow.py"], status: todo }
-      - { id: debug_option, desc: "enable_price_debug.", files: ["custom_components/pp_reader/config_flow.py"], status: todo }
+      - { id: add_options_flow, desc: "OptionsFlowHandler erweitern/erstellen.", files: ["custom_components/pp_reader/config_flow.py"], status: done }
+      - { id: interval_option, desc: "price_update_interval_seconds (>=300, default 900).", files: ["custom_components/pp_reader/config_flow.py"], status: done }
+      - { id: debug_option, desc: "enable_price_debug.", files: ["custom_components/pp_reader/config_flow.py"], status: done }
+      - { id: apply_on_reload, desc: "Optionen (Intervall) beim Reload anwenden.", files: ["custom_components/pp_reader/__init__.py"], status: done }
+      - { id: debug_logger_apply, desc: "Debug Option setzt Logger-Level prices Namespace.", files: ["custom_components/pp_reader/__init__.py"], status: done }
 
   - id: setup_unload
     title: "Setup / Unload Integration"
     items:
-      - { id: initial_run, desc: "Initiallauf direkt nach async_setup_entry.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
-      - { id: schedule_task, desc: "Intervall-Task planen & Cancel-Handle speichern.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
-      - { id: unload_cleanup, desc: "Task cancel + state cleanup.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
-      - { id: reload_behavior, desc: "Reload startet neuen Initiallauf.", files: ["custom_components/pp_reader/__init__.py"], status: todo }
+      - { id: initial_run, desc: "Initiallauf direkt nach async_setup_entry.", files: ["custom_components/pp_reader/__init__.py"], status: done }
+      - { id: schedule_task, desc: "Intervall-Task planen & Cancel-Handle speichern.", files: ["custom_components/pp_reader/__init__.py"], status: done }
+      - { id: unload_cleanup, desc: "Task cancel + state cleanup.", files: ["custom_components/pp_reader/__init__.py"], status: done }
+      - { id: reload_behavior, desc: "Reload startet neuen Initiallauf.", files: ["custom_components/pp_reader/__init__.py"], status: done }
+      - { id: manifest_dependency, desc: "manifest: yahooquery==2.3.7 + Minor Version-Bump.", files: ["custom_components/pp_reader/manifest.json"], status: done }
 
   - id: logging
     title: "Logging"
     items:
-      - { id: info_cycle, desc: "INFO Zyklus-Metadatenzeile.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: warn_conditions, desc: "Chunk Fail, Watchdog, Drift, repeated failures, Zero-Quotes.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: debug_details, desc: "Batch Start/Ende, Accept/Drop, Skip Overlap.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: warn_zero_quotes, desc: "WARN bei Gesamt-0-Quotes (dedupliziert).", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
-      - { id: import_error_disable, desc: "ERROR bei yahooquery Importfehler → deaktivieren.", files: ["custom_components/pp_reader/prices/price_service.py"], status: todo }
+      - { id: logger_namespace, desc: "Logger Namespace custom_components.pp_reader.prices.*", files: ["custom_components/pp_reader/manifest.json"], status: done }
+      - { id: info_cycle, desc: "INFO Zyklus-Metadatenzeile.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: warn_conditions, desc: "Chunk Fail, Watchdog, Drift, repeated failures, Zero-Quotes.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: debug_details, desc: "Batch Start/Ende, Accept/Drop, Skip Overlap.", files: ["custom_components/pp_reader/prices/price_service.py","custom_components/pp_reader/prices/yahooquery_provider.py"], status: done }
+      - { id: warn_zero_quotes, desc: "WARN bei Gesamt-0-Quotes (dedupliziert).", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: import_error_disable, desc: "ERROR bei yahooquery Importfehler → deaktivieren.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
+      - { id: error_counter_reset_log, desc: "Log bei Fehlerzähler-Reset nach Erfolg.", files: ["custom_components/pp_reader/prices/price_service.py"], status: done }
 
   - id: i18n
     title: "Internationalisierung"
