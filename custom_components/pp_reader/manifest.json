@@ -1,7 +1,7 @@
 {
   "domain": "pp_reader",
   "name": "Portfolio Performance Reader",
-  "version": "0.10.0",
+  "version": "0.10.2",
   "documentation": "https://github.com/Freakandi/ha-pp-reader",
   "dependencies": [],
   "codeowners": [
@@ -11,12 +11,15 @@
     "protobuf>=4.25.0",
     "pandas>=2.2.0",
     "numpy>=1.26.0",
-    "yahooquery==2.3.7"
+    "lxml>=5.2.1",
+    "yahooquery==2.4.1"
   ],
   "config_flow": true,
   "iot_class": "local_polling",
   "loggers": [
     "custom_components.pp_reader",
-    "custom_components.pp_reader.prices"
+    "custom_components.pp_reader.prices",
+    "custom_components.pp_reader.prices.price_service",
+    "custom_components.pp_reader.prices.yahooquery_provider"
   ]
 }

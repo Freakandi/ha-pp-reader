@@ -26,7 +26,10 @@ from pathlib import Path
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.prices import price_service
 from custom_components.pp_reader.const import DOMAIN
-from custom_components.pp_reader.prices.yahooquery_provider import YahooQueryProvider
+from custom_components.pp_reader.prices.yahooquery_provider import (
+    YahooQueryProvider,
+    CHUNK_SIZE,
+)
 from custom_components.pp_reader.prices.provider_base import Quote
 from custom_components.pp_reader.prices.price_service import (
     initialize_price_state,
@@ -54,7 +57,9 @@ class FakeHass:
         return await loop.run_in_executor(None, func, *args)
 
 
-def _create_db_with_security(tmp_path: Path, uuid: str, ticker: str, currency: str | None, last_price: int | None):
+def _create_db_with_security(
+    tmp_path: Path, uuid: str, ticker: str, currency: str | None, last_price: int | None
+):
     db_path = tmp_path / "test.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute(
@@ -95,7 +100,9 @@ def _create_db_with_security(tmp_path: Path, uuid: str, ticker: str, currency: s
     return db_path
 
 
-def _init_store(hass: FakeHass, entry_id: str, db_path: Path, symbols_map: dict[str, list[str]]):
+def _init_store(
+    hass: FakeHass, entry_id: str, db_path: Path, symbols_map: dict[str, list[str]]
+):
     price_service.initialize_price_state(hass, entry_id)
     store = hass.data[DOMAIN][entry_id]
     store["db_path"] = db_path
@@ -124,7 +131,9 @@ def _make_quote(symbol: str, price: float, currency: str | None = None) -> Quote
 async def test_change_triggers_events(monkeypatch, tmp_path):
     hass = FakeHass()
     entry_id = "e1"
-    db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", 100_000_000)  # 1.0
+    db_path = _create_db_with_security(
+        tmp_path, "sec1", "AAPL", "USD", 100_000_000
+    )  # 1.0
     _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
 
     events: list[tuple[str, list | dict]] = []
@@ -135,7 +144,12 @@ async def test_change_triggers_events(monkeypatch, tmp_path):
     async def fake_reval(hass_, conn, uuids):
         return {
             "portfolio_values": {
-                "pf1": {"name": "Depot", "value": 123.456, "count": 1, "purchase_sum": 100.0}
+                "pf1": {
+                    "name": "Depot",
+                    "value": 123.456,
+                    "count": 1,
+                    "purchase_sum": 100.0,
+                }
             },
             "portfolio_positions": None,
         }
@@ -222,13 +236,21 @@ async def test_currency_drift_warn_once(monkeypatch, tmp_path, caplog):
 
     caplog.clear()
     await price_service._run_price_cycle(hass, entry_id)
-    first_warnings = [r for r in caplog.records if "Currency Drift" in r.message or "Currency Drift erkannt" in r.message]
+    first_warnings = [
+        r
+        for r in caplog.records
+        if "Currency Drift" in r.message or "Currency Drift erkannt" in r.message
+    ]
     assert len(first_warnings) == 1
 
     caplog.clear()
     # Zweiter Lauf – gleiche Drift sollte NICHT erneut loggen
     await price_service._run_price_cycle(hass, entry_id)
-    second_warnings = [r for r in caplog.records if "Currency Drift" in r.message or "Currency Drift erkannt" in r.message]
+    second_warnings = [
+        r
+        for r in caplog.records
+        if "Currency Drift" in r.message or "Currency Drift erkannt" in r.message
+    ]
     assert len(second_warnings) == 0
 
 
@@ -273,7 +295,9 @@ async def test_error_counter_increment_and_reset(monkeypatch, tmp_path, caplog):
     await price_service._run_price_cycle(hass, entry_id)
 
     assert store["price_error_counter"] == 0
-    reset_logged = any("Fehlerzähler zurückgesetzt" in r.message for r in caplog.records)
+    reset_logged = any(
+        "Fehlerzähler zurückgesetzt" in r.message for r in caplog.records
+    )
     assert reset_logged, "Reset-Log nicht gefunden"
 
 
@@ -305,7 +329,9 @@ async def test_no_drift_none_currency(monkeypatch, tmp_path, caplog):
 
     # Keine Drift-WARN erwartet
     drift_logs = [
-        r for r in caplog.records if "Currency Drift" in r.message or "Currency Drift erkannt" in r.message
+        r
+        for r in caplog.records
+        if "Currency Drift" in r.message or "Currency Drift erkannt" in r.message
     ]
     assert not drift_logs, "Drift-WARN wurde trotz fehlender currency geloggt"
 
@@ -367,7 +393,14 @@ async def test_metadata_log(hass, tmp_path, caplog, monkeypatch):
 
     log_text = caplog.text
     assert "prices_cycle symbols=" in log_text, "Metadata Log fehlt"
-    for key in ["batches=", "returned=", "changed=", "errors=", "duration=", "skipped_running="]:
+    for key in [
+        "batches=",
+        "returned=",
+        "changed=",
+        "errors=",
+        "duration=",
+        "skipped_running=",
+    ]:
         assert key in log_text, f"Metadata Schlüssel {key} fehlt im Log"
 
     # Sicherstellen, dass kein skipped_running True war (normaler Lauf)
@@ -558,7 +591,7 @@ async def test_filter_invalid_price(monkeypatch, tmp_path):
         return {
             "AAA": Quote(
                 symbol="AAA",
-                price=None,              # invalid
+                price=None,  # invalid
                 previous_close=None,
                 currency="EUR",
                 volume=None,
@@ -571,7 +604,7 @@ async def test_filter_invalid_price(monkeypatch, tmp_path):
             ),
             "BBB": Quote(
                 symbol="BBB",
-                price=80.25,             # valid
+                price=80.25,  # valid
                 previous_close=79.0,
                 currency="EUR",
                 volume=None,
@@ -809,22 +842,21 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
     Chunk Fehler → andere verarbeitet:
 
     Setup:
-      - 11 Securities -> Orchestrator bildet 2 Batches (Batchgröße=10).
-      - Erster Batch (10 Symbole) wirft Exception → kompletter Chunk verworfen.
+      - (CHUNK_SIZE + 1) Securities -> Orchestrator bildet 2 Batches (Batchgröße=CHUNK_SIZE).
+      - Erster Batch wirft Exception → kompletter Chunk verworfen.
       - Zweiter Batch (1 Symbol) liefert gültige Quote -> Persistenz + Events.
 
     Erwartet:
-      - Nur Security des zweiten Batches (SYM10) aktualisiert (last_price geändert).
-      - Alle ersten 10 Securities unverändert.
+      - Nur Security des zweiten Batches (letztes Symbol) aktualisiert.
+      - Alle ersten CHUNK_SIZE Securities unverändert.
       - Events gesendet (portfolio_values zuerst, danach portfolio_positions).
       - Fehlerzähler nach Zyklus > 0 (Chunk-Fehler gezählt).
     """
     db_path = tmp_path / "chunk_failure.db"
     initialize_database_schema(db_path)
 
-    # 11 Securities anlegen (SYM0..SYM10)
     with sqlite3.connect(str(db_path)) as conn:
-        for i in range(11):
+        for i in range(CHUNK_SIZE + 1):
             sym = f"SYM{i}"
             conn.execute(
                 """
@@ -851,11 +883,11 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
         if call_count["n"] == 1:
             # Simulierter Chunk-Fehler
             raise Exception("Simulierter Chunkfehler")
-        # Zweiter Aufruf -> letzter Symbol-Eintrag (SYM10)
-        assert len(symbols) == 1 and symbols[0] == "SYM10"
+        # Zweiter Aufruf -> letztes Symbol
+        assert len(symbols) == 1 and symbols[0] == f"SYM{CHUNK_SIZE}"
         return {
-            "SYM10": Quote(
-                symbol="SYM10",
+            f"SYM{CHUNK_SIZE}": Quote(
+                symbol=f"SYM{CHUNK_SIZE}",
                 price=999.99,
                 previous_close=500.0,
                 currency="EUR",
@@ -936,7 +968,9 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
 
     # Erste 10 Securities unverändert
     for i in range(10):
-        assert rows[f"sec{i}"][0] == int((100 + i) * 1e8), f"sec{i} wurde unerwartet geändert"
+        assert rows[f"sec{i}"][0] == int((100 + i) * 1e8), (
+            f"sec{i} wurde unerwartet geändert"
+        )
     # Letzte Security aktualisiert
     assert rows["sec10"][0] == int(round(999.99 * 1e8))
     assert rows["sec10"][1] == "yahoo"
@@ -952,7 +986,9 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_zero_quotes_warn_and_error_counter_increment(hass, caplog, tmp_path: Path, monkeypatch):
+async def test_zero_quotes_warn_and_error_counter_increment(
+    hass, caplog, tmp_path: Path, monkeypatch
+):
     """
     Szenario: Alle Batches liefern 0 Quotes.
     Erwartet:
@@ -998,6 +1034,7 @@ async def test_zero_quotes_warn_and_error_counter_increment(hass, caplog, tmp_pa
     # Provider.fetch → leeres Dict (Total-Fehlschlag)
     async def _fake_fetch(self, symbols):
         return {}
+
     monkeypatch.setattr(YahooQueryProvider, "fetch", _fake_fetch)
 
     with caplog.at_level("WARNING"):
@@ -1028,18 +1065,22 @@ async def test_total_chunk_failure_counts_as_error(hass, tmp_path, monkeypatch, 
 
     # Events sammeln (soll leer bleiben)
     pushed = []
+
     def fake_push(hass_, entry, data_type, payload):
         pushed.append((data_type, payload))
+
     monkeypatch.setattr(price_service, "_push_update", fake_push)
 
     # Revaluation stub (wird nicht aufgerufen da keine Änderungen)
     async def fake_reval(hass_, conn, uuids):
         return {"portfolio_values": None, "portfolio_positions": None}
+
     monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
 
     # Provider.fetch → Exception (Chunk-Fehlschlag)
     async def failing_fetch(self, symbols):
         raise RuntimeError("Simulierter Chunk Fehler")
+
     monkeypatch.setattr(YahooQueryProvider, "fetch", failing_fetch)
 
     caplog.set_level(logging.WARNING)
@@ -1051,4 +1092,8 @@ async def test_total_chunk_failure_counts_as_error(hass, tmp_path, monkeypatch, 
     assert not pushed, "Es dürfen keine Events bei fehlenden Änderungen gesendet werden"
 
     # Sicherstellen, dass WARN für Chunk-Fehler geloggt wurde
-    assert "Chunk Fetch Fehler" in caplog.text or "Chunk-Fetch Fehler" in caplog.text or "Chunk Fetch" in caplog.text
+    assert (
+        "Chunk Fetch Fehler" in caplog.text
+        or "Chunk-Fetch Fehler" in caplog.text
+        or "Chunk Fetch" in caplog.text
+    )

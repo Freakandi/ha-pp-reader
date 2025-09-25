@@ -4,6 +4,22 @@ Alle erwähnenswerten Änderungen an diesem Projekt werden in dieser Datei festg
 Format orientiert sich an: Keep a Changelog
 Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Changes).
 
+## [0.10.2] - 2025-09-25
+### Changed
+- Vereinheitlichte Batchgröße: Verwendung von `CHUNK_SIZE` aus Provider statt hartkodiertem Wert.
+- Resilienz: Äußerer try/except im Preiszyklus verhindert ungefangene Ausnahmen; Fehlerzähler wird erhöht.
+
+### Added
+- INFO Log beim ersten Skip wegen leerer Symbol-Liste (separat vom Discovery-INFO).
+- Regressionstest `test_batches_count_regression` (Batch-Anzahl & Metadaten).
+
+### Fixed
+- Potentielle künftige Drift zwischen Provider-Chunkgröße und Orchestrator.
+
+## [0.10.1] - 2025-09-25
+### Fixed
+- Added explicit dependency `lxml>=5.2.1` to ensure a Python 3.13 compatible wheel is installed (previous implicit pull of `lxml==4.9.4` via `yahooquery==2.3.7` caused build failure in the dev container).
+
 ## [0.10.0] - 2025-09-25
 ### Added
 - Live-Preis Integration (Yahoo Finance via `yahooquery`) – Aktualisierung von `last_price`, `last_price_source`, `last_price_fetched_at` in der `securities` Tabelle.

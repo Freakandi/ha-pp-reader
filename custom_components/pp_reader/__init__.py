@@ -40,6 +40,15 @@ from .prices.price_service import (
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
+PRICE_LOGGER_NAMES = [
+    "custom_components.pp_reader.prices",
+    "custom_components.pp_reader.prices.price_service",
+    "custom_components.pp_reader.prices.yahooquery_provider",
+    "custom_components.pp_reader.prices.revaluation",
+    "custom_components.pp_reader.prices.symbols",
+    "custom_components.pp_reader.prices.provider_base",
+]
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
     """Set up your component."""
@@ -72,14 +81,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
 
 def _apply_price_debug_logging(entry: ConfigEntry) -> None:
     """
-    Wendet die Debug-Option auf den Preis-Logger-Namespace an.
+    Apply the integration option 'enable_price_debug' to the price logger namespace.
 
-    Setzt ausschließlich Logger unterhalb von:
-        custom_components.pp_reader.prices
-    auf DEBUG (bei aktivierter Option) bzw. INFO (sonst).
-    Greift bei jedem (Re-)Setup / Reload.
-
-    Beeinflusst keine anderen Namespaces.
+    Only affects the loggers listed in PRICE_LOGGER_NAMES.
+    Sets them to DEBUG when enabled, else INFO.
+    Safe to call multiple times (idempotent).
     """
     try:
         enabled = bool(entry.options.get("enable_price_debug", False))
@@ -87,40 +93,31 @@ def _apply_price_debug_logging(entry: ConfigEntry) -> None:
         enabled = False
 
     level = logging.DEBUG if enabled else logging.INFO
-    base_name = "custom_components.pp_reader.prices"
-    submodules = [
-        base_name,
-        f"{base_name}.price_service",
-        f"{base_name}.yahooquery_provider",
-        f"{base_name}.revaluation",
-        f"{base_name}.symbols",
-        f"{base_name}.provider_base",
-    ]
-    for name in submodules:
-        logging.getLogger(name).setLevel(level)
+    effective_levels = {}
+    for name in PRICE_LOGGER_NAMES:
+        logger = logging.getLogger(name)
+        logger.setLevel(
+            level if enabled else logger.level
+        )  # do not downgrade an already higher level explicitly
+        effective_levels[name] = logging.getLogger(name).getEffectiveLevel()
 
     if enabled:
         _LOGGER.info(
-            "Preis-Debug aktiviert (Logger-Level DEBUG) entry_id=%s", entry.entry_id
+            "Preis-Debug Option=ON -> Ziel-Level=DEBUG (effective: %s)",
+            {k: logging.getLevelName(v) for k, v in effective_levels.items()},
         )
     else:
-        _LOGGER.debug(
-            "Preis-Debug deaktiviert (Logger-Level INFO) entry_id=%s", entry.entry_id
+        _LOGGER.info(
+            "Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective=%s",
+            {k: logging.getLevelName(v) for k, v in effective_levels.items()},
         )
 
 
 async def _async_reload_entry_on_update(hass: HomeAssistant, entry: ConfigEntry):
     """
-    Update-Listener: Anwendung geänderter Optionen (Intervall / Debug).
-
-    Erwartete Schritte:
-    - Cancel bestehender Intervall-Task.
-    - (Re-)Anwendung Debug Logging.
-    - Neuer Initiallauf + Neuplanung Intervall mit neuem Wert.
-    - INFO Log bei Intervalländerung alt→neu (Spezifikation §7 Scheduling).
+    Update listener: apply changed options (interval / debug), restart initial cycle.
     """
     _apply_price_debug_logging(entry)
-
     store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if not store:
         return
@@ -175,7 +172,9 @@ async def _async_reload_entry_on_update(hass: HomeAssistant, entry: ConfigEntry)
 
     # Neuer Initiallauf
     hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
-    _LOGGER.debug("Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id)
+    _LOGGER.debug(
+        "Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -201,7 +200,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "db_path": db_path,
         }
 
-        # Apply Debug Logging (vor erstem Preiszyklus)
+        # Apply debug logging BEFORE any price cycle starts
         _apply_price_debug_logging(entry)
 
         # Coordinator initialisieren
@@ -212,7 +211,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry_id=entry.entry_id,
         )
         await coordinator.async_config_entry_first_refresh()
-
         hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
 
         # Plattformen laden (Sensoren)
@@ -220,8 +218,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # --- NEU: Preis-Service Initialisierung + einmaliger Initiallauf ---
         initialize_price_state(hass, entry.entry_id)
+        # Move cycle start log before scheduling task for intuitive ordering
+        _LOGGER.debug(
+            "Initialer Preiszyklus wird gestartet (entry_id=%s)", entry.entry_id
+        )
         hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
-        _LOGGER.debug("Initialer Preiszyklus gestartet (entry_id=%s)", entry.entry_id)
         # ---------------------------------------------------------------
 
         # --- NEU: Wiederkehrenden Preis-Task planen (Intervall laut Option) ---
@@ -297,7 +298,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     except Exception:
         _LOGGER.exception("Fehler beim Setup des Config Entries")
-        return False
+        raise
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

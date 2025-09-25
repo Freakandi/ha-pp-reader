@@ -57,7 +57,9 @@ def _fetch_quotes_blocking(symbols: List[str]) -> dict:
         # Spezifikation verlangt genau EIN ERROR-Log für den Importfehler (beim Disable im Orchestrator).
         # Deshalb hier nur DEBUG (früher ERROR) + Setzen des Flags.
         if not _YAHOOQUERY_IMPORT_ERROR:
-            _LOGGER.debug("YahooQuery Import fehlgeschlagen (wird deaktiviert): %s", exc)
+            _LOGGER.debug(
+                "YahooQuery Import fehlgeschlagen (wird deaktiviert): %s", exc
+            )
             _YAHOOQUERY_IMPORT_ERROR = True
         # Leeres Dict signalisiert totalen Chunk-Fehlschlag
         return {}
@@ -109,7 +111,9 @@ class YahooQueryProvider(PriceProvider):
         for sym in symbols:
             data = raw_quotes.get(sym)
             if not data:
-                _LOGGER.debug("YahooQuery: skip symbol=%s (keine Daten im Resultat)", sym)
+                _LOGGER.debug(
+                    "YahooQuery: skip symbol=%s (keine Daten im Resultat)", sym
+                )
                 continue
 
             price = data.get("regularMarketPrice")
@@ -137,5 +141,15 @@ class YahooQueryProvider(PriceProvider):
                 price,
                 quote.currency,
             )
+
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            skipped = [s for s in symbols if s not in result]
+            if skipped:
+                _LOGGER.debug(
+                    "YahooQuery: summary skipped=%s accepted=%s/%s",
+                    skipped,
+                    len(result),
+                    len(symbols),
+                )
 
         return result
