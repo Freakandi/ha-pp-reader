@@ -1,8 +1,21 @@
+
 # Changelog
 Alle erwähnenswerten Änderungen an diesem Projekt werden in dieser Datei festgehalten.
 
 Format orientiert sich an: Keep a Changelog
 Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Changes).
+
+## [0.10.4] - 2025-09-25
+### Fixed
+- Crash beim Initial-Sync auf frischer DB: Verwendete `HasField('high')` / `low` / `volume` auf `PHistoricalPrice` (hat nur `date`, `close`). Jetzt Descriptor-basiert optional.
+
+## [0.10.3] - 2025-09-25
+### Fixed
+- Entfernt fehlerhafte Annahme einer nicht existierenden `securities.note` Spalte; Startup auf frischer DB schlug sonst mit `OperationalError: no column named note` fehl.
+- Umstellung auf differenzierte UPDATE-Logik für `securities` statt `INSERT OR REPLACE`, damit `last_price` / `last_price_source` / `last_price_fetched_at` nicht verloren gehen.
+
+### Internal
+- Dokumentiert bewusste Nicht-Persistenz von Notizen für Wertpapiere (keine Schema-Erweiterung notwendig).
 
 ## [0.10.2] - 2025-09-25
 ### Changed

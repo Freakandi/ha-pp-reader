@@ -365,92 +365,109 @@ def sync_from_pclient(
         delete_missing_entries(conn, "securities", "uuid", security_ids)
 
         for sec in client.securities:
-            # Lade den bestehenden Eintrag aus der Tabelle securities
-            cur.execute(
-                """
-                SELECT * FROM securities WHERE uuid = ?
-            """,
-                (sec.uuid,),
-            )
-            existing_security = cur.fetchone()
-
-            # Einheitliche Darstellung von retired (immer 0 oder 1)
+            # Einheitliche Darstellung retired (0/1)
             retired = 1 if getattr(sec, "isRetired", False) else 0
-
-            # Einheitliches Format für updated_at
             updated_at = (
                 to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
             )
 
-            # Neue Daten für das Wertpapier
-            new_security_data = (
-                sec.uuid,
+            # Wir persistieren KEINE 'note' Spalte für securities (bewusste Entscheidung).
+            # Falls spätere Schema-Erweiterung erforderlich wäre, muss DDL + ALL_SCHEMAS + Migration ergänzt werden.
+            # Relevante Vergleichsdaten (geordnet):
+            new_security_attrs = (
                 sec.name,
-                sec.currencyCode,
-                sec.note if sec.HasField("note") else None,
                 sec.isin if sec.HasField("isin") else None,
                 sec.wkn if sec.HasField("wkn") else None,
                 sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
-                retired,  # Konsistente Darstellung
-                updated_at,  # Konsistentes Format
+                sec.currencyCode,
+                retired,
+                updated_at,
             )
 
-            # Aktualisiere die Tabelle securities, wenn sich die Daten geändert haben
-            if not existing_security or existing_security[:-2] != new_security_data:
+            cur.execute(
+                """
+                SELECT name, isin, wkn, ticker_symbol, currency_code, retired, updated_at
+                FROM securities
+                WHERE uuid = ?
+                """,
+                (sec.uuid,),
+            )
+            existing_attr_row = cur.fetchone()
+
+            if not existing_attr_row:
+                # Neu anlegen – feed behalten wir (None) als Platzhalter für mögliche spätere Quellen
+                cur.execute(
+                    """
+                    INSERT INTO securities (
+                        uuid, name, isin, wkn, ticker_symbol, feed,
+                        currency_code, retired, updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        sec.uuid,
+                        new_security_attrs[0],
+                        new_security_attrs[1],
+                        new_security_attrs[2],
+                        new_security_attrs[3],
+                        None,  # feed (nicht belegt)
+                        new_security_attrs[4],
+                        new_security_attrs[5],
+                        new_security_attrs[6],
+                    ),
+                )
+                security_changes_detected = True
+                updated_data["securities"].append(sec.uuid)
+            elif existing_attr_row != new_security_attrs:
+                # Nur selektives UPDATE statt REPLACE → erhält last_price / source / fetched_at
+                cur.execute(
+                    """
+                    UPDATE securities
+                    SET name=?, isin=?, wkn=?, ticker_symbol=?, currency_code=?, retired=?, updated_at=?
+                    WHERE uuid=?
+                    """,
+                    (*new_security_attrs, sec.uuid),
+                )
                 security_changes_detected = True
                 updated_data["securities"].append(sec.uuid)
 
-                cur.execute(
-                    """
-                    INSERT OR REPLACE INTO securities (
-                        uuid, name, currency_code,
-                        note, isin, wkn, ticker_symbol,
-                        retired, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    new_security_data,
-                )
-
-            # Aktualisiere die Tabelle historical_prices
+            # Historische Preise (unverändert, aber robust gegen PHistoricalPrice ohne high/low/volume)
             if sec.prices:
                 for price in sec.prices:
-                    # Konvertiere das Datum aus epoch day in ISO-8601
-                    price_date_iso = to_iso8601(
-                        Timestamp(seconds=price.date * 86400)
-                    )  # epoch day -> seconds -> ISO-8601
+                    # PHistoricalPrice hat nur (date, close); PFullHistoricalPrice zusätzlich high/low/volume
+                    descriptor = getattr(price, "DESCRIPTOR", None)
+                    fields = descriptor.fields_by_name if descriptor else {}
+
+                    def _opt(field: str):
+                        # Liefert Wert nur, wenn Feld existiert; sonst None
+                        return getattr(price, field, None) if field in fields else None
+
                     cur.execute(
                         """
                         INSERT OR REPLACE INTO historical_prices (
                             security_uuid, date, close, high, low, volume
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
+                        ) VALUES (?,?,?,?,?,?)
+                        """,
                         (
                             sec.uuid,
-                            price_date_iso,  # Datum im ISO-8601-Format
-                            price.close,  # Schlusskurs
-                            price.high
-                            if hasattr(price, "high")
-                            else None,  # Höchstkurs
-                            price.low if hasattr(price, "low") else None,  # Tiefstkurs
-                            price.volume
-                            if hasattr(price, "volume")
-                            else None,  # Handelsvolumen
+                            price.date,
+                            price.close,
+                            _opt("high"),
+                            _opt("low"),
+                            _opt("volume"),
                         ),
                     )
 
-            # Aktualisiere den letzten Preis und das Datum in der Tabelle securities
-            if sec.prices:
-                security_changes_detected = True
+                # Letzten Preis (aus Datei) in securities setzen – behält live-price Felder falls später überschrieben
                 latest_price = max(sec.prices, key=lambda p: p.date)
                 latest_price_date_iso = to_iso8601(
                     Timestamp(seconds=latest_price.date * 86400)
-                )  # epoch day -> seconds -> ISO-8601
+                )
                 cur.execute(
                     """
                     UPDATE securities
                     SET last_price = ?, last_price_date = ?
                     WHERE uuid = ?
-                """,
+                    """,
                     (latest_price.close, latest_price_date_iso, sec.uuid),
                 )
 

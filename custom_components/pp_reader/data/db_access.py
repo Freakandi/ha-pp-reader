@@ -122,27 +122,29 @@ def get_securities(db_path: Path) -> dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
     conn = sqlite3.connect(str(db_path))
     try:
-        cur = conn.execute("""
+        cur = conn.execute(
+            """
             SELECT uuid, name, currency_code,
-                   note, isin, wkn, ticker_symbol,
+                   isin, wkn, ticker_symbol,
                    retired, updated_at,
                    last_price, last_price_date
             FROM securities
             ORDER BY name
-        """)
+            """
+        )
         return {
             row[0]: Security(
                 uuid=row[0],
                 name=row[1],
                 currency_code=row[2],
-                note=row[3],
-                isin=row[4],
-                wkn=row[5],
-                ticker_symbol=row[6],
-                retired=bool(row[7]),
-                updated_at=row[8],
-                last_price=row[9],
-                last_price_date=row[10],
+                note=None,  # keine Spalte in Schema → bewusst None
+                isin=row[3],
+                wkn=row[4],
+                ticker_symbol=row[5],
+                retired=bool(row[6]),
+                updated_at=row[7],
+                last_price=row[8],
+                last_price_date=row[9],
             )
             for row in cur.fetchall()
         }
