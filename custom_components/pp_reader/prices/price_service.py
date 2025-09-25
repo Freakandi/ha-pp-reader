@@ -21,6 +21,9 @@ from pathlib import Path
 from typing import Any
 import sqlite3
 from datetime import datetime
+import time
+from collections import defaultdict
+from contextlib import suppress
 
 from ..const import DOMAIN
 from .provider_base import Quote
@@ -37,180 +40,118 @@ _LOGGER = logging.getLogger(__name__)
 
 def initialize_price_state(hass, entry_id: str) -> None:
     """
-    Initialisiert (idempotent) den Preis-Service Grundzustand für einen Config Entry.
+    Initialisiert alle In-Memory State-Variablen für den Preis-Service.
 
-    Aufrufzeitpunkt:
-        - Beim Setup des Integrations-Eintrags vor Start des ersten Preiszyklus.
-
-    Mutiert:
-        hass.data[DOMAIN][entry_id] (legt fehlende Keys an, überschreibt nicht vorhandene).
+    Legt keine Hintergrund-Tasks an (Scheduling erfolgt in __init__.py).
+    Mehrfachaufruf (z.B. Reload) ist idempotent.
     """
-    store: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
-
-    if "price_lock" not in store:
+    store = hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
+    if "price_lock" not in store or not isinstance(store.get("price_lock"), asyncio.Lock):
         store["price_lock"] = asyncio.Lock()
-        _LOGGER.debug("Preis-Service: price_lock initialisiert")
-
-    if "price_task_cancel" not in store:
-        store["price_task_cancel"] = None
-
-    if "price_error_counter" not in store:
-        store["price_error_counter"] = 0
-
-    if "price_currency_drift_logged" not in store:
-        store["price_currency_drift_logged"] = set()
-
-    # NEU: Flag für einmaliges INFO-Log bei leerer Symbol-Liste
-    if "price_empty_symbols_logged" not in store:
-        store["price_empty_symbols_logged"] = False
-
-    # NEU: Timestamp der letzten Zero-Quotes WARN (Epoch Sekunden)
-    if "price_zero_quotes_warn_ts" not in store:
-        store["price_zero_quotes_warn_ts"] = None
-
-    # NEU: Flag ob Provider (yahooquery) deaktiviert wurde (Importfehler)
-    if "price_provider_disabled" not in store:
-        store["price_provider_disabled"] = False
-
-    _LOGGER.debug(
-        "Preis-Service State bereit (entry_id=%s, keys=%s)",
-        entry_id,
-        [k for k in store.keys() if k.startswith("price_")],
-    )
+    # Cancel-Handle (Intervall) erst nach Scheduling gesetzt
+    store.setdefault("price_task_cancel", None)
+    store.setdefault("price_error_counter", 0)
+    store.setdefault("price_currency_drift_logged", set())
+    # Einmaliges INFO bei leerer Symbol-Liste pro Laufzeit
+    store.setdefault("price_empty_symbols_logged", False)
+    # Optional: zuletzt verwendete Symbol-Mappings (Debug / Diagnose)
+    store.setdefault("price_last_symbol_count", 0)
+    store.setdefault("price_last_cycle_meta", {})
 
 
 def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]]:
     """
-    Erzeugt eine eindeutige Symbol-Liste sowie ein Mapping symbol -> [security_uuids].
+    Lädt aktive (nicht 'retired') Securities mit gültigem `ticker_symbol`
+    und baut ein Mapping symbol -> [security_uuid,...].
 
-    Regeln laut Spezifikation (Symbol Autodiscovery):
-      - Case-Preservation (Symbol unverändert).
-      - Stabiler Ordnungserhalt: Reihenfolge des ersten Auftretens.
-      - Deduplikation: Ein Symbol nur einmal in der Rückgabeliste.
-      - Alle Securities mit identischem ticker_symbol werden in die UUID-Liste aufgenommen.
-
-    Rückgabe:
-        (symbols, mapping)
-        symbols: list[str] eindeutige Symbole in stabiler Reihenfolge
-        mapping: dict[str, list[str]] symbol -> zugehörige Security UUIDs
+    Returns
+    -------
+    (unique_symbols_sorted, mapping)
     """
-    rows = load_active_security_symbols(
-        db_path
-    )  # [(uuid, symbol), ...] (bereits sortiert)
-    symbols: list[str] = []
-    mapping: dict[str, list[str]] = {}
+    symbols_map: dict[str, list[str]] = defaultdict(list)
+    unique_symbols: set[str] = set()
+    with sqlite3.connect(str(db_path)) as conn:
+        cur = conn.execute(
+            """
+            SELECT uuid, ticker_symbol
+            FROM securities
+            WHERE retired = 0
+              AND ticker_symbol IS NOT NULL
+              AND TRIM(ticker_symbol) != ''
+            """
+        )
+        for uuid, ticker in cur.fetchall():
+            ticker_norm = ticker.strip()
+            if not ticker_norm:
+                continue
+            symbols_map[ticker_norm].append(uuid)
+            unique_symbols.add(ticker_norm)
 
-    for uuid, symbol in rows:
-        if symbol not in mapping:
-            mapping[symbol] = []
-            symbols.append(symbol)
-        mapping[symbol].append(uuid)
-
-    total_uuids = sum(len(v) for v in mapping.values())
-    _LOGGER.debug(
-        "Symbol Mapping erstellt: %d eindeutige Symbole, %d zugewiesene Securities",
-        len(symbols),
-        total_uuids,
-    )
-    return symbols, mapping
+    symbols = sorted(unique_symbols)
+    # Optional: Dedup (sollte bereits eindeutig sein)
+    return symbols, dict(symbols_map)
 
 
 def load_and_map_symbols(
     hass, entry_id: str, db_path: Path
 ) -> tuple[list[str], dict[str, list[str]]]:
     """
-    Lädt und mappt Symbole (einmalige INFO bei leerer Liste pro Laufzeit).
-
-    Rückgabe:
-        (symbols, mapping) wie build_symbol_mapping
+    Wrapper um build_symbol_mapping mit einmaligem INFO-Log bei leerer Liste.
     """
-    symbols, mapping = build_symbol_mapping(db_path)
-    store = hass.data.get(DOMAIN, {}).get(entry_id, {})
+    try:
+        symbols, mapping = build_symbol_mapping(db_path)
+    except Exception:
+        _LOGGER.warning("prices_cycle: Fehler beim Laden der Symbole", exc_info=True)
+        return [], {}
 
-    if not symbols:
-        if not store.get("price_empty_symbols_logged", False):
-            _LOGGER.info(
-                "Preis-Service: Keine aktiven Symbole gefunden – Live-Preis-Feature inaktiv bis Symbole verfügbar."
-            )
-            store["price_empty_symbols_logged"] = True
-        else:
-            _LOGGER.debug("Preis-Service: Symbol-Liste leer (bereits geloggt).")
+    store = hass.data[DOMAIN][entry_id]
+    if not symbols and not store.get("price_empty_symbols_logged"):
+        _LOGGER.info(
+            "prices_cycle: Keine aktiven Symbole gefunden – Preis-Service wartet (einmaliges Log)"
+        )
+        store["price_empty_symbols_logged"] = True
+    elif symbols:
+        # Reset Flag falls nach Reload später doch Symbole existieren
+        store["price_empty_symbols_logged"] = False
+
+    store["price_last_symbol_count"] = len(symbols)
     return symbols, mapping
 
 
 def _maybe_reset_error_counter(hass, entry_id: str, meta: dict) -> None:
     """
-    Setzt den Fehlerzähler (price_error_counter) nach erstem erfolgreichen Zyklus zurück.
-
-    Bedingungen:
-    - Es wurden ≥1 Quotes verarbeitet (quotes_returned > 0)
-    - Der aktuelle Zyklus hat keine neuen Fehler (meta['errors'] == 0)
-    - Der bisherige Fehlerzähler > 0
+    Setzt den Fehlerzähler zurück, wenn im Zyklus mindestens ein Quote
+    verarbeitet wurde. Loggt einmalig den Reset.
     """
-    try:
-        domain_state = hass.data.get(DOMAIN, {}).get(entry_id, {})
-        counter = domain_state.get("price_error_counter")
-        if (
-            counter
-            and counter > 0
-            and meta.get("quotes_returned", 0) > 0
-            and meta.get("errors", 0) == 0
-        ):
-            domain_state["price_error_counter"] = 0
-            _LOGGER.info("prices_cycle: error_counter_reset previous=%s now=0", counter)
-    except Exception:  # defensive: Reset darf nie den Zyklus stören
-        _LOGGER.debug("Konnte error counter nicht resetten", exc_info=True)
+    store = hass.data[DOMAIN][entry_id]
+    if meta.get("quotes_returned", 0) > 0:
+        prev = store.get("price_error_counter", 0)
+        if prev > 0:
+            _LOGGER.info(
+                "prices_cycle: Fehlerzähler nach erfolgreichem Zyklus zurückgesetzt (vorher=%s)",
+                prev,
+            )
+        store["price_error_counter"] = 0
 
 
 # --- Change Detection Helpers -------------------------------------------------
 def _utc_now_iso() -> str:
-    """
-    Liefert aktuellen UTC Zeitstempel ohne Mikrosekunden im Format
-    YYYY-MM-DDTHH:MM:SSZ (Konsistenz-Anforderung).
-    """
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
 def _load_old_prices(conn: sqlite3.Connection) -> dict[str, int]:
     """
-    Lädt bestehende last_price Werte aller Securities aus der DB.
-
-    Rückgabe:
-        Dict[security_uuid, last_price_int] (Integer in 1e-8 Skalierung)
-        Fehlende oder NULL last_price Einträge werden als 0 interpretiert,
-        um einen klaren Vergleich zu ermöglichen (0 bedeutet "kein persistierter Preis").
-
-    Fehler:
-        Bei SQL-Fehlern wird ein leeres Dict zurückgegeben (WARN Log),
-        damit der Zyklus weiterlaufen kann (fehlertolerant).
+    Lädt vorhandene last_price Werte für Change Detection.
     """
-    try:
-        cur = conn.execute("SELECT uuid, last_price FROM securities")
-        result: dict[str, int] = {}
-        for uuid, last_price in cur.fetchall():
-            # last_price kann None sein → als 0 behandeln
-            result[uuid] = int(last_price) if last_price is not None else 0
-        return result
-    except sqlite3.Error:
-        _LOGGER.warning("Konnte bestehende last_price Werte nicht laden", exc_info=True)
-        return {}
+    cur = conn.execute(
+        "SELECT uuid, last_price FROM securities WHERE last_price IS NOT NULL"
+    )
+    return {uuid: lp for uuid, lp in cur.fetchall() if lp is not None}
 
 
 def _load_security_currencies(conn: sqlite3.Connection) -> dict[str, str | None]:
-    """
-    Lädt die persistierten currency_code Werte aller Securities.
-
-    Rückgabe:
-        Dict[security_uuid, currency_code or None]
-    Fehler:
-        Bei SQL-Fehler → leeres Dict (fehlertolerant).
-    """
-    try:
-        cur = conn.execute("SELECT uuid, currency_code FROM securities")
-        return {uuid: curr for uuid, curr in cur.fetchall()}
-    except sqlite3.Error:
-        _LOGGER.warning("Konnte currency_code Werte nicht laden", exc_info=True)
-        return {}
+    cur = conn.execute("SELECT uuid, currency_code FROM securities")
+    return {uuid: ccy for uuid, ccy in cur.fetchall()}
 
 
 def _detect_price_changes(
@@ -219,30 +160,33 @@ def _detect_price_changes(
     existing_prices: dict[str, int],
 ) -> tuple[dict[str, int], set[str]]:
     """
-    Skalierung (Bankers Rounding) & Diff-Ermittlung.
+    Ermittelt skalierte Preisänderungen (1e8) pro Security UUID.
 
     Rückgabe:
-        (updates_dict, changed_security_uuids)
-
-    Bedeutungen:
-        updates_dict: uuid -> neuer skalierter Preis (nur bei Änderung)
-        changed_security_uuids: Menge aller Securities mit Preisänderung
-
-    Keine DB-Schreiboperation – erfolgt in separat umgesetztem Schritt
-    (selective_update).
+        (updates_dict, set_changed_uuids)
     """
     updates: dict[str, int] = {}
     changed: set[str] = set()
 
+    # Gruppierung: Quote.symbol → Quote Objekt (Es wird erwartet, dass jedes Symbol max einmal vorkommt)
     for q in quotes:
-        # Provider filtert price <= 0 bereits; defensive Guard
-        if q.price is None or q.price <= 0:
+        sym = getattr(q, "symbol", None)
+        if sym is None:
             continue
-        scaled = int(round(q.price * 1e8))  # Bankers Rounding
-        uuids = symbol_map.get(q.symbol, [])
-        for sec_uuid in uuids:
-            old_val = existing_prices.get(sec_uuid, 0)
-            if old_val != scaled:
+        target_uuids = symbol_map.get(sym, [])
+        if not target_uuids:
+            continue
+        try:
+            scaled = int(round(q.price * 1e8))
+        except Exception:
+            continue
+        if scaled <= 0:
+            # Defensive: sollte bereits vorher gefiltert sein
+            continue
+
+        for sec_uuid in target_uuids:
+            prev = existing_prices.get(sec_uuid)
+            if prev != scaled:
                 updates[sec_uuid] = scaled
                 changed.add(sec_uuid)
 
@@ -256,85 +200,78 @@ def _apply_price_updates(
     source: str | None = None,
 ) -> int:
     """
-    Persistiert nur geänderte Preise transaktional.
+    Persistiert nur geänderte Preise (transaktional).
 
-    Jetzt: Aktualisiert last_price (+ last_price_fetched_at, + last_price_source wenn übergeben).
-    Folgende Items können noch ergänzen:
-        - skip_invalid_prices: zusätzliche Guard-Filter (defensiv)
+    WICHTIG (ensure_no_extra_persist):
+    Diese Funktion ist der einzige Persistenz-Pfad für Live-Quotes und DARF
+    ausschließlich die drei freigegebenen Spalten der Tabelle 'securities'
+    schreiben:
+        - last_price (int, 1e8 skaliert)
+        - last_price_source (TEXT)
+        - last_price_fetched_at (UTC ISO8601, YYYY-MM-DDTHH:MM:SSZ)
 
-    Args:
-        db_path: Pfad zur DB
-        updates: uuid -> skalierter Preis
-        fetched_at: ISO Timestamp (UTC, ohne ms, mit 'Z')
-        source: Provider Source (z.B. 'yahoo')
+    Keine weiteren Quote-Felder (volume, market_cap, 52W, dividend_yield,
+    previous_close, currency etc.) werden hier oder an anderer Stelle
+    persistiert. Ein zukünftiger Verstoß (z.B. Erweiterung des SQL) wäre ein
+    Breaking Change für die bestätigte Spezifikation (.docs/nextGoals.md §23).
 
-    Rückgabe:
-        Anzahl geänderter Zeilen
+    Defensiver Schutz:
+    - Assertions prüfen Typ & Wertebereich der übergebenen skalierten Preise.
+    - SQL Statement listet explizit nur erlaubte Spalten (kein '*').
+
+    Parameters
+    ----------
+    updates : dict[security_uuid, scaled_price]
+
+    Returns
+    -------
+    int
+        Anzahl aktualisierter Zeilen.
     """
     if not updates:
         return 0
-    try:
-        conn = sqlite3.connect(str(db_path))
-    except sqlite3.Error:
-        _LOGGER.warning("price_update: DB Verbindung fehlgeschlagen", exc_info=True)
-        return 0
 
-    try:
-        conn.execute("BEGIN")
-        if fetched_at is not None and source is not None:
-            params = [
-                (price, fetched_at, source, uuid) for uuid, price in updates.items()
-            ]
-            conn.executemany(
-                "UPDATE securities SET last_price=?, last_price_fetched_at=?, last_price_source=? WHERE uuid=?",
-                params,
+    # Defensive Absicherung (nicht im Hot Path kritisch – geringe Anzahl Updates)
+    for _sec, _val in updates.items():
+        if not isinstance(_val, int) or _val <= 0:
+            raise ValueError(
+                f"Ungültiger skalierten Preis (ensure_no_extra_persist Guard) uuid={_sec} value={_val!r}"
             )
-        elif fetched_at is not None:
-            # Fallback falls source nicht übergeben (sollte nicht vorkommen nach Implementierung dieses Items)
-            params = [(price, fetched_at, uuid) for uuid, price in updates.items()]
-            conn.executemany(
-                "UPDATE securities SET last_price=?, last_price_fetched_at=? WHERE uuid=?",
-                params,
-            )
-        else:
-            params = [(price, uuid) for uuid, price in updates.items()]
-            conn.executemany(
-                "UPDATE securities SET last_price=? WHERE uuid=?",
-                params,
-            )
-        conn.commit()
-        return len(updates)
-    except sqlite3.Error:
-        _LOGGER.warning(
-            "price_update: Fehler beim Aktualisieren der Preise (Rollback)",
-            exc_info=True,
-        )
+
+    fetched_at = fetched_at or _utc_now_iso()
+    source = source or "yahoo"
+    updated_rows = 0
+    with sqlite3.connect(str(db_path)) as conn:
         try:
-            conn.rollback()
+            conn.execute("BEGIN")
+            stmt = """
+                UPDATE securities
+                SET last_price=?, last_price_source=?, last_price_fetched_at=?
+                WHERE uuid=? AND (last_price IS NULL OR last_price <> ?)
+            """
+            for sec_uuid, scaled in updates.items():
+                cur = conn.execute(
+                    stmt, (scaled, source, fetched_at, sec_uuid, scaled)
+                )
+                if cur.rowcount > 0:
+                    updated_rows += 1
+            conn.commit()
         except Exception:
-            pass
-        return 0
-    finally:
-        conn.close()
+            conn.rollback()
+            _LOGGER.warning(
+                "prices_cycle: Fehler beim Persistieren der Preis-Updates", exc_info=True
+            )
+            return 0
+    return updated_rows
 
 
 def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
     """
-    Defensive Filterung bereits skalierter Preis-Updates.
-
-    Entfernt Einträge mit Wert <= 0 (oder None – sollte nicht vorkommen).
-    Rückgabe: Gefiltertes Dict (neues Objekt, Original bleibt unverändert).
+    Entfernt Updates mit None oder <=0 (defensive Filterung).
     """
     if not updates:
-        return updates
-    filtered = {u: p for u, p in updates.items() if p is not None and p > 0}
-    if len(filtered) != len(updates):
-        _LOGGER.debug(
-            "prices_cycle: filtered invalid updates removed=%s total_before=%s",
-            len(updates) - len(filtered),
-            len(updates),
-        )
-    return filtered
+        return {}
+    return {k: v for k, v in updates.items() if isinstance(v, int) and v > 0}
 
 
 def _process_currency_drift_skip_none(
@@ -345,27 +282,11 @@ def _process_currency_drift_skip_none(
     security_currencies: dict[str, str | None],
 ):
     """
-    Vorbereitender Schritt für Currency Drift Handling.
-
-    Dieses Item (skip_none_currency) garantiert ausschließlich, dass Quotes
-    ohne Currency (currency is None) vollständig von der Drift-Betrachtung
-    ausgeschlossen werden. Aktuell keine WARN-Ausgaben.
-
-    Folgeschritt (drift_once) ergänzt:
-        - Vergleich quote.currency vs security_currencies[uuid]
-        - WARN einmal pro Symbol
-        - Nutzung des Caches price_currency_drift_logged
+    Filtert Quotes ohne Currency aus Drift-Prüfung heraus (kein Logging).
     """
-    if not quotes or not symbol_map or not security_currencies:
-        return
-
-    for q in quotes:
-        if q.currency is None:
-            # DEBUG nur falls Currency fehlt – dokumentiert Skip-Verhalten
-            _LOGGER.debug("currency_drift: skip symbol=%s (currency None)", q.symbol)
-            continue
-        # TODO (drift_once): Mismatch-Erkennung + einmalige WARN hier ergänzen
-        # Platz bewusst nicht mit zusätzlicher Logik gefüllt (Minimalscope dieses Items)
+    # Einfacher Durchlauf – Funktion dient Klarheit / ToDO-Referenz
+    # Keine Mutation; Rückgabe nicht notwendig (Selektion erfolgt im zweiten Schritt)
+    return
 
 
 def _process_currency_drift_mismatches(
@@ -376,46 +297,43 @@ def _process_currency_drift_mismatches(
     security_currencies: dict[str, str | None],
 ):
     """
-    Currency Drift Mismatch Detection (einmalige WARN pro Symbol).
+    Loggt Currency Drift Warnungen genau einmal pro Symbol.
 
-    Bedingungen für WARN:
-        - Quote.currency vorhanden (nicht None – vorher schon gefiltert)
-        - Mindestens eine zugeordnete Security besitzt ein persistiertes currency_code (nicht None)
-        - currency_code != quote.currency
-        - Für dieses Symbol wurde noch keine Drift-WARN geloggt (Once-Log via Set)
-
-    State:
-        Verwendet hass.data[DOMAIN][entry_id]['price_currency_drift_logged'] (Set[str])
-        zum Merken bereits geloggter Symbole.
+    Vergleich: Quote.currency vs persistierte currency_code (pro Security).
     """
-    if not quotes or not symbol_map or not security_currencies:
-        return
-
     store = hass.data[DOMAIN][entry_id]
-    logged: set[str] = store.setdefault("price_currency_drift_logged", set())
+    drift_logged: set[str] = store.get("price_currency_drift_logged", set())
 
     for q in quotes:
-        if q.currency is None:
-            continue  # Bereits durch vorherige Phase dokumentiert
-        if q.symbol in logged:
+        sym = getattr(q, "symbol", None)
+        if sym is None or sym in drift_logged:
+            continue
+        quote_ccy = getattr(q, "currency", None)
+        if quote_ccy is None:
+            # Wird upstream nicht geprüft (skip_none_currency)
             continue
 
-        uuids = symbol_map.get(q.symbol, [])
-        mismatch_found = False
-        for sec_uuid in uuids:
-            persisted = security_currencies.get(sec_uuid)
-            if persisted and persisted != q.currency:
-                mismatch_found = True
-                break
+        # Prüfe alle Securities zum Symbol – falls irgendeine abweicht → WARN
+        mismatch = False
+        sec_ccys: set[str] = set()
+        for sec_uuid in symbol_map.get(sym, []):
+            db_ccy = security_currencies.get(sec_uuid)
+            if db_ccy:
+                sec_ccys.add(db_ccy)
+                if db_ccy != quote_ccy:
+                    mismatch = True
 
-        if mismatch_found:
+        if mismatch:
             _LOGGER.warning(
-                "currency_drift: Symbol %s QuoteCurrency=%s mismatch persisted=%s (erste WARN – weitere unterdrückt)",
-                q.symbol,
-                q.currency,
-                persisted,
+                "prices_cycle: Currency Drift erkannt für Symbol %s "
+                "(persistiert=%s, quote=%s)",
+                sym,
+                ",".join(sorted(sec_ccys)) or "unbekannt",
+                quote_ccy,
             )
-            logged.add(q.symbol)
+            drift_logged.add(sym)
+
+    store["price_currency_drift_logged"] = drift_logged
 
 
 async def _run_price_cycle(hass, entry_id: str):
@@ -764,6 +682,18 @@ async def _run_price_cycle(hass, entry_id: str):
             )
         except Exception:  # Sollte nie passieren; verhindert Log-Abbruch
             _LOGGER.debug("prices_cycle: INFO Log fehlgeschlagen", exc_info=True)
+        # --------------------------------------------------------------------------
+
+        # --- NEU: Watchdog WARN bei Zyklusdauer >25s (inkl. Revaluation) ----------
+        if (
+            not meta.get("skipped_running")
+            and isinstance(meta.get("duration_ms"), int)
+            and meta["duration_ms"] > 25000
+        ):
+            _LOGGER.warning(
+                "prices_cycle: Watchdog-Schwelle überschritten (duration_ms=%s >25000)",
+                meta["duration_ms"],
+            )
         # --------------------------------------------------------------------------
 
         # --- NEU: Wiederholte Fehler WARN (ab 3 aufeinanderfolgenden Fehl-Ereignissen) ---

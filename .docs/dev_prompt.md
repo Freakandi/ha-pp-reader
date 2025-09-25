@@ -13,10 +13,9 @@ Ziel:
 Abarbeitung der vollständigen ToDo-Liste für die Live-Preis Integration (YahooQuery) gemäß:
 - .docs/nextGoals.md
 - .docs/DEV_PRICE_TODO.md
-- .docs/DEV_PRICE_TODO.yaml
 
 Vorgehensweise (strikt einhalten):
-1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate).
+1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Datei ARCHITECTURE.md).
 2. Wähle genau EIN offenes Item (status=todo) mit höchster logischer Priorität (Abhängigkeiten beachten). Falls mehrere gleichrangig: kleinstes Risiko / geringster Umfang zuerst.
 3. Beschreibe kurz:
    - Gewähltes Item (ID + Titel)
@@ -27,9 +26,8 @@ Vorgehensweise (strikt einhalten):
    - Passe nur minimal notwendige Teile an (kein Refactor außer erforderlich).
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
-6. Nach Codeänderung: Aktualisiere beide Checklisten:
+6. Nach Codeänderung: Aktualisiere die Checkliste:
    - DEV_PRICE_TODO.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
-   - DEV_PRICE_TODO.yaml: setze status auf done
 7. Führe eine kurze Selbstprüfung durch:
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Falls ja: notiere offenen Testpunkt)
@@ -62,7 +60,7 @@ Explizite Qualitätskriterien:
 - Konsistente Nutzung vorhandener Logger-Namespace-Konvention: custom_components.pp_reader.[submodule]
 
 Wenn dieser Prompt erneut gesendet wird:
-- Re-scan der Checklisten
+- Re-scan der Checkliste
 - Fortsetzung beim nächsten offenen Item
 
 END PROMPT

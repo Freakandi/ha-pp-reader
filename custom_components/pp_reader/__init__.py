@@ -111,16 +111,36 @@ def _apply_price_debug_logging(entry: ConfigEntry) -> None:
 
 async def _async_reload_entry_on_update(hass: HomeAssistant, entry: ConfigEntry):
     """
-    Update-Listener für ConfigEntry (Options-/Datenänderungen).
+    Update-Listener: Anwendung geänderter Optionen (Intervall / Debug).
 
-    Erkennt Intervalländerungen (price_update_interval_seconds) und loggt diese,
-    bevor ein vollständiger Reload ausgelöst wird. Der Reload sorgt für Neuplanung
-    und erneuten Initiallauf. Debug-Flag Anwendung folgt in separatem Item.
+    Erwartete Schritte:
+    - Cancel bestehender Intervall-Task.
+    - (Re-)Anwendung Debug Logging.
+    - Neuer Initiallauf + Neuplanung Intervall mit neuem Wert.
+    - INFO Log bei Intervalländerung alt→neu (Spezifikation §7 Scheduling).
     """
-    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    old_interval = store.get("price_interval_applied") if store else None
+    _apply_price_debug_logging(entry)
 
-    # neuen Intervallwert analog Setup ermitteln (Fallback + Mindestwert)
+    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if not store:
+        return
+
+    old_cancel = store.get("price_task_cancel")
+    old_interval = store.get("price_interval_applied")
+
+    if old_cancel:
+        try:
+            old_cancel()
+        except Exception:  # pragma: no cover (defensiv)
+            _LOGGER.warning(
+                "Preis-Service: Fehler beim Cancel des alten Intervall-Tasks (Reload)",
+                exc_info=True,
+            )
+
+    # State idempotent re-initialisieren
+    initialize_price_state(hass, entry.entry_id)
+
+    # Neuen Intervallwert bestimmen
     try:
         raw_interval = entry.options.get("price_update_interval_seconds", 900)
         new_interval = int(raw_interval)
@@ -129,21 +149,33 @@ async def _async_reload_entry_on_update(hass: HomeAssistant, entry: ConfigEntry)
     if new_interval < 300:
         new_interval = 900
 
+    async def _scheduled_price_cycle(_now):
+        hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
+
+    remove_listener = async_track_time_interval(
+        hass, _scheduled_price_cycle, timedelta(seconds=new_interval)
+    )
+    store["price_task_cancel"] = remove_listener
+    store["price_interval_applied"] = new_interval
+
+    # INFO Log nur bei tatsächlicher Änderung (Spezifikation)
     if old_interval is not None and old_interval != new_interval:
         _LOGGER.info(
-            "Preis-Service: Intervall geändert (old=%ss → new=%ss) – Reload (entry_id=%s)",
+            "Preis-Service: Intervall geändert alt=%ss neu=%ss (entry_id=%s)",
             old_interval,
             new_interval,
             entry.entry_id,
         )
     else:
         _LOGGER.debug(
-            "Reload Listener ausgelöst (entry_id=%s) – Intervall unverändert (%s s)",
-            entry.entry_id,
+            "Preis-Service: Intervall (re)gesetzt=%ss (entry_id=%s)",
             new_interval,
+            entry.entry_id,
         )
 
-    await hass.config_entries.async_reload(entry.entry_id)
+    # Neuer Initiallauf
+    hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
+    _LOGGER.debug("Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

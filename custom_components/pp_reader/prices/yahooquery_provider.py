@@ -53,8 +53,11 @@ def _fetch_quotes_blocking(symbols: List[str]) -> dict:
     try:
         from yahooquery import Ticker  # type: ignore
     except Exception as exc:  # ImportError oder andere
+        # Anpassung (qa_single_import_error):
+        # Spezifikation verlangt genau EIN ERROR-Log für den Importfehler (beim Disable im Orchestrator).
+        # Deshalb hier nur DEBUG (früher ERROR) + Setzen des Flags.
         if not _YAHOOQUERY_IMPORT_ERROR:
-            _LOGGER.error("YahooQuery Import fehlgeschlagen: %s", exc)
+            _LOGGER.debug("YahooQuery Import fehlgeschlagen (wird deaktiviert): %s", exc)
             _YAHOOQUERY_IMPORT_ERROR = True
         # Leeres Dict signalisiert totalen Chunk-Fehlschlag
         return {}
@@ -65,7 +68,6 @@ def _fetch_quotes_blocking(symbols: List[str]) -> dict:
         tk = Ticker(symbols, asynchronous=False)
         return getattr(tk, "quotes", {}) or {}
     except Exception as exc:
-        # Fehler im Fetch selbst
         _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", exc)
         return {}
 

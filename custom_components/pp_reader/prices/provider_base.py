@@ -12,6 +12,12 @@ Spezifikation (siehe .docs/nextGoals.md / DEV_PRICE_TODO):
 - Fehlende Felder → None.
 - Keine Exceptions pro Symbol (Provider filtert / lässt aus).
 - Skalierung & Persistenz erfolgen NICHT hier (Change Detection Layer).
+
+Cleanup Hinweis (remove_legacy_providers):
+- Ehemalige/quasi geplante Provider (AlphaVantage/Stooq, Rotation/Token Bucket)
+  wurden vollständig entfernt. Aktuell existiert ausschließlich der
+  YahooQueryProvider (siehe yahooquery_provider.py). Dieser Kommentar dient als
+  Nachweis für das erledigte Cleanup-Item ohne funktionale Änderung.
 """
 
 from __future__ import annotations

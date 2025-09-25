@@ -15,6 +15,20 @@
         }
       }
     },
-    "error": {}
+    "error": {},
+    "price_update_interval_seconds": "Price update interval (seconds)",
+    "enable_price_debug": "Enable price debug logging"
+  },
+  "help": {
+    "auto_symbols": "Symbols are auto-discovered from active (non-retired) securities."
+  },
+  "log": {
+    "prices_cycle": "Prices cycle: symbols={symbols} batches={batches} returned={returned} changed={changed} errors={errors} duration={duration}ms skipped_running={skipped}"
+  },
+  "warn": {
+    "no_quotes_received": "No quotes received from provider",
+    "batch_failed": "Batch fetch failed",
+    "currency_drift": "Currency drift detected: stored={stored} quote={quote}",
+    "repeated_batch_failures": "Repeated batch failures – still no valid quotes"
   }
 }

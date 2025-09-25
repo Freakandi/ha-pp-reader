@@ -28,6 +28,7 @@ from ..logic.portfolio import (
     calculate_portfolio_value,
     calculate_purchase_sum,
 )
+from ..data.sync_from_pclient import fetch_positions_for_portfolios  # NEU: Reuse bestehender Positions-Loader
 
 # HINWEIS (Item portfolio_aggregation_reuse):
 # Die Revaluation nutzt bewusst die bestehenden Aggregationsfunktionen
@@ -154,8 +155,24 @@ async def revalue_after_price_updates(
     if not portfolio_values:
         return {"portfolio_values": None, "portfolio_positions": None}
 
-    # Positionsdaten aktuell nicht berechnet (Folge-Item ergänzt)
+    # NEU: Positionsdaten für betroffene Portfolios laden (Reuse Helper)
+    portfolio_positions = None
+    try:
+        # fetch_positions_for_portfolios öffnet eigene DB-Verbindung → Executor
+        raw_positions = await hass.async_add_executor_job(
+            fetch_positions_for_portfolios, db_path, affected
+        )
+        # Nur setzen, wenn nicht leer
+        if raw_positions:
+            portfolio_positions = raw_positions
+    except Exception:
+        _LOGGER.warning(
+            "revaluation: Fehler beim Laden der Positionsdaten",
+            exc_info=True,
+        )
+        portfolio_positions = None
+
     return {
         "portfolio_values": portfolio_values,
-        "portfolio_positions": None,  # TODO (portfolio_aggregation_reuse / events): Positionsdetails ergänzen
+        "portfolio_positions": portfolio_positions,
     }
