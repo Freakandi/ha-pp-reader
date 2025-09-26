@@ -1,10 +1,10 @@
-markdown
-// filepath: /workspaces/ha-pp-reader/.docs/migration_on_demand_aggregation_checklist.md
 # Migration Checkliste: On-Demand DB Aggregation & Entfernung Override-Cache
 
 Ziel: Umstellung auf ausschließlich DB-basierte, On-Demand Aggregationen für Portfolio-Werte (keine Client-Seitigen Overrides), Beibehaltung Lazy-Positions-Laden, konsistente Events & WebSocket Responses.
 
 ---
+
+Legende: [ ] offen | [x] fertig
 
 ## 1. Backend: On-Demand Aggregation Infrastruktur
 
@@ -157,7 +157,7 @@ c) [ ] (Optional) Footer "Summe" konsolidieren: Neu-Berechnung aus DOM statt Sta
 
 ## 8. Dokumentation
 
-a) [ ] ARCHITEKTURENTRY: Neuer Abschnitt "Berechnungsmodell (On-Demand)"
+a) [x] ARCHITEKTURENTRY: Neuer Abschnitt "Berechnungsmodell (On-Demand)"
    - Datei: `ARCHITECTURE.md`
    - Inhalt:
      - Server-Side Single Source via `fetch_live_portfolios`

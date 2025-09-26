@@ -314,6 +314,44 @@ Invarianten / Regeln:
 2. DOM Patch (kein Full Re-Render) über Handler.
 3. Lazy Load: Bei Expand Portfolio → `pp_reader/get_portfolio_positions`.
 
+### Berechnungsmodell (On-Demand Aggregation)
+Dieser Abschnitt beschreibt das konsolidierte Berechnungsmodell nach Migration auf serverseitige On-Demand Aggregation.
+
+Ziele:
+- Single Source of Truth für Depot-Kennzahlen (value, purchase_sum, count) direkt aus der SQLite-Datenbank.
+- Eliminierung des ehemaligen client-seitigen Override-Caches (`__ppReaderPortfolioValueOverrides`).
+- Beibehaltung der bestehenden Event-Sequenzen und Sensor-Verträge ohne Änderung von Key-Namen oder Shapes.
+
+Komponenten:
+- On-Demand Helper [`fetch_live_portfolios`](custom_components/pp_reader/data/db_access.py): Aggregiert aktuelle Portfolio-Werte unter Nutzung persistierter Live-Preise (`securities.last_price` + Skalierung 1e-8) und fallback-Logik für fehlende Preise (bestehende gespeicherte Werte).
+- WebSocket Handler (`ws_get_portfolio_data`, `ws_get_dashboard_data` in [custom_components/pp_reader/data/websocket.py](custom_components/pp_reader/data/websocket.py)): Liefern beim Initial-Ladezyklus bereits die aktuellsten Aggregationen (kein Merge/Delta mehr nötig).
+- Revaluation Pfad (`revalue_after_price_updates` in [custom_components/pp_reader/prices/revaluation.py](custom_components/pp_reader/prices/revaluation.py)): Führt partielle Neubewertung betroffener Depots nach Preisänderungen durch und pusht Events in unveränderter Reihenfolge:
+  1. `portfolio_values`
+  2. pro betroffenes Depot `portfolio_positions`
+- Coordinator [`PPReaderCoordinator`](custom_components/pp_reader/data/coordinator.py): Lädt weiterhin periodisch Datei→DB Synchronisationsresultate und hält `coordinator.data["portfolios"]` für Sensoren (Legacy-Kompatibilität). Frontend-Initialdaten verwenden jedoch ausschließlich die On-Demand Aggregation.
+
+Unveränderte Aspekte:
+- Keine neuen Eventtypen oder Payload-Felder.
+- Rounding (2 Dezimal) erst an Frontend-/Sensor-Grenze.
+- Sensoren konsumieren weiterhin `coordinator.data` (Backward Compatibility).
+
+Nicht mehr vorhanden:
+- Client Override Cache (Setzen/Löschen/Anwenden entfällt).
+- Heuristiken zur Erkennung von Full-Sync vs. Delta im Frontend.
+
+Vorteile:
+- Konsistenz zwischen Reload des Dashboards und Laufzeit-Events.
+- Reduziertes UI-spezifisches State-Handling.
+- Klare Trennung: Sensoren (Snapshot) vs. Frontend (Live On-Demand).
+
+Risiken & Mitigation:
+- Potenzielle Performance-Kosten bei sehr großen Depots → Option für leichtes Mikro-Caching (≤5s) ist bewusst zurückgestellt, erst nach Messung.
+- Divergenz zwischen Coordinator-Snapshot und On-Demand Aggregation: Minimiert durch identische Aggregationsfunktionen und Nutzung derselben Preisdaten.
+
+Testing Implikationen:
+- Neue Tests verifizieren, dass WebSocket Antworten direkt Live-Werte reflektieren (siehe geplante Items in `.docs/TODO_updateGoals.md`).
+- Revaluation Tests müssen keine Anpassung erhalten, solange Event-Reihenfolge unverändert bleibt.
+
 ### 5. Backup Cycle
 1. Zeitgesteuerte Ausführung → Integritätsprüfung → Kopie in `backups/`.
 2. Optionale Aufbewahrungslogik (implizit—Details nicht sichtbar; potenziell erweiterbar).
