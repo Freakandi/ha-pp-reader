@@ -102,7 +102,7 @@ Always cross-check and (when needed) update:
 - `manifest.json`: version bump when behavior, schema, or user-visible configuration changes.
 
 Linking (in explanations):
-- Use relative links: `[ARCHITECTURE.md](ARCHITECTURE.md)`, `[data/coordinator.py](custom_components/pp_reader/data/coordinator.py)` etc.
+- Use relative links: `[ARCHITECTURE.md](../ARCHITECTURE.md)`, `[coordinator.py](../custom_components/pp_reader/data/coordinator.py)` etc.
 
 ---
 
