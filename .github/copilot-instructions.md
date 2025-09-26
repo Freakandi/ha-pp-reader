@@ -1,54 +1,242 @@
-## AI Coding Agent Instructions (ha-pp-reader)
-Goal: Enable immediate productive edits to the Home Assistant integration `pp_reader` (Portfolio Performance Reader) while preserving sensor/frontend contracts.
+# AI Coding Agent Instructions (ha-pp-reader)
 
-Architecture (server → client):
-1. Config entry (`config_flow.py`) provides `file_path`, `db_path`.
-2. `async_setup_entry` (`__init__.py`): ensure schema (`data/db_init.py` using `ALL_SCHEMAS` in `data/db_schema.py`), create `PPReaderCoordinator` (1‑min interval), forward sensors, register panel + websocket + event push.
-3. Change detection: `PPReaderCoordinator` compares minute‑truncated mtime vs stored `last_file_update`; if changed → parse (`data/reader.py`) → sync (`data/sync_from_pclient.py`) diff (upsert + hard delete) → compute metrics (`logic/*.py`) → populate `coordinator.data` → `_push_update` emits `EVENT_PANELS_UPDATED` per data type.
-4. Frontend: custom panel (`www/pp_reader_dashboard/panel.js`) mounts `<pp-reader-panel>` → Shadow DOM → `<pp-reader-dashboard>` which subscribes to `EVENT_PANELS_UPDATED` and incrementally patches DOM via handlers in `js/data/updateConfigsWS.js`.
+Goal: High‑quality, incremental implementation for the Home Assistant integration `pp_reader` while preserving all existing runtime contracts (sensors, frontend event payloads, DB schema invariants).
+Primary workflow now: 1) Draft concepts, 2) Derive explicit To‑Do checklist, 3) Implement exactly one open checklist item per turn (unless in focused bugfix/test assistance mode).
 
-Coordinator data contract (DO NOT mutate existing shapes):
+---
+
+## 0. Core Invariants (DO NOT BREAK)
+
+Coordinator data contract (append new top-level keys only):
+```json
 {
-  accounts: { uuid: { name, balance (EUR float), is_retired } },
-  portfolios: { uuid: { name, value (EUR float), count, purchase_sum } },
-  transactions: [...],
-  last_update: ISO8601 minute string
+  "accounts": { "<uuid>": { "name": str, "balance": float(EUR), "is_retired": bool } },
+  "portfolios": { "<uuid>": { "name": str, "value": float(EUR), "count": int, "purchase_sum": float(EUR) } },
+  "transactions": [ ... ],
+  "last_update": "YYYY-MM-DDTHH:MM:SSZ"
 }
-Add new top-level keys only; sensors & panel rely on current ones.
+```
+Rules:
+- No mutation of shapes / key names.
+- Rounding to 2 decimals only at sensor & event boundary.
+- Prices/shares internally scaled (1e-8). Integer cents may exist in DB; never emit mixed precision.
+- FX preload (see `currencies/fx.py`) required before cross‑currency aggregation. Non‑EUR accounts: keep original + converted.
 
-Units & FX:
-- Raw protobuf shares/prices scaled 1e‑8; internal DB often integer cents; convert & round (2 decimals) only at sensor/event boundary.
-- Always preload FX (`currencies/fx.py`) before cross‑currency metrics; balances for non‑EUR accounts keep `orig_balance` + converted EUR.
+Event types (fixed set for dashboard incremental patching):
+- `accounts`
+- `last_file_update`
+- `portfolio_values`
+- `portfolio_positions`
+Order on price updates or file-driven portfolio changes:
+1. `portfolio_values`
+2. each affected portfolio `portfolio_positions`
 
-Frontend DOM patterns (overview tab):
-- Portfolio table: `<table class="expandable-portfolio-table">` rows: `.portfolio-row[data-portfolio=UUID]` + adjacent `.portfolio-details` (positions container). Update handlers patch cells (no full re-render). Positions lazy/pushed into `.positions-container`.
-- Event payload types: `accounts`, `last_file_update`, `portfolio_values`, `portfolio_positions` (positions may arrive before details row → pending cache logic in `handlePortfolioPositionsUpdate`).
-- Sticky header: `.header-card` toggled with `IntersectionObserver` anchored by injected `#anchor` element.
-- Navigation & swipe: `dashboard.js` manages `currentPage` (array `tabs`). Add new tabs by pushing `{title, render}`.
+DOM contract (overview tab):
+- Table: `<table class="expandable-portfolio-table">`
+- Portfolio row selector: `.portfolio-row[data-portfolio=UUID]`
+- Adjacent details container: `.portfolio-details` → `.positions-container`
+- No full re-render; patch only existing nodes.
 
-Sensor pattern (`sensors/*.py`): subclass `CoordinatorEntity, SensorEntity`; `_attr_should_poll = False` unless dependent (e.g. gain sensors). Unique ID: slug of underlying UUID + semantic suffix. Keep 2‑decimal rounding & error logging style.
+Schema change protocol:
+1. Extend creation SQL in `data/db_schema.py`
+2. Add to `ALL_SCHEMAS` (`data/db_init.py`)
+3. (If altering existing tables) Add safe `ALTER` guarded logic (idempotent)
+4. Update `ARCHITECTURE.md` (SQLite Schema & Migrations)
+5. Add CHANGELOG entry (Added / Changed)
+6. Consider tests (persistence + migration)
+7. Never silently add a table/column without ALL_SCHEMAS.
 
-Schema & Sync rules:
-- Add table/column → extend creation SQL + include in `ALL_SCHEMAS` else never created.
-- Diff: `sync_from_pclient` hard deletes missing entities (`delete_missing_entries`). Changing to soft delete requires updating diff + consumer logic.
+---
 
-Websocket/Event integration:
-- Register commands in `__init__.py`; push incremental updates via `_push_update(hass, entry_id, data_type, data)` emitting HA event `EVENT_PANELS_UPDATED`. Frontend filters by `entry_id` (see `getEntryId` in `js/data/api.js`).
+## 1. Standard Workflow (Concept → Checklist → Implementation)
 
-Dev workflow:
-./scripts/setup_container → source .venv/bin/activate → ./scripts/codex_develop (or ./scripts/develop) → ./scripts/lint (Ruff). Panel assets cache-busted via version query param in `panel.js` import.
+1. Concept Draft
+   - Create / update a document under `.docs/` (e.g. `updateGoals.md` or a new focused concept) describing rationale, scope, constraints, contracts unchanged, and potential risks.
+   - Reference existing architecture sections instead of duplicating unless a refinement is introduced.
 
-Release: Work on `dev`; merge to `main` keeping file history; bump version in `manifest.json` when behavior changes.
+2. Checklist Derivation
+   - Produce a numbered To‑Do list file (e.g. `.docs/TODO_<topic>.md`) containing atomic items:
+     - Each item: `[ ]` one change (file path, function/section, goal/result).
+     - Mark optional / deferred optimizations explicitly.
+     - Include test & documentation update items (ARCHITECTURE.md, TESTING.md, CHANGELOG.md).
+   - Items must be order-aware (dependencies first).
 
-Common pitfalls:
-- Forgetting FX preload → incorrect EUR metrics.
-- Mutating existing coordinator key shapes → sensor/panel breakage.
-- Adding schema w/o updating `ALL_SCHEMAS` → silent absence.
-- Replacing full table render instead of patching → flicker + lost scroll/state.
+3. Incremental Implementation Cycle (default mode)
+   - Pick exactly ONE open checklist item (highest priority / dependency satisfied).
+   - Response sections (mirrors process prompt style):
+     A. Item summary & reason for selection
+     B. Planned changes (bullets)
+     C. Code patch (only real modifications; use required fenced block format)
+     D. Checklist update (mark item complete with `[x]` or progress note)
+     E. Risk / follow-up suggestions
+   - No batching of multiple checklist items in a single turn.
+   - If ambiguity/blocker: do NOT code—list decisions required + alternative next items.
 
-Extend safely checklist:
-1 Schema update (+ALL_SCHEMAS) 2 Sync population 3 Add coordinator key / event type 4 Sensor(s) or frontend handler 5 FX handling if multi-currency 6 Preserve existing DOM classes & data attributes.
+4. Exceptions (Bugfix / Test Assistance Mode)
+   - When user explicitly asks for a quick fix, test addition, or investigation, you may bypass the single-item rule (state that you are in exception mode).
+   - Keep patches minimal & localized.
 
-Key files: `__init__.py`, `const.py`, `data/{coordinator,reader,sync_from_pclient,db_schema,db_init,websocket}.py`, `logic/*.py`, `sensors/*.py`, `currencies/fx.py`, `www/pp_reader_dashboard/js/*.js`.
+5. Completion
+   - After final item: prompt for validation steps (manual + tests) before merging.
+   - Ensure CHANGELOG & `manifest.json` version bump align with semantic change.
 
-Feedback: Request more detail if you need protobuf field mapping, FX rate source strategy, or adding a new websocket command pattern.
+---
+
+## 2. Patch Formatting Rules
+
+- Use 4 backticks fenced code blocks with language (e.g. `markdown`, `python`, `javascript`).
+- First line: `// filepath: <relative path>`
+- Show only changed/new files. For modified large files, you may replace full content if simpler—avoid placeholder code.
+- Use `...existing code...` markers only if showing a partial context; otherwise deliver full updated file for clarity.
+- No broad refactors unless explicitly requested or required by the item.
+
+---
+
+## 3. Referencing & Cross-File Consistency
+
+Always cross-check and (when needed) update:
+- `ARCHITECTURE.md`: data flow, schema, contracts, lifecycle, invariants.
+- `CHANGELOG.md`: Added / Changed / Fixed / Internal sections (Keep a Changelog style).
+- `TESTING.md`: any new test strategy, fixtures, or commands.
+- `README.md`: user-visible behavior changes only.
+- `manifest.json`: version bump when behavior, schema, or user-visible configuration changes.
+
+Linking (in explanations):
+- Use relative links: `[ARCHITECTURE.md](ARCHITECTURE.md)`, `[data/coordinator.py](custom_components/pp_reader/data/coordinator.py)` etc.
+
+---
+
+## 4. Sensors & Entities
+
+Pattern:
+- Subclass `CoordinatorEntity` & `SensorEntity`.
+- `_attr_should_poll = False` (unless explicitly dependent on real-time dynamic that is not covered by coordinator updates).
+- Unique IDs: slugified base UUID + descriptive suffix.
+- Round values at emission (2 decimals, standard `round()`).
+
+---
+
+## 5. WebSocket & Events
+
+- All commands declared & registered in `__init__.py` via HA `websocket_api`.
+- Use `_push_update(hass, entry_id, data_type, data)` to emit `EVENT_PANELS_UPDATED`.
+- Do not rename existing `data_type` values.
+- Add new event types only with explicit checklist item + frontend handler + documentation update.
+
+---
+
+## 6. Price / Revaluation Path
+
+- Live price cycle: orchestrated in `prices/price_service.py` (batch fetch, change detection).
+- Partials: `revaluation.revalue_after_price_updates` returns `portfolio_values` + affected `portfolio_positions`.
+- Maintain documented event order (see invariants section).
+- Drift warnings & error counter logic must remain idempotent and deduplicated per design.
+
+---
+
+## 7. Testing & Quality Integration
+
+When implementing items:
+- Add / adapt tests under `tests/` only if the item implies new logic or regression risk.
+- Follow `TESTING.md` quick commands (`pytest -q`, coverage invocation).
+- Avoid test flakiness (no real network).
+- For schema changes: add test ensuring new columns exist & are populated.
+
+---
+
+## 8. Performance & Integrity
+
+- Avoid unnecessary full-table scans—reuse existing aggregation helpers (e.g. `logic/accounting.py`, `logic/portfolio.py`).
+- Consider FX preload before any cross-currency loop.
+- If an optimization is speculative, defer & mark in checklist as optional with rationale.
+
+---
+
+## 9. Logging
+
+- Namespaces:
+  - `custom_components.pp_reader`
+  - `custom_components.pp_reader.prices.*`
+- Emit WARN/INFO only per established patterns (deduplicated warnings).
+- Do not introduce verbose DEBUG floods without checklist justification.
+
+---
+
+## 10. Backup & Reliability
+
+- Ensure any schema change remains compatible with existing backup/restore (`data/backup_db.py`).
+- Do not break idempotent schema initialization (create-if-not-exists pattern remains).
+
+---
+
+## 11. Security & Stability Guardrails
+
+- No execution of untrusted input.
+- WebSocket handlers: validate `entry_id`.
+- No exposure of raw file paths in events beyond existing design.
+
+---
+
+## 12. Checklist Enforcement Helper (Internal Guidance)
+
+Before coding:
+- Is there a checklist item? If no → ask user to add / confirm.
+After patch:
+- Did we update all impacted docs?
+- Are contracts unchanged?
+- Is CHANGELOG updated if user-visible?
+- Are tests needed (logic / schema)? If deferred, note explicitly in section E.
+
+---
+
+## 13. When Unsure
+
+Respond with:
+- Clarifying assumptions
+- Alternative approaches (pros/cons)
+- Suggested minimal next step itemization
+
+Never guess protobuf mappings or schema fields—ask if not already defined in existing repository context.
+
+---
+
+## 14. Quick Reference (Do / Don’t)
+
+Do:
+- Preserve contracts
+- Implement one checklist item per turn
+- Keep patches minimal & isolated
+- Cross-update docs & changelog
+
+Don’t:
+- Batch unrelated changes
+- Introduce silent schema elements
+- Rename event types or coordinator keys
+- Add rounding earlier than emission layer
+
+---
+
+## 15. Key Files (Reference)
+
+- Core: `__init__.py`, `const.py`
+- Data Layer: `data/{coordinator,reader,sync_from_pclient,db_schema,db_init,websocket}.py`
+- Aggregation: `logic/*.py`
+- Prices: `prices/{price_service,revaluation,provider_base,yahooquery_provider}.py`
+- FX: `currencies/fx.py`
+- Frontend: `www/pp_reader_dashboard/js/*`
+- Docs: `ARCHITECTURE.md`, `CHANGELOG.md`, `.docs/*.md`
+- Testing: `tests/`
+
+---
+
+## 16. Example Implementation Turn (Template)
+
+A. Item: 3.b `websocket.py` adapt `ws_get_portfolio_data` to use live aggregation
+B. Changes: call `fetch_live_portfolios`, remove legacy snapshot use, doc update
+C. Code: (patch)
+D. Checklist: mark 3.b done
+E. Risks: performance regression (monitor), next: update related test
+
+---
+
+End of updated instructions.
