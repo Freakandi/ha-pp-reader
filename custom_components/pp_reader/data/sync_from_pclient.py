@@ -779,139 +779,113 @@ def sync_from_pclient(
                 formatted_last_file_update,
             )
 
-        if sec_port_changes_detected:
-            # Bereite die Daten für das Update vor
-            portfolio_data = {}
-
-            # Iteriere über die berechneten Werte in current_holdings_values
-            for (
-                portfolio_uuid,
-                security_uuid,
-            ), data in current_holdings_values.items():
-                current_value = data.get("current_value", 0)
-                purchase_value = data.get("purchase_value", 0)
-
-                # Initialisiere das Portfolio, falls es noch nicht im Dictionary ist
-                if portfolio_uuid not in portfolio_data:
-                    portfolio_data[portfolio_uuid] = {
-                        "name": None,  # Der Name des Portfolios wird später gesetzt
-                        "position_count": 0,
-                        "current_value": 0.0,
-                        "purchase_sum": 0.0,
-                    }
-
-                # Aktualisiere die Werte für das Portfolio
-                portfolio_data[portfolio_uuid]["position_count"] += 1
-                portfolio_data[portfolio_uuid]["current_value"] += current_value
-                portfolio_data[portfolio_uuid]["purchase_sum"] += purchase_value
-
-            # Setze die Namen der Portfolios
-            cur.execute("SELECT uuid, name FROM portfolios")
-            portfolio_names = {row[0]: row[1] for row in cur.fetchall()}
-            for portfolio_uuid, portfolio_info in portfolio_data.items():
-                portfolio_info["name"] = portfolio_names.get(
-                    portfolio_uuid, "Unbekannt"
-                )
-
             # NEU (Single Source of Truth via fetch_live_portfolios):
+            portfolio_values_payload: list[dict] = []
+            portfolio_values_sent = False
             try:
                 live_portfolios = fetch_live_portfolios(db_path)
-                # Erwartete Struktur jedes Elements in live_portfolios:
-                # {
-                #   "uuid": str,
-                #   "name": str,
-                #   "value": float,          # EUR (keine zusätzliche Rundung hier)
-                #   "position_count": int,
-                #   "purchase_sum": float    # EUR
-                # }
-                portfolio_values_payload = {
-                    p["uuid"]: {
-                        "name": p["name"],
-                        "value": p["value"],
-                        "count": p["position_count"],
-                        "purchase_sum": p["purchase_sum"],
+                portfolio_values_payload = [
+                    {
+                        "uuid": p.get("uuid"),
+                        "name": p.get("name", "Unbekannt"),
+                        "position_count": int(p.get("position_count") or 0),
+                        "current_value": round(((p.get("current_value") or 0) / 100), 2),
+                        "purchase_sum": round(((p.get("purchase_sum") or 0) / 100), 2),
                     }
                     for p in live_portfolios
-                }
+                    if p and p.get("uuid")
+                ]
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception(
+                    "Fehler beim Aggregieren der Portfolio-Werte via fetch_live_portfolios"
+                )
+
+            if portfolio_values_payload:
                 _push_update(
                     hass,
                     entry_id,
                     "portfolio_values",
                     portfolio_values_payload,
                 )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception(
-                    "Fehler beim Aggregieren der Portfolio-Werte via fetch_live_portfolios"
+                portfolio_values_sent = True
+            else:
+                _LOGGER.debug(
+                    "sync_from_pclient: Keine Portfolio-Werte für Event vorhanden (fetch_live_portfolios lieferte keine Daten)"
                 )
 
             # Neu: Positionsdaten-Push für geänderte Portfolios (granular)
-            try:
-                # changed_portfolios wurde bereits befüllt (nur UUIDs behalten)
-                valid_changed = {
-                    pid
-                    for pid in changed_portfolios
-                    if isinstance(pid, str) and len(pid) >= 8 and "-" in pid
-                }
+            if not portfolio_values_sent:
+                _LOGGER.debug(
+                    "sync_from_pclient: Überspringe portfolio_positions Push – portfolio_values Event wurde nicht gesendet."
+                )
+            else:
+                try:
+                    # changed_portfolios wurde bereits befüllt (nur UUIDs behalten)
+                    valid_changed = {
+                        pid
+                        for pid in changed_portfolios
+                        if isinstance(pid, str) and len(pid) >= 8 and "-" in pid
+                    }
 
-                # Schritt 23: Erweiterte Debug-Logs zur Nachverfolgung
-                if changed_portfolios and not valid_changed:
-                    _LOGGER.debug(
-                        "sync_from_pclient: changed_portfolios vorhanden (%d), aber keine gültigen UUIDs nach Filter: %s",
-                        len(changed_portfolios),
-                        list(changed_portfolios)[:10],
-                    )
-                else:
-                    _LOGGER.debug(
-                        "sync_from_pclient: Kandidaten für portfolio_positions Push (valid_changed=%d): %s",
-                        len(valid_changed),
-                        list(valid_changed)[:10],
-                    )
-
-                if not valid_changed:
-                    _LOGGER.debug(
-                        "sync_from_pclient: Keine gültigen changed_portfolios → Überspringe portfolio_positions Push."
-                    )
-                else:
-                    # Lädt alle Positionslisten (1 DB Query pro Depot – akzeptabel bei kleiner Anzahl)
-                    positions_map = fetch_positions_for_portfolios(
-                        db_path, valid_changed
-                    )
-
-                    # Schritt 24: Verbesserte Fehler-/Leere-Diagnostik vor Versand
-                    empty_lists = [pid for pid, pos in positions_map.items() if not pos]
-                    if empty_lists:
+                    # Schritt 23: Erweiterte Debug-Logs zur Nachverfolgung
+                    if changed_portfolios and not valid_changed:
                         _LOGGER.debug(
-                            "sync_from_pclient: %d Portfolios ohne Positionen (werden trotzdem gesendet): %s",
-                            len(empty_lists),
-                            empty_lists[:10],
+                            "sync_from_pclient: changed_portfolios vorhanden (%d), aber keine gültigen UUIDs nach Filter: %s",
+                            len(changed_portfolios),
+                            list(changed_portfolios)[:10],
+                        )
+                    else:
+                        _LOGGER.debug(
+                            "sync_from_pclient: Kandidaten für portfolio_positions Push (valid_changed=%d): %s",
+                            len(valid_changed),
+                            list(valid_changed)[:10],
                         )
 
-                    # Einzelnes Event pro Depot (bewusst granular für gezieltes UI-Update ohne großen Payload)
-                    for pid, positions in positions_map.items():
-                        try:
-                            _push_update(
-                                hass,
-                                entry_id,
-                                "portfolio_positions",
-                                {
-                                    "portfolio_uuid": pid,
-                                    "positions": positions,
-                                },
-                            )
+                    if not valid_changed:
+                        _LOGGER.debug(
+                            "sync_from_pclient: Keine gültigen changed_portfolios → Überspringe portfolio_positions Push."
+                        )
+                    else:
+                        # Lädt alle Positionslisten (1 DB Query pro Depot – akzeptabel bei kleiner Anzahl)
+                        positions_map = fetch_positions_for_portfolios(
+                            db_path, valid_changed
+                        )
+
+                        # Schritt 24: Verbesserte Fehler-/Leere-Diagnostik vor Versand
+                        empty_lists = [pid for pid, pos in positions_map.items() if not pos]
+                        if empty_lists:
                             _LOGGER.debug(
-                                "sync_from_pclient: 📡 portfolio_positions-Event für %s gesendet (%d Positionen)",
-                                pid,
-                                len(positions),
+                                "sync_from_pclient: %d Portfolios ohne Positionen (werden trotzdem gesendet): %s",
+                                len(empty_lists),
+                                empty_lists[:10],
                             )
-                        except Exception:  # noqa: BLE001
-                            _LOGGER.exception(
-                                "sync_from_pclient: Fehler beim Senden des portfolio_positions Events für %s",
-                                pid,
-                            )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception(
-                    "sync_from_pclient: Allgemeiner Fehler beim Push der portfolio_positions Events"
-                )
+
+                        # Einzelnes Event pro Depot (bewusst granular für gezieltes UI-Update ohne großen Payload)
+                        for pid, positions in positions_map.items():
+                            try:
+                                _push_update(
+                                    hass,
+                                    entry_id,
+                                    "portfolio_positions",
+                                    {
+                                        "portfolio_uuid": pid,
+                                        "positions": positions,
+                                    },
+                                )
+                                _LOGGER.debug(
+                                    "sync_from_pclient: 📡 portfolio_positions-Event für %s gesendet (%d Positionen)",
+                                    pid,
+                                    len(positions),
+                                )
+                            except Exception:  # noqa: BLE001
+                                _LOGGER.exception(
+                                    "sync_from_pclient: Fehler beim Senden des portfolio_positions Events für %s",
+                                    pid,
+                                )
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception(
+                        "sync_from_pclient: Allgemeiner Fehler beim Push der portfolio_positions Events"
+                    )
     else:
         # Aggregierten Änderungsstatus berechnen (nur für Debug)
         changes_detected = any(

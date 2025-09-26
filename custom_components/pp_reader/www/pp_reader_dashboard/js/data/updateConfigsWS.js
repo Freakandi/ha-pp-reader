@@ -91,15 +91,6 @@ export function handlePortfolioUpdate(update, root) {
     console.debug("handlePortfolioUpdate: payload=", update);
   } catch (_) { }
 
-  // Heuristik: Full File Sync liefert 'value' (Backend-Coordinator) statt 'current_value'
-  // → behandelt als Baseline → Overrides invalidieren
-  const looksLikeFullSync = update.length > 0 &&
-    update.every(u => u && typeof u === 'object' && ('value' in u) && !('current_value' in u));
-
-  if (looksLikeFullSync) {
-    _clearPortfolioOverrides("file_sync_portfolio_values");
-  }
-
   // Tabelle finden (neuer Selektor unterstützt beide Varianten)
   const table =
     root?.querySelector('.portfolio-table table') ||
@@ -173,22 +164,12 @@ export function handlePortfolioUpdate(update, root) {
     row.dataset.purchaseSum = purchase.toString();
     patched++;
 
-    // Nur speichern, wenn kein FullSync (FullSync ist Baseline, Overrides leer oder gerade geleert)
-    if (!looksLikeFullSync) {
-      try {
-        window.__ppReaderPortfolioValueOverrides.set(u.uuid, {
-          current_value: curVal,
-          purchase_sum: purchase,
-          position_count: posCount,
-        });
-      } catch (_) { }
-    }
   }
 
   if (patched === 0) {
     console.debug("handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.");
   } else {
-    console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht. baseline=${looksLikeFullSync}`);
+    console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht.`);
   }
 
   // Total-Wealth neu berechnen (Accounts + Portfolios)
@@ -516,8 +497,6 @@ function createPortfolioRowHtml(p, expanded = false) {
 // ==== Last File Update Handler (canonical) ====
 // (Ändere zu export function, damit unten kein Sammel-Export nötig ist)
 export function handleLastFileUpdate(update, root) {
-  // Neu: Override Cache invalidieren (neue Datei gilt als neue Baseline)
-  _clearPortfolioOverrides("last_file_update_event");
   const value = typeof update === 'string'
     ? update
     : (update && update.last_file_update) || '';
@@ -594,21 +573,3 @@ function parseNumLoose(txt) {
   ) || 0;
 }
 
-// Override-Cache für Portfolio-Werte (persistiert zwischen Re-Renders)
-if (!window.__ppReaderPortfolioValueOverrides) {
-  window.__ppReaderPortfolioValueOverrides = new Map(); // uuid -> {current_value,purchase_sum,position_count}
-}
-
-// Utility zum Leeren (zentral, damit Logging konsistent)
-function _clearPortfolioOverrides(reason) {
-  try {
-    if (window.__ppReaderPortfolioValueOverrides?.size) {
-      const sz = window.__ppReaderPortfolioValueOverrides.size;
-      window.__ppReaderPortfolioValueOverrides.clear();
-      console.debug(`pp_reader: Override-Cache geleert (size=${sz}, reason=${reason})`);
-    } else {
-      // Nur bei Debug sinnvoll loggen
-      console.debug(`pp_reader: Override-Cache bereits leer (reason=${reason})`);
-    }
-  } catch (_) { }
-}

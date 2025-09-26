@@ -12,7 +12,7 @@ Rückgabeformat:
 
 Hinweise:
 - Positionsdetails werden bewusst in einem separaten Item ergänzt (Events-Phase).
-- Reuse vorhandener Aggregationsfunktionen (calculate_portfolio_value, calculate_purchase_sum).
+- Aggregation erfolgt primär via fetch_live_portfolios (Single Source of Truth) mit Fallback auf calculate_portfolio_value / calculate_purchase_sum.
 - Fehler dürfen den Preiszyklus nicht unterbrechen (fehlertolerant).
 """
 
@@ -28,14 +28,14 @@ from ..logic.portfolio import (
     calculate_portfolio_value,
     calculate_purchase_sum,
 )
+from ..data.db_access import fetch_live_portfolios  # Einheitliche Aggregationsquelle
 from ..data.sync_from_pclient import fetch_positions_for_portfolios  # NEU: Reuse bestehender Positions-Loader
 
 # HINWEIS (Item portfolio_aggregation_reuse):
-# Die Revaluation nutzt bewusst die bestehenden Aggregationsfunktionen
-# calculate_portfolio_value und calculate_purchase_sum (kein eigener
-# Berechnungsweg), womit das ToDo "Vorhandene Aggregationsfunktionen
-# wiederverwenden" erfüllt ist. Diese Kommentarergänzung dient der
-# transparenten Nachvollziehbarkeit ohne funktionale Änderung.
+# Die Revaluation nutzt primär fetch_live_portfolios als Single Source of Truth.
+# Für Resilienz bleibt ein Fallback auf calculate_portfolio_value /
+# calculate_purchase_sum erhalten, damit Events trotz temporärer Fehler
+# zuverlässig bleiben.
 
 _LOGGER = logging.getLogger(__name__)
 __all__ = ["revalue_after_price_updates"]
@@ -115,7 +115,7 @@ async def revalue_after_price_updates(
         )
         return {"portfolio_values": None, "portfolio_positions": None}
 
-    # DB-Dateipfad für Reuse der bestehenden Aggregationsfunktionen ermitteln
+    # DB-Dateipfad ermitteln (benötigt für Aggregations-Helper)
     try:
         db_list = conn.execute("PRAGMA database_list").fetchall()
         main_row = next((r for r in db_list if r[1] == "main"), None)
@@ -130,27 +130,79 @@ async def revalue_after_price_updates(
         return {"portfolio_values": None, "portfolio_positions": None}
 
     portfolio_values: dict[str, dict] = {}
-    reference_date = datetime.utcnow()
+    live_entries: dict[str, dict[str, Any]] = {}
+    try:
+        live_rows = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+        for row in live_rows or []:
+            if not isinstance(row, dict):
+                continue
+            p_uuid = row.get("uuid")
+            if not p_uuid:
+                continue
+            live_entries[p_uuid] = row
+    except Exception:
+        _LOGGER.warning(
+            "revaluation: fetch_live_portfolios fehlgeschlagen – fallback auf Einzelaggregation",
+            exc_info=True,
+        )
 
-    # Sequenziell (Anzahl Portfolios typischerweise klein). Optimierung optional später.
-    for p_uuid in affected:
+    missing_portfolios: Set[str] = set(affected)
+
+    for p_uuid in list(missing_portfolios):
+        data = live_entries.get(p_uuid)
+        if not data:
+            continue
+
+        raw_value = data.get("current_value", data.get("value"))
+        raw_purchase_sum = data.get("purchase_sum")
+        raw_count = data.get("position_count", data.get("count"))
+
         try:
-            value, count = await calculate_portfolio_value(
-                p_uuid, reference_date, db_path
-            )
-            purchase_sum = await calculate_purchase_sum(p_uuid, db_path)
-            portfolio_values[p_uuid] = {
-                "name": names.get(p_uuid, p_uuid),
-                "value": value,
-                "count": count,
-                "purchase_sum": purchase_sum,
-            }
-        except Exception:
-            _LOGGER.warning(
-                "revaluation: Fehler bei Aggregation für Portfolio %s",
-                p_uuid,
-                exc_info=True,
-            )
+            value = round(float(raw_value) / 100, 2)
+        except (TypeError, ValueError):
+            value = 0.0
+
+        try:
+            purchase_sum = round(float(raw_purchase_sum) / 100, 2)
+        except (TypeError, ValueError):
+            purchase_sum = 0.0
+
+        try:
+            count = int(raw_count) if raw_count is not None else 0
+        except (TypeError, ValueError):
+            count = 0
+
+        portfolio_values[p_uuid] = {
+            "name": data.get("name") or names.get(p_uuid, p_uuid),
+            "value": value,
+            "count": count,
+            "purchase_sum": purchase_sum,
+        }
+        missing_portfolios.discard(p_uuid)
+
+    if missing_portfolios:
+        reference_date = datetime.utcnow()
+
+        for p_uuid in list(missing_portfolios):
+            try:
+                value, count = await calculate_portfolio_value(
+                    p_uuid, reference_date, db_path
+                )
+                purchase_sum = await calculate_purchase_sum(p_uuid, db_path)
+                portfolio_values[p_uuid] = {
+                    "name": names.get(p_uuid, p_uuid),
+                    "value": value,
+                    "count": count,
+                    "purchase_sum": purchase_sum,
+                }
+            except Exception:
+                _LOGGER.warning(
+                    "revaluation: Fehler bei Aggregation für Portfolio %s",
+                    p_uuid,
+                    exc_info=True,
+                )
+            finally:
+                missing_portfolios.discard(p_uuid)
 
     if not portfolio_values:
         return {"portfolio_values": None, "portfolio_positions": None}

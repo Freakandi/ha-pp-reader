@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 import sqlite3
+from typing import Any
 
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
@@ -26,6 +27,65 @@ from .db_access import (
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
+
+
+async def _live_portfolios_payload(
+    hass,
+    entry_id: str,
+    *,
+    entry_data: dict[str, Any] | None = None,
+    log_context: str = "",
+) -> list[dict[str, Any]]:
+    """Fetch live portfolio aggregates with coordinator fallback."""
+
+    domain_data = hass.data.get(DOMAIN, {})
+    data = entry_data or domain_data.get(entry_id)
+    if not data:
+        raise LookupError(f"entry_id {entry_id} not registered")
+
+    db_path: Path = data["db_path"]
+    coordinator = data.get("coordinator")
+
+    try:
+        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+        if isinstance(portfolios, list):
+            return portfolios
+        if isinstance(portfolios, dict):
+            return list(portfolios.values())
+        return list(portfolios)
+    except Exception:
+        context_suffix = f" ({log_context})" if log_context else ""
+        _LOGGER.warning(
+            "On-Demand Portfolio Aggregation%s fehlgeschlagen – Fallback auf Coordinator Daten",
+            context_suffix,
+            exc_info=True,
+        )
+
+    if not coordinator:
+        return []
+
+    snapshot = coordinator.data.get("portfolios", [])
+
+    if isinstance(snapshot, list):
+        return snapshot
+
+    if isinstance(snapshot, dict):
+        normalized: list[dict[str, Any]] = []
+        for portfolio_uuid, raw in snapshot.items():
+            if not isinstance(raw, dict):
+                continue
+            normalized.append(
+                {
+                    "uuid": portfolio_uuid,
+                    "name": raw.get("name"),
+                    "current_value": raw.get("current_value", raw.get("value", 0)),
+                    "purchase_sum": raw.get("purchase_sum", 0),
+                    "position_count": raw.get("position_count", raw.get("count", 0)),
+                }
+            )
+        return normalized
+
+    return []
 
 
 # === Dashboard Websocket Test-Command ===
@@ -53,7 +113,6 @@ async def ws_get_dashboard_data(hass, connection, msg):
         connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
         return
 
-    db_path: Path = entry_data["db_path"]
     coordinator = entry_data.get("coordinator")
 
     # Accounts & Transactions weiter wie zuvor (Snapshot / bestehende Helper)
@@ -66,16 +125,12 @@ async def ws_get_dashboard_data(hass, connection, msg):
         last_file_update = coordinator.data.get("last_update")
 
     # NEU: Live Portfolios
-    try:
-        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
-    except Exception:
-        _LOGGER.warning(
-            "On-Demand Portfolio Aggregation (dashboard) fehlgeschlagen – Fallback auf Coordinator Daten",
-            exc_info=True,
-        )
-        portfolios = {}
-        if coordinator:
-            portfolios = coordinator.data.get("portfolios", {})
+    portfolios = await _live_portfolios_payload(
+        hass,
+        entry_id,
+        entry_data=entry_data,
+        log_context="dashboard",
+    )
 
     connection.send_result(
         msg["id"],
@@ -237,20 +292,12 @@ async def ws_get_portfolio_data(hass, connection, msg):
         connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
         return
 
-    db_path: Path = entry_data["db_path"]
-    coordinator = entry_data.get("coordinator")
-
-    try:
-        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
-    except Exception:
-        _LOGGER.warning(
-            "On-Demand Portfolio Aggregation fehlgeschlagen – Fallback auf Coordinator Daten",
-            exc_info=True,
-        )
-        portfolios = {}
-        if coordinator:
-            portfolios = coordinator.data.get("portfolios", {})
-        # Kein Re-Raise: Frontend soll weiterhin Daten (ggf. stale) erhalten.
+    portfolios = await _live_portfolios_payload(
+        hass,
+        entry_id,
+        entry_data=entry_data,
+        log_context="portfolio",
+    )
 
     connection.send_result(
         msg["id"],

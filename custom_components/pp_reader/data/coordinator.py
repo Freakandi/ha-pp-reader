@@ -18,9 +18,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from ..logic.accounting import calculate_account_balance
-from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
 
-from .db_access import get_accounts, get_portfolios, get_transactions
+from .db_access import get_accounts, get_transactions, fetch_live_portfolios
 from .reader import parse_data_portfolio
 from .sync_from_pclient import sync_from_pclient
 
@@ -168,10 +167,6 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 get_accounts, self.db_path
             )
 
-            portfolios = await self.hass.async_add_executor_job(
-                get_portfolios, self.db_path
-            )
-
             transactions = await self.hass.async_add_executor_job(
                 get_transactions, self.db_path
             )
@@ -182,22 +177,87 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 for account in accounts
             }
 
-            # Berechne Depotwerte und Kaufsummen
-            portfolio_data = {}
-            for portfolio in portfolios:
-                reference_date = datetime.now()  # noqa: DTZ005
-                value, count = await calculate_portfolio_value(
-                    portfolio.uuid, reference_date, self.db_path
+            # Portfolios aus der zentralen On-Demand Aggregation laden
+            try:
+                raw_portfolios = await self.hass.async_add_executor_job(
+                    fetch_live_portfolios, self.db_path
                 )
-                purchase_sum = await calculate_purchase_sum(
-                    portfolio.uuid, self.db_path
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception(
+                    "PPReaderCoordinator: fetch_live_portfolios fehlgeschlagen – verwende leeren Snapshot"
                 )
-                portfolio_data[portfolio.uuid] = {
-                    "name": portfolio.name,
-                    "value": value,
-                    "count": count,
+                raw_portfolios = []
+
+            def _normalize_amount(value):
+                """Konvertiert Cent-Werte oder Float-Werte zu EUR (float)."""
+                if value is None:
+                    return 0.0
+                if isinstance(value, int):
+                    return value / 100
+                if isinstance(value, float):
+                    return value
+                try:
+                    as_int = int(value)
+                except (TypeError, ValueError):
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        return 0.0
+                return as_int / 100
+
+            if isinstance(raw_portfolios, dict):
+                live_portfolios = list(raw_portfolios.values())
+            elif isinstance(raw_portfolios, list):
+                live_portfolios = raw_portfolios
+            elif raw_portfolios:
+                live_portfolios = list(raw_portfolios)
+            else:
+                live_portfolios = []
+
+            def _portfolio_contract_entry(entry):
+                """Normalize aggregation rows to the coordinator sensor contract (item 4a)."""
+                if not isinstance(entry, dict):
+                    return None
+
+                portfolio_uuid = entry.get("uuid") or entry.get("portfolio_uuid")
+                if not portfolio_uuid:
+                    return None
+
+                current_value_raw = entry.get("current_value")
+                if current_value_raw is None:
+                    current_value_raw = entry.get("value")
+
+                purchase_sum_raw = entry.get("purchase_sum")
+                if purchase_sum_raw is None:
+                    purchase_sum_raw = entry.get("purchaseSum")
+
+                position_count_raw = entry.get("position_count")
+                if position_count_raw is None:
+                    position_count_raw = entry.get("count")
+                if position_count_raw is None:
+                    position_count_raw = 0
+                try:
+                    position_count = int(position_count_raw or 0)
+                except (TypeError, ValueError):
+                    position_count = 0
+
+                current_value = round(_normalize_amount(current_value_raw), 2)
+                purchase_sum = round(_normalize_amount(purchase_sum_raw), 2)
+
+                return portfolio_uuid, {
+                    "name": entry.get("name"),
+                    "value": current_value,
+                    "count": position_count,
                     "purchase_sum": purchase_sum,
                 }
+
+            portfolio_data: dict[str, dict] = {}
+            for entry in live_portfolios:
+                normalized = _portfolio_contract_entry(entry)
+                if not normalized:
+                    continue
+                portfolio_uuid, payload = normalized
+                portfolio_data[portfolio_uuid] = payload
 
             # Speichere die Daten
             self.data = {

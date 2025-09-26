@@ -40,7 +40,7 @@ b) [x] `ws_get_dashboard_data` nutzt `fetch_live_portfolios`
    - Datei: `custom_components/pp_reader/data/websocket.py`
    - Ziel: Kombiniertes Payload nutzt neue Aggregation (Accounts unverändert)
 
-c) [ ] Einheitliche Helper-Funktion `_live_portfolios_payload(hass, entry_id)`
+c) [x] Einheitliche Helper-Funktion `_live_portfolios_payload(hass, entry_id)`
    - Datei: `custom_components/pp_reader/data/websocket.py`
    - Ziel: Duplication vermeiden (DRY)
 
@@ -52,20 +52,20 @@ d) [ ] Anpassung `ws_get_portfolio_positions` (Optional)
 
 ## 3. Backend: Event Push Pfad angleichen
 
-a) [ ] Datei-Sync (`sync_from_pclient.py`) – Ersetzung Aggregationsquelle
+a) [x] Datei-Sync (`sync_from_pclient.py`) – Ersetzung Aggregationsquelle
    - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
    - ZIEL: Nutzung `fetch_live_portfolios` für `portfolio_values` Event (Single Source of Truth)
 
-b) [ ] Preis-Revaluation (`revaluation.py`) – vereinheitlichen
+b) [x] Preis-Revaluation (`revaluation.py`) – vereinheitlichen
    - Datei: `custom_components/pp_reader/prices/revaluation.py`
    - Abschnitt: Rückgabe der `portfolio_values`
    - Ziel: Verwendung der gleichen Aggregationslogik oder (falls Performance kritisch) Bestätigung identischer Berechnungswege (Kommentar ergänzen)
 
-c) [ ] `_push_update` Aufrufe überprüfen (Reihenfolge unverändert)
+c) [x] `_push_update` Aufrufe überprüfen (Reihenfolge unverändert)
    - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
    - Ziel: Reihenfolge bleibt: `portfolio_values` → einzelne `portfolio_positions`
 
-d) [ ] Konsolidierung: Code-Duplizierung für Portfolio Aggregation entfernen
+d) [x] Konsolidierung: Code-Duplizierung für Portfolio Aggregation entfernen
    - Dateien: `coordinator.py`, `sync_from_pclient.py`
    - Ziel: Kommentar + Verweis auf `fetch_live_portfolios` als einzige Quelle
 
@@ -73,7 +73,7 @@ d) [ ] Konsolidierung: Code-Duplizierung für Portfolio Aggregation entfernen
 
 ## 4. Backend: Coordinator Konsistenz / Legacy Sicherung
 
-a) [ ] Beibehalten bestehender `coordinator.data["portfolios"]` für Sensoren
+a) [x] Beibehalten bestehender `coordinator.data["portfolios"]` für Sensoren
    - Datei: `custom_components/pp_reader/data/coordinator.py`
    - Ziel: Keine Breaking Changes Sensor-Vertrag (Dokumentation ergänzen)
 
@@ -87,7 +87,7 @@ c) [ ] (Optional) Kennzeichnung veralteter Aggregationspfad (WARN nur im Debug)
 
 ## 5. Frontend: Entfernung Override-Cache
 
-a) [ ] Entfernen Merge-Anwendung beim Initial-Render
+a) [x] Entfernen Merge-Anwendung beim Initial-Render
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
    - Funktion: `renderDashboard`
    - Schritte:
@@ -95,21 +95,21 @@ a) [ ] Entfernen Merge-Anwendung beim Initial-Render
      - Entferne Berechnung "Overrides Merge fehlgeschlagen"
      - Ziel: Rein serverseitige Werte anzeigen
 
-b) [ ] Entfernen Definition / Initialisierung globaler Map
+b) [x] Entfernen Definition / Initialisierung globaler Map
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Code: `window.__ppReaderPortfolioValueOverrides = new Map()`
    - Ziel: Kein globaler Override-State mehr
 
-c) [ ] Entfernen aller Schreibzugriffe auf Override-Map
+c) [x] Entfernen aller Schreibzugriffe auf Override-Map
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Funktion: `handlePortfolioUpdate`
    - Ziel: Patch-Logik nur DOM, kein Cache
 
-d) [ ] Entfernen `_clearPortfolioOverrides`
+d) [x] Entfernen `_clearPortfolioOverrides`
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Ziel: Vollständige Bereinigung; Aufrufer (z.B. `handleLastFileUpdate`) anpassen
 
-e) [ ] Entfernen Heuristik `looksLikeFullSync` die Cache invalidiert
+e) [x] Entfernen Heuristik `looksLikeFullSync` die Cache invalidiert
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Ziel: Vereinfachung – kein Baseline/Delta Konzept mehr nötig
 

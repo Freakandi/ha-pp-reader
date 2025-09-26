@@ -473,32 +473,6 @@ export async function renderDashboard(root, hass, panelConfig) {
     };
   });
 
-  // NEU: Client-seitige Overrides (Live-Preis Events) anwenden
-  try {
-    const overrides = window.__ppReaderPortfolioValueOverrides;
-    if (overrides && overrides.size) {
-      depots = depots.map(d => {
-        const ov = overrides.get(d.uuid);
-        if (ov) {
-          const cv = typeof ov.current_value === 'number' ? ov.current_value : d.current_value;
-          const ps = typeof ov.purchase_sum === 'number' ? ov.purchase_sum : d.purchase_sum;
-          const gabs = cv - ps;
-          return {
-            ...d,
-            position_count: typeof ov.position_count === 'number' ? ov.position_count : d.position_count,
-            current_value: cv,
-            purchase_sum: ps,
-            gain_abs: gabs,
-            gain_pct: ps > 0 ? (gabs / ps) * 100 : 0
-          };
-        }
-        return d;
-      });
-    }
-  } catch (e) {
-    console.warn("renderDashboard: Overrides Merge fehlgeschlagen:", e);
-  }
-
   // 3. Last file update (optional – falls bereits WS-Command vorhanden)
   let lastFileUpdate = '';
   try {
