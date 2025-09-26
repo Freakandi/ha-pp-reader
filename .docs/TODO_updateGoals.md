@@ -8,7 +8,7 @@ Ziel: Umstellung auf ausschließlich DB-basierte, On-Demand Aggregationen für P
 
 ## 1. Backend: On-Demand Aggregation Infrastruktur
 
-a) [ ] Neue Funktion `fetch_live_portfolios`
+a) [x] Neue Funktion `fetch_live_portfolios`
    - Datei: `custom_components/pp_reader/data/db_access.py`
    - Abschnitt: Am Ende der Datei oder bei anderen Fetch-Hilfsfunktionen
    - Inhalt: SQL Join/Queries zur Ermittlung aktueller Portfolio-Werte:
@@ -18,17 +18,16 @@ a) [ ] Neue Funktion `fetch_live_portfolios`
      - Nutzung `securities.last_price` (falls vorhanden) – ansonsten Fallback bestehender gespeicherter `current_value`
    - Ziel: Single Source of Truth für aktuelle Portfolio-Aggregationen (reduziert Divergenz)
 
-b) [ ] Ergänzung: (Optional) Mikro-Index Validierung
+b) [x] Ergänzung: Mikro-Index Validierung
    - Datei: `custom_components/pp_reader/data/db_schema.py`
-   - Ziel: Prüfen ob Index auf `portfolio_securities (portfolio_uuid)` existiert, sonst ergänzen (Performance)
-   - Kennzeichnung: Optional (nur falls Messung Bedarf zeigt)
+   - Ziel: Index `idx_portfolio_securities_portfolio` (IF NOT EXISTS) für schnellere Aggregation
 
 c) [ ] Utility `fetch_portfolio_positions_live` (Optional)
    - Datei: `custom_components/pp_reader/data/db_access.py`
    - Ziel: Positionsliste (Name, current_holdings, purchase_value, current_value, Gains) direkt aus DB (für potenzielles späteres Reuse)
    - Optional (Vorbereitung für konsistenten Server-Side Reuse)
 
-d) [ ] Fehlerbehandlung & Rückgabeformat vereinheitlichen
+d) [x] Fehlerbehandlung & Rückgabeformat vereinheitlichen
    - Datei: `custom_components/pp_reader/data/db_access.py`
    - Ziel: Rückgabe `List[Dict]` analog bestehendem WebSocket Format (`uuid,name,current_value,purchase_sum,position_count`)
 
@@ -36,16 +35,12 @@ d) [ ] Fehlerbehandlung & Rückgabeformat vereinheitlichen
 
 ## 2. Backend: WebSocket Handlers auf On-Demand Aggregation umstellen
 
-a) [ ] `ws_get_portfolio_data` auf `fetch_live_portfolios` umstellen
-   - Datei: `custom_components/pp_reader/data/websocket.py`
-   - Ziel: Keine Nutzung von `coordinator.data["portfolios"]` mehr (nur Fallback bei Fehler)
-   - Log Level: WARN bei Fallback, DEBUG bei Erfolg
-
-b) [ ] `ws_get_dashboard_data` analog anpassen
+a) [x] `ws_get_portfolio_data` nutzt `fetch_live_portfolios`
+b) [x] `ws_get_dashboard_data` nutzt `fetch_live_portfolios`
    - Datei: `custom_components/pp_reader/data/websocket.py`
    - Ziel: Kombiniertes Payload nutzt neue Aggregation (Accounts unverändert)
 
-c) [ ] (Optional) Einheitliche Helper-Funktion `_live_portfolios_payload(hass, entry_id)`
+c) [ ] Einheitliche Helper-Funktion `_live_portfolios_payload(hass, entry_id)`
    - Datei: `custom_components/pp_reader/data/websocket.py`
    - Ziel: Duplication vermeiden (DRY)
 
@@ -59,8 +54,7 @@ d) [ ] Anpassung `ws_get_portfolio_positions` (Optional)
 
 a) [ ] Datei-Sync (`sync_from_pclient.py`) – Ersetzung Aggregationsquelle
    - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
-   - Abschnitt: Event-Push Block für `portfolio_values`
-   - Ziel: Statt lokal berechneter Werte: erneuter Aufruf `fetch_live_portfolios` (Gewährleistung Konsistenz)
+   - ZIEL: Nutzung `fetch_live_portfolios` für `portfolio_values` Event (Single Source of Truth)
 
 b) [ ] Preis-Revaluation (`revaluation.py`) – vereinheitlichen
    - Datei: `custom_components/pp_reader/prices/revaluation.py`
@@ -71,7 +65,7 @@ c) [ ] `_push_update` Aufrufe überprüfen (Reihenfolge unverändert)
    - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
    - Ziel: Reihenfolge bleibt: `portfolio_values` → einzelne `portfolio_positions`
 
-d) [ ] (Optional) Konsolidierung: Code-Duplizierung für Portfolio Aggregation entfernen
+d) [ ] Konsolidierung: Code-Duplizierung für Portfolio Aggregation entfernen
    - Dateien: `coordinator.py`, `sync_from_pclient.py`
    - Ziel: Kommentar + Verweis auf `fetch_live_portfolios` als einzige Quelle
 
@@ -83,7 +77,7 @@ a) [ ] Beibehalten bestehender `coordinator.data["portfolios"]` für Sensoren
    - Datei: `custom_components/pp_reader/data/coordinator.py`
    - Ziel: Keine Breaking Changes Sensor-Vertrag (Dokumentation ergänzen)
 
-b) [ ] Kommentar ergänzen: "UI/WS nutzt On-Demand; Coordinator nur für Sensoren"
+b) [x] Kommentar ergänzen: "UI/WS nutzt On-Demand; Coordinator nur für Sensoren"
    - Datei: `custom_components/pp_reader/data/coordinator.py`
 
 c) [ ] (Optional) Kennzeichnung veralteter Aggregationspfad (WARN nur im Debug)

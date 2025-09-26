@@ -371,3 +371,19 @@ ALL_SCHEMAS = [
     *FX_SCHEMA,
     *METADATA_SCHEMA,
 ]
+
+# Performance Index für On-Demand Portfolio Aggregation:
+# fetch_live_portfolios greift häufig nach portfolio_securities per portfolio_uuid zu.
+# Der Index reduziert Lookup-/Aggregationszeit ohne bestehende Abfragen zu beeinflussen.
+SCHEMA_LIVE_AGGREGATION_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_portfolio_securities_portfolio
+ON portfolio_securities (portfolio_uuid)
+"""
+
+# Aufnahme des neuen Index in ALL_SCHEMAS (additiv, idempotent)
+try:
+    ALL_SCHEMAS.append(SCHEMA_LIVE_AGGREGATION_INDEX)  # type: ignore[attr-defined]
+except NameError:
+    # Fallback: Falls ALL_SCHEMAS hier noch nicht definiert war (unwahrscheinlich),
+    # würde dies ein Entwicklungsproblem anzeigen. Kein Hard-Fail, nur Log-Hinweis wäre möglich.
+    pass

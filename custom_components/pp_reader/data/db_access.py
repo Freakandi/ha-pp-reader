@@ -6,12 +6,11 @@ and related data in a SQLite database.
 """
 
 import logging
+from typing import Any, Dict, List
 import sqlite3
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
 
 @dataclass
@@ -377,3 +376,88 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         return []
     finally:
         conn.close()
+
+
+def _normalize_portfolio_row(row: sqlite3.Row) -> Dict[str, Any]:
+    """
+    Internal helper to map a sqlite3.Row to the unified portfolio dict format.
+
+    Expected columns (query responsibility):
+      - uuid
+      - name
+      - current_value
+      - purchase_sum
+      - position_count
+    """
+    return {
+        "uuid": row["uuid"],
+        "name": row["name"],
+        "current_value": row["current_value"]
+        if row["current_value"] is not None
+        else 0,
+        "purchase_sum": row["purchase_sum"] if row["purchase_sum"] is not None else 0,
+        "position_count": row["position_count"]
+        if row["position_count"] is not None
+        else 0,
+    }
+
+
+def fetch_live_portfolios(db_path) -> List[Dict[str, Any]]:  # noqa: D401  (docstring expanded)
+    """
+    Aggregiert aktuelle Portfoliodaten direkt aus der SQLite-DB (Single Source of Truth).
+
+    Rückgabeformat (vereinheitlicht – WebSocket & Event Konsum):
+        [
+          {
+            "uuid": <str>,
+            "name": <str>,
+            "current_value": <int>,    # 1e-8 skalierter Wert (KEINE Rundung hier)
+            "purchase_sum": <int>,     # 1e-8 skalierter Wert
+            "position_count": <int>
+          },
+          ...
+        ]
+
+    Fehlerbehandlung:
+      - Bei beliebigem Fehler (SQLite / unerwartete Column Issues) wird eine leere Liste
+        zurückgegeben, der Fehler geloggt (exception Log). Dies verhindert einen
+        kompletten Ausfall des WebSocket Handlers und hält den Fallback deterministisch.
+        (Bewusst gewählt für On-Demand Pfad; Sensoren bleiben Coordinator-basiert.)
+
+    Performance:
+      - Nutzung des Index `idx_portfolio_securities_portfolio` (siehe Schema).
+      - OPTIONAL (später): Mikro-Caching (≤5s) falls Messungen Bedarf zeigen.
+    """
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # NOTE: current_value & purchase_sum aggregieren die verknüpften Positionen.
+        # Nutzung last_price falls vorhanden erfolgt bereits beim Update der
+        # portfolio_securities Tabelle (Annahme lt. Architektur), daher hier direkte Summen.
+        # Falls zukünftig ein direkter JOIN zu securities.last_price nötig wäre,
+        # würde dies hier zentral ergänzt.
+        sql = """
+        SELECT
+            p.uuid AS uuid,
+            p.name AS name,
+            COALESCE(SUM(ps.current_value), 0) AS current_value,
+            COALESCE(SUM(ps.purchase_value), 0) AS purchase_sum,
+            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count
+        FROM portfolios p
+        LEFT JOIN portfolio_securities ps
+          ON p.uuid = ps.portfolio_uuid
+        GROUP BY p.uuid, p.name
+        ORDER BY p.name COLLATE NOCASE
+        """
+        rows = cur.execute(sql).fetchall()
+        return [_normalize_portfolio_row(r) for r in rows]
+    except Exception:
+        _LOGGER.exception("fetch_live_portfolios fehlgeschlagen (db_path=%s)", db_path)
+        return []
+    finally:
+        try:
+            conn.close()  # type: ignore[has-type]
+        except Exception:
+            pass

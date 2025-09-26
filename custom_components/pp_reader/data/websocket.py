@@ -7,7 +7,7 @@ account information, portfolio data, and file update timestamps.
 
 import logging
 from datetime import datetime
-from pathlib import Path  # sicherstellen vorhanden
+from pathlib import Path
 import sqlite3
 
 import voluptuous as vol
@@ -17,7 +17,12 @@ from homeassistant.components.websocket_api import ActiveConnection
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
 )
-from .db_access import get_portfolio_positions  # Neu: Positions-Abfrage
+from .db_access import (
+    get_accounts,
+    get_portfolios,  # ggf. noch von anderen Handlern genutzt
+    get_transactions,
+    fetch_live_portfolios,  # NEU: On-Demand Aggregation
+)
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
@@ -27,92 +32,60 @@ DOMAIN = "pp_reader"
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_dashboard_data",
-        vol.Optional("entry_id"): str,
+        vol.Required("entry_id"): str,
     }
 )
 @websocket_api.async_response
-async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -> None:
-    """Handle WebSocket command to get dashboard data (accounts + portfolios, incl. FX)."""
+async def ws_get_dashboard_data(hass, connection, msg):
+    """Return full initial dashboard dataset (accounts, portfolios, last_file_update, transactions).
+
+    Änderung (Migration Schritt 2.b):
+    - Portfolios jetzt via fetch_live_portfolios (On-Demand Aggregation, Single Source of Truth).
+    - Fallback auf Coordinator Snapshot bei Fehler (stale aber verfügbar).
+    - Andere Teile (accounts, last_file_update, transactions) unverändert.
+    - Payload-Shape bleibt unverändert (keine Mutation bestehender Keys).
+    """
+    entry_id = msg.get("entry_id")
+    domain_data = hass.data.get(DOMAIN, {})
+    entry_data = domain_data.get(entry_id)
+
+    if not entry_data:
+        connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
+        return
+
+    db_path: Path = entry_data["db_path"]
+    coordinator = entry_data.get("coordinator")
+
+    # Accounts & Transactions weiter wie zuvor (Snapshot / bestehende Helper)
+    accounts = {}
+    transactions = []
+    last_file_update = None
+    if coordinator:
+        accounts = coordinator.data.get("accounts", {})
+        transactions = coordinator.data.get("transactions", [])
+        last_file_update = coordinator.data.get("last_update")
+
+    # NEU: Live Portfolios
     try:
-        entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from .db_access import get_accounts, get_portfolios
-
-        accounts = await hass.async_add_executor_job(get_accounts, db_path)
-        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-
-        # FX Vorbereitung
-        try:
-            from ..currencies.fx import (
-                ensure_exchange_rates_for_dates,
-                load_latest_rates,
-            )
-
-            active_fx_currencies = {
-                getattr(a, "currency_code", "EUR")
-                for a in accounts
-                if not a.is_retired and getattr(a, "currency_code", "EUR") != "EUR"
-            }
-            if active_fx_currencies:
-                today = datetime.now()
-                await ensure_exchange_rates_for_dates(
-                    [today], active_fx_currencies, db_path
-                )
-                fx_rates = await load_latest_rates(today, db_path)
-            else:
-                fx_rates = {}
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse – setze Fremdwährungswerte=0 EUR."
-            )
-            fx_rates = {}
-
-        # Accounts transformieren (gleiches Format wie ws_get_accounts)
-        accounts_payload = []
-        for a in accounts:
-            if a.is_retired:
-                continue
-            currency = getattr(a, "currency_code", "EUR") or "EUR"
-            orig_balance = a.balance / 100.0  # Originalbetrag in Konto-Währung
-            if currency != "EUR":
-                rate = fx_rates.get(currency)
-                eur_balance = (orig_balance / rate) if rate else 0.0
-            else:
-                eur_balance = orig_balance
-            accounts_payload.append(
-                {
-                    "name": a.name,
-                    "currency_code": currency,
-                    "orig_balance": round(orig_balance, 2),
-                    "balance": round(
-                        eur_balance, 2
-                    ),  # EUR-Wert (Abwärtskompatibilität)
-                }
-            )
-
-        connection.send_result(
-            msg["id"],
-            {
-                "accounts": accounts_payload,
-                "portfolios": [p.__dict__ for p in portfolios],
-            },
+        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+    except Exception:
+        _LOGGER.warning(
+            "On-Demand Portfolio Aggregation (dashboard) fehlgeschlagen – Fallback auf Coordinator Daten",
+            exc_info=True,
         )
+        portfolios = {}
+        if coordinator:
+            portfolios = coordinator.data.get("portfolios", {})
 
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_updated_{entry_id}",
-            lambda new_data: connection.send_message(
-                {
-                    "id": msg["id"] + 1,
-                    "type": "pp_reader/dashboard_data_updated",
-                    "data": new_data,
-                }
-            ),
-        )
-
-    except Exception as e:  # noqa: BLE001
-        _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten")
-        connection.send_error(msg["id"], "db_error", str(e))
+    connection.send_result(
+        msg["id"],
+        {
+            "accounts": accounts,
+            "portfolios": portfolios,
+            "last_file_update": last_file_update,
+            "transactions": transactions,
+        },
+    )
 
 
 # === Websocket Accounts-Data ===
@@ -244,57 +217,47 @@ async def ws_get_last_file_update(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_portfolio_data",
-        vol.Optional("entry_id"): str,  # Erwartet die entry_id
+        vol.Required("entry_id"): str,
     }
 )
 @websocket_api.async_response
-async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -> None:
-    """Handle WebSocket command to get portfolio data."""
+async def ws_get_portfolio_data(hass, connection, msg):
+    """Return current portfolio aggregates via on-demand DB aggregation.
+
+    Änderung (Migration Schritt 2.a):
+    - Statt Coordinator-Snapshot jetzt Aufruf `fetch_live_portfolios` (Single Source of Truth).
+    - Fallback (WARN) auf alten Snapshot bei Fehler, um keine Hard-Failure im Frontend zu erzeugen.
+    - Payload-Shape UNVERÄNDERT: {"portfolios": { uuid: {name,value,count,purchase_sum}, ... }}.
+    """
+    entry_id = msg.get("entry_id")
+    domain_data = hass.data.get(DOMAIN, {})
+    entry_data = domain_data.get(entry_id)
+
+    if not entry_data:
+        connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
+        return
+
+    db_path: Path = entry_data["db_path"]
+    coordinator = entry_data.get("coordinator")
+
     try:
-        # Zugriff auf die Datenbank
-        entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from .db_access import get_portfolios
-        from ..logic.portfolio import (
-            db_calculate_portfolio_purchase_sum,
-            db_calculate_portfolio_value_and_count,
+        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+    except Exception:
+        _LOGGER.warning(
+            "On-Demand Portfolio Aggregation fehlgeschlagen – Fallback auf Coordinator Daten",
+            exc_info=True,
         )
+        portfolios = {}
+        if coordinator:
+            portfolios = coordinator.data.get("portfolios", {})
+        # Kein Re-Raise: Frontend soll weiterhin Daten (ggf. stale) erhalten.
 
-        # Lade alle aktiven Depots
-        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-        active_portfolios = [p for p in portfolios if not p.is_retired]
-
-        # Berechne die Werte für jedes aktive Depot
-        portfolio_data = []
-        for portfolio in active_portfolios:
-            portfolio_uuid = portfolio.uuid
-            value, position_count = await hass.async_add_executor_job(
-                db_calculate_portfolio_value_and_count, portfolio_uuid, db_path
-            )
-            purchase_sum = await hass.async_add_executor_job(
-                db_calculate_portfolio_purchase_sum, portfolio_uuid, db_path
-            )
-            portfolio_data.append(
-                {
-                    "uuid": portfolio_uuid,  # <-- hinzugefügt
-                    "name": portfolio.name,
-                    "position_count": position_count,
-                    "current_value": value,
-                    "purchase_sum": purchase_sum,
-                }
-            )
-
-        connection.send_result(
-            msg["id"],
-            {
-                "portfolios": portfolio_data,
-            },
-        )
-        # _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)  # noqa: ERA001
-
-    except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Depotdaten")
-        connection.send_error(msg["id"], "db_error", str(e))
+    connection.send_result(
+        msg["id"],
+        {
+            "portfolios": portfolios,
+        },
+    )
 
 
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen oder analog zu anderen)

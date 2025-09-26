@@ -27,6 +27,19 @@ from .sync_from_pclient import sync_from_pclient
 _LOGGER = logging.getLogger(__name__)
 
 
+# NOTE (On-Demand Aggregation Migration):
+# The dashboard / WebSocket layer now obtains live portfolio aggregates via the
+# on-demand helper (fetch_live_portfolios) to ensure a single source of truth
+# that already reflects the latest persisted live prices. This coordinator
+# instance remains the authoritative (legacy) data source ONLY for sensor entities.
+# DO NOT:
+# - Mutate key names or nested shapes in self.data (accounts, portfolios,
+#   transactions, last_update).
+# - Introduce divergent aggregation logic here; if aggregation changes are
+#   required they must be implemented centrally in the shared DB helpers and/or
+#   fetch_live_portfolios to avoid drift between sensor and UI values.
+# Any refactor touching aggregation should reference this comment and the
+# migration checklist in .docs/TODO_updateGoals.md (section 4).
 class PPReaderCoordinator(DataUpdateCoordinator):
     """
     A coordinator for data updates from a file, synching to an SQLite database.
@@ -172,7 +185,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             # Berechne Depotwerte und Kaufsummen
             portfolio_data = {}
             for portfolio in portfolios:
-                reference_date = datetime.now() # noqa: DTZ005
+                reference_date = datetime.now()  # noqa: DTZ005
                 value, count = await calculate_portfolio_value(
                     portfolio.uuid, reference_date, self.db_path
                 )
@@ -192,7 +205,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     account.uuid: {
                         "name": account.name,
                         "balance": account_balances[account.uuid],
-                        "is_retired": account.is_retired
+                        "is_retired": account.is_retired,
                     }
                     for account in accounts
                 },

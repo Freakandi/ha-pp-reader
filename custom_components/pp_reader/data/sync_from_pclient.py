@@ -34,6 +34,7 @@ from ..name.abuchen.portfolio import client_pb2  # noqa: TID252
 from .db_access import (
     get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
     get_transactions,
+    fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
 )
 
 DOMAIN = "pp_reader"
@@ -625,7 +626,7 @@ def sync_from_pclient(
                             purchase_value,
                             current_value
                         ) VALUES (?, ?, ?, ?, ?)
-                    """,
+                        """,
                         (
                             portfolio_uuid,
                             security_uuid,
@@ -635,6 +636,11 @@ def sync_from_pclient(
                         ),
                     )
                     portfolio_sec_processed += 1  # NEU: zählen statt pro Zeile loggen
+
+                    # NEU (Requirement: Immer Positions- & Portfolio-Events bei Wertänderungen):
+                    # Auch reine Wert-/Preisänderungen ohne Positionsanzahl-Änderung sollen
+                    # ein Positions-Event auslösen → Portfolio markieren.
+                    changed_portfolios.add(portfolio_uuid)
 
             # Entferne veraltete Einträge aus portfolio_securities
             portfolio_security_keys = set(current_holdings_values.keys())
@@ -807,23 +813,36 @@ def sync_from_pclient(
                     portfolio_uuid, "Unbekannt"
                 )
 
-            # Konvertiere die Werte in das gewünschte Format
-            portfolio_values = [
-                {
-                    "uuid": pid,  # <-- hinzugefügt
-                    "name": data["name"],
-                    "position_count": data["position_count"],
-                    "current_value": round(data["current_value"], 2),
-                    "purchase_sum": round(data["purchase_sum"], 2),
+            # NEU (Single Source of Truth via fetch_live_portfolios):
+            try:
+                live_portfolios = fetch_live_portfolios(db_path)
+                # Erwartete Struktur jedes Elements in live_portfolios:
+                # {
+                #   "uuid": str,
+                #   "name": str,
+                #   "value": float,          # EUR (keine zusätzliche Rundung hier)
+                #   "position_count": int,
+                #   "purchase_sum": float    # EUR
+                # }
+                portfolio_values_payload = {
+                    p["uuid"]: {
+                        "name": p["name"],
+                        "value": p["value"],
+                        "count": p["position_count"],
+                        "purchase_sum": p["purchase_sum"],
+                    }
+                    for p in live_portfolios
                 }
-                for pid, data in portfolio_data.items()
-            ]
-            # Sende das Event für portfolio_values
-            _push_update(hass, entry_id, "portfolio_values", portfolio_values)
-            _LOGGER.debug(
-                "sync_from_pclient: 📡 portfolio_values-Update-Event gesendet: %s",
-                portfolio_values,
-            )
+                _push_update(
+                    hass,
+                    entry_id,
+                    "portfolio_values",
+                    portfolio_values_payload,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception(
+                    "Fehler beim Aggregieren der Portfolio-Werte via fetch_live_portfolios"
+                )
 
             # Neu: Positionsdaten-Push für geänderte Portfolios (granular)
             try:
