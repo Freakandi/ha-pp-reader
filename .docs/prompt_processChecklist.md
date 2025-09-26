@@ -10,9 +10,9 @@ Kopiere diesen Prompt unverändert in eine neue Chat-Nachricht, um
 Arbeite als Implementierungs-Assistent für das Home Assistant Integration Projekt `pp_reader`.
 
 Ziel:
-Abarbeitung der vollständigen ToDo-Liste für die Live-Preis Integration (YahooQuery) gemäß:
-- .docs/nextGoals.md
-- .docs/DEV_PRICE_TODO.md
+Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
+- .docs/updateGoals.md
+- .docs/TODO_updateGoals.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Datei ARCHITECTURE.md).
@@ -27,10 +27,10 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - DEV_PRICE_TODO.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_updateGoals.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Mögliche Seiteneffekte?
-   - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Falls ja: notiere offenen Testpunkt)
+   - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
 8. Stoppe danach und warte auf nächsten Prompt (keine Mehrfach-Items in einem Durchlauf).
 9. Wenn Blocker (fehlende Info / Ambiguität) → Statt Code:
    - Blocker beschreiben
@@ -50,7 +50,6 @@ Regeln:
 - Kein Entfernen vorhandener Funktionsverträge ohne zwingenden Grund.
 - Logging nur falls spezifiziert oder notwendig.
 - Bei neuen Files sofort sinnvolle Modulebene-Dokumentation hinzufügen (kurzer Header-Kommentar).
-- Tests erst implementieren, wenn zugehörige produktive Module vorhanden (Provider vor Tests!). Wenn ein Test-Item vorzeitig gewählt würde, aber abhängiger Code fehlt → zurückweisen.
 
 Explizite Qualitätskriterien:
 - Einhaltung Zeit-/Formatangaben (z.B. Timestamp Format `YYYY-MM-DDTHH:MM:SSZ`)
