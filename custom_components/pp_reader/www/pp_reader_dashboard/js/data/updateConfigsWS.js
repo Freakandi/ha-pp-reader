@@ -87,15 +87,23 @@ export function handlePortfolioUpdate(update, root) {
     console.warn("handlePortfolioUpdate: Update ist kein Array:", update);
     return;
   }
-  // Debug: eingehende Rohdaten
   try {
     console.debug("handlePortfolioUpdate: payload=", update);
   } catch (_) { }
 
+  // Heuristik: Full File Sync liefert 'value' (Backend-Coordinator) statt 'current_value'
+  // → behandelt als Baseline → Overrides invalidieren
+  const looksLikeFullSync = update.length > 0 &&
+    update.every(u => u && typeof u === 'object' && ('value' in u) && !('current_value' in u));
+
+  if (looksLikeFullSync) {
+    _clearPortfolioOverrides("file_sync_portfolio_values");
+  }
+
   // Tabelle finden (neuer Selektor unterstützt beide Varianten)
   const table =
-    root.querySelector('.portfolio-table table') ||
-    root.querySelector('table.expandable-portfolio-table');
+    root?.querySelector('.portfolio-table table') ||
+    root?.querySelector('table.expandable-portfolio-table');
   if (!table) {
     console.warn("handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden.");
     return;
@@ -131,45 +139,26 @@ export function handlePortfolioUpdate(update, root) {
   for (const u of update) {
     if (!u || !u.uuid) continue;
     const row = rowMap.get(u.uuid);
-    if (!row) {
-      // Kein Fehler – Event kann nur Teilmenge betreffen
-      continue;
-    }
-    // Spaltenannahme: 0 Name | 1 position_count | 2 current_value | 3 gain_abs | 4 gain_pct (optional)
-    if (row.cells.length < 3) {
-      console.warn("handlePortfolioUpdate: Unerwartete Spaltenanzahl für Row", u.uuid, row.cells.length);
-      continue;
-    }
+    if (!row) continue;
+
+    if (row.cells.length < 3) continue;
 
     const posCountCell = row.cells[1];
     const curValCell = row.cells[2];
     const gainAbsCell = row.cells[3];
     const gainPctCell = row.cells[4];
 
+    // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
     const posCount = Number(u.position_count ?? u.count ?? 0);
     const curVal = Number(u.current_value ?? u.value ?? 0);
     const purchase = Number(u.purchase_sum ?? u.purchaseSum ?? row.dataset.purchaseSum ?? 0);
 
-    // Gains berechnen (nur wenn purchase > 0)
     const gainAbs = purchase > 0 ? curVal - purchase : 0;
     const gainPct = purchase > 0 ? (gainAbs / purchase) * 100 : 0;
 
-    // Alte Werte zum Vergleich (Parsing)
-    const parseNum = (txt) => {
-      if (!txt) return 0;
-      return parseFloat(
-        txt
-          .replace(/\u00A0/g, ' ')
-          .replace(/\./g, '')
-          .replace(',', '.')
-          .replace(/[^\d.-]/g, '')
-      ) || 0;
-    };
+    const oldCur = parseNumLoose(curValCell.textContent);
+    const oldCnt = parseNumLoose(posCountCell.textContent);
 
-    const oldCur = parseNum(curValCell.textContent);
-    const oldCnt = parseNum(posCountCell.textContent);
-
-    // Patch nur wenn geändert – verhindert Flackern
     if (oldCnt !== posCount) {
       posCountCell.textContent = posCount.toString();
     }
@@ -178,23 +167,28 @@ export function handlePortfolioUpdate(update, root) {
       row.classList.add('flash-update');
       setTimeout(() => row.classList.remove('flash-update'), 800);
     }
+    if (gainAbsCell) gainAbsCell.textContent = formatNumber(gainAbs) + ' €';
+    if (gainPctCell) gainPctCell.textContent = formatNumber(gainPct) + ' %';
 
-    if (gainAbsCell) {
-      gainAbsCell.textContent = formatNumber(gainAbs) + ' €';
-    }
-    if (gainPctCell) {
-      gainPctCell.textContent = formatNumber(gainPct) + ' %';
-    }
-
-    // Datensatz aktualisieren (für Rekonstruktion Kaufpreis bei späteren Totals)
     row.dataset.purchaseSum = purchase.toString();
     patched++;
+
+    // Nur speichern, wenn kein FullSync (FullSync ist Baseline, Overrides leer oder gerade geleert)
+    if (!looksLikeFullSync) {
+      try {
+        window.__ppReaderPortfolioValueOverrides.set(u.uuid, {
+          current_value: curVal,
+          purchase_sum: purchase,
+          position_count: posCount,
+        });
+      } catch (_) { }
+    }
   }
 
   if (patched === 0) {
     console.debug("handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.");
   } else {
-    console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht.`);
+    console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht. baseline=${looksLikeFullSync}`);
   }
 
   // Total-Wealth neu berechnen (Accounts + Portfolios)
@@ -202,25 +196,22 @@ export function handlePortfolioUpdate(update, root) {
     const eurTable = root.querySelector('.accounts-eur-table table');
     const fxTable = root.querySelector('.accounts-fx-table table');
 
-    const parseAccounts = (tbl, isFx) => {
+    const extractAccounts = (tbl, isFx) => {
       if (!tbl) return [];
-      return Array.from(tbl.querySelectorAll('tbody tr.account-row')).map(row => {
-        const eurCell = isFx ? row.cells[2] : row.cells[1];
-        const val = parseNum(eurCell?.textContent || '');
-        return { balance: val };
+      return Array.from(tbl.querySelectorAll('tbody tr.account-row')).map(r => {
+        const cell = isFx ? r.cells[2] : r.cells[1];
+        return { balance: parseNumLoose(cell?.textContent) };
       });
     };
-
     const accounts = [
-      ...parseAccounts(eurTable, false),
-      ...parseAccounts(fxTable, true),
+      ...extractAccounts(eurTable, false),
+      ...extractAccounts(fxTable, true),
     ];
 
-    // Sammle aktualisierte Portfolio-Werte aus DOM (nach Patch)
     const portfolioDomValues = Array.from(
-      tbody.querySelectorAll('tr.portfolio-row')
+      table.querySelectorAll('tbody tr.portfolio-row')
     ).map(r => {
-      const cv = parseNum(r.cells[2]?.textContent);
+      const cv = parseNumLoose(r.cells[2]?.textContent);
       const ps = parseFloat(r.dataset.purchaseSum || '0') || 0;
       return { current_value: cv, purchase_sum: ps };
     });
@@ -418,16 +409,14 @@ function renderPositionsTableInline(positions) {
 }
 
 function updatePortfolioFooter(table) {
+  if (!table) return;
   const rows = Array.from(table.querySelectorAll('tbody tr.portfolio-row'));
-  let sumCurrent = 0;
-  let sumGainAbs = 0;
-  let sumPurchase = 0;
-  let sumPositions = 0;
+  let sumCurrent = 0, sumGainAbs = 0, sumPurchase = 0, sumPositions = 0;
 
   rows.forEach(r => {
-    const count = parseInt(r.cells[1]?.textContent.replace(/\./g, ''), 10) || 0;
-    const currentValue = parseLocaleNumber(r.cells[2]?.textContent) || 0;
-    const gainAbs = parseLocaleNumber(r.cells[3]?.textContent) || 0;
+    const count = parseInt((r.cells[1]?.textContent || '').replace(/\./g, ''), 10) || 0;
+    const currentValue = parseNumLoose(r.cells[2]?.textContent);
+    const gainAbs = parseNumLoose(r.cells[3]?.textContent);
     const purchaseSumAttr = parseFloat(r.dataset.purchaseSum || '0');
 
     sumPositions += count;
@@ -435,19 +424,13 @@ function updatePortfolioFooter(table) {
     sumGainAbs += gainAbs;
     sumPurchase += isNaN(purchaseSumAttr) ? (currentValue - gainAbs) : purchaseSumAttr;
   });
-
-  // Fallback falls purchase_sum nicht gesetzt war
-  if (sumPurchase <= 0) {
-    sumPurchase = sumCurrent - sumGainAbs;
-  }
+  if (sumPurchase <= 0) sumPurchase = sumCurrent - sumGainAbs;
   const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
 
   let footer = table.querySelector('tr.footer-row');
   if (!footer) {
-    // Fallback: anfügen falls nicht vorhanden
     footer = document.createElement('tr');
     footer.className = 'footer-row';
-    footer.innerHTML = '<td colspan="5"></td>';
     table.querySelector('tbody')?.appendChild(footer);
   }
   footer.innerHTML = `
@@ -533,6 +516,8 @@ function createPortfolioRowHtml(p, expanded = false) {
 // ==== Last File Update Handler (canonical) ====
 // (Ändere zu export function, damit unten kein Sammel-Export nötig ist)
 export function handleLastFileUpdate(update, root) {
+  // Neu: Override Cache invalidieren (neue Datei gilt als neue Baseline)
+  _clearPortfolioOverrides("last_file_update_event");
   const value = typeof update === 'string'
     ? update
     : (update && update.last_file_update) || '';
@@ -595,3 +580,35 @@ export function reapplyPositionsSort(containerEl) {
   sortTableRows(table, key, dir, true);
 }
 window.__ppReaderReapplyPositionsSort = reapplyPositionsSort; // Optional global für Lazy-Load-Code
+
+// === Globale / modulweite Utilities ===
+function parseNumLoose(txt) {
+  if (txt == null) return 0;
+  return parseFloat(
+    String(txt)
+      .replace(/\u00A0/g, ' ')
+      .replace(/[€%]/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .replace(/[^\d.-]/g, '')
+  ) || 0;
+}
+
+// Override-Cache für Portfolio-Werte (persistiert zwischen Re-Renders)
+if (!window.__ppReaderPortfolioValueOverrides) {
+  window.__ppReaderPortfolioValueOverrides = new Map(); // uuid -> {current_value,purchase_sum,position_count}
+}
+
+// Utility zum Leeren (zentral, damit Logging konsistent)
+function _clearPortfolioOverrides(reason) {
+  try {
+    if (window.__ppReaderPortfolioValueOverrides?.size) {
+      const sz = window.__ppReaderPortfolioValueOverrides.size;
+      window.__ppReaderPortfolioValueOverrides.clear();
+      console.debug(`pp_reader: Override-Cache geleert (size=${sz}, reason=${reason})`);
+    } else {
+      // Nur bei Debug sinnvoll loggen
+      console.debug(`pp_reader: Override-Cache bereits leer (reason=${reason})`);
+    }
+  } catch (_) { }
+}

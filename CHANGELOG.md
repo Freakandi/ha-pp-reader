@@ -4,6 +4,23 @@ Alle erwähnenswerten Änderungen an diesem Projekt werden in dieser Datei festg
 Format orientiert sich an: Keep a Changelog
 Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Changes).
 
+## [0.10.7] - 2025-09-26
+### Added
+- Automatische Invalidierung des Portfolio Override-Caches bei Datei-Sync (`last_file_update` Event) sowie bei erkannten Full-Sync `portfolio_values` Events (Heuristik: `value` ohne `current_value`).
+### Fixed
+- Verhindert Persistenz veralteter Live-Preis Overrides nach vollständigem Rebuild der Tabellen.
+### Internal
+- Utility `_clearPortfolioOverrides(reason)` für konsistentes Logging.
+
+## [0.10.6] - 2025-09-26
+### Fixed
+- JS Fehler: `parseNum is not defined` in `handlePortfolioUpdate` verhinderte Footer-/Total-Wealth-Update nach Events.
+- Live-Preis / Event-Patches verschwanden nach Re-Render, da ursprüngliche Backend-Werte erneut gerendert wurden. Client-seitiger Override-Cache (`__ppReaderPortfolioValueOverrides`) eingeführt und beim Render angewendet.
+
+### Internal
+- Gemeinsame Parsing-Utility `parseNumLoose`.
+- Stabilere Footer-Berechnung ohne Exceptions.
+
 ## [0.10.5] - 2025-09-25
 ### Fixed
 - Frontend erhielt zwar `panels_updated` Events, abonnierte aber den falschen Literal-Eventnamen (`EVENT_PANELS_UPDATED`) → keine Live-Aktualisierung der Depotwerte. Subscription in `dashboard.js` korrigiert.
