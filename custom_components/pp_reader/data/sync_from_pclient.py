@@ -659,6 +659,10 @@ class _SyncRunner:
                     new_portfolio_data,
                 )
 
+        # Changes must be committed before other tasks attempt database writes
+        # (e.g. exchange rate updates during portfolio securities sync).
+        self.conn.commit()
+
     def _sync_portfolio_securities(self) -> None:
         if self.cursor is None:
             return
