@@ -13,17 +13,14 @@ import logging
 import sqlite3
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from custom_components.pp_reader.logic.accounting import calculate_account_balance
-
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
-from .reader import parse_data_portfolio
-from .sync_from_pclient import sync_from_pclient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +44,18 @@ def _sync_data_to_db(
     db_path: Path,
 ) -> None:
     """Persist parsed portfolio data to SQLite using the legacy sync helper."""
+    try:
+        sync_module = import_module(
+            "custom_components.pp_reader.data.sync_from_pclient"
+        )
+    except ModuleNotFoundError as err:  # pragma: no cover - optional dep for tests
+        msg = (
+            "protobuf runtime is required to synchronize Portfolio Performance data"
+        )
+        raise RuntimeError(msg) from err
+
+    sync_from_pclient = sync_module.sync_from_pclient
+
     with sqlite3.connect(str(db_path)) as conn:
         sync_from_pclient(
             data,
@@ -253,6 +262,16 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         """Parse and persist the portfolio when the file has changed."""
         _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
 
+        try:
+            reader_module = import_module(
+                "custom_components.pp_reader.data.reader"
+            )
+        except ModuleNotFoundError as err:  # pragma: no cover - optional dep for tests
+            msg = "protobuf runtime is required to parse Portfolio Performance files"
+            raise UpdateFailed(msg) from err
+
+        parse_data_portfolio = reader_module.parse_data_portfolio
+
         data = await self.hass.async_add_executor_job(
             parse_data_portfolio, str(self.file_path)
         )
@@ -281,6 +300,11 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self, accounts: Iterable[Any], transactions: Iterable[Any]
     ) -> dict[str, Any]:
         """Aggregate balances for each account using the shared helper."""
+        accounting_module = import_module(
+            "custom_components.pp_reader.logic.accounting"
+        )
+        calculate_account_balance = accounting_module.calculate_account_balance
+
         return {
             account.uuid: calculate_account_balance(account.uuid, transactions)
             for account in accounts

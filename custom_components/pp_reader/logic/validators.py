@@ -1,12 +1,25 @@
 """Validation helpers for Portfolio Performance data."""
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from custom_components.pp_reader.data.db_access import Transaction
-from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+try:  # pragma: no cover - dependency optional for unit tests
+    from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+except ModuleNotFoundError:  # pragma: no cover - protobuf dependency missing
+    client_pb2 = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from custom_components.pp_reader.data.db_access import Transaction
+    from custom_components.pp_reader.name.abuchen.portfolio import (
+        client_pb2 as _client_pb2,
+    )
+else:  # pragma: no cover - runtime fallback for typing
+    Transaction = Any  # type: ignore[assignment]
+    _client_pb2 = Any  # type: ignore[assignment]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,12 +85,12 @@ class PPDataValidator:
         return None
 
     def validate_transaction(
-        self, tx: dict | client_pb2.PTransaction | Transaction
+        self, tx: dict | _client_pb2.PTransaction | Transaction
     ) -> ValidationResult:
         """Validiert eine einzelne Transaktion."""
         required_fields = ["uuid", "type", "date"]
 
-        if isinstance(tx, client_pb2.PTransaction):
+        if client_pb2 and isinstance(tx, client_pb2.PTransaction):
             return self._validate_proto_transaction(tx)
 
         if isinstance(tx, dict):
@@ -90,9 +103,12 @@ class PPDataValidator:
         return self._handle_unknown_transaction(tx, actual_tx_fqn)
 
     def _validate_proto_transaction(
-        self, tx: client_pb2.PTransaction
+        self, tx: _client_pb2.PTransaction
     ) -> ValidationResult:
         """Validate protobuf transaction data."""
+        if not client_pb2:  # pragma: no cover - only hit when dependency missing
+            msg = "protobuf runtime is required to validate protobuf transactions"
+            raise RuntimeError(msg)
         _LOGGER.debug("Validating PTransaction")
         if not self._is_valid_transaction_type(tx.type):
             return ValidationResult(

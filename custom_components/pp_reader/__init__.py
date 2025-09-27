@@ -2,8 +2,10 @@
 
 import logging
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from importlib import import_module
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Final
 
 from homeassistant.components import websocket_api
@@ -19,20 +21,6 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
-from .data.backup_db import setup_backup_system
-from .data.coordinator import PPReaderCoordinator
-from .data.db_init import initialize_database_schema
-from .data.websocket import (
-    ws_get_accounts,
-    ws_get_dashboard_data,
-    ws_get_last_file_update,
-    ws_get_portfolio_data,
-    ws_get_portfolio_positions,
-)
-from .prices.price_service import (
-    _run_price_cycle,  # Initiallauf (einmalig); Intervall folgt in separatem Item
-    initialize_price_state,
-)
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -54,6 +42,16 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
     TypeError,
     ValueError,
 )
+
+
+def _get_price_service_module() -> ModuleType:
+    """Return the price service module on demand."""
+    return import_module("custom_components.pp_reader.prices.price_service")
+
+
+def _get_websocket_module() -> ModuleType:
+    """Return the websocket helpers module on demand."""
+    return import_module("custom_components.pp_reader.data.websocket")
 
 
 def _get_entry_options(entry: ConfigEntry) -> Mapping[str, Any]:
@@ -87,7 +85,11 @@ def _schedule_price_interval(
     """Schedule the recurring price update task and persist the cancel handle."""
 
     async def _scheduled_price_cycle(_now: datetime) -> None:
-        hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
+        price_service = _get_price_service_module()
+
+        hass.async_create_task(
+            price_service._run_price_cycle(hass, entry.entry_id)  # noqa: SLF001
+        )
 
     remove_listener = async_track_time_interval(
         hass, _scheduled_price_cycle, timedelta(seconds=interval)
@@ -114,7 +116,7 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
         return
 
     try:
-        cache_bust = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        cache_bust = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         await panel_custom_async_register_panel(
             hass,
             frontend_url_path="ppreader",
@@ -145,9 +147,12 @@ def _initialize_price_tasks(
     options: Mapping[str, Any],
 ) -> None:
     """Ensure the price service state and recurring task are set up."""
-    initialize_price_state(hass, entry.entry_id)
+    price_service = _get_price_service_module()
+    price_service.initialize_price_state(hass, entry.entry_id)
     _LOGGER.debug("Initialer Preiszyklus wird gestartet (entry_id=%s)", entry.entry_id)
-    hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
+    hass.async_create_task(
+        price_service._run_price_cycle(hass, entry.entry_id)  # noqa: SLF001
+    )
 
     if not store.get("price_task_cancel"):
         interval = _get_price_interval_seconds(options)
@@ -171,11 +176,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
 
     # Websocket-API registrieren
     try:
-        websocket_api.async_register_command(hass, ws_get_dashboard_data)
-        websocket_api.async_register_command(hass, ws_get_accounts)
-        websocket_api.async_register_command(hass, ws_get_last_file_update)
-        websocket_api.async_register_command(hass, ws_get_portfolio_data)
-        websocket_api.async_register_command(hass, ws_get_portfolio_positions)
+        websocket = _get_websocket_module()
+
+        websocket_api.async_register_command(hass, websocket.ws_get_dashboard_data)
+        websocket_api.async_register_command(hass, websocket.ws_get_accounts)
+        websocket_api.async_register_command(hass, websocket.ws_get_last_file_update)
+        websocket_api.async_register_command(hass, websocket.ws_get_portfolio_data)
+        websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
         # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
         _LOGGER.exception("❌ Fehler bei der Registrierung der Websocket-Befehle")
@@ -214,6 +221,7 @@ async def _async_reload_entry_on_update(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
     """Apply changed options (interval / debug) and restart the initial cycle."""
+    price_service = _get_price_service_module()
     _apply_price_debug_logging(entry)
     store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if not store:
@@ -231,7 +239,7 @@ async def _async_reload_entry_on_update(
                 exc_info=True,
             )
 
-    initialize_price_state(hass, entry.entry_id)
+    price_service.initialize_price_state(hass, entry.entry_id)
 
     options = _get_entry_options(entry)
     new_interval = _get_price_interval_seconds(options)
@@ -251,7 +259,9 @@ async def _async_reload_entry_on_update(
             entry.entry_id,
         )
 
-    hass.async_create_task(_run_price_cycle(hass, entry.entry_id))
+    hass.async_create_task(
+        price_service._run_price_cycle(hass, entry.entry_id)  # noqa: SLF001
+    )
     _LOGGER.debug(
         "Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id
     )
@@ -260,6 +270,16 @@ async def _async_reload_entry_on_update(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
     try:
+        backup_module = import_module("custom_components.pp_reader.data.backup_db")
+        coordinator_module = import_module(
+            "custom_components.pp_reader.data.coordinator"
+        )
+        db_init_module = import_module("custom_components.pp_reader.data.db_init")
+
+        setup_backup_system = backup_module.setup_backup_system
+        coordinator_cls = coordinator_module.PPReaderCoordinator
+        initialize_database_schema = db_init_module.initialize_database_schema
+
         options = _get_entry_options(entry)
         file_path = entry.data[CONF_FILE_PATH]
         db_path = Path(entry.data[CONF_DB_PATH])
@@ -281,7 +301,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         _apply_price_debug_logging(entry)
 
-        coordinator = PPReaderCoordinator(
+        coordinator = coordinator_cls(
             hass,
             db_path=db_path,
             file_path=Path(file_path),
