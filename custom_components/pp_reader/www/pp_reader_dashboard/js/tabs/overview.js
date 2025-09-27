@@ -2,11 +2,10 @@ import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct } 
 import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS, fetchPortfolioPositionsWS } from '../data/api.js';
 
 // === Modul-weiter State für Expand/Collapse & Lazy Load ===
-// On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.
 let _hassRef = null;
 let _panelConfigRef = null;
 const portfolioPositionsCache = new Map();      // portfolio_uuid -> positions[]
-// Global für Push-Handler (Events); hält ausschließlich Positionsdaten für Lazy-Loads
+// Global für Push-Handler (Events)
 window.__ppReaderPortfolioPositionsCache = portfolioPositionsCache;
 const expandedPortfolios = new Set();           // gemerkte geöffnete Depots (persistiert über Re-Renders)
 
@@ -101,13 +100,7 @@ function buildExpandablePortfolioTable(depots) {
     const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
     const detailId = `portfolio-details-${d.uuid}`;
 
-    html += `<tr class="portfolio-row"
-                data-portfolio="${d.uuid}"
-                data-position-count="${positionCount}"
-                data-current-value="${currentValue}"
-                data-purchase-sum="${purchaseSum}"
-                data-gain-abs="${gainAbs}"
-                data-gain-pct="${gainPct}">
+    html += `<tr class="portfolio-row" data-portfolio="${d.uuid}" data-purchase-sum="${purchaseSum}">
       <td>
         <button type="button"
                 class="${toggleClass}"
@@ -162,105 +155,6 @@ function buildExpandablePortfolioTable(depots) {
   html += '</tbody></table>';
   return html;
 }
-
-function resolvePortfolioTable(target) {
-  if (target instanceof HTMLTableElement) {
-    return target;
-  }
-  if (target && typeof target.querySelector === 'function') {
-    return target.querySelector('table.expandable-portfolio-table') ||
-      target.querySelector('.portfolio-table table') ||
-      target.querySelector('table');
-  }
-  return document.querySelector('.portfolio-table table.expandable-portfolio-table') ||
-    document.querySelector('.portfolio-table table');
-}
-
-function readDatasetNumber(value) {
-  if (value === undefined) {
-    return null;
-  }
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-}
-
-function extractNumericFromCell(cell) {
-  if (!cell) {
-    return 0;
-  }
-  const raw = cell.textContent || '';
-  if (!raw) {
-    return 0;
-  }
-  const cleaned = raw
-    .replace(/[^0-9,.-]/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const parsed = Number.parseFloat(cleaned);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-export function updatePortfolioFooterFromDom(target) {
-  const table = resolvePortfolioTable(target);
-  if (!table) {
-    return;
-  }
-  const tbody = table.tBodies?.[0];
-  if (!tbody) {
-    return;
-  }
-  const rows = Array.from(tbody.querySelectorAll('tr.portfolio-row'));
-  if (!rows.length) {
-    return;
-  }
-
-  let sumPositions = 0;
-  let sumCurrent = 0;
-  let sumPurchase = 0;
-  let sumGainAbs = 0;
-
-  for (const row of rows) {
-    const posCount = readDatasetNumber(row.dataset.positionCount) ?? extractNumericFromCell(row.cells[1]);
-    const currentValue = readDatasetNumber(row.dataset.currentValue) ?? extractNumericFromCell(row.cells[2]);
-    const gainAbs = readDatasetNumber(row.dataset.gainAbs) ?? extractNumericFromCell(row.cells[3]);
-    const purchaseSumDataset = readDatasetNumber(row.dataset.purchaseSum);
-    const purchaseSum = purchaseSumDataset != null ? purchaseSumDataset : (currentValue - gainAbs);
-
-    sumPositions += posCount;
-    sumCurrent += currentValue;
-    sumGainAbs += gainAbs;
-    sumPurchase += purchaseSum;
-  }
-
-  if (sumPurchase <= 0) {
-    sumPurchase = sumCurrent - sumGainAbs;
-  }
-
-  const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
-
-  let footer = tbody.querySelector('tr.footer-row');
-  if (!footer) {
-    footer = document.createElement('tr');
-    footer.classList.add('footer-row');
-    tbody.appendChild(footer);
-  }
-
-  const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
-
-  footer.innerHTML = `
-    <td>Summe</td>
-    <td class="align-right">${sumPositionsDisplay}</td>
-    <td class="align-right">${formatNumber(sumCurrent)}&nbsp;€</td>
-    <td class="align-right">${formatGain(sumGainAbs)}</td>
-    <td class="align-right">${formatGainPct(sumGainPct)}</td>
-  `;
-  footer.dataset.positionCount = String(Math.round(sumPositions));
-  footer.dataset.currentValue = String(sumCurrent);
-  footer.dataset.purchaseSum = String(sumPurchase);
-  footer.dataset.gainAbs = String(sumGainAbs);
-  footer.dataset.gainPct = String(sumGainPct);
-}
-window.__ppReaderUpdatePortfolioFooter = updatePortfolioFooterFromDom;
 
 /**
  * Utility-Funktionen zum Auslesen und Wiederherstellen des Expand-States.
@@ -386,37 +280,32 @@ if (!window.__ppReaderAttachPortfolioPositionsSorting) {
 // NEU: Funktion zum erneuten Laden der Positionsdaten
 async function reloadPortfolioPositions(portfolioUuid, containerEl, root) {
   if (!portfolioUuid || !_hassRef || !_panelConfigRef) return;
-
-  const targetContainer = containerEl || root?.querySelector(
-    `.portfolio-details[data-portfolio="${portfolioUuid}"] .positions-container`
-  );
-  if (!targetContainer) {
-    return;
+  if (containerEl) {
+    containerEl.innerHTML = '<div class="loading">Neu laden...</div>';
   }
-
-  const detailsRow = targetContainer.closest('.portfolio-details');
-  if (detailsRow && detailsRow.classList.contains('hidden')) {
-    return; // Hidden Rows sollen keinen Silent-Preload anstoßen
-  }
-
-  targetContainer.innerHTML = '<div class="loading">Neu laden...</div>';
   try {
     const resp = await fetchPortfolioPositionsWS(_hassRef, _panelConfigRef, portfolioUuid);
     if (resp.error) {
-      targetContainer.innerHTML = `<div class="error">${resp.error} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
+      if (containerEl) {
+        containerEl.innerHTML = `<div class="error">${resp.error} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
+      }
       return;
     }
     const positions = resp.positions || [];
     portfolioPositionsCache.set(portfolioUuid, positions);
-    targetContainer.innerHTML = renderPositionsTable(positions);
-    // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
-    try {
-      attachPortfolioPositionsSorting(root, portfolioUuid);
-    } catch (e) {
-      console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", e);
+    if (containerEl) {
+      containerEl.innerHTML = renderPositionsTable(positions);
+      // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
+      try {
+        attachPortfolioPositionsSorting(root, portfolioUuid);
+      } catch (e) {
+        console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", e);
+      }
     }
   } catch (e) {
-    targetContainer.innerHTML = `<div class="error">Fehler: ${e.message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
+    if (containerEl) {
+      containerEl.innerHTML = `<div class="error">Fehler: ${e.message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
+    }
   }
 }
 
@@ -568,7 +457,7 @@ export async function renderDashboard(root, hass, panelConfig) {
   const accounts = (accountsResp && accountsResp.accounts) || [];
 
   const portfoliosResp = await fetchPortfoliosWS(hass, panelConfig);
-  let depots = (portfoliosResp.portfolios || []).map(p => {
+  const depots = (portfoliosResp.portfolios || []).map(p => {
     const current_value = typeof p.current_value === 'number' ? p.current_value : 0;
     const purchase_sum = typeof p.purchase_sum === 'number' ? p.purchase_sum : 0;
     const gain_abs = current_value - purchase_sum;
@@ -695,12 +584,6 @@ export async function renderDashboard(root, hass, panelConfig) {
           console.warn("Init-Sortierung für expandiertes Depot fehlgeschlagen:", pid, e);
         }
       });
-
-      try {
-        updatePortfolioFooterFromDom(wrapper);
-      } catch (footerErr) {
-        console.warn("renderDashboard: Footer-Summe konnte nicht aktualisiert werden:", footerErr);
-      }
 
       console.debug("renderDashboard: portfolio-toggle Buttons:", wrapper.querySelectorAll('.portfolio-toggle').length);
     } catch (e) {

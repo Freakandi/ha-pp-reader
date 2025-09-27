@@ -4,7 +4,7 @@ This repository hosts the Home Assistant integration **Portfolio Performance Rea
 
 ## Development
 - Create the development environment with `./scripts/setup_container` and activate the virtual environment (`source .venv/bin/activate`).
-- Start Home Assistant using `./scripts/develop`.
+- Start Home Assistant using `./scripts/codex_develop` or `./scripts/develop`.
 - Run `./scripts/lint` to format and lint the code using Ruff.
 
 ## Release workflow

@@ -6,8 +6,6 @@ securities, portfolios, transactions, and more. These schemas are used to create
 and manage the database structure for the pp_reader application.
 """
 
-from contextlib import suppress
-
 # db_schema.py
 
 ACCOUNT_SCHEMA = [
@@ -29,27 +27,23 @@ ACCOUNT_SCHEMA = [
         value TEXT,
         FOREIGN KEY (account_uuid) REFERENCES accounts(uuid)
     );
-    """,
+    """
 ]
 
-SECURITY_SCHEMA = [
+SECURITIES_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS securities (
         uuid TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        currency_code TEXT NOT NULL,
+        note TEXT,
         isin TEXT,
         wkn TEXT,
         ticker_symbol TEXT,
-        feed TEXT,
-        currency_code TEXT,
-        retired INTEGER,
+        retired INTEGER DEFAULT 0,
         updated_at TEXT,
         last_price INTEGER,           -- Letzter Preis in 10^-8 Einheiten
-        last_price_date INTEGER,      -- Datum des letzten Preises (Unix-Timestamp)
-        last_price_source TEXT,       -- Quelle des zuletzt geholten Preises
-                                      -- (z.B. 'yahoo')
-        last_price_fetched_at TEXT    -- UTC Zeitstempel (YYYY-MM-DDTHH:MM:SSZ)
-                                      -- des letzten Fetch
+        last_price_date INTEGER       -- Datum des letzten Preises (Unix-Timestamp)
     );
     """,
     """
@@ -63,7 +57,7 @@ SECURITY_SCHEMA = [
         PRIMARY KEY (security_uuid, date),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
-    """,
+    """
 ]
 
 PORTFOLIO_SCHEMA = [
@@ -84,7 +78,7 @@ PORTFOLIO_SCHEMA = [
         value TEXT,
         FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid)
     );
-    """,
+    """
 ]
 
 PORTFOLIO_SECURITIES_SCHEMA = [
@@ -151,7 +145,7 @@ TRANSACTION_SCHEMA = [
     """
     CREATE INDEX IF NOT EXISTS idx_transaction_units_currency
     ON transaction_units(fx_currency_code);
-    """,
+    """
 ]
 
 """
@@ -346,16 +340,14 @@ EXCHANGE_SCHEMA = [
 ]
 """
 
-FX_SCHEMA = [
-    """
+FX_SCHEMA = ["""
 CREATE TABLE IF NOT EXISTS fx_rates (
     date TEXT NOT NULL,
     currency TEXT NOT NULL,
     rate REAL NOT NULL,
     PRIMARY KEY (date, currency)
 );
-"""
-]
+"""]
 
 METADATA_SCHEMA = [
     """
@@ -368,24 +360,10 @@ METADATA_SCHEMA = [
 
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
-    *SECURITY_SCHEMA,
+    *SECURITIES_SCHEMA,
     *PORTFOLIO_SCHEMA,
     *PORTFOLIO_SECURITIES_SCHEMA,
     *TRANSACTION_SCHEMA,
     *FX_SCHEMA,
-    *METADATA_SCHEMA,
+    *METADATA_SCHEMA
 ]
-
-# Performance Index für On-Demand Portfolio Aggregation:
-# fetch_live_portfolios greift häufig nach portfolio_securities per portfolio_uuid zu.
-# Der Index reduziert Lookup-/Aggregationszeit ohne bestehende Abfragen zu beeinflussen.
-SCHEMA_LIVE_AGGREGATION_INDEX = """
-CREATE INDEX IF NOT EXISTS idx_portfolio_securities_portfolio
-ON portfolio_securities (portfolio_uuid)
-"""
-
-# Aufnahme des neuen Index in ALL_SCHEMAS (additiv, idempotent)
-# Fallback: Falls ALL_SCHEMAS hier noch nicht definiert war (unwahrscheinlich),
-# würde dies ein Entwicklungsproblem anzeigen.
-with suppress(NameError):
-    ALL_SCHEMAS.append(SCHEMA_LIVE_AGGREGATION_INDEX)  # type: ignore[attr-defined]
