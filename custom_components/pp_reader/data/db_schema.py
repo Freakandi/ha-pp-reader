@@ -6,6 +6,8 @@ securities, portfolios, transactions, and more. These schemas are used to create
 and manage the database structure for the pp_reader application.
 """
 
+from contextlib import suppress
+
 # db_schema.py
 
 ACCOUNT_SCHEMA = [
@@ -44,8 +46,10 @@ SECURITY_SCHEMA = [
         updated_at TEXT,
         last_price INTEGER,           -- Letzter Preis in 10^-8 Einheiten
         last_price_date INTEGER,      -- Datum des letzten Preises (Unix-Timestamp)
-        last_price_source TEXT,       -- Quelle des zuletzt geholten Preises (z.B. 'yahoo')
-        last_price_fetched_at TEXT    -- UTC Zeitstempel (YYYY-MM-DDTHH:MM:SSZ) des letzten Fetch
+        last_price_source TEXT,       -- Quelle des zuletzt geholten Preises
+                                      -- (z.B. 'yahoo')
+        last_price_fetched_at TEXT    -- UTC Zeitstempel (YYYY-MM-DDTHH:MM:SSZ)
+                                      -- des letzten Fetch
     );
     """,
     """
@@ -381,9 +385,7 @@ ON portfolio_securities (portfolio_uuid)
 """
 
 # Aufnahme des neuen Index in ALL_SCHEMAS (additiv, idempotent)
-try:
+# Fallback: Falls ALL_SCHEMAS hier noch nicht definiert war (unwahrscheinlich),
+# würde dies ein Entwicklungsproblem anzeigen.
+with suppress(NameError):
     ALL_SCHEMAS.append(SCHEMA_LIVE_AGGREGATION_INDEX)  # type: ignore[attr-defined]
-except NameError:
-    # Fallback: Falls ALL_SCHEMAS hier noch nicht definiert war (unwahrscheinlich),
-    # würde dies ein Entwicklungsproblem anzeigen. Kein Hard-Fail, nur Log-Hinweis wäre möglich.
-    pass
