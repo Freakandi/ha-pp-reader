@@ -162,12 +162,12 @@ async def revalue_after_price_updates(
         raw_count = data.get("position_count", data.get("count"))
 
         try:
-            value = round(float(raw_value) / 100, 2)
+            value = round(float(raw_value), 2)
         except (TypeError, ValueError):
             value = 0.0
 
         try:
-            purchase_sum = round(float(raw_purchase_sum) / 100, 2)
+            purchase_sum = round(float(raw_purchase_sum), 2)
         except (TypeError, ValueError):
             purchase_sum = 0.0
 

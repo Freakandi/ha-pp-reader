@@ -5,6 +5,10 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip(
+    "google.protobuf", reason="protobuf runtime required for module imports"
+)
+
 from custom_components.pp_reader.data.db_access import fetch_live_portfolios
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 
@@ -54,15 +58,15 @@ def test_fetch_live_portfolios_basic(initialized_db: Path) -> None:
 
     by_uuid = {entry["uuid"]: entry for entry in result}
 
-    assert by_uuid["p1"]["current_value"] == 175_000_000
-    assert by_uuid["p1"]["purchase_sum"] == 150_000_000
+    assert by_uuid["p1"]["current_value"] == 1_750_000.0
+    assert by_uuid["p1"]["purchase_sum"] == 1_500_000.0
     assert by_uuid["p1"]["position_count"] == 1
 
-    assert by_uuid["p2"]["current_value"] == 620_000_000
-    assert by_uuid["p2"]["purchase_sum"] == 500_000_000
+    assert by_uuid["p2"]["current_value"] == 6_200_000.0
+    assert by_uuid["p2"]["purchase_sum"] == 5_000_000.0
     assert by_uuid["p2"]["position_count"] == 1
 
     # Portfolio ohne Positionen → alle Werte 0
-    assert by_uuid["p3"]["current_value"] == 0
-    assert by_uuid["p3"]["purchase_sum"] == 0
+    assert by_uuid["p3"]["current_value"] == 0.0
+    assert by_uuid["p3"]["purchase_sum"] == 0.0
     assert by_uuid["p3"]["position_count"] == 0
