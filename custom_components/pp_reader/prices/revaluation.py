@@ -6,13 +6,18 @@ im aktuellen Zyklus eine Preisänderung hatten.
 
 Rückgabeformat:
 {
-  "portfolio_values": { portfolio_uuid: { name, value, count, purchase_sum }, ... } | None,
+  "portfolio_values": {
+      portfolio_uuid: { name, value, count, purchase_sum },
+      ...
+  } | None,
   "portfolio_positions": None  # (wird in späterem Schritt ergänzt)
 }
 
 Hinweise:
-- Positionsdetails werden bewusst in einem separaten Item ergänzt (Events-Phase).
-- Aggregation erfolgt primär via fetch_live_portfolios (Single Source of Truth) mit Fallback auf calculate_portfolio_value / calculate_purchase_sum.
+- Positionsdetails werden bewusst in einem separaten Item ergänzt
+  (Events-Phase).
+- Aggregation erfolgt primär via fetch_live_portfolios (Single Source of
+  Truth) mit Fallback auf calculate_portfolio_value / calculate_purchase_sum.
 - Fehler dürfen den Preiszyklus nicht unterbrechen (fehlertolerant).
 """
 
@@ -20,16 +25,15 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ..data.db_access import fetch_live_portfolios  # Einheitliche Aggregationsquelle
-from ..data.sync_from_pclient import (
+from custom_components.pp_reader.data.db_access import fetch_live_portfolios
+from custom_components.pp_reader.data.sync_from_pclient import (
     fetch_positions_for_portfolios,
-)  # NEU: Reuse bestehender Positions-Loader
-from ..logic.portfolio import (
+)
+from custom_components.pp_reader.logic.portfolio import (
     calculate_portfolio_value,
     calculate_purchase_sum,
 )
@@ -44,8 +48,19 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ["revalue_after_price_updates"]
 
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from homeassistant.core import HomeAssistant
+else:  # pragma: no cover - runtime alias for type checking compatibility
+    import collections.abc as _collections_abc
+
+    HomeAssistant = Any
+    Iterable = _collections_abc.Iterable
+
+
 async def revalue_after_price_updates(
-    hass,
+    hass: HomeAssistant,
     conn: sqlite3.Connection,
     updated_security_uuids: Iterable[str],
 ) -> dict[str, Any]:
@@ -67,96 +82,138 @@ async def revalue_after_price_updates(
         Struktur mit (portfolio_values | None, portfolio_positions | None)
 
     """
-    updated_set: set[str] = set(updated_security_uuids)
+    updated_set = set(updated_security_uuids)
     if not updated_set:
         return {"portfolio_values": None, "portfolio_positions": None}
 
-    # Betroffene Portfolios via UNION (portfolio_securities + transactions)
-    try:
-        placeholders = ",".join("?" for _ in updated_set)
-        affected: set[str] = set()
-
-        if placeholders:  # defensiv
-            cur = conn.execute(
-                f"""
-                SELECT DISTINCT portfolio_uuid
-                FROM portfolio_securities
-                WHERE security_uuid IN ({placeholders})
-                """,
-                tuple(updated_set),
-            )
-            affected.update(r for (r,) in cur.fetchall())
-
-            cur = conn.execute(
-                f"""
-                SELECT DISTINCT portfolio
-                FROM transactions
-                WHERE security IN ({placeholders})
-                  AND portfolio IS NOT NULL
-                """,
-                tuple(updated_set),
-            )
-            affected.update(r for (r,) in cur.fetchall())
-
-        if not affected:
-            return {"portfolio_values": None, "portfolio_positions": None}
-
-        # Portfolio Namen laden
-        cur = conn.execute(
-            f"""
-            SELECT uuid, name
-            FROM portfolios
-            WHERE uuid IN ({",".join("?" for _ in affected)})
-            """,
-            tuple(affected),
-        )
-        names = {uuid: name for uuid, name in cur.fetchall()}
-
-    except sqlite3.Error:
-        _LOGGER.warning(
-            "revaluation: SQL Fehler bei Ermittlung betroffener Portfolios",
-            exc_info=True,
-        )
+    affected, names = _collect_affected_portfolios(conn, updated_set)
+    if not affected:
         return {"portfolio_values": None, "portfolio_positions": None}
 
-    # DB-Dateipfad ermitteln (benötigt für Aggregations-Helper)
-    try:
-        db_list = conn.execute("PRAGMA database_list").fetchall()
-        main_row = next((r for r in db_list if r[1] == "main"), None)
-        db_path = Path(main_row[2]) if main_row and main_row[2] else None
-    except Exception:
-        db_path = None
-
+    db_path = _resolve_main_db_path(conn)
     if db_path is None:
         _LOGGER.warning(
             "revaluation: Konnte DB-Pfad über PRAGMA database_list nicht ermitteln"
         )
         return {"portfolio_values": None, "portfolio_positions": None}
 
-    portfolio_values: dict[str, dict] = {}
+    live_entries = await _load_live_entries(hass, db_path)
+    portfolio_values = _build_portfolio_values_from_live_entries(live_entries, names)
+
+    missing_portfolios = set(affected) - set(portfolio_values)
+    if missing_portfolios:
+        fallback_values = await _fallback_aggregate_missing(
+            missing_portfolios, names, db_path
+        )
+        portfolio_values.update(fallback_values)
+
+    if not portfolio_values:
+        return {"portfolio_values": None, "portfolio_positions": None}
+
+    portfolio_positions = await _load_portfolio_positions(hass, db_path, affected)
+
+    return {
+        "portfolio_values": portfolio_values,
+        "portfolio_positions": portfolio_positions,
+    }
+
+
+def _collect_affected_portfolios(
+    conn: sqlite3.Connection, updated_set: set[str]
+) -> tuple[set[str], dict[str, str]]:
+    placeholders = ",".join("?" for _ in updated_set)
+    affected: set[str] = set()
+
+    if not placeholders:
+        return affected, {}
+
+    try:
+        security_query = (
+            "SELECT DISTINCT portfolio_uuid "
+            "FROM portfolio_securities "
+            "WHERE security_uuid IN (" + placeholders + ")"
+        )
+        cur = conn.execute(security_query, tuple(updated_set))
+        affected.update(r for (r,) in cur.fetchall())
+
+        transaction_query = (
+            "SELECT DISTINCT portfolio "
+            "FROM transactions "
+            "WHERE security IN (" + placeholders + ") AND portfolio IS NOT NULL"
+        )
+        cur = conn.execute(transaction_query, tuple(updated_set))
+        affected.update(r for (r,) in cur.fetchall())
+
+        if not affected:
+            return affected, {}
+
+        name_placeholders = ",".join("?" for _ in affected)
+        name_query = (
+            "SELECT uuid, name "
+            "FROM portfolios "
+            "WHERE uuid IN (" + name_placeholders + ")"
+        )
+        cur = conn.execute(name_query, tuple(affected))
+        names = dict(cur.fetchall())
+    except sqlite3.Error:
+        _LOGGER.warning(
+            "revaluation: SQL Fehler bei Ermittlung betroffener Portfolios",
+            exc_info=True,
+        )
+        return set(), {}
+
+    return affected, names
+
+
+def _resolve_main_db_path(conn: sqlite3.Connection) -> Path | None:
+    try:
+        db_list = conn.execute("PRAGMA database_list").fetchall()
+    except sqlite3.Error:
+        return None
+
+    main_row = next((r for r in db_list if r[1] == "main"), None)
+    if not main_row or not main_row[2]:
+        return None
+
+    try:
+        return Path(main_row[2])
+    except (TypeError, ValueError):
+        return None
+
+
+async def _load_live_entries(
+    hass: HomeAssistant, db_path: Path
+) -> dict[str, dict[str, Any]]:
     live_entries: dict[str, dict[str, Any]] = {}
     try:
         live_rows = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
-        for row in live_rows or []:
-            if not isinstance(row, dict):
-                continue
-            p_uuid = row.get("uuid")
-            if not p_uuid:
-                continue
-            live_entries[p_uuid] = row
-    except Exception:
+    except RuntimeError:
         _LOGGER.warning(
-            "revaluation: fetch_live_portfolios fehlgeschlagen – fallback auf Einzelaggregation",
+            (
+                "revaluation: fetch_live_portfolios fehlgeschlagen - "
+                "fallback auf Einzelaggregation"
+            ),
             exc_info=True,
         )
+        return live_entries
 
-    missing_portfolios: set[str] = set(affected)
-
-    for p_uuid in list(missing_portfolios):
-        data = live_entries.get(p_uuid)
-        if not data:
+    for row in live_rows or []:
+        if not isinstance(row, dict):
             continue
+        p_uuid = row.get("uuid")
+        if not p_uuid:
+            continue
+        live_entries[p_uuid] = row
 
+    return live_entries
+
+
+def _build_portfolio_values_from_live_entries(
+    live_entries: dict[str, dict[str, Any]], names: dict[str, str]
+) -> dict[str, dict[str, Any]]:
+    portfolio_values: dict[str, dict[str, Any]] = {}
+
+    for p_uuid, data in live_entries.items():
         raw_value = data.get("current_value", data.get("value"))
         raw_purchase_sum = data.get("purchase_sum")
         raw_count = data.get("position_count", data.get("count"))
@@ -182,53 +239,61 @@ async def revalue_after_price_updates(
             "count": count,
             "purchase_sum": purchase_sum,
         }
-        missing_portfolios.discard(p_uuid)
 
-    if missing_portfolios:
-        reference_date = datetime.utcnow()
+    return portfolio_values
 
-        for p_uuid in list(missing_portfolios):
-            try:
-                value, count = await calculate_portfolio_value(
-                    p_uuid, reference_date, db_path
-                )
-                purchase_sum = await calculate_purchase_sum(p_uuid, db_path)
-                portfolio_values[p_uuid] = {
-                    "name": names.get(p_uuid, p_uuid),
-                    "value": value,
-                    "count": count,
-                    "purchase_sum": purchase_sum,
-                }
-            except Exception:
-                _LOGGER.warning(
-                    "revaluation: Fehler bei Aggregation für Portfolio %s",
-                    p_uuid,
-                    exc_info=True,
-                )
-            finally:
-                missing_portfolios.discard(p_uuid)
 
-    if not portfolio_values:
-        return {"portfolio_values": None, "portfolio_positions": None}
+async def _fallback_aggregate_missing(
+    missing_portfolios: set[str], names: dict[str, str], db_path: Path
+) -> dict[str, dict[str, Any]]:
+    if not missing_portfolios:
+        return {}
 
-    # NEU: Positionsdaten für betroffene Portfolios laden (Reuse Helper)
-    portfolio_positions = None
+    reference_date = datetime.now(tz=UTC)
+    aggregated: dict[str, dict[str, Any]] = {}
+
+    for p_uuid in list(missing_portfolios):
+        try:
+            value, count = await calculate_portfolio_value(
+                p_uuid, reference_date, db_path
+            )
+            purchase_sum = await calculate_purchase_sum(p_uuid, db_path)
+        except (RuntimeError, sqlite3.Error, ValueError):
+            _LOGGER.warning(
+                "revaluation: Fehler bei Aggregation für Portfolio %s",
+                p_uuid,
+                exc_info=True,
+            )
+            continue
+
+        aggregated[p_uuid] = {
+            "name": names.get(p_uuid, p_uuid),
+            "value": value,
+            "count": count,
+            "purchase_sum": purchase_sum,
+        }
+
+    return aggregated
+
+
+async def _load_portfolio_positions(
+    hass: HomeAssistant, db_path: Path, affected: set[str]
+) -> dict[str, list[dict]] | None:
+    if not affected:
+        return None
+
     try:
-        # fetch_positions_for_portfolios öffnet eigene DB-Verbindung → Executor
         raw_positions = await hass.async_add_executor_job(
             fetch_positions_for_portfolios, db_path, affected
         )
-        # Nur setzen, wenn nicht leer
-        if raw_positions:
-            portfolio_positions = raw_positions
-    except Exception:
+    except RuntimeError:
         _LOGGER.warning(
             "revaluation: Fehler beim Laden der Positionsdaten",
             exc_info=True,
         )
-        portfolio_positions = None
+        return None
 
-    return {
-        "portfolio_values": portfolio_values,
-        "portfolio_positions": portfolio_positions,
-    }
+    if not raw_positions:
+        return None
+
+    return raw_positions
