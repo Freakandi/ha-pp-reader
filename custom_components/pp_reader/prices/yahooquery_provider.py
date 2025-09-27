@@ -4,9 +4,11 @@ YahooQuery Provider für Live-Preise.
 Implementiert das PriceProvider-Protokoll mittels `yahooquery` (blocking API).
 Eigenschaften:
 - CHUNK_SIZE=50 (Orchestrator chunked Symbole vor Aufruf; doppelte Sicherheit).
-- Lazy Import von `yahooquery` im Executor (ImportError wird geloggt und führt zu leerem Resultat).
+- Lazy Import von `yahooquery` im Executor (ImportError wird geloggt und
+  führt zu leerem Resultat).
 - Filter: Nur Quotes mit `regularMarketPrice > 0`.
-- Fehlertolerant: Fehler im Batch → WARN + Rückgabe {} (Chunk komplett verworfen).
+- Fehlertolerant: Fehler im Batch → WARN + Rückgabe {} (Chunk komplett
+  verworfen).
 - Keine Persistenz / DB-Logik hier. Reine Quote-Erhebung & Mapping.
 
 Feld-Mapping:
@@ -27,6 +29,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
+from importlib import import_module
+from typing import TYPE_CHECKING
 
 from .provider_base import PriceProvider, Quote
 
@@ -34,6 +39,12 @@ _LOGGER = logging.getLogger(__name__)
 
 CHUNK_SIZE = 50  # Sicherheitskonstante (primär durch Orchestrator genutzt)
 _YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
+
+
+if TYPE_CHECKING:  # pragma: no cover - nur für Type Checker relevant
+    from yahooquery import Ticker
+
+TickerFactory = Callable[..., "Ticker"]
 
 
 def has_import_error() -> bool:
@@ -49,26 +60,36 @@ def _fetch_quotes_blocking(symbols: list[str]) -> dict:
     oder wirft eine Exception weiter.
     """
     global _YAHOOQUERY_IMPORT_ERROR  # noqa: PLW0603
+
+    ticker_factory: TickerFactory | None = None
     try:
-        from yahooquery import Ticker  # type: ignore
-    except Exception as exc:  # ImportError oder andere
-        # Anpassung (qa_single_import_error):
-        # Spezifikation verlangt genau EIN ERROR-Log für den Importfehler (beim Disable im Orchestrator).
-        # Deshalb hier nur DEBUG (früher ERROR) + Setzen des Flags.
+        yahooquery_module = import_module("yahooquery")
+    except ImportError as exc:
         if not _YAHOOQUERY_IMPORT_ERROR:
             _LOGGER.debug(
                 "YahooQuery Import fehlgeschlagen (wird deaktiviert): %s", exc
             )
             _YAHOOQUERY_IMPORT_ERROR = True
-        # Leeres Dict signalisiert totalen Chunk-Fehlschlag
         return {}
+
+    try:
+        ticker_factory = yahooquery_module.Ticker
+    except AttributeError as exc:
+        if not _YAHOOQUERY_IMPORT_ERROR:
+            _LOGGER.debug(
+                "YahooQuery Ticker nicht verfügbar (wird deaktiviert): %s", exc
+            )
+            _YAHOOQUERY_IMPORT_ERROR = True
+        return {}
+
     # Defensive Begrenzung (falls Orchestrator nicht chunked)
     if len(symbols) > CHUNK_SIZE:
         symbols = symbols[:CHUNK_SIZE]
+
     try:
-        tk = Ticker(symbols, asynchronous=False)
+        tk = ticker_factory(symbols, asynchronous=False)
         return getattr(tk, "quotes", {}) or {}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - yahooquery wirft diverse Exceptions
         _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", exc)
         return {}
 
@@ -83,7 +104,7 @@ class YahooQueryProvider(PriceProvider):
         Lädt Quotes für übergebene Symbole.
 
         Rückgabe:
-            Dict[symbol, Quote] – nur für akzeptierte (price > 0) Einträge.
+            Dict[symbol, Quote] - nur für akzeptierte (price > 0) Einträge.
             Bei Fehler im gesamten Chunk: leeres Dict (Caller wertet als Fehler).
         """
         if not symbols:
@@ -94,14 +115,14 @@ class YahooQueryProvider(PriceProvider):
             raw_quotes: dict = await loop.run_in_executor(
                 None, _fetch_quotes_blocking, symbols
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - Executor Exceptions sollen abgefangen werden
             _LOGGER.warning(
                 "Unerwarteter Fehler beim YahooQuery Executor-Aufruf", exc_info=True
             )
             return {}
 
         if not raw_quotes:
-            # Leerer Chunk → schon geloggt im Blocking-Helper (Import oder Fetch Problem)
+            # Leerer Chunk -> bereits im Blocking-Helper geloggt (Import-/Fetch-Problem)
             return {}
 
         result: dict[str, Quote] = {}
