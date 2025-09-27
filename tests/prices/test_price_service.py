@@ -21,6 +21,7 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -724,6 +725,125 @@ async def test_filter_invalid_price(monkeypatch, tmp_path):
             for port_payload in payload:
                 for pos in port_payload.get("positions", []):
                     assert pos.get("security_uuid") != "secA"
+
+
+@pytest.mark.asyncio
+async def test_price_update_refreshes_portfolio_securities(tmp_path, monkeypatch):
+    db_path = tmp_path / "refresh.db"
+    initialize_database_schema(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO portfolios (uuid, name) VALUES (?, ?)",
+            ("port1", "Portfolio 1"),
+        )
+        conn.execute(
+            """
+            INSERT INTO securities (uuid, name, ticker_symbol, currency_code, retired, last_price)
+            VALUES (?, ?, ?, ?, 0, ?)
+            """,
+            ("sec1", "Security 1", "TICK", "EUR", int(10 * 1e8)),
+        )
+        conn.execute(
+            """
+            INSERT INTO transactions (
+                uuid, type, account, portfolio, other_account, other_portfolio,
+                date, currency_code, amount, shares, security
+            ) VALUES (?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?)
+            """,
+            (
+                "tx1",
+                0,
+                "port1",
+                "2024-01-01T00:00:00",
+                "EUR",
+                1600,
+                int(2 * 1e8),
+                "sec1",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO portfolio_securities (
+                portfolio_uuid, security_uuid, current_holdings, purchase_value, current_value
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            ("port1", "sec1", 2.0, 1600, 2000),
+        )
+        conn.commit()
+
+    hass = FakeHass()
+    entry_id = "refresh_entry"
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry_id] = {"db_path": db_path}
+
+    initialize_price_state(hass, entry_id)
+    symbols, mapping = load_and_map_symbols(hass, entry_id, db_path)
+    store = hass.data[DOMAIN][entry_id]
+    store["price_symbols"] = symbols
+    store["price_symbol_to_uuids"] = mapping
+
+    async def _fake_fetch(self, symbols_):
+        assert symbols_ == ["TICK"]
+        return {
+            "TICK": Quote(
+                symbol="TICK",
+                price=12.0,
+                previous_close=10.0,
+                currency="EUR",
+                volume=None,
+                market_cap=None,
+                high_52w=None,
+                low_52w=None,
+                dividend_yield=None,
+                ts=1234567890.0,
+                source="yahoo",
+            )
+        }
+
+    monkeypatch.setattr(YahooQueryProvider, "fetch", _fake_fetch)
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.prices.revaluation.fetch_positions_for_portfolios",
+        lambda _db_path, _portfolio_ids: {},
+    )
+
+    pushed: list[tuple[str, Any]] = []
+
+    def _fake_push_update(hass_, entry_id_, data_type, data):
+        pushed.append((data_type, data))
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.prices.price_service._push_update",
+        _fake_push_update,
+    )
+
+    await _run_price_cycle(hass, entry_id)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        row = conn.execute(
+            """
+            SELECT current_holdings, purchase_value, current_value
+            FROM portfolio_securities
+            WHERE portfolio_uuid=? AND security_uuid=?
+            """,
+            ("port1", "sec1"),
+        ).fetchone()
+
+    assert row is not None
+    assert row[0] == pytest.approx(2.0)
+    assert row[1] == 1600
+    assert row[2] == 2400
+
+    pv_payload = next((data for kind, data in pushed if kind == "portfolio_values"), None)
+    assert pv_payload is not None
+    assert len(pv_payload) == 1
+
+    entry = pv_payload[0]
+    assert entry["current_value"] == 24.0
+    assert entry["purchase_sum"] == 16.0
+    assert entry["gain_abs"] == 8.0
+    assert entry["gain_pct"] == 50.0
 
 
 @pytest.mark.asyncio
