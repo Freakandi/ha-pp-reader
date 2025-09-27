@@ -24,6 +24,27 @@ from .db_access import (
     get_portfolio_positions,
 )
 
+
+def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
+    """Return all non-EUR currencies from active accounts."""
+    active_currencies: set[str] = set()
+    for account in accounts:
+        if getattr(account, "is_retired", False):
+            continue
+
+        raw_currency = getattr(account, "currency_code", "EUR")
+        if not isinstance(raw_currency, str):
+            continue
+
+        currency = raw_currency.strip().upper()
+        if not currency or currency == "EUR":
+            continue
+
+        active_currencies.add(currency)
+
+    return active_currencies
+
+
 try:
     from custom_components.pp_reader.currencies.fx import (
         ensure_exchange_rates_for_dates,
@@ -189,11 +210,7 @@ async def ws_get_accounts(
 
         # FX laden
         try:
-            active_fx_currencies = {
-                getattr(a, "currency_code", "EUR")
-                for a in accounts
-                if not a.is_retired and getattr(a, "currency_code", "EUR") != "EUR"
-            }
+            active_fx_currencies = _collect_active_fx_currencies(accounts)
             fx_rates = {}
             if active_fx_currencies:
                 ensure_rates = ensure_exchange_rates_for_dates
