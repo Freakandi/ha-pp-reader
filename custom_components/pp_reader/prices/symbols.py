@@ -24,7 +24,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _LOGGER = logging.getLogger(__name__)
 __all__ = ["load_active_security_symbols"]
@@ -61,10 +64,11 @@ def load_active_security_symbols(db_path: Path) -> list[tuple[str, str]]:
             """
         )
         rows = [(r[0], r[1]) for r in cur.fetchall()]
-        _LOGGER.debug("Symbol-Autoload: %d aktive Symbole geladen", len(rows))
-        return rows
     except sqlite3.Error:
         _LOGGER.exception("Symbol-Autoload: Fehler beim Ausführen der Symbol-Query")
         return []
+    else:
+        _LOGGER.debug("Symbol-Autoload: %d aktive Symbole geladen", len(rows))
+        return rows
     finally:
         conn.close()
