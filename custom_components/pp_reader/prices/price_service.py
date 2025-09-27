@@ -20,26 +20,45 @@ import logging
 import sqlite3
 import time
 from collections import defaultdict
-from datetime import datetime
-from pathlib import Path
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from ..const import DOMAIN
-from ..data.sync_from_pclient import (
+from homeassistant.exceptions import HomeAssistantError
+
+from custom_components.pp_reader.const import DOMAIN
+from custom_components.pp_reader.data.sync_from_pclient import (
     _push_update,
     fetch_positions_for_portfolios,
-)  # Reuse bestehender Event-Push & Positions-Loader
-from ..logic.portfolio import (
+)
+from custom_components.pp_reader.logic.portfolio import (
     db_calculate_portfolio_purchase_sum,
     db_calculate_portfolio_value_and_count,
 )
-from .provider_base import Quote
-from .revaluation import revalue_after_price_updates
-from .yahooquery_provider import CHUNK_SIZE, YahooQueryProvider, has_import_error
+from custom_components.pp_reader.prices.revaluation import revalue_after_price_updates
+from custom_components.pp_reader.prices.yahooquery_provider import (
+    CHUNK_SIZE,
+    YahooQueryProvider,
+    has_import_error,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from homeassistant.core import HomeAssistant
+
+    from custom_components.pp_reader.prices.provider_base import Quote
+
+WATCHDOG_DURATION_THRESHOLD_MS = 25_000
+CONSECUTIVE_ERROR_THRESHOLD = 3
+INVALID_SCALED_PRICE_ERROR = (
+    "Ungültiger skalierten Preis (ensure_no_extra_persist Guard)"
+)
+ZERO_QUOTES_WARN_INTERVAL = 1_800
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def initialize_price_state(hass, entry_id: str) -> None:
+def initialize_price_state(hass: HomeAssistant, entry_id: str) -> None:
     """
     Initialisiert alle In-Memory State-Variablen für den Preis-Service.
 
@@ -66,8 +85,7 @@ def initialize_price_state(hass, entry_id: str) -> None:
 
 def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]]:
     """
-    Lädt aktive (nicht 'retired') Securities mit gültigem `ticker_symbol`
-    und baut ein Mapping symbol -> [security_uuid,...].
+    Erzeugt ein Symbol-Mapping für aktive Securities.
 
     Returns
     -------
@@ -99,22 +117,22 @@ def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]
 
 
 def load_and_map_symbols(
-    hass, entry_id: str, db_path: Path
+    hass: HomeAssistant, entry_id: str, db_path: Path
 ) -> tuple[list[str], dict[str, list[str]]]:
-    """
-    Wrapper um build_symbol_mapping mit einmaligem INFO-Log bei leerer Liste.
-    """
+    """Erzeuge das Symbolmapping und protokolliere leere Listen einmalig als INFO."""
     try:
         symbols, mapping = build_symbol_mapping(db_path)
-    except Exception:
+    except (sqlite3.Error, ValueError):
         _LOGGER.warning("prices_cycle: Fehler beim Laden der Symbole", exc_info=True)
         return [], {}
 
     store = hass.data[DOMAIN][entry_id]
     if not symbols and not store.get("price_empty_symbols_logged"):
-        _LOGGER.info(
-            "prices_cycle: Keine aktiven Symbole gefunden – Preis-Service wartet (einmaliges Log)"
+        message = (
+            "prices_cycle: Keine aktiven Symbole gefunden - Preis-Service wartet "
+            "(einmaliges Log)"
         )
+        _LOGGER.info(message)
         store["price_empty_symbols_logged"] = True
     elif symbols:
         # Reset Flag falls nach Reload später doch Symbole existieren
@@ -124,31 +142,33 @@ def load_and_map_symbols(
     return symbols, mapping
 
 
-def _maybe_reset_error_counter(hass, entry_id: str, meta: dict) -> None:
+def _maybe_reset_error_counter(
+    hass: HomeAssistant, entry_id: str, meta: dict[str, Any]
+) -> None:
     """
-    Setzt den Fehlerzähler zurück, wenn im Zyklus mindestens ein Quote
-    verarbeitet wurde. Loggt einmalig den Reset.
+    Setzt den Fehlerzähler nach einem erfolgreichen Zyklus zurück.
+
+    Loggt einmalig den Reset.
     """
     store = hass.data[DOMAIN][entry_id]
     if meta.get("quotes_returned", 0) > 0:
         prev = store.get("price_error_counter", 0)
         if prev > 0:
-            _LOGGER.info(
-                "prices_cycle: Fehlerzähler nach erfolgreichem Zyklus zurückgesetzt (vorher=%s)",
-                prev,
+            message = (
+                "prices_cycle: Fehlerzähler nach erfolgreichem Zyklus zurückgesetzt "
+                "(vorher=%s)"
             )
+            _LOGGER.info(message, prev)
         store["price_error_counter"] = 0
 
 
 # --- Change Detection Helpers -------------------------------------------------
 def _utc_now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _load_old_prices(conn: sqlite3.Connection) -> dict[str, int]:
-    """
-    Lädt vorhandene last_price Werte für Change Detection.
-    """
+    """Lädt vorhandene last_price Werte für Change Detection."""
     cur = conn.execute(
         "SELECT uuid, last_price FROM securities WHERE last_price IS NOT NULL"
     )
@@ -157,7 +177,7 @@ def _load_old_prices(conn: sqlite3.Connection) -> dict[str, int]:
 
 def _load_security_currencies(conn: sqlite3.Connection) -> dict[str, str | None]:
     cur = conn.execute("SELECT uuid, currency_code FROM securities")
-    return {uuid: ccy for uuid, ccy in cur.fetchall()}
+    return dict(cur.fetchall())
 
 
 def _detect_price_changes(
@@ -174,7 +194,8 @@ def _detect_price_changes(
     updates: dict[str, int] = {}
     changed: set[str] = set()
 
-    # Gruppierung: Quote.symbol → Quote Objekt (Es wird erwartet, dass jedes Symbol max einmal vorkommt)
+    # Gruppierung: Quote.symbol -> Quote Objekt
+    # Erwartung: Jedes Symbol erscheint höchstens einmal.
     for q in quotes:
         sym = getattr(q, "symbol", None)
         if sym is None:
@@ -183,9 +204,16 @@ def _detect_price_changes(
         if not target_uuids:
             continue
         try:
-            scaled = int(round(q.price * 1e8))
-        except Exception:
+            scaled_value = round(q.price * 1e8)
+        except (ArithmeticError, TypeError, ValueError):
             continue
+        if isinstance(scaled_value, int):
+            scaled = scaled_value
+        else:
+            try:
+                scaled = int(scaled_value)
+            except (TypeError, ValueError):
+                continue
         if scaled <= 0:
             # Defensive: sollte bereits vorher gefiltert sein
             continue
@@ -227,7 +255,14 @@ def _apply_price_updates(
 
     Parameters
     ----------
+    db_path : Path
+        Datenbankpfad für die Verbindung.
     updates : dict[security_uuid, scaled_price]
+        Zu persistierende, skalierte Preise.
+    fetched_at : str | None
+        Optionaler Timestamp für last_price_fetched_at (ISO UTC).
+    source : str | None
+        Optionaler Quellname für last_price_source.
 
     Returns
     -------
@@ -238,12 +273,11 @@ def _apply_price_updates(
     if not updates:
         return 0
 
-    # Defensive Absicherung (nicht im Hot Path kritisch – geringe Anzahl Updates)
+    # Defensive Absicherung (nicht im Hot Path kritisch - geringe Anzahl Updates)
     for _sec, _val in updates.items():
         if not isinstance(_val, int) or _val <= 0:
-            raise ValueError(
-                f"Ungültiger skalierten Preis (ensure_no_extra_persist Guard) uuid={_sec} value={_val!r}"
-            )
+            message = f"{INVALID_SCALED_PRICE_ERROR} uuid={_sec} value={_val!r}"
+            raise ValueError(message)
 
     fetched_at = fetched_at or _utc_now_iso()
     source = source or "yahoo"
@@ -261,7 +295,7 @@ def _apply_price_updates(
                 if cur.rowcount > 0:
                     updated_rows += 1
             conn.commit()
-        except Exception:
+        except sqlite3.Error:
             conn.rollback()
             _LOGGER.warning(
                 "prices_cycle: Fehler beim Persistieren der Preis-Updates",
@@ -272,36 +306,32 @@ def _apply_price_updates(
 
 
 def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
-    """
-    Entfernt Updates mit None oder <=0 (defensive Filterung).
-    """
+    """Entfernt Updates mit None oder <=0 (defensive Filterung)."""
     if not updates:
         return {}
     return {k: v for k, v in updates.items() if isinstance(v, int) and v > 0}
 
 
 def _process_currency_drift_skip_none(
-    hass,
-    entry_id: str,
-    quotes: list[Quote],
-    symbol_map: dict[str, list[str]],
-    security_currencies: dict[str, str | None],
-):
-    """
-    Filtert Quotes ohne Currency aus Drift-Prüfung heraus (kein Logging).
-    """
-    # Einfacher Durchlauf – Funktion dient Klarheit / ToDO-Referenz
+    _hass: HomeAssistant,
+    _entry_id: str,
+    _quotes: list[Quote],
+    _symbol_map: dict[str, list[str]],
+    _security_currencies: dict[str, str | None],
+) -> None:
+    """Filtert Quotes ohne Currency aus Drift-Prüfung heraus (kein Logging)."""
+    # Einfacher Durchlauf - Funktion dient Klarheit / ToDO-Referenz
     # Keine Mutation; Rückgabe nicht notwendig (Selektion erfolgt im zweiten Schritt)
     return
 
 
 def _process_currency_drift_mismatches(
-    hass,
+    hass: HomeAssistant,
     entry_id: str,
     quotes: list[Quote],
     symbol_map: dict[str, list[str]],
     security_currencies: dict[str, str | None],
-):
+) -> None:
     """
     Loggt Currency Drift Warnungen genau einmal pro Symbol.
 
@@ -319,7 +349,7 @@ def _process_currency_drift_mismatches(
             # Wird upstream nicht geprüft (skip_none_currency)
             continue
 
-        # Prüfe alle Securities zum Symbol – falls irgendeine abweicht → WARN
+        # Prüfe alle Securities zum Symbol - falls irgendeine abweicht -> WARN
         mismatch = False
         sec_ccys: set[str] = set()
         for sec_uuid in symbol_map.get(sym, []):
@@ -344,8 +374,9 @@ def _process_currency_drift_mismatches(
 
 def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
     """
-    Transformiert das Dict-Format der Revaluation in die erwartete Event-Payload
-    (identisch zur File-Sync Struktur).
+    Transformiert das Dict-Format der Revaluation in die erwartete Event-Payload.
+
+    (Identisch zur File-Sync Struktur.)
     """
     payload: list[dict] = []
     for pid, data in pv_dict.items():
@@ -359,9 +390,12 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
                     "purchase_sum": round(data.get("purchase_sum", 0.0) or 0.0, 2),
                 }
             )
-        except Exception:
+        except (TypeError, ValueError):
             _LOGGER.debug(
-                "prices_cycle: Fehler beim Aufbau der portfolio_values Zeile pid=%s data=%r",
+                (
+                    "prices_cycle: Fehler beim Aufbau der portfolio_values Zeile "
+                    "pid=%s data=%r"
+                ),
                 pid,
                 data,
                 exc_info=True,
@@ -369,10 +403,10 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
     return payload
 
 
-async def _run_price_cycle(hass, entry_id: str):
+async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
     cycle_start_ts = time.time()
     store = hass.data[DOMAIN][entry_id]
-    lock: asyncio.Lock = store.get("price_lock")  # type: ignore
+    lock: asyncio.Lock = store.get("price_lock")  # type: ignore[assignment]
     if lock.locked():
         _LOGGER.debug(
             "prices_cycle: skip overlap (laufender Zyklus) entry_id=%s", entry_id
@@ -388,22 +422,15 @@ async def _run_price_cycle(hass, entry_id: str):
         }
 
     async with lock:
-        try:  # --- OUTER RESILIENCE GUARD ------------------------------------------------
+        try:  # --- OUTER RESILIENCE GUARD ---
             db_path = store.get("db_path")
             symbols = store.get("price_symbols")
 
             # On-demand Autodiscovery
             if (not symbols) and db_path:
-                try:
-                    symbols, symbol_map = load_and_map_symbols(hass, entry_id, db_path)
-                    store["price_symbols"] = symbols
-                    store["price_symbol_to_uuids"] = symbol_map
-                except Exception:
-                    _LOGGER.warning(
-                        "prices_cycle: Fehler beim nachträglichen Laden der Symbole",
-                        exc_info=True,
-                    )
-                    symbols = []
+                symbols, symbol_map = load_and_map_symbols(hass, entry_id, db_path)
+                store["price_symbols"] = symbols
+                store["price_symbol_to_uuids"] = symbol_map
 
             if (not db_path) or (not symbols):
                 # Zusatz-INFO beim ersten tatsächlichen Skip wegen leerer Liste
@@ -412,12 +439,17 @@ async def _run_price_cycle(hass, entry_id: str):
                     and store.get("price_empty_symbols_logged")
                     and not store.get("price_empty_symbols_skip_logged")
                 ):
-                    _LOGGER.info(
-                        "prices_cycle: Skip – keine Symbole vorhanden (kein Fetch ausgeführt)"
+                    skip_msg = (
+                        "prices_cycle: Skip - keine Symbole vorhanden "
+                        "(kein Fetch ausgeführt)"
                     )
+                    _LOGGER.info(skip_msg)
                     store["price_empty_symbols_skip_logged"] = True
                 _LOGGER.debug(
-                    "prices_cycle: Skip (keine Symbole oder db_path fehlt) entry_id=%s symbols=%s db=%s",
+                    (
+                        "prices_cycle: Skip (keine Symbole oder db_path fehlt) "
+                        "entry_id=%s symbols=%s db=%s"
+                    ),
                     entry_id,
                     len(symbols) if symbols else 0,
                     bool(db_path),
@@ -435,16 +467,15 @@ async def _run_price_cycle(hass, entry_id: str):
             prev_error_counter = store.get("price_error_counter", 0)
             store["price_error_counter"] = 0
 
-            # --- Batch Bildung mit Provider-Konstante -----------------------------------
-            batches: list[list[str]] = []
-            for i in range(0, len(symbols), CHUNK_SIZE):
-                batches.append(symbols[i : i + CHUNK_SIZE])
+            # --- Batch Bildung mit Provider-Konstante ---
+            batches = [
+                symbols[i : i + CHUNK_SIZE] for i in range(0, len(symbols), CHUNK_SIZE)
+            ]
             batches_count = len(batches)
 
             provider = YahooQueryProvider()
             all_quotes: list[Quote] = []
             skipped_running = False
-            error_count = 0
             chunk_failure_count = 0
 
             for idx, batch_symbols in enumerate(batches, start=1):
@@ -459,10 +490,27 @@ async def _run_price_cycle(hass, entry_id: str):
                     quotes_dict = await asyncio.wait_for(
                         provider.fetch(batch_symbols), timeout=10
                     )
-                except Exception:
+                except TimeoutError:
                     chunk_failure_count += 1
+                    error_msg = (
+                        "prices_cycle: Chunk Fetch Fehler (timeout) batch_size=%s "
+                        "idx=%s"
+                    )
                     _LOGGER.warning(
-                        "prices_cycle: Chunk Fetch Fehler (timeout/exception) batch_size=%s idx=%s",
+                        error_msg,
+                        len(batch_symbols),
+                        idx,
+                        exc_info=True,
+                    )
+                    continue
+                except Exception:  # noqa: BLE001 - Resilienz für unerwartete Providerfehler
+                    chunk_failure_count += 1
+                    error_msg = (
+                        "prices_cycle: Chunk Fetch Fehler (exception) batch_size=%s "
+                        "idx=%s"
+                    )
+                    _LOGGER.warning(
+                        error_msg,
                         len(batch_symbols),
                         idx,
                         exc_info=True,
@@ -474,8 +522,7 @@ async def _run_price_cycle(hass, entry_id: str):
                         "prices_cycle: batch_end idx=%s accepted=0 (leer/fehler)", idx
                     )
                     continue
-                for q in quotes_dict.values():
-                    all_quotes.append(q)
+                all_quotes.extend(quotes_dict.values())
                 _LOGGER.debug(
                     "prices_cycle: batch_end idx=%s accepted=%s cumulative=%s",
                     idx,
@@ -497,67 +544,60 @@ async def _run_price_cycle(hass, entry_id: str):
                 store["price_error_counter"] = store.get("price_error_counter", 0) + 1
                 now_ts = time.time()
                 last_warn = store.get("price_zero_quotes_warn_ts")
-                if last_warn is None or (now_ts - last_warn) >= 1800:
-                    _LOGGER.warning(
-                        "prices_cycle: Keine Quotes erhalten (total=0) – Fehlerzähler=%s",
-                        store["price_error_counter"],
+                if (
+                    last_warn is None
+                    or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
+                ):
+                    warn_msg = (
+                        "prices_cycle: Keine Quotes erhalten (total=0) - "
+                        "Fehlerzähler=%s"
                     )
+                    _LOGGER.warning(warn_msg, store["price_error_counter"])
                     store["price_zero_quotes_warn_ts"] = now_ts
                 else:
                     _LOGGER.debug(
-                        "prices_cycle: zero-quotes detected (WARN gedrosselt) -> error_counter=%s",
+                        (
+                            "prices_cycle: zero-quotes detected (WARN gedrosselt) -> "
+                            "error_counter=%s"
+                        ),
                         store["price_error_counter"],
                     )
 
-            # --- Load existing prices & currencies ---------------------------------------
+            # --- Load existing prices and currencies ---
             existing_prices: dict[str, int] = {}
             security_currencies: dict[str, str | None] = {}
             try:
                 with sqlite3.connect(str(db_path)) as conn:
                     existing_prices = _load_old_prices(conn)
                     security_currencies = _load_security_currencies(conn)
-            except Exception:
-                _LOGGER.warning(
-                    "prices_cycle: Unerwarteter Fehler beim Laden bestehender Preise / Währungen",
-                    exc_info=True,
+            except sqlite3.Error:
+                warn_msg = (
+                    "prices_cycle: Unerwarteter Fehler beim Laden bestehender Preise / "
+                    "Währungen"
                 )
+                _LOGGER.warning(warn_msg, exc_info=True)
 
             # Drift
-            try:
-                _process_currency_drift_skip_none(
-                    hass,
-                    entry_id,
-                    all_quotes,
-                    store.get("price_symbol_to_uuids", {}),
-                    security_currencies,
-                )
-                _process_currency_drift_mismatches(
-                    hass,
-                    entry_id,
-                    all_quotes,
-                    store.get("price_symbol_to_uuids", {}),
-                    security_currencies,
-                )
-            except Exception:
-                _LOGGER.warning(
-                    "prices_cycle: Fehler in currency drift (mismatch phase)",
-                    exc_info=True,
-                )
+            _process_currency_drift_skip_none(
+                hass,
+                entry_id,
+                all_quotes,
+                store.get("price_symbol_to_uuids", {}),
+                security_currencies,
+            )
+            _process_currency_drift_mismatches(
+                hass,
+                entry_id,
+                all_quotes,
+                store.get("price_symbol_to_uuids", {}),
+                security_currencies,
+            )
 
             # Change Detection
-            try:
-                scaled_updates, changed_security_uuids = _detect_price_changes(
-                    all_quotes, store.get("price_symbol_to_uuids", {}), existing_prices
-                )
-                detected_changes = len(changed_security_uuids)
-            except Exception:
-                _LOGGER.warning(
-                    "prices_cycle: Fehler in Change Detection (Skalierung)",
-                    exc_info=True,
-                )
-                scaled_updates = {}
-                changed_security_uuids = set()
-                detected_changes = 0
+            scaled_updates, changed_security_uuids = _detect_price_changes(
+                all_quotes, store.get("price_symbol_to_uuids", {}), existing_prices
+            )
+            detected_changes = len(changed_security_uuids)
 
             if scaled_updates and db_path:
                 scaled_updates = _filter_invalid_updates(scaled_updates)
@@ -569,8 +609,12 @@ async def _run_price_cycle(hass, entry_id: str):
                         db_path, scaled_updates, fetched_at=fetched_at, source="yahoo"
                     )
                     if updated_rows != detected_changes:
+                        debug_msg = (
+                            "prices_cycle: update_result mismatch detected=%s "
+                            "updated=%s"
+                        )
                         _LOGGER.debug(
-                            "prices_cycle: update_result mismatch detected=%s updated=%s",
+                            debug_msg,
                             detected_changes,
                             updated_rows,
                         )
@@ -589,7 +633,7 @@ async def _run_price_cycle(hass, entry_id: str):
                             revaluation_result = await revalue_after_price_updates(
                                 hass, reval_conn, updated_security_uuids_final
                             )
-                    except Exception:
+                    except sqlite3.Error:
                         _LOGGER.warning(
                             "prices_cycle: Fehler bei partieller Revaluation",
                             exc_info=True,
@@ -599,20 +643,20 @@ async def _run_price_cycle(hass, entry_id: str):
             if changed_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
 
-                # Fallback: Wenn Revaluation nichts liefert, aber Preise geändert → aggregiere betroffene Portfolios direkt
+                # Fallback: Wenn Revaluation nichts liefert, aber Preise geändert,
+                # aggregiere betroffene Portfolios direkt.
                 if not pv_dict:
                     try:
                         affected_portfolios: set[str] = set()
                         with sqlite3.connect(str(db_path)) as conn:
-                            cur = conn.execute(
-                                f"""
-                                SELECT DISTINCT portfolio_uuid
-                                FROM portfolio_securities
-                                WHERE security_uuid IN ({",".join("?" for _ in scaled_updates)})
-                                """,
-                                tuple(scaled_updates.keys()),
-                            )
-                            affected_portfolios.update(r for (r,) in cur.fetchall())
+                            for sec_uuid in scaled_updates:
+                                cur = conn.execute(
+                                    "SELECT DISTINCT portfolio_uuid "
+                                    "FROM portfolio_securities "
+                                    "WHERE security_uuid=?",
+                                    (sec_uuid,),
+                                )
+                                affected_portfolios.update(r for (r,) in cur.fetchall())
 
                         if affected_portfolios:
                             fallback = {}
@@ -634,19 +678,28 @@ async def _run_price_cycle(hass, entry_id: str):
                                         "count": cnt,
                                         "purchase_sum": purch,
                                     }
-                                except Exception:
+                                except (
+                                    HomeAssistantError,
+                                    sqlite3.Error,
+                                    ValueError,
+                                    TypeError,
+                                ):
                                     _LOGGER.debug(
-                                        "prices_cycle: Fehler im Fallback-Aggregat pid=%s",
+                                        (
+                                            "prices_cycle: Fehler im Fallback-Aggregat "
+                                            "pid=%s"
+                                        ),
                                         pid,
                                         exc_info=True,
                                     )
                             if fallback:
                                 pv_dict = fallback
-                                _LOGGER.debug(
-                                    "prices_cycle: Revaluation leer – Fallback Aggregation genutzt (portfolios=%d)",
-                                    len(fallback),
+                                fallback_msg = (
+                                    "prices_cycle: Revaluation leer - Fallback "
+                                    "Aggregation genutzt (portfolios=%d)"
                                 )
-                    except Exception:
+                                _LOGGER.debug(fallback_msg, len(fallback))
+                    except sqlite3.Error:
                         _LOGGER.debug(
                             "prices_cycle: Fallback Aggregation fehlgeschlagen",
                             exc_info=True,
@@ -656,32 +709,37 @@ async def _run_price_cycle(hass, entry_id: str):
                     try:
                         pv_payload = _build_portfolio_values_payload(pv_dict)
 
-                        # Diff-Logging (alter vs neuer Wert) – nur DEBUG
+                        # Diff-Logging (alter vs neuer Wert) - nur DEBUG
                         if _LOGGER.isEnabledFor(logging.DEBUG):
                             try:
                                 with sqlite3.connect(str(db_path)) as diff_conn:
-                                    cur = diff_conn.execute(
-                                        "SELECT uuid FROM portfolios WHERE uuid IN ({})".format(
-                                            ",".join("?" for _ in pv_dict)
-                                        ),
-                                        tuple(pv_dict.keys()),
-                                    )
-                                    present = {r[0] for r in cur.fetchall()}
+                                    present: set[str] = set()
+                                    for pid in pv_dict:
+                                        cur = diff_conn.execute(
+                                            "SELECT 1 FROM portfolios WHERE uuid=?",
+                                            (pid,),
+                                        )
+                                        if cur.fetchone():
+                                            present.add(pid)
                                 for row in pv_payload:
                                     pid = row["uuid"]
                                     if pid not in present:
-                                        _LOGGER.debug(
-                                            "prices_cycle: pv_event WARN fehlendes Portfolio in DB pid=%s",
-                                            pid,
+                                        warn_msg = (
+                                            "prices_cycle: pv_event WARN fehlendes "
+                                            "Portfolio in DB pid=%s"
                                         )
-                            except Exception:
+                                        _LOGGER.debug(warn_msg, pid)
+                            except sqlite3.Error:
                                 _LOGGER.debug(
                                     "prices_cycle: Diff-Check Fehler", exc_info=True
                                 )
 
                         if pv_payload:
                             _LOGGER.debug(
-                                "prices_cycle: pv_event push count=%d changed_secs=%d payload=%s",
+                                (
+                                    "prices_cycle: pv_event push count=%d "
+                                    "changed_secs=%d payload=%s"
+                                ),
                                 len(pv_payload),
                                 detected_changes,
                                 pv_payload,
@@ -689,10 +747,13 @@ async def _run_price_cycle(hass, entry_id: str):
                             _push_update(hass, entry_id, "portfolio_values", pv_payload)
                         else:
                             _LOGGER.warning(
-                                "prices_cycle: Geänderte Preise (%s) aber leere pv_payload nach Transformation",
+                                (
+                                    "prices_cycle: Geänderte Preise (%s) aber leere "
+                                    "pv_payload nach Transformation"
+                                ),
                                 changed_count,
                             )
-                    except Exception:
+                    except (HomeAssistantError, ValueError):
                         _LOGGER.warning(
                             "prices_cycle: Fehler beim portfolio_values Event-Push",
                             exc_info=True,
@@ -700,7 +761,10 @@ async def _run_price_cycle(hass, entry_id: str):
 
                 else:
                     _LOGGER.debug(
-                        "prices_cycle: Keine portfolio_values (revaluation leer) obwohl changed=%s",
+                        (
+                            "prices_cycle: Keine portfolio_values (revaluation leer) "
+                            "obwohl changed=%s"
+                        ),
                         changed_count,
                     )
 
@@ -726,7 +790,7 @@ async def _run_price_cycle(hass, entry_id: str):
                             "prices_cycle: Keine positions_map (skip push) changed=%s",
                             changed_count,
                         )
-                except Exception:
+                except (HomeAssistantError, sqlite3.Error, ValueError):
                     _LOGGER.warning(
                         "prices_cycle: Fehler beim Push portfolio_positions",
                         exc_info=True,
@@ -743,7 +807,10 @@ async def _run_price_cycle(hass, entry_id: str):
 
             try:
                 _LOGGER.info(
-                    "prices_cycle symbols=%s batches=%s returned=%s changed=%s errors=%s duration=%sms skipped_running=%s",
+                    (
+                        "prices_cycle symbols=%s batches=%s returned=%s changed=%s "
+                        "errors=%s duration=%sms skipped_running=%s"
+                    ),
                     meta["symbols_total"],
                     meta["batches"],
                     meta["quotes_returned"],
@@ -752,33 +819,44 @@ async def _run_price_cycle(hass, entry_id: str):
                     meta["duration_ms"],
                     meta["skipped_running"],
                 )
-            except Exception:
+            except (TypeError, ValueError):
                 _LOGGER.debug("prices_cycle: INFO Log fehlgeschlagen", exc_info=True)
 
             if (
                 not meta.get("skipped_running")
                 and isinstance(meta.get("duration_ms"), int)
-                and meta["duration_ms"] > 25000
+                and meta["duration_ms"] > WATCHDOG_DURATION_THRESHOLD_MS
             ):
                 _LOGGER.warning(
-                    "prices_cycle: Watchdog-Schwelle überschritten (duration_ms=%s >25000)",
+                    (
+                        "prices_cycle: Watchdog-Schwelle überschritten "
+                        "(duration_ms=%s >%s)"
+                    ),
                     meta["duration_ms"],
+                    WATCHDOG_DURATION_THRESHOLD_MS,
                 )
 
             if (
                 not skipped_running
-                and store.get("price_error_counter", 0) >= 3
+                and store.get("price_error_counter", 0) >= CONSECUTIVE_ERROR_THRESHOLD
                 and len(all_quotes) == 0
             ):
                 _LOGGER.warning(
-                    "prices_cycle: Wiederholte Fehlschläge (error_counter=%s ≥3) – weiterhin keine gültigen Quotes",
+                    (
+                        "prices_cycle: Wiederholte Fehlschläge (error_counter=%s >=%s) "
+                        "- weiterhin keine gültigen Quotes"
+                    ),
                     store["price_error_counter"],
+                    CONSECUTIVE_ERROR_THRESHOLD,
                 )
 
             if has_import_error() and not store.get("price_provider_disabled"):
                 store["price_provider_disabled"] = True
                 _LOGGER.error(
-                    "prices_cycle: yahooquery Importfehler erkannt – Live-Preis Feature deaktiviert (entry_id=%s)",
+                    (
+                        "prices_cycle: yahooquery Importfehler erkannt - Live-Preis "
+                        "Feature deaktiviert (entry_id=%s)"
+                    ),
                     entry_id,
                 )
 
@@ -787,14 +865,10 @@ async def _run_price_cycle(hass, entry_id: str):
                     "prices_cycle: Fehlerzähler zurückgesetzt (previous=%s)",
                     prev_error_counter,
                 )
-
-            return meta
-        except Exception:  # Outer guard
+        except Exception:
             # Increment error counter & return safe meta
             store["price_error_counter"] = store.get("price_error_counter", 0) + 1
-            _LOGGER.error(
-                "prices_cycle: Unerwarteter Ausnahmefehler im Zyklus", exc_info=True
-            )
+            _LOGGER.exception("prices_cycle: Unerwarteter Ausnahmefehler im Zyklus")
             return {
                 "symbols_total": store.get("price_last_symbol_count", 0),
                 "batches": 0,
@@ -804,3 +878,5 @@ async def _run_price_cycle(hass, entry_id: str):
                 "duration_ms": int((time.time() - cycle_start_ts) * 1000),
                 "skipped_running": False,
             }
+        else:
+            return meta
