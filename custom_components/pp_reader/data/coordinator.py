@@ -20,7 +20,14 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from custom_components.pp_reader.logic import accounting as _accounting_module
+
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
+
+try:
+    from . import reader as _reader_module
+except ModuleNotFoundError:  # pragma: no cover - optional dep for tests
+    _reader_module = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -262,15 +269,11 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         """Parse and persist the portfolio when the file has changed."""
         _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
 
-        try:
-            reader_module = import_module(
-                "custom_components.pp_reader.data.reader"
-            )
-        except ModuleNotFoundError as err:  # pragma: no cover - optional dep for tests
+        if _reader_module is None:  # pragma: no cover - optional dep for tests
             msg = "protobuf runtime is required to parse Portfolio Performance files"
-            raise UpdateFailed(msg) from err
+            raise UpdateFailed(msg)
 
-        parse_data_portfolio = reader_module.parse_data_portfolio
+        parse_data_portfolio = _reader_module.parse_data_portfolio
 
         data = await self.hass.async_add_executor_job(
             parse_data_portfolio, str(self.file_path)
@@ -300,10 +303,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self, accounts: Iterable[Any], transactions: Iterable[Any]
     ) -> dict[str, Any]:
         """Aggregate balances for each account using the shared helper."""
-        accounting_module = import_module(
-            "custom_components.pp_reader.logic.accounting"
-        )
-        calculate_account_balance = accounting_module.calculate_account_balance
+        calculate_account_balance = _accounting_module.calculate_account_balance
 
         return {
             account.uuid: calculate_account_balance(account.uuid, transactions)
