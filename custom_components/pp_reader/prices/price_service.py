@@ -54,6 +54,9 @@ INVALID_SCALED_PRICE_ERROR = (
     "Ungültiger skalierten Preis (ensure_no_extra_persist Guard)"
 )
 ZERO_QUOTES_WARN_INTERVAL = 1_800
+# Yahoo Finance benötigt teils >10s für große Chunks –
+# 20s verhindern False-Timeouts.
+PRICE_FETCH_TIMEOUT = 20
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -488,7 +491,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 )
                 try:
                     quotes_dict = await asyncio.wait_for(
-                        provider.fetch(batch_symbols), timeout=10
+                        provider.fetch(batch_symbols), timeout=PRICE_FETCH_TIMEOUT
                     )
                 except TimeoutError:
                     chunk_failure_count += 1

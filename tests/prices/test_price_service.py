@@ -108,7 +108,8 @@ def _init_store(
     store = hass.data[DOMAIN][entry_id]
     store["db_path"] = db_path
     store["price_symbols"] = list(symbols_map.keys())
-    store["price_symbol_map"] = symbols_map  # wird in _run_price_cycle konsumiert
+    store["price_symbol_map"] = symbols_map  # Legacy Name (bleibt für ältere Tests)
+    store["price_symbol_to_uuids"] = symbols_map
     return store
 
 
@@ -196,6 +197,28 @@ async def test_no_change_no_events(monkeypatch, tmp_path):
     meta = await price_service._run_price_cycle(hass, entry_id)
     assert meta["changed"] == 0
     assert events == []  # keine Events
+
+
+@pytest.mark.asyncio
+async def test_fetch_uses_configured_timeout(monkeypatch, tmp_path):
+    hass = FakeHass()
+    entry_id = "timeout"
+    db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", None)
+    _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
+
+    async def fake_fetch(symbols):
+        return {"AAPL": _make_quote("AAPL", 1.0, "USD")}
+
+    async def fake_wait_for(awaitable, timeout, *, loop=None):
+        assert timeout == price_service.PRICE_FETCH_TIMEOUT
+        return await awaitable
+
+    monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
+    monkeypatch.setattr(price_service.asyncio, "wait_for", fake_wait_for)
+
+    meta = await price_service._run_price_cycle(hass, entry_id)
+
+    assert meta["quotes_returned"] == 1
 
 
 @pytest.mark.asyncio
