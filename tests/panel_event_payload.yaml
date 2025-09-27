@@ -11,10 +11,14 @@ data:
     position_count: 45
     current_value: 50000.00
     purchase_sum: 40000.00
+    gain_abs: 10000.00
+    gain_pct: 25.0
   - uuid: f9996e0d-743d-417f-b0f2-150dd68df646
     position_count: 2
     current_value: 1000.00
     purchase_sum: 500.00
+    gain_abs: 500.00
+    gain_pct: 100.0
 
 # --- portfolio_positions (ein Portfolio) ---
 # domain: pp_reader

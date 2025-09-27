@@ -148,11 +148,18 @@ def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] 
         except (TypeError, ValueError):
             return 0
 
+    current_value = _float("current_value", "value")
+    purchase_sum = _float("purchase_sum")
+    gain_abs = round(current_value - purchase_sum, 2)
+    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum else 0.0, 2)
+
     return {
         "uuid": str(uuid),
         "position_count": _int("position_count", "count"),
-        "current_value": _float("current_value", "value"),
-        "purchase_sum": _float("purchase_sum"),
+        "current_value": current_value,
+        "purchase_sum": purchase_sum,
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
     }
 
 

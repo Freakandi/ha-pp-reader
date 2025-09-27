@@ -141,6 +141,8 @@ def test_compact_event_data_trims_portfolio_values_list() -> None:
             "position_count": 3,
             "current_value": 1234.57,
             "purchase_sum": 1100.0,
+            "gain_abs": 134.57,
+            "gain_pct": 12.23,
         }
     ]
 
@@ -170,6 +172,8 @@ def test_compact_event_data_trims_portfolio_values_mapping() -> None:
             "position_count": 1,
             "current_value": 200.99,
             "purchase_sum": 199.0,
+            "gain_abs": 1.99,
+            "gain_pct": pytest.approx(1.0, rel=0, abs=0.01),
         }
     ]
 

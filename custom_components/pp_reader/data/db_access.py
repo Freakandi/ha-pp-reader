@@ -406,11 +406,19 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
         except (TypeError, ValueError):
             return 0.0
 
+    current_value = _cent_to_eur(row["current_value"])
+    purchase_sum = _cent_to_eur(row["purchase_sum"])
+
+    gain_abs = round(current_value - purchase_sum, 2)
+    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum > 0 else 0.0, 2)
+
     return {
         "uuid": row["uuid"],
         "name": row["name"],
-        "current_value": _cent_to_eur(row["current_value"]),
-        "purchase_sum": _cent_to_eur(row["purchase_sum"]),
+        "current_value": current_value,
+        "purchase_sum": purchase_sum,
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
         "position_count": row["position_count"]
         if row["position_count"] is not None
         else 0,
@@ -428,6 +436,8 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             "name": <str>,
             "current_value": <float>,    # EUR (2 Nachkommastellen)
             "purchase_sum": <float>,     # EUR (2 Nachkommastellen)
+            "gain_abs": <float>,         # EUR (2 Nachkommastellen)
+            "gain_pct": <float>,         # % (2 Nachkommastellen)
             "position_count": <int>
           },
           ...
