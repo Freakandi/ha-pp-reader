@@ -222,7 +222,7 @@ async def ws_get_accounts(
                     )
                     _LOGGER.warning(message)
                 else:
-                    today = datetime.now(datetime.UTC)
+                    today = datetime.now(timezone.utc)  # noqa: UP017
                     await ensure_rates([today], active_fx_currencies, db_path)
                     fx_rates = await load_rates(today, db_path)
         except Exception:  # noqa: BLE001
@@ -325,7 +325,7 @@ async def ws_get_last_file_update(
             try:
                 parsed_update = datetime.strptime(
                     last_file_update_raw, "%Y-%m-%dT%H:%M:%S"
-                ).replace(tzinfo=timezone.utc)
+                ).replace(tzinfo=timezone.utc)  # noqa: UP017
                 last_file_update = parsed_update.strftime("%d.%m.%Y, %H:%M")
             except ValueError:
                 _LOGGER.exception("Fehler beim Parsen des Zeitstempels")

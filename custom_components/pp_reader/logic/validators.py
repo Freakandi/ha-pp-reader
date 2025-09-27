@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar
 
 try:  # pragma: no cover - dependency optional for unit tests
@@ -124,8 +124,11 @@ class PPDataValidator:
             )
 
         try:
-            tx_date = datetime.fromtimestamp(tx.date.seconds, tz=datetime.UTC)
-            now_utc = datetime.now(tz=datetime.UTC)
+            tx_date = datetime.fromtimestamp(
+                tx.date.seconds,
+                tz=timezone.utc,  # noqa: UP017
+            )
+            now_utc = datetime.now(tz=timezone.utc)  # noqa: UP017
             if tx_date > now_utc:
                 return ValidationResult(
                     is_valid=False,
