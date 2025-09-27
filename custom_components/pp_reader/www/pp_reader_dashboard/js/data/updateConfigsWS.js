@@ -185,12 +185,33 @@ export function handlePortfolioUpdate(update, root) {
 
   // Total-Wealth neu berechnen (Accounts + Portfolios)
   try {
-    const eurTable = root.querySelector('.accounts-eur-table table');
-    const fxTable = root.querySelector('.accounts-fx-table table');
+    const findTable = (...selectors) => {
+      for (const selector of selectors) {
+        if (!selector) continue;
+        const tableEl = root?.querySelector(selector);
+        if (tableEl) return tableEl;
+      }
+      return null;
+    };
+
+    const eurTable = findTable(
+      '.account-table table',
+      '.accounts-eur-table table',
+      '.accounts-table table'
+    );
+    const fxTable = findTable(
+      '.fx-account-table table',
+      '.accounts-fx-table table'
+    );
 
     const extractAccounts = (tbl, isFx) => {
       if (!tbl) return [];
-      return Array.from(tbl.querySelectorAll('tbody tr.account-row')).map(r => {
+      const accountRows = tbl.querySelectorAll('tbody tr.account-row');
+      const rows = accountRows.length
+        ? Array.from(accountRows)
+        : Array.from(tbl.querySelectorAll('tbody tr:not(.footer-row)'));
+
+      return rows.map(r => {
         const cell = isFx ? r.cells[2] : r.cells[1];
         return { balance: parseNumLoose(cell?.textContent) };
       });
