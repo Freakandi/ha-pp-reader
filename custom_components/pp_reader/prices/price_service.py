@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
+from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.sync_from_pclient import (
     _push_update,
     fetch_positions_for_portfolios,
@@ -33,6 +34,11 @@ from custom_components.pp_reader.data.sync_from_pclient import (
 from custom_components.pp_reader.logic.portfolio import (
     db_calculate_portfolio_purchase_sum,
     db_calculate_portfolio_value_and_count,
+)
+from custom_components.pp_reader.logic.securities import (
+    db_calculate_current_holdings,
+    db_calculate_holdings_value,
+    db_calculate_sec_purchase_value,
 )
 from custom_components.pp_reader.prices.revaluation import revalue_after_price_updates
 from custom_components.pp_reader.prices.yahooquery_provider import (
@@ -313,6 +319,185 @@ def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
     if not updates:
         return {}
     return {k: v for k, v in updates.items() if isinstance(v, int) and v > 0}
+
+
+def _refresh_impacted_portfolio_securities(
+    db_path: Path, scaled_updates: dict[str, int]
+) -> set[str]:
+    """Recalculate portfolio/security aggregates for affected securities."""
+
+    if not scaled_updates:
+        return set()
+
+    security_ids = [sec for sec in set(scaled_updates.keys()) if sec]
+    if not security_ids:
+        return set()
+
+    impacted_portfolios: set[str] = set()
+
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            existing_entries: dict[tuple[str, str], tuple[float, int, int]] = {}
+            impacted_pairs: set[tuple[str, str]] = set()
+
+            placeholders = ",".join("?" for _ in security_ids)
+            try:
+                cur = conn.execute(
+                    f"""
+                        SELECT portfolio_uuid, security_uuid, current_holdings,
+                               purchase_value, current_value
+                        FROM portfolio_securities
+                        WHERE security_uuid IN ({placeholders})
+                    """,
+                    tuple(security_ids),
+                )
+            except sqlite3.Error:
+                _LOGGER.debug(
+                    "prices_cycle: portfolio_securities Lookup übersprungen (Tabelle fehlt?)",
+                    exc_info=True,
+                )
+                return set()
+
+            for portfolio_uuid, security_uuid, cur_hold, purch_val, cur_val in cur.fetchall():
+                key = (portfolio_uuid, security_uuid)
+                impacted_pairs.add(key)
+                impacted_portfolios.add(portfolio_uuid)
+                existing_entries[key] = (
+                    float(cur_hold or 0.0),
+                    int(purch_val or 0),
+                    int(cur_val or 0),
+                )
+
+            transaction_rows: list[tuple] = []
+            try:
+                tx_cur = conn.execute(
+                    f"""
+                        SELECT uuid, type, account, portfolio, other_account, other_portfolio,
+                               date, currency_code, amount, shares, security
+                        FROM transactions
+                        WHERE security IN ({placeholders})
+                          AND portfolio IS NOT NULL
+                    """,
+                    tuple(security_ids),
+                )
+                transaction_rows = tx_cur.fetchall()
+            except sqlite3.Error:
+                _LOGGER.debug(
+                    "prices_cycle: transactions Lookup fehlgeschlagen (Refresh übersprungen)",
+                    exc_info=True,
+                )
+
+            transactions: list[DbTransaction] = [
+                DbTransaction(*row) for row in transaction_rows
+            ]
+
+            for tx in transactions:
+                if tx.portfolio and tx.security:
+                    key = (tx.portfolio, tx.security)
+                    impacted_pairs.add(key)
+                    impacted_portfolios.add(tx.portfolio)
+
+            if not impacted_pairs:
+                return set()
+
+            current_holdings = (
+                db_calculate_current_holdings(transactions) if transactions else {}
+            )
+            purchase_values = (
+                db_calculate_sec_purchase_value(transactions, db_path)
+                if transactions
+                else {}
+            )
+
+            current_hold_pur: dict[tuple[str, str], dict[str, float]] = {}
+            for key in impacted_pairs:
+                holdings = current_holdings.get(key)
+                purchase_value = purchase_values.get(key)
+
+                if holdings is None and key in existing_entries:
+                    holdings = existing_entries[key][0]
+                if purchase_value is None and key in existing_entries:
+                    purchase_value = round(existing_entries[key][1] / 100, 2)
+
+                if holdings is None:
+                    continue
+
+                current_hold_pur[key] = {
+                    "current_holdings": holdings,
+                    "purchase_value": purchase_value or 0.0,
+                }
+
+            if not current_hold_pur:
+                return impacted_portfolios
+
+            holdings_values = db_calculate_holdings_value(
+                db_path, conn, current_hold_pur
+            )
+            if not holdings_values:
+                return impacted_portfolios
+
+            upserts: list[tuple[str, str, float, int, int]] = []
+            for key, data in holdings_values.items():
+                portfolio_uuid, security_uuid = key
+                current_holdings_val = float(data.get("current_holdings", 0.0) or 0.0)
+                purchase_value_eur = float(data.get("purchase_value", 0.0) or 0.0)
+                current_value_eur = float(data.get("current_value", 0.0) or 0.0)
+
+                expected_values = (
+                    current_holdings_val,
+                    int(round(purchase_value_eur * 100)),
+                    int(round(current_value_eur * 100)),
+                )
+
+                existing_entry = existing_entries.get(key)
+                if existing_entry and (
+                    abs(existing_entry[0] - expected_values[0]) < 1e-9
+                    and existing_entry[1] == expected_values[1]
+                    and existing_entry[2] == expected_values[2]
+                ):
+                    continue
+
+                upserts.append(
+                    (
+                        portfolio_uuid,
+                        security_uuid,
+                        current_holdings_val,
+                        expected_values[1],
+                        expected_values[2],
+                    )
+                )
+
+            if not upserts:
+                return impacted_portfolios
+
+            try:
+                conn.execute("BEGIN")
+                conn.executemany(
+                    """
+                        INSERT OR REPLACE INTO portfolio_securities (
+                            portfolio_uuid,
+                            security_uuid,
+                            current_holdings,
+                            purchase_value,
+                            current_value
+                        ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    upserts,
+                )
+                conn.commit()
+            except sqlite3.Error:
+                conn.rollback()
+                _LOGGER.warning(
+                    "prices_cycle: Fehler beim Aktualisieren von portfolio_securities",
+                    exc_info=True,
+                )
+            return impacted_portfolios
+    except sqlite3.Error:
+        _LOGGER.debug(
+            "prices_cycle: Verbindung für portfolio_securities Refresh fehlgeschlagen",
+            exc_info=True,
+        )
+        return set()
 
 
 def _process_currency_drift_skip_none(
@@ -613,6 +798,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             )
             detected_changes = len(changed_security_uuids)
 
+            impacted_portfolios: set[str] = set()
+
             if scaled_updates and db_path:
                 scaled_updates = _filter_invalid_updates(scaled_updates)
                 if not scaled_updates:
@@ -632,6 +819,18 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             detected_changes,
                             updated_rows,
                         )
+                    if updated_rows > 0:
+                        try:
+                            impacted_portfolios = await hass.async_add_executor_job(
+                                _refresh_impacted_portfolio_securities,
+                                db_path,
+                                scaled_updates,
+                            )
+                        except Exception:  # noqa: BLE001 - Logging für Diagnose
+                            _LOGGER.debug(
+                                "prices_cycle: Refresh portfolio_securities fehlgeschlagen",
+                                exc_info=True,
+                            )
                     changed_count = updated_rows
             else:
                 changed_count = 0
@@ -661,16 +860,19 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 # aggregiere betroffene Portfolios direkt.
                 if not pv_dict:
                     try:
-                        affected_portfolios: set[str] = set()
-                        with sqlite3.connect(str(db_path)) as conn:
-                            for sec_uuid in scaled_updates:
-                                cur = conn.execute(
-                                    "SELECT DISTINCT portfolio_uuid "
-                                    "FROM portfolio_securities "
-                                    "WHERE security_uuid=?",
-                                    (sec_uuid,),
-                                )
-                                affected_portfolios.update(r for (r,) in cur.fetchall())
+                        affected_portfolios: set[str] = set(impacted_portfolios)
+                        if not affected_portfolios:
+                            with sqlite3.connect(str(db_path)) as conn:
+                                for sec_uuid in scaled_updates:
+                                    cur = conn.execute(
+                                        "SELECT DISTINCT portfolio_uuid "
+                                        "FROM portfolio_securities "
+                                        "WHERE security_uuid=?",
+                                        (sec_uuid,),
+                                    )
+                                    affected_portfolios.update(
+                                        r for (r,) in cur.fetchall()
+                                    )
 
                         if affected_portfolios:
                             fallback = {}
