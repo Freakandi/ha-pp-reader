@@ -65,8 +65,38 @@ async def _load_rates_for_date(db_path: Path, date: str) -> dict[str, float]:
     return await _execute_db(_load_rates_for_date_sync, db_path, date)
 
 
-async def _save_rates(db_path: Path, date: str, rates: dict[str, float]) -> None:
-    await _execute_db(_save_rates_sync, db_path, date, rates)
+async def _save_rates(
+    db_path: Path,
+    date: str,
+    rates: dict[str, float],
+    *,
+    retries: int = 3,
+    initial_delay: float = 0.5,
+) -> None:
+    if not rates:
+        return
+
+    delay = initial_delay
+    last_error: sqlite3.OperationalError | None = None
+
+    for attempt in range(1, retries + 1):
+        try:
+            await _execute_db(_save_rates_sync, db_path, date, rates)
+        except sqlite3.OperationalError as err:
+            if "database is locked" not in str(err).lower():
+                raise
+
+            last_error = err
+            if attempt == retries:
+                break
+
+            await asyncio.sleep(delay)
+            delay *= 2
+        else:
+            return
+
+    if last_error is not None:
+        raise last_error
 
 
 async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
