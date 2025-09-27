@@ -8,7 +8,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from google.protobuf.timestamp_pb2 import Timestamp
+try:  # pragma: no cover - dependency optional for unit tests
+    from google.protobuf.timestamp_pb2 import Timestamp
+except ModuleNotFoundError as err:  # pragma: no cover - protobuf dependency missing
+    Timestamp = None  # type: ignore[assignment]
+    _TIMESTAMP_IMPORT_ERROR = err
+else:
+    _TIMESTAMP_IMPORT_ERROR = None
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
 
@@ -96,6 +102,13 @@ DOMAIN = "pp_reader"
 _LOGGER = logging.getLogger(__name__)
 
 
+def _require_timestamp_support() -> None:
+    """Ensure the protobuf Timestamp dependency is available."""
+    if _TIMESTAMP_IMPORT_ERROR is not None:  # pragma: no cover - defensive
+        msg = "protobuf runtime is required to work with Portfolio Performance data"
+        raise RuntimeError(msg) from _TIMESTAMP_IMPORT_ERROR
+
+
 def to_iso8601(ts: Timestamp) -> str:
     """
     Convert a Google Protobuf Timestamp to an ISO 8601 formatted string.
@@ -112,6 +125,7 @@ def to_iso8601(ts: Timestamp) -> str:
         or None if the timestamp is invalid or has zero seconds.
 
     """
+    _require_timestamp_support()
     return ts.ToDatetime().isoformat() if ts is not None and ts.seconds != 0 else None
 
 
@@ -575,6 +589,8 @@ class _SyncRunner:
                     )
 
                 latest_price = max(security.prices, key=lambda price: price.date)
+                _require_timestamp_support()
+                assert Timestamp is not None  # noqa: S101 - runtime guard for type checkers
                 latest_price_date_iso = to_iso8601(
                     Timestamp(seconds=latest_price.date * 86400)
                 )
