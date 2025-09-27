@@ -931,7 +931,7 @@ class _SyncRunner:
             return
         portfolio_values: list[dict[str, Any]] = []
         try:
-            portfolio_values = fetch_live_portfolios(self.conn, self.db_path)
+            portfolio_values = fetch_live_portfolios(self.db_path)
             if not portfolio_values:
                 _LOGGER.debug(
                     "sync_from_pclient: Keine Portfolio-Werte für Event vorhanden "
