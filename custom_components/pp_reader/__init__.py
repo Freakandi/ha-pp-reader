@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Final
 
@@ -114,7 +114,7 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
         return
 
     try:
-        cache_bust = datetime.now(datetime.UTC).strftime("%Y%m%d%H%M%S")
+        cache_bust = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         await panel_custom_async_register_panel(
             hass,
             frontend_url_path="ppreader",
