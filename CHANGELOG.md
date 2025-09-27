@@ -6,15 +6,16 @@ Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Change
 
 ## [0.11.0] - 2025-09-27
 ### Added
-- On-Demand Aggregation über `fetch_live_portfolios` für WebSocket Initial-Loads und Events; liefert stets aktuelle `current_value`/`purchase_sum`/`position_count` direkt aus der DB.
-- Gemeinsame Helper für Portfolio-Summen im Dashboard (DOM-basierte Footer/Total-Wealth Aktualisierung ohne Client-Cache).
-### Removed
-- Client-seitiger Override-Cache `__ppReaderPortfolioValueOverrides` inkl. sämtlicher Set/Reset/Apply-Pfade.
+- Neue DB-Hilfsfunktion `fetch_live_portfolios` aggregiert aktuelle Depotwerte und Positionszahlen on demand als Single Source of Truth für WebSocket-Antworten und Dashboard-Ladepfade.【F:custom_components/pp_reader/data/db_access.py†L428-L484】
+- Regressionstests sichern die Live-Aggregation sowie die WebSocket-Flows für Portfolios und FX-Konten ab.【F:tests/test_fetch_live_portfolios.py†L1-L72】【F:tests/test_ws_portfolios_live.py†L1-L94】【F:tests/test_ws_accounts_fx.py†L120-L191】
 ### Changed
-- WebSocket Handler (`pp_reader/get_portfolio_data`, `pp_reader/get_dashboard_data`) beziehen Aggregationen ausschließlich Server-seitig.
-- Preis-Event Pfad und Sync-Prozess nutzen denselben Aggregations-Helper als Single Source of Truth.
+- WebSocket-Kommandos (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_last_file_update`) laden Portfolios jetzt on demand aus der Datenbank, holen fehlende FX-Kurse nach und besitzen Coordinator-Fallbacks für fehlerfreie Antworten.【F:custom_components/pp_reader/data/websocket.py†L65-L341】
+- Revaluation und Preis-Events greifen auf `fetch_live_portfolios` zurück, um betroffene Portfolios mit konsistenten Summen zu füllen und bei Problemen auf Einzelaggregation zurückzufallen.【F:custom_components/pp_reader/prices/revaluation.py†L1-L118】
+- Das Dashboard rendert eine expandierbare Tabelle mit DOM-basiertem Summen-Footer und cached nur noch Positionsdaten, sodass Aktualisierungen ohne manuelle Override-Caches funktionieren.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js†L4-L160】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js†L203-L263】
+### Removed
+- Client-Override-Caches für Depotwerte entfallen, das UI verlässt sich vollständig auf die serverseitige Aggregation und DOM-Neuberechnungen.【F:README.md†L82-L93】
 ### Internal
-- Dokumentation (ARCHITECTURE.md) beschreibt Frontend-Flow ohne Overrides und verweist auf On-Demand Aggregation.
+- Erweiterte Tests für Revaluation und Sync sichern den Refactor der Aggregationspfade ab.【F:tests/prices/test_revaluation_live_aggregation.py†L1-L62】【F:tests/test_sync_from_pclient.py†L1-L60】
 
 ## [0.10.7] - 2025-09-26
 ### Added
