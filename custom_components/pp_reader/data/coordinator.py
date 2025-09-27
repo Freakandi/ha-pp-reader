@@ -11,22 +11,147 @@ It includes functionality to:
 
 import logging
 import sqlite3
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from ..logic.accounting import calculate_account_balance
-from ..logic.portfolio import calculate_portfolio_value, calculate_purchase_sum
+from custom_components.pp_reader.logic.accounting import calculate_account_balance
 
-from .db_access import get_accounts, get_portfolios, get_transactions
+from .db_access import fetch_live_portfolios, get_accounts, get_transactions
 from .reader import parse_data_portfolio
 from .sync_from_pclient import sync_from_pclient
 
 _LOGGER = logging.getLogger(__name__)
 
 
+def _get_last_db_update(db_path: Path) -> datetime | None:
+    """Read the last known file timestamp from the metadata table."""
+    with sqlite3.connect(str(db_path)) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT date FROM metadata WHERE key = 'last_file_update'")
+        result = cur.fetchone()
+    if result and result[0]:
+        return datetime.fromisoformat(result[0])
+    return None
+
+
+def _sync_data_to_db(
+    data: Mapping[str, Any],
+    hass: HomeAssistant,
+    entry_id: str,
+    last_update_iso: str,
+    db_path: Path,
+) -> None:
+    """Persist parsed portfolio data to SQLite using the legacy sync helper."""
+    with sqlite3.connect(str(db_path)) as conn:
+        sync_from_pclient(
+            data,
+            conn,
+            hass,
+            entry_id,
+            last_update_iso,
+            db_path,
+        )
+
+
+def _normalize_amount(value: Any) -> float:
+    """Konvertiert Cent-Werte oder Float-Werte zu EUR (float)."""
+    if value is None:
+        return 0.0
+    if isinstance(value, int):
+        return value / 100
+    if isinstance(value, float):
+        return value
+    try:
+        as_int = int(value)
+    except (TypeError, ValueError):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+    return as_int / 100
+
+
+def _portfolio_contract_entry(
+    entry: Mapping[str, Any] | None,
+) -> tuple[str, dict[str, Any]] | None:
+    """Normalize aggregation rows to the coordinator sensor contract (item 4a)."""
+    if not isinstance(entry, Mapping):
+        return None
+
+    portfolio_uuid = entry.get("uuid") or entry.get("portfolio_uuid")
+    if not portfolio_uuid:
+        return None
+
+    current_value_raw = entry.get("current_value")
+    if current_value_raw is None:
+        current_value_raw = entry.get("value")
+
+    purchase_sum_raw = entry.get("purchase_sum")
+    if purchase_sum_raw is None:
+        purchase_sum_raw = entry.get("purchaseSum")
+
+    position_count_raw = entry.get("position_count")
+    if position_count_raw is None:
+        position_count_raw = entry.get("count")
+    if position_count_raw is None:
+        position_count_raw = 0
+    try:
+        position_count = int(position_count_raw or 0)
+    except (TypeError, ValueError):
+        position_count = 0
+
+    current_value = round(_normalize_amount(current_value_raw), 2)
+    purchase_sum = round(_normalize_amount(purchase_sum_raw), 2)
+
+    return portfolio_uuid, {
+        "name": entry.get("name"),
+        "value": current_value,
+        "count": position_count,
+        "purchase_sum": purchase_sum,
+    }
+
+
+def _coerce_live_portfolios(raw_portfolios: Any) -> list[Any]:
+    """Convert the aggregation result into an iterable list."""
+    if isinstance(raw_portfolios, dict):
+        return list(raw_portfolios.values())
+    if isinstance(raw_portfolios, list):
+        return raw_portfolios
+    if raw_portfolios:
+        return list(raw_portfolios)
+    return []
+
+
+def _build_portfolio_data(live_portfolios: Iterable[Any]) -> dict[str, dict[str, Any]]:
+    """Create the coordinator contract for portfolio entries."""
+    portfolio_data: dict[str, dict[str, Any]] = {}
+    for entry in live_portfolios:
+        normalized = _portfolio_contract_entry(entry)
+        if not normalized:
+            continue
+        portfolio_uuid, payload = normalized
+        portfolio_data[portfolio_uuid] = payload
+    return portfolio_data
+
+
+# NOTE (On-Demand Aggregation Migration):
+# The dashboard / WebSocket layer now obtains live portfolio aggregates via the
+# on-demand helper (fetch_live_portfolios) to ensure a single source of truth
+# that already reflects the latest persisted live prices. This coordinator
+# instance remains the authoritative (legacy) data source ONLY for sensor entities.
+# DO NOT:
+# - Mutate key names or nested shapes in self.data (accounts, portfolios,
+#   transactions, last_update).
+# - Introduce divergent aggregation logic here; if aggregation changes are
+#   required they must be implemented centrally in the shared DB helpers and/or
+#   fetch_live_portfolios to avoid drift between sensor and UI values.
+# Any refactor touching aggregation should reference this comment and the
+# migration checklist in .docs/TODO_updateGoals.md (section 4).
 class PPReaderCoordinator(DataUpdateCoordinator):
     """
     A coordinator for data updates from a file, synching to an SQLite database.
@@ -72,127 +197,31 @@ class PPReaderCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict:
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
         try:
-            # Prüfe den letzten Änderungszeitstempel der Portfolio-Datei
-            last_update = self.file_path.stat().st_mtime
-            last_update_truncated = datetime.fromtimestamp(last_update).replace(  # noqa: DTZ006
-                second=0, microsecond=0
+            last_update_truncated = self._get_last_file_update()
+            last_db_update = await self.hass.async_add_executor_job(
+                _get_last_db_update, self.db_path
             )
-            # _LOGGER.debug(
-            #     "📂 Letzte Änderung der Portfolio-Datei: %s",  # noqa: ERA001
-            #     last_update_truncated,
-            # )  # noqa: ERA001, RUF100
 
-            # Vergleiche das aktuelle Änderungsdatum mit dem gespeicherten Wert
-            # in der DB
-            def get_last_db_update() -> datetime | None:
-                conn = sqlite3.connect(str(self.db_path))
-                try:
-                    cur = conn.cursor()
-                    cur.execute(
-                        "SELECT date FROM metadata WHERE key = 'last_file_update'"
-                    )
-                    result = cur.fetchone()
-                    # Überprüfen, ob result[0] ein gültiger String ist
-                    if result and result[0]:
-                        return datetime.fromisoformat(result[0])
-                    return None
-                finally:
-                    conn.close()
+            if self._should_sync(last_db_update, last_update_truncated):
+                await self._sync_portfolio_file(last_update_truncated)
 
-            last_db_update = await self.hass.async_add_executor_job(get_last_db_update)
-            # _LOGGER.debug(
-            #     "📂 Letzter gespeicherter Zeitstempel in der DB: %s",  # noqa: ERA001
-            #     last_db_update,  # noqa: ERA001
-            # )  # noqa: ERA001, RUF100
-
-            # Synchronisiere nur, wenn der Zeitstempel sich geändert hat
-            if not last_db_update or last_update_truncated > last_db_update:
-                _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
-
-                # Portfolio-Datei laden und in DB synchronisieren
-                data = await self.hass.async_add_executor_job(
-                    parse_data_portfolio, str(self.file_path)
-                )
-                if not data:
-                    msg = "Portfolio-Daten konnten nicht geladen werden"
-                    raise UpdateFailed(msg)  # noqa: TRY301
-
-                try:
-                    _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
-
-                    # DB-Synchronisation in einem eigenen Executor-Job
-                    def sync_data() -> None:
-                        conn = sqlite3.connect(str(self.db_path))
-                        try:
-                            # _LOGGER.debug(
-                            #     "Rufe sync_from_pclient auf mit
-                            #     entry_id: %s", self.entry_id,
-                            # )  # noqa: ERA001, RUF100
-                            sync_from_pclient(
-                                data,
-                                conn,
-                                self.hass,
-                                self.entry_id,
-                                last_update_truncated.isoformat(),
-                                self.db_path,
-                            )
-                        finally:
-                            conn.close()
-
-                    await self.hass.async_add_executor_job(sync_data)
-
-                except Exception as e:
-                    msg = "DB-Synchronisation fehlgeschlagen"
-                    raise UpdateFailed(msg) from e
-
-                # Aktualisiere den internen Zeitstempel
-                self.last_file_update = last_update_truncated
-                _LOGGER.info("Daten erfolgreich aktualisiert.")
-
-            # Lade Konten, Depots und Transaktionen
-            # (bestehende Funktionalität bleibt unverändert)
             accounts = await self.hass.async_add_executor_job(
                 get_accounts, self.db_path
             )
-
-            portfolios = await self.hass.async_add_executor_job(
-                get_portfolios, self.db_path
-            )
-
             transactions = await self.hass.async_add_executor_job(
                 get_transactions, self.db_path
             )
 
-            # Berechne Kontostände
-            account_balances = {
-                account.uuid: calculate_account_balance(account.uuid, transactions)
-                for account in accounts
-            }
+            account_balances = self._calculate_account_balances(accounts, transactions)
+            live_portfolios = await self._load_live_portfolios()
+            portfolio_data = _build_portfolio_data(live_portfolios)
 
-            # Berechne Depotwerte und Kaufsummen
-            portfolio_data = {}
-            for portfolio in portfolios:
-                reference_date = datetime.now() # noqa: DTZ005
-                value, count = await calculate_portfolio_value(
-                    portfolio.uuid, reference_date, self.db_path
-                )
-                purchase_sum = await calculate_purchase_sum(
-                    portfolio.uuid, self.db_path
-                )
-                portfolio_data[portfolio.uuid] = {
-                    "name": portfolio.name,
-                    "value": value,
-                    "count": count,
-                    "purchase_sum": purchase_sum,
-                }
-
-            # Speichere die Daten
             self.data = {
                 "accounts": {
                     account.uuid: {
                         "name": account.name,
                         "balance": account_balances[account.uuid],
-                        "is_retired": account.is_retired
+                        "is_retired": account.is_retired,
                     }
                     for account in accounts
                 },
@@ -201,9 +230,72 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "last_update": last_update_truncated.isoformat(),
             }
 
-            return self.data  # noqa: TRY300
-
         except Exception as e:
             _LOGGER.exception("Fehler beim Laden der Daten")
             msg = f"Update fehlgeschlagen: {e}"
             raise UpdateFailed(msg) from e
+
+        return self.data
+
+    def _get_last_file_update(self) -> datetime:
+        """Truncate the file's last modification timestamp to the minute."""
+        last_update = self.file_path.stat().st_mtime
+        return datetime.fromtimestamp(last_update).replace(  # noqa: DTZ006
+            second=0, microsecond=0
+        )
+
+    @staticmethod
+    def _should_sync(last_db_update: datetime | None, file_update: datetime) -> bool:
+        """Return True when the DB snapshot is older than the file on disk."""
+        return not last_db_update or file_update > last_db_update
+
+    async def _sync_portfolio_file(self, last_update_truncated: datetime) -> None:
+        """Parse and persist the portfolio when the file has changed."""
+        _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
+
+        data = await self.hass.async_add_executor_job(
+            parse_data_portfolio, str(self.file_path)
+        )
+        if not data:
+            msg = "Portfolio-Daten konnten nicht geladen werden"
+            raise UpdateFailed(msg)
+
+        try:
+            _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
+            await self.hass.async_add_executor_job(
+                _sync_data_to_db,
+                data,
+                self.hass,
+                self.entry_id,
+                last_update_truncated.isoformat(),
+                self.db_path,
+            )
+        except Exception as exc:
+            msg = "DB-Synchronisation fehlgeschlagen"
+            raise UpdateFailed(msg) from exc
+
+        self.last_file_update = last_update_truncated
+        _LOGGER.info("Daten erfolgreich aktualisiert.")
+
+    def _calculate_account_balances(
+        self, accounts: Iterable[Any], transactions: Iterable[Any]
+    ) -> dict[str, Any]:
+        """Aggregate balances for each account using the shared helper."""
+        return {
+            account.uuid: calculate_account_balance(account.uuid, transactions)
+            for account in accounts
+        }
+
+    async def _load_live_portfolios(self) -> list[Any]:
+        """Fetch live portfolio aggregates while shielding coordinator errors."""
+        try:
+            raw_portfolios = await self.hass.async_add_executor_job(
+                fetch_live_portfolios, self.db_path
+            )
+        except Exception:
+            _LOGGER.exception(
+                "PPReaderCoordinator: fetch_live_portfolios fehlgeschlagen - "
+                "verwende leeren Snapshot"
+            )
+            return []
+        return _coerce_live_portfolios(raw_portfolios)

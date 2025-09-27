@@ -5,114 +5,169 @@ This module provides WebSocket commands to retrieve dashboard data,
 account information, portfolio data, and file update timestamps.
 """
 
+from __future__ import annotations
+
 import logging
-from datetime import datetime
-from pathlib import Path  # sicherstellen vorhanden
 import sqlite3
+from collections.abc import Iterable
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
-import homeassistant.helpers.config_validation as cv
 from homeassistant.components import websocket_api
-from homeassistant.components.websocket_api import ActiveConnection
-from homeassistant.helpers.dispatcher import (
-    async_dispatcher_connect,
+
+from .db_access import (
+    fetch_live_portfolios,  # NEU: On-Demand Aggregation
+    get_accounts,
+    get_last_file_update,
+    get_portfolio_positions,
 )
-from .db_access import get_portfolio_positions  # Neu: Positions-Abfrage
+
+try:
+    from custom_components.pp_reader.currencies.fx import (
+        ensure_exchange_rates_for_dates,
+        load_latest_rates,
+    )
+except ImportError:  # pragma: no cover - optional FX module
+    ensure_exchange_rates_for_dates = None  # type: ignore[assignment]
+    load_latest_rates = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from homeassistant.components.websocket_api import ActiveConnection
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
+
+
+async def _live_portfolios_payload(
+    hass: HomeAssistant,
+    entry_id: str,
+    *,
+    entry_data: dict[str, Any] | None = None,
+    log_context: str = "",
+) -> list[dict[str, Any]]:
+    """Fetch live portfolio aggregates with coordinator fallback."""
+    domain_data = hass.data.get(DOMAIN, {})
+    data = entry_data or domain_data.get(entry_id)
+    if not data:
+        message = f"entry_id {entry_id} not registered"
+        raise LookupError(message)
+
+    db_path: Path = data["db_path"]
+    coordinator = data.get("coordinator")
+
+    result: list[dict[str, Any]] | None = None
+    try:
+        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+    except Exception:  # noqa: BLE001 - broad catch keeps coordinator fallback intact
+        context_suffix = f" ({log_context})" if log_context else ""
+        _LOGGER.warning(
+            (
+                "On-Demand Portfolio Aggregation%s fehlgeschlagen - "
+                "Fallback auf Coordinator Daten"
+            ),
+            context_suffix,
+            exc_info=True,
+        )
+    else:
+        if isinstance(portfolios, list):
+            result = list(portfolios)
+        elif isinstance(portfolios, dict):
+            result = list(portfolios.values())
+        elif isinstance(portfolios, Iterable):
+            result = list(portfolios)
+
+    if result is not None:
+        return result
+
+    if not coordinator:
+        return []
+
+    snapshot = coordinator.data.get("portfolios", [])
+
+    if isinstance(snapshot, list):
+        return snapshot
+
+    if isinstance(snapshot, dict):
+        normalized: list[dict[str, Any]] = []
+        for portfolio_uuid, raw in snapshot.items():
+            if not isinstance(raw, dict):
+                continue
+            normalized.append(
+                {
+                    "uuid": portfolio_uuid,
+                    "name": raw.get("name"),
+                    "current_value": raw.get("current_value", raw.get("value", 0)),
+                    "purchase_sum": raw.get("purchase_sum", 0),
+                    "position_count": raw.get("position_count", raw.get("count", 0)),
+                }
+            )
+        return normalized
+
+    return []
 
 
 # === Dashboard Websocket Test-Command ===
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_dashboard_data",
-        vol.Optional("entry_id"): str,
+        vol.Required("entry_id"): str,
     }
 )
 @websocket_api.async_response
-async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -> None:
-    """Handle WebSocket command to get dashboard data (accounts + portfolios, incl. FX)."""
-    try:
-        entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from .db_access import get_accounts, get_portfolios
+async def ws_get_dashboard_data(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """
+    Return the initial dashboard dataset for the configured entry.
 
-        accounts = await hass.async_add_executor_job(get_accounts, db_path)
-        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
+    Änderung (Migration Schritt 2.b):
+    - Portfolios jetzt via fetch_live_portfolios (On-Demand Aggregation,
+      Single Source of Truth).
+    - Fallback auf Coordinator Snapshot bei Fehler (stale aber verfügbar).
+    - Andere Teile (accounts, last_file_update, transactions) unverändert.
+    - Payload-Shape bleibt unverändert (keine Mutation bestehender Keys).
+    """
+    entry_id = msg.get("entry_id")
+    domain_data = hass.data.get(DOMAIN, {})
+    entry_data = domain_data.get(entry_id)
 
-        # FX Vorbereitung
-        try:
-            from ..currencies.fx import (
-                ensure_exchange_rates_for_dates,
-                load_latest_rates,
-            )
+    if not entry_data:
+        connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
+        return
 
-            active_fx_currencies = {
-                getattr(a, "currency_code", "EUR")
-                for a in accounts
-                if not a.is_retired and getattr(a, "currency_code", "EUR") != "EUR"
-            }
-            if active_fx_currencies:
-                today = datetime.now()
-                await ensure_exchange_rates_for_dates(
-                    [today], active_fx_currencies, db_path
-                )
-                fx_rates = await load_latest_rates(today, db_path)
-            else:
-                fx_rates = {}
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse – setze Fremdwährungswerte=0 EUR."
-            )
-            fx_rates = {}
+    coordinator = entry_data.get("coordinator")
 
-        # Accounts transformieren (gleiches Format wie ws_get_accounts)
-        accounts_payload = []
-        for a in accounts:
-            if a.is_retired:
-                continue
-            currency = getattr(a, "currency_code", "EUR") or "EUR"
-            orig_balance = a.balance / 100.0  # Originalbetrag in Konto-Währung
-            if currency != "EUR":
-                rate = fx_rates.get(currency)
-                eur_balance = (orig_balance / rate) if rate else 0.0
-            else:
-                eur_balance = orig_balance
-            accounts_payload.append(
-                {
-                    "name": a.name,
-                    "currency_code": currency,
-                    "orig_balance": round(orig_balance, 2),
-                    "balance": round(
-                        eur_balance, 2
-                    ),  # EUR-Wert (Abwärtskompatibilität)
-                }
-            )
+    # Accounts & Transactions weiter wie zuvor (Snapshot / bestehende Helper)
+    accounts = {}
+    transactions = []
+    last_file_update = None
+    if coordinator:
+        accounts = coordinator.data.get("accounts", {})
+        transactions = coordinator.data.get("transactions", [])
+        last_file_update = coordinator.data.get("last_update")
 
-        connection.send_result(
-            msg["id"],
-            {
-                "accounts": accounts_payload,
-                "portfolios": [p.__dict__ for p in portfolios],
-            },
-        )
+    # NEU: Live Portfolios
+    portfolios = await _live_portfolios_payload(
+        hass,
+        entry_id,
+        entry_data=entry_data,
+        log_context="dashboard",
+    )
 
-        async_dispatcher_connect(
-            hass,
-            f"{DOMAIN}_updated_{entry_id}",
-            lambda new_data: connection.send_message(
-                {
-                    "id": msg["id"] + 1,
-                    "type": "pp_reader/dashboard_data_updated",
-                    "data": new_data,
-                }
-            ),
-        )
-
-    except Exception as e:  # noqa: BLE001
-        _LOGGER.exception("Fehler beim Abrufen der Dashboard-Daten")
-        connection.send_error(msg["id"], "db_error", str(e))
+    connection.send_result(
+        msg["id"],
+        {
+            "accounts": accounts,
+            "portfolios": portfolios,
+            "last_file_update": last_file_update,
+            "transactions": transactions,
+        },
+    )
 
 
 # === Websocket Accounts-Data ===
@@ -123,38 +178,40 @@ async def ws_get_dashboard_data(hass, connection: ActiveConnection, msg: dict) -
     }
 )
 @websocket_api.async_response
-async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None:
+async def ws_get_accounts(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     """Return active accounts with original and EUR-converted balance (FX)."""
     try:
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from .db_access import get_accounts
-
         accounts = await hass.async_add_executor_job(get_accounts, db_path)
 
         # FX laden
         try:
-            from ..currencies.fx import (
-                ensure_exchange_rates_for_dates,
-                load_latest_rates,
-            )
-
             active_fx_currencies = {
                 getattr(a, "currency_code", "EUR")
                 for a in accounts
                 if not a.is_retired and getattr(a, "currency_code", "EUR") != "EUR"
             }
+            fx_rates = {}
             if active_fx_currencies:
-                today = datetime.now()
-                await ensure_exchange_rates_for_dates(
-                    [today], active_fx_currencies, db_path
-                )
-                fx_rates = await load_latest_rates(today, db_path)
-            else:
-                fx_rates = {}
+                ensure_rates = ensure_exchange_rates_for_dates
+                load_rates = load_latest_rates
+                if ensure_rates is None or load_rates is None:
+                    message = (
+                        "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
+                        "setze Fremdwährungswerte=0 EUR."
+                    )
+                    _LOGGER.warning(message)
+                else:
+                    today = datetime.now(datetime.UTC)
+                    await ensure_rates([today], active_fx_currencies, db_path)
+                    fx_rates = await load_rates(today, db_path)
         except Exception:  # noqa: BLE001
             _LOGGER.warning(
-                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse – setze Fremdwährungswerte=0 EUR."
+                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze "
+                "Fremdwährungswerte=0 EUR."
             )
             fx_rates = {}
 
@@ -185,7 +242,7 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
             },
         )
 
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))
 
@@ -199,105 +256,126 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
 )
 @websocket_api.async_response
 async def ws_get_last_file_update(
-    hass, connection: ActiveConnection, msg: dict
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle WebSocket command to get the last file update timestamp."""
-    try:
-        # Zugriff auf die Datenbank
-        entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from .db_access import get_last_file_update
+    msg_id = msg.get("id")
 
-        # Datenbankabfrage ausführen
+    try:
+        domain_entries: dict[str, dict[str, Any]] | None = hass.data.get(DOMAIN)
+        if not domain_entries:
+            connection.send_error(
+                msg_id, "not_found", "Keine pp_reader Config Entries registriert"
+            )
+            return
+
+        entry_id = msg.get("entry_id")
+        entry_data: dict[str, Any] | None = None
+
+        if entry_id:
+            entry_data = domain_entries.get(entry_id)
+            if not entry_data:
+                connection.send_error(
+                    msg_id, "not_found", f"entry_id {entry_id} unknown"
+                )
+                return
+        elif len(domain_entries) == 1:
+            entry_id, entry_data = next(iter(domain_entries.items()))
+        else:
+            connection.send_error(
+                msg_id,
+                "not_found",
+                "entry_id erforderlich, wenn mehrere Config Entries aktiv sind",
+            )
+            return
+
+        db_path_raw = entry_data.get("db_path") if entry_data else None
+        if not db_path_raw:
+            connection.send_error(
+                msg_id,
+                "db_error",
+                "db_path für den Config Entry fehlt",
+            )
+            return
+
+        db_path = Path(db_path_raw)
+
         last_file_update_raw = await hass.async_add_executor_job(
             get_last_file_update, db_path
         )
 
-        # Zeitstempel formatieren
         if last_file_update_raw:
             try:
-                # Zeitstempel im ISO-8601-Format "%Y-%m-%dT%H:%M:%S" parsen und in das gewünschte Format umwandeln
-                last_file_update = datetime.strptime(
+                parsed_update = datetime.strptime(
                     last_file_update_raw, "%Y-%m-%dT%H:%M:%S"
-                ).strftime("%d.%m.%Y, %H:%M")
+                ).replace(tzinfo=timezone.utc)
+                last_file_update = parsed_update.strftime("%d.%m.%Y, %H:%M")
             except ValueError:
                 _LOGGER.exception("Fehler beim Parsen des Zeitstempels")
                 last_file_update = "Unbekannt"
         else:
             last_file_update = "Unbekannt"
 
-        # Antwort senden
         connection.send_result(
-            msg["id"],
+            msg_id,
             {
                 "last_file_update": last_file_update,
             },
         )
-        # _LOGGER.debug("Last file update erfolgreich abgerufen: %s", last_file_update)  # noqa: ERA001
-
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update")
-        connection.send_error(msg["id"], "db_error", str(e))
+        connection.send_error(msg_id, "db_error", str(e))
 
 
 # === Websocket Portfolio-Data ===
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_portfolio_data",
-        vol.Optional("entry_id"): str,  # Erwartet die entry_id
+        vol.Required("entry_id"): str,
     }
 )
 @websocket_api.async_response
-async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -> None:
-    """Handle WebSocket command to get portfolio data."""
-    try:
-        # Zugriff auf die Datenbank
-        entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        from .db_access import get_portfolios
-        from ..logic.portfolio import (
-            db_calculate_portfolio_purchase_sum,
-            db_calculate_portfolio_value_and_count,
-        )
+async def ws_get_portfolio_data(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """
+    Return current portfolio aggregates via on-demand DB aggregation.
 
-        # Lade alle aktiven Depots
-        portfolios = await hass.async_add_executor_job(get_portfolios, db_path)
-        active_portfolios = [p for p in portfolios if not p.is_retired]
+    Änderung (Migration Schritt 2.a):
+    - Statt Coordinator-Snapshot jetzt Aufruf `fetch_live_portfolios`
+      (Single Source of Truth).
+    - Fallback (WARN) auf alten Snapshot bei Fehler, um keine Hard-Failure im
+      Frontend zu erzeugen.
+    - Payload-Shape UNVERÄNDERT: {"portfolios": { uuid:
+      {name,value,count,purchase_sum}, ... }}.
+    """
+    entry_id = msg.get("entry_id")
+    domain_data = hass.data.get(DOMAIN, {})
+    entry_data = domain_data.get(entry_id)
 
-        # Berechne die Werte für jedes aktive Depot
-        portfolio_data = []
-        for portfolio in active_portfolios:
-            portfolio_uuid = portfolio.uuid
-            value, position_count = await hass.async_add_executor_job(
-                db_calculate_portfolio_value_and_count, portfolio_uuid, db_path
-            )
-            purchase_sum = await hass.async_add_executor_job(
-                db_calculate_portfolio_purchase_sum, portfolio_uuid, db_path
-            )
-            portfolio_data.append(
-                {
-                    "uuid": portfolio_uuid,  # <-- hinzugefügt
-                    "name": portfolio.name,
-                    "position_count": position_count,
-                    "current_value": value,
-                    "purchase_sum": purchase_sum,
-                }
-            )
+    if not entry_data:
+        connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
+        return
 
-        connection.send_result(
-            msg["id"],
-            {
-                "portfolios": portfolio_data,
-            },
-        )
-        # _LOGGER.debug("Depotdaten erfolgreich abgerufen und gesendet: %s", portfolio_data)  # noqa: ERA001
+    portfolios = await _live_portfolios_payload(
+        hass,
+        entry_id,
+        entry_data=entry_data,
+        log_context="portfolio",
+    )
 
-    except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Depotdaten")
-        connection.send_error(msg["id"], "db_error", str(e))
+    connection.send_result(
+        msg["id"],
+        {
+            "portfolios": portfolios,
+        },
+    )
 
 
-# Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen oder analog zu anderen)
+# Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen
+# oder analog zu anderen)
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_portfolio_positions",
@@ -306,10 +384,16 @@ async def ws_get_portfolio_data(hass, connection: ActiveConnection, msg: dict) -
     }
 )
 @websocket_api.async_response
-async def ws_get_portfolio_positions(hass, connection, msg):
+async def ws_get_portfolio_positions(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
     """
-    Liefert die Wertpapier-Positionen eines Depots (lazy load beim Aufklappen im Frontend).
-    Bei Fehler oder unbekanntem Depot wird ein 'error' Feld zurückgegeben.
+    Liefert die Wertpapier-Positionen eines Depots.
+
+    Die Daten werden lazy geladen, sobald das Frontend ein Depot aufklappt.
+    Bei Fehler oder unbekanntem Depot wird ein "error" Feld zurückgegeben.
     """
     entry_id = msg.get("entry_id")
     portfolio_uuid = msg.get("portfolio_uuid")
@@ -353,7 +437,7 @@ async def ws_get_portfolio_positions(hass, connection, msg):
         positions = await hass.async_add_executor_job(
             get_portfolio_positions, db_path, portfolio_uuid
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.exception(
             "WebSocket: Fehler beim Laden der Positionen für Portfolio %s",
             portfolio_uuid,
@@ -377,6 +461,6 @@ async def ws_get_portfolio_positions(hass, connection, msg):
     )
 
 
-def async_register_commands(hass):
+def async_register_commands(hass: HomeAssistant) -> None:
     """Registriert alle WebSocket-Commands dieses Modules."""
     websocket_api.async_register_command(hass, ws_get_portfolio_positions)

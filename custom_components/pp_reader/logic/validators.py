@@ -1,21 +1,22 @@
-from dataclasses import dataclass, field
-from decimal import Decimal
-from datetime import (
-    datetime,
-    timezone,
-)  # Ensure timezone is imported if used for future date checks
+"""Validation helpers for Portfolio Performance data."""
+
 import logging
-from typing import Optional, Dict, Any, Union, Tuple
-from ..name.abuchen.portfolio import client_pb2
-from ..data.db_access import (
-    Transaction,
-)  # This import remains for the type hint
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, ClassVar
+
+from custom_components.pp_reader.data.db_access import Transaction
+from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 
 _LOGGER = logging.getLogger(__name__)
 
 # The FQN of the Transaction class as it's actually instantiated and passed around.
 # This is derived from your log message.
 EXPECTED_DB_TRANSACTION_FQN = "custom_components.pp_reader.data.db_access.Transaction"
+
+MIN_ACCOUNT_BALANCE = -1_000_000
+MAX_SHARE_COUNT = 1_000_000
+MAX_GAIN_FACTOR = 100
 
 
 @dataclass
@@ -30,7 +31,7 @@ class ValidationResult:
 class PPDataValidator:
     """Validiert Portfolio Performance Daten aus der DB."""
 
-    VALID_TRANSACTION_TYPES = {
+    VALID_TRANSACTION_TYPES: ClassVar[dict[int, str]] = {
         0: "PURCHASE",
         1: "SALE",
         2: "INBOUND_DELIVERY",
@@ -52,13 +53,16 @@ class PPDataValidator:
         """Prüft ob der Transaktionstyp gültig ist."""
         is_valid = type_id in self.VALID_TRANSACTION_TYPES
         if not is_valid:
+            valid_types = list(self.VALID_TRANSACTION_TYPES)
             _LOGGER.debug(
-                f"Invalid transaction type ID: {type_id}. Valid types: {self.VALID_TRANSACTION_TYPES.keys()}"
+                "Invalid transaction type ID: %s. Valid types: %s",
+                type_id,
+                valid_types,
             )
         return is_valid
 
-    def _get_object_fqn(self, obj: Any) -> Optional[str]:
-        """Helper to get the FQN of an object's class."""
+    def _get_object_fqn(self, obj: Any) -> str | None:
+        """Return the FQN of an object's class."""
         if (
             hasattr(obj, "__class__")
             and hasattr(obj.__class__, "__module__")
@@ -68,142 +72,156 @@ class PPDataValidator:
         return None
 
     def validate_transaction(
-        self, tx: Union[dict, client_pb2.PTransaction, Transaction]
+        self, tx: dict | client_pb2.PTransaction | Transaction
     ) -> ValidationResult:
         """Validiert eine einzelne Transaktion."""
         required_fields = ["uuid", "type", "date"]
-        # now_utc = datetime.now(timezone.utc) # For future date checks if re-added
 
-        # 1. Protobuf Transaction validieren
         if isinstance(tx, client_pb2.PTransaction):
-            _LOGGER.debug("Validating PTransaction")
-            if not self._is_valid_transaction_type(tx.type):
+            return self._validate_proto_transaction(tx)
+
+        if isinstance(tx, dict):
+            return self._validate_dict_transaction(tx, required_fields)
+
+        actual_tx_fqn = self._get_object_fqn(tx)
+        if actual_tx_fqn == EXPECTED_DB_TRANSACTION_FQN:
+            return self._validate_db_transaction(tx, required_fields)
+
+        return self._handle_unknown_transaction(tx, actual_tx_fqn)
+
+    def _validate_proto_transaction(
+        self, tx: client_pb2.PTransaction
+    ) -> ValidationResult:
+        """Validate protobuf transaction data."""
+        _LOGGER.debug("Validating PTransaction")
+        if not self._is_valid_transaction_type(tx.type):
+            return ValidationResult(
+                is_valid=False,
+                message=f"Ungültiger Transaktionstyp (PTransaction): {tx.type}",
+                details={"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())},
+            )
+        if not tx.HasField("uuid") or not tx.HasField("date"):
+            return ValidationResult(
+                is_valid=False,
+                message="Fehlende Pflichtfelder in PTransaction (uuid/date)",
+                details={"tx_id": getattr(tx, "uuid", "UNKNOWN")},
+            )
+
+        try:
+            tx_date = datetime.fromtimestamp(tx.date.seconds, tz=datetime.UTC)
+            now_utc = datetime.now(tz=datetime.UTC)
+            if tx_date > now_utc:
                 return ValidationResult(
-                    False,
-                    f"Ungültiger Transaktionstyp (PTransaction): {tx.type}",
-                    {"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())},
+                    is_valid=False,
+                    message="Transaktionsdatum (PTransaction) in der Zukunft",
+                    details={"date": tx_date.isoformat()},
                 )
-            if not tx.HasField("uuid") or not tx.HasField("date"):
-                return ValidationResult(
-                    False,
-                    "Fehlende Pflichtfelder in PTransaction (uuid/date)",
-                    {"tx_id": getattr(tx, "uuid", "UNKNOWN")},
-                )
+        except Exception as error:  # noqa: BLE001 - preserve broad exception handling
+            _LOGGER.warning("Error converting PTransaction date: %s", error)
+            return ValidationResult(
+                is_valid=False,
+                message="Fehler bei PTransaction Datumskonvertierung",
+                details={"error": str(error)},
+            )
+        return ValidationResult(is_valid=True, message="PTransaction valid")
 
-            try:
-                tx_date = datetime.fromtimestamp(
-                    tx.date.seconds
-                )  # Consider timezone: datetime.fromtimestamp(tx.date.seconds, timezone.utc)
-                if tx_date > datetime.now():  # Consider timezone: if tx_date > now_utc:
-                    return ValidationResult(
-                        False,
-                        "Transaktionsdatum (PTransaction) in der Zukunft",
-                        {"date": tx_date.isoformat()},
-                    )
-            except Exception as e:
-                _LOGGER.warning(f"Error converting PTransaction date: {e}")
-                return ValidationResult(
-                    False,
-                    "Fehler bei PTransaction Datumskonvertierung",
-                    {"error": str(e)},
-                )
-            return ValidationResult(True, "PTransaction valid")
+    def _validate_dict_transaction(
+        self, tx: dict[str, Any], required_fields: list[str]
+    ) -> ValidationResult:
+        """Validate transaction data provided as dictionary."""
+        _LOGGER.debug("Validating transaction as dict")
+        missing = [f for f in required_fields if f not in tx or tx.get(f) is None]
+        if missing:
+            return ValidationResult(
+                is_valid=False,
+                message=f"Fehlende Pflichtfelder (dict): {', '.join(missing)}",
+                details={"tx_id": tx.get("uuid", "UNKNOWN")},
+            )
 
-        # 2. Dictionary validieren
-        elif isinstance(tx, dict):
-            _LOGGER.debug("Validating transaction as dict")
-            missing = [f for f in required_fields if f not in tx or tx.get(f) is None]
-            if missing:
-                return ValidationResult(
-                    False,
-                    f"Fehlende Pflichtfelder (dict): {', '.join(missing)}",
-                    {"tx_id": tx.get("uuid", "UNKNOWN")},
-                )
+        tx_type_val = tx.get("type")
+        if not self._is_valid_transaction_type(tx_type_val):
+            return ValidationResult(
+                is_valid=False,
+                message=f"Ungültiger Transaktionstyp (dict): {tx_type_val}",
+                details={"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())},
+            )
 
-            tx_type_val = tx.get("type")
-            if not self._is_valid_transaction_type(tx_type_val):
-                return ValidationResult(
-                    False,
-                    f"Ungültiger Transaktionstyp (dict): {tx_type_val}",
-                    {"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())},
-                )
+        # Future improvement: validate that the provided date is not in the future.
 
-            # Optional: Add future date check for dicts here if needed
-            # tx_date_val = tx.get("date")
-            # ... parsing and checking tx_date_val > now_utc ...
+        return ValidationResult(is_valid=True, message="Dict Transaction valid")
 
-            return ValidationResult(True, "Dict Transaction valid")
+    def _validate_db_transaction(
+        self, tx: Transaction, required_fields: list[str]
+    ) -> ValidationResult:
+        """Validate database transaction objects."""
+        missing = [
+            field
+            for field in required_fields
+            if not hasattr(tx, field) or getattr(tx, field) is None
+        ]
+        if missing:
+            missing_fields = ", ".join(missing)
+            return ValidationResult(
+                is_valid=False,
+                message=f"Fehlende Pflichtfelder (DB Transaction): {missing_fields}",
+                details={"tx_id": getattr(tx, "uuid", "UNKNOWN")},
+            )
 
-        # 3. DB-Transaction (via FQN) validieren
-        else:
-            actual_tx_fqn = self._get_object_fqn(tx)
-            if actual_tx_fqn == EXPECTED_DB_TRANSACTION_FQN:
-                # _LOGGER.debug(f"Validating DB Transaction by FQN: {actual_tx_fqn}")
-                missing = [
-                    f
-                    for f in required_fields
-                    if not hasattr(tx, f) or getattr(tx, f) is None
-                ]
-                if missing:
-                    return ValidationResult(
-                        False,
-                        f"Fehlende Pflichtfelder (DB Transaction): {', '.join(missing)}",
-                        {"tx_id": getattr(tx, "uuid", "UNKNOWN")},
-                    )
+        if not hasattr(tx, "type"):
+            return ValidationResult(
+                is_valid=False,
+                message="Fehlendes 'type' Feld in DB Transaktion",
+                details={"tx_id": getattr(tx, "uuid", "UNKNOWN")},
+            )
 
-                # Ensure tx.type is accessed correctly
-                if not hasattr(tx, "type"):
-                    return ValidationResult(
-                        False,
-                        "Fehlendes 'type' Feld in DB Transaktion",
-                        {"tx_id": getattr(tx, "uuid", "UNKNOWN")},
-                    )
+        tx_type_val = tx.type
+        if not self._is_valid_transaction_type(tx_type_val):
+            return ValidationResult(
+                is_valid=False,
+                message=f"Ungültiger Transaktionstyp (DB Transaction): {tx_type_val}",
+                details={"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())},
+            )
 
-                tx_type_val = tx.type
-                if not self._is_valid_transaction_type(tx_type_val):
-                    return ValidationResult(
-                        False,
-                        f"Ungültiger Transaktionstyp (DB Transaction): {tx_type_val}",
-                        {"valid_types": list(self.VALID_TRANSACTION_TYPES.keys())},
-                    )
+        # Future improvement: validate that the provided date is not in the future.
 
-                # Optional: Add future date check for DB Transactions here if needed
-                # if hasattr(tx, 'date') and isinstance(tx.date, str): # Assuming date is ISO string
-                #     try:
-                #         db_tx_date = datetime.fromisoformat(tx.date).replace(tzinfo=timezone.utc) # Or handle naive
-                #         if db_tx_date > now_utc:
-                #             return ValidationResult(False, "Transaktionsdatum (DB Transaction) in der Zukunft", {"date": db_tx_date.isoformat()})
-                #     except ValueError:
-                #         return ValidationResult(False, "Ungültiges Datumsformat in DB Transaktion", {"date_str": tx.date})
+        return ValidationResult(is_valid=True, message="DB Transaction valid")
 
-                return ValidationResult(True, "DB Transaction valid")
-            else:
-                # Fallback for unknown type
-                _LOGGER.warning(
-                    f"Transaction object type not recognized. Expected PTransaction, dict, or DB Transaction (FQN: {EXPECTED_DB_TRANSACTION_FQN}). "
-                    f"Actual FQN: '{actual_tx_fqn}'. Actual object type: '{type(tx).__name__}'."
-                )
-                return ValidationResult(
-                    False,
-                    f"Ungültiger oder nicht erkannter Transaktionstyp: {type(tx).__name__}",
-                    {
-                        "expected_types_or_fqn": [
-                            "dict",
-                            "client_pb2.PTransaction",
-                            EXPECTED_DB_TRANSACTION_FQN,
-                        ],
-                        "actual_type": type(tx).__name__,
-                        "actual_fqn": actual_tx_fqn or "N/A",
-                    },
-                )
+    def _handle_unknown_transaction(
+        self, tx: Any, actual_tx_fqn: str | None
+    ) -> ValidationResult:
+        """Provide a consistent response for unknown transaction types."""
+        _LOGGER.warning(
+            (
+                "Transaction object type not recognized. Expected "
+                "PTransaction, dict, or DB Transaction (FQN: %s). "
+                "Actual FQN: '%s'. Actual object type: '%s'."
+            ),
+            EXPECTED_DB_TRANSACTION_FQN,
+            actual_tx_fqn,
+            type(tx).__name__,
+        )
+        type_name = type(tx).__name__
+        return ValidationResult(
+            is_valid=False,
+            message=f"Ungültiger oder nicht erkannter Transaktionstyp: {type_name}",
+            details={
+                "expected_types_or_fqn": [
+                    "dict",
+                    "client_pb2.PTransaction",
+                    EXPECTED_DB_TRANSACTION_FQN,
+                ],
+                "actual_type": type_name,
+                "actual_fqn": actual_tx_fqn or "N/A",
+            },
+        )
 
     def validate_fx_rate(self, base: str, term: str, rate: float) -> ValidationResult:
         """Validiert Wechselkurse auf Plausibilität."""
         if rate <= 0:
             return ValidationResult(
-                False,
-                f"Ungültiger Wechselkurs {rate} für {base}/{term}",
-                {"rate": rate, "base": base, "term": term},
+                is_valid=False,
+                message=f"Ungültiger Wechselkurs {rate} für {base}/{term}",
+                details={"rate": rate, "base": base, "term": term},
             )
 
         # Typische Spannen für Hauptwährungen
@@ -217,40 +235,42 @@ class PPDataValidator:
             min_rate, max_rate = ranges[(base, term)]
             if not min_rate <= rate <= max_rate:
                 return ValidationResult(
-                    False,
-                    f"Wechselkurs {rate} außerhalb typischer Spanne",
-                    {"expected_range": (min_rate, max_rate)},
+                    is_valid=False,
+                    message=f"Wechselkurs {rate} außerhalb typischer Spanne",
+                    details={"expected_range": (min_rate, max_rate)},
                 )
 
-        return ValidationResult(True, "Wechselkurs valid")
+        return ValidationResult(is_valid=True, message="Wechselkurs valid")
 
     def validate_account_balance(
         self, balance: float, account_name: str
     ) -> ValidationResult:
         """Validiert einen Kontostand auf Plausibilität."""
-        if balance < -1_000_000:  # Beispielgrenze für Überziehung
+        if balance < MIN_ACCOUNT_BALANCE:  # Beispielgrenze für Überziehung
             return ValidationResult(
-                False,
-                f"Verdächtig hoher negativer Kontostand: {balance}€",
-                {"account": account_name, "balance": balance},
+                is_valid=False,
+                message=f"Verdächtig hoher negativer Kontostand: {balance}€",
+                details={"account": account_name, "balance": balance},
             )
-        return ValidationResult(True, "Kontostand plausibel")
+        return ValidationResult(is_valid=True, message="Kontostand plausibel")
 
-    def validate_normalized_value(
-        self, value: Union[int, float], type_: str
-    ) -> ValidationResult:
+    def validate_normalized_value(self, value: float, type_: str) -> ValidationResult:
         """Validiert normalisierte Werte (Kurse/Stückzahlen)."""
         if value < 0:
             return ValidationResult(
-                False, f"Negativer {type_}: {value}", {"value": value, "type": type_}
+                is_valid=False,
+                message=f"Negativer {type_}: {value}",
+                details={"value": value, "type": type_},
             )
 
-        if type_ == "shares" and value > 1_000_000:
+        if type_ == "shares" and value > MAX_SHARE_COUNT:
             return ValidationResult(
-                False, f"Verdächtig hohe Stückzahl: {value}", {"shares": value}
+                is_valid=False,
+                message=f"Verdächtig hohe Stückzahl: {value}",
+                details={"shares": value},
             )
 
-        return ValidationResult(True, f"Valider {type_}")
+        return ValidationResult(is_valid=True, message=f"Valider {type_}")
 
     def validate_calculation_inputs(
         self, current_value: float, purchase_sum: float
@@ -258,16 +278,16 @@ class PPDataValidator:
         """Validiert Eingabewerte für Gewinnberechnungen."""
         if current_value < 0 or purchase_sum < 0:
             return ValidationResult(
-                False,
-                "Negative Werte in Gewinnberechnung",
-                {"current": current_value, "purchase": purchase_sum},
+                is_valid=False,
+                message="Negative Werte in Gewinnberechnung",
+                details={"current": current_value, "purchase": purchase_sum},
             )
 
-        if purchase_sum > 0 and current_value / purchase_sum > 100:
+        if purchase_sum > 0 and current_value / purchase_sum > MAX_GAIN_FACTOR:
             return ValidationResult(
-                False,
-                "Verdächtig hoher Kursgewinn",
-                {"gain_factor": current_value / purchase_sum},
+                is_valid=False,
+                message="Verdächtig hoher Kursgewinn",
+                details={"gain_factor": current_value / purchase_sum},
             )
 
-        return ValidationResult(True, "Valide Berechnungsgrundlage")
+        return ValidationResult(is_valid=True, message="Valide Berechnungsgrundlage")

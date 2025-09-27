@@ -13,6 +13,7 @@ import asyncio
 import logging
 import sqlite3
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -227,7 +228,7 @@ async def ensure_exchange_rates_for_dates(
 def ensure_exchange_rates_for_dates_sync(
     dates: list[datetime], currencies: set[str], db_path: Path
 ) -> None:
-    """Stelle sicher, dass alle benötigten Wechselkurse verfügbar sind (synchroner Wrapper)."""
+    """Ensure required exchange rates exist using a synchronous wrapper."""
 
     def run_async_task(
         dates: list[datetime], currencies: set[str], db_path: Path
@@ -239,11 +240,9 @@ def ensure_exchange_rates_for_dates_sync(
                 ensure_exchange_rates_for_dates(dates, currencies, db_path)
             )
         finally:
-            try:
+            asyncio.set_event_loop(None)
+            with suppress(Exception):
                 loop.close()
-            except Exception:
-                pass
-        asyncio.set_event_loop(None)
 
     if currencies and dates:
         run_async_task(dates, currencies, db_path)

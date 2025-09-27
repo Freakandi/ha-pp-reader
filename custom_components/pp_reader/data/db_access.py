@@ -7,11 +7,15 @@ and related data in a SQLite database.
 
 import logging
 import sqlite3
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
+
+
+_MISSING_DB_RESOURCE_MESSAGE = "Entweder db_path oder conn muss angegeben werden."
 
 
 @dataclass
@@ -97,7 +101,7 @@ def get_transactions(
     """Lädt alle Transaktionen aus der DB."""
     if conn is None:
         if db_path is None:
-            raise ValueError("Entweder db_path oder conn muss angegeben werden.")
+            raise ValueError(_MISSING_DB_RESOURCE_MESSAGE)
         conn = sqlite3.connect(str(db_path))
 
     try:
@@ -122,27 +126,29 @@ def get_securities(db_path: Path) -> dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
     conn = sqlite3.connect(str(db_path))
     try:
-        cur = conn.execute("""
+        cur = conn.execute(
+            """
             SELECT uuid, name, currency_code,
-                   note, isin, wkn, ticker_symbol,
+                   isin, wkn, ticker_symbol,
                    retired, updated_at,
                    last_price, last_price_date
             FROM securities
             ORDER BY name
-        """)
+            """
+        )
         return {
             row[0]: Security(
                 uuid=row[0],
                 name=row[1],
                 currency_code=row[2],
-                note=row[3],
-                isin=row[4],
-                wkn=row[5],
-                ticker_symbol=row[6],
-                retired=bool(row[7]),
-                updated_at=row[8],
-                last_price=row[9],
-                last_price_date=row[10],
+                note=None,  # keine Spalte in Schema → bewusst None
+                isin=row[3],
+                wkn=row[4],
+                ticker_symbol=row[5],
+                retired=bool(row[6]),
+                updated_at=row[7],
+                last_price=row[8],
+                last_price_date=row[9],
             )
             for row in cur.fetchall()
         }
@@ -264,7 +270,7 @@ def get_portfolio_securities(
     """Lädt alle Wertpapiere eines Depots aus der Tabelle portfolio_securities."""
     conn = sqlite3.connect(str(db_path))
     try:
-        # _LOGGER.debug("Lese portfolio_securities für portfolio_uuid=%s", portfolio_uuid)
+        _LOGGER.debug("Lese portfolio_securities für portfolio_uuid=%s", portfolio_uuid)
         cur = conn.execute(
             """
             SELECT portfolio_uuid, security_uuid, current_holdings,
@@ -305,7 +311,7 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
 
 def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str, Any]]:
     """
-    Liefert die Positionen (Wertpapiere) eines Depots inkl. Kauf-/Aktueller Wert und Gewinn.
+    Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Gewinn.
 
     Rückgabe:
     [
@@ -335,7 +341,8 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             FROM portfolio_securities ps
             JOIN securities s ON s.uuid = ps.security_uuid
             WHERE ps.portfolio_uuid = ?
-            ORDER BY s.name ASC   -- Alphabetische Standardsortierung (vorher: aktueller Wert DESC)
+            ORDER BY s.name ASC   -- Alphabetische Standardsortierung
+                                    -- (vorher: aktueller Wert DESC)
             """,
             (portfolio_uuid,),
         )
@@ -366,12 +373,108 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 }
             )
 
-        return positions
     except Exception:
         _LOGGER.exception(
-            "get_portfolio_positions: Fehler beim Laden der Positionen für Portfolio %s",
+            "get_portfolio_positions: Fehler beim Laden der Positionen für "
+            "Portfolio %s",
             portfolio_uuid,
         )
         return []
+    else:
+        return positions
     finally:
         conn.close()
+
+
+def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
+    """
+    Map a sqlite3.Row to the unified portfolio dict format.
+
+    Expected columns (query responsibility):
+      - uuid
+      - name
+      - current_value (Cent)
+      - purchase_sum (Cent)
+      - position_count
+    """
+
+    def _cent_to_eur(value: Any) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return round(float(value) / 100.0, 2)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return {
+        "uuid": row["uuid"],
+        "name": row["name"],
+        "current_value": _cent_to_eur(row["current_value"]),
+        "purchase_sum": _cent_to_eur(row["purchase_sum"]),
+        "position_count": row["position_count"]
+        if row["position_count"] is not None
+        else 0,
+    }
+
+
+def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
+    """
+    Aggregiert aktuelle Portfoliodaten aus der SQLite-DB (Single Source of Truth).
+
+    Rückgabeformat (vereinheitlicht - WebSocket & Event Konsum):
+        [
+          {
+            "uuid": <str>,
+            "name": <str>,
+            "current_value": <float>,    # EUR (2 Nachkommastellen)
+            "purchase_sum": <float>,     # EUR (2 Nachkommastellen)
+            "position_count": <int>
+          },
+          ...
+        ]
+
+    Fehlerbehandlung:
+      - Bei beliebigem Fehler (SQLite / unerwartete Column Issues) wird eine leere Liste
+        zurückgegeben, der Fehler geloggt (exception Log). Dies verhindert einen
+        kompletten Ausfall des WebSocket Handlers und hält den Fallback deterministisch.
+        (Bewusst gewählt für On-Demand Pfad; Sensoren bleiben Coordinator-basiert.)
+
+    Performance:
+      - Nutzung des Index `idx_portfolio_securities_portfolio` (siehe Schema).
+      - OPTIONAL (später): Mikro-Caching (≤5s) falls Messungen Bedarf zeigen.
+    """
+    conn: sqlite3.Connection | None = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # NOTE: current_value & purchase_sum aggregieren die verknüpften
+        # Positionen.
+        # Nutzung last_price falls vorhanden erfolgt bereits beim Update der
+        # portfolio_securities Tabelle (Annahme lt. Architektur), daher hier
+        # direkte Summen.
+        # Falls zukünftig ein direkter JOIN zu securities.last_price nötig wäre,
+        # würde dies hier zentral ergänzt.
+        sql = """
+        SELECT
+            p.uuid AS uuid,
+            p.name AS name,
+            COALESCE(SUM(ps.current_value), 0) AS current_value,
+            COALESCE(SUM(ps.purchase_value), 0) AS purchase_sum,
+            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count
+        FROM portfolios p
+        LEFT JOIN portfolio_securities ps
+          ON p.uuid = ps.portfolio_uuid
+        GROUP BY p.uuid, p.name
+        ORDER BY p.name COLLATE NOCASE
+        """
+        rows = cur.execute(sql).fetchall()
+        return [_normalize_portfolio_row(r) for r in rows]
+    except Exception:
+        _LOGGER.exception("fetch_live_portfolios fehlgeschlagen (db_path=%s)", db_path)
+        return []
+    finally:
+        if conn is not None:
+            with suppress(Exception):
+                conn.close()  # type: ignore[has-type]

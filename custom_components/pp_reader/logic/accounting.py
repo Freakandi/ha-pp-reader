@@ -1,13 +1,18 @@
-from typing import List, Dict
-from ..data.db_access import Transaction, get_transactions
-from ..logic.validators import PPDataValidator
+"""Business logic helpers for Portfolio Performance account balances."""
+
 import logging
+
+from custom_components.pp_reader.data.db_access import Transaction
+from custom_components.pp_reader.logic.validators import PPDataValidator
 
 _LOGGER = logging.getLogger(__name__)
 
 
+CASH_TRANSFER_TYPE = 5
+
+
 def calculate_account_balance(
-    account_uuid: str, transactions: List[Transaction]
+    account_uuid: str, transactions: list[Transaction]
 ) -> float:
     """Berechne den Kontostand eines Kontos anhand aller relevanten DB-Transaktionen."""
     validator = PPDataValidator()
@@ -20,10 +25,10 @@ def calculate_account_balance(
             continue
 
         # Alle Felder kommen direkt aus der DB-Transaction
-        if tx.account != account_uuid and tx.other_account != account_uuid:
+        if account_uuid not in (tx.account, tx.other_account):
             continue
 
-        if tx.type == 5:  # CASH_TRANSFER
+        if tx.type == CASH_TRANSFER_TYPE:  # CASH_TRANSFER
             if tx.account == account_uuid:
                 saldo -= tx.amount
             elif tx.other_account == account_uuid:
@@ -40,9 +45,10 @@ def calculate_account_balance(
             8,
             12,
             1,
-            5,
+            CASH_TRANSFER_TYPE,
             14,
-        ):  # DEPOSIT, INTEREST, DIVIDENDS, TAX_REFUND, SELL, TRANSFER_IN, FEES_REFUND
+        ):
+            # DEPOSIT, INTEREST, DIVIDENDS, TAX_REFUND, SELL, TRANSFER_IN, FEES_REFUND
             saldo += tx.amount
 
         elif tx.type in (
@@ -51,8 +57,9 @@ def calculate_account_balance(
             10,
             11,
             0,
-            5,
-        ):  # REMOVAL, FEES, INTEREST_CHARGE, TAXES, BUY, TRANSFER_OUT
+            CASH_TRANSFER_TYPE,
+        ):
+            # REMOVAL, FEES, INTEREST_CHARGE, TAXES, BUY, TRANSFER_OUT
             saldo -= tx.amount
 
         # Hinweis: CASH_TRANSFER bereits oben separat behandelt
@@ -67,22 +74,23 @@ def calculate_account_balance(
 
 def db_calc_account_balance(
     account_uuid: str,
-    transactions: List[Transaction],
-    accounts_currency_map: Dict[str, str] | None = None,
-    tx_units: Dict[str, Dict[str, int | str]] | None = None,
+    transactions: list[Transaction],
+    accounts_currency_map: dict[str, str] | None = None,
+    tx_units: dict[str, dict[str, int | str]] | None = None,
 ) -> int:
     """
     Berechnet den Kontostand (Cent) eines Kontos.
+
     Berücksichtigt bei CASH_TRANSFER (Typ 5) jetzt fx_amount für das Zielkonto,
     falls verfügbar (Cross-Currency-Transfer).
     """
     saldo = 0
 
     for tx in transactions:
-        if tx.account != account_uuid and tx.other_account != account_uuid:
+        if account_uuid not in (tx.account, tx.other_account):
             continue
 
-        if tx.type == 5:  # CASH_TRANSFER
+        if tx.type == CASH_TRANSFER_TYPE:  # CASH_TRANSFER
             if tx.account == account_uuid:
                 # Quellkonto → immer Abfluss in Originalwährung
                 saldo -= tx.amount
@@ -105,9 +113,17 @@ def db_calc_account_balance(
         if tx.account != account_uuid:
             continue
 
-        if (
-            tx.type in (6, 9, 8, 12, 1, 5, 14)
-        ):  # DEPOSIT, INTEREST, DIVIDENDS, TAX_REFUND, SELL, (TRANSFER_IN handled above), FEES_REFUND
+        if tx.type in (
+            6,
+            9,
+            8,
+            12,
+            1,
+            CASH_TRANSFER_TYPE,
+            14,
+        ):
+            # DEPOSIT, INTEREST, DIVIDENDS, TAX_REFUND, SELL,
+            # (TRANSFER_IN handled above), FEES_REFUND
             saldo += tx.amount
         elif tx.type in (
             7,
@@ -115,8 +131,10 @@ def db_calc_account_balance(
             10,
             11,
             0,
-            5,
-        ):  # REMOVAL, FEES, INTEREST_CHARGE, TAXES, BUY, (TRANSFER_OUT handled above)
+            CASH_TRANSFER_TYPE,
+        ):
+            # REMOVAL, FEES, INTEREST_CHARGE, TAXES, BUY,
+            # (TRANSFER_OUT handled above)
             saldo -= tx.amount
 
     return saldo

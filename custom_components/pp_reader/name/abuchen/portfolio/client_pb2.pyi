@@ -5,19 +5,20 @@ isort:skip_file
 
 import builtins
 import collections.abc
+import sys
+import typing
+
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import google.protobuf.struct_pb2
 import google.protobuf.timestamp_pb2
-import sys
-import typing
 
 if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+    pass
 else:
-    import typing_extensions
+    pass
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
@@ -38,7 +39,12 @@ class PDecimalValue(google.protobuf.message.Message):
         precision: builtins.int = ...,
         value: builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["precision", b"precision", "scale", b"scale", "value", b"value"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "precision", b"precision", "scale", b"scale", "value", b"value"
+        ],
+    ) -> None: ...
 
 global___PDecimalValue = PDecimalValue
 
@@ -72,9 +78,54 @@ class PAnyValue(google.protobuf.message.Message):
         bool: builtins.bool = ...,
         map: global___PMap | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["bool", b"bool", "double", b"double", "int32", b"int32", "int64", b"int64", "kind", b"kind", "map", b"map", "null", b"null", "string", b"string"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["bool", b"bool", "double", b"double", "int32", b"int32", "int64", b"int64", "kind", b"kind", "map", b"map", "null", b"null", "string", b"string"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["kind", b"kind"]) -> typing.Literal["null", "string", "int32", "int64", "double", "bool", "map"] | None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "bool",
+            b"bool",
+            "double",
+            b"double",
+            "int32",
+            b"int32",
+            "int64",
+            b"int64",
+            "kind",
+            b"kind",
+            "map",
+            b"map",
+            "null",
+            b"null",
+            "string",
+            b"string",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "bool",
+            b"bool",
+            "double",
+            b"double",
+            "int32",
+            b"int32",
+            "int64",
+            b"int64",
+            "kind",
+            b"kind",
+            "map",
+            b"map",
+            "null",
+            b"null",
+            "string",
+            b"string",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["kind", b"kind"]
+    ) -> (
+        typing.Literal["null", "string", "int32", "int64", "double", "bool", "map"]
+        | None
+    ): ...
 
 global___PAnyValue = PAnyValue
 
@@ -93,8 +144,12 @@ class PKeyValue(google.protobuf.message.Message):
         key: builtins.str = ...,
         value: global___PAnyValue | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["value", b"value"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+    def HasField(
+        self, field_name: typing.Literal["value", b"value"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self, field_name: typing.Literal["key", b"key", "value", b"value"]
+    ) -> None: ...
 
 global___PKeyValue = PKeyValue
 
@@ -104,7 +159,11 @@ class PMap(google.protobuf.message.Message):
 
     ENTRIES_FIELD_NUMBER: builtins.int
     @property
-    def entries(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+    def entries(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PKeyValue
+    ]: ...
     def __init__(
         self,
         *,
@@ -129,7 +188,9 @@ class PHistoricalPrice(google.protobuf.message.Message):
         date: builtins.int = ...,
         close: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["close", b"close", "date", b"date"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["close", b"close", "date", b"date"]
+    ) -> None: ...
 
 global___PHistoricalPrice = PHistoricalPrice
 
@@ -157,7 +218,21 @@ class PFullHistoricalPrice(google.protobuf.message.Message):
         low: builtins.int = ...,
         volume: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["close", b"close", "date", b"date", "high", b"high", "low", b"low", "volume", b"volume"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "close",
+            b"close",
+            "date",
+            b"date",
+            "high",
+            b"high",
+            "low",
+            b"low",
+            "volume",
+            b"volume",
+        ],
+    ) -> None: ...
 
 global___PFullHistoricalPrice = PFullHistoricalPrice
 
@@ -167,9 +242,14 @@ class PSecurityEvent(google.protobuf.message.Message):
 
     class _Type:
         ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        type V = ValueType
 
-    class _TypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[PSecurityEvent._Type.ValueType], builtins.type):
+    class _TypeEnumTypeWrapper(
+        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+            PSecurityEvent._Type.ValueType
+        ],
+        builtins.type,
+    ):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         STOCK_SPLIT: PSecurityEvent._Type.ValueType  # 0
         NOTE: PSecurityEvent._Type.ValueType  # 1
@@ -191,7 +271,11 @@ class PSecurityEvent(google.protobuf.message.Message):
     details: builtins.str
     source: builtins.str
     @property
-    def data(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PAnyValue]: ...
+    def data(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PAnyValue
+    ]: ...
     def __init__(
         self,
         *,
@@ -201,7 +285,21 @@ class PSecurityEvent(google.protobuf.message.Message):
         data: collections.abc.Iterable[global___PAnyValue] | None = ...,
         source: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["data", b"data", "date", b"date", "details", b"details", "source", b"source", "type", b"type"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "data",
+            b"data",
+            "date",
+            b"date",
+            "details",
+            b"details",
+            "source",
+            b"source",
+            "type",
+            b"type",
+        ],
+    ) -> None: ...
 
 global___PSecurityEvent = PSecurityEvent
 
@@ -246,15 +344,31 @@ class PSecurity(google.protobuf.message.Message):
     latestFeedURL: builtins.str
     isRetired: builtins.bool
     @property
-    def prices(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PHistoricalPrice]: ...
+    def prices(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PHistoricalPrice
+    ]: ...
     @property
     def latest(self) -> global___PFullHistoricalPrice: ...
     @property
-    def attributes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+    def attributes(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PKeyValue
+    ]: ...
     @property
-    def events(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PSecurityEvent]: ...
+    def events(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PSecurityEvent
+    ]: ...
     @property
-    def properties(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+    def properties(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PKeyValue
+    ]: ...
     @property
     def updatedAt(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     def __init__(
@@ -282,34 +396,190 @@ class PSecurity(google.protobuf.message.Message):
         isRetired: builtins.bool = ...,
         updatedAt: google.protobuf.timestamp_pb2.Timestamp | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_calendar", b"_calendar", "_currencyCode", b"_currencyCode", "_feed", b"_feed", "_feedURL", b"_feedURL", "_isin", b"_isin", "_latest", b"_latest", "_latestFeed", b"_latestFeed", "_latestFeedURL", b"_latestFeedURL", "_note", b"_note", "_onlineId", b"_onlineId", "_targetCurrencyCode", b"_targetCurrencyCode", "_tickerSymbol", b"_tickerSymbol", "_wkn", b"_wkn", "calendar", b"calendar", "currencyCode", b"currencyCode", "feed", b"feed", "feedURL", b"feedURL", "isin", b"isin", "latest", b"latest", "latestFeed", b"latestFeed", "latestFeedURL", b"latestFeedURL", "note", b"note", "onlineId", b"onlineId", "targetCurrencyCode", b"targetCurrencyCode", "tickerSymbol", b"tickerSymbol", "updatedAt", b"updatedAt", "wkn", b"wkn"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_calendar", b"_calendar", "_currencyCode", b"_currencyCode", "_feed", b"_feed", "_feedURL", b"_feedURL", "_isin", b"_isin", "_latest", b"_latest", "_latestFeed", b"_latestFeed", "_latestFeedURL", b"_latestFeedURL", "_note", b"_note", "_onlineId", b"_onlineId", "_targetCurrencyCode", b"_targetCurrencyCode", "_tickerSymbol", b"_tickerSymbol", "_wkn", b"_wkn", "attributes", b"attributes", "calendar", b"calendar", "currencyCode", b"currencyCode", "events", b"events", "feed", b"feed", "feedURL", b"feedURL", "isRetired", b"isRetired", "isin", b"isin", "latest", b"latest", "latestFeed", b"latestFeed", "latestFeedURL", b"latestFeedURL", "name", b"name", "note", b"note", "onlineId", b"onlineId", "prices", b"prices", "properties", b"properties", "targetCurrencyCode", b"targetCurrencyCode", "tickerSymbol", b"tickerSymbol", "updatedAt", b"updatedAt", "uuid", b"uuid", "wkn", b"wkn"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_calendar",
+            b"_calendar",
+            "_currencyCode",
+            b"_currencyCode",
+            "_feed",
+            b"_feed",
+            "_feedURL",
+            b"_feedURL",
+            "_isin",
+            b"_isin",
+            "_latest",
+            b"_latest",
+            "_latestFeed",
+            b"_latestFeed",
+            "_latestFeedURL",
+            b"_latestFeedURL",
+            "_note",
+            b"_note",
+            "_onlineId",
+            b"_onlineId",
+            "_targetCurrencyCode",
+            b"_targetCurrencyCode",
+            "_tickerSymbol",
+            b"_tickerSymbol",
+            "_wkn",
+            b"_wkn",
+            "calendar",
+            b"calendar",
+            "currencyCode",
+            b"currencyCode",
+            "feed",
+            b"feed",
+            "feedURL",
+            b"feedURL",
+            "isin",
+            b"isin",
+            "latest",
+            b"latest",
+            "latestFeed",
+            b"latestFeed",
+            "latestFeedURL",
+            b"latestFeedURL",
+            "note",
+            b"note",
+            "onlineId",
+            b"onlineId",
+            "targetCurrencyCode",
+            b"targetCurrencyCode",
+            "tickerSymbol",
+            b"tickerSymbol",
+            "updatedAt",
+            b"updatedAt",
+            "wkn",
+            b"wkn",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_calendar",
+            b"_calendar",
+            "_currencyCode",
+            b"_currencyCode",
+            "_feed",
+            b"_feed",
+            "_feedURL",
+            b"_feedURL",
+            "_isin",
+            b"_isin",
+            "_latest",
+            b"_latest",
+            "_latestFeed",
+            b"_latestFeed",
+            "_latestFeedURL",
+            b"_latestFeedURL",
+            "_note",
+            b"_note",
+            "_onlineId",
+            b"_onlineId",
+            "_targetCurrencyCode",
+            b"_targetCurrencyCode",
+            "_tickerSymbol",
+            b"_tickerSymbol",
+            "_wkn",
+            b"_wkn",
+            "attributes",
+            b"attributes",
+            "calendar",
+            b"calendar",
+            "currencyCode",
+            b"currencyCode",
+            "events",
+            b"events",
+            "feed",
+            b"feed",
+            "feedURL",
+            b"feedURL",
+            "isRetired",
+            b"isRetired",
+            "isin",
+            b"isin",
+            "latest",
+            b"latest",
+            "latestFeed",
+            b"latestFeed",
+            "latestFeedURL",
+            b"latestFeedURL",
+            "name",
+            b"name",
+            "note",
+            b"note",
+            "onlineId",
+            b"onlineId",
+            "prices",
+            b"prices",
+            "properties",
+            b"properties",
+            "targetCurrencyCode",
+            b"targetCurrencyCode",
+            "tickerSymbol",
+            b"tickerSymbol",
+            "updatedAt",
+            b"updatedAt",
+            "uuid",
+            b"uuid",
+            "wkn",
+            b"wkn",
+        ],
+    ) -> None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_calendar", b"_calendar"]) -> typing.Literal["calendar"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_calendar", b"_calendar"]
+    ) -> typing.Literal["calendar"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_currencyCode", b"_currencyCode"]) -> typing.Literal["currencyCode"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_currencyCode", b"_currencyCode"]
+    ) -> typing.Literal["currencyCode"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_feed", b"_feed"]) -> typing.Literal["feed"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_feed", b"_feed"]
+    ) -> typing.Literal["feed"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_feedURL", b"_feedURL"]) -> typing.Literal["feedURL"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_feedURL", b"_feedURL"]
+    ) -> typing.Literal["feedURL"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_isin", b"_isin"]) -> typing.Literal["isin"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_isin", b"_isin"]
+    ) -> typing.Literal["isin"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_latest", b"_latest"]) -> typing.Literal["latest"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_latest", b"_latest"]
+    ) -> typing.Literal["latest"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_latestFeed", b"_latestFeed"]) -> typing.Literal["latestFeed"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_latestFeed", b"_latestFeed"]
+    ) -> typing.Literal["latestFeed"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_latestFeedURL", b"_latestFeedURL"]) -> typing.Literal["latestFeedURL"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_latestFeedURL", b"_latestFeedURL"]
+    ) -> typing.Literal["latestFeedURL"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_note", b"_note"]) -> typing.Literal["note"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_note", b"_note"]
+    ) -> typing.Literal["note"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_onlineId", b"_onlineId"]) -> typing.Literal["onlineId"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_onlineId", b"_onlineId"]
+    ) -> typing.Literal["onlineId"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_targetCurrencyCode", b"_targetCurrencyCode"]) -> typing.Literal["targetCurrencyCode"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_targetCurrencyCode", b"_targetCurrencyCode"]
+    ) -> typing.Literal["targetCurrencyCode"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_tickerSymbol", b"_tickerSymbol"]) -> typing.Literal["tickerSymbol"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_tickerSymbol", b"_tickerSymbol"]
+    ) -> typing.Literal["tickerSymbol"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_wkn", b"_wkn"]) -> typing.Literal["wkn"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_wkn", b"_wkn"]
+    ) -> typing.Literal["wkn"] | None: ...
 
 global___PSecurity = PSecurity
 
@@ -321,8 +591,10 @@ class PWatchlist(google.protobuf.message.Message):
     SECURITIES_FIELD_NUMBER: builtins.int
     name: builtins.str
     @property
-    def securities(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
-        """uuids"""
+    def securities(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
+        """Uuids"""
 
     def __init__(
         self,
@@ -330,7 +602,9 @@ class PWatchlist(google.protobuf.message.Message):
         name: builtins.str = ...,
         securities: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["name", b"name", "securities", b"securities"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["name", b"name", "securities", b"securities"]
+    ) -> None: ...
 
 global___PWatchlist = PWatchlist
 
@@ -351,7 +625,11 @@ class PAccount(google.protobuf.message.Message):
     note: builtins.str
     isRetired: builtins.bool
     @property
-    def attributes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+    def attributes(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PKeyValue
+    ]: ...
     @property
     def updatedAt(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     def __init__(
@@ -365,9 +643,36 @@ class PAccount(google.protobuf.message.Message):
         attributes: collections.abc.Iterable[global___PKeyValue] | None = ...,
         updatedAt: google.protobuf.timestamp_pb2.Timestamp | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_note", b"_note", "note", b"note", "updatedAt", b"updatedAt"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_note", b"_note", "attributes", b"attributes", "currencyCode", b"currencyCode", "isRetired", b"isRetired", "name", b"name", "note", b"note", "updatedAt", b"updatedAt", "uuid", b"uuid"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_note", b"_note"]) -> typing.Literal["note"] | None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_note", b"_note", "note", b"note", "updatedAt", b"updatedAt"
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_note",
+            b"_note",
+            "attributes",
+            b"attributes",
+            "currencyCode",
+            b"currencyCode",
+            "isRetired",
+            b"isRetired",
+            "name",
+            b"name",
+            "note",
+            b"note",
+            "updatedAt",
+            b"updatedAt",
+            "uuid",
+            b"uuid",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_note", b"_note"]
+    ) -> typing.Literal["note"] | None: ...
 
 global___PAccount = PAccount
 
@@ -388,7 +693,11 @@ class PPortfolio(google.protobuf.message.Message):
     isRetired: builtins.bool
     referenceAccount: builtins.str
     @property
-    def attributes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+    def attributes(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PKeyValue
+    ]: ...
     @property
     def updatedAt(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     def __init__(
@@ -402,12 +711,52 @@ class PPortfolio(google.protobuf.message.Message):
         attributes: collections.abc.Iterable[global___PKeyValue] | None = ...,
         updatedAt: google.protobuf.timestamp_pb2.Timestamp | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_note", b"_note", "_referenceAccount", b"_referenceAccount", "note", b"note", "referenceAccount", b"referenceAccount", "updatedAt", b"updatedAt"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_note", b"_note", "_referenceAccount", b"_referenceAccount", "attributes", b"attributes", "isRetired", b"isRetired", "name", b"name", "note", b"note", "referenceAccount", b"referenceAccount", "updatedAt", b"updatedAt", "uuid", b"uuid"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_note",
+            b"_note",
+            "_referenceAccount",
+            b"_referenceAccount",
+            "note",
+            b"note",
+            "referenceAccount",
+            b"referenceAccount",
+            "updatedAt",
+            b"updatedAt",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_note",
+            b"_note",
+            "_referenceAccount",
+            b"_referenceAccount",
+            "attributes",
+            b"attributes",
+            "isRetired",
+            b"isRetired",
+            "name",
+            b"name",
+            "note",
+            b"note",
+            "referenceAccount",
+            b"referenceAccount",
+            "updatedAt",
+            b"updatedAt",
+            "uuid",
+            b"uuid",
+        ],
+    ) -> None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_note", b"_note"]) -> typing.Literal["note"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_note", b"_note"]
+    ) -> typing.Literal["note"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_referenceAccount", b"_referenceAccount"]) -> typing.Literal["referenceAccount"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_referenceAccount", b"_referenceAccount"]
+    ) -> typing.Literal["referenceAccount"] | None: ...
 
 global___PPortfolio = PPortfolio
 
@@ -417,9 +766,14 @@ class PTransactionUnit(google.protobuf.message.Message):
 
     class _Type:
         ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        type V = ValueType
 
-    class _TypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[PTransactionUnit._Type.ValueType], builtins.type):
+    class _TypeEnumTypeWrapper(
+        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+            PTransactionUnit._Type.ValueType
+        ],
+        builtins.type,
+    ):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         GROSS_VALUE: PTransactionUnit._Type.ValueType  # 0
         TAX: PTransactionUnit._Type.ValueType  # 1
@@ -453,14 +807,58 @@ class PTransactionUnit(google.protobuf.message.Message):
         fxCurrencyCode: builtins.str | None = ...,
         fxRateToBase: global___PDecimalValue | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_fxAmount", b"_fxAmount", "_fxCurrencyCode", b"_fxCurrencyCode", "_fxRateToBase", b"_fxRateToBase", "fxAmount", b"fxAmount", "fxCurrencyCode", b"fxCurrencyCode", "fxRateToBase", b"fxRateToBase"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_fxAmount", b"_fxAmount", "_fxCurrencyCode", b"_fxCurrencyCode", "_fxRateToBase", b"_fxRateToBase", "amount", b"amount", "currencyCode", b"currencyCode", "fxAmount", b"fxAmount", "fxCurrencyCode", b"fxCurrencyCode", "fxRateToBase", b"fxRateToBase", "type", b"type"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_fxAmount",
+            b"_fxAmount",
+            "_fxCurrencyCode",
+            b"_fxCurrencyCode",
+            "_fxRateToBase",
+            b"_fxRateToBase",
+            "fxAmount",
+            b"fxAmount",
+            "fxCurrencyCode",
+            b"fxCurrencyCode",
+            "fxRateToBase",
+            b"fxRateToBase",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_fxAmount",
+            b"_fxAmount",
+            "_fxCurrencyCode",
+            b"_fxCurrencyCode",
+            "_fxRateToBase",
+            b"_fxRateToBase",
+            "amount",
+            b"amount",
+            "currencyCode",
+            b"currencyCode",
+            "fxAmount",
+            b"fxAmount",
+            "fxCurrencyCode",
+            b"fxCurrencyCode",
+            "fxRateToBase",
+            b"fxRateToBase",
+            "type",
+            b"type",
+        ],
+    ) -> None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_fxAmount", b"_fxAmount"]) -> typing.Literal["fxAmount"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_fxAmount", b"_fxAmount"]
+    ) -> typing.Literal["fxAmount"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_fxCurrencyCode", b"_fxCurrencyCode"]) -> typing.Literal["fxCurrencyCode"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_fxCurrencyCode", b"_fxCurrencyCode"]
+    ) -> typing.Literal["fxCurrencyCode"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_fxRateToBase", b"_fxRateToBase"]) -> typing.Literal["fxRateToBase"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_fxRateToBase", b"_fxRateToBase"]
+    ) -> typing.Literal["fxRateToBase"] | None: ...
 
 global___PTransactionUnit = PTransactionUnit
 
@@ -470,9 +868,14 @@ class PTransaction(google.protobuf.message.Message):
 
     class _Type:
         ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        type V = ValueType
 
-    class _TypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[PTransaction._Type.ValueType], builtins.type):
+    class _TypeEnumTypeWrapper(
+        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+            PTransaction._Type.ValueType
+        ],
+        builtins.type,
+    ):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         PURCHASE: PTransaction._Type.ValueType  # 0
         SALE: PTransaction._Type.ValueType  # 1
@@ -542,7 +945,11 @@ class PTransaction(google.protobuf.message.Message):
     @property
     def date(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     @property
-    def units(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PTransactionUnit]: ...
+    def units(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PTransactionUnit
+    ]: ...
     @property
     def updatedAt(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     def __init__(
@@ -566,28 +973,154 @@ class PTransaction(google.protobuf.message.Message):
         updatedAt: google.protobuf.timestamp_pb2.Timestamp | None = ...,
         source: builtins.str | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_account", b"_account", "_note", b"_note", "_otherAccount", b"_otherAccount", "_otherPortfolio", b"_otherPortfolio", "_otherUpdatedAt", b"_otherUpdatedAt", "_otherUuid", b"_otherUuid", "_portfolio", b"_portfolio", "_security", b"_security", "_shares", b"_shares", "_source", b"_source", "account", b"account", "date", b"date", "note", b"note", "otherAccount", b"otherAccount", "otherPortfolio", b"otherPortfolio", "otherUpdatedAt", b"otherUpdatedAt", "otherUuid", b"otherUuid", "portfolio", b"portfolio", "security", b"security", "shares", b"shares", "source", b"source", "updatedAt", b"updatedAt"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_account", b"_account", "_note", b"_note", "_otherAccount", b"_otherAccount", "_otherPortfolio", b"_otherPortfolio", "_otherUpdatedAt", b"_otherUpdatedAt", "_otherUuid", b"_otherUuid", "_portfolio", b"_portfolio", "_security", b"_security", "_shares", b"_shares", "_source", b"_source", "account", b"account", "amount", b"amount", "currencyCode", b"currencyCode", "date", b"date", "note", b"note", "otherAccount", b"otherAccount", "otherPortfolio", b"otherPortfolio", "otherUpdatedAt", b"otherUpdatedAt", "otherUuid", b"otherUuid", "portfolio", b"portfolio", "security", b"security", "shares", b"shares", "source", b"source", "type", b"type", "units", b"units", "updatedAt", b"updatedAt", "uuid", b"uuid"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_account",
+            b"_account",
+            "_note",
+            b"_note",
+            "_otherAccount",
+            b"_otherAccount",
+            "_otherPortfolio",
+            b"_otherPortfolio",
+            "_otherUpdatedAt",
+            b"_otherUpdatedAt",
+            "_otherUuid",
+            b"_otherUuid",
+            "_portfolio",
+            b"_portfolio",
+            "_security",
+            b"_security",
+            "_shares",
+            b"_shares",
+            "_source",
+            b"_source",
+            "account",
+            b"account",
+            "date",
+            b"date",
+            "note",
+            b"note",
+            "otherAccount",
+            b"otherAccount",
+            "otherPortfolio",
+            b"otherPortfolio",
+            "otherUpdatedAt",
+            b"otherUpdatedAt",
+            "otherUuid",
+            b"otherUuid",
+            "portfolio",
+            b"portfolio",
+            "security",
+            b"security",
+            "shares",
+            b"shares",
+            "source",
+            b"source",
+            "updatedAt",
+            b"updatedAt",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_account",
+            b"_account",
+            "_note",
+            b"_note",
+            "_otherAccount",
+            b"_otherAccount",
+            "_otherPortfolio",
+            b"_otherPortfolio",
+            "_otherUpdatedAt",
+            b"_otherUpdatedAt",
+            "_otherUuid",
+            b"_otherUuid",
+            "_portfolio",
+            b"_portfolio",
+            "_security",
+            b"_security",
+            "_shares",
+            b"_shares",
+            "_source",
+            b"_source",
+            "account",
+            b"account",
+            "amount",
+            b"amount",
+            "currencyCode",
+            b"currencyCode",
+            "date",
+            b"date",
+            "note",
+            b"note",
+            "otherAccount",
+            b"otherAccount",
+            "otherPortfolio",
+            b"otherPortfolio",
+            "otherUpdatedAt",
+            b"otherUpdatedAt",
+            "otherUuid",
+            b"otherUuid",
+            "portfolio",
+            b"portfolio",
+            "security",
+            b"security",
+            "shares",
+            b"shares",
+            "source",
+            b"source",
+            "type",
+            b"type",
+            "units",
+            b"units",
+            "updatedAt",
+            b"updatedAt",
+            "uuid",
+            b"uuid",
+        ],
+    ) -> None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_account", b"_account"]) -> typing.Literal["account"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_account", b"_account"]
+    ) -> typing.Literal["account"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_note", b"_note"]) -> typing.Literal["note"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_note", b"_note"]
+    ) -> typing.Literal["note"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_otherAccount", b"_otherAccount"]) -> typing.Literal["otherAccount"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_otherAccount", b"_otherAccount"]
+    ) -> typing.Literal["otherAccount"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_otherPortfolio", b"_otherPortfolio"]) -> typing.Literal["otherPortfolio"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_otherPortfolio", b"_otherPortfolio"]
+    ) -> typing.Literal["otherPortfolio"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_otherUpdatedAt", b"_otherUpdatedAt"]) -> typing.Literal["otherUpdatedAt"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_otherUpdatedAt", b"_otherUpdatedAt"]
+    ) -> typing.Literal["otherUpdatedAt"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_otherUuid", b"_otherUuid"]) -> typing.Literal["otherUuid"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_otherUuid", b"_otherUuid"]
+    ) -> typing.Literal["otherUuid"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_portfolio", b"_portfolio"]) -> typing.Literal["portfolio"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_portfolio", b"_portfolio"]
+    ) -> typing.Literal["portfolio"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_security", b"_security"]) -> typing.Literal["security"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_security", b"_security"]
+    ) -> typing.Literal["security"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_shares", b"_shares"]) -> typing.Literal["shares"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_shares", b"_shares"]
+    ) -> typing.Literal["shares"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_source", b"_source"]) -> typing.Literal["source"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_source", b"_source"]
+    ) -> typing.Literal["source"] | None: ...
 
 global___PTransaction = PTransaction
 
@@ -597,9 +1130,14 @@ class PInvestmentPlan(google.protobuf.message.Message):
 
     class _Type:
         ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        type V = ValueType
 
-    class _TypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[PInvestmentPlan._Type.ValueType], builtins.type):
+    class _TypeEnumTypeWrapper(
+        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+            PInvestmentPlan._Type.ValueType
+        ],
+        builtins.type,
+    ):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         PURCHASE_OR_DELIVERY: PInvestmentPlan._Type.ValueType  # 0
         DEPOSIT: PInvestmentPlan._Type.ValueType  # 1
@@ -639,10 +1177,16 @@ class PInvestmentPlan(google.protobuf.message.Message):
     taxes: builtins.int
     type: global___PInvestmentPlan.Type.ValueType
     @property
-    def attributes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+    def attributes(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PKeyValue
+    ]: ...
     @property
-    def transactions(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
-        """uuids"""
+    def transactions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
+        """Uuids"""
 
     def __init__(
         self,
@@ -662,16 +1206,84 @@ class PInvestmentPlan(google.protobuf.message.Message):
         taxes: builtins.int = ...,
         type: global___PInvestmentPlan.Type.ValueType = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_account", b"_account", "_note", b"_note", "_portfolio", b"_portfolio", "_security", b"_security", "account", b"account", "note", b"note", "portfolio", b"portfolio", "security", b"security"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_account", b"_account", "_note", b"_note", "_portfolio", b"_portfolio", "_security", b"_security", "account", b"account", "amount", b"amount", "attributes", b"attributes", "autoGenerate", b"autoGenerate", "date", b"date", "fees", b"fees", "interval", b"interval", "name", b"name", "note", b"note", "portfolio", b"portfolio", "security", b"security", "taxes", b"taxes", "transactions", b"transactions", "type", b"type"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_account",
+            b"_account",
+            "_note",
+            b"_note",
+            "_portfolio",
+            b"_portfolio",
+            "_security",
+            b"_security",
+            "account",
+            b"account",
+            "note",
+            b"note",
+            "portfolio",
+            b"portfolio",
+            "security",
+            b"security",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_account",
+            b"_account",
+            "_note",
+            b"_note",
+            "_portfolio",
+            b"_portfolio",
+            "_security",
+            b"_security",
+            "account",
+            b"account",
+            "amount",
+            b"amount",
+            "attributes",
+            b"attributes",
+            "autoGenerate",
+            b"autoGenerate",
+            "date",
+            b"date",
+            "fees",
+            b"fees",
+            "interval",
+            b"interval",
+            "name",
+            b"name",
+            "note",
+            b"note",
+            "portfolio",
+            b"portfolio",
+            "security",
+            b"security",
+            "taxes",
+            b"taxes",
+            "transactions",
+            b"transactions",
+            "type",
+            b"type",
+        ],
+    ) -> None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_account", b"_account"]) -> typing.Literal["account"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_account", b"_account"]
+    ) -> typing.Literal["account"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_note", b"_note"]) -> typing.Literal["note"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_note", b"_note"]
+    ) -> typing.Literal["note"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_portfolio", b"_portfolio"]) -> typing.Literal["portfolio"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_portfolio", b"_portfolio"]
+    ) -> typing.Literal["portfolio"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_security", b"_security"]) -> typing.Literal["security"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_security", b"_security"]
+    ) -> typing.Literal["security"] | None: ...
 
 global___PInvestmentPlan = PInvestmentPlan
 
@@ -691,7 +1303,11 @@ class PTaxonomy(google.protobuf.message.Message):
         weight: builtins.int
         rank: builtins.int
         @property
-        def data(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+        def data(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+            global___PKeyValue
+        ]: ...
         def __init__(
             self,
             *,
@@ -700,7 +1316,19 @@ class PTaxonomy(google.protobuf.message.Message):
             rank: builtins.int = ...,
             data: collections.abc.Iterable[global___PKeyValue] | None = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["data", b"data", "investmentVehicle", b"investmentVehicle", "rank", b"rank", "weight", b"weight"]) -> None: ...
+        def ClearField(
+            self,
+            field_name: typing.Literal[
+                "data",
+                b"data",
+                "investmentVehicle",
+                b"investmentVehicle",
+                "rank",
+                b"rank",
+                "weight",
+                b"weight",
+            ],
+        ) -> None: ...
 
     @typing.final
     class Classification(google.protobuf.message.Message):
@@ -723,9 +1351,17 @@ class PTaxonomy(google.protobuf.message.Message):
         weight: builtins.int
         rank: builtins.int
         @property
-        def data(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PKeyValue]: ...
+        def data(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+            global___PKeyValue
+        ]: ...
         @property
-        def assignments(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PTaxonomy.Assignment]: ...
+        def assignments(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+            global___PTaxonomy.Assignment
+        ]: ...
         def __init__(
             self,
             *,
@@ -737,14 +1373,57 @@ class PTaxonomy(google.protobuf.message.Message):
             weight: builtins.int = ...,
             rank: builtins.int = ...,
             data: collections.abc.Iterable[global___PKeyValue] | None = ...,
-            assignments: collections.abc.Iterable[global___PTaxonomy.Assignment] | None = ...,
+            assignments: collections.abc.Iterable[global___PTaxonomy.Assignment]
+            | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["_note", b"_note", "_parentId", b"_parentId", "note", b"note", "parentId", b"parentId"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["_note", b"_note", "_parentId", b"_parentId", "assignments", b"assignments", "color", b"color", "data", b"data", "id", b"id", "name", b"name", "note", b"note", "parentId", b"parentId", "rank", b"rank", "weight", b"weight"]) -> None: ...
+        def HasField(
+            self,
+            field_name: typing.Literal[
+                "_note",
+                b"_note",
+                "_parentId",
+                b"_parentId",
+                "note",
+                b"note",
+                "parentId",
+                b"parentId",
+            ],
+        ) -> builtins.bool: ...
+        def ClearField(
+            self,
+            field_name: typing.Literal[
+                "_note",
+                b"_note",
+                "_parentId",
+                b"_parentId",
+                "assignments",
+                b"assignments",
+                "color",
+                b"color",
+                "data",
+                b"data",
+                "id",
+                b"id",
+                "name",
+                b"name",
+                "note",
+                b"note",
+                "parentId",
+                b"parentId",
+                "rank",
+                b"rank",
+                "weight",
+                b"weight",
+            ],
+        ) -> None: ...
         @typing.overload
-        def WhichOneof(self, oneof_group: typing.Literal["_note", b"_note"]) -> typing.Literal["note"] | None: ...
+        def WhichOneof(
+            self, oneof_group: typing.Literal["_note", b"_note"]
+        ) -> typing.Literal["note"] | None: ...
         @typing.overload
-        def WhichOneof(self, oneof_group: typing.Literal["_parentId", b"_parentId"]) -> typing.Literal["parentId"] | None: ...
+        def WhichOneof(
+            self, oneof_group: typing.Literal["_parentId", b"_parentId"]
+        ) -> typing.Literal["parentId"] | None: ...
 
     ID_FIELD_NUMBER: builtins.int
     NAME_FIELD_NUMBER: builtins.int
@@ -755,9 +1434,17 @@ class PTaxonomy(google.protobuf.message.Message):
     name: builtins.str
     source: builtins.str
     @property
-    def dimensions(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
+    def dimensions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.str
+    ]: ...
     @property
-    def classifications(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PTaxonomy.Classification]: ...
+    def classifications(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PTaxonomy.Classification
+    ]: ...
     def __init__(
         self,
         *,
@@ -765,11 +1452,32 @@ class PTaxonomy(google.protobuf.message.Message):
         name: builtins.str = ...,
         source: builtins.str | None = ...,
         dimensions: collections.abc.Iterable[builtins.str] | None = ...,
-        classifications: collections.abc.Iterable[global___PTaxonomy.Classification] | None = ...,
+        classifications: collections.abc.Iterable[global___PTaxonomy.Classification]
+        | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_source", b"_source", "source", b"source"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_source", b"_source", "classifications", b"classifications", "dimensions", b"dimensions", "id", b"id", "name", b"name", "source", b"source"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_source", b"_source"]) -> typing.Literal["source"] | None: ...
+    def HasField(
+        self, field_name: typing.Literal["_source", b"_source", "source", b"source"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_source",
+            b"_source",
+            "classifications",
+            b"classifications",
+            "dimensions",
+            b"dimensions",
+            "id",
+            b"id",
+            "name",
+            b"name",
+            "source",
+            b"source",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_source", b"_source"]
+    ) -> typing.Literal["source"] | None: ...
 
 global___PTaxonomy = PTaxonomy
 
@@ -795,7 +1503,9 @@ class PDashboard(google.protobuf.message.Message):
                 key: builtins.str = ...,
                 value: builtins.str = ...,
             ) -> None: ...
-            def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+            def ClearField(
+                self, field_name: typing.Literal["key", b"key", "value", b"value"]
+            ) -> None: ...
 
         TYPE_FIELD_NUMBER: builtins.int
         LABEL_FIELD_NUMBER: builtins.int
@@ -803,15 +1513,25 @@ class PDashboard(google.protobuf.message.Message):
         type: builtins.str
         label: builtins.str
         @property
-        def configuration(self) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]: ...
+        def configuration(
+            self,
+        ) -> google.protobuf.internal.containers.ScalarMap[
+            builtins.str, builtins.str
+        ]: ...
         def __init__(
             self,
             *,
             type: builtins.str = ...,
             label: builtins.str = ...,
-            configuration: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+            configuration: collections.abc.Mapping[builtins.str, builtins.str]
+            | None = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["configuration", b"configuration", "label", b"label", "type", b"type"]) -> None: ...
+        def ClearField(
+            self,
+            field_name: typing.Literal[
+                "configuration", b"configuration", "label", b"label", "type", b"type"
+            ],
+        ) -> None: ...
 
     @typing.final
     class Column(google.protobuf.message.Message):
@@ -821,14 +1541,20 @@ class PDashboard(google.protobuf.message.Message):
         WIDGETS_FIELD_NUMBER: builtins.int
         weight: builtins.int
         @property
-        def widgets(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PDashboard.Widget]: ...
+        def widgets(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+            global___PDashboard.Widget
+        ]: ...
         def __init__(
             self,
             *,
             weight: builtins.int = ...,
             widgets: collections.abc.Iterable[global___PDashboard.Widget] | None = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["weight", b"weight", "widgets", b"widgets"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["weight", b"weight", "widgets", b"widgets"]
+        ) -> None: ...
 
     @typing.final
     class ConfigurationEntry(google.protobuf.message.Message):
@@ -844,7 +1570,9 @@ class PDashboard(google.protobuf.message.Message):
             key: builtins.str = ...,
             value: builtins.str = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     NAME_FIELD_NUMBER: builtins.int
     CONFIGURATION_FIELD_NUMBER: builtins.int
@@ -853,9 +1581,15 @@ class PDashboard(google.protobuf.message.Message):
     name: builtins.str
     id: builtins.str
     @property
-    def configuration(self) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]: ...
+    def configuration(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]: ...
     @property
-    def columns(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PDashboard.Column]: ...
+    def columns(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PDashboard.Column
+    ]: ...
     def __init__(
         self,
         *,
@@ -864,7 +1598,19 @@ class PDashboard(google.protobuf.message.Message):
         columns: collections.abc.Iterable[global___PDashboard.Column] | None = ...,
         id: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["columns", b"columns", "configuration", b"configuration", "id", b"id", "name", b"name"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "columns",
+            b"columns",
+            "configuration",
+            b"configuration",
+            "id",
+            b"id",
+            "name",
+            b"name",
+        ],
+    ) -> None: ...
 
 global___PDashboard = PDashboard
 
@@ -882,7 +1628,9 @@ class PBookmark(google.protobuf.message.Message):
         label: builtins.str = ...,
         pattern: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["label", b"label", "pattern", b"pattern"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["label", b"label", "pattern", b"pattern"]
+    ) -> None: ...
 
 global___PBookmark = PBookmark
 
@@ -919,9 +1667,38 @@ class PAttributeType(google.protobuf.message.Message):
         converterClass: builtins.str = ...,
         properties: global___PMap | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_source", b"_source", "properties", b"properties", "source", b"source"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_source", b"_source", "columnLabel", b"columnLabel", "converterClass", b"converterClass", "id", b"id", "name", b"name", "properties", b"properties", "source", b"source", "target", b"target", "type", b"type"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_source", b"_source"]) -> typing.Literal["source"] | None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_source", b"_source", "properties", b"properties", "source", b"source"
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_source",
+            b"_source",
+            "columnLabel",
+            b"columnLabel",
+            "converterClass",
+            b"converterClass",
+            "id",
+            b"id",
+            "name",
+            b"name",
+            "properties",
+            b"properties",
+            "source",
+            b"source",
+            "target",
+            b"target",
+            "type",
+            b"type",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_source", b"_source"]
+    ) -> typing.Literal["source"] | None: ...
 
 global___PAttributeType = PAttributeType
 
@@ -945,7 +1722,12 @@ class PConfigurationSet(google.protobuf.message.Message):
         name: builtins.str = ...,
         data: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["data", b"data", "key", b"key", "name", b"name", "uuid", b"uuid"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "data", b"data", "key", b"key", "name", b"name", "uuid", b"uuid"
+        ],
+    ) -> None: ...
 
 global___PConfigurationSet = PConfigurationSet
 
@@ -957,19 +1739,42 @@ class PSettings(google.protobuf.message.Message):
     ATTRIBUTETYPES_FIELD_NUMBER: builtins.int
     CONFIGURATIONSETS_FIELD_NUMBER: builtins.int
     @property
-    def bookmarks(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PBookmark]: ...
+    def bookmarks(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PBookmark
+    ]: ...
     @property
-    def attributeTypes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PAttributeType]: ...
+    def attributeTypes(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PAttributeType
+    ]: ...
     @property
-    def configurationSets(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PConfigurationSet]: ...
+    def configurationSets(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PConfigurationSet
+    ]: ...
     def __init__(
         self,
         *,
         bookmarks: collections.abc.Iterable[global___PBookmark] | None = ...,
         attributeTypes: collections.abc.Iterable[global___PAttributeType] | None = ...,
-        configurationSets: collections.abc.Iterable[global___PConfigurationSet] | None = ...,
+        configurationSets: collections.abc.Iterable[global___PConfigurationSet]
+        | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["attributeTypes", b"attributeTypes", "bookmarks", b"bookmarks", "configurationSets", b"configurationSets"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "attributeTypes",
+            b"attributeTypes",
+            "bookmarks",
+            b"bookmarks",
+            "configurationSets",
+            b"configurationSets",
+        ],
+    ) -> None: ...
 
 global___PSettings = PSettings
 
@@ -991,7 +1796,9 @@ class PClient(google.protobuf.message.Message):
             key: builtins.str = ...,
             value: builtins.str = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     VERSION_FIELD_NUMBER: builtins.int
     SECURITIES_FIELD_NUMBER: builtins.int
@@ -1008,23 +1815,57 @@ class PClient(google.protobuf.message.Message):
     version: builtins.int
     baseCurrency: builtins.str
     @property
-    def securities(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PSecurity]: ...
+    def securities(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PSecurity
+    ]: ...
     @property
-    def accounts(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PAccount]: ...
+    def accounts(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PAccount
+    ]: ...
     @property
-    def portfolios(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PPortfolio]: ...
+    def portfolios(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PPortfolio
+    ]: ...
     @property
-    def transactions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PTransaction]: ...
+    def transactions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PTransaction
+    ]: ...
     @property
-    def plans(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PInvestmentPlan]: ...
+    def plans(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PInvestmentPlan
+    ]: ...
     @property
-    def watchlists(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PWatchlist]: ...
+    def watchlists(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PWatchlist
+    ]: ...
     @property
-    def taxonomies(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PTaxonomy]: ...
+    def taxonomies(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PTaxonomy
+    ]: ...
     @property
-    def dashboards(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PDashboard]: ...
+    def dashboards(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PDashboard
+    ]: ...
     @property
-    def properties(self) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]: ...
+    def properties(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]: ...
     @property
     def settings(self) -> global___PSettings: ...
     def __init__(
@@ -1043,8 +1884,38 @@ class PClient(google.protobuf.message.Message):
         settings: global___PSettings | None = ...,
         baseCurrency: builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["settings", b"settings"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["accounts", b"accounts", "baseCurrency", b"baseCurrency", "dashboards", b"dashboards", "plans", b"plans", "portfolios", b"portfolios", "properties", b"properties", "securities", b"securities", "settings", b"settings", "taxonomies", b"taxonomies", "transactions", b"transactions", "version", b"version", "watchlists", b"watchlists"]) -> None: ...
+    def HasField(
+        self, field_name: typing.Literal["settings", b"settings"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "accounts",
+            b"accounts",
+            "baseCurrency",
+            b"baseCurrency",
+            "dashboards",
+            b"dashboards",
+            "plans",
+            b"plans",
+            "portfolios",
+            b"portfolios",
+            "properties",
+            b"properties",
+            "securities",
+            b"securities",
+            "settings",
+            b"settings",
+            "taxonomies",
+            b"taxonomies",
+            "transactions",
+            b"transactions",
+            "version",
+            b"version",
+            "watchlists",
+            b"watchlists",
+        ],
+    ) -> None: ...
 
 global___PClient = PClient
 
@@ -1063,8 +1934,12 @@ class PExchangeRate(google.protobuf.message.Message):
         date: builtins.int = ...,
         value: global___PDecimalValue | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["value", b"value"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["date", b"date", "value", b"value"]) -> None: ...
+    def HasField(
+        self, field_name: typing.Literal["value", b"value"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self, field_name: typing.Literal["date", b"date", "value", b"value"]
+    ) -> None: ...
 
 global___PExchangeRate = PExchangeRate
 
@@ -1078,7 +1953,11 @@ class PExchangeRateTimeSeries(google.protobuf.message.Message):
     baseCurrency: builtins.str
     termCurrency: builtins.str
     @property
-    def exchangeRates(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PExchangeRate]: ...
+    def exchangeRates(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PExchangeRate
+    ]: ...
     def __init__(
         self,
         *,
@@ -1086,7 +1965,17 @@ class PExchangeRateTimeSeries(google.protobuf.message.Message):
         termCurrency: builtins.str = ...,
         exchangeRates: collections.abc.Iterable[global___PExchangeRate] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["baseCurrency", b"baseCurrency", "exchangeRates", b"exchangeRates", "termCurrency", b"termCurrency"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "baseCurrency",
+            b"baseCurrency",
+            "exchangeRates",
+            b"exchangeRates",
+            "termCurrency",
+            b"termCurrency",
+        ],
+    ) -> None: ...
 
 global___PExchangeRateTimeSeries = PExchangeRateTimeSeries
 
@@ -1098,13 +1987,22 @@ class PECBData(google.protobuf.message.Message):
     SERIES_FIELD_NUMBER: builtins.int
     lastModified: builtins.int
     @property
-    def series(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PExchangeRateTimeSeries]: ...
+    def series(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PExchangeRateTimeSeries
+    ]: ...
     def __init__(
         self,
         *,
         lastModified: builtins.int = ...,
         series: collections.abc.Iterable[global___PExchangeRateTimeSeries] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["lastModified", b"lastModified", "series", b"series"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "lastModified", b"lastModified", "series", b"series"
+        ],
+    ) -> None: ...
 
 global___PECBData = PECBData

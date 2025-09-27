@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowContext, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowContext,
+    ConfigFlowResult,
+    OptionsFlow,  # NEU: OptionsFlow import
+)
 
 from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from .data.reader import parse_data_portfolio
@@ -17,6 +23,8 @@ from .data.reader import parse_data_portfolio
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_DB_DIR = "/config/pp_reader_data"
+DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL = 900
+MIN_OPTIONS_PRICE_UPDATE_INTERVAL = 300
 
 
 class PPReaderConfigFlowContext(ConfigFlowContext):
@@ -146,3 +154,96 @@ class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="db_path", data_schema=data_schema, errors=errors
         )
+
+
+# -----------------------------------------------------------------------------
+# Options Flow (Grundgerüst)
+# -----------------------------------------------------------------------------
+class PPReaderOptionsFlowHandler(OptionsFlow):
+    """
+    OptionsFlow für pp_reader (Intervall- & Debug-Option).
+
+    Implementiert:
+      - price_update_interval_seconds (int, ≥300, default 900)
+      - enable_price_debug (bool, default False)
+
+    Noch ausstehend (separate Items):
+      - Anwendung der Optionen beim Reload / Logger-Umschaltung
+    """
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Store the config entry and set up a logger scoped to the options flow."""
+        self._entry = config_entry
+        self._logger = logging.getLogger(f"{__name__}.options")
+
+    def _current_interval(self) -> int:
+        """Hole aktuell gesetztes Intervall oder Default."""
+        try:
+            val = int(
+                self._entry.options.get(
+                    "price_update_interval_seconds",
+                    DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL,
+                )
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+        if val < MIN_OPTIONS_PRICE_UPDATE_INTERVAL:
+            return DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+        return val
+
+    def _current_debug(self) -> bool:
+        """Aktuellen Debug-Flag Wert oder Default liefern."""
+        try:
+            return bool(self._entry.options.get("enable_price_debug", False))
+        except (TypeError, ValueError):
+            return False
+
+    async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
+        """Initialer Options-Schritt (Intervall + Debug)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Intervall-Validierung
+            interval = user_input.get("price_update_interval_seconds")
+            if interval is None:
+                user_input["price_update_interval_seconds"] = (
+                    DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+                )
+                interval = DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+            if (
+                not isinstance(interval, int)
+                or interval < MIN_OPTIONS_PRICE_UPDATE_INTERVAL
+            ):
+                errors["price_update_interval_seconds"] = "invalid_interval"
+
+            # Debug Flag defensiv normieren
+            user_input["enable_price_debug"] = bool(
+                user_input.get("enable_price_debug", False)
+            )
+
+            if not errors:
+                self._logger.debug("OptionsFlow: Speichere Optionen %s", user_input)
+                return self.async_create_entry(title="", data=user_input)
+
+        data_schema = vol.Schema(
+            {
+                vol.Optional(
+                    "price_update_interval_seconds",
+                    default=self._current_interval(),
+                ): vol.All(int, vol.Range(min=MIN_OPTIONS_PRICE_UPDATE_INTERVAL)),
+                vol.Optional(
+                    "enable_price_debug",
+                    default=self._current_debug(),
+                ): bool,
+            }
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=data_schema,
+            errors=errors,
+        )
+
+
+async def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+    """Entry Point für Home Assistant zum Erstellen des OptionsFlows."""
+    return PPReaderOptionsFlowHandler(config_entry)
