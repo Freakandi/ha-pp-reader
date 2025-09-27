@@ -142,7 +142,7 @@ export function handlePortfolioUpdate(update, root) {
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
     const posCount = Number(u.position_count ?? u.count ?? 0);
     const curVal = Number(u.current_value ?? u.value ?? 0);
-    const purchase = Number(u.purchase_sum ?? u.purchaseSum ?? row.dataset.purchaseSum ?? 0);
+    const purchase = Number(u.purchase_sum ?? u.purchaseSum ?? 0);
 
     const gainAbs = purchase > 0 ? curVal - purchase : 0;
     const gainPct = purchase > 0 ? (gainAbs / purchase) * 100 : 0;
@@ -161,7 +161,12 @@ export function handlePortfolioUpdate(update, root) {
     if (gainAbsCell) gainAbsCell.textContent = formatNumber(gainAbs) + ' €';
     if (gainPctCell) gainPctCell.textContent = formatNumber(gainPct) + ' %';
 
-    row.dataset.purchaseSum = purchase.toString();
+    row.dataset.positionCount = String(posCount);
+    row.dataset.currentValue = String(curVal);
+    row.dataset.purchaseSum = String(purchase);
+    row.dataset.gainAbs = String(gainAbs);
+    row.dataset.gainPct = String(gainPct);
+
     patched++;
 
   }
@@ -170,6 +175,12 @@ export function handlePortfolioUpdate(update, root) {
     console.debug("handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.");
   } else {
     console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht.`);
+  }
+
+  try {
+    updatePortfolioFooter(table);
+  } catch (e) {
+    console.warn("handlePortfolioUpdate: Fehler bei Summen-Neuberechnung:", e);
   }
 
   // Total-Wealth neu berechnen (Accounts + Portfolios)
@@ -193,7 +204,8 @@ export function handlePortfolioUpdate(update, root) {
       table.querySelectorAll('tbody tr.portfolio-row')
     ).map(r => {
       const cv = parseNumLoose(r.cells[2]?.textContent);
-      const ps = parseFloat(r.dataset.purchaseSum || '0') || 0;
+      const gain = parseNumLoose(r.cells[3]?.textContent);
+      const ps = cv - gain;
       return { current_value: cv, purchase_sum: ps };
     });
 
@@ -217,14 +229,14 @@ export function handlePortfolioPositionsUpdate(update, root) {
   }
   const { portfolio_uuid, positions, error } = update;
 
-  // Cache aktualisieren (unverändert)
+  // Positions-Cache aktualisieren (Lazy-Load bleibt bestehen)
   try {
     const cache = window.__ppReaderPortfolioPositionsCache;
     if (cache && typeof cache.set === 'function' && !error) {
       cache.set(portfolio_uuid, positions || []);
     }
   } catch (e) {
-    console.warn("handlePortfolioPositionsUpdate: Konnte Cache nicht aktualisieren:", e);
+    console.warn("handlePortfolioPositionsUpdate: Positions-Cache konnte nicht aktualisiert werden:", e);
   }
 
   if (!window.__ppReaderPendingPositions) {
@@ -391,21 +403,52 @@ function renderPositionsTableInline(positions) {
 
 function updatePortfolioFooter(table) {
   if (!table) return;
+  try {
+    const helper = window.__ppReaderUpdatePortfolioFooter;
+    if (typeof helper === 'function') {
+      helper(table);
+      return;
+    }
+  } catch (err) {
+    console.warn("updatePortfolioFooter: global Helper schlug fehl:", err);
+  }
+
   const rows = Array.from(table.querySelectorAll('tbody tr.portfolio-row'));
-  let sumCurrent = 0, sumGainAbs = 0, sumPurchase = 0, sumPositions = 0;
+  let sumCurrent = 0;
+  let sumGainAbs = 0;
+  let sumPurchase = 0;
+  let sumPositions = 0;
 
   rows.forEach(r => {
-    const count = parseInt((r.cells[1]?.textContent || '').replace(/\./g, ''), 10) || 0;
-    const currentValue = parseNumLoose(r.cells[2]?.textContent);
-    const gainAbs = parseNumLoose(r.cells[3]?.textContent);
-    const purchaseSumAttr = parseFloat(r.dataset.purchaseSum || '0');
+    const datasetCount = Number(r.dataset?.positionCount);
+    const posCount = Number.isFinite(datasetCount)
+      ? datasetCount
+      : parseInt((r.cells[1]?.textContent || '').replace(/\./g, ''), 10) || 0;
 
-    sumPositions += count;
+    const datasetCurrent = Number(r.dataset?.currentValue);
+    const currentValue = Number.isFinite(datasetCurrent)
+      ? datasetCurrent
+      : parseNumLoose(r.cells[2]?.textContent);
+
+    const datasetGain = Number(r.dataset?.gainAbs);
+    const gainAbs = Number.isFinite(datasetGain)
+      ? datasetGain
+      : parseNumLoose(r.cells[3]?.textContent);
+
+    const datasetPurchase = Number(r.dataset?.purchaseSum);
+    const purchase = Number.isFinite(datasetPurchase)
+      ? datasetPurchase
+      : (currentValue - gainAbs);
+
+    sumPositions += posCount;
     sumCurrent += currentValue;
     sumGainAbs += gainAbs;
-    sumPurchase += isNaN(purchaseSumAttr) ? (currentValue - gainAbs) : purchaseSumAttr;
+    sumPurchase += purchase;
   });
-  if (sumPurchase <= 0) sumPurchase = sumCurrent - sumGainAbs;
+
+  if (sumPurchase <= 0) {
+    sumPurchase = sumCurrent - sumGainAbs;
+  }
   const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
 
   let footer = table.querySelector('tr.footer-row');
@@ -414,13 +457,20 @@ function updatePortfolioFooter(table) {
     footer.className = 'footer-row';
     table.querySelector('tbody')?.appendChild(footer);
   }
+  const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
+
   footer.innerHTML = `
     <td>Summe</td>
-    <td class="align-right">${sumPositions.toLocaleString('de-DE')}</td>
+    <td class="align-right">${sumPositionsDisplay}</td>
     <td class="align-right">${formatNumber(sumCurrent)}&nbsp;€</td>
     <td class="align-right">${formatGain(sumGainAbs)}</td>
     <td class="align-right">${formatGainPct(sumGainPct)}</td>
   `;
+  footer.dataset.positionCount = String(Math.round(sumPositions));
+  footer.dataset.currentValue = String(sumCurrent);
+  footer.dataset.purchaseSum = String(sumPurchase);
+  footer.dataset.gainAbs = String(sumGainAbs);
+  footer.dataset.gainPct = String(sumGainPct);
 }
 
 function parseLocaleNumber(txt = '') {
@@ -448,6 +498,43 @@ function formatGainPct(v) {
   return `<span class="${cls}">${formatNumber(v)}&nbsp;%</span>`;
 }
 
+function updateTotalWealth(accounts, portfolios, root) {
+  const targetRoot = root || document;
+
+  const accountSum = (Array.isArray(accounts) ? accounts : []).reduce((acc, entry) => {
+    const value = entry != null && typeof entry === 'object'
+      ? entry.balance ?? entry.current_value ?? entry.value ?? 0
+      : entry;
+    const numeric = Number(value);
+    return acc + (Number.isFinite(numeric) ? numeric : 0);
+  }, 0);
+
+  const portfolioSum = (Array.isArray(portfolios) ? portfolios : []).reduce((acc, entry) => {
+    const value = entry != null && typeof entry === 'object'
+      ? entry.current_value ?? entry.value ?? 0
+      : entry;
+    const numeric = Number(value);
+    return acc + (Number.isFinite(numeric) ? numeric : 0);
+  }, 0);
+
+  const totalWealth = accountSum + portfolioSum;
+
+  const headerMeta = targetRoot?.querySelector('#headerMeta');
+  if (!headerMeta) {
+    console.warn('updateTotalWealth: #headerMeta nicht gefunden.');
+    return;
+  }
+
+  const valueElement = headerMeta.querySelector('strong') || headerMeta.querySelector('.total-wealth-value');
+  if (valueElement) {
+    valueElement.textContent = `${formatNumber(totalWealth)}\u00A0€`;
+  } else {
+    headerMeta.textContent = `💰 Gesamtvermögen: ${formatNumber(totalWealth)}\u00A0€`;
+  }
+
+  headerMeta.dataset.totalWealthEur = String(totalWealth);
+}
+
 /**
  * HINWEIS (2025-09):
  * Die frühere Funktion updatePortfolioTable (vollständiger Neuaufbau der Depot-Tabelle)
@@ -466,7 +553,7 @@ function createPortfolioRowHtml(p, expanded = false) {
   const detailId = `portfolio-details-${p.uuid}`;
   const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
   return {
-    main: `<tr class="portfolio-row" data-portfolio="${p.uuid}" data-purchase-sum="${p.purchase_sum ?? 0}">
+    main: `<tr class="portfolio-row" data-portfolio="${p.uuid}">
       <td>
         <button type="button"
                 class="${toggleClass}"
@@ -572,4 +659,3 @@ function parseNumLoose(txt) {
       .replace(/[^\d.-]/g, '')
   ) || 0;
 }
-

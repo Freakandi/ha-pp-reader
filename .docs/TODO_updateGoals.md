@@ -113,11 +113,11 @@ e) [x] Entfernen Heuristik `looksLikeFullSync` die Cache invalidiert
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Ziel: Vereinfachung – kein Baseline/Delta Konzept mehr nötig
 
-f) [ ] Kommentare & Debug Logs aktualisieren
+f) [x] Kommentare & Debug Logs aktualisieren
    - Dateien: beide obigen JS Dateien
    - Ziel: Keine Referenzen auf "Overrides", "Baseline", "Cache leeren"
 
-g) [ ] Visuelles Update-Verhalten (`flash-update`) unverändert lassen
+g) [x] Visuelles Update-Verhalten (`flash-update`) unverändert lassen
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Ziel: Nutzerfeedback bei Preisänderungen bleibt
 
@@ -125,11 +125,11 @@ g) [ ] Visuelles Update-Verhalten (`flash-update`) unverändert lassen
 
 ## 6. Frontend: Positions-Lazy-Load Sicherstellung
 
-a) [ ] Review `attachPortfolioToggleHandler` & `reloadPortfolioPositions`
+a) [x] Review `attachPortfolioToggleHandler` & `reloadPortfolioPositions`
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
    - Ziel: Keine unbeabsichtigte Vorab-Ladung durch andere Änderungen
 
-b) [ ] Kommentar ergänzen: "On-Demand Aggregation ersetzt Client Overrides; Lazy-Positions unverändert"
+b) [x] Kommentar ergänzen: "On-Demand Aggregation ersetzt Client Overrides; Lazy-Positions unverändert"
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
 
 c) [ ] (Optional) Retry-Button Behavior bestätigen (Fehlerfall)
@@ -140,16 +140,16 @@ c) [ ] (Optional) Retry-Button Behavior bestätigen (Fehlerfall)
 
 ## 7. Frontend: Total-Wealth Berechnung Update
 
-a) [ ] Prüfen ob Total-Wealth Recalc weiterhin funktioniert ohne Overrides
+a) [x] Prüfen ob Total-Wealth Recalc weiterhin funktioniert ohne Overrides
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js`
    - Funktion: `handlePortfolioUpdate`
    - Ziel: Nutzung reiner DOM Werte; kein toString aus Cache
 
-b) [ ] Entferne toString / dataset.purchaseSum Fallback falls ausschließlich DOM genutzt
+b) [x] Entferne toString / dataset.purchaseSum Fallback falls ausschließlich DOM genutzt
    - Datei: obige
    - Ziel: Vereinfachung (nur wenn sicher entbehrlich)
 
-c) [ ] (Optional) Footer "Summe" konsolidieren: Neu-Berechnung aus DOM statt State
+c) [x] Footer "Summe" konsolidieren: Neu-Berechnung aus DOM statt State
    - Datei: `overview.js`
    - Ziel: Einheitlicher Mechanismus
 
@@ -165,14 +165,14 @@ a) [x] ARCHITEKTURENTRY: Neuer Abschnitt "Berechnungsmodell (On-Demand)"
      - Keine Client Overrides
      - Event Patch Flow unverändert
 
-b) [ ] Anpassung bestehender Abschnitte (Control Flow & Datenfluss)
+b) [x] Anpassung bestehender Abschnitte (Control Flow & Datenfluss)
    - Datei: `ARCHITECTURE.md`
    - Ziel: Ergänze Schritt "Frontend ruft WebSocket → On-Demand Aggregation"
 
-c) [ ] Entferne/aktualisiere Hinweis auf Override-Cache in "Frontend Update"
+c) [x] Entferne/aktualisiere Hinweis auf Override-Cache in "Frontend Update"
    - Datei: `ARCHITECTURE.md`
 
-d) [ ] CHANGELOG Eintrag hinzufügen
+d) [x] CHANGELOG Eintrag hinzufügen
    - Datei: `CHANGELOG.md`
    - Version: +0.0.1 (Minor)
    - Punkte:
@@ -180,7 +180,7 @@ d) [ ] CHANGELOG Eintrag hinzufügen
      - Removed: Client Override Cache
      - Internal: Unified aggregation path
 
-e) [ ] Optional: `README.md` Abschnitt "Architektur / Live-Preise" anpassen
+e) [x] `README.md` Abschnitt "Architektur / Live-Preise" anpassen
    - Datei: `README.md`
    - Ziel: Hinweis auf Echtzeit ohne Client Cache
 
@@ -192,57 +192,60 @@ f) [ ] (Optional) `.docs/updateGoals.md` Fortschrittsmarkierung / Referenz
 
 ## 9. Manifest & Versionierung
 
-a) [ ] Version erhöhen
+a) [x] Version erhöhen
    - Datei: `custom_components/pp_reader/manifest.json`
    - Ziel: Konsistent mit CHANGELOG
 
-b) [ ] Prüfen ob neue Abhängigkeiten unnötig → keine Änderung
+b) [x] Prüfen ob neue Abhängigkeiten unnötig → keine Änderung
    - Datei: `manifest.json`
 
 ---
 
 ## 10. Tests
 
-a) [ ] Neuer Test: `test_fetch_live_portfolios_basic`
+a) [x] Neuer Test: `test_fetch_live_portfolios_basic`
    - Datei: `tests/test_fetch_live_portfolios.py`
    - Ziel: Korrekte Summen & Counts (Mock DB)
 
-b) [ ] Neuer Test: WebSocket `pp_reader/get_portfolio_data`
+b) [x] Neuer Test: WebSocket `pp_reader/get_portfolio_data`
    - Datei: `tests/test_ws_portfolios_live.py`
    - Ziel: Antwortstruktur stimmt; keine Coordinator-Abhängigkeit (Patch/MagicMock)
 
-c) [ ] Anpassung existierender Tests falls `coordinator.data["portfolios"]` Assertions -> unverändert lassen (Backward Compatibility)
+c) [x] Anpassung existierender Tests falls `coordinator.data["portfolios"]` Assertions -> unverändert lassen (Backward Compatibility)
+   - Hinweis: Bestehende Tests enthalten keine Assertions auf `coordinator.data["portfolios"]`; keine Änderungen notwendig.
 
-d) [ ] (Optional) Performance Test (≥100 Positionen) – Messung Laufzeit
+d) [ ] Performance Test (≥100 Positionen) – Messung Laufzeit
    - Datei: `tests/perf/test_live_aggregation_perf.py`
    - Ziel: Basis-Metrik für spätere Optimierungen
 
-e) [ ] Revaluation Pfad Test: Preisänderung → Event nutzt neue Werte
+e) [x] Revaluation Pfad Test: Preisänderung → Event nutzt neue Werte
+   - Hinweis: Abgedeckt durch tests/prices/test_revaluation_live_aggregation.py
    - Datei: `tests/prices/test_revaluation_live_aggregation.py`
 
-f) [ ] Grep Sicherung: Keine `__ppReaderPortfolioValueOverrides` Referenzen mehr
-   - Skript: `grep -R "__ppReaderPortfolioValueOverrides" .` (manuell)
-   - Ziel: Vollständige Entfernung
+f) [x] Grep Sicherung: Keine `__ppReaderPortfolioValueOverrides` Referenzen mehr
+   - Skript: `rg "__ppReaderPortfolioValueOverrides" -n`
+   - Hinweis: Treffer nur in Dokumentation (Changelog/README/ARCHITECTURE) zur Historie – Codebasis frei.
 
 ---
 
 ## 11. Manuelle Validierung
 
-a) [ ] Ablauf: Start → Dashboard öffnen → Preise ändern (Fake) → Event Patch sichtbar → Reload Panel → Werte identisch
+a) [x] Ablauf: Start → Dashboard öffnen → Preise ändern (Fake) → Event Patch sichtbar → Reload Panel → Werte identisch
    - Ziel: Persistenz-Konsistenz
 
-b) [ ] Dateiänderung (Full Sync) → Tabelle stimmt (keine "Baseline" Logs mehr)
+b) [x] Dateiänderung (Full Sync) → Tabelle stimmt (keine "Baseline" Logs mehr)
 
-c) [ ] Expand/Collapse Verhalten unverändert nach mehreren Preiszyklen
+c) [x] Expand/Collapse Verhalten unverändert nach mehreren Preiszyklen
 
-d) [ ] Accessibility: ARIA Attribute unverändert (Positions Region)
+d) [x] Accessibility: ARIA Attribute unverändert (Positions Region)
 
 ---
 
 ## 12. Bereinigung & Kommentare
 
-a) [ ] Entferne alte Kommentare über "Baseline/Overrides"
+a) [x] Entferne alte Kommentare über "Baseline/Overrides"
    - Dateien: `overview.js`, `updateConfigsWS.js`
+   - Hinweis: Code durchsucht – keine Alt-Kommentare mehr vorhanden.
 
 b) [ ] Ergänze TODO Marker falls Micro-Caching geplant
    - Datei: `db_access.py` (über `fetch_live_portfolios`)

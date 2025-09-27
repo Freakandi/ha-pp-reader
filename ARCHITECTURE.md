@@ -309,10 +309,11 @@ Invarianten / Regeln:
 6. Partielle Revaluation (`revaluation.revalue_after_price_updates`).
 7. Event Reihenfolge: `portfolio_values` → je Portfolio `portfolio_positions`.
 
-### 4. Frontend Update
-1. WebSocket Subscription empfängt Events.
-2. DOM Patch (kein Full Re-Render) über Handler.
-3. Lazy Load: Bei Expand Portfolio → `pp_reader/get_portfolio_positions`.
+### 4. Frontend Initial Load & Update
+1. Dashboard-Initialisierung ruft `pp_reader/get_accounts` sowie `pp_reader/get_portfolio_data`; letzteres nutzt serverseitig `fetch_live_portfolios` und liefert On-Demand aggregierte Depotwerte (inkl. Live-Preisen) ohne Client-Side Overrides.
+2. WebSocket Subscription empfängt Events.
+3. DOM-Patch erfolgt inkrementell über die Handler in `updateConfigsWS.js`; Summen (Header, Tabellen-Footer) lesen aktuelle Werte direkt aus dem DOM, ein Override-Cache ist nicht mehr beteiligt.
+4. Lazy Load: Bei Expand Portfolio → `pp_reader/get_portfolio_positions`.
 
 ### Berechnungsmodell (On-Demand Aggregation)
 Dieser Abschnitt beschreibt das konsolidierte Berechnungsmodell nach Migration auf serverseitige On-Demand Aggregation.

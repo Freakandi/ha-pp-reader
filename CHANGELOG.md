@@ -4,6 +4,18 @@ Alle erwähnenswerten Änderungen an diesem Projekt werden in dieser Datei festg
 Format orientiert sich an: Keep a Changelog
 Versionierung: SemVer (Minor-Bump für neue Funktionalität ohne Breaking Changes).
 
+## [0.11.0] - 2025-09-27
+### Added
+- On-Demand Aggregation über `fetch_live_portfolios` für WebSocket Initial-Loads und Events; liefert stets aktuelle `current_value`/`purchase_sum`/`position_count` direkt aus der DB.
+- Gemeinsame Helper für Portfolio-Summen im Dashboard (DOM-basierte Footer/Total-Wealth Aktualisierung ohne Client-Cache).
+### Removed
+- Client-seitiger Override-Cache `__ppReaderPortfolioValueOverrides` inkl. sämtlicher Set/Reset/Apply-Pfade.
+### Changed
+- WebSocket Handler (`pp_reader/get_portfolio_data`, `pp_reader/get_dashboard_data`) beziehen Aggregationen ausschließlich Server-seitig.
+- Preis-Event Pfad und Sync-Prozess nutzen denselben Aggregations-Helper als Single Source of Truth.
+### Internal
+- Dokumentation (ARCHITECTURE.md) beschreibt Frontend-Flow ohne Overrides und verweist auf On-Demand Aggregation.
+
 ## [0.10.7] - 2025-09-26
 ### Added
 - Automatische Invalidierung des Portfolio Override-Caches bei Datei-Sync (`last_file_update` Event) sowie bei erkannten Full-Sync `portfolio_values` Events (Heuristik: `value` ohne `current_value`).
