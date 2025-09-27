@@ -5,6 +5,10 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip(
+    "google.protobuf", reason="protobuf runtime required for module imports"
+)
+
 from custom_components.pp_reader.data.websocket import (
     DOMAIN,
     ws_get_portfolio_data,
@@ -77,14 +81,14 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
 
     portfolios = {item["uuid"]: item for item in payload["portfolios"]}
 
-    assert portfolios["p1"]["current_value"] == 175_000_000
-    assert portfolios["p1"]["purchase_sum"] == 150_000_000
+    assert portfolios["p1"]["current_value"] == 1_750_000.0
+    assert portfolios["p1"]["purchase_sum"] == 1_500_000.0
     assert portfolios["p1"]["position_count"] == 1
 
-    assert portfolios["p2"]["current_value"] == 620_000_000
-    assert portfolios["p2"]["purchase_sum"] == 500_000_000
+    assert portfolios["p2"]["current_value"] == 6_200_000.0
+    assert portfolios["p2"]["purchase_sum"] == 5_000_000.0
     assert portfolios["p2"]["position_count"] == 1
 
-    assert portfolios["p3"]["current_value"] == 0
-    assert portfolios["p3"]["purchase_sum"] == 0
+    assert portfolios["p3"]["current_value"] == 0.0
+    assert portfolios["p3"]["purchase_sum"] == 0.0
     assert portfolios["p3"]["position_count"] == 0

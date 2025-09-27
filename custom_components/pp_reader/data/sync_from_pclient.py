@@ -789,10 +789,8 @@ def sync_from_pclient(
                         "uuid": p.get("uuid"),
                         "name": p.get("name", "Unbekannt"),
                         "position_count": int(p.get("position_count") or 0),
-                        "current_value": round(
-                            ((p.get("current_value") or 0) / 100), 2
-                        ),
-                        "purchase_sum": round(((p.get("purchase_sum") or 0) / 100), 2),
+                        "current_value": round(float(p.get("current_value") or 0.0), 2),
+                        "purchase_sum": round(float(p.get("purchase_sum") or 0.0), 2),
                     }
                     for p in live_portfolios
                     if p and p.get("uuid")

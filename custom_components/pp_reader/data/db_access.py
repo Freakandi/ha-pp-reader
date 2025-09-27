@@ -9,7 +9,7 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
@@ -379,31 +379,38 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         conn.close()
 
 
-def _normalize_portfolio_row(row: sqlite3.Row) -> Dict[str, Any]:
+def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
     """
     Internal helper to map a sqlite3.Row to the unified portfolio dict format.
 
     Expected columns (query responsibility):
       - uuid
       - name
-      - current_value
-      - purchase_sum
+      - current_value (Cent)
+      - purchase_sum (Cent)
       - position_count
     """
+
+    def _cent_to_eur(value: Any) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return round(float(value) / 100.0, 2)
+        except (TypeError, ValueError):
+            return 0.0
+
     return {
         "uuid": row["uuid"],
         "name": row["name"],
-        "current_value": row["current_value"]
-        if row["current_value"] is not None
-        else 0,
-        "purchase_sum": row["purchase_sum"] if row["purchase_sum"] is not None else 0,
+        "current_value": _cent_to_eur(row["current_value"]),
+        "purchase_sum": _cent_to_eur(row["purchase_sum"]),
         "position_count": row["position_count"]
         if row["position_count"] is not None
         else 0,
     }
 
 
-def fetch_live_portfolios(db_path) -> List[Dict[str, Any]]:  # noqa: D401  (docstring expanded)
+def fetch_live_portfolios(db_path) -> list[dict[str, Any]]:
     """
     Aggregiert aktuelle Portfoliodaten direkt aus der SQLite-DB (Single Source of Truth).
 
@@ -412,8 +419,8 @@ def fetch_live_portfolios(db_path) -> List[Dict[str, Any]]:  # noqa: D401  (docs
           {
             "uuid": <str>,
             "name": <str>,
-            "current_value": <int>,    # 1e-8 skalierter Wert (KEINE Rundung hier)
-            "purchase_sum": <int>,     # 1e-8 skalierter Wert
+            "current_value": <float>,    # EUR (2 Nachkommastellen)
+            "purchase_sum": <float>,     # EUR (2 Nachkommastellen)
             "position_count": <int>
           },
           ...
