@@ -11,7 +11,7 @@ from pathlib import Path
 
 import google.protobuf.message
 
-from ..name.abuchen.portfolio import client_pb2
+from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.debug(dir(client_pb2))
