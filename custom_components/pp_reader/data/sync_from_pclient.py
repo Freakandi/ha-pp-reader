@@ -177,9 +177,24 @@ def extract_exchange_rate(pdecimal: Any) -> float | None:
 
 def maybe_field(message: Any, field_name: str) -> Any:
     """Gibt einen optionalen Protobuf-Wert zurück, falls vorhanden."""
-    if hasattr(message, "HasField") and message.HasField(field_name):
-        return getattr(message, field_name)
-    return None
+    if not hasattr(message, field_name):
+        return None
+
+    value = getattr(message, field_name)
+
+    has_field = getattr(message, "HasField", None)
+    if callable(has_field):
+        try:
+            if has_field(field_name):
+                return value
+        except ValueError:
+            # Proto3-Skalarfelder besitzen keine Presence-Informationen.
+            # In diesem Fall verwenden wir den direkten Attributwert.
+            return value
+        else:
+            return None
+
+    return value
 
 
 @callback
