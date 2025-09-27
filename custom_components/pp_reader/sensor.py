@@ -24,8 +24,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> bool:
     """Initialisiere alle Sensoren für pp_reader."""
-    # Zugriff auf den Coordinator aus hass.data
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     try:
         # Zugriff auf den Coordinator aus hass.data
         coordinator: PPReaderCoordinator = hass.data[DOMAIN][config_entry.entry_id][
@@ -69,8 +67,8 @@ async def async_setup_entry(
         # 🔥 Sensoren an HA übergeben
         async_add_entities(sensors)
 
-        return True  # noqa: TRY300
-
     except Exception:
         _LOGGER.exception("Fehler beim Setup der Sensoren")
         return False
+
+    return True
