@@ -208,3 +208,38 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             "gain_pct": 22.12,
         }
     ]
+
+
+def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> None:
+    """Transaction changes should not result in websocket events."""
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = None
+    runner.hass = object()
+    runner.entry_id = "entry"
+    runner.changes.transactions = True
+    runner.changes.accounts = False
+    runner.changes.portfolios = False
+    runner.changes.last_file_update = False
+    runner.changes.portfolio_securities = False
+
+    captured: list[str] = []
+
+    def _capture_event(_hass: Any, _entry_id: str, data_type: str, _data: Any) -> None:
+        captured.append(data_type)
+
+    monkeypatch.setattr(sync_module, "_push_update", _capture_event)
+
+    runner._emit_updates()
+
+    assert captured == []
+
+    conn.close()
