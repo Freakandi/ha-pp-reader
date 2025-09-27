@@ -20,16 +20,19 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Set
+from typing import Any
 
+from ..data.db_access import fetch_live_portfolios  # Einheitliche Aggregationsquelle
+from ..data.sync_from_pclient import (
+    fetch_positions_for_portfolios,
+)  # NEU: Reuse bestehender Positions-Loader
 from ..logic.portfolio import (
     calculate_portfolio_value,
     calculate_purchase_sum,
 )
-from ..data.db_access import fetch_live_portfolios  # Einheitliche Aggregationsquelle
-from ..data.sync_from_pclient import fetch_positions_for_portfolios  # NEU: Reuse bestehender Positions-Loader
 
 # HINWEIS (Item portfolio_aggregation_reuse):
 # Die Revaluation nutzt primär fetch_live_portfolios als Single Source of Truth.
@@ -62,15 +65,16 @@ async def revalue_after_price_updates(
     -------
     dict[str, Any]
         Struktur mit (portfolio_values | None, portfolio_positions | None)
+
     """
-    updated_set: Set[str] = set(updated_security_uuids)
+    updated_set: set[str] = set(updated_security_uuids)
     if not updated_set:
         return {"portfolio_values": None, "portfolio_positions": None}
 
     # Betroffene Portfolios via UNION (portfolio_securities + transactions)
     try:
         placeholders = ",".join("?" for _ in updated_set)
-        affected: Set[str] = set()
+        affected: set[str] = set()
 
         if placeholders:  # defensiv
             cur = conn.execute(
@@ -146,7 +150,7 @@ async def revalue_after_price_updates(
             exc_info=True,
         )
 
-    missing_portfolios: Set[str] = set(affected)
+    missing_portfolios: set[str] = set(affected)
 
     for p_uuid in list(missing_portfolios):
         data = live_entries.get(p_uuid)

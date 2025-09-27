@@ -14,13 +14,13 @@ Prüfungen:
 
 import logging
 import sqlite3
-import pytest
-from pathlib import Path
-from tests.common import MockConfigEntry
 
-from custom_components.pp_reader.const import DOMAIN, CONF_DB_PATH, CONF_FILE_PATH
+import pytest
+
+from custom_components.pp_reader.const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.prices.price_service import _run_price_cycle
+from tests.common import MockConfigEntry
 
 
 @pytest.mark.asyncio
@@ -71,11 +71,14 @@ async def test_zero_quotes_warn_deduplicated(hass, tmp_path, monkeypatch, caplog
 
     # --- Auswertung Logs ---
     warn_logs = [
-        r for r in caplog.records if r.levelno == logging.WARNING and "zero-quotes detected (WARN)" in r.getMessage()
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING
+        and "zero-quotes detected (WARN)" in r.getMessage()
     ]
-    assert (
-        len(warn_logs) == 1
-    ), f"Erwartet genau 1 deduplizierte WARN, erhalten {len(warn_logs)}"
+    assert len(warn_logs) == 1, (
+        f"Erwartet genau 1 deduplizierte WARN, erhalten {len(warn_logs)}"
+    )
 
     debug_dedup = [
         r

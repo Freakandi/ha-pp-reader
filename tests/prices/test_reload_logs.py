@@ -6,14 +6,14 @@ Verifiziert:
 - INFO Log mit Intervalländerung alt→neu vorhanden (Spezifikation §7).
 """
 
-import logging
 import asyncio
-import pytest
-from pathlib import Path
-from tests.common import MockConfigEntry
+import logging
 
-from custom_components.pp_reader.const import DOMAIN, CONF_DB_PATH, CONF_FILE_PATH
+import pytest
+
+from custom_components.pp_reader.const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from tests.common import MockConfigEntry
 
 
 @pytest.mark.asyncio

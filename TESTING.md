@@ -31,11 +31,11 @@ Empfohlene Qualitäts-Pipeline vor jedem PR:
 | Komponente | Quelle | Hinweis |
 |------------|--------|---------|
 | Python Version | `scripts/setup_container` (Zeile 11–16: `pyenv install -s 3.13.3`) | Zielversion 3.13.3 |
-| Dependencies (Runtime) | `requirements.txt` | Enthält nur Runtime + Lint (`ruff`) |
+| Dependencies (Runtime) | `requirements.txt` | Enthält Runtime + Lint (`ruff`) |
 | Home Assistant Integration Domain | `custom_components/pp_reader/manifest.json` (`"domain": "pp_reader"`) | Domain-Konstante |
 | Linter | `ruff.toml` + `scripts/lint` | Einheitlich für Format + Lint |
 
-Es existiert KEINE `requirements-dev.txt` und KEIN `pyproject.toml`. Dev-Tools (pytest, coverage) müssen manuell ergänzt werden.
+Zusätzliche Dev-Tools (Pytest, Coverage, HA Pytest Plugin) werden über `requirements-dev.txt` gepflegt; ein `pyproject.toml` ist weiterhin nicht vorhanden.
 
 ### 2.1 Virtuelle Umgebung (Unix)
 
@@ -44,8 +44,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-# Dev-Extras (nicht im Repo fixiert):
-pip install pytest pytest-asyncio coverage
+# Dev-Extras
+pip install -r requirements-dev.txt
 ```
 
 ### 2.2 Virtuelle Umgebung (Windows PowerShell)
@@ -55,13 +55,14 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install pytest pytest-asyncio coverage
+python -m pip install -r requirements-dev.txt
 ```
 
 ### 2.3 Devcontainer / Container
 
 - Devcontainer bereit (siehe `.devcontainer.json`, nicht im Auszug; Aktivierung via VS Code).
 - Setup-Skript: `./scripts/setup_container` (installiert Paketabhängigkeiten & erstellt venv).
+- `postCreateCommand` installiert Runtime (`requirements.txt`) und Dev-Dependencies (`requirements-dev.txt`).
 - Start HA Instanz: `./scripts/develop` oder `./scripts/codex_develop`.
 
 ### 2.4 Optional: Poetry
@@ -76,7 +77,7 @@ Nicht verwendet (kein `pyproject.toml` / `poetry.lock`). Poetry-Nutzung derzeit 
 # 1. Umgebung
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pip install pytest pytest-asyncio coverage
+pip install -r requirements-dev.txt
 
 # 2. Lint + Format (Auto-Fix)
 ./scripts/lint
@@ -148,9 +149,9 @@ pytest -vv -o log_cli=true --log-cli-level=DEBUG -k "debug_scope"
 
 ### 4.5 Fehlende / Optionale Fixtures
 
-- `hass` Parameter in async Tests deutet auf Verwendung von `pytest-homeassistant-custom-component` hin – das Paket ist NICHT explizit als Dependency gelistet. Falls Fixture fehlt → Paket installieren:
+- `hass` Parameter in async Tests nutzt `pytest-homeassistant-custom-component` (bereitgestellt über `requirements-dev.txt`). Falls Fixture fehlt →
   ```bash
-  pip install pytest-homeassistant-custom-component
+  pip install -r requirements-dev.txt
   ```
 
 (Quellhinweis: Parameter `hass` in `tests/prices/test_zero_quotes_warn.py:53`)
@@ -293,7 +294,7 @@ Typischer Reproduktionsschritt lokal (hypothetisch):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pip install pytest pytest-asyncio coverage
+pip install -r requirements-dev.txt
 ./scripts/lint
 pytest --cov=custom_components/pp_reader --cov-report=term-missing
 python -m script.hassfest
@@ -321,8 +322,8 @@ Konvention:
 
 | Problem | Ursache | Lösung |
 |---------|---------|--------|
-| `ModuleNotFoundError: pytest` | Dev-Dependencies nicht installiert | `pip install pytest pytest-asyncio` |
-| `fixture 'hass' not found` | Fehlendes HA Pytest Plugin | `pip install pytest-homeassistant-custom-component` (falls benötigt) |
+| `ModuleNotFoundError: pytest` | Dev-Dependencies nicht installiert | `pip install -r requirements-dev.txt` |
+| `fixture 'hass' not found` | Fehlendes HA Pytest Plugin | `pip install -r requirements-dev.txt` |
 | HA Start sehr langsam | Erste Initialisierung / Cache | Warten; Log-Level reduzieren |
 | Windows Pfade Backslashes | Shell-Skripte bash-spezifisch | Git Bash / WSL verwenden |
 | Coverage 0% | Tests importieren Modul nicht | Sicherstellen, dass `custom_components/pp_reader` importiert wird (Tests tun das bereits) |
@@ -374,7 +375,7 @@ Test für Preiswarnung referenzieren: `tests/prices/test_zero_quotes_warn.py:0` 
 | Aktion | Befehl |
 |--------|--------|
 | Setup venv | `python3 -m venv .venv && source .venv/bin/activate` |
-| Install Runtime + Dev | `pip install -r requirements.txt && pip install pytest pytest-asyncio coverage` |
+| Install Runtime + Dev | `pip install -r requirements.txt && pip install -r requirements-dev.txt` |
 | Lint & Format | `./scripts/lint` |
 | Nur Lint Check | `ruff check .` |
 | Tests (schnell) | `pytest -q` |
@@ -384,7 +385,7 @@ Test für Preiswarnung referenzieren: `tests/prices/test_zero_quotes_warn.py:0` 
 | Coverage HTML öffnen | `$BROWSER htmlcov/index.html` |
 | Hassfest | `python -m script.hassfest` |
 | HA lokal starten | `./scripts/develop` |
-| HA (venv Binary) | `./scripts/codex_develop` |
+
 
 ### 16.2 Test-Matrix
 

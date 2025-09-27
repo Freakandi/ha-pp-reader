@@ -21,7 +21,10 @@ from ..logic.portfolio import normalize_price, normalize_shares
 
 _LOGGER = logging.getLogger(__name__)
 
-def db_calculate_current_holdings(transactions: list[Transaction]) -> dict[tuple[str, str], float]:
+
+def db_calculate_current_holdings(
+    transactions: list[Transaction],
+) -> dict[tuple[str, str], float]:
     """
     Berechnet die aktuell im Bestand befindliche Anzahl pro Wertpapier (security) und Depot (portfolio).
 
@@ -40,7 +43,9 @@ def db_calculate_current_holdings(transactions: list[Transaction]) -> dict[tuple
             continue  # Überspringe Transaktionen ohne zugeordnetes Wertpapier oder Depot
 
         key = (tx.portfolio, tx.security)
-        shares = normalize_shares(tx.shares) if tx.shares else 0  # Wende normalize_shares an
+        shares = (
+            normalize_shares(tx.shares) if tx.shares else 0
+        )  # Wende normalize_shares an
 
         # _LOGGER.debug(
         #     "Berechne current_holdings: portfolio_uuid=%s,",  # noqa: ERA001
@@ -50,14 +55,21 @@ def db_calculate_current_holdings(transactions: list[Transaction]) -> dict[tuple
 
         # Transaktionstypen auswerten
         if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
-            portfolio_securities_holdings[key] = portfolio_securities_holdings.get(key, 0) + shares
+            portfolio_securities_holdings[key] = (
+                portfolio_securities_holdings.get(key, 0) + shares
+            )
         elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
-            portfolio_securities_holdings[key] = portfolio_securities_holdings.get(key, 0) - shares
+            portfolio_securities_holdings[key] = (
+                portfolio_securities_holdings.get(key, 0) - shares
+            )
 
     # Entferne Einträge mit einem Bestand von 0 oder weniger
     return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
 
-def db_calculate_sec_purchase_value(transactions: list[Transaction], db_path: Path) -> dict[tuple[str, str], float]:
+
+def db_calculate_sec_purchase_value(
+    transactions: list[Transaction], db_path: Path
+) -> dict[tuple[str, str], float]:
     """
     Berechnet den gesamten Kaufpreis des aktuellen Bestands pro Wertpapier (FIFO) und Depot.
 
@@ -71,7 +83,9 @@ def db_calculate_sec_purchase_value(transactions: list[Transaction], db_path: Pa
 
     """
     portfolio_securities_purchase_values: dict[tuple[str, str], float] = {}
-    holdings: dict[tuple[str, str], list[tuple[float, float, datetime]]] = {}  # FIFO-Liste pro Depot und Wertpapier
+    holdings: dict[
+        tuple[str, str], list[tuple[float, float, datetime]]
+    ] = {}  # FIFO-Liste pro Depot und Wertpapier
 
     # Vor der Transaktionsverarbeitung: Alle benötigten Währungen und Daten sammeln
     fx_dates = set()
@@ -93,7 +107,9 @@ def db_calculate_sec_purchase_value(transactions: list[Transaction], db_path: Pa
             continue
 
         key = (tx.portfolio, tx.security)
-        shares = normalize_shares(tx.shares) if tx.shares else 0  # Wende normalize_shares an
+        shares = (
+            normalize_shares(tx.shares) if tx.shares else 0
+        )  # Wende normalize_shares an
         amount = tx.amount / 100  # Cent -> EUR
         tx_date = datetime.fromisoformat(tx.date)
 
@@ -105,7 +121,8 @@ def db_calculate_sec_purchase_value(transactions: list[Transaction], db_path: Pa
             if not rate:
                 _LOGGER.warning(
                     "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
-                    tx_date.strftime("%Y-%m-%d"), tx.currency_code
+                    tx_date.strftime("%Y-%m-%d"),
+                    tx.currency_code,
                 )
             # else:
             #     _LOGGER.debug(
@@ -153,10 +170,11 @@ def db_calculate_sec_purchase_value(transactions: list[Transaction], db_path: Pa
 
     return portfolio_securities_purchase_values
 
+
 def db_calculate_holdings_value(
     db_path: Path,
     conn: sqlite3.Connection,
-    current_hold_pur: dict[tuple[str, str], dict[str, float]]
+    current_hold_pur: dict[tuple[str, str], dict[str, float]],
 ) -> dict[tuple[str, str], dict[str, float]]:
     """
     Berechnet den aktuellen Wert (current_value) für jede Position in current_holdings.
@@ -168,6 +186,7 @@ def db_calculate_holdings_value(
 
     Returns:
         Dict[Tuple[str, str], Dict[str, float]]: Das ursprüngliche Dictionary, ergänzt um den aktuellen Wert (current_value).
+
     """
     # _LOGGER.debug("db_calculate_holdings_value: Berechnung des aktuellen Werts gestartet.")
 
@@ -176,13 +195,16 @@ def db_calculate_holdings_value(
     cur = conn.cursor()
 
     for (portfolio_uuid, security_uuid), data in current_hold_pur.items():
-        cur.execute("""
+        cur.execute(
+            """
             SELECT currency_code FROM securities WHERE uuid = ?
-        """, (security_uuid,))
+        """,
+            (security_uuid,),
+        )
         currency_row = cur.fetchone()
         currency_code = currency_row[0] if currency_row else "EUR"
 
-        if (currency_code != "EUR"):
+        if currency_code != "EUR":
             needed_currencies.add(currency_code)
 
     # Stelle sicher, dass die Wechselkurse verfügbar sind
@@ -216,14 +238,19 @@ def db_calculate_holdings_value(
                 latest_price /= rate  # Wende den Wechselkurs an
                 # _LOGGER.debug("Angewendeter Wechselkurs für %s: %f", currency_code, rate)
             else:
-                _LOGGER.warning("⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.", currency_code)
+                _LOGGER.warning(
+                    "⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
+                    currency_code,
+                )
                 continue  # Überspringe die Berechnung für diese Währung
         else:
             rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
 
         # Berechne den aktuellen Wert
         current_value = holdings * latest_price
-        current_hold_pur[(portfolio_uuid, security_uuid)]["current_value"] = round(current_value, 2)
+        current_hold_pur[(portfolio_uuid, security_uuid)]["current_value"] = round(
+            current_value, 2
+        )
 
         # _LOGGER.debug(
         #     "Berechneter Wert: portfolio_uuid=%s, security_uuid=%s, current_value=%f",

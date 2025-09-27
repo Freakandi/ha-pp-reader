@@ -11,12 +11,15 @@ existieren / beschrieben werden.
 Dieser Test adressiert das QA-Item:
 "Keine Persistenz zusätzlicher Quote-Felder (nur last_price/source/fetched_at)"
 """
+
 import sqlite3
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.prices.price_service import _apply_price_updates  # type: ignore
+from custom_components.pp_reader.prices.price_service import (
+    _apply_price_updates,  # type: ignore
+)
 
 
 def _create_security(db_path: Path, *, symbol: str, currency: str = "EUR") -> str:
@@ -39,7 +42,7 @@ def test_only_allowed_price_columns_persisted(tmp_path):
 
     sec_uuid = _create_security(db_path, symbol="ABC")
 
-    scaled_price = int(round(12.34 * 1e8))
+    scaled_price = round(12.34 * 1e8)
     fetched_at = "2024-01-01T12:00:00Z"
     updated_rows = _apply_price_updates(
         db_path,
@@ -61,7 +64,9 @@ def test_only_allowed_price_columns_persisted(tmp_path):
             "dividend_yield",
             "previous_close",
         }
-        assert forbidden.isdisjoint(cols), f"Unerwartete persistierte Felder: {forbidden & cols}"
+        assert forbidden.isdisjoint(cols), (
+            f"Unerwartete persistierte Felder: {forbidden & cols}"
+        )
 
         row = conn.execute(
             "SELECT last_price, last_price_source, last_price_fetched_at FROM securities WHERE uuid=?",

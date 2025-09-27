@@ -18,8 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from ..logic.accounting import calculate_account_balance
-
-from .db_access import get_accounts, get_transactions, fetch_live_portfolios
+from .db_access import fetch_live_portfolios, get_accounts, get_transactions
 from .reader import parse_data_portfolio
 from .sync_from_pclient import sync_from_pclient
 
@@ -182,7 +181,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 raw_portfolios = await self.hass.async_add_executor_job(
                     fetch_live_portfolios, self.db_path
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception(
                     "PPReaderCoordinator: fetch_live_portfolios fehlgeschlagen – verwende leeren Snapshot"
                 )

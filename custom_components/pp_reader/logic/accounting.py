@@ -1,13 +1,13 @@
-from typing import List, Dict
-from ..data.db_access import Transaction, get_transactions
-from ..logic.validators import PPDataValidator
 import logging
+
+from ..data.db_access import Transaction
+from ..logic.validators import PPDataValidator
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def calculate_account_balance(
-    account_uuid: str, transactions: List[Transaction]
+    account_uuid: str, transactions: list[Transaction]
 ) -> float:
     """Berechne den Kontostand eines Kontos anhand aller relevanten DB-Transaktionen."""
     validator = PPDataValidator()
@@ -67,9 +67,9 @@ def calculate_account_balance(
 
 def db_calc_account_balance(
     account_uuid: str,
-    transactions: List[Transaction],
-    accounts_currency_map: Dict[str, str] | None = None,
-    tx_units: Dict[str, Dict[str, int | str]] | None = None,
+    transactions: list[Transaction],
+    accounts_currency_map: dict[str, str] | None = None,
+    tx_units: dict[str, dict[str, int | str]] | None = None,
 ) -> int:
     """
     Berechnet den Kontostand (Cent) eines Kontos.

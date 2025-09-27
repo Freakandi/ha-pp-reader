@@ -32,7 +32,9 @@ def test_fresh_schema_contains_price_columns(tmp_path):
 
     cols = _get_columns(db_path, "securities")
     assert "last_price_source" in cols, "Spalte last_price_source fehlt in frischer DB"
-    assert "last_price_fetched_at" in cols, "Spalte last_price_fetched_at fehlt in frischer DB"
+    assert "last_price_fetched_at" in cols, (
+        "Spalte last_price_fetched_at fehlt in frischer DB"
+    )
     assert cols["last_price_source"]["type"].upper() == "TEXT"
     assert cols["last_price_fetched_at"]["type"].upper() == "TEXT"
 
@@ -73,12 +75,16 @@ def test_legacy_schema_migrated(tmp_path):
 
     cols = _get_columns(db_path, "securities")
     assert "last_price_source" in cols, "Migration hat last_price_source nicht ergänzt"
-    assert "last_price_fetched_at" in cols, "Migration hat last_price_fetched_at nicht ergänzt"
+    assert "last_price_fetched_at" in cols, (
+        "Migration hat last_price_fetched_at nicht ergänzt"
+    )
 
     # Datenintegrität prüfen
     conn2 = sqlite3.connect(str(db_path))
     try:
-        row = conn2.execute("SELECT uuid, last_price FROM securities WHERE uuid='u1'").fetchone()
+        row = conn2.execute(
+            "SELECT uuid, last_price FROM securities WHERE uuid='u1'"
+        ).fetchone()
         assert row is not None, "Bestandsdatensatz fehlt nach Migration"
         assert row[1] == 123456789, "last_price Wert geändert durch Migration"
     finally:

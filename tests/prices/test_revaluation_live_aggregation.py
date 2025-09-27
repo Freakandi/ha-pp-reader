@@ -60,4 +60,3 @@ async def test_revaluation_uses_live_portfolio_values(tmp_path: Path) -> None:
     assert positions["p1"][0]["purchase_value"] == pytest.approx(2000.0)
     assert positions["p1"][0]["gain_abs"] == pytest.approx(500.0)
     assert positions["p1"][0]["gain_pct"] == pytest.approx(25.0)
-

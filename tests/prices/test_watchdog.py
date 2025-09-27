@@ -7,18 +7,19 @@ ohne reale Verzögerung. Erwartet:
 - WARN Log mit 'Watchdog-Schwelle überschritten'
 """
 
+import logging
 import sqlite3
 import time
-import logging
+
 import pytest
 
 from custom_components.pp_reader.const import DOMAIN
+from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.prices.price_service import (
-    initialize_price_state,
     _run_price_cycle,
+    initialize_price_state,
 )
 from custom_components.pp_reader.prices.provider_base import Quote
-from custom_components.pp_reader.data.db_init import initialize_database_schema
 
 
 @pytest.mark.asyncio
@@ -80,13 +81,17 @@ async def test_watchdog_warn(monkeypatch, hass, tmp_path, caplog):
             return base_time
         return base_time + 26.0
 
-    monkeypatch.setattr("custom_components.pp_reader.prices.price_service.time.time", fake_time)
+    monkeypatch.setattr(
+        "custom_components.pp_reader.prices.price_service.time.time", fake_time
+    )
 
     meta = await _run_price_cycle(hass, entry_id)
 
     assert meta["duration_ms"] > 25000, meta
     # Warn-Log prüfen
     watchdog_warnings = [
-        rec for rec in caplog.records if "Watchdog-Schwelle überschritten" in rec.getMessage()
+        rec
+        for rec in caplog.records
+        if "Watchdog-Schwelle überschritten" in rec.getMessage()
     ]
     assert watchdog_warnings, "Erwartete Watchdog-WARN nicht gefunden"

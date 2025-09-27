@@ -10,8 +10,6 @@ from custom_components.pp_reader.data.websocket import (
     ws_get_portfolio_data,
 )
 
-from tests.test_fetch_live_portfolios import initialized_db  # re-use fixture
-
 
 class StubConnection:
     """Collects WebSocket responses for assertions."""

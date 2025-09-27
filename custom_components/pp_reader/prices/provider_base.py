@@ -22,13 +22,13 @@ Cleanup Hinweis (remove_legacy_providers):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol, Dict, List, Optional
 import logging
+from dataclasses import dataclass
+from typing import Protocol
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = ["Quote", "PriceProvider"]
+__all__ = ["PriceProvider", "Quote"]
 
 
 @dataclass(slots=True)
@@ -53,14 +53,14 @@ class Quote:
     """
 
     symbol: str
-    price: Optional[float]
-    previous_close: Optional[float]
-    currency: Optional[str]
-    volume: Optional[int]
-    market_cap: Optional[int]
-    high_52w: Optional[float]
-    low_52w: Optional[float]
-    dividend_yield: Optional[float]
+    price: float | None
+    previous_close: float | None
+    currency: str | None
+    volume: int | None
+    market_cap: int | None
+    high_52w: float | None
+    low_52w: float | None
+    dividend_yield: float | None
     ts: float
     source: str
 
@@ -83,6 +83,6 @@ class PriceProvider(Protocol):
         Dict[symbol, Quote]
     """
 
-    async def fetch(self, symbols: List[str]) -> Dict[str, Quote]:
+    async def fetch(self, symbols: list[str]) -> dict[str, Quote]:
         """Lädt Quotes für übergebene Symbole."""
         ...

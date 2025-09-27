@@ -12,9 +12,9 @@ import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
-    OptionsFlow,   # NEU: OptionsFlow import
     ConfigFlowContext,
     ConfigFlowResult,
+    OptionsFlow,  # NEU: OptionsFlow import
 )
 
 from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
@@ -158,7 +158,8 @@ class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
 # Options Flow (Grundgerüst)
 # -----------------------------------------------------------------------------
 class PPReaderOptionsFlowHandler(OptionsFlow):
-    """OptionsFlow für pp_reader (Intervall- & Debug-Option).
+    """
+    OptionsFlow für pp_reader (Intervall- & Debug-Option).
 
     Implementiert:
       - price_update_interval_seconds (int, ≥300, default 900)

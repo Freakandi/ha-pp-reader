@@ -6,24 +6,18 @@ account information, portfolio data, and file update timestamps.
 """
 
 import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-import sqlite3
 from typing import Any
 
 import voluptuous as vol
-import homeassistant.helpers.config_validation as cv
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import ActiveConnection
-from homeassistant.helpers.dispatcher import (
-    async_dispatcher_connect,
-)
+
 from .db_access import (
-    get_accounts,
-    get_portfolios,  # ggf. noch von anderen Handlern genutzt
-    get_transactions,
     fetch_live_portfolios,  # NEU: On-Demand Aggregation
-)
+    )
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
@@ -37,7 +31,6 @@ async def _live_portfolios_payload(
     log_context: str = "",
 ) -> list[dict[str, Any]]:
     """Fetch live portfolio aggregates with coordinator fallback."""
-
     domain_data = hass.data.get(DOMAIN, {})
     data = entry_data or domain_data.get(entry_id)
     if not data:
@@ -97,7 +90,8 @@ async def _live_portfolios_payload(
 )
 @websocket_api.async_response
 async def ws_get_dashboard_data(hass, connection, msg):
-    """Return full initial dashboard dataset (accounts, portfolios, last_file_update, transactions).
+    """
+    Return full initial dashboard dataset (accounts, portfolios, last_file_update, transactions).
 
     Änderung (Migration Schritt 2.b):
     - Portfolios jetzt via fetch_live_portfolios (On-Demand Aggregation, Single Source of Truth).
@@ -213,7 +207,7 @@ async def ws_get_accounts(hass, connection: ActiveConnection, msg: dict) -> None
             },
         )
 
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))
 
@@ -277,7 +271,8 @@ async def ws_get_last_file_update(
 )
 @websocket_api.async_response
 async def ws_get_portfolio_data(hass, connection, msg):
-    """Return current portfolio aggregates via on-demand DB aggregation.
+    """
+    Return current portfolio aggregates via on-demand DB aggregation.
 
     Änderung (Migration Schritt 2.a):
     - Statt Coordinator-Snapshot jetzt Aufruf `fetch_live_portfolios` (Single Source of Truth).
@@ -363,7 +358,7 @@ async def ws_get_portfolio_positions(hass, connection, msg):
         positions = await hass.async_add_executor_job(
             get_portfolio_positions, db_path, portfolio_uuid
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.exception(
             "WebSocket: Fehler beim Laden der Positionen für Portfolio %s",
             portfolio_uuid,

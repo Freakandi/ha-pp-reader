@@ -10,10 +10,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from homeassistant.components import frontend, websocket_api
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import (
     async_register_panel as panel_custom_async_register_panel,
 )
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -26,15 +26,15 @@ from .data.backup_db import setup_backup_system
 from .data.coordinator import PPReaderCoordinator
 from .data.db_init import initialize_database_schema
 from .data.websocket import (
-    ws_get_dashboard_data,
     ws_get_accounts,
+    ws_get_dashboard_data,
     ws_get_last_file_update,
     ws_get_portfolio_data,
     ws_get_portfolio_positions,
 )  # Neu: Registrierung neuer WebSocket-Commands (portfolio positions)
 from .prices.price_service import (
-    initialize_price_state,
     _run_price_cycle,  # Initiallauf (einmalig); Intervall folgt in separatem Item
+    initialize_price_state,
 )
 
 _LOGGER = logging.getLogger(__name__)

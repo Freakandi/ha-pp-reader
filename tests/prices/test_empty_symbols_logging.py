@@ -5,6 +5,7 @@ Prüft, dass load_and_map_symbols:
 - Beim ersten Aufruf mit leerer Symbolliste genau einmal ein INFO-Log schreibt.
 - Beim zweiten Aufruf (gleiche Laufzeit, gesetztes Flag) kein weiteres INFO-Log erzeugt.
 """
+
 import logging
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -58,6 +59,6 @@ def test_empty_symbols_info_logged_once(caplog, tmp_path):
             if r.levelno == logging.INFO
             and r.name == "custom_components.pp_reader.prices.price_service"
         ]
-        assert (
-            len(info_second) == 1
-        ), "Zweiter Aufruf darf kein zusätzliches INFO-Log erzeugen (dedupliziert)"
+        assert len(info_second) == 1, (
+            "Zweiter Aufruf darf kein zusätzliches INFO-Log erzeugen (dedupliziert)"
+        )

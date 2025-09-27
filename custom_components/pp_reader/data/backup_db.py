@@ -24,6 +24,7 @@ BACKUP_SUBDIR = "backups"
 
 # === Public Entry Point ===
 
+
 async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
     """Initialisiere zyklische Backups innerhalb von Home Assistant."""
     interval = timedelta(hours=6)
@@ -44,9 +45,7 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
         """
         try:
             hass.services.async_register(
-                "pp_reader",
-                "trigger_backup_debug",
-                async_trigger_debug_backup
+                "pp_reader", "trigger_backup_debug", async_trigger_debug_backup
             )
             _LOGGER.info(
                 "✅ Backup-Service registriert: pp_reader.trigger_backup_debug"
@@ -63,6 +62,7 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
 
 
 # === Core Logic ===
+
 
 def run_backup_cycle(db_path: Path) -> None:
     """
@@ -91,7 +91,9 @@ def run_backup_cycle(db_path: Path) -> None:
     create_backup_if_valid(db_path)
     cleanup_old_backups(db_path.parent / BACKUP_SUBDIR)
 
+
 # === SQLite-Prüfung ===
+
 
 def is_sqlite_integrity_ok(db_path: str) -> bool:
     """
@@ -118,7 +120,9 @@ def is_sqlite_integrity_ok(db_path: str) -> bool:
         _LOGGER.exception("❌ Fehler beim Prüfen der DB-Integrität")
         return False
 
+
 # === Backup-Erstellung ===
+
 
 def create_backup_if_valid(db_path: Path) -> None:
     """
@@ -137,7 +141,9 @@ def create_backup_if_valid(db_path: Path) -> None:
     shutil.copy2(db_path, backup_path)
     _LOGGER.info("✅ Backup erstellt: %s", backup_path.name)
 
+
 # === Wiederherstellung ===
+
 
 def restore_from_latest_backup(db_path: Path) -> bool:
     """
@@ -164,10 +170,12 @@ def restore_from_latest_backup(db_path: Path) -> bool:
     _LOGGER.error("❌ Kein gültiges Backup zur Wiederherstellung gefunden")
     return False
 
+
 # === Aufbewahrung ===
 
 RETENTION_DAYS_DAILY = 7
 RETENTION_DAYS_WEEKLY = 28
+
 
 def cleanup_old_backups(backup_dir: Path) -> None:
     """

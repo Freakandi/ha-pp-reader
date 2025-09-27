@@ -1,6 +1,6 @@
+import logging
 import sqlite3
 from pathlib import Path
-import logging
 
 from .db_schema import ALL_SCHEMAS
 
@@ -102,6 +102,6 @@ def initialize_database_schema(db_path: Path) -> None:
             conn.close()
             _LOGGER.info("📦 Datenbank erfolgreich initialisiert: %s", db_path)
 
-    except Exception as e:
+    except Exception:
         _LOGGER.exception("❌ Kritischer Fehler bei DB-Initialisierung")
         raise

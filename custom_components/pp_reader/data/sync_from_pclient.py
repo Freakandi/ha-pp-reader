@@ -32,9 +32,9 @@ from ..logic.securities import (  # noqa: TID252
 )
 from ..name.abuchen.portfolio import client_pb2  # noqa: TID252
 from .db_access import (
+    fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
     get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
     get_transactions,
-    fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
 )
 
 DOMAIN = "pp_reader"
@@ -728,7 +728,7 @@ def sync_from_pclient(
                         [today], fx_currencies, db_path
                     )
                     fx_rates = load_latest_rates_sync(today, db_path)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _LOGGER.exception(
                         "FX: Fehler beim Laden der Wechselkurse – Fremdwährungskonten werden mit EUR=0 gesendet."
                     )
@@ -789,13 +789,15 @@ def sync_from_pclient(
                         "uuid": p.get("uuid"),
                         "name": p.get("name", "Unbekannt"),
                         "position_count": int(p.get("position_count") or 0),
-                        "current_value": round(((p.get("current_value") or 0) / 100), 2),
+                        "current_value": round(
+                            ((p.get("current_value") or 0) / 100), 2
+                        ),
                         "purchase_sum": round(((p.get("purchase_sum") or 0) / 100), 2),
                     }
                     for p in live_portfolios
                     if p and p.get("uuid")
                 ]
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception(
                     "Fehler beim Aggregieren der Portfolio-Werte via fetch_live_portfolios"
                 )
@@ -852,7 +854,9 @@ def sync_from_pclient(
                         )
 
                         # Schritt 24: Verbesserte Fehler-/Leere-Diagnostik vor Versand
-                        empty_lists = [pid for pid, pos in positions_map.items() if not pos]
+                        empty_lists = [
+                            pid for pid, pos in positions_map.items() if not pos
+                        ]
                         if empty_lists:
                             _LOGGER.debug(
                                 "sync_from_pclient: %d Portfolios ohne Positionen (werden trotzdem gesendet): %s",
@@ -877,12 +881,12 @@ def sync_from_pclient(
                                     pid,
                                     len(positions),
                                 )
-                            except Exception:  # noqa: BLE001
+                            except Exception:
                                 _LOGGER.exception(
                                     "sync_from_pclient: Fehler beim Senden des portfolio_positions Events für %s",
                                     pid,
                                 )
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _LOGGER.exception(
                         "sync_from_pclient: Allgemeiner Fehler beim Push der portfolio_positions Events"
                     )
@@ -940,7 +944,7 @@ def fetch_positions_for_portfolios(
     for pid in portfolio_ids:
         try:
             result[pid] = get_portfolio_positions(db_path, pid)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.exception(
                 "fetch_positions_for_portfolios: Fehler beim Laden der Positionen für %s",
                 pid,

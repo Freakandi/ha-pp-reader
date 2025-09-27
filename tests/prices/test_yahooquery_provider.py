@@ -14,12 +14,16 @@ internen Blocking-Helper `_fetch_quotes_blocking`.
 import pytest
 
 from custom_components.pp_reader.prices import yahooquery_provider
-from custom_components.pp_reader.prices.yahooquery_provider import YahooQueryProvider, Quote
+from custom_components.pp_reader.prices.yahooquery_provider import (
+    Quote,
+    YahooQueryProvider,
+)
 
 
 @pytest.mark.asyncio
 async def test_accepts_positive_price(monkeypatch):
     """Ein Symbol mit gültigem Preis wird akzeptiert und korrekt gemappt."""
+
     def fake_blocking(symbols):
         assert symbols == ["AAPL"]
         return {
@@ -54,6 +58,7 @@ async def test_accepts_positive_price(monkeypatch):
 @pytest.mark.asyncio
 async def test_filters_invalid_price(monkeypatch):
     """Symbole mit Preis None oder <=0 werden verworfen."""
+
     def fake_blocking(symbols):
         return {
             "SYM0": {"regularMarketPrice": 0},
@@ -70,6 +75,7 @@ async def test_filters_invalid_price(monkeypatch):
 @pytest.mark.asyncio
 async def test_missing_symbol_data(monkeypatch):
     """Wenn das Raw Dict keinen Eintrag für das angefragte Symbol enthält → kein Quote."""
+
     def fake_blocking(symbols):
         # Angefragtes Symbol 'MISS' fehlt im Resultat absichtlich
         return {"OTHER": {"regularMarketPrice": 10.0}}
@@ -83,6 +89,7 @@ async def test_missing_symbol_data(monkeypatch):
 @pytest.mark.asyncio
 async def test_chunk_failure_exception(monkeypatch):
     """Exception im Blocking Helper führt zu leerem Dict (Fehlerpfad)."""
+
     def failing_blocking(symbols):
         raise RuntimeError("Simulierter Fetch-Fehler")
 

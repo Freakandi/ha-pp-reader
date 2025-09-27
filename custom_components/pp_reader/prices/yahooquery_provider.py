@@ -27,9 +27,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, List
 
-from .provider_base import Quote, PriceProvider
+from .provider_base import PriceProvider, Quote
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ def has_import_error() -> bool:
     return _YAHOOQUERY_IMPORT_ERROR
 
 
-def _fetch_quotes_blocking(symbols: List[str]) -> dict:
+def _fetch_quotes_blocking(symbols: list[str]) -> dict:
     """
     Blocking Helper für Executor.
 
@@ -79,7 +78,7 @@ class YahooQueryProvider(PriceProvider):
 
     source = "yahoo"
 
-    async def fetch(self, symbols: List[str]) -> Dict[str, Quote]:
+    async def fetch(self, symbols: list[str]) -> dict[str, Quote]:
         """
         Lädt Quotes für übergebene Symbole.
 
@@ -105,7 +104,7 @@ class YahooQueryProvider(PriceProvider):
             # Leerer Chunk → schon geloggt im Blocking-Helper (Import oder Fetch Problem)
             return {}
 
-        result: Dict[str, Quote] = {}
+        result: dict[str, Quote] = {}
         now_ts = time.time()
 
         for sym in symbols:

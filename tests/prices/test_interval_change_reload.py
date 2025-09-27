@@ -13,18 +13,20 @@ Strategie:
 - Ändere Optionen (Update Entry) → Reload wird durch vorhandenen Listener ausgelöst.
 """
 
-import logging
 import asyncio
-from pathlib import Path
-import pytest
-from tests.common import MockConfigEntry
+import logging
 
-from custom_components.pp_reader.const import DOMAIN, CONF_DB_PATH, CONF_FILE_PATH
+import pytest
+
+from custom_components.pp_reader.const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from tests.common import MockConfigEntry
 
 
 @pytest.mark.asyncio
-async def test_interval_change_cancels_old_and_creates_new(hass, tmp_path, monkeypatch, caplog):
+async def test_interval_change_cancels_old_and_creates_new(
+    hass, tmp_path, monkeypatch, caplog
+):
     caplog.set_level(logging.DEBUG)
 
     # --- Setup DB & Portfolio Dummy ---
@@ -90,7 +92,9 @@ async def test_interval_change_cancels_old_and_creates_new(hass, tmp_path, monke
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(registrations) == 1, f"Erwartet 1 Registrierung, erhalten {len(registrations)}"
+    assert len(registrations) == 1, (
+        f"Erwartet 1 Registrierung, erhalten {len(registrations)}"
+    )
     first = registrations[0]
     assert first["interval_seconds"] == 900
     assert first["canceled"] is False
@@ -105,7 +109,9 @@ async def test_interval_change_cancels_old_and_creates_new(hass, tmp_path, monke
     )
     await hass.async_block_till_done()
 
-    assert len(registrations) == 2, f"Erwartet 2 Registrierungen, erhalten {len(registrations)}"
+    assert len(registrations) == 2, (
+        f"Erwartet 2 Registrierungen, erhalten {len(registrations)}"
+    )
     assert first["canceled"] is True, "Alter Listener wurde nicht gecancelt"
 
     second = registrations[1]

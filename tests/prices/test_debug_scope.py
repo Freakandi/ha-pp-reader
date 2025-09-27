@@ -12,14 +12,12 @@ custom_components.pp_reader.__init__._async_reload_entry_on_update.
 """
 
 import logging
-import asyncio
+
 import pytest
-from pathlib import Path
-from tests.common import MockConfigEntry
 
-from custom_components.pp_reader.const import DOMAIN, CONF_FILE_PATH, CONF_DB_PATH
+from custom_components.pp_reader.const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-
+from tests.common import MockConfigEntry
 
 PRICE_LOGGERS = [
     "custom_components.pp_reader.prices",
@@ -56,16 +54,16 @@ async def test_debug_option_scoped_logging(hass, tmp_path, caplog):
     # 1. Alle Preis-Logger auf DEBUG
     for name in PRICE_LOGGERS:
         lvl = logging.getLogger(name).getEffectiveLevel()
-        assert (
-            lvl == logging.DEBUG
-        ), f"Preis-Logger {name} nicht DEBUG (ist {logging.getLevelName(lvl)})"
+        assert lvl == logging.DEBUG, (
+            f"Preis-Logger {name} nicht DEBUG (ist {logging.getLevelName(lvl)})"
+        )
 
     # 2. Nicht-Preis-Logger bleibt != DEBUG
     other_logger = logging.getLogger("custom_components.pp_reader.data.coordinator")
     other_lvl = other_logger.getEffectiveLevel()
-    assert (
-        other_lvl != logging.DEBUG
-    ), f"Fremd-Logger unerwartet auf DEBUG gesetzt ({logging.getLevelName(other_lvl)})"
+    assert other_lvl != logging.DEBUG, (
+        f"Fremd-Logger unerwartet auf DEBUG gesetzt ({logging.getLevelName(other_lvl)})"
+    )
 
     # Reload mit Debug=False
     caplog.clear()
@@ -81,12 +79,12 @@ async def test_debug_option_scoped_logging(hass, tmp_path, caplog):
     # 3. Preis-Logger zurück auf INFO
     for name in PRICE_LOGGERS:
         lvl = logging.getLogger(name).getEffectiveLevel()
-        assert (
-            lvl == logging.INFO
-        ), f"Preis-Logger {name} nicht auf INFO zurückgesetzt (ist {logging.getLevelName(lvl)})"
+        assert lvl == logging.INFO, (
+            f"Preis-Logger {name} nicht auf INFO zurückgesetzt (ist {logging.getLevelName(lvl)})"
+        )
 
     # Non-Preis Namespace weiterhin nicht DEBUG (idempotent)
     other_lvl_2 = other_logger.getEffectiveLevel()
-    assert (
-        other_lvl_2 != logging.DEBUG
-    ), f"Fremd-Logger nach Reload DEBUG (ist {logging.getLevelName(other_lvl_2)})"
+    assert other_lvl_2 != logging.DEBUG, (
+        f"Fremd-Logger nach Reload DEBUG (ist {logging.getLevelName(other_lvl_2)})"
+    )

@@ -12,26 +12,23 @@ Strategie:
 """
 
 import logging
-import asyncio
-import sqlite3
-from pathlib import Path
 
 import pytest
-from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_FILE_PATH
+from homeassistant.core import HomeAssistant
 
-from homeassistant.config_entries import ConfigEntry
-from tests.common import MockConfigEntry
-
-from custom_components.pp_reader.const import DOMAIN, CONF_DB_PATH
+from custom_components.pp_reader.const import CONF_DB_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from tests.common import MockConfigEntry
 
 # Nutzen des echten Symbols für spätere Verlinkung / Referenz in Doku:
 # custom_components.pp_reader.prices.price_service._run_price_cycle
 
 
 @pytest.mark.asyncio
-async def test_reload_triggers_new_initial_cycle(hass: HomeAssistant, tmp_path, monkeypatch, caplog):
+async def test_reload_triggers_new_initial_cycle(
+    hass: HomeAssistant, tmp_path, monkeypatch, caplog
+):
     caplog.set_level(logging.DEBUG)
 
     # --- Vorbereitung: Dummy Portfolio-Datei & DB ---
@@ -63,7 +60,7 @@ async def test_reload_triggers_new_initial_cycle(hass: HomeAssistant, tmp_path, 
         fake_run_price_cycle,
     )
 
-    async def fake_first_refresh(self):  # noqa: D401
+    async def fake_first_refresh(self):
         return {}  # Koordinator-Daten bleiben leer (Sensoren tolerant)
 
     monkeypatch.setattr(
@@ -90,7 +87,9 @@ async def test_reload_triggers_new_initial_cycle(hass: HomeAssistant, tmp_path, 
     await hass.async_block_till_done()
 
     # Initialer Zyklus genau einmal
-    assert calls["count"] == 1, f"Erwartet 1 initialen Zyklus, erhalten {calls['count']}"
+    assert calls["count"] == 1, (
+        f"Erwartet 1 initialen Zyklus, erhalten {calls['count']}"
+    )
 
     store = hass.data[DOMAIN][entry.entry_id]
     first_cancel = store.get("price_task_cancel")
@@ -109,7 +108,9 @@ async def test_reload_triggers_new_initial_cycle(hass: HomeAssistant, tmp_path, 
     await hass.async_block_till_done()
 
     # Zweiter Initiallauf nach Reload
-    assert calls["count"] == 2, f"Reload sollte neuen Initiallauf starten (calls={calls['count']})"
+    assert calls["count"] == 2, (
+        f"Reload sollte neuen Initiallauf starten (calls={calls['count']})"
+    )
 
     store2 = hass.data[DOMAIN][entry.entry_id]
     second_cancel = store2.get("price_task_cancel")
@@ -117,7 +118,9 @@ async def test_reload_triggers_new_initial_cycle(hass: HomeAssistant, tmp_path, 
 
     assert second_cancel is not None
     assert second_cancel != first_cancel, "Alter Intervall-Task wurde nicht ersetzt"
-    assert second_interval == 1200, f"Neues Intervall nicht angewandt: {second_interval}"
+    assert second_interval == 1200, (
+        f"Neues Intervall nicht angewandt: {second_interval}"
+    )
 
     # Sanity: Preis-State erneut initialisiert (idempotent)
     assert "price_lock" in store2

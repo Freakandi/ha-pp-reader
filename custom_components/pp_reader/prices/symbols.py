@@ -25,13 +25,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 from pathlib import Path
-from typing import List, Tuple
 
 _LOGGER = logging.getLogger(__name__)
 __all__ = ["load_active_security_symbols"]
 
 
-def load_active_security_symbols(db_path: Path) -> List[Tuple[str, str]]:
+def load_active_security_symbols(db_path: Path) -> list[tuple[str, str]]:
     """
     Lädt aktive Security-Symbole aus der DB.
 
@@ -40,6 +39,7 @@ def load_active_security_symbols(db_path: Path) -> List[Tuple[str, str]]:
 
     Returns:
         Liste von (uuid, ticker_symbol)
+
     """
     try:
         conn = sqlite3.connect(str(db_path))

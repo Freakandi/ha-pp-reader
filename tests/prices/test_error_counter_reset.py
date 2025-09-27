@@ -16,17 +16,16 @@ Prüfungen:
 """
 
 import logging
-import sqlite3
 import re
+import sqlite3
+
 import pytest
-from pathlib import Path
-from tests.common import MockConfigEntry
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.prices.price_service import (
-    initialize_price_state,
     _run_price_cycle,
+    initialize_price_state,
 )
 from custom_components.pp_reader.prices.provider_base import Quote
 
@@ -92,8 +91,12 @@ async def test_error_counter_reset_after_success(hass, tmp_path, monkeypatch, ca
     meta_fail_1 = await _run_price_cycle(hass, entry_id)
     meta_fail_2 = await _run_price_cycle(hass, entry_id)
 
-    assert meta_fail_1["errors"] > 0, f"Erwartet errors>0 im ersten Fehlzyklus: {meta_fail_1}"
-    assert meta_fail_2["errors"] > 0, f"Erwartet errors>0 im zweiten Fehlzyklus: {meta_fail_2}"
+    assert meta_fail_1["errors"] > 0, (
+        f"Erwartet errors>0 im ersten Fehlzyklus: {meta_fail_1}"
+    )
+    assert meta_fail_2["errors"] > 0, (
+        f"Erwartet errors>0 im zweiten Fehlzyklus: {meta_fail_2}"
+    )
 
     # Logs für Erfolgsprüfung säubern
     caplog.clear()
@@ -105,12 +108,18 @@ async def test_error_counter_reset_after_success(hass, tmp_path, monkeypatch, ca
 
     # INFO Log für Reset prüfen
     reset_logs = [
-        r for r in caplog.records if r.levelno == logging.INFO and "Fehlerzähler zurückgesetzt" in r.getMessage()
+        r
+        for r in caplog.records
+        if r.levelno == logging.INFO and "Fehlerzähler zurückgesetzt" in r.getMessage()
     ]
-    assert len(reset_logs) == 1, f"Erwartet genau 1 Reset-Log, gefunden {len(reset_logs)}"
+    assert len(reset_logs) == 1, (
+        f"Erwartet genau 1 Reset-Log, gefunden {len(reset_logs)}"
+    )
     msg = reset_logs[0].getMessage()
 
     prev_val_match = re.search(r"previous=(\d+)", msg)
     assert prev_val_match, f"previous=... nicht gefunden in Log: {msg}"
     prev_val = int(prev_val_match.group(1))
-    assert prev_val == meta_fail_2["errors"], f"previous={prev_val} != letzter Fehlerzähler={meta_fail_2['errors']}"
+    assert prev_val == meta_fail_2["errors"], (
+        f"previous={prev_val} != letzter Fehlerzähler={meta_fail_2['errors']}"
+    )

@@ -6,9 +6,10 @@ and related data in a SQLite database.
 """
 
 import logging
-from typing import Any, Dict, List
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 

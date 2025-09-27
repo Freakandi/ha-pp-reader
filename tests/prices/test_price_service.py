@@ -19,22 +19,23 @@ Hinweise:
 import asyncio
 import logging
 import re
-import pytest
-import tempfile
 import sqlite3
 from pathlib import Path
+
+import pytest
+
+from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.prices import price_service
-from custom_components.pp_reader.const import DOMAIN
-from custom_components.pp_reader.prices.yahooquery_provider import (
-    YahooQueryProvider,
-    CHUNK_SIZE,
-)
-from custom_components.pp_reader.prices.provider_base import Quote
 from custom_components.pp_reader.prices.price_service import (
+    _run_price_cycle,
     initialize_price_state,
     load_and_map_symbols,
-    _run_price_cycle,
+)
+from custom_components.pp_reader.prices.provider_base import Quote
+from custom_components.pp_reader.prices.yahooquery_provider import (
+    CHUNK_SIZE,
+    YahooQueryProvider,
 )
 
 
@@ -173,7 +174,7 @@ async def test_no_change_no_events(monkeypatch, tmp_path):
     hass = FakeHass()
     entry_id = "e2"
     # last_price entspricht Quote (1.05)
-    scaled = int(round(1.05 * 1e8))
+    scaled = round(1.05 * 1e8)
     db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", scaled)
     _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
 
@@ -523,8 +524,8 @@ async def test_normal_batch(monkeypatch, tmp_path):
 
     assert "secA" in rows and "secB" in rows
     # Skaliert
-    assert rows["secA"][0] == int(round(101.23 * 1e8))
-    assert rows["secB"][0] == int(round(199.99 * 1e8))
+    assert rows["secA"][0] == round(101.23 * 1e8)
+    assert rows["secB"][0] == round(199.99 * 1e8)
     # Source
     assert rows["secA"][1] == "yahoo"
     assert rows["secB"][1] == "yahoo"
@@ -686,7 +687,7 @@ async def test_filter_invalid_price(monkeypatch, tmp_path):
     # secA unverändert
     assert rows["secA"][0] == int(50 * 1e8)
     # secB aktualisiert
-    assert rows["secB"][0] == int(round(80.25 * 1e8))
+    assert rows["secB"][0] == round(80.25 * 1e8)
     assert rows["secB"][1] == "yahoo"
 
     # Events: Erwartet mindestens 2 (values + positions)
@@ -820,7 +821,7 @@ async def test_missing_symbol(monkeypatch, tmp_path):
     # secA unverändert (10 * 1e8)
     assert rows["secA"][0] == int(10 * 1e8)
     # secB aktualisiert
-    assert rows["secB"][0] == int(round(21.75 * 1e8))
+    assert rows["secB"][0] == round(21.75 * 1e8)
     assert rows["secB"][1] == "yahoo"
 
     # Events vorhanden & Reihenfolge
@@ -972,7 +973,7 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
             f"sec{i} wurde unerwartet geändert"
         )
     # Letzte Security aktualisiert
-    assert rows["sec10"][0] == int(round(999.99 * 1e8))
+    assert rows["sec10"][0] == round(999.99 * 1e8)
     assert rows["sec10"][1] == "yahoo"
 
     # Events: portfolio_values zuerst, danach portfolio_positions

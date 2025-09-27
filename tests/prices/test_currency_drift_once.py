@@ -15,15 +15,14 @@ Prüfungen:
 
 import logging
 import sqlite3
-from pathlib import Path
+
 import pytest
 
-from tests.common import MockConfigEntry
-
-from custom_components.pp_reader.const import DOMAIN, CONF_DB_PATH, CONF_FILE_PATH
+from custom_components.pp_reader.const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.prices.price_service import _run_price_cycle
 from custom_components.pp_reader.prices.provider_base import Quote
+from tests.common import MockConfigEntry
 
 
 @pytest.mark.asyncio
@@ -91,9 +90,9 @@ async def test_currency_drift_warn_once(hass, tmp_path, monkeypatch, caplog):
         and "currency" in r.getMessage().lower()
         and "drift" in r.getMessage().lower()
     ]
-    assert (
-        len(first_drift_warns) == 1
-    ), f"Erwartet 1 Drift-WARN im ersten Zyklus, erhalten {len(first_drift_warns)}"
+    assert len(first_drift_warns) == 1, (
+        f"Erwartet 1 Drift-WARN im ersten Zyklus, erhalten {len(first_drift_warns)}"
+    )
 
     # Logs leeren für zweite Betrachtung
     caplog.clear()
@@ -108,6 +107,6 @@ async def test_currency_drift_warn_once(hass, tmp_path, monkeypatch, caplog):
         and "currency" in r.getMessage().lower()
         and "drift" in r.getMessage().lower()
     ]
-    assert (
-        len(second_drift_warns) == 0
-    ), f"Keine zweite Drift-WARN erwartet, gefunden {len(second_drift_warns)}"
+    assert len(second_drift_warns) == 0, (
+        f"Keine zweite Drift-WARN erwartet, gefunden {len(second_drift_warns)}"
+    )

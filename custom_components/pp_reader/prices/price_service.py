@@ -17,27 +17,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
-from typing import Any
 import sqlite3
-from datetime import datetime
 import time
 from collections import defaultdict
-from contextlib import suppress
+from datetime import datetime
+from pathlib import Path
 
 from ..const import DOMAIN
-from .provider_base import Quote
-from .symbols import load_active_security_symbols
-from .revaluation import revalue_after_price_updates
 from ..data.sync_from_pclient import (
     _push_update,
     fetch_positions_for_portfolios,
 )  # Reuse bestehender Event-Push & Positions-Loader
-from .yahooquery_provider import YahooQueryProvider, has_import_error, CHUNK_SIZE
 from ..logic.portfolio import (
-    db_calculate_portfolio_value_and_count,
     db_calculate_portfolio_purchase_sum,
+    db_calculate_portfolio_value_and_count,
 )
+from .provider_base import Quote
+from .revaluation import revalue_after_price_updates
+from .yahooquery_provider import CHUNK_SIZE, YahooQueryProvider, has_import_error
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +72,7 @@ def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]
     Returns
     -------
     (unique_symbols_sorted, mapping)
+
     """
     symbols_map: dict[str, list[str]] = defaultdict(list)
     unique_symbols: set[str] = set()
@@ -235,6 +233,7 @@ def _apply_price_updates(
     -------
     int
         Anzahl aktualisierter Zeilen.
+
     """
     if not updates:
         return 0

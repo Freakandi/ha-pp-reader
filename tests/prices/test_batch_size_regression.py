@@ -1,13 +1,13 @@
-import sqlite3
 import logging
+import sqlite3
+
 import pytest
-from pathlib import Path
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.prices.price_service import (
+    _run_price_cycle,
     initialize_price_state,
     load_and_map_symbols,
-    _run_price_cycle,
 )
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,

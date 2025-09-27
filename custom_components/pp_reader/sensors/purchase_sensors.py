@@ -1,12 +1,9 @@
 # purchase_sensors.py
-import os
 import logging
-from pathlib import Path
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
-
-from ..logic.portfolio import calculate_purchase_sum
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +28,9 @@ class PortfolioPurchaseSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Gibt die aktuelle Kaufsumme zurück."""
-        portfolio_data = self.coordinator.data["portfolios"].get(self._portfolio_uuid, {})
+        portfolio_data = self.coordinator.data["portfolios"].get(
+            self._portfolio_uuid, {}
+        )
         purchase_sum = portfolio_data.get("purchase_sum", 0.0)
         return round(purchase_sum, 2)
 
@@ -39,6 +38,8 @@ class PortfolioPurchaseSensor(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self):
         """Zusätzliche Attribute des Sensors."""
         return {
-            "letzte_aktualisierung": self.coordinator.data.get("last_update", "Unbekannt"),
+            "letzte_aktualisierung": self.coordinator.data.get(
+                "last_update", "Unbekannt"
+            ),
             "portfolio_uuid": self._portfolio_uuid,
         }
