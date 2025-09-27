@@ -938,7 +938,6 @@ class _SyncRunner:
             return
 
         self._emit_account_updates()
-        self._emit_transaction_updates()
         self._emit_last_file_update()
         self._emit_portfolio_updates()
 
@@ -1019,59 +1018,6 @@ class _SyncRunner:
         else:
             _LOGGER.debug(
                 "sync_from_pclient: Keine aktualisierten Konten zum Senden vorhanden."
-            )
-
-    def _emit_transaction_updates(self) -> None:
-        if not self.changes.transactions or self.cursor is None:
-            return
-        try:
-            self.cursor.execute(
-                """
-                SELECT uuid, type, account, portfolio, other_account, other_portfolio,
-                       other_uuid, other_updated_at, date, currency_code, amount,
-                       shares, note, security, source, updated_at
-                FROM transactions
-                ORDER BY date DESC, updated_at DESC
-                LIMIT 50
-                """
-            )
-            latest_transactions = [
-                {
-                    "uuid": row[0],
-                    "type": row[1],
-                    "account": row[2],
-                    "portfolio": row[3],
-                    "other_account": row[4],
-                    "other_portfolio": row[5],
-                    "other_uuid": row[6],
-                    "other_updated_at": row[7],
-                    "date": row[8],
-                    "currency_code": row[9],
-                    "amount": row[10],
-                    "shares": row[11],
-                    "note": row[12],
-                    "security": row[13],
-                    "source": row[14],
-                    "updated_at": row[15],
-                }
-                for row in self.cursor.fetchall()
-            ]
-            _push_update(
-                self.hass,
-                self.entry_id,
-                "transactions",
-                {
-                    "updated": latest_transactions,
-                    "changed_ids": self.updated_data["transactions"],
-                },
-            )
-            _LOGGER.debug(
-                "sync_from_pclient: 📡 Transaktions-Update-Event gesendet (%d IDs)",
-                len(self.updated_data["transactions"]),
-            )
-        except Exception:
-            _LOGGER.exception(
-                "sync_from_pclient: Fehler beim Senden des transactions Events"
             )
 
     def _emit_last_file_update(self) -> None:
