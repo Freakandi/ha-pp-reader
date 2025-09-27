@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -259,22 +259,56 @@ async def ws_get_last_file_update(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle WebSocket command to get the last file update timestamp."""
+    msg_id = msg.get("id")
+
     try:
-        # Zugriff auf die Datenbank
-        entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        # Datenbankabfrage ausführen
+        domain_entries: dict[str, dict[str, Any]] | None = hass.data.get(DOMAIN)
+        if not domain_entries:
+            connection.send_error(
+                msg_id, "not_found", "Keine pp_reader Config Entries registriert"
+            )
+            return
+
+        entry_id = msg.get("entry_id")
+        entry_data: dict[str, Any] | None = None
+
+        if entry_id:
+            entry_data = domain_entries.get(entry_id)
+            if not entry_data:
+                connection.send_error(
+                    msg_id, "not_found", f"entry_id {entry_id} unknown"
+                )
+                return
+        elif len(domain_entries) == 1:
+            entry_id, entry_data = next(iter(domain_entries.items()))
+        else:
+            connection.send_error(
+                msg_id,
+                "not_found",
+                "entry_id erforderlich, wenn mehrere Config Entries aktiv sind",
+            )
+            return
+
+        db_path_raw = entry_data.get("db_path") if entry_data else None
+        if not db_path_raw:
+            connection.send_error(
+                msg_id,
+                "db_error",
+                "db_path für den Config Entry fehlt",
+            )
+            return
+
+        db_path = Path(db_path_raw)
+
         last_file_update_raw = await hass.async_add_executor_job(
             get_last_file_update, db_path
         )
 
-        # Zeitstempel formatieren
         if last_file_update_raw:
             try:
-                # Zeitstempel im ISO-8601-Format "%Y-%m-%dT%H:%M:%S" parsen
                 parsed_update = datetime.strptime(
                     last_file_update_raw, "%Y-%m-%dT%H:%M:%S"
-                ).replace(tzinfo=datetime.UTC)
+                ).replace(tzinfo=timezone.utc)
                 last_file_update = parsed_update.strftime("%d.%m.%Y, %H:%M")
             except ValueError:
                 _LOGGER.exception("Fehler beim Parsen des Zeitstempels")
@@ -282,16 +316,15 @@ async def ws_get_last_file_update(
         else:
             last_file_update = "Unbekannt"
 
-        # Antwort senden
         connection.send_result(
-            msg["id"],
+            msg_id,
             {
                 "last_file_update": last_file_update,
             },
         )
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen von last_file_update")
-        connection.send_error(msg["id"], "db_error", str(e))
+        connection.send_error(msg_id, "db_error", str(e))
 
 
 # === Websocket Portfolio-Data ===
