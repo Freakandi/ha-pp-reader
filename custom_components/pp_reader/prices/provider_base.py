@@ -38,7 +38,8 @@ class Quote:
 
     Attribute:
         symbol: Ursprüngliches Symbol aus Autodiscovery (keine Normalisierung).
-        price: Letzter Preis (float, ungefiltert; Provider garantiert >0 bei gültigen Quotes).
+        price: Letzter Preis (float, ungefiltert).
+            Provider garantiert > 0 bei gültigen Quotes.
         previous_close: Vorheriger Schlusskurs.
         currency: Währungscode der Quote (für Drift-Prüfung, wird nicht persistiert).
         volume: Handelsvolumen (optional).
