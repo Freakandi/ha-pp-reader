@@ -3,7 +3,6 @@
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
-from importlib import import_module
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Final
@@ -21,6 +20,11 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
+from .data import backup_db as backup_db_module
+from .data import coordinator as coordinator_module
+from .data import db_init as db_init_module
+from .data import websocket as websocket_module
+from .prices import price_service as price_service_module
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -46,12 +50,12 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
-    return import_module("custom_components.pp_reader.prices.price_service")
+    return price_service_module
 
 
 def _get_websocket_module() -> ModuleType:
     """Return the websocket helpers module on demand."""
-    return import_module("custom_components.pp_reader.data.websocket")
+    return websocket_module
 
 
 def _get_entry_options(entry: ConfigEntry) -> Mapping[str, Any]:
@@ -270,13 +274,7 @@ async def _async_reload_entry_on_update(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
     try:
-        backup_module = import_module("custom_components.pp_reader.data.backup_db")
-        coordinator_module = import_module(
-            "custom_components.pp_reader.data.coordinator"
-        )
-        db_init_module = import_module("custom_components.pp_reader.data.db_init")
-
-        setup_backup_system = backup_module.setup_backup_system
+        setup_backup_system = backup_db_module.setup_backup_system
         coordinator_cls = coordinator_module.PPReaderCoordinator
         initialize_database_schema = db_init_module.initialize_database_schema
 
