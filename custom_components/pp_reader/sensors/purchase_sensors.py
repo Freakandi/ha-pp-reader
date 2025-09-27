@@ -1,9 +1,13 @@
-# purchase_sensors.py
+"""Sensoren zur Darstellung der Kaufsumme für Portfolio-Depots."""
+
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
+
+from custom_components.pp_reader.data.coordinator import PPReaderCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -11,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 class PortfolioPurchaseSensor(CoordinatorEntity, SensorEntity):
     """Sensor für die Kaufsumme eines Depots."""
 
-    def __init__(self, coordinator, portfolio_uuid: str):
+    def __init__(self, coordinator: PPReaderCoordinator, portfolio_uuid: str) -> None:
         """Initialisiere den Sensor."""
         super().__init__(coordinator)
         self.coordinator = coordinator
@@ -26,7 +30,7 @@ class PortfolioPurchaseSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
-    def native_value(self):
+    def native_value(self) -> float:
         """Gibt die aktuelle Kaufsumme zurück."""
         portfolio_data = self.coordinator.data["portfolios"].get(
             self._portfolio_uuid, {}
@@ -35,7 +39,7 @@ class PortfolioPurchaseSensor(CoordinatorEntity, SensorEntity):
         return round(purchase_sum, 2)
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Zusätzliche Attribute des Sensors."""
         return {
             "letzte_aktualisierung": self.coordinator.data.get(
