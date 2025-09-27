@@ -12,6 +12,7 @@ Includes:
 import asyncio
 import logging
 import sqlite3
+import threading
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import datetime
@@ -24,6 +25,10 @@ _LOGGER = logging.getLogger(__name__)
 
 API_URL = "https://api.frankfurter.app"
 SQLITE_TIMEOUT = 30.0
+_WRITE_LOCK = threading.Lock()
+UPSERT_QUERY = (
+    "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)"
+)
 
 # --- Hilfsfunktionen ---
 
@@ -49,16 +54,14 @@ def _load_rates_for_date_sync(db_path: Path, date: str) -> dict[str, float]:
 def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
     if not rates:
         return
-    conn = sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
-    try:
-        inserts = [(date, currency, rate) for currency, rate in rates.items()]
-        conn.executemany(
-            "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
-            inserts,
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    with _WRITE_LOCK:
+        conn = sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
+        try:
+            inserts = [(date, currency, rate) for currency, rate in rates.items()]
+            conn.executemany(UPSERT_QUERY, inserts)
+            conn.commit()
+        finally:
+            conn.close()
 
 
 async def _load_rates_for_date(db_path: Path, date: str) -> dict[str, float]:
