@@ -1,3 +1,5 @@
+"""Database initialization helpers for the Portfolio Performance Reader."""
+
 import logging
 import sqlite3
 from pathlib import Path
@@ -21,7 +23,10 @@ def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
         existing_cols = {row[1] for row in cur.fetchall()}
     except sqlite3.Error:
         _LOGGER.warning(
-            "Konnte PRAGMA table_info(securities) nicht ausführen – Migration übersprungen",
+            (
+                "Konnte PRAGMA table_info(securities) nicht ausführen - "
+                "Migration übersprungen"
+            ),
             exc_info=True,
         )
         return
@@ -56,7 +61,7 @@ def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
 
     if not migrations:
         _LOGGER.debug(
-            "Runtime-Migration: Preis-Spalten bereits vorhanden – nichts zu tun"
+            "Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun"
         )
 
 
@@ -84,18 +89,22 @@ def initialize_database_schema(db_path: Path) -> None:
                     conn.execute(schema_group)
 
             # Initialen Eintrag für das Änderungsdatum hinzufügen
-            conn.execute("""
-                INSERT OR IGNORE INTO metadata (key, date) VALUES ('last_file_update', NULL)
-            """)
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO metadata (key, date)
+                VALUES ('last_file_update', NULL)
+                """
+            )
 
             # --- NEU: Best-effort Runtime-Migration für Preis-Spalten ---
             _ensure_runtime_price_columns(conn)
 
             conn.commit()
 
-        except Exception as e:
+        except Exception as err:
             conn.rollback()
-            _LOGGER.error("❌ Fehler beim Erstellen der Tabellen: %s", e)
+            error_message = f"❌ Fehler beim Erstellen der Tabellen: {err}"
+            _LOGGER.exception(error_message)
             raise
 
         finally:
