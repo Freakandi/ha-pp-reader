@@ -124,11 +124,16 @@ def _portfolio_contract_entry(
     current_value = round(_normalize_amount(current_value_raw), 2)
     purchase_sum = round(_normalize_amount(purchase_sum_raw), 2)
 
+    gain_abs = round(current_value - purchase_sum, 2)
+    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum else 0.0, 2)
+
     return portfolio_uuid, {
         "name": entry.get("name"),
         "value": current_value,
         "count": position_count,
         "purchase_sum": purchase_sum,
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
     }
 
 

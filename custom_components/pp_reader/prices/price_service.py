@@ -54,7 +54,7 @@ INVALID_SCALED_PRICE_ERROR = (
     "Ungültiger skalierten Preis (ensure_no_extra_persist Guard)"
 )
 ZERO_QUOTES_WARN_INTERVAL = 1_800
-# Yahoo Finance benötigt teils >10s für große Chunks –
+# Yahoo Finance benötigt teils >10s für große Chunks -
 # 20s verhindern False-Timeouts.
 PRICE_FETCH_TIMEOUT = 20
 
@@ -384,13 +384,24 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
     payload: list[dict] = []
     for pid, data in pv_dict.items():
         try:
+            raw_value = data.get("value", data.get("current_value", 0.0))
+            raw_purchase = data.get("purchase_sum", data.get("purchaseSum", 0.0))
+            current_value = round(raw_value or 0.0, 2)
+            purchase_sum = round(raw_purchase or 0.0, 2)
+            gain_abs = round(current_value - purchase_sum, 2)
+            gain_pct = round(
+                (gain_abs / purchase_sum * 100) if purchase_sum else 0.0,
+                2,
+            )
             payload.append(
                 {
                     "uuid": pid,
                     "name": data.get("name", pid),
                     "position_count": data.get("count", 0) or 0,
-                    "current_value": round(data.get("value", 0.0) or 0.0, 2),
-                    "purchase_sum": round(data.get("purchase_sum", 0.0) or 0.0, 2),
+                    "current_value": current_value,
+                    "purchase_sum": purchase_sum,
+                    "gain_abs": gain_abs,
+                    "gain_pct": gain_pct,
                 }
             )
         except (TypeError, ValueError):
