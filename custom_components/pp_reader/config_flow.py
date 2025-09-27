@@ -23,6 +23,8 @@ from .data.reader import parse_data_portfolio
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_DB_DIR = "/config/pp_reader_data"
+DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL = 900
+MIN_OPTIONS_PRICE_UPDATE_INTERVAL = 300
 
 
 class PPReaderConfigFlowContext(ConfigFlowContext):
@@ -170,27 +172,33 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
     """
 
     def __init__(self, config_entry: ConfigEntry) -> None:
+        """Store the config entry and set up a logger scoped to the options flow."""
         self._entry = config_entry
         self._logger = logging.getLogger(f"{__name__}.options")
 
     def _current_interval(self) -> int:
         """Hole aktuell gesetztes Intervall oder Default."""
         try:
-            val = int(self._entry.options.get("price_update_interval_seconds", 900))
-            if val < 300:
-                return 900
-            return val
-        except Exception:
-            return 900
+            val = int(
+                self._entry.options.get(
+                    "price_update_interval_seconds",
+                    DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL,
+                )
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+        if val < MIN_OPTIONS_PRICE_UPDATE_INTERVAL:
+            return DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+        return val
 
     def _current_debug(self) -> bool:
         """Aktuellen Debug-Flag Wert oder Default liefern."""
         try:
             return bool(self._entry.options.get("enable_price_debug", False))
-        except Exception:
+        except (TypeError, ValueError):
             return False
 
-    async def async_step_init(self, user_input: dict | None = None):
+    async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Initialer Options-Schritt (Intervall + Debug)."""
         errors: dict[str, str] = {}
 
@@ -198,9 +206,14 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
             # Intervall-Validierung
             interval = user_input.get("price_update_interval_seconds")
             if interval is None:
-                user_input["price_update_interval_seconds"] = 900
-                interval = 900
-            if not isinstance(interval, int) or interval < 300:
+                user_input["price_update_interval_seconds"] = (
+                    DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+                )
+                interval = DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL
+            if (
+                not isinstance(interval, int)
+                or interval < MIN_OPTIONS_PRICE_UPDATE_INTERVAL
+            ):
                 errors["price_update_interval_seconds"] = "invalid_interval"
 
             # Debug Flag defensiv normieren
@@ -217,7 +230,7 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                 vol.Optional(
                     "price_update_interval_seconds",
                     default=self._current_interval(),
-                ): vol.All(int, vol.Range(min=300)),
+                ): vol.All(int, vol.Range(min=MIN_OPTIONS_PRICE_UPDATE_INTERVAL)),
                 vol.Optional(
                     "enable_price_debug",
                     default=self._current_debug(),
@@ -231,6 +244,6 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
         )
 
 
-async def async_get_options_flow(config_entry: ConfigEntry):
+async def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
     """Entry Point für Home Assistant zum Erstellen des OptionsFlows."""
     return PPReaderOptionsFlowHandler(config_entry)
