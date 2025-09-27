@@ -1,23 +1,16 @@
-"""
-Module for synchronizing data from parsed .portfolio file.
+"""Synchronisation von Portfolio Performance Daten."""
 
-This module provides functions to fill a local SQLite database,
-handle transactions, accounts, securities, portfolios,
-and other related data, ensuring consistency and updating the Home Assistant
-event bus when changes are detected.
-"""
+from __future__ import annotations
 
 import logging
-import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
-from pathlib import (
-    Path,
-)
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from homeassistant.const import EVENT_PANELS_UPDATED
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 
 from pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
@@ -30,12 +23,73 @@ from ..logic.securities import (  # noqa: TID252
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
-from ..name.abuchen.portfolio import client_pb2  # noqa: TID252
 from .db_access import (
     fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
     get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
     get_transactions,
 )
+
+
+@dataclass(slots=True)
+class SyncStats:
+    """Aggregierte Statistiken über den Importlauf."""
+
+    securities: int = 0
+    transactions: int = 0
+    fx_transactions: int = 0
+
+
+@dataclass(slots=True)
+class SyncChanges:
+    """Verfolgt, welche Bereiche bei der Synchronisation Änderungen enthielten."""
+
+    accounts: bool = False
+    transactions: bool = False
+    securities: bool = False
+    portfolios: bool = False
+    last_file_update: bool = False
+    portfolio_securities: bool = False
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
+    from sqlite3 import Connection, Cursor
+
+    from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+else:  # pragma: no cover - Laufzeittypen nur für Hinweise
+    Iterable = Any  # type: ignore[assignment]
+    Path = Any  # type: ignore[assignment]
+    Connection = Cursor = Any  # type: ignore[assignment]
+    client_pb2 = Any  # type: ignore[assignment]
+
+
+DELETE_TABLE_CONFIG = {
+    "transactions": {
+        "select_sql": "SELECT uuid FROM transactions",
+        "delete_sql": "DELETE FROM transactions WHERE uuid = ?",
+        "truncate_sql": "DELETE FROM transactions",
+        "id_column": "uuid",
+    },
+    "accounts": {
+        "select_sql": "SELECT uuid FROM accounts",
+        "delete_sql": "DELETE FROM accounts WHERE uuid = ?",
+        "truncate_sql": "DELETE FROM accounts",
+        "id_column": "uuid",
+    },
+    "securities": {
+        "select_sql": "SELECT uuid FROM securities",
+        "delete_sql": "DELETE FROM securities WHERE uuid = ?",
+        "truncate_sql": "DELETE FROM securities",
+        "id_column": "uuid",
+    },
+    "portfolios": {
+        "select_sql": "SELECT uuid FROM portfolios",
+        "delete_sql": "DELETE FROM portfolios WHERE uuid = ?",
+        "truncate_sql": "DELETE FROM portfolios",
+        "id_column": "uuid",
+    },
+}
 
 DOMAIN = "pp_reader"
 
@@ -62,32 +116,44 @@ def to_iso8601(ts: Timestamp) -> str:
 
 
 def delete_missing_entries(
-    conn: sqlite3.Connection, table: str, id_column: str, current_ids: set
+    conn: Connection, table: str, id_column: str, current_ids: Iterable[str]
 ) -> None:
-    """Löscht veraltete Einträge aus einer Tabelle (Differenzabgleich)."""
+    """Remove entries that are no longer present in the source dataset."""
+    config = DELETE_TABLE_CONFIG.get(table)
+    if config is None or config["id_column"] != id_column:
+        msg = (
+            f"Invalid delete configuration for table={table!r} id_column={id_column!r}"
+        )
+        raise ValueError(msg)
+
+    ids_to_keep = set(current_ids)
     cur = conn.cursor()
-    if not current_ids:
-        # Wenn keine aktuellen IDs existieren, alles löschen
+    if not ids_to_keep:
         _LOGGER.debug("Lösche alle Einträge aus %s (keine aktuellen IDs)", table)
-        cur.execute(f"DELETE FROM {table}")
+        cur.execute(config["truncate_sql"])
     else:
-        placeholders = ",".join("?" for _ in current_ids)
-        sql = f"DELETE FROM {table} WHERE {id_column} NOT IN ({placeholders})"
-        cur.execute(sql, list(current_ids))
+        cur.execute(config["select_sql"])
+        existing_ids = {row[0] for row in cur.fetchall()}
+        stale_ids = existing_ids - ids_to_keep
+        if stale_ids:
+            cur.executemany(
+                config["delete_sql"],
+                [(stale_id,) for stale_id in stale_ids],
+            )
     conn.commit()
 
 
-def normalize_shares(shares: int) -> int:
+def normalize_shares(shares: int | None) -> int | None:
     """Stellt sicher dass Shares als Integer gespeichert werden."""
     return int(shares) if shares is not None else None
 
 
-def normalize_amount(amount: int) -> int:
+def normalize_amount(amount: int | None) -> int | None:
     """Stellt sicher dass Beträge als Cent-Integer gespeichert werden."""
     return int(amount) if amount is not None else None
 
 
-def extract_exchange_rate(pdecimal) -> float:
+def extract_exchange_rate(pdecimal: Any) -> float | None:
     """Extrahiert einen positiven Wechselkurs aus PDecimalValue."""
     if not pdecimal or not pdecimal.HasField("value"):
         return None
@@ -95,8 +161,20 @@ def extract_exchange_rate(pdecimal) -> float:
     return abs(value / (10**pdecimal.scale))
 
 
+def maybe_field(message: Any, field_name: str) -> Any:
+    """Gibt einen optionalen Protobuf-Wert zurück, falls vorhanden."""
+    if hasattr(message, "HasField") and message.HasField(field_name):
+        return getattr(message, field_name)
+    return None
+
+
 @callback
-def _push_update(hass, entry_id, data_type, data):
+def _push_update(
+    hass: HomeAssistant | None,
+    entry_id: str | None,
+    data_type: str,
+    data: Any,
+) -> None:
     """Thread-sicheres Pushen eines Update-Events in den HA Event Loop."""
     if not hass or not entry_id:
         return
@@ -113,123 +191,167 @@ def _push_update(hass, entry_id, data_type, data):
         _LOGGER.exception("Fehler beim Schedulen des Events %s", data_type)
 
 
-def sync_from_pclient(
+def sync_from_pclient(  # noqa: PLR0913 - API erfordert diese Parameter
     client: client_pb2.PClient,
-    conn: sqlite3.Connection,
-    hass=None,
-    entry_id=None,
-    last_file_update=None,
-    db_path=None,
+    conn: Connection,
+    hass: HomeAssistant | None = None,
+    entry_id: str | None = None,
+    last_file_update: str | None = None,
+    db_path: Path | None = None,
 ) -> None:
     """Synchronisiere Daten aus Portfolio Performance mit der lokalen SQLite DB."""
-    cur = conn.cursor()
-    stats = {"securities": 0, "transactions": 0, "fx_transactions": 0}
+    runner = _SyncRunner(
+        client=client,
+        conn=conn,
+        hass=hass,
+        entry_id=entry_id,
+        last_file_update=last_file_update,
+        db_path=db_path,
+    )
+    runner.run()
 
-    # Flags für Änderungen in den jeweiligen Tabellen
-    account_changes_detected = False
-    transaction_changes_detected = False
-    security_changes_detected = False
-    portfolio_changes_detected = False
-    last_file_update_change_detected = False
-    sec_port_changes_detected = False
-    # Neu: Track geänderte Portfolios (optional – falls granularer Versand gewünscht)
-    changed_portfolios: set[str] = set()
 
-    updated_data = {
-        "accounts": [],
-        "securities": [],
-        "portfolios": [],
-        "transactions": [],
-    }
+class _SyncRunner:
+    """Kapselt die synchronen Import-Schritte."""
 
-    try:
-        conn.execute("BEGIN TRANSACTION")
+    def __init__(  # noqa: PLR0913 - Keyword-API für HA-Aufrufer
+        self,
+        *,
+        client: client_pb2.PClient,
+        conn: Connection,
+        hass: HomeAssistant | None,
+        entry_id: str | None,
+        last_file_update: str | None,
+        db_path: Path | None,
+    ) -> None:
+        self.client = client
+        self.conn = conn
+        self.hass = hass
+        self.entry_id = entry_id
+        self.last_file_update = last_file_update
+        self.db_path = db_path
+        self.stats = SyncStats()
+        self.changes = SyncChanges()
+        self.updated_data: dict[str, list[Any]] = {
+            "accounts": [],
+            "securities": [],
+            "portfolios": [],
+            "transactions": [],
+        }
+        self.changed_portfolios: set[str] = set()
+        self.accounts_currency_map: dict[str, str] = {}
+        self.all_transactions: list[Any] = []
+        self.tx_units: dict[str, dict[str, Any]] = {}
+        self.cursor: Cursor | None = None
 
-        # Speichere das Änderungsdatum der Portfolio-Datei
-        if last_file_update:
-            cur.execute(
-                """
-                INSERT OR REPLACE INTO metadata (
-                    key, date
-                ) VALUES (
-                    'last_file_update', ?
-                )
-            """,
-                (last_file_update,),
+    def run(self) -> None:
+        self.cursor = self.conn.cursor()
+        try:
+            self.conn.execute("BEGIN TRANSACTION")
+            self._store_last_file_update()
+            self._sync_transactions()
+            self._sync_accounts()
+            self._sync_securities()
+            self._sync_portfolios()
+            self._sync_portfolio_securities()
+        except Exception:
+            self.conn.rollback()
+            _LOGGER.exception("sync_from_pclient: Fehler während der Synchronisation")
+            self._reset_change_flags()
+            raise
+        else:
+            self._emit_updates()
+        finally:
+            if self.cursor is not None:
+                self.cursor.close()
+            self._log_summary()
+
+    # Datenbank-Schritte -------------------------------------------------
+
+    def _store_last_file_update(self) -> None:
+        if not self.last_file_update or self.cursor is None:
+            return
+        self.cursor.execute(
+            """
+            INSERT OR REPLACE INTO metadata (
+                key, date
+            ) VALUES (
+                'last_file_update', ?
             )
-
-            # Setze das Flag für Änderungen
-            last_file_update_change_detected = True
-
-        # --- TRANSACTIONS ---
-        # _LOGGER.debug(
-        #     "sync_from_pclient: Synchronisiere Transaktionen..."  # noqa: ERA001
-        # )  # noqa: ERA001, RUF100
-        transaction_ids = {t.uuid for t in client.transactions}
-        delete_missing_entries(conn, "transactions", "uuid", transaction_ids)
-
-        for t in client.transactions:
-            cur.execute(
-                """
-                SELECT * FROM transactions WHERE uuid = ?
             """,
-                (t.uuid,),
+            (self.last_file_update,),
+        )
+        self.changes.last_file_update = True
+
+    def _sync_transactions(self) -> None:
+        if self.cursor is None:
+            return
+        transaction_ids = {t.uuid for t in self.client.transactions}
+        delete_missing_entries(self.conn, "transactions", "uuid", transaction_ids)
+
+        for transaction in self.client.transactions:
+            other_updated_at = maybe_field(transaction, "otherUpdatedAt")
+            self.cursor.execute(
+                "SELECT * FROM transactions WHERE uuid = ?",
+                (transaction.uuid,),
             )
-            existing_transaction = cur.fetchone()
+            existing_transaction = self.cursor.fetchone()
 
             new_transaction_data = (
-                t.uuid,
-                int(t.type),
-                t.account if t.HasField("account") else None,
-                t.portfolio if t.HasField("portfolio") else None,
-                t.otherAccount if t.HasField("otherAccount") else None,
-                t.otherPortfolio if t.HasField("otherPortfolio") else None,
-                t.otherUuid if t.HasField("otherUuid") else None,
-                to_iso8601(t.otherUpdatedAt) if t.HasField("otherUpdatedAt") else None,
-                to_iso8601(t.date),
-                t.currencyCode,
-                normalize_amount(t.amount),
-                normalize_shares(t.shares) if t.HasField("shares") else None,
-                t.note if t.HasField("note") else None,
-                t.security if t.HasField("security") else None,
-                t.source if t.HasField("source") else None,
-                to_iso8601(t.updatedAt),
+                transaction.uuid,
+                int(transaction.type),
+                maybe_field(transaction, "account"),
+                maybe_field(transaction, "portfolio"),
+                maybe_field(transaction, "otherAccount"),
+                maybe_field(transaction, "otherPortfolio"),
+                maybe_field(transaction, "otherUuid"),
+                to_iso8601(other_updated_at),
+                to_iso8601(transaction.date),
+                transaction.currencyCode,
+                normalize_amount(maybe_field(transaction, "amount")),
+                normalize_shares(maybe_field(transaction, "shares")),
+                maybe_field(transaction, "note"),
+                maybe_field(transaction, "security"),
+                maybe_field(transaction, "source"),
+                to_iso8601(transaction.updatedAt),
             )
 
             if not existing_transaction or existing_transaction != new_transaction_data:
-                transaction_changes_detected = True
-                updated_data["transactions"].append(t.uuid)
-
-                cur.execute(
+                self.changes.transactions = True
+                self.updated_data["transactions"].append(transaction.uuid)
+                self.cursor.execute(
                     """
                     INSERT OR REPLACE INTO transactions (
                         uuid, type, account, portfolio, other_account, other_portfolio,
                         other_uuid, other_updated_at, date, currency_code, amount,
                         shares, note, security, source, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     new_transaction_data,
                 )
-            stats["transactions"] += 1
 
-        # Transaktionen nach dem Einfügen bestätigen
-        conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
-        # _LOGGER.debug(
-        #     "sync_from_pclient: Transaktionen in der DB bestätigt."  # noqa: ERA001
-        # )  # noqa: ERA001, RUF100
+            self.stats.transactions += 1
 
-        # --- TRANSACTION_UNITS (vor Accounts, damit FX bei CASH_TRANSFER korrekt ist) ---
-        cur.execute("DELETE FROM transaction_units")
-        for t in client.transactions:
-            for u in t.units:
+        self.conn.commit()
+        self.tx_units = self._rebuild_transaction_units()
+        self.all_transactions = self._load_all_transactions()
+
+    def _rebuild_transaction_units(self) -> dict[str, dict[str, Any]]:
+        if self.cursor is None:
+            return {}
+
+        self.cursor.execute("DELETE FROM transaction_units")
+        for transaction in self.client.transactions:
+            for unit in transaction.units:
                 fx_rate = None
-                if u.HasField("fxRateToBase"):
-                    scale = u.fxRateToBase.scale
+                if unit.HasField("fxRateToBase"):
+                    scale = unit.fxRateToBase.scale
                     value = int.from_bytes(
-                        u.fxRateToBase.value, byteorder="little", signed=True
+                        unit.fxRateToBase.value, byteorder="little", signed=True
                     )
                     fx_rate = abs(value / (10**scale))
-                cur.execute(
+
+                self.cursor.execute(
                     """
                     INSERT INTO transaction_units (
                         transaction_uuid, type, amount, currency_code,
@@ -237,28 +359,27 @@ def sync_from_pclient(
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        t.uuid,
-                        u.type,
-                        u.amount,
-                        u.currencyCode,
-                        u.fxAmount if u.HasField("fxAmount") else None,
-                        u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
+                        transaction.uuid,
+                        unit.type,
+                        unit.amount,
+                        unit.currencyCode,
+                        maybe_field(unit, "fxAmount"),
+                        maybe_field(unit, "fxCurrencyCode"),
                         fx_rate,
                     ),
                 )
-                if u.HasField("fxAmount"):
-                    stats["fx_transactions"] += 1
+                if unit.HasField("fxAmount"):
+                    self.stats.fx_transactions += 1
 
-        # FX-Units jetzt aktuell verfügbar für Kontostände
-        cur.execute(
+        self.cursor.execute(
             """
             SELECT transaction_uuid, fx_amount, fx_currency_code
             FROM transaction_units
             WHERE fx_amount IS NOT NULL
             """
         )
-        tx_units = {}
-        for tx_uuid, fx_amount, fx_ccy in cur.fetchall():
+        tx_units: dict[str, dict[str, Any]] = {}
+        for tx_uuid, fx_amount, fx_ccy in self.cursor.fetchall():
             if fx_amount is not None and fx_ccy:
                 tx_units.setdefault(
                     tx_uuid,
@@ -268,138 +389,132 @@ def sync_from_pclient(
                     },
                 )
 
-        # Alle Transaktionen einmal laden (wird für Account-Balances und später für portfolio_securities wiederverwendet)
+        self.conn.commit()
+        return tx_units
+
+    def _load_all_transactions(self) -> list[Any]:
         try:
-            all_transactions = get_transactions(conn=conn)
+            return get_transactions(conn=self.conn)
         except Exception:
-            all_transactions = []
             _LOGGER.exception(
-                "sync_from_pclient: Konnte Transaktionen nicht laden (all_transactions leer)."
+                "sync_from_pclient: Konnte Transaktionen nicht laden "
+                "(all_transactions leer)."
             )
+            return []
 
-        # --- ACCOUNTS ---
-        account_ids = {acc.uuid for acc in client.accounts}
-        delete_missing_entries(conn, "accounts", "uuid", account_ids)
+    def _sync_accounts(self) -> None:
+        if self.cursor is None:
+            return
+        account_ids = {account.uuid for account in self.client.accounts}
+        delete_missing_entries(self.conn, "accounts", "uuid", account_ids)
 
-        # Mapping vorhandener Accounts aus DB laden (kann durch Löschung eben geleert sein)
-        cur.execute("SELECT uuid, currency_code FROM accounts")
-        accounts_currency_map = {row[0]: row[1] or "EUR" for row in cur.fetchall()}
+        self.cursor.execute("SELECT uuid, currency_code FROM accounts")
+        self.accounts_currency_map = {
+            row[0]: row[1] or "EUR" for row in self.cursor.fetchall()
+        }
 
-        for acc in client.accounts:
-            # Sicherstellen, dass jede Account-Währung im Mapping ist (auch für neue Accounts)
-            accounts_currency_map.setdefault(acc.uuid, acc.currencyCode or "EUR")
-            cur.execute(
+        for account in self.client.accounts:
+            self.accounts_currency_map.setdefault(
+                account.uuid, account.currencyCode or "EUR"
+            )
+            self.cursor.execute(
                 """
                 SELECT uuid, name, currency_code, note, is_retired, updated_at, balance
                 FROM accounts
                 WHERE uuid = ?
                 """,
-                (acc.uuid,),
+                (account.uuid,),
             )
-            existing_account = cur.fetchone()
+            existing_account = self.cursor.fetchone()
 
-            # Einheitliche Darstellung von is_retired (immer 0 oder 1)
-            is_retired = 1 if getattr(acc, "isRetired", False) else 0
-
-            # Einheitliches Format für updated_at
+            is_retired = 1 if getattr(account, "isRetired", False) else 0
             updated_at = (
-                to_iso8601(acc.updatedAt) if acc.HasField("updatedAt") else None
+                to_iso8601(account.updatedAt) if account.HasField("updatedAt") else None
             )
-
             new_account_data = (
-                acc.uuid,
-                acc.name,
-                acc.currencyCode,
-                acc.note if acc.HasField("note") else None,
-                is_retired,  # Konsistente Darstellung
-                updated_at,  # Konsistentes Format
+                account.uuid,
+                account.name,
+                account.currencyCode,
+                account.note if account.HasField("note") else None,
+                is_retired,
+                updated_at,
             )
 
-            # Berechne den Kontostand nur, wenn Transaktionen geändert wurden
-            if transaction_changes_detected:
+            if self.changes.transactions:
                 if is_retired:
-                    balance = 0  # Retired-Konten haben immer Kontostand 0
+                    balance = 0
                 else:
                     account_transactions = [
                         tx
-                        for tx in all_transactions
-                        if tx.account == acc.uuid or tx.other_account == acc.uuid
+                        for tx in self.all_transactions
+                        if account.uuid in (tx.account, tx.other_account)
                     ]
                     balance = db_calc_account_balance(
-                        acc.uuid,
+                        account.uuid,
                         account_transactions,
-                        accounts_currency_map=accounts_currency_map,
-                        tx_units=tx_units,
+                        accounts_currency_map=self.accounts_currency_map,
+                        tx_units=self.tx_units,
                     )
             else:
-                # Behalte den bestehenden Kontostand bei,
-                # wenn keine Transaktionen geändert wurden
                 balance = existing_account[-1] if existing_account else 0
 
-            # Vergleiche die Daten, um Änderungen zu erkennen
             if (
                 not existing_account
-                or existing_account[1:6] != new_account_data[1:]  # name..updated_at
-                or balance
-                != (existing_account[6] if existing_account else None)  # balance
+                or existing_account[1:6] != new_account_data[1:]
+                or balance != (existing_account[6] if existing_account else None)
             ):
-                account_changes_detected = True
-                updated_data["accounts"].append(
+                self.changes.accounts = True
+                self.updated_data["accounts"].append(
                     {
-                        "name": acc.name,
-                        "balance": balance,  # Cent in Original-Währung
-                        "currency_code": acc.currencyCode,
+                        "name": account.name,
+                        "balance": balance,
+                        "currency_code": account.currencyCode,
                         "is_retired": is_retired,
                     }
                 )
-
-                cur.execute(
+                self.cursor.execute(
                     """
                     INSERT OR REPLACE INTO accounts
                     (uuid, name, currency_code, note, is_retired, updated_at, balance)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     (*new_account_data, balance),
                 )
 
-        # --- SECURITIES ---
+    def _sync_securities(self) -> None:
+        if self.cursor is None:
+            return
         _LOGGER.debug("sync_from_pclient: Synchronisiere Wertpapiere...")
-        security_ids = {sec.uuid for sec in client.securities}
-        delete_missing_entries(conn, "securities", "uuid", security_ids)
+        security_ids = {security.uuid for security in self.client.securities}
+        delete_missing_entries(self.conn, "securities", "uuid", security_ids)
 
-        for sec in client.securities:
-            # Einheitliche Darstellung retired (0/1)
-            retired = 1 if getattr(sec, "isRetired", False) else 0
-            updated_at = (
-                to_iso8601(sec.updatedAt) if sec.HasField("updatedAt") else None
-            )
-
-            # Wir persistieren KEINE 'note' Spalte für securities (bewusste Entscheidung).
-            # Falls spätere Schema-Erweiterung erforderlich wäre, muss DDL + ALL_SCHEMAS + Migration ergänzt werden.
-            # Relevante Vergleichsdaten (geordnet):
+        for security in self.client.securities:
+            retired = 1 if getattr(security, "isRetired", False) else 0
+            security_updated_at = maybe_field(security, "updatedAt")
+            updated_at = to_iso8601(security_updated_at)
             new_security_attrs = (
-                sec.name,
-                sec.isin if sec.HasField("isin") else None,
-                sec.wkn if sec.HasField("wkn") else None,
-                sec.tickerSymbol if sec.HasField("tickerSymbol") else None,
-                sec.currencyCode,
+                security.name,
+                maybe_field(security, "isin"),
+                maybe_field(security, "wkn"),
+                maybe_field(security, "tickerSymbol"),
+                security.currencyCode,
                 retired,
                 updated_at,
             )
 
-            cur.execute(
+            self.cursor.execute(
                 """
-                SELECT name, isin, wkn, ticker_symbol, currency_code, retired, updated_at
+                SELECT name, isin, wkn, ticker_symbol,
+                       currency_code, retired, updated_at
                 FROM securities
                 WHERE uuid = ?
                 """,
-                (sec.uuid,),
+                (security.uuid,),
             )
-            existing_attr_row = cur.fetchone()
+            existing_attr_row = self.cursor.fetchone()
 
             if not existing_attr_row:
-                # Neu anlegen – feed behalten wir (None) als Platzhalter für mögliche spätere Quellen
-                cur.execute(
+                self.cursor.execute(
                     """
                     INSERT INTO securities (
                         uuid, name, isin, wkn, ticker_symbol, feed,
@@ -407,523 +522,536 @@ def sync_from_pclient(
                     ) VALUES (?,?,?,?,?,?,?,?,?)
                     """,
                     (
-                        sec.uuid,
+                        security.uuid,
                         new_security_attrs[0],
                         new_security_attrs[1],
                         new_security_attrs[2],
                         new_security_attrs[3],
-                        None,  # feed (nicht belegt)
+                        None,
                         new_security_attrs[4],
                         new_security_attrs[5],
                         new_security_attrs[6],
                     ),
                 )
-                security_changes_detected = True
-                updated_data["securities"].append(sec.uuid)
+                self.changes.securities = True
+                self.updated_data["securities"].append(security.uuid)
             elif existing_attr_row != new_security_attrs:
-                # Nur selektives UPDATE statt REPLACE → erhält last_price / source / fetched_at
-                cur.execute(
+                self.cursor.execute(
                     """
                     UPDATE securities
-                    SET name=?, isin=?, wkn=?, ticker_symbol=?, currency_code=?, retired=?, updated_at=?
+                    SET name=?, isin=?, wkn=?, ticker_symbol=?,
+                        currency_code=?, retired=?, updated_at=?
                     WHERE uuid=?
                     """,
-                    (*new_security_attrs, sec.uuid),
+                    (*new_security_attrs, security.uuid),
                 )
-                security_changes_detected = True
-                updated_data["securities"].append(sec.uuid)
+                self.changes.securities = True
+                self.updated_data["securities"].append(security.uuid)
 
-            # Historische Preise (unverändert, aber robust gegen PHistoricalPrice ohne high/low/volume)
-            if sec.prices:
-                for price in sec.prices:
-                    # PHistoricalPrice hat nur (date, close); PFullHistoricalPrice zusätzlich high/low/volume
+            if security.prices:
+                for price in security.prices:
                     descriptor = getattr(price, "DESCRIPTOR", None)
                     fields = descriptor.fields_by_name if descriptor else {}
+                    high = getattr(price, "high", None) if "high" in fields else None
+                    low = getattr(price, "low", None) if "low" in fields else None
+                    volume = (
+                        getattr(price, "volume", None) if "volume" in fields else None
+                    )
 
-                    def _opt(field: str):
-                        # Liefert Wert nur, wenn Feld existiert; sonst None
-                        return getattr(price, field, None) if field in fields else None
-
-                    cur.execute(
+                    self.cursor.execute(
                         """
                         INSERT OR REPLACE INTO historical_prices (
                             security_uuid, date, close, high, low, volume
                         ) VALUES (?,?,?,?,?,?)
                         """,
                         (
-                            sec.uuid,
+                            security.uuid,
                             price.date,
                             price.close,
-                            _opt("high"),
-                            _opt("low"),
-                            _opt("volume"),
+                            high,
+                            low,
+                            volume,
                         ),
                     )
 
-                # Letzten Preis (aus Datei) in securities setzen – behält live-price Felder falls später überschrieben
-                latest_price = max(sec.prices, key=lambda p: p.date)
+                latest_price = max(security.prices, key=lambda price: price.date)
                 latest_price_date_iso = to_iso8601(
                     Timestamp(seconds=latest_price.date * 86400)
                 )
-                cur.execute(
+                self.cursor.execute(
                     """
                     UPDATE securities
                     SET last_price = ?, last_price_date = ?
                     WHERE uuid = ?
                     """,
-                    (latest_price.close, latest_price_date_iso, sec.uuid),
+                    (latest_price.close, latest_price_date_iso, security.uuid),
                 )
 
-            stats["securities"] += 1
+            self.stats.securities += 1
 
-        # --- PORTFOLIOS ---
-        portfolio_ids = {p.uuid for p in client.portfolios}
-        delete_missing_entries(conn, "portfolios", "uuid", portfolio_ids)
+    def _sync_portfolios(self) -> None:
+        if self.cursor is None:
+            return
+        portfolio_ids = {portfolio.uuid for portfolio in self.client.portfolios}
+        delete_missing_entries(self.conn, "portfolios", "uuid", portfolio_ids)
 
-        for p in client.portfolios:
-            cur.execute(
-                """
-                SELECT * FROM portfolios WHERE uuid = ?
-            """,
-                (p.uuid,),
+        for portfolio in self.client.portfolios:
+            self.cursor.execute(
+                "SELECT * FROM portfolios WHERE uuid = ?",
+                (portfolio.uuid,),
             )
-            existing_portfolio = cur.fetchone()
+            existing_portfolio = self.cursor.fetchone()
 
-            # Einheitliche Darstellung von is_retired (immer 0 oder 1)
-            is_retired = 1 if getattr(p, "isRetired", False) else 0
-
-            # Einheitliches Format für updated_at
-            updated_at = to_iso8601(p.updatedAt) if p.HasField("updatedAt") else None
-
+            is_retired = 1 if getattr(portfolio, "isRetired", False) else 0
+            portfolio_updated_at = maybe_field(portfolio, "updatedAt")
+            updated_at = to_iso8601(portfolio_updated_at)
+            reference_account = maybe_field(portfolio, "referenceAccount")
             new_portfolio_data = (
-                p.uuid,
-                p.name,
-                p.note if p.HasField("note") else None,
-                p.referenceAccount if p.HasField("referenceAccount") else None,
-                is_retired,  # Konsistente Darstellung
-                updated_at,  # Konsistentes Format
+                portfolio.uuid,
+                portfolio.name,
+                maybe_field(portfolio, "note"),
+                reference_account,
+                is_retired,
+                updated_at,
             )
 
             if not existing_portfolio or existing_portfolio != new_portfolio_data:
-                portfolio_changes_detected = True
-                updated_data["portfolios"].append(p.uuid)
-
-                cur.execute(
+                self.changes.portfolios = True
+                self.updated_data["portfolios"].append(portfolio.uuid)
+                self.cursor.execute(
                     """
                     INSERT OR REPLACE INTO portfolios (
                         uuid, name, note, reference_account, is_retired, updated_at
                     )
                     VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     new_portfolio_data,
                 )
 
-        # --- TRANSACTION_UNITS ---
-        # Vor dem Einfügen: Alle bestehenden transaction_units löschen (volles Rebuild)
-        cur.execute("DELETE FROM transaction_units")
+    def _sync_portfolio_securities(self) -> None:
+        if self.cursor is None:
+            return
+        if not (self.changes.transactions or self.changes.securities):
+            return
 
-        for t in client.transactions:
-            for u in t.units:
-                # fxRateToBase ist optional im Protobuf
-                fx_rate = None
-                if u.HasField("fxRateToBase"):
-                    scale = u.fxRateToBase.scale
-                    value = int.from_bytes(
-                        u.fxRateToBase.value, byteorder="little", signed=True
-                    )
-                    fx_rate = abs(value / (10**scale))
+        _LOGGER.debug(
+            "sync_from_pclient: Berechne und synchronisiere portfolio_securities..."
+        )
+        current_holdings = db_calculate_current_holdings(self.all_transactions)
+        purchase_values = db_calculate_sec_purchase_value(
+            self.all_transactions, self.db_path
+        )
 
-                cur.execute(
-                    """
-                    INSERT INTO transaction_units (
-                        transaction_uuid, type, amount, currency_code,
-                        fx_amount, fx_currency_code, fx_rate_to_base
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        current_hold_pur: dict[tuple[str, str], dict[str, Any]] = {}
+        for key, purchase_value in purchase_values.items():
+            if key in current_holdings:
+                current_hold_pur[key] = {
+                    "current_holdings": current_holdings[key],
+                    "purchase_value": purchase_value,
+                }
+
+        current_holdings_values = db_calculate_holdings_value(
+            self.db_path, self.conn, current_hold_pur
+        )
+
+        portfolio_sec_processed = 0
+        for (portfolio_uuid, security_uuid), data in current_holdings_values.items():
+            current_holdings_val = data.get("current_holdings", 0)
+            purchase_value = data.get("purchase_value", 0)
+            current_value = data.get("current_value", 0)
+
+            self.cursor.execute(
+                """
+                SELECT current_holdings, purchase_value, current_value
+                FROM portfolio_securities
+                WHERE portfolio_uuid = ? AND security_uuid = ?
                 """,
+                (portfolio_uuid, security_uuid),
+            )
+            existing_entry = self.cursor.fetchone()
+
+            expected_values = (
+                current_holdings_val,
+                int(purchase_value * 100),
+                int(current_value * 100),
+            )
+            if not existing_entry or existing_entry != expected_values:
+                self.changes.portfolio_securities = True
+                self.cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO portfolio_securities (
+                        portfolio_uuid,
+                        security_uuid,
+                        current_holdings,
+                        purchase_value,
+                        current_value
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
                     (
-                        t.uuid,
-                        u.type,
-                        u.amount,
-                        u.currencyCode,
-                        u.fxAmount if u.HasField("fxAmount") else None,
-                        u.fxCurrencyCode if u.HasField("fxCurrencyCode") else None,
-                        fx_rate,  # Kann nun None sein
+                        portfolio_uuid,
+                        security_uuid,
+                        current_holdings_val,
+                        expected_values[1],
+                        expected_values[2],
                     ),
                 )
-                if u.HasField("fxAmount"):
-                    stats["fx_transactions"] += 1
+                portfolio_sec_processed += 1
+                self.changed_portfolios.add(portfolio_uuid)
 
-        conn.commit()  # Beende die Transaktion, um die Sperre aufzuheben
-        # _LOGGER.debug(
-        #     "sync_from_pclient: Transaktionen, Wertpapiere und "  # noqa: ERA001
-        #     "Portfolios "  # noqa: ERA001
-        #     "in der DB bestätigt."
-        # )  # noqa: ERA001, RUF100
+        portfolio_security_keys = set(current_holdings_values.keys())
+        self.cursor.execute(
+            "SELECT portfolio_uuid, security_uuid FROM portfolio_securities"
+        )
+        existing_keys = set(self.cursor.fetchall())
+        keys_to_delete = existing_keys - portfolio_security_keys
 
-        # --- NEUE LOGIK: Befüllen der Tabelle portfolio_securities ---
-        if transaction_changes_detected or security_changes_detected:
-            _LOGGER.debug(
-                "sync_from_pclient: Berechne und synchronisiere portfolio_securities..."
-            )
-
-            # all_transactions ist bereits zuvor geladen; kein erneutes get_transactions nötig
-            current_holdings = db_calculate_current_holdings(all_transactions)
-            purchase_values = db_calculate_sec_purchase_value(all_transactions, db_path)
-
-            current_hold_pur = {}  # Dictionary für aktuelle Bestände und Kaufwerte
-
-            # Füge purchase_value zu current_holdings hinzu
-            for key, purchase_value in purchase_values.items():
-                if key in current_holdings:
-                    current_hold_pur[key] = {
-                        "current_holdings": current_holdings[key],
-                        "purchase_value": purchase_value,
-                    }
-
-            # Berechne den aktuellen Wert (current_value)
-            current_holdings_values = db_calculate_holdings_value(
-                db_path, conn, current_hold_pur
-            )
-
-            # NEU: Zähler statt Spam pro Eintrag
-            portfolio_sec_processed = 0
-
-            # Iteriere über die berechneten Werte und vergleiche mit der DB
-            for (
-                portfolio_uuid,
-                security_uuid,
-            ), data in current_holdings_values.items():
-                current_holdings = data.get("current_holdings", 0)
-                purchase_value = data.get("purchase_value", 0)
-                current_value = data.get("current_value", 0)
-
-                # Lade den aktuellen Eintrag aus der Tabelle portfolio_securities
-                cur.execute(
-                    """
-                    SELECT current_holdings, purchase_value, current_value
-                    FROM portfolio_securities
-                    WHERE portfolio_uuid = ? AND security_uuid = ?
-                """,
-                    (portfolio_uuid, security_uuid),
-                )
-                existing_entry = cur.fetchone()
-
-                # Vergleiche mit den berechneten Werten
-                if not existing_entry or existing_entry != (
-                    current_holdings,
-                    int(purchase_value * 100),
-                    int(current_value * 100),
-                ):
-                    sec_port_changes_detected = True
-
-                    # Aktualisiere oder füge den Eintrag in die Tabelle ein
-                    cur.execute(
-                        """
-                        INSERT OR REPLACE INTO portfolio_securities (
-                            portfolio_uuid,
-                            security_uuid,
-                            current_holdings,
-                            purchase_value,
-                            current_value
-                        ) VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (
-                            portfolio_uuid,
-                            security_uuid,
-                            current_holdings,
-                            int(purchase_value * 100),  # EUR -> Cent
-                            int(current_value * 100),  # EUR -> Cent
-                        ),
-                    )
-                    portfolio_sec_processed += 1  # NEU: zählen statt pro Zeile loggen
-
-                    # NEU (Requirement: Immer Positions- & Portfolio-Events bei Wertänderungen):
-                    # Auch reine Wert-/Preisänderungen ohne Positionsanzahl-Änderung sollen
-                    # ein Positions-Event auslösen → Portfolio markieren.
-                    changed_portfolios.add(portfolio_uuid)
-
-            # Entferne veraltete Einträge aus portfolio_securities
-            portfolio_security_keys = set(current_holdings_values.keys())
-            cur.execute(
-                "SELECT portfolio_uuid, security_uuid FROM portfolio_securities"
-            )
-            existing_keys = set(cur.fetchall())  # Alle vorhandenen Schlüssel
-
-            # Bestimme die veralteten Schlüssel
-            keys_to_delete = existing_keys - portfolio_security_keys
-
-            if keys_to_delete:
-                # Lösche nur die veralteten Einträge
-                cur.executemany(
-                    """
-                    DELETE FROM portfolio_securities
-                    WHERE portfolio_uuid = ? AND security_uuid = ?
-                """,
-                    keys_to_delete,
-                )
-                if cur.rowcount > 0:
-                    sec_port_changes_detected = True
-                    # Alle gelöschten Keys zu changed_portfolios hinzufügen
-                    for pk, _sk in keys_to_delete:
-                        changed_portfolios.add(pk)
-
-            # NEU: Zusammenfassendes Debug statt vieler Einzelzeilen
-            _LOGGER.debug(
-                "sync_from_pclient: portfolio_securities upsert summary: upserts=%d deletions=%d changes_flag=%s",
-                portfolio_sec_processed,
-                len(keys_to_delete),
-                sec_port_changes_detected,
-            )
-
-            conn.commit()
-        # else:  # noqa: ERA001
-        # _LOGGER.debug(
-        #     "sync_from_pclient: Keine Änderungen an "  # noqa: ERA001
-        #     "portfolio_securities erforderlich."
-        # )  # noqa: ERA001, RUF100
-
-    except Exception:
-        conn.rollback()
-        _LOGGER.exception("sync_from_pclient: Fehler während der Synchronisation")
-        account_changes_detected = False
-        transaction_changes_detected = False
-        security_changes_detected = False
-        last_file_update_change_detected = False
-        sec_port_changes_detected = False
-        raise
-
-    # Sende Updates für geänderte Tabellen
-    if hass and entry_id:
-        if account_changes_detected:
-            # Lade alle aktiven Konten aus der DB (vollständige Liste fürs Frontend)
-            cur.execute(
+        if keys_to_delete:
+            self.cursor.executemany(
                 """
-                SELECT name, currency_code, balance
-                FROM accounts
-                WHERE is_retired = 0
-                ORDER BY name
-                """
+                DELETE FROM portfolio_securities
+                WHERE portfolio_uuid = ? AND security_uuid = ?
+                """,
+                keys_to_delete,
             )
-            db_accounts = [
-                {
-                    "name": row[0],
-                    "currency_code": row[1] or "EUR",
-                    "raw_balance": row[2],  # Cent in Original-Währung
-                }
-                for row in cur.fetchall()
-            ]
+            if self.cursor.rowcount > 0:
+                self.changes.portfolio_securities = True
+                for portfolio_uuid, _security_uuid in keys_to_delete:
+                    self.changed_portfolios.add(portfolio_uuid)
 
-            # Bestimme benötigte Fremdwährungen
-            fx_currencies = {
-                acc["currency_code"]
-                for acc in db_accounts
-                if acc["currency_code"] and acc["currency_code"] != "EUR"
+        _LOGGER.debug(
+            "sync_from_pclient: portfolio_securities upsert summary: "
+            "upserts=%d deletions=%d changes_flag=%s",
+            portfolio_sec_processed,
+            len(keys_to_delete),
+            self.changes.portfolio_securities,
+        )
+        self.conn.commit()
+
+    # Event Versand ------------------------------------------------------
+
+    def _emit_updates(self) -> None:
+        if not (self.hass and self.entry_id):
+            self._log_missing_dispatch()
+            return
+
+        self._emit_account_updates()
+        self._emit_transaction_updates()
+        self._emit_last_file_update()
+        self._emit_portfolio_updates()
+
+    def _emit_account_updates(self) -> None:
+        if not self.changes.accounts or self.cursor is None:
+            return
+        self.cursor.execute(
+            """
+            SELECT name, currency_code, balance
+            FROM accounts
+            WHERE is_retired = 0
+            ORDER BY name
+            """
+        )
+        db_accounts = [
+            {
+                "name": row[0],
+                "currency_code": row[1] or "EUR",
+                "raw_balance": row[2],
             }
+            for row in self.cursor.fetchall()
+        ]
 
-            fx_rates = {}
-            if fx_currencies:
-                try:
-                    today = datetime.now()
-                    ensure_exchange_rates_for_dates_sync(
-                        [today], fx_currencies, db_path
-                    )
-                    fx_rates = load_latest_rates_sync(today, db_path)
-                except Exception:
-                    _LOGGER.exception(
-                        "FX: Fehler beim Laden der Wechselkurse – Fremdwährungskonten werden mit EUR=0 gesendet."
-                    )
+        fx_currencies = {
+            account["currency_code"]
+            for account in db_accounts
+            if account["currency_code"] and account["currency_code"] != "EUR"
+        }
 
-            # Transformiere Accounts: orig_balance (Original), balance (EUR)
-            updated_accounts = []
-            for acc in db_accounts:
-                currency = acc["currency_code"]
-                orig_balance = acc["raw_balance"] / 100.0  # Cent -> Original-Betrag
-                if currency != "EUR":
-                    rate = fx_rates.get(currency)
-                    if rate:
-                        eur_balance = orig_balance / rate
-                    else:
-                        eur_balance = 0.0
-                        _LOGGER.warning(
-                            "FX: Kein Kurs für %s – setze EUR-Wert=0", currency
-                        )
+        fx_rates: dict[str, float] = {}
+        if fx_currencies:
+            try:
+                today = datetime.now(tz=ZoneInfo("UTC"))
+                ensure_exchange_rates_for_dates_sync(
+                    [today],
+                    fx_currencies,
+                    self.db_path,
+                )
+                fx_rates = load_latest_rates_sync(today, self.db_path)
+            except Exception:
+                _LOGGER.exception(
+                    "FX: Fehler beim Laden der Wechselkurse - "
+                    "Fremdwährungskonten werden mit EUR=0 gesendet."
+                )
+
+        updated_accounts: list[dict[str, Any]] = []
+        for account in db_accounts:
+            currency = account["currency_code"]
+            orig_balance = account["raw_balance"] / 100.0
+            if currency != "EUR":
+                rate = fx_rates.get(currency)
+                if rate:
+                    eur_balance = orig_balance / rate
                 else:
-                    eur_balance = orig_balance
+                    eur_balance = 0.0
+                    _LOGGER.warning(
+                        "FX: Kein Kurs für %s - setze EUR-Wert=0",
+                        currency,
+                    )
+            else:
+                eur_balance = orig_balance
 
-                updated_accounts.append(
-                    {
-                        "name": acc["name"],
-                        "currency_code": currency,
-                        "orig_balance": round(orig_balance, 2),
-                        "balance": round(eur_balance, 2),  # EUR-Wert für Frontend
-                    }
-                )
-
-            if updated_accounts:
-                _push_update(hass, entry_id, "accounts", updated_accounts)
-                _LOGGER.debug(
-                    "sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s",
-                    updated_accounts,
-                )
-
-        if last_file_update_change_detected:
-            # Datum korrekt formatieren
-            formatted_last_file_update = (
-                datetime.strptime(last_file_update, "%Y-%m-%dT%H:%M:%S")
-                .replace(tzinfo=ZoneInfo("Europe/Berlin"))
-                .strftime("%d.%m.%Y, %H:%M")
+            updated_accounts.append(
+                {
+                    "name": account["name"],
+                    "currency_code": currency,
+                    "orig_balance": round(orig_balance, 2),
+                    "balance": round(eur_balance, 2),
+                }
             )
-            _push_update(hass, entry_id, "last_file_update", formatted_last_file_update)
+
+        if updated_accounts:
+            _push_update(self.hass, self.entry_id, "accounts", updated_accounts)
+            _LOGGER.debug(
+                "sync_from_pclient: 📡 Kontodaten-Update-Event gesendet: %s",
+                updated_accounts,
+            )
+        else:
+            _LOGGER.debug(
+                "sync_from_pclient: Keine aktualisierten Konten zum Senden vorhanden."
+            )
+
+    def _emit_transaction_updates(self) -> None:
+        if not self.changes.transactions or self.cursor is None:
+            return
+        try:
+            self.cursor.execute(
+                """
+                SELECT uuid, type, account, portfolio, other_account, other_portfolio,
+                       other_uuid, other_updated_at, date, currency_code, amount,
+                       shares, note, security, source, updated_at
+                FROM transactions
+                ORDER BY date DESC, updated_at DESC
+                LIMIT 50
+                """
+            )
+            latest_transactions = [
+                {
+                    "uuid": row[0],
+                    "type": row[1],
+                    "account": row[2],
+                    "portfolio": row[3],
+                    "other_account": row[4],
+                    "other_portfolio": row[5],
+                    "other_uuid": row[6],
+                    "other_updated_at": row[7],
+                    "date": row[8],
+                    "currency_code": row[9],
+                    "amount": row[10],
+                    "shares": row[11],
+                    "note": row[12],
+                    "security": row[13],
+                    "source": row[14],
+                    "updated_at": row[15],
+                }
+                for row in self.cursor.fetchall()
+            ]
+            _push_update(
+                self.hass,
+                self.entry_id,
+                "transactions",
+                {
+                    "updated": latest_transactions,
+                    "changed_ids": self.updated_data["transactions"],
+                },
+            )
+            _LOGGER.debug(
+                "sync_from_pclient: 📡 Transaktions-Update-Event gesendet (%d IDs)",
+                len(self.updated_data["transactions"]),
+            )
+        except Exception:
+            _LOGGER.exception(
+                "sync_from_pclient: Fehler beim Senden des transactions Events"
+            )
+
+    def _emit_last_file_update(self) -> None:
+        if not self.changes.last_file_update or not self.last_file_update:
+            return
+        try:
+            formatted_last_file_update = (
+                datetime.strptime(self.last_file_update, "%Y-%m-%dT%H:%M:%S")
+                .replace(tzinfo=ZoneInfo("Europe/Berlin"))
+                .isoformat()
+            )
+            _push_update(
+                self.hass,
+                self.entry_id,
+                "last_file_update",
+                formatted_last_file_update,
+            )
             _LOGGER.debug(
                 "sync_from_pclient: 📡 last_file_update-Event gesendet: %s",
                 formatted_last_file_update,
             )
+        except Exception:
+            _LOGGER.exception(
+                "sync_from_pclient: Fehler beim Formatieren von last_file_update"
+            )
 
-            # NEU (Single Source of Truth via fetch_live_portfolios):
-            portfolio_values_payload: list[dict] = []
-            portfolio_values_sent = False
-            try:
-                live_portfolios = fetch_live_portfolios(db_path)
-                portfolio_values_payload = [
-                    {
-                        "uuid": p.get("uuid"),
-                        "name": p.get("name", "Unbekannt"),
-                        "position_count": int(p.get("position_count") or 0),
-                        "current_value": round(float(p.get("current_value") or 0.0), 2),
-                        "purchase_sum": round(float(p.get("purchase_sum") or 0.0), 2),
-                    }
-                    for p in live_portfolios
-                    if p and p.get("uuid")
-                ]
-            except Exception:
-                _LOGGER.exception(
-                    "Fehler beim Aggregieren der Portfolio-Werte via fetch_live_portfolios"
+    def _emit_portfolio_updates(self) -> None:
+        if not (self.changes.portfolios or self.changes.portfolio_securities):
+            return
+        portfolio_values: list[dict[str, Any]] = []
+        try:
+            portfolio_values = fetch_live_portfolios(self.conn, self.db_path)
+            if not portfolio_values:
+                _LOGGER.debug(
+                    "sync_from_pclient: Keine Portfolio-Werte für Event vorhanden "
+                    "(fetch_live_portfolios lieferte keine Daten)"
                 )
-
-            if portfolio_values_payload:
+            else:
                 _push_update(
-                    hass,
-                    entry_id,
+                    self.hass,
+                    self.entry_id,
                     "portfolio_values",
-                    portfolio_values_payload,
+                    {
+                        "portfolios": portfolio_values,
+                        "changed_portfolios": list(self.changed_portfolios),
+                    },
                 )
-                portfolio_values_sent = True
-            else:
                 _LOGGER.debug(
-                    "sync_from_pclient: Keine Portfolio-Werte für Event vorhanden (fetch_live_portfolios lieferte keine Daten)"
+                    "sync_from_pclient: 📡 portfolio_values-Event gesendet "
+                    "(%d Portfolios)",
+                    len(portfolio_values),
+                )
+        except Exception:
+            _LOGGER.exception(
+                "sync_from_pclient: Fehler beim Senden des portfolio_values Events"
+            )
+
+        try:
+            if not portfolio_values:
+                _LOGGER.debug(
+                    "sync_from_pclient: Überspringe portfolio_positions Push - "
+                    "portfolio_values Event wurde nicht gesendet."
+                )
+                return
+
+            if not self.changed_portfolios:
+                _LOGGER.debug(
+                    "sync_from_pclient: Keine gültigen changed_portfolios -> "
+                    "Überspringe portfolio_positions Push."
+                )
+                return
+
+            valid_changed = {
+                portfolio_uuid
+                for portfolio_uuid in self.changed_portfolios
+                if portfolio_uuid and isinstance(portfolio_uuid, str)
+            }
+            if not valid_changed:
+                _LOGGER.debug(
+                    "sync_from_pclient: changed_portfolios vorhanden (%d), aber "
+                    "keine gültigen UUIDs nach Filter: %s",
+                    len(self.changed_portfolios),
+                    list(self.changed_portfolios)[:10],
+                )
+                return
+
+            _LOGGER.debug(
+                "sync_from_pclient: Kandidaten für portfolio_positions Push "
+                "(valid_changed=%d): %s",
+                len(valid_changed),
+                list(valid_changed)[:10],
+            )
+
+            positions_map = fetch_positions_for_portfolios(self.db_path, valid_changed)
+            empty_lists = [
+                portfolio_uuid
+                for portfolio_uuid, positions in positions_map.items()
+                if not positions
+            ]
+            if empty_lists:
+                _LOGGER.debug(
+                    "sync_from_pclient: %d Portfolios ohne Positionen "
+                    "(werden trotzdem gesendet): %s",
+                    len(empty_lists),
+                    empty_lists[:10],
                 )
 
-            # Neu: Positionsdaten-Push für geänderte Portfolios (granular)
-            if not portfolio_values_sent:
-                _LOGGER.debug(
-                    "sync_from_pclient: Überspringe portfolio_positions Push – portfolio_values Event wurde nicht gesendet."
-                )
-            else:
+            for portfolio_uuid, positions in positions_map.items():
                 try:
-                    # changed_portfolios wurde bereits befüllt (nur UUIDs behalten)
-                    valid_changed = {
-                        pid
-                        for pid in changed_portfolios
-                        if isinstance(pid, str) and len(pid) >= 8 and "-" in pid
-                    }
-
-                    # Schritt 23: Erweiterte Debug-Logs zur Nachverfolgung
-                    if changed_portfolios and not valid_changed:
-                        _LOGGER.debug(
-                            "sync_from_pclient: changed_portfolios vorhanden (%d), aber keine gültigen UUIDs nach Filter: %s",
-                            len(changed_portfolios),
-                            list(changed_portfolios)[:10],
-                        )
-                    else:
-                        _LOGGER.debug(
-                            "sync_from_pclient: Kandidaten für portfolio_positions Push (valid_changed=%d): %s",
-                            len(valid_changed),
-                            list(valid_changed)[:10],
-                        )
-
-                    if not valid_changed:
-                        _LOGGER.debug(
-                            "sync_from_pclient: Keine gültigen changed_portfolios → Überspringe portfolio_positions Push."
-                        )
-                    else:
-                        # Lädt alle Positionslisten (1 DB Query pro Depot – akzeptabel bei kleiner Anzahl)
-                        positions_map = fetch_positions_for_portfolios(
-                            db_path, valid_changed
-                        )
-
-                        # Schritt 24: Verbesserte Fehler-/Leere-Diagnostik vor Versand
-                        empty_lists = [
-                            pid for pid, pos in positions_map.items() if not pos
-                        ]
-                        if empty_lists:
-                            _LOGGER.debug(
-                                "sync_from_pclient: %d Portfolios ohne Positionen (werden trotzdem gesendet): %s",
-                                len(empty_lists),
-                                empty_lists[:10],
-                            )
-
-                        # Einzelnes Event pro Depot (bewusst granular für gezieltes UI-Update ohne großen Payload)
-                        for pid, positions in positions_map.items():
-                            try:
-                                _push_update(
-                                    hass,
-                                    entry_id,
-                                    "portfolio_positions",
-                                    {
-                                        "portfolio_uuid": pid,
-                                        "positions": positions,
-                                    },
-                                )
-                                _LOGGER.debug(
-                                    "sync_from_pclient: 📡 portfolio_positions-Event für %s gesendet (%d Positionen)",
-                                    pid,
-                                    len(positions),
-                                )
-                            except Exception:
-                                _LOGGER.exception(
-                                    "sync_from_pclient: Fehler beim Senden des portfolio_positions Events für %s",
-                                    pid,
-                                )
+                    _push_update(
+                        self.hass,
+                        self.entry_id,
+                        "portfolio_positions",
+                        {
+                            "portfolio_uuid": portfolio_uuid,
+                            "positions": positions,
+                        },
+                    )
+                    _LOGGER.debug(
+                        "sync_from_pclient: 📡 portfolio_positions-Event für %s "
+                        "gesendet (%d Positionen)",
+                        portfolio_uuid,
+                        len(positions),
+                    )
                 except Exception:
                     _LOGGER.exception(
-                        "sync_from_pclient: Allgemeiner Fehler beim Push der portfolio_positions Events"
+                        "sync_from_pclient: Fehler beim Senden des "
+                        "portfolio_positions Events für %s",
+                        portfolio_uuid,
                     )
-    else:
-        # Aggregierten Änderungsstatus berechnen (nur für Debug)
+        except Exception:
+            _LOGGER.exception(
+                "sync_from_pclient: Allgemeiner Fehler beim Push der "
+                "portfolio_positions Events"
+            )
+
+    # Logging ------------------------------------------------------------
+
+    def _log_missing_dispatch(self) -> None:
         changes_detected = any(
-            [
-                account_changes_detected,
-                transaction_changes_detected,
-                security_changes_detected,
-                portfolio_changes_detected,
-                last_file_update_change_detected,
-                sec_port_changes_detected,
-            ]
+            (
+                self.changes.accounts,
+                self.changes.transactions,
+                self.changes.securities,
+                self.changes.portfolios,
+                self.changes.last_file_update,
+                self.changes.portfolio_securities,
+            )
         )
         _LOGGER.error(
             "❌ sync_from_pclient: Kein Event gesendet. Gründe:\n"
             "  - changes_detected: %s\n"
             "  - hass vorhanden: %s\n"
             "  - entry_id vorhanden: %s\n"
-            "  - updated_data(accounts=%d, securities=%d, portfolios=%d, transactions=%d)",
+            "  - updated_data(accounts=%d, securities=%d, portfolios=%d, "
+            "transactions=%d)",
             changes_detected,
-            bool(hass),
-            bool(entry_id),
-            len(updated_data["accounts"]),
-            len(updated_data["securities"]),
-            len(updated_data["portfolios"]),
-            len(updated_data["transactions"]),
+            bool(self.hass),
+            bool(self.entry_id),
+            len(self.updated_data["accounts"]),
+            len(self.updated_data["securities"]),
+            len(self.updated_data["portfolios"]),
+            len(self.updated_data["transactions"]),
         )
 
-    # Schließe den Cursor und logge den Abschluss der Synchronisation
-    cur.close()
-    _LOGGER.info(
-        "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, "
-        "%d Transaktionen (%d mit Fremdwährung)",
-        stats["securities"],
-        stats["transactions"],
-        stats["fx_transactions"],
-    )
+    def _log_summary(self) -> None:
+        _LOGGER.info(
+            "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, "
+            "%d Transaktionen (%d mit Fremdwährung)",
+            self.stats.securities,
+            self.stats.transactions,
+            self.stats.fx_transactions,
+        )
+
+    def _reset_change_flags(self) -> None:
+        self.changes = SyncChanges()
+        self.updated_data = {
+            "accounts": [],
+            "securities": [],
+            "portfolios": [],
+            "transactions": [],
+        }
+        self.changed_portfolios.clear()
 
 
 def fetch_positions_for_portfolios(
@@ -931,11 +1059,13 @@ def fetch_positions_for_portfolios(
 ) -> dict[str, list[dict]]:
     """
     Hilfsfunktion: Lädt Positionslisten für mehrere Portfolios.
+
     Gibt Dict { portfolio_uuid: [ {position...}, ... ] } zurück.
 
     Hinweise:
-      - Reihenfolge der Positionen ist jetzt alphabetisch nach Name (ORDER BY s.name ASC),
-        siehe SQL in db_access.get_portfolio_positions (früher: aktueller Wert DESC).
+      - Reihenfolge der Positionen ist jetzt alphabetisch nach Name
+        (ORDER BY s.name ASC), siehe SQL in db_access.get_portfolio_positions
+        (früher: aktueller Wert DESC).
       - Werte sind bereits in EUR normalisiert und auf 2 Nachkommastellen gerundet.
     """
     result: dict[str, list[dict]] = {}
@@ -944,13 +1074,15 @@ def fetch_positions_for_portfolios(
             result[pid] = get_portfolio_positions(db_path, pid)
         except Exception:
             _LOGGER.exception(
-                "fetch_positions_for_portfolios: Fehler beim Laden der Positionen für %s",
+                "fetch_positions_for_portfolios: Fehler beim Laden der "
+                "Positionen für %s",
                 pid,
             )
             result[pid] = []
     return result
 
 
-# (Sicherstellen, dass am Modulende kein ausführbarer Code steht – nur Funktions-/Konstantendefinitionen)
+# (Sicherstellen, dass am Modulende kein ausführbarer Code steht - nur
+# Funktions- oder Konstantendefinitionen)
 # Entferne ggf. versehentlich hinzugefügte Debug- oder Testaufrufe wie:
 # sync_from_pclient(...), print(...), o.Ä.
