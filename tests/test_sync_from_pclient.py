@@ -11,7 +11,11 @@ import pytest
 
 from custom_components.pp_reader.data import db_schema
 from custom_components.pp_reader.data import sync_from_pclient as sync_module
-from custom_components.pp_reader.data.sync_from_pclient import _SyncRunner, maybe_field
+from custom_components.pp_reader.data.sync_from_pclient import (
+    _compact_event_data,
+    _SyncRunner,
+    maybe_field,
+)
 
 
 class _NoPresenceProto:
@@ -113,3 +117,94 @@ def test_sync_portfolios_commits_changes(tmp_path: Path) -> None:
         sync_module._TIMESTAMP_IMPORT_ERROR = original_error
         runner.cursor.close()
         conn.close()
+
+
+def test_compact_event_data_trims_portfolio_values_list() -> None:
+    """portfolio_values payloads should lose unused keys and get rounded values."""
+    raw = [
+        {
+            "uuid": "pf-1",
+            "name": "Long Portfolio Name",
+            "count": "3",
+            "value": "1234.567",
+            "purchase_sum": "1100.0",
+            "ignored": True,
+        }
+    ]
+
+    compacted = _compact_event_data("portfolio_values", raw)
+
+    assert isinstance(compacted, list)
+    assert compacted == [
+        {
+            "uuid": "pf-1",
+            "position_count": 3,
+            "current_value": 1234.57,
+            "purchase_sum": 1100.0,
+        }
+    ]
+
+
+def test_compact_event_data_trims_portfolio_values_mapping() -> None:
+    """Mapping payloads should be normalised and drop auxiliary keys."""
+    raw = {
+        "portfolios": [
+            {
+                "uuid": "pf-2",
+                "position_count": 1,
+                "current_value": 200.987,
+                "purchase_sum": 199.0,
+                "name": "Unused",
+            }
+        ],
+        "changed_portfolios": ["pf-2", "pf-3"],
+        "error": None,
+    }
+
+    compacted = _compact_event_data("portfolio_values", raw)
+
+    assert set(compacted.keys()) == {"portfolios", "error"}
+    assert compacted["portfolios"] == [
+        {
+            "uuid": "pf-2",
+            "position_count": 1,
+            "current_value": 200.99,
+            "purchase_sum": 199.0,
+        }
+    ]
+
+
+def test_compact_event_data_trims_portfolio_positions() -> None:
+    """Position payloads should retain essential fields and rounding."""
+    raw = {
+        "portfolio_uuid": "pf-3",
+        "positions": [
+            {
+                "security_uuid": "sec-1",
+                "name": "Security A",
+                "current_holdings": 5,
+                "purchase_value": 123.456,
+                "current_value": 150.987,
+                "gain_abs": 27.531,
+                "gain_pct": 22.1234,
+                "debug": "ignore",
+            },
+            "not-a-mapping",
+        ],
+        "error": None,
+    }
+
+    compacted = _compact_event_data("portfolio_positions", raw)
+
+    assert compacted["portfolio_uuid"] == "pf-3"
+    assert compacted["positions"] == [
+        {
+            "security_uuid": "sec-1",
+            "name": "Security A",
+            "current_holdings": 5,
+            "purchase_value": 123.46,
+            "current_value": 150.99,
+            "gain_abs": 27.53,
+            "gain_pct": 22.12,
+        }
+    ]
