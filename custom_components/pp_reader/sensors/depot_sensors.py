@@ -1,16 +1,21 @@
+"""Sensor entities exposing account and depot metrics."""
+
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
+from custom_components.pp_reader.data.coordinator import PPReaderCoordinator
+
 _LOGGER = logging.getLogger(__name__)
 
 
-class PortfolioAccountSensor(CoordinatorEntity, SensorEntity):
+class PortfolioAccountSensor(CoordinatorEntity[PPReaderCoordinator], SensorEntity):
     """Sensor für den Kontostand eines aktiven Kontos."""
 
-    def __init__(self, coordinator, account_uuid: str):
+    def __init__(self, coordinator: PPReaderCoordinator, account_uuid: str) -> None:
         """Initialisiere den Sensor."""
         super().__init__(coordinator)
         self.coordinator = coordinator
@@ -28,14 +33,14 @@ class PortfolioAccountSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
-    def native_value(self):
+    def native_value(self) -> float:
         """Gibt den aktuellen Kontostand zurück."""
         account_data = self.coordinator.data["accounts"].get(self._account_uuid, {})
         balance = account_data.get("balance", 0.0)
         return round(balance, 2)
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Zusätzliche Attribute des Sensors."""
         return {
             "letzte_aktualisierung": self.coordinator.data.get(
@@ -45,10 +50,10 @@ class PortfolioAccountSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class PortfolioDepotSensor(CoordinatorEntity, SensorEntity):
+class PortfolioDepotSensor(CoordinatorEntity[PPReaderCoordinator], SensorEntity):
     """Sensor für den aktuellen Depotwert eines aktiven Depots."""
 
-    def __init__(self, coordinator, portfolio_uuid: str):
+    def __init__(self, coordinator: PPReaderCoordinator, portfolio_uuid: str) -> None:
         """Initialisiere den Sensor."""
         super().__init__(coordinator)
         self.coordinator = coordinator
@@ -68,7 +73,7 @@ class PortfolioDepotSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = "measurement"  # Zustandsklasse hinzufügen
 
     @property
-    def native_value(self):
+    def native_value(self) -> float:
         """Gibt den aktuellen Depotwert zurück."""
         portfolio_data = self.coordinator.data["portfolios"].get(
             self._portfolio_uuid, {}
@@ -77,7 +82,7 @@ class PortfolioDepotSensor(CoordinatorEntity, SensorEntity):
         return round(value, 2)
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Zusätzliche Attribute des Sensors."""
         portfolio_data = self.coordinator.data["portfolios"].get(
             self._portfolio_uuid, {}
