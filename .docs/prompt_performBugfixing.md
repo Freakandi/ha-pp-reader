@@ -22,6 +22,7 @@ Instructions:
 6. Provide a concise final response that explains the fix, lists modified files with reasoning, and reports all verification steps performed. Call out any assumptions, risks, or follow-up tasks.
 
 Constraints:
+- New and changed code needs to be ruff-compliant
 - Preserve existing behaviour and APIs unless modification is essential to the fix.
 - Keep edits contained to relevant files; prefer targeted, well-documented changes.
 - Avoid unrelated refactors or clean-up unless required to address the bug.
