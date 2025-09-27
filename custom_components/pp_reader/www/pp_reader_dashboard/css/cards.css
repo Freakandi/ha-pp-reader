@@ -178,21 +178,6 @@ tbody tr:hover {
   /* HA-Variable für Akzente */
 }
 
-/* Visuelles Feedback bei Live-Updates */
-.expandable-portfolio-table tbody tr td {
-  transition: background-color 0.3s ease;
-}
-
-.expandable-portfolio-table tbody tr.flash-update td {
-  background-color: var(--pp-reader-flash-color, rgba(3, 169, 244, 0.22));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .expandable-portfolio-table tbody tr td {
-    transition: none;
-  }
-}
-
 .footer-row td {
   font-weight: 700;
   background: var(--primary-background-color, #f9fafb);

@@ -291,35 +291,23 @@ class PPReaderDashboard extends HTMLElement {
       return;
     }
 
-    // Korrektur: Richtiger Event-Typ ist 'panels_updated' (Wert von HA CONST EVENT_PANELS_UPDATED)
-    // Zur Sicherheit auch Legacy-Fehlwert registrieren (wird einfach nie feuern)
-    const eventTypes = ["panels_updated"]; // früher fälschlich: "EVENT_PANELS_UPDATED"
-
-    const subs = [];
-    Promise.all(
-      eventTypes.map(et =>
-        conn
-          .subscribeEvents(this._handleBusEvent.bind(this), et)
-          .then(unsub => {
-            if (typeof unsub === "function") {
-              subs.push(unsub);
-              console.debug("PPReaderDashboard: subscribed to", et);
-            } else {
-              console.error("PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für", et, unsub);
-            }
-          })
-          .catch(err => {
-            console.error("PPReaderDashboard: Fehler bei subscribeEvents für", et, err);
-          })
+    // subscribeEvents liefert ein Promise<unsubscribe>
+    conn
+      .subscribeEvents(
+        this._handleBusEvent.bind(this),
+        "EVENT_PANELS_UPDATED"
       )
-    ).then(() => {
-      this._unsubscribeEvents = () => {
-        subs.forEach(f => {
-          try { f(); } catch (e) { /* noop */ }
-        });
-        console.debug("PPReaderDashboard: alle Event-Subscriptions entfernt");
-      };
-    });
+      .then(unsub => {
+        if (typeof unsub === "function") {
+          this._unsubscribeEvents = unsub;
+          // console.debug("PPReaderDashboard: Event-Listener registriert, unsubscribe ist", unsub);
+        } else {
+          console.error("PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func:", unsub);
+        }
+      })
+      .catch(err => {
+        console.error("PPReaderDashboard: Fehler bei subscribeEvents:", err);
+      });
   }
 
   _removeEventListeners() {

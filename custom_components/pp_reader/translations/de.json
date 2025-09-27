@@ -15,20 +15,6 @@
         }
       }
     },
-    "error": {},
-    "price_update_interval_seconds": "Preisaktualisierungsintervall (Sekunden)",
-    "enable_price_debug": "Preis-Debug-Logging aktivieren"
-  },
-  "help": {
-    "auto_symbols": "Symbole werden automatisch aus aktiven (nicht stillgelegten) Wertpapieren ermittelt."
-  },
-  "log": {
-    "prices_cycle": "Preiszylus: symbole={symbols} batches={batches} zurück={returned} geändert={changed} fehler={errors} dauer={duration}ms übersprungen={skipped}"
-  },
-  "warn": {
-    "no_quotes_received": "Keine Kurse vom Provider empfangen",
-    "batch_failed": "Batch-Abruf fehlgeschlagen",
-    "currency_drift": "Währungsabweichung erkannt: gespeichert={stored} quote={quote}",
-    "repeated_batch_failures": "Wiederholte Batch-Fehlschläge – weiterhin keine gültigen Kurse"
+    "error": {}
   }
 }

@@ -44,5 +44,4 @@
     },
     "cursorpyright.analysis.autoImportCompletions": true,
     "cursorpyright.analysis.typeCheckingMode": "basic",
-    "chatgpt.openOnStartup": true,
 }

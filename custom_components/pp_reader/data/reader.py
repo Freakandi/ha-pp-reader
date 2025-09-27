@@ -11,13 +11,12 @@ from pathlib import Path
 
 import google.protobuf.message
 
-from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+from ..name.abuchen.portfolio import client_pb2
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.debug(dir(client_pb2))
 
-
-def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignore  # noqa: PGH003
+def parse_data_portfolio(path: str) -> client_pb2.PClient | None: # type: ignore  # noqa: PGH003
     """
     Entpackt eine .portfolio-Datei und extrahiert das Client-Objekt.
 
@@ -45,13 +44,10 @@ def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignor
 
         # Direktes Parsen als PClient
         try:
-            client = client_pb2.PClient()  # type: ignore  # noqa: PGH003
+            client = client_pb2.PClient() # type: ignore  # noqa: PGH003
             client.ParseFromString(raw_data)
-            _LOGGER.info(
-                "✅ Parsen erfolgreich - Version %s mit %d Wertpapieren",
-                client.version,
-                len(client.securities),
-            )
+            _LOGGER.info("✅ Parsen erfolgreich - Version %s mit %d Wertpapieren",
+                         client.version, len(client.securities))
         except google.protobuf.message.DecodeError:
             _LOGGER.exception("❌ Fehler beim Parsen der Datei")
         else:
@@ -63,3 +59,4 @@ def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignor
         _LOGGER.exception("❌ Unerwarteter Fehler beim Parsen")
 
     return None
+
