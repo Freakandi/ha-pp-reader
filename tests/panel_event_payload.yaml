@@ -8,12 +8,10 @@ entry_id: 01JXT49AXKDAX0811MTMJXHG5G
 data_type: portfolio_values
 data:
   - uuid: 2cff58d9-ea39-4bb3-a6bb-3b170e4237ff
-    name: S-Broker
     position_count: 45
     current_value: 50000.00
     purchase_sum: 40000.00
   - uuid: f9996e0d-743d-417f-b0f2-150dd68df646
-    name: IBKR Portfolio
     position_count: 2
     current_value: 1000.00
     purchase_sum: 500.00
