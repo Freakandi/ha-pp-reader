@@ -23,7 +23,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Gesäuberte Preislisten gesammelt per `executemany` mit `INSERT OR REPLACE` einspielen, damit große Dateien performant verarbeitet werden.
-   d) [ ] Future-Dates und Inkonsistenzen bereinigen
+   d) [x] Future-Dates und Inkonsistenzen bereinigen
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Datensätze mit Datum > heutiger Tag oder außerhalb des importierten Bereichs verwerfen bzw. protokollieren.

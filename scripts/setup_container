@@ -23,6 +23,7 @@ source .venv/bin/activate
 
 pip install --upgrade pip
 pip install --requirement requirements.txt
+pip install --requirement requirements-dev.txt
 
 if [ ! -d "config" ]; then
     mkdir -p "config"
