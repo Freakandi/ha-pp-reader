@@ -47,7 +47,7 @@
       - Ziel: Einheitliches Logging bei SQLite-Fehlern, damit Tests und Nutzer Fehlerursachen nachvollziehen können.
 
 4. Feature-Flag & WebSocket-Schnittstelle vorbereiten
-   a) [ ] Feature-Flag-Helfer anlegen
+   a) [x] Feature-Flag-Helfer anlegen
       - Datei: `custom_components/pp_reader/feature_flags.py` (neu)
       - Abschnitt/Funktion: `is_enabled(name: str, hass: HomeAssistant)` bzw. Getter/Registry
       - Ziel: Zentrales Flag `pp_reader_history` verwalten (Konfigurationsquelle: `config_entry.options` oder `hass.data`), Default = `False`.
