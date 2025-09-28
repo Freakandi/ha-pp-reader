@@ -59,7 +59,7 @@
       - Datei: `custom_components/pp_reader/__init__.py`
       - Abschnitt/Funktion: `async_setup_entry`
       - Ziel: Optionen/Defaultwerte für `pp_reader_history` setzen und interne Ablage (`hass.data[DOMAIN][entry_id]["feature_flags"]`) vorbereiten.
-   d) [ ] CLI-/Dev-Dokumentation zum Flag ergänzen
+   d) [x] CLI-/Dev-Dokumentation zum Flag ergänzen
       - Datei: `README-dev.md`
       - Abschnitt/Funktion: Neuer Unterabschnitt "Feature Flags"
       - Ziel: Schritte erläutern, wie das History-Flag aktiviert wird (z.B. via YAML/Optionsflow), bis UI-Unterstützung folgt.

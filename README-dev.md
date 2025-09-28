@@ -24,6 +24,30 @@ Additional options (Windows, devcontainers) are documented in [TESTING.md §2](T
 - **Formatting & linting:** Execute `./scripts/lint` to run `ruff format .` followed by `ruff check . --fix`.【F:AGENTS.md†L13-L14】【F:TESTING.md†L179-L189】
 - **Source layout awareness:** The integration registers a custom panel (`ppreader`) and WebSocket commands during setup; ensure changes keep the static asset paths and registration logic intact.【F:custom_components/pp_reader/__init__.py†L121-L199】
 
+## Feature flags
+
+The integration exposes internal feature toggles to stage backend features before they become generally available. Flags are normalised to lower-case strings and resolved against defaults defined in `feature_flags.py`. Currently the only flag is `pp_reader_history`, which unlocks the WebSocket endpoint returning historical close prices when enabled.【F:custom_components/pp_reader/feature_flags.py†L11-L49】【F:custom_components/pp_reader/data/websocket.py†L408-L453】
+
+### Enabling `pp_reader_history`
+
+Until the options flow surfaces a UI, set the flag through the config entry options stored in `.storage/core.config_entries`:
+
+1. Stop the local Home Assistant instance (`CTRL+C` in the terminal running `./scripts/develop`).
+2. Open `config/.storage/core.config_entries` and locate the object with `"domain": "pp_reader"`.
+3. Inside its `options` mapping add or extend the `feature_flags` section:
+
+   ```json
+   "options": {
+     "feature_flags": {
+       "pp_reader_history": true
+     }
+   }
+   ```
+
+4. Save the file and restart Home Assistant. During setup the integration normalises the options and persists them under `hass.data[DOMAIN][entry_id]["feature_flags"]`, so WebSocket calls can see the flag without further changes.【F:custom_components/pp_reader/__init__.py†L70-L112】【F:custom_components/pp_reader/feature_flags.py†L51-L101】
+
+For ad-hoc experiments you can also toggle the flag at runtime from the Home Assistant developer tools (Python console) by mutating `hass.data["pp_reader"]["<entry_id>"]["feature_flags"]["pp_reader_history"] = True`. This override is ephemeral and resets on the next reload because the config entry options remain the single source of truth.【F:custom_components/pp_reader/feature_flags.py†L51-L101】
+
 ## Testing & quality checks
 Follow the recommended pipeline before submitting a PR: lint, run targeted tests, then run the full suite with coverage and optional hassfest.【F:AGENTS.md†L13-L15】【F:TESTING.md†L20-L96】
 
