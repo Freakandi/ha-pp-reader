@@ -1,7 +1,7 @@
-# Promptvorlage: ToDo-Checkliste aus updateGoals.md ableiten
+# Promptvorlage: ToDo-Checkliste aus daily_close_storage.md ableiten
 
 **Ziel:**
-Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Migration auf ausschließlich DB-basierte Berechnungen (Entfall Override-Cache, On-Demand Aggregation im WebSocket-Handler, lazy Positionsdetails), basierend auf den Festlegungen in [.docs/daily_close_storage.md](.docs/daily_close_storage.md).
+Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Umsetzung/Implementierung der nächsten Entwicklungsziele, basierend auf den Festlegungen in [.docs/daily_close_storage.md](.docs/daily_close_storage.md).
 
 **Vorgehen:**
 1. Scanne das gesamte Dokument [.docs/daily_close_storage.md](.docs/daily_close_storage.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
