@@ -6,7 +6,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from zoneinfo import ZoneInfo
 
 try:  # pragma: no cover - dependency optional for unit tests
@@ -554,15 +554,52 @@ class _SyncRunner:
 
             if security.prices:
                 if not retired:
+                    dedup_prices: dict[int, tuple[int, Optional[int], Optional[int], Optional[int]]] = {}
                     for price in security.prices:
                         descriptor = getattr(price, "DESCRIPTOR", None)
                         fields = descriptor.fields_by_name if descriptor else {}
+
+                        date_value = getattr(price, "date", None)
+                        close_value = (
+                            getattr(price, "close", None)
+                            if (hasattr(price, "close") or "close" in fields)
+                            else None
+                        )
+                        if date_value is None:
+                            _LOGGER.warning(
+                                "sync_from_pclient: Überspringe historischen Preis ohne Datum für %s",
+                                security.uuid,
+                            )
+                            continue
+                        if close_value is None:
+                            _LOGGER.warning(
+                                "sync_from_pclient: Überspringe historischen Preis ohne Close für %s am %s",
+                                security.uuid,
+                                date_value,
+                            )
+                            continue
+
                         high = getattr(price, "high", None) if "high" in fields else None
                         low = getattr(price, "low", None) if "low" in fields else None
                         volume = (
                             getattr(price, "volume", None) if "volume" in fields else None
                         )
 
+                        if date_value in dedup_prices:
+                            _LOGGER.debug(
+                                "sync_from_pclient: Duplikater Close für %s am %s überschrieben",
+                                security.uuid,
+                                date_value,
+                            )
+                        dedup_prices[date_value] = (
+                            close_value,
+                            high,
+                            low,
+                            volume,
+                        )
+
+                    for date_value in sorted(dedup_prices):
+                        close_value, high, low, volume = dedup_prices[date_value]
                         self.cursor.execute(
                             """
                             INSERT OR REPLACE INTO historical_prices (
@@ -571,8 +608,8 @@ class _SyncRunner:
                             """,
                             (
                                 security.uuid,
-                                price.date,
-                                price.close,
+                                date_value,
+                                close_value,
                                 high,
                                 low,
                                 volume,
