@@ -18,3 +18,4 @@ This repository hosts the Home Assistant integration **Portfolio Performance Rea
 - Released versions live on `main`; ongoing integration happens on feature branches that merge through `dev`.
 - Open pull requests targeting `dev` by default. Maintainers will promote changes from `dev` to `main` when cutting a release.
 - Update documentation (README, CHANGELOG, etc.) alongside functional changes when relevant so `dev` always mirrors the intended release notes.
+- Documentation style: keep all documentation in English.

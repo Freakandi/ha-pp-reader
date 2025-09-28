@@ -245,8 +245,9 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
 `data.event_push` owns the event compaction layer shared by ingestion and pricing:
 
 - `_compact_event_data` strips unused fields from `portfolio_values` and `portfolio_positions` payloads so emitted events stay below Home Assistant’s 32 KB recorder limit.
-- `_push_update` schedules `EVENT_PANELS_UPDATED` via `call_soon_threadsafe`, guarding against missing `hass` or `entry_id` values. It warns when payloads approach or exceed the recorder threshold so developers can tune payload size before events are dropped.
+- `_push_update` schedules `EVENT_PANELS_UPDATED` via `call_soon_threadsafe`, guarding against missing `hass` or `entry_id` values. It warns when payloads approach or exceed the recorder threshold so developers can tune payload size before events are dropped and ensures every payload carries `domain`, `entry_id`, `data_type`, and compacted `data` fields for downstream filtering.【F:custom_components/pp_reader/data/event_push.py†L17-L206】
 - `data.sync_from_pclient` invokes the helper after database writes to keep dashboard clients up to date, while `prices.price_service` reuses it when price changes require incremental UI refreshes.
+- Das Frontend abonniert das Home-Assistant-Event `panels_updated`, filtert Bus-Nachrichten anhand des aktuellen `entry_id` und reiht aktualisierte Payloads in `_pendingUpdates` ein, damit Re-Renders nach Navigationswechseln alle Event-Patches erneut anwenden können.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L204-L505】
 
 ---
 
@@ -294,7 +295,7 @@ All commands default to the coordinator snapshot when live aggregation fails to 
 The custom panel lives under `www/pp_reader_dashboard`:
 
 - `panel.js` registers `<pp-reader-panel>` and boots the dashboard when the sidebar item is opened.
-- `js/dashboard.js` opens a WebSocket connection, subscribes to `EVENT_PANELS_UPDATED`, and performs DOM updates without full re-rendering. Portfolio positions are lazily requested and cached in `window.__ppReaderPortfolioPositionsCache`.
+- `js/dashboard.js` verbindet sich mit dem WebSocket, registriert `panels_updated` Listener auf der Home-Assistant-Verbindung, filtert Events anhand des Config-Entry, und führt DOM-Patches (`handleAccountUpdate`, `handlePortfolioUpdate`, `handlePortfolioPositionsUpdate`) unmittelbar aus. Zusätzlich werden Payloads geklont und in `_pendingUpdates` persistiert, sodass nach Navigationswechseln oder Re-Renders alle Eventdaten nochmals angewendet werden.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L204-L505】
 - CSS files (`base.css`, `cards.css`, `nav.css`) provide layout styling.
 
 Events emitted by `_push_update` follow the same contract as sensor snapshots, allowing the frontend to patch the DOM incrementally.
