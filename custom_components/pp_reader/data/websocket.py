@@ -22,7 +22,9 @@ from .db_access import (
     get_accounts,
     get_last_file_update,
     get_portfolio_positions,
+    iter_security_close_prices,
 )
+from ..feature_flags import is_enabled as is_feature_enabled
 
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
@@ -391,6 +393,109 @@ async def ws_get_portfolio_data(
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_security_history",
+        vol.Required("entry_id"): str,
+        vol.Required("security_uuid"): str,
+        vol.Optional("start_date"): vol.Any(None, vol.Coerce(int)),
+        vol.Optional("end_date"): vol.Any(None, vol.Coerce(int)),
+    }
+)
+@websocket_api.async_response
+async def ws_get_security_history(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return historical close prices for a security when the feature flag is enabled."""
+
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+
+    if not entry_id:
+        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
+        return
+
+    if not is_feature_enabled("pp_reader_history", hass, entry_id=entry_id):
+        connection.send_error(
+            msg_id,
+            "feature_not_enabled",
+            "Historische Kursdaten sind derzeit deaktiviert.",
+        )
+        return
+
+    domain_entries = hass.data.get(DOMAIN)
+    if not isinstance(domain_entries, dict):
+        connection.send_error(
+            msg_id,
+            "not_found",
+            "Keine pp_reader Config Entries registriert",
+        )
+        return
+
+    entry_data = domain_entries.get(entry_id)
+    if not isinstance(entry_data, dict):
+        connection.send_error(msg_id, "not_found", f"entry_id {entry_id} unknown")
+        return
+
+    db_path_raw = entry_data.get("db_path")
+    if db_path_raw is None:
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "db_path für den Config Entry fehlt",
+        )
+        return
+
+    security_uuid = msg.get("security_uuid")
+    start_date = msg.get("start_date")
+    end_date = msg.get("end_date")
+
+    def _collect_prices() -> list[tuple[int, int]]:
+        return list(
+            iter_security_close_prices(
+                db_path=Path(db_path_raw),
+                security_uuid=security_uuid,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+
+    try:
+        prices = await hass.async_add_executor_job(_collect_prices)
+    except (TypeError, ValueError) as err:
+        connection.send_error(msg_id, "invalid_format", str(err))
+        return
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Laden historischer Preise (security_uuid=%s)",
+            security_uuid,
+        )
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "Fehler beim Laden historischer Preise",
+        )
+        return
+
+    payload = [
+        {"date": date_value, "close": close_value}
+        for date_value, close_value in prices
+    ]
+
+    response: dict[str, Any] = {
+        "security_uuid": security_uuid,
+        "prices": payload,
+    }
+    if start_date is not None:
+        response["start_date"] = start_date
+    if end_date is not None:
+        response["end_date"] = end_date
+
+    connection.send_result(msg_id, response)
+
+
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen
 # oder analog zu anderen)
 @websocket_api.websocket_command(
@@ -481,3 +586,4 @@ async def ws_get_portfolio_positions(
 def async_register_commands(hass: HomeAssistant) -> None:
     """Registriert alle WebSocket-Commands dieses Modules."""
     websocket_api.async_register_command(hass, ws_get_portfolio_positions)
+    websocket_api.async_register_command(hass, ws_get_security_history)

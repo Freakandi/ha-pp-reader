@@ -51,7 +51,7 @@
       - Datei: `custom_components/pp_reader/feature_flags.py` (neu)
       - Abschnitt/Funktion: `is_enabled(name: str, hass: HomeAssistant)` bzw. Getter/Registry
       - Ziel: Zentrales Flag `pp_reader_history` verwalten (Konfigurationsquelle: `config_entry.options` oder `hass.data`), Default = `False`.
-   b) [ ] WebSocket-Schema erweitern
+   b) [x] WebSocket-Schema erweitern
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Neuer Handler `ws_get_security_history`
       - Ziel: Bei aktivem Feature-Flag Close-Serien über `iter_security_close_prices` liefern; andernfalls Fehler `feature_not_enabled` zurückgeben.
