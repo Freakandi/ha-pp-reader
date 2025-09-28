@@ -44,6 +44,8 @@ class SyncStats:
     securities: int = 0
     transactions: int = 0
     fx_transactions: int = 0
+    historical_prices_written: int = 0
+    historical_prices_skipped: int = 0
 
 
 @dataclass(slots=True)
@@ -574,6 +576,7 @@ class _SyncRunner:
                                 "sync_from_pclient: Überspringe historischen Preis ohne Datum für %s",
                                 security.uuid,
                             )
+                            self.stats.historical_prices_skipped += 1
                             continue
                         if not isinstance(date_value, int):
                             _LOGGER.warning(
@@ -581,6 +584,7 @@ class _SyncRunner:
                                 type(date_value).__name__,
                                 security.uuid,
                             )
+                            self.stats.historical_prices_skipped += 1
                             continue
                         if date_value > today_epoch_day:
                             if date_value not in skipped_future_dates:
@@ -590,6 +594,7 @@ class _SyncRunner:
                                     date_value,
                                 )
                                 skipped_future_dates.add(date_value)
+                            self.stats.historical_prices_skipped += 1
                             continue
                         if date_value < 0:
                             if date_value not in skipped_invalid_dates:
@@ -599,6 +604,7 @@ class _SyncRunner:
                                     date_value,
                                 )
                                 skipped_invalid_dates.add(date_value)
+                            self.stats.historical_prices_skipped += 1
                             continue
                         if close_value is None:
                             _LOGGER.warning(
@@ -606,6 +612,7 @@ class _SyncRunner:
                                 security.uuid,
                                 date_value,
                             )
+                            self.stats.historical_prices_skipped += 1
                             continue
 
                         high = getattr(price, "high", None) if "high" in fields else None
@@ -620,6 +627,7 @@ class _SyncRunner:
                                 security.uuid,
                                 date_value,
                             )
+                            self.stats.historical_prices_skipped += 1
                         dedup_prices[date_value] = (
                             close_value,
                             high,
@@ -662,6 +670,9 @@ class _SyncRunner:
                             """,
                             rows_to_persist,
                         )
+                    self.stats.historical_prices_written += len(rows_to_persist)
+                else:
+                    self.stats.historical_prices_skipped += len(security.prices)
 
                 latest_price = max(security.prices, key=lambda price: price.date)
                 _require_timestamp_support()
@@ -1090,10 +1101,13 @@ class _SyncRunner:
     def _log_summary(self) -> None:
         _LOGGER.info(
             "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, "
-            "%d Transaktionen (%d mit Fremdwährung)",
+            "%d Transaktionen (%d mit Fremdwährung), %d historische Close-Werte "
+            "geschrieben, %d übersprungen",
             self.stats.securities,
             self.stats.transactions,
             self.stats.fx_transactions,
+            self.stats.historical_prices_written,
+            self.stats.historical_prices_skipped,
         )
 
     def _reset_change_flags(self) -> None:
