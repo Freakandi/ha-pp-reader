@@ -6,7 +6,6 @@ import logging
 import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
-from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -24,6 +23,7 @@ from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
+from .prices import price_service as price_service_module
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -59,7 +59,7 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
-    return import_module(".prices.price_service", __name__)
+    return price_service_module
 
 
 def _get_websocket_module() -> ModuleType:
