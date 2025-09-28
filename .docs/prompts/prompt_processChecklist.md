@@ -1,21 +1,16 @@
 # Standard-Prompt zur Umsetzung der Live-Preis Integration (YahooQuery)
 
-Kopiere diesen Prompt unverändert in eine neue Chat-Nachricht, um
-(a) die Umsetzung zu starten oder
-(b) sie nach einer Unterbrechung fortzusetzen.
-
---------------------------------------------------------------------------------
-@workspace PROMPT:
+PROMPT:
 
 Arbeite als Implementierungs-Assistent für das Home Assistant Integration Projekt `pp_reader`.
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
-- .docs/updateGoals.md
-- .docs/TODO_updateGoals.md
+- .docs/daily_close_storage.md
+- .docs/TODO_daily_close_storage.md
 
 Vorgehensweise (strikt einhalten):
-1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Datei ARCHITECTURE.md).
+1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md).
 2. Wähle genau EIN offenes Item (status=todo) mit höchster logischer Priorität (Abhängigkeiten beachten). Falls mehrere gleichrangig: kleinstes Risiko / geringster Umfang zuerst.
 3. Beschreibe kurz:
    - Gewähltes Item (ID + Titel)
@@ -52,9 +47,9 @@ Regeln:
 - Bei neuen Files sofort sinnvolle Modulebene-Dokumentation hinzufügen (kurzer Header-Kommentar).
 
 Explizite Qualitätskriterien:
-- Einhaltung Zeit-/Formatangaben (z.B. Timestamp Format `YYYY-MM-DDTHH:MM:SSZ`)
-- Rounding & Skalierung unverändert (1e8 int, Python round)
-- Keine neuen Eventtypen
+- Einhaltung Zeit-/Formatangaben
+- Rounding & Skalierung unverändert
+- Jeglicher neue oder geänderte Code muss ruff-compliant sein
 - Keine Mutationen bestehender Coordinator Keys
 - Konsistente Nutzung vorhandener Logger-Namespace-Konvention: custom_components.pp_reader.[submodule]
 
@@ -63,6 +58,3 @@ Wenn dieser Prompt erneut gesendet wird:
 - Fortsetzung beim nächsten offenen Item
 
 END PROMPT
---------------------------------------------------------------------------------
-
-Hinweis: Passe diesen Prompt NICHT an – Konsistenz sichert reproduzierbare Fortsetzung.
