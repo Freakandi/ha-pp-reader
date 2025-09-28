@@ -66,4 +66,4 @@ Optionale Optimierungen (z.B. Micro-Caching für Positionsabrufe) als "Optional"
 ---
 
 **Anwendung:**
-Nutze diese Vorlage, um aus [.docs/updateGoals.md](.docs/updateGoals.md) eine vollständige, umsetzbare ToDo-Checkliste für die Migration zu erstellen.
+Nutze diese Vorlage, um aus [.docs/daily_close_storage.md](.docs/daily_close_storage.md) eine vollständige, umsetzbare ToDo-Checkliste für die Migration zu erstellen.
