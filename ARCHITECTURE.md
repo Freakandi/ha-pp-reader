@@ -3,22 +3,24 @@
 ## Table of contents
 1. [Overview](#overview)
 2. [Code structure](#code-structure)
-3. [External dependencies & services](#external-dependencies--services)
-4. [Home Assistant integration layer](#home-assistant-integration-layer)
-5. [Configuration](#configuration)
-6. [Data ingestion & persistence](#data-ingestion--persistence)
-7. [Price service](#price-service)
-8. [Foreign exchange helper](#foreign-exchange-helper)
-9. [WebSocket API & frontend](#websocket-api--frontend)
-10. [Domain model snapshot](#domain-model-snapshot)
-11. [Control flow summary](#control-flow-summary)
-12. [Error handling & observability](#error-handling--observability)
-13. [Performance & concurrency](#performance--concurrency)
-14. [Security & data handling](#security--data-handling)
-15. [Testing strategy](#testing-strategy)
-16. [Extensibility & architectural decisions](#extensibility--architectural-decisions)
-17. [Known gaps & open questions](#known-gaps--open-questions)
-18. [Glossary](#glossary)
+3. [Packaging & generated assets](#packaging--generated-assets)
+4. [External dependencies & services](#external-dependencies--services)
+5. [Home Assistant integration layer](#home-assistant-integration-layer)
+6. [Configuration](#configuration)
+7. [Data ingestion & persistence](#data-ingestion--persistence)
+8. [Event propagation](#event-propagation)
+9. [Price service](#price-service)
+10. [Foreign exchange helper](#foreign-exchange-helper)
+11. [WebSocket API & frontend](#websocket-api--frontend)
+12. [Domain model snapshot](#domain-model-snapshot)
+13. [Control flow summary](#control-flow-summary)
+14. [Error handling & observability](#error-handling--observability)
+15. [Performance & concurrency](#performance--concurrency)
+16. [Security & data handling](#security--data-handling)
+17. [Testing strategy](#testing-strategy)
+18. [Extensibility & architectural decisions](#extensibility--architectural-decisions)
+19. [Known gaps & open questions](#known-gaps--open-questions)
+20. [Glossary](#glossary)
 
 <!-- DIAGRAMS-PLACEHOLDER -->
 
@@ -27,18 +29,18 @@
 ## Overview
 The custom component `pp_reader` integrates a local Portfolio Performance (`.portfolio`) file into Home Assistant. The integration:
 
-- Parses Portfolio Performance protobuf data and mirrors it into a dedicated SQLite database that lives next to Home Assistant’s configuration.
-- Exposes account and portfolio information to Home Assistant sensors and a custom dashboard panel.
-- Schedules optional Yahoo Finance price updates via `yahooquery`, persists the last fetched quote, and triggers partial portfolio revaluation.
-- Provides an automated backup cycle and a debug service to create on-demand SQLite snapshots.
+- Parses Portfolio Performance protobuf data with the vendored schema and mirrors it into a dedicated SQLite database placed next to Home Assistant’s configuration.
+- Exposes accounts, portfolios, transactions, and derived gains to Home Assistant sensors and a custom dashboard panel.
+- Streams price updates from Yahoo Finance through `yahooquery`, persists the latest quotes, revalues affected portfolios, and emits compact Home Assistant events for live UI updates.
+- Provides automated six-hour backups plus a debug service for on-demand snapshots and integrity recovery.
 
 Key responsibilities are split across five areas:
 
-1. **Home Assistant lifecycle** – config flow, setup, and entity registration.
-2. **Data ingestion** – file parsing, diff sync to SQLite, and aggregation helpers.
-3. **Price orchestration** – background task that updates quotes and triggers recalculations.
+1. **Home Assistant lifecycle** – config flow, setup, option handling, and entity registration.
+2. **Data ingestion** – file parsing, diff sync to SQLite, runtime schema migrations, and aggregation helpers.
+3. **Price orchestration** – background task that updates quotes, tracks fetch health, and triggers recalculations.
 4. **Foreign exchange** – on-demand loading and caching of EUR exchange rates when non-EUR accounts exist.
-5. **Presentation** – WebSocket API and dashboard assets for drill-down views.
+5. **Presentation** – WebSocket API, compact event push helpers, and dashboard assets for drill-down views.
 
 ---
 
@@ -47,30 +49,38 @@ Repository folders relevant for the runtime integration:
 
 ```text
 custom_components/pp_reader/
-  __init__.py                # Integration entry points and scheduler wiring
+  __init__.py                # Integration entry points, namespace alias, scheduler wiring
   manifest.json              # Home Assistant metadata and runtime requirements
   const.py                   # Shared constants (domain, config keys)
   config_flow.py             # Config flow and options flow implementation
   sensor.py                  # Sensor platform bootstrap
   services.yaml              # Service descriptions exposed to Home Assistant
+  name/
+    __init__.py              # Namespace package for vendored Portfolio Performance schema
+    abuchen/portfolio/
+      client.proto           # Upstream schema (for reference / regeneration)
+      client_pb2.py          # Generated protobuf module consumed at runtime
+      client_pb2.pyi         # Type hints for the generated module
   currencies/
     fx.py                    # Frankfurter FX helper (EUR conversions)
   data/
     __init__.py
-    reader.py                # .portfolio parser (protobuf extraction)
-    sync_from_pclient.py     # File → SQLite diff synchronisation
-    db_schema.py             # CREATE TABLE definitions & indices
-    db_init.py               # Database bootstrap (executes ALL_SCHEMAS)
-    db_access.py             # Query helpers used by coordinator & WebSockets
-    coordinator.py           # DataUpdateCoordinator for sensor snapshots
-    websocket.py             # WebSocket commands & payload builders
     backup_db.py             # Periodic backups + service registration
+    coordinator.py           # DataUpdateCoordinator for sensor snapshots
+    db_access.py             # Query helpers used by coordinator & WebSockets
+    db_init.py               # Database bootstrap + runtime migrations
+    db_schema.py             # CREATE TABLE definitions & indices
+    event_push.py            # Event compaction + EVENT_PANELS_UPDATED helpers
+    reader.py                # .portfolio parser (protobuf extraction)
+    sync_from_pclient.py     # File → SQLite diff synchronisation + event push
+    websocket.py             # WebSocket commands & payload builders
   logic/
     accounting.py            # Account balance aggregation
     portfolio.py             # Portfolio valuation helpers
     securities.py            # Holdings aggregation utilities for prices
     validators.py            # Data validation helpers used by accounting
   prices/
+    __init__.py
     price_service.py         # Price cycle orchestration and change detection
     provider_base.py         # Provider protocol and Quote dataclass
     yahooquery_provider.py   # Yahoo Finance implementation (yahooquery)
@@ -88,6 +98,14 @@ custom_components/pp_reader/
 ```
 
 Support tooling lives outside of the integration (for example `scripts/`, `tests/`, `TESTING.md`).
+
+---
+
+## Packaging & generated assets
+
+- `custom_components.pp_reader.__init__` registers the module under the alias `pp_reader` to satisfy legacy import paths used by the data sync helpers. Any new module must work through the canonical `custom_components.pp_reader` package; only compatibility shims should use the alias.
+- The Portfolio Performance protobuf schema lives in `custom_components/pp_reader/name/abuchen/portfolio/`. `client_pb2.py` is generated from `client.proto` and ships with a matching `.pyi` stub for typing. `client_pb2.py.bak` is retained solely as an upstream backup reference and is not imported at runtime.
+- The generated protobuf module is imported directly by `data.reader` and by the sync layer. Regeneration uses `protoc` with Python codegen and must preserve the namespace hierarchy to keep imports stable.
 
 ---
 
@@ -110,21 +128,24 @@ Developer tooling includes `ruff` and scripts under `scripts/` for linting and l
 
 ## Home Assistant integration layer
 ### Manifest
-`manifest.json` declares domain `pp_reader`, version `0.11.0`, the runtime dependencies above, and marks the integration as `local_polling` with a config flow.
+`manifest.json` declares domain `pp_reader`, version `0.11.0`, the runtime dependencies above, and marks the integration as `local_polling` with a config flow. The `loggers` array aligns with the price submodules so option toggles can adjust the effective log level without touching global Home Assistant logging.
 
 ### Setup lifecycle
 
 - `async_setup` (`__init__.py`)
-  - Registers the dashboard static files under `/pp_reader_dashboard`.
+  - Registers the dashboard static files under `/pp_reader_dashboard` via `StaticPathConfig` so cache headers remain disabled for development refreshes.
   - Registers WebSocket commands from `data.websocket`.
 
 - `async_setup_entry`
   - Initializes the SQLite schema via `data.db_init.initialize_database_schema` for the configured database path.
+  - Ensures the runtime migration for price columns runs alongside schema creation.
+  - Applies the price debug logging option before creating runtime tasks.
   - Creates and stores a `PPReaderCoordinator` instance (see [Data ingestion](#data-ingestion--persistence)).
   - Forwards platforms (currently sensors only).
-  - Configures the price service state and starts the initial cycle if prices are enabled.
-  - Registers the backup system (`data.backup_db.setup_backup_system`).
-  - Registers the custom panel `<pp-reader-panel>` if it is not already active.
+  - Initializes price state (`prices.price_service.initialize_price_state`), schedules the recurring interval, and triggers the initial asynchronous cycle.
+  - Registers an options update listener that reinitializes the price cycle when options change.
+  - Registers the backup system (`data.backup_db.setup_backup_system`). The helper delays service registration until Home Assistant has fully started.
+  - Registers the custom panel `<pp-reader-panel>` with a cache-busting query string if it is not already active.
 
 - `async_unload_entry`
   - Unloads sensor entities.
@@ -145,20 +166,26 @@ For each config entry `entry_id`, `hass.data[DOMAIN][entry_id]` stores:
     "price_currency_drift_logged": set[str],
     "price_empty_symbols_logged": bool,
     "price_empty_symbols_skip_logged": bool,
+    "price_symbols": list[str] | None,
+    "price_symbol_to_uuids": dict[str, list[str]] | None,
+    "price_zero_quotes_warn_ts": float | None,
+    "price_provider_disabled": bool | None,
     "price_last_symbol_count": int,
-    "price_last_cycle_meta": dict[str, Any],
+    "price_last_cycle_meta": dict[str, Any],  # Reserved for diagnostics (currently unused)
 }
 ```
 
+Keys prefixed with `price_` are initialised lazily by `initialize_price_state` and the cycle logic. Options reload and unload cleanup routines remove every `price_*` key before rescheduling to avoid stale state.
+
 ### Config flow & options flow
 - Config flow (`config_flow.PortfolioConfigFlow`)
-  - Step `user`: validate the `.portfolio` path and optionally choose to use the default database directory (`/config/pp_reader_data/<stem>.db`).
+  - Step `user`: validate the `.portfolio` path and optionally choose to use the default database directory (`/config/pp_reader_data/<stem>.db`). Context state (`PPReaderConfigFlowContext`) persists the choice between steps.
   - Step `db_path`: allow a custom directory for the SQLite file when the default is not used.
-  - Validation relies on `data.reader.parse_data_portfolio` to ensure the file is readable.
+  - Validation relies on `data.reader.parse_data_portfolio` (protobuf parser) to ensure the file is readable before creating the entry.
 - Options flow exposes:
-  - `price_update_interval_seconds` (>=300 seconds, default 900).
-  - `enable_price_debug` to raise logger levels for the price namespace.
-  - Option changes trigger `_async_reload_entry_on_update`, rescheduling the interval and rerunning the initial cycle.
+  - `price_update_interval_seconds` (>=300 seconds, default 900). Values below the minimum fall back to the default.
+  - `enable_price_debug` toggles the effective log level for all price modules.
+  - Option changes trigger `_async_reload_entry_on_update`, which resets in-memory state, reschedules the interval, reapplies debug logging, and kicks off an immediate cycle.
 
 ### Sensor platform
 `sensor.py` instantiates coordinator-based entities:
@@ -170,7 +197,7 @@ For each config entry `entry_id`, `hass.data[DOMAIN][entry_id]` stores:
 Sensors read from the coordinator snapshot (`coordinator.data`) to remain compatible with existing Home Assistant entity contracts.
 
 ### Services
-`data.backup_db.setup_backup_system` registers `pp_reader.trigger_backup_debug`. The service runs the same backup cycle that the periodic job executes (every six hours) and logs success or failures.
+`data.backup_db.setup_backup_system` registers `pp_reader.trigger_backup_debug`. The service runs the same backup cycle that the periodic job executes (every six hours) and logs success or failures. Registration is deferred until Home Assistant has started to avoid missing the service in early boot phases.
 
 ---
 
@@ -181,7 +208,7 @@ Sensors read from the coordinator snapshot (`coordinator.data`) to remain compat
 | `file_path` | Config flow | — | Must point to an existing `.portfolio` file | Defines the data source. |
 | `db_path` | Config flow | `/config/pp_reader_data/<portfolio>.db` | Directory must exist and be writable | Defines SQLite storage location. |
 | `price_update_interval_seconds` | Options flow | 900 | Minimum 300 | Reschedules the recurring price fetch. |
-| `enable_price_debug` | Options flow | `false` | Boolean | Elevates price logger levels to DEBUG when set. |
+| `enable_price_debug` | Options flow | `false` | Boolean | Elevates price logger levels to DEBUG and is applied immediately. |
 
 No credentials are required; Yahoo Finance quotes are public and the FX helper only fetches EUR rates.
 
@@ -189,8 +216,8 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
 
 ## Data ingestion & persistence
 ### Portfolio parsing and synchronization
-- `data.reader.parse_data_portfolio` extracts `data.portfolio` from the `.portfolio` ZIP, removes the `PPPBV1` prefix, and parses it into `client_pb2.PClient`.
-- `data.sync_from_pclient.sync_from_pclient` takes the protobuf payload and applies inserts/updates/deletes across SQLite tables. The function also updates metadata such as `last_file_update`.
+- `data.reader.parse_data_portfolio` extracts `data.portfolio` from the `.portfolio` ZIP, removes the `PPPBV1` prefix, and parses it into `client_pb2.PClient` from the vendored schema package.
+- `data.sync_from_pclient.sync_from_pclient` takes the protobuf payload and applies inserts/updates/deletes across SQLite tables. The function updates metadata such as `last_file_update`, refreshes derived holdings via `logic.*`, ensures FX side effects run through the `pp_reader.currencies` alias, and triggers downstream event pushes when aggregates change.
 
 ### Coordinator (`data.coordinator.PPReaderCoordinator`)
 - Polls every minute (minute-truncated file timestamp).
@@ -202,30 +229,40 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
   - Stores a snapshot in `self.data` for sensors: `accounts`, `portfolios`, `transactions`, and `last_update` (ISO8601).
 
 ### SQLite schema & helpers
-- Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities, portfolios, transactions, transaction units, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`.
-- `db_access.py` offers strongly typed dataclasses and helper queries (e.g., `get_portfolio_positions`, `get_last_file_update`, `get_all_portfolio_securities`). Monetary values are stored as integers (cents) or scaled integers (`last_price` × 1e8) to avoid floating-point drift.
+- Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities (with `last_price_source` and `last_price_fetched_at`), portfolios, transactions, transaction units, historical prices, plans, watchlists, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`, which also performs a runtime migration to add missing price columns.
+- `db_access.py` offers strongly typed dataclasses and helper queries (e.g., `get_portfolio_positions`, `fetch_live_portfolios`, `get_last_file_update`, `get_all_portfolio_securities`). Monetary values are stored as integers (cents) or scaled integers (`last_price` × 1e8) to avoid floating-point drift.
 
 ### Backups
 `data.backup_db`:
 - Runs every six hours and on manual trigger.
 - Executes `PRAGMA integrity_check`; if the database fails the check, it tries to restore from the newest valid backup in `<db>/backups/`.
 - Applies a tiered cleanup strategy: keep seven daily and four weekly backups.
+- Registers the debug service once Home Assistant emits `homeassistant_started`, ensuring the callable is always present in automations.
+
+---
+
+## Event propagation
+`data.event_push` owns the event compaction layer shared by ingestion and pricing:
+
+- `_compact_event_data` strips unused fields from `portfolio_values` and `portfolio_positions` payloads so emitted events stay below Home Assistant’s 32 KB recorder limit.
+- `_push_update` schedules `EVENT_PANELS_UPDATED` via `call_soon_threadsafe`, guarding against missing `hass` or `entry_id` values. It warns when payloads approach or exceed the recorder threshold so developers can tune payload size before events are dropped.
+- `data.sync_from_pclient` invokes the helper after database writes to keep dashboard clients up to date, while `prices.price_service` reuses it when price changes require incremental UI refreshes.
 
 ---
 
 ## Price service
 `prices.price_service` owns the recurring quote fetch:
 
-1. **State initialisation** – `initialize_price_state` seeds locks and counters in `hass.data`.
-2. **Scheduling** – `_schedule_price_interval` (called from `__init__.py`) uses `async_track_time_interval` to run `_run_price_cycle` at the configured cadence.
-3. **Symbol discovery** – `prices.symbols.load_active_security_symbols` queries active securities with tickers; `price_service.build_symbol_mapping` groups UUIDs by ticker for change fan-out.
-4. **Fetching quotes** – `_fetch_quotes` (within `yahooquery_provider`) loads batches (`CHUNK_SIZE` 50) with a 20 second timeout. Failures increment `price_error_counter` and eventually disable debug skip logging.
-5. **Change detection** – `_detect_price_changes` compares scaled prices and filters out unchanged or invalid values (`price <= 0`). Currency drift per symbol logs once per runtime.
-6. **Persistence** – Updated prices and metadata are written to `securities` in SQLite. The service maintains a watchdog (25s) and tracks consecutive errors (threshold 3) for observability.
-7. **Revaluation** – `prices.revaluation.revalue_after_price_updates` recalculates affected portfolios, leveraging helpers in `logic.portfolio` and `logic.securities` to recompute holdings and values.
-8. **Event push** – `_push_update` from `sync_from_pclient` is reused to dispatch `EVENT_PANELS_UPDATED` in Home Assistant. The order remains `portfolio_values` followed by `portfolio_positions` per affected UUID.
+1. **State initialisation** – `initialize_price_state` seeds locks, caches (`price_symbols`, `price_symbol_to_uuids`), error counters, and log throttling flags in `hass.data`.
+2. **Scheduling** – `_schedule_price_interval` (called from `__init__.py`) uses `async_track_time_interval` to run `_run_price_cycle` at the configured cadence. Option reloads reuse the helper and trigger an immediate cycle.
+3. **Symbol discovery** – `build_symbol_mapping` queries active securities with tickers and caches the mapping for the next run. Empty symbol lists log a single INFO message plus a throttled skip message on subsequent cycles.
+4. **Fetching quotes** – `YahooQueryProvider.fetch` runs in batches (`CHUNK_SIZE` 50) with a 20 second timeout. Failures increment `price_error_counter`. When an entire cycle returns zero quotes the service throttles WARN logs via `price_zero_quotes_warn_ts`.
+5. **Change detection** – `_detect_price_changes` compares scaled prices and filters out unchanged or invalid values (`price <= 0`). Currency mismatches log once per symbol by tracking `price_currency_drift_logged`.
+6. **Persistence** – Updated prices and metadata (`last_price`, `last_price_source`, `last_price_fetched_at`) are written to `securities`. The cycle records meta information (batches, duration, skipped flag) and warns when execution time exceeds the 25 s watchdog threshold or when the consecutive error counter reaches three with zero quotes.
+7. **Revaluation** – `prices.revaluation.revalue_after_price_updates` recalculates affected portfolios, leveraging helpers in `logic.portfolio` and `logic.securities` to recompute holdings and values. It reloads impacted positions so follow-up events carry fresh data.
+8. **Event push** – `_push_update` from `data.event_push` is reused to dispatch `EVENT_PANELS_UPDATED`. The order remains `portfolio_values` followed by `portfolio_positions` per affected UUID, and the helper ensures payloads stay compact.
 
-When no symbols are available the service logs the condition once and skips the fetch without treating it as an error. Reloading an entry reinitializes state and immediately triggers a new price cycle.
+When no symbols are available the service logs the condition once and skips the fetch without treating it as an error. Persistent yahooquery import failures flip `price_provider_disabled` to avoid repeated logs. Reloading an entry reinitializes state and immediately triggers a new price cycle.
 
 ---
 
@@ -233,11 +270,11 @@ When no symbols are available the service logs the condition once and skips the 
 `currencies.fx` provides optional EUR exchange rate support when multi-currency accounts exist:
 
 - Determines required currencies from Portfolio Performance data (`get_required_currencies`).
-- Uses the Frankfurter API to fetch missing rates for a given date and stores them in the `fx_rates` table.
-- Employs asyncio executors and retry logic to avoid SQLite write lock issues.
-- Exposes `get_exchange_rates`, `ensure_exchange_rates_for_dates`, and `load_latest_rates`, which are used from WebSocket handlers to populate FX information when returning account data.
+- Uses the Frankfurter API to fetch missing rates for a given date and stores them in the `fx_rates` table with retry-backed writes guarded by a threading lock.
+- Provides both async (`get_exchange_rates`, `ensure_exchange_rates_for_dates`) and sync (`*_sync`) entry points so ingestion can run inside executor threads without blocking Home Assistant.
+- Exposes `load_latest_rates` for WebSocket handlers to attach FX metadata to account payloads.
 
-The FX helper is resilient to network failures (logs warnings and returns partial results) to avoid blocking the main coordinator.
+The FX helper logs and returns partial results on network or database failures to avoid blocking the main coordinator.
 
 ---
 
@@ -252,7 +289,7 @@ The FX helper is resilient to network failures (logs warnings and returns partia
 | `pp_reader/get_portfolio_data` | `entry_id` | Live portfolio aggregates using `fetch_live_portfolios`. |
 | `pp_reader/get_portfolio_positions` | `entry_id`, `portfolio_uuid` | Detailed positions including gains and holdings. |
 
-All commands default to the coordinator snapshot when live aggregation fails to keep the dashboard responsive.
+All commands default to the coordinator snapshot when live aggregation fails to keep the dashboard responsive. `_live_portfolios_payload` centralises the fetch logic: it queries SQLite via `fetch_live_portfolios` inside an executor, logs and falls back to coordinator snapshots on error, and normalises results before serialising. The accounts endpoint invokes `ensure_exchange_rates_for_dates`/`load_latest_rates` so FX metadata is up to date when non-EUR accounts are present.
 
 The custom panel lives under `www/pp_reader_dashboard`:
 
@@ -270,9 +307,9 @@ Key entities and their origin:
 | Entity | Source | Important fields | Notes |
 |--------|--------|------------------|-------|
 | Account | SQLite `accounts` + transactions | `uuid`, `name`, `currency_code`, `balance` (cents) | Balances are recomputed per refresh, not stored. |
-| Security | SQLite `securities` | `uuid`, `name`, `ticker_symbol`, `currency_code`, `last_price` (scaled) | `last_price_source` and `last_price_fetched_at` updated by price service. |
+| Security | SQLite `securities` | `uuid`, `name`, `ticker_symbol`, `currency_code`, `last_price` (scaled), `last_price_date` | `last_price_source`/`last_price_fetched_at` updated by price service; `historical_prices` table kept for future expansion. |
 | Portfolio | SQLite `portfolios` | `uuid`, `name`, `reference_account`, `is_retired` | Aggregates are derived from `portfolio_securities`. |
-| PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents) | Generated `avg_price` column simplifies average cost lookup. |
+| PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price` | Generated `avg_price` column simplifies average cost lookup. |
 | Transaction | SQLite `transactions` | `type`, `amount`, `currency_code`, `shares`, `security` | `transaction_units` store FX amounts for cross-currency transfers. |
 | FXRate | SQLite `fx_rates` | `date`, `currency`, `rate` | Populated on demand via `currencies.fx`. |
 | Metadata | SQLite `metadata` | `last_file_update` | Drives coordinator sync decisions.
@@ -280,20 +317,22 @@ Key entities and their origin:
 ---
 
 ## Control flow summary
-1. **Initial setup** – Config flow validates file; setup entry initialises schema, coordinator, price state, backup scheduling, and panel registration.
+1. **Initial setup** – Config flow validates file; setup entry initialises schema (including runtime migrations), coordinator, price state, backup scheduling, and panel registration.
 2. **Periodic sync** – Every minute the coordinator checks the `.portfolio` file mtime (rounded to the nearest minute). On change it parses, syncs to SQLite, reloads aggregates, and updates `coordinator.data`.
-3. **Price cycle** – According to the options flow interval, the price service locks execution, fetches Yahoo quotes, writes updated prices, runs revaluation, and publishes events.
-4. **Frontend interactions** – The dashboard uses WebSocket commands to fetch initial data and listens for `EVENT_PANELS_UPDATED` to patch rows. Portfolio positions are fetched lazily per user interaction.
-5. **Backups** – A 6-hour interval backup ensures integrity and retention; manual trigger is available via service call.
+3. **Price cycle** – According to the options flow interval, the price service locks execution, fetches Yahoo quotes, writes updated prices, runs revaluation, and publishes events while updating error counters and watchdog metrics.
+4. **Options updates** – Changing options triggers `_async_reload_entry_on_update`, which reapplies price debug logging, reschedules the interval, resets state, and reruns the initial price cycle.
+5. **Frontend interactions** – The dashboard uses WebSocket commands to fetch initial data and listens for `EVENT_PANELS_UPDATED` to patch rows. Portfolio positions are fetched lazily per user interaction.
+6. **Backups** – A 6-hour interval backup ensures integrity and retention; manual trigger is available via service call.
 
 ---
 
 ## Error handling & observability
 - **Coordinator** – Wraps sync logic in try/except and raises `UpdateFailed` for Home Assistant to retry. Detailed logs highlight parse or SQLite issues.
-- **Price service** – Tracks consecutive errors, logs warnings for skipped runs, zero quotes, currency drift, and long cycles (>25s). On repeated failures it continues scheduling but keeps counters for visibility.
+- **Price service** – Tracks consecutive errors, throttles zero-quote warnings, logs currency drift mismatches once per symbol, and warns when cycles exceed 25 s. Persistent yahooquery import issues flip `price_provider_disabled` so follow-up logs occur once.
+- **Event propagation** – `_push_update` emits warnings when payloads approach or exceed the 32 KB recorder limit, helping developers trim payloads before Home Assistant drops events.
 - **WebSocket** – Falls back to coordinator snapshots on aggregation errors and sends `not_found` errors when an entry id is unknown.
 - **Backup system** – Logs success (`✅`) and failure (`❌`) with clear emoji markers; attempts recovery from the latest valid backup when integrity fails.
-- **Logging namespaces** – `custom_components.pp_reader` and `custom_components.pp_reader.prices*` allow focused log level control via the options flow.
+- **Logging namespaces** – `custom_components.pp_reader` and `custom_components.pp_reader.prices*` allow focused log level control via the options flow, and `_apply_price_debug_logging` ensures effective levels are reported when toggled.
 
 No metrics or traces are emitted; observability relies on structured log lines.
 
@@ -303,8 +342,10 @@ No metrics or traces are emitted; observability relies on structured log lines.
 - File parsing and SQLite operations run in executor threads to keep the event loop responsive.
 - `asyncio.Lock` ensures only one price cycle executes at a time; overlapping schedules are skipped rather than queued.
 - Quote fetches batch up to 50 symbols to balance throughput and rate limits.
+- Symbol discovery caches the last symbol list/mapping to avoid redundant SQLite queries when the data set is stable.
 - Portfolio aggregation relies on SQL sums and the `idx_portfolio_securities_portfolio` index to speed up repeated queries.
 - FX writes use a threading lock and retry with exponential backoff to avoid SQLite `database is locked` errors.
+- Event payloads are compacted before emission to minimise recorder overhead and avoid exceeding Home Assistant’s 32 KB limit.
 
 Potential bottlenecks: very large `.portfolio` files (protobuf parsing) and slow Yahoo responses. The system tolerates these by logging and skipping cycles rather than blocking the coordinator.
 
@@ -321,12 +362,12 @@ Potential bottlenecks: very large `.portfolio` files (protobuf parsing) and slow
 ## Testing strategy
 Automated tests live under `tests/` (see [TESTING.md](TESTING.md)):
 
-- `tests/prices/` covers yahooquery integration, price cycle behaviours, and error counters.
-- `test_fetch_live_portfolios.py` and `test_ws_portfolios_live.py` validate the on-demand aggregation contract and WebSocket payloads.
-- `test_ws_accounts_fx.py` ensures FX rate hooks respond correctly when non-EUR accounts are present.
-- `test_currencies_fx.py` covers Frankfurter fetches, retries, and SQLite persistence.
-- `test_sync_from_pclient.py` verifies the diff sync for Portfolio Performance payloads.
-- `test_validators_timezone.py` guards transaction validation edge cases.
+- **Price orchestration** – `test_price_service.py`, `test_reload_initial_cycle.py`, `test_reload_logs.py`, `test_interval_change_reload.py`, `test_zero_quotes_warn.py`, `test_empty_symbols_logging.py`, `test_currency_drift_once.py`, `test_error_counter_reset.py`, `test_watchdog.py`, `test_batch_size_regression.py`, `test_price_persistence_fields.py`, and `test_debug_scope.py` exercise interval rescheduling, warning throttling, persistence fields, and logging scope.
+- **Provider integration** – `test_yahooquery_provider.py` validates chunked fetch behaviour and error handling for the Yahoo Finance client.
+- **Aggregation & revaluation** – `test_fetch_live_portfolios.py`, `test_revaluation_live_aggregation.py`, and `test_ws_portfolios_live.py` cover on-demand portfolio aggregation, ensuring WebSocket payloads remain in sync with persisted data.
+- **WebSocket & FX** – `test_ws_accounts_fx.py`, `test_ws_last_file_update.py`, and `test_ws_portfolios_live.py` verify websocket payloads, while `test_currencies_fx.py` checks FX fetch, retries, and SQLite persistence.
+- **Sync & migrations** – `test_sync_from_pclient.py`, `test_migration.py`, and `test_price_persistence_fields.py` assert diff synchronisation, runtime schema migrations, and price field updates.
+- **Validation helpers** – `test_validators_timezone.py` guards transaction validation edge cases.
 
 Manual testing relies on the scripts in `scripts/` (`./scripts/develop`, `./scripts/lint`) and the Home Assistant dev container described in [README.md](README.md).
 
@@ -342,6 +383,8 @@ Manual testing relies on the scripts in `scripts/` (`./scripts/develop`, `./scri
 | Skip overlapping price cycles | Simplifies scheduling | Fast consecutive intervals may drop runs when the previous cycle is still executing. |
 | Store monetary values as integers | Ensures deterministic rounding | Formatting to two decimals happens in sensors/frontend. |
 | Explicitly depend on `lxml>=5.2.1` | Avoids wheel compatibility issues in development containers | Slightly increases package footprint but stabilises builds. |
+| Compact event payloads before emission | Keeps `EVENT_PANELS_UPDATED` within recorder limits | New event types should route through `data.event_push` compaction helpers. |
+| Register `pp_reader` as namespace alias | Maintains compatibility with legacy module paths | Future modules should import from `custom_components.pp_reader` to avoid ambiguity. |
 
 Extension points:
 
@@ -349,6 +392,8 @@ Extension points:
 - Add new entities by creating sensor classes under `sensors/` that consume the coordinator snapshot.
 - Extend the database schema by appending SQL statements to `ALL_SCHEMAS` (idempotent) and exposing new query helpers in `db_access`.
 - Enhance the dashboard by updating assets in `www/pp_reader_dashboard` and adjusting WebSocket payloads (preserving backward compatibility where possible).
+- Regenerate the protobuf bindings by running `protoc` against `name/abuchen/portfolio/client.proto`, ensuring the package path remains `custom_components.pp_reader.name.abuchen.portfolio`.
+- Reuse `_push_update` when broadcasting new payload types so payload compaction and recorder safeguards apply automatically.
 
 ---
 
@@ -357,6 +402,7 @@ Extension points:
 - **FX cache lifecycle** – The `fx_rates` table grows over time without pruning. Consider retention or deduplication strategies if disk usage becomes material.
 - **Performance metrics** – No runtime metrics exist; future work could add diagnostics (e.g., via Home Assistant statistics) for price cycle duration and sync timing.
 - **Large portfolio scalability** – Real-world limits for the on-demand aggregation and DOM patching have not been benchmarked since the refactor; measure before enabling micro-caching.
+- **Price cycle diagnostics** – `price_last_cycle_meta` is currently initialised but never populated; confirm whether future observability should populate it or remove the placeholder.
 
 ---
 
@@ -370,5 +416,6 @@ Extension points:
 | Override cache | Deprecated frontend cache removed after the on-demand aggregation refactor. |
 | FX rate | Exchange rate relative to EUR stored in the `fx_rates` table. |
 | Event patch | Incremental DOM update strategy used by the dashboard. |
+| `EVENT_PANELS_UPDATED` | Home Assistant event emitted for dashboard updates via `data.event_push`. |
 
 _End of architecture documentation._
