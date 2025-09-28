@@ -33,7 +33,7 @@
       - Ziel: Anzahl neu geschriebener bzw. übersprungener Close-Zeilen erfassen, um spätere Validierung zu erleichtern.
 
 3. Datenzugriff auf Close-Serien bereitstellen
-   a) [ ] Generator-Helfer `iter_security_close_prices`
+   a) [x] Generator-Helfer `iter_security_close_prices`
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Neuer Funktionsblock unterhalb bestehender Getter
       - Ziel: Reihenweise `(date, close)` für eine Security optional gefiltert nach `start_date`/`end_date` in aufsteigender Reihenfolge liefern; Eingabewerte validieren.
