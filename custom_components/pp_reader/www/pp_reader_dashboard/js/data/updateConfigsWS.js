@@ -48,23 +48,29 @@ function restoreSortAndInit(containerEl, rootEl, pid) {
 }
 
 function applyPortfolioPositionsToDom(root, portfolioUuid, positions, error) {
-  if (!root || !portfolioUuid) return false;
+  if (!root || !portfolioUuid) {
+    return { applied: false, reason: 'invalid' };
+  }
 
   const detailsRow = root.querySelector(
     `.portfolio-table .portfolio-details[data-portfolio="${portfolioUuid}"]`
   );
   if (!detailsRow) {
-    return false;
+    return { applied: false, reason: 'missing' };
   }
 
   const container = detailsRow.querySelector('.positions-container');
   if (!container) {
-    return false;
+    return { applied: false, reason: 'missing' };
+  }
+
+  if (detailsRow.classList.contains('hidden')) {
+    return { applied: false, reason: 'hidden' };
   }
 
   if (error) {
     container.innerHTML = renderPositionsError(error, portfolioUuid);
-    return true;
+    return { applied: true };
   }
 
   const prevKey = container.dataset.sortKey;
@@ -76,7 +82,7 @@ function applyPortfolioPositionsToDom(root, portfolioUuid, positions, error) {
   if (prevDir) container.dataset.sortDir = prevDir;
 
   restoreSortAndInit(container, root, portfolioUuid);
-  return true;
+  return { applied: true };
 }
 
 export function flushPendingPositions(root, portfolioUuid) {
@@ -84,16 +90,16 @@ export function flushPendingPositions(root, portfolioUuid) {
   const pending = pendingMap.get(portfolioUuid);
   if (!pending) return false;
 
-  const applied = applyPortfolioPositionsToDom(
+  const result = applyPortfolioPositionsToDom(
     root,
     portfolioUuid,
     pending.positions,
     pending.error
   );
-  if (applied) {
+  if (result.applied) {
     pendingMap.delete(portfolioUuid);
   }
-  return applied;
+  return result.applied;
 }
 
 export function flushAllPendingPositions(root) {
@@ -393,14 +399,16 @@ export function handlePortfolioPositionsUpdate(update, root) {
     console.warn("handlePortfolioPositionsUpdate: Positions-Cache konnte nicht aktualisiert werden:", e);
   }
 
-  const applied = applyPortfolioPositionsToDom(root, portfolio_uuid, positions, error);
+  const result = applyPortfolioPositionsToDom(root, portfolio_uuid, positions, error);
   const pendingMap = ensurePendingMap();
 
-  if (applied) {
+  if (result.applied) {
     pendingMap.delete(portfolio_uuid);
   } else {
     pendingMap.set(portfolio_uuid, { positions, error });
-    schedulePendingRetry(root, portfolio_uuid);
+    if (result.reason !== 'hidden') {
+      schedulePendingRetry(root, portfolio_uuid);
+    }
   }
 }
 
