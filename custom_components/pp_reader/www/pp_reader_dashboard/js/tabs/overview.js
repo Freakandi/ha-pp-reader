@@ -438,31 +438,34 @@ async function waitForElement(root, selector, timeoutMs = 3000, intervalMs = 50)
 export function attachPortfolioToggleHandler(root) {
   if (!root) return;
 
-  if (root.__ppReaderAttachInProgress) return;
+  const token = (root.__ppReaderAttachToken ?? 0) + 1;
+  root.__ppReaderAttachToken = token;
   root.__ppReaderAttachInProgress = true;
 
   (async () => {
-    const container = await waitForElement(root, '.portfolio-table');
-    if (!container) {
-      console.warn("attachPortfolioToggleHandler: .portfolio-table nicht gefunden (Timeout)");
-      root.__ppReaderAttachInProgress = false;
-      return;
-    }
+    try {
+      const container = await waitForElement(root, '.portfolio-table');
+      if (token !== root.__ppReaderAttachToken) {
+        return; // Ein neuer Versuch läuft bereits – diesen abbrechen
+      }
+      if (!container) {
+        console.warn("attachPortfolioToggleHandler: .portfolio-table nicht gefunden (Timeout)");
+        return;
+      }
 
-    // Buttons generiert?
-    const btnCount = container.querySelectorAll('.portfolio-toggle').length;
-    if (btnCount === 0) {
-      console.debug("attachPortfolioToggleHandler: Noch keine Buttons – evtl. Recovery später");
-    }
+      // Buttons generiert?
+      const btnCount = container.querySelectorAll('.portfolio-toggle').length;
+      if (btnCount === 0) {
+        console.debug("attachPortfolioToggleHandler: Noch keine Buttons – evtl. Recovery später");
+      }
 
-    if (container.__ppReaderPortfolioToggleBound) {
-      root.__ppReaderAttachInProgress = false;
-      return;
-    }
-    container.__ppReaderPortfolioToggleBound = true;
-    console.debug("attachPortfolioToggleHandler: Listener registriert");
+      if (container.__ppReaderPortfolioToggleBound) {
+        return;
+      }
+      container.__ppReaderPortfolioToggleBound = true;
+      console.debug("attachPortfolioToggleHandler: Listener registriert");
 
-    container.addEventListener('click', async (e) => {
+      container.addEventListener('click', async (e) => {
       try {
         const retryBtn = e.target.closest('.retry-pos');
         if (retryBtn && container.contains(retryBtn)) {
@@ -552,9 +555,12 @@ export function attachPortfolioToggleHandler(root) {
       } catch (err) {
         console.error("attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler", err);
       }
-    });
-
-    root.__ppReaderAttachInProgress = false;
+      });
+    } finally {
+      if (token === root.__ppReaderAttachToken) {
+        root.__ppReaderAttachInProgress = false;
+      }
+    }
   })();
 }
 
