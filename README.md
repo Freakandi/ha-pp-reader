@@ -16,6 +16,27 @@ Home Assistant can then be started with:
 ./scripts/develop
 ```
 
+## Preparing a release PR for `main`
+
+The `dev` branch contains tooling, fixtures, and development helpers that
+should not reach `main`. Use the helper script to create a sanitized worktree
+that only keeps `custom_components/` together with the required root files
+(`ARCHITECTURE.md`, `CHANGELOG.md`, `hacs.json`, `LICENSE`, `README.md`).
+
+```bash
+./scripts/prepare_main_pr.sh [source_branch] [target_branch] [worktree_dir]
+```
+
+- `source_branch` defaults to `dev`.
+- `target_branch` defaults to `main-release`.
+- `worktree_dir` defaults to `.worktrees/<target_branch>`.
+
+The script checks out the source branch into a separate worktree, prunes every
+tracked file that is not part of the add-on payload, and leaves you with a
+clean branch ready for a pull request against `main`. Review the worktree,
+commit the changes, and push the `target_branch` when you are ready to open the
+PR.
+
 In Codex environments the setup script cannot keep the virtual
 environment active. Run `source .venv/bin/activate` after the container
 starts or use `./scripts/codex_develop` which directly runs the Hass
