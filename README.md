@@ -1,115 +1,53 @@
-dev Repo for pp_reader
+# Portfolio Performance Reader for Home Assistant
 
-## Development
+Portfolio Performance Reader brings your local Portfolio Performance (`.portfolio`) file into Home Assistant with live prices, consolidated sensors, and a purpose-built dashboard panel. The integration parses your portfolios on the server, keeps a dedicated SQLite database in sync, and surfaces aggregated values to both the UI and automations.【F:ARCHITECTURE.md†L29-L44】
 
-Run `./scripts/setup_container` once to create the virtual environment and
-install dependencies. Activate the environment before running any other
-scripts:
+## Features
+- **End-to-end portfolio sync** – Parses Portfolio Performance protobuf data, mirrors accounts, portfolios, and gains into Home Assistant, and exposes them through sensors and the dashboard.【F:ARCHITECTURE.md†L29-L44】【F:ARCHITECTURE.md†L47-L100】
+- **Live valuation with Yahoo Finance** – Uses `yahooquery` to fetch the latest quotes, stores the most recent price only, and revalues affected portfolios before pushing compact Home Assistant events.【F:ARCHITECTURE.md†L32-L35】【F:CHANGELOG.md†L82-L105】
+- **Single source of truth aggregation** – `fetch_live_portfolios` aggregates up-to-date values directly from SQLite for WebSocket responses, events, and the dashboard footer.【F:CHANGELOG.md†L8-L15】【F:custom_components/pp_reader/data/db_access.py†L428-L486】
+- **Automatic resilience** – Six-hour rolling backups protect the portfolio database, and a manual service lets you trigger an immediate snapshot when needed.【F:ARCHITECTURE.md†L32-L35】【F:custom_components/pp_reader/data/backup_db.py†L28-L93】【F:custom_components/pp_reader/services.yaml†L1-L4】
+- **Custom dashboard panel** – Registers a sidebar entry (`Portfolio Dashboard`) that streams portfolio updates via WebSockets and refreshes DOM totals without client-side caches.【F:custom_components/pp_reader/__init__.py†L121-L199】【F:CHANGELOG.md†L12-L15】
 
-```bash
-source .venv/bin/activate
-```
+## Requirements
+- Home Assistant **2025.4.1** or newer for HACS-managed installs.【F:hacs.json†L1-L8】
+- Integration version **0.11.0** (see `manifest.json`).【F:custom_components/pp_reader/manifest.json†L1-L25】
+- A Portfolio Performance desktop export (`.portfolio`) accessible to Home Assistant.
+- Optional internet access for Yahoo Finance prices (`yahooquery`) and EUR FX rates (Frankfurter API).【F:ARCHITECTURE.md†L32-L35】【F:ARCHITECTURE.md†L112-L124】
 
-Home Assistant can then be started with:
+## Installation
+### Via HACS (recommended)
+1. In HACS → Integrations, add this repository (`Freakandi/ha-pp-reader`) as a custom repository if it is not listed automatically.【F:hacs.json†L1-L8】
+2. Install **Portfolio Performance Reader** and restart Home Assistant.
+3. After restart, navigate to **Settings → Devices & Services → Add Integration** and search for "Portfolio Performance Reader".
 
-```bash
-./scripts/develop
-```
+### Manual installation
+1. Download the latest release archive.
+2. Copy `custom_components/pp_reader/` into your Home Assistant `config/custom_components/` directory, preserving the folder structure shown below.【F:ARCHITECTURE.md†L47-L100】
+3. Restart Home Assistant and add the integration through **Settings → Devices & Services**.
 
-## Preparing a release PR for `main`
+## Configuration
+1. Start the config flow and provide the path to your `.portfolio` file. The wizard validates that the file exists and can be parsed before continuing.【F:custom_components/pp_reader/config_flow.py†L43-L99】
+2. Choose whether to use the default database location (`/config/pp_reader_data/<portfolio>.db`) or supply a custom directory.【F:custom_components/pp_reader/config_flow.py†L84-L155】
+3. After setup, open the integration options to adjust:
+   - `price_update_interval_seconds` (default 900 s, minimum 300 s).【F:custom_components/pp_reader/config_flow.py†L159-L244】
+   - `enable_price_debug` to confine verbose logging to the price namespace.【F:custom_components/pp_reader/config_flow.py†L162-L244】【F:custom_components/pp_reader/manifest.json†L19-L24】
 
-The `dev` branch contains tooling, fixtures, and development helpers that
-should not reach `main`. Use the helper script to create a sanitized worktree
-that only keeps `custom_components/` together with the required root files
-(`ARCHITECTURE.md`, `CHANGELOG.md`, `hacs.json`, `LICENSE`, `README.md`).
+> **Tip:** Respect Yahoo Finance rate limits—intervals of 15 minutes or more avoid throttling while still keeping valuations fresh.【F:CHANGELOG.md†L101-L104】
 
-```bash
-./scripts/prepare_main_pr.sh [source_branch] [target_branch] [worktree_dir]
-```
+## Usage
+- **Sensors:** The integration creates sensors for portfolio values, purchase sums, gains, and account balances. Names follow your Portfolio Performance entities and surface aggregated totals in EUR.【F:ARCHITECTURE.md†L29-L44】【F:ARCHITECTURE.md†L47-L95】
+- **Dashboard panel:** Look for **Portfolio Dashboard** in the sidebar. It loads live data via WebSockets and updates automatically when price events or file syncs run.【F:custom_components/pp_reader/__init__.py†L121-L199】【F:CHANGELOG.md†L12-L15】
+- **Backups:** Automatic backups run every six hours; trigger `pp_reader.trigger_backup_debug` to create an immediate snapshot (e.g., via Developer Tools → Services).【F:custom_components/pp_reader/data/backup_db.py†L28-L93】【F:custom_components/pp_reader/services.yaml†L1-L4】
 
-- `source_branch` defaults to `dev`.
-- `target_branch` defaults to `main-release`.
-- `worktree_dir` defaults to `.worktrees/<target_branch>`.
+## Troubleshooting
+| Symptom | Suggested action |
+| --- | --- |
+| Config flow reports "file not found" or "parse failed" | Verify the Home Assistant host can read the `.portfolio` file path and that the export is up to date.【F:custom_components/pp_reader/config_flow.py†L62-L99】 |
+| Live prices stop updating | Check the integration options for the polling interval (minimum 300 s) and review the Home Assistant logs for Yahoo Finance warnings before lowering the interval further.【F:custom_components/pp_reader/config_flow.py†L159-L244】【F:CHANGELOG.md†L101-L104】 |
+| Dashboard shows stale totals | Ensure Home Assistant is running (background price task executes on schedule) and inspect logs for database errors from `fetch_live_portfolios`. The helper returns an empty list if SQLite queries fail and logs the exception for easier diagnosis.【F:custom_components/pp_reader/__init__.py†L93-L174】【F:custom_components/pp_reader/data/db_access.py†L428-L486】 |
 
-The script checks out the source branch into a separate worktree, prunes every
-tracked file that is not part of the add-on payload, and leaves you with a
-clean branch ready for a pull request against `main`. Review the worktree,
-commit the changes, and push the `target_branch` when you are ready to open the
-PR.
-
-In Codex environments the setup script cannot keep the virtual
-environment active. Run `source .venv/bin/activate` after the container
-starts or use `./scripts/codex_develop` which directly runs the Hass
-binary from the virtual environment.
-
-## Live Kurse (YahooQuery)
-
-Die Integration unterstützt optionale Live-Preise über das Python-Paket `yahooquery` (Batch Fetch).
-Ziel: Aktualisierung des zuletzt bekannten Preises (`last_price`) für aktive (nicht stillgelegte) Wertpapiere. Keine historischen Zeitreihen.
-
-Empfehlung Intervall: ≥ 900 Sekunden (15 Minuten). Kürzere Intervalle erhöhen Rate-Limit-/Blocking-Risiko ohne Mehrwert bei verzögerten Kursen.
-
-Persistenz:
-- Gespeichert werden ausschließlich: `last_price` (als Integer skaliert ×1e8), `last_price_source='yahoo'`, `last_price_fetched_at` (UTC `YYYY-MM-DDTHH:MM:SSZ`).
-- Keine Persistenz zusätzlicher Felder (Volume, 52W High/Low, Dividend Yield etc.).
-
-Felder einer Laufzeit-Quote (nur In-Memory, können `None` sein):
-| Feld | Bedeutung | Persistiert |
-|------|-----------|-------------|
-| price | Letzter Marktpreis (>0 gefiltert) | ja (skaliert) |
-| previous_close | Vorheriger Schlusskurs | nein |
-| currency | Währung des Quotes (nur Drift-Prüfung) | nein |
-| volume | Handelsvolumen | nein |
-| market_cap | Marktkapitalisierung | nein |
-| high_52w / low_52w | 52‑Wochen Hoch/Tief | nein |
-| dividend_yield | Trailing Dividend Yield | nein |
-| ts | Timestamp (Epoch Sekunden) | nein |
-| source | Provider-Kennung (yahoo) | indirekt (als last_price_source) |
-
-Drift-Prüfung:
-- Einmalige WARN pro Symbol bei Abweichung zwischen persistierter `currency_code` und Quote-Währung.
-- Fehlt die Währung (None) → keine Prüfung.
-
-Events:
-- Nur bei mindestens einer tatsächlichen Preisänderung:
-  1. `portfolio_values` (aggregiert betroffene Portfolios)
-  2. Danach je betroffenem Portfolio `portfolio_positions`
-- Keine neuen Eventtypen; bestehende Frontend Patch-Logik bleibt unverändert.
-
-Logging (Kurzüberblick):
-- INFO: Zyklusmetadaten (Symbole, Batches, Änderungen, Dauer, Fehlerzähler).
-- WARN: Chunk-Fehler, wiederholte Misserfolge (≥3), Gesamt-0 Quotes (dedupliziert), Currency Drift, Watchdog >25s.
-- ERROR: Importfehler `yahooquery` (Feature deaktiviert).
-- DEBUG (nur mit Debug-Option): Batch Start/Ende, akzeptierte / verworfene Symbole, Overlap-Skip, Change-Details.
-
-Grenzen & Hinweise:
-- Keine Garantie für Echtzeit / Intraday-Tiefe (Upstream-Verzögerungen möglich).
-- Upstream-API / Feldänderungen können zu fehlenden Quotes führen (robustes Fehler-Logging; Funktionalität bleibt tolerant).
-- Kein Retry innerhalb eines Zyklus; Robustheit durch Intervall.
-- Doppelte Symbole aktualisieren alle referenzierten Securities (bewusst akzeptiert).
-- Bei dauerhaften Importfehlern wird das Feature deaktiviert (Log-Hinweis).
-
-Fehlerzähler:
-- In-Memory (`price_error_counter`), Reset bei erstem erfolgreichen Zyklus mit ≥1 Quote.
-
-Debugging:
-- Aktivieren der Option → detaillierte Batch-/Symbol-Logs ohne globale Logger-Beeinflussung.
-
-Deaktivierung:
-- Importfehler `yahooquery` → Feature abgeschaltet (keine weiteren Versuche in derselben Laufzeit).
-
-> **Hinweis:** Die Integration persistiert ausschließlich den zuletzt bekannten Preis (`last_price` mit Quelle & Zeitstempel). Es werden **keine** historischen Intraday- oder Tageskursreihen abgefragt oder gespeichert. Für konsistente und schonende Nutzung der Upstream-API wird ein Intervall von **≥ 900 Sekunden (15 Minuten)** empfohlen. Kürzere Intervalle erhöhen nur das Risiko von Limit-/Blocking ohne Mehrwert bei verzögerten Kursen.
-
-## Architektur / Live-Preise
-
-Der Datenfluss für Live-Preise und Portfolio-Aggregationen ist vollständig serverseitig:
-
-- Der Preiszyklus persistiert aktualisierte `last_price` Werte und stößt eine partielle Revaluation an.
-- Die Funktion `fetch_live_portfolios` aggregiert aktuelle Depotkennzahlen (Wert, Kaufwert, Positionsanzahl) direkt aus der SQLite-DB – identisch für WebSocket-Initial-Abfragen und Event-Pushes.
-- WebSocket-Kommandos `pp_reader/get_portfolio_data` und `pp_reader/get_dashboard_data` nutzen diese Aggregation on-demand; der Accounts-Teil bleibt unverändert.
-- Push-Events (`portfolio_values`, anschließend je Portfolio `portfolio_positions`) verwenden dieselben Ergebnisse als Single Source of Truth.
-- Das Dashboard arbeitet ohne Client-Override-Cache (`__ppReaderPortfolioValueOverrides`); Summen (Header & Tabellen-Footer) werden aus den aktualisierten DOM-Zellen berechnet.
-- Positionsdetails bleiben Lazy Load: Beim Expand einer Depotzeile wird `pp_reader/get_portfolio_positions` aufgerufen und das Ergebnis im Cache `window.__ppReaderPortfolioPositionsCache` gehalten.
-
-Damit bleiben Sensor-Snapshots (`coordinator.data['portfolios']`) abwärtskompatibel, während UI und WebSocket Antworten stets die neuesten, durch Live-Preise beeinflussten Werte liefern.
-
+## Further documentation
+- [Architecture](ARCHITECTURE.md) – deep dive into modules and data flow.
+- [Testing guide](TESTING.md) – reproducible QA workflow.
+- [Developer guide](README-dev.md) – development setup, coding standards, and release process.
