@@ -19,7 +19,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Preise nach Datum sortieren, Duplikate pro `(security_uuid, date)` entfernen und fehlende Pflichtfelder (`close`) validieren, bevor geschrieben wird.
-   c) [ ] Batch-Insert via `executemany`
+   c) [x] Batch-Insert via `executemany`
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Gesäuberte Preislisten gesammelt per `executemany` mit `INSERT OR REPLACE` einspielen, damit große Dateien performant verarbeitet werden.

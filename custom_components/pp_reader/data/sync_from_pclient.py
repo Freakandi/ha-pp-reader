@@ -598,22 +598,28 @@ class _SyncRunner:
                             volume,
                         )
 
-                    for date_value in sorted(dedup_prices):
-                        close_value, high, low, volume = dedup_prices[date_value]
-                        self.cursor.execute(
+                    rows_to_persist = [
+                        (
+                            security.uuid,
+                            date_value,
+                            close_value,
+                            high,
+                            low,
+                            volume,
+                        )
+                        for date_value, (close_value, high, low, volume) in sorted(
+                            dedup_prices.items()
+                        )
+                    ]
+
+                    if rows_to_persist:
+                        self.cursor.executemany(
                             """
                             INSERT OR REPLACE INTO historical_prices (
                                 security_uuid, date, close, high, low, volume
                             ) VALUES (?,?,?,?,?,?)
                             """,
-                            (
-                                security.uuid,
-                                date_value,
-                                close_value,
-                                high,
-                                low,
-                                volume,
-                            ),
+                            rows_to_persist,
                         )
 
                 latest_price = max(security.prices, key=lambda price: price.date)
