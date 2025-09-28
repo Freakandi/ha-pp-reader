@@ -256,6 +256,24 @@ def iter_security_close_prices(
         conn.close()
 
 
+def get_security_close_prices(
+    db_path: Path,
+    security_uuid: str,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> list[tuple[int, int]]:
+    """Gibt tägliche Schlusskurse eines Wertpapiers als Liste zurück."""
+
+    return list(
+        iter_security_close_prices(
+            db_path=db_path,
+            security_uuid=security_uuid,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    )
+
+
 def get_accounts(db_path: Path) -> list[Account]:
     """Lädt alle Konten aus der DB."""
     conn = sqlite3.connect(str(db_path))
