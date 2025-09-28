@@ -15,7 +15,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Nur Securities mit `retired = 0` für neue Einträge in `historical_prices` berücksichtigen und trotzdem bestehende Historie für bereits archivierte Papiere bewahren.
-   b) [ ] Preislisten pro Security deduplizieren und sortieren
+   b) [x] Preislisten pro Security deduplizieren und sortieren
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Preise nach Datum sortieren, Duplikate pro `(security_uuid, date)` entfernen und fehlende Pflichtfelder (`close`) validieren, bevor geschrieben wird.
