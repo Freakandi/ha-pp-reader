@@ -55,7 +55,7 @@
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Neuer Handler `ws_get_security_history`
       - Ziel: Bei aktivem Feature-Flag Close-Serien über `iter_security_close_prices` liefern; andernfalls Fehler `feature_not_enabled` zurückgeben.
-   c) [ ] Feature-Flag im Entry-Setup dokumentieren
+   c) [x] Feature-Flag im Entry-Setup dokumentieren
       - Datei: `custom_components/pp_reader/__init__.py`
       - Abschnitt/Funktion: `async_setup_entry`
       - Ziel: Optionen/Defaultwerte für `pp_reader_history` setzen und interne Ablage (`hass.data[DOMAIN][entry_id]["feature_flags"]`) vorbereiten.

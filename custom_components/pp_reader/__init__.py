@@ -76,6 +76,32 @@ def _get_entry_options(entry: ConfigEntry) -> Mapping[str, Any]:
     return {}
 
 
+def _extract_feature_flag_options(options: Mapping[str, Any]) -> dict[str, bool]:
+    """Return normalized feature flag overrides from the entry options."""
+    raw_flags = options.get("feature_flags")
+    if not isinstance(raw_flags, Mapping):
+        return {}
+
+    normalized: dict[str, bool] = {}
+    for raw_name, raw_value in raw_flags.items():
+        if not isinstance(raw_name, str):
+            continue
+        name = raw_name.strip().lower()
+        if not name:
+            continue
+        normalized[name] = bool(raw_value)
+
+    return normalized
+
+
+def _store_feature_flags(store: dict[str, Any], overrides: Mapping[str, bool]) -> dict[str, bool]:
+    """Persist feature flag values in the entry store with defaults applied."""
+    flags = dict(overrides)
+    flags.setdefault("pp_reader_history", False)
+    store["feature_flags"] = flags
+    return flags
+
+
 def _get_price_interval_seconds(options: Mapping[str, Any]) -> int:
     """Normalize the configured interval with sane defaults."""
     raw_interval = options.get(
@@ -241,6 +267,10 @@ async def _async_reload_entry_on_update(
     if not store:
         return
 
+    options = _get_entry_options(entry)
+    flag_overrides = _extract_feature_flag_options(options)
+    _store_feature_flags(store, flag_overrides)
+
     old_cancel = store.get("price_task_cancel")
     old_interval = store.get("price_interval_applied")
 
@@ -255,7 +285,6 @@ async def _async_reload_entry_on_update(
 
     price_service.initialize_price_state(hass, entry.entry_id)
 
-    options = _get_entry_options(entry)
     new_interval = _get_price_interval_seconds(options)
     _schedule_price_interval(hass, entry, store, new_interval)
 
@@ -306,6 +335,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "db_path": db_path,
         }
         hass.data[DOMAIN][entry.entry_id] = store
+
+        flag_overrides = _extract_feature_flag_options(options)
+        _store_feature_flags(store, flag_overrides)
 
         _apply_price_debug_logging(entry)
 
