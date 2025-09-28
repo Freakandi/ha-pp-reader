@@ -217,6 +217,7 @@ class PPReaderDashboard extends HTMLElement {
     this._unsubscribeEvents = null; // Event-Bus-Listener für Updates
     this._initialized = false; // Initialisierungs-Flag
     this._hasNewData = false; // Flag für neue Daten
+    this._pendingUpdates = []; // Gespeicherte WS-Updates zur Re-Anwendung nach Re-Renders
   }
 
   set hass(hass) {
@@ -342,6 +343,7 @@ class PPReaderDashboard extends HTMLElement {
 
     console.debug("PPReaderDashboard: Bus-Update erhalten", event.data);
 
+    this._queueUpdate(event.data.data_type, event.data.data);
     // Daten direkt ins Rendern einfließen lassen
     this._doRender(event.data.data_type, event.data.data);
   }
@@ -358,6 +360,71 @@ class PPReaderDashboard extends HTMLElement {
       handlePortfolioPositionsUpdate(pushedData, this._root);
     } else {
       console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
+    }
+  }
+
+  _queueUpdate(dataType, pushedData) {
+    if (!dataType) {
+      return;
+    }
+
+    if (!Array.isArray(this._pendingUpdates)) {
+      this._pendingUpdates = [];
+    }
+
+    const entry = { type: dataType, data: this._cloneData(pushedData) };
+
+    let index = -1;
+    if (dataType === "portfolio_positions" && pushedData && pushedData.portfolio_uuid) {
+      index = this._pendingUpdates.findIndex(
+        (item) =>
+          item.type === dataType &&
+          item.data &&
+          item.data.portfolio_uuid === pushedData.portfolio_uuid
+      );
+    } else {
+      index = this._pendingUpdates.findIndex(item => item.type === dataType);
+    }
+
+    if (index >= 0) {
+      this._pendingUpdates[index] = entry;
+    } else {
+      this._pendingUpdates.push(entry);
+    }
+
+    this._hasNewData = true;
+  }
+
+  _cloneData(data) {
+    if (data == null) {
+      return data;
+    }
+    try {
+      if (typeof structuredClone === "function") {
+        return structuredClone(data);
+      }
+    } catch (err) {
+      console.warn("PPReaderDashboard: structuredClone fehlgeschlagen, falle auf JSON zurück", err);
+    }
+    try {
+      return JSON.parse(JSON.stringify(data));
+    } catch (err) {
+      console.warn("PPReaderDashboard: JSON-Clone fehlgeschlagen, referenziere Originaldaten", err);
+      return data;
+    }
+  }
+
+  _reapplyPendingUpdates() {
+    if (!Array.isArray(this._pendingUpdates) || this._pendingUpdates.length === 0) {
+      return;
+    }
+
+    for (const item of this._pendingUpdates) {
+      try {
+        this._doRender(item.type, this._cloneData(item.data));
+      } catch (error) {
+        console.error("PPReaderDashboard: Fehler beim erneuten Anwenden eines Updates", item, error);
+      }
     }
   }
 
@@ -396,20 +463,40 @@ class PPReaderDashboard extends HTMLElement {
       this._scrollPositions[this._lastPage] = this._root.scrollTop;
     }
 
-    // Tatsächliches Rendern
-    renderTab(this._root, this._hass, this._panel);
+    const maybePromise = renderTab(this._root, this._hass, this._panel);
+    if (maybePromise && typeof maybePromise.then === "function") {
+      maybePromise
+        .then(() => {
+          this._afterRender(page);
+        })
+        .catch((error) => {
+          console.error("PPReaderDashboard: Fehler beim Rendern des Tabs", error);
+          this._afterRender(page);
+        });
+    } else {
+      this._afterRender(page);
+    }
+  }
 
-    // Scroll-Position wiederherstellen
+  _afterRender(page) {
+    if (!this._root) {
+      return;
+    }
+
     const restore = this._scrollPositions[page] || 0;
     this._root.scrollTop = restore;
 
-    // Neuen „Last“-Zustand merken
     this._lastPanel = this._panel;
     this._lastNarrow = this._narrow;
     this._lastRoute = this._route;
     this._lastPage = page;
 
-    // Setze das Flag für neue Daten zurück
+    try {
+      this._reapplyPendingUpdates();
+    } catch (error) {
+      console.error("PPReaderDashboard: Fehler beim Wiederanlegen der Updates", error);
+    }
+
     this._hasNewData = false;
   }
 }
