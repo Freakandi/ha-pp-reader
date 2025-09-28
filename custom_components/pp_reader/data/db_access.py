@@ -7,6 +7,7 @@ and related data in a SQLite database.
 
 import logging
 import sqlite3
+from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -196,6 +197,61 @@ def get_portfolio_by_uuid(db_path: Path, uuid: str) -> Portfolio | None:
         )
         row = cur.fetchone()
         return Portfolio(*row) if row else None
+    finally:
+        conn.close()
+
+
+def iter_security_close_prices(
+    db_path: Path,
+    security_uuid: str,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> Iterator[tuple[int, int]]:
+    """Liefert tägliche Schlusskurse eines Wertpapiers in aufsteigender Reihenfolge."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    if start_date is not None and not isinstance(start_date, int):
+        message = "start_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if end_date is not None and not isinstance(end_date, int):
+        message = "end_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if start_date is not None and end_date is not None and end_date < start_date:
+        message = "end_date muss größer oder gleich start_date sein"
+        raise ValueError(message)
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        sql = [
+            "SELECT date, close",
+            "FROM historical_prices",
+            "WHERE security_uuid = ?",
+        ]
+        params: list[Any] = [security_uuid]
+
+        if start_date is not None:
+            sql.append("AND date >= ?")
+            params.append(start_date)
+        if end_date is not None:
+            sql.append("AND date <= ?")
+            params.append(end_date)
+
+        sql.append("ORDER BY date ASC")
+        statement = " ".join(sql)
+
+        try:
+            cursor = conn.execute(statement, params)
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Lesen historischer Preise (security_uuid=%s)",
+                security_uuid,
+            )
+            return
+
+        for date_value, close_value in cursor:
+            yield int(date_value), int(close_value)
     finally:
         conn.close()
 
