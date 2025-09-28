@@ -553,30 +553,31 @@ class _SyncRunner:
                 self.updated_data["securities"].append(security.uuid)
 
             if security.prices:
-                for price in security.prices:
-                    descriptor = getattr(price, "DESCRIPTOR", None)
-                    fields = descriptor.fields_by_name if descriptor else {}
-                    high = getattr(price, "high", None) if "high" in fields else None
-                    low = getattr(price, "low", None) if "low" in fields else None
-                    volume = (
-                        getattr(price, "volume", None) if "volume" in fields else None
-                    )
+                if not retired:
+                    for price in security.prices:
+                        descriptor = getattr(price, "DESCRIPTOR", None)
+                        fields = descriptor.fields_by_name if descriptor else {}
+                        high = getattr(price, "high", None) if "high" in fields else None
+                        low = getattr(price, "low", None) if "low" in fields else None
+                        volume = (
+                            getattr(price, "volume", None) if "volume" in fields else None
+                        )
 
-                    self.cursor.execute(
-                        """
-                        INSERT OR REPLACE INTO historical_prices (
-                            security_uuid, date, close, high, low, volume
-                        ) VALUES (?,?,?,?,?,?)
-                        """,
-                        (
-                            security.uuid,
-                            price.date,
-                            price.close,
-                            high,
-                            low,
-                            volume,
-                        ),
-                    )
+                        self.cursor.execute(
+                            """
+                            INSERT OR REPLACE INTO historical_prices (
+                                security_uuid, date, close, high, low, volume
+                            ) VALUES (?,?,?,?,?,?)
+                            """,
+                            (
+                                security.uuid,
+                                price.date,
+                                price.close,
+                                high,
+                                low,
+                                volume,
+                            ),
+                        )
 
                 latest_price = max(security.prices, key=lambda price: price.date)
                 _require_timestamp_support()

@@ -11,7 +11,7 @@
       - Ziel: Dokumentieren, dass Close-Werte für aktive Wertpapiere vollständig gehalten werden und welche (ggf. spätere) Aufbewahrungsregeln gelten.
 
 2. Importer für Tages-Schlusskurse härten
-   a) [ ] Aktive Wertpapiere vor Persistenz filtern
+   a) [x] Aktive Wertpapiere vor Persistenz filtern
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Nur Securities mit `retired = 0` für neue Einträge in `historical_prices` berücksichtigen und trotzdem bestehende Historie für bereits archivierte Papiere bewahren.
