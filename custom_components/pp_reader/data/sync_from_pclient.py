@@ -492,6 +492,8 @@ class _SyncRunner:
         security_ids = {security.uuid for security in self.client.securities}
         delete_missing_entries(self.conn, "securities", "uuid", security_ids)
 
+        today_epoch_day = int(datetime.now(tz=ZoneInfo("UTC")).timestamp() // 86400)
+
         for security in self.client.securities:
             retired = 1 if getattr(security, "isRetired", False) else 0
             security_updated_at = maybe_field(security, "updatedAt")
@@ -555,6 +557,8 @@ class _SyncRunner:
             if security.prices:
                 if not retired:
                     dedup_prices: dict[int, tuple[int, Optional[int], Optional[int], Optional[int]]] = {}
+                    skipped_future_dates: set[int] = set()
+                    skipped_invalid_dates: set[int] = set()
                     for price in security.prices:
                         descriptor = getattr(price, "DESCRIPTOR", None)
                         fields = descriptor.fields_by_name if descriptor else {}
@@ -570,6 +574,31 @@ class _SyncRunner:
                                 "sync_from_pclient: Überspringe historischen Preis ohne Datum für %s",
                                 security.uuid,
                             )
+                            continue
+                        if not isinstance(date_value, int):
+                            _LOGGER.warning(
+                                "sync_from_pclient: Überspringe historischen Preis mit ungültigem Datumstyp %s für %s",
+                                type(date_value).__name__,
+                                security.uuid,
+                            )
+                            continue
+                        if date_value > today_epoch_day:
+                            if date_value not in skipped_future_dates:
+                                _LOGGER.warning(
+                                    "sync_from_pclient: Überspringe zukünftigen historischen Preis für %s am %s",
+                                    security.uuid,
+                                    date_value,
+                                )
+                                skipped_future_dates.add(date_value)
+                            continue
+                        if date_value < 0:
+                            if date_value not in skipped_invalid_dates:
+                                _LOGGER.warning(
+                                    "sync_from_pclient: Überspringe historischen Preis mit negativem Datum für %s am %s",
+                                    security.uuid,
+                                    date_value,
+                                )
+                                skipped_invalid_dates.add(date_value)
                             continue
                         if close_value is None:
                             _LOGGER.warning(
@@ -611,6 +640,18 @@ class _SyncRunner:
                             dedup_prices.items()
                         )
                     ]
+
+                    self.cursor.execute(
+                        "DELETE FROM historical_prices WHERE security_uuid = ? AND date > ?",
+                        (security.uuid, today_epoch_day),
+                    )
+                    deleted_future_rows = self.cursor.rowcount
+                    if deleted_future_rows:
+                        _LOGGER.debug(
+                            "sync_from_pclient: Entfernte %d zukünftige historische Preise für %s",
+                            deleted_future_rows,
+                            security.uuid,
+                        )
 
                     if rows_to_persist:
                         self.cursor.executemany(
