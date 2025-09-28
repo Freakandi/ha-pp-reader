@@ -1,13 +1,20 @@
 # Codex Agent Instructions
 
-This repository hosts the Home Assistant integration **Portfolio Performance Reader**. The core integration code lives under `custom_components/pp_reader/`.
+This repository hosts the Home Assistant integration **Portfolio Performance Reader**. The integration source lives under `custom_components/pp_reader/` and test fixtures live in `tests/`.
 
-## Development
-- Create the development environment with `./scripts/setup_container` and activate the virtual environment (`source .venv/bin/activate`).
-- Start Home Assistant using `./scripts/develop`.
-- Run `./scripts/lint` to format and lint the code using Ruff.
+## Development setup
+- Preferred bootstrap: `./scripts/setup_container`. The script installs the required system packages (ffmpeg, libturbojpeg, libpcap, libsqlite3, python3-venv), creates/updates `.venv`, upgrades `pip`, and installs `requirements.txt`.
+- Activate the virtual environment in every new shell with `source .venv/bin/activate`.
+- Install the testing dependencies when you plan to run pytest: `pip install -r requirements-dev.txt`.
+- As a fallback for bare environments, `./scripts/environment_setup` performs the same dependency installation without creating a virtual environment.
+
+## Day-to-day workflow
+- Start the development Home Assistant instance with `./scripts/develop`. The script ensures `config/` exists, seeds a default configuration if needed, and extends `PYTHONPATH` so Home Assistant finds the integration under `custom_components/`.
+- Format and lint the codebase with `./scripts/lint`. It runs `ruff format .` followed by `ruff check . --fix`.
+- Run the Python test suite with `pytest`. For coverage reporting use `pytest --cov=custom_components/pp_reader --cov-report=term-missing`.
+- Optional validation: run Home Assistant's integration validator with `python -m script.hassfest`.
 
 ## Release workflow
-- The `main` branch contains released versions. Development is done on a separate branch (e.g. `dev`).
-- When preparing a release, open a pull request from the dev branch to `main`.
-- Copy the current state of `custom_components/pp_reader/` to `main`, ensuring that the commit history for each file is preserved so the latest commit message for every file remains intact.
+- Released versions live on `main`; ongoing integration happens on feature branches that merge through `dev`.
+- Open pull requests targeting `dev` by default. Maintainers will promote changes from `dev` to `main` when cutting a release.
+- Update documentation (README, CHANGELOG, etc.) alongside functional changes when relevant so `dev` always mirrors the intended release notes.
