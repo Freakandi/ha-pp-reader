@@ -27,8 +27,8 @@ from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
+from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.sync_from_pclient import (
-    _push_update,
     fetch_positions_for_portfolios,
 )
 from custom_components.pp_reader.logic.portfolio import (
