@@ -1,5 +1,6 @@
 import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct } from '../content/elements.js';
 import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS, fetchPortfolioPositionsWS } from '../data/api.js';
+import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS.js';
 
 // === Modul-weiter State für Expand/Collapse & Lazy Load ===
 // On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.
@@ -491,6 +492,20 @@ export function attachPortfolioToggleHandler(root) {
           if (caretEl) caretEl.textContent = '▼';
           expandedPortfolios.add(portfolioUuid);
 
+          let pendingApplied = false;
+          try {
+            pendingApplied = flushPendingPositions(root, portfolioUuid);
+          } catch (e) {
+            console.warn('attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:', e);
+          }
+          if (!pendingApplied && window.__ppReaderFlushPendingPositions) {
+            try {
+              pendingApplied = window.__ppReaderFlushPendingPositions(root, portfolioUuid);
+            } catch (e) {
+              console.warn('attachPortfolioToggleHandler: Global Pending-Flush fehlgeschlagen:', e);
+            }
+          }
+
           if (!portfolioPositionsCache.has(portfolioUuid)) {
             const containerEl = detailsRow.querySelector('.positions-container');
             if (containerEl) containerEl.innerHTML = '<div class="loading">Lade Positionen...</div>';
@@ -700,6 +715,12 @@ export async function renderDashboard(root, hass, panelConfig) {
         updatePortfolioFooterFromDom(wrapper);
       } catch (footerErr) {
         console.warn("renderDashboard: Footer-Summe konnte nicht aktualisiert werden:", footerErr);
+      }
+
+      try {
+        flushAllPendingPositions(root);
+      } catch (pendingErr) {
+        console.warn('renderDashboard: Pending-Positions konnten nicht angewendet werden:', pendingErr);
       }
 
       console.debug("renderDashboard: portfolio-toggle Buttons:", wrapper.querySelectorAll('.portfolio-toggle').length);
