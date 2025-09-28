@@ -5,7 +5,7 @@
       - Datei: `custom_components/pp_reader/data/db_init.py`
       - Abschnitt/Funktion: `initialize_database_schema`, Hilfsfunktionen für Migrationslogik
       - Ziel: Sicherstellen, dass beim Initialisieren/Upgraden ein `CREATE INDEX IF NOT EXISTS idx_historical_prices_security_date ON historical_prices(security_uuid, date)` ausgeführt wird, damit Abfragen auf Zeitreihen performant laufen.
-   b) [ ] Schema-Kommentar zu Retention ergänzen
+   b) [x] Schema-Kommentar zu Retention ergänzen
       - Datei: `custom_components/pp_reader/data/db_schema.py`
       - Abschnitt/Funktion: Definition von `historical_prices` in `SECURITY_SCHEMA`
       - Ziel: Dokumentieren, dass Close-Werte für aktive Wertpapiere vollständig gehalten werden und welche (ggf. spätere) Aufbewahrungsregeln gelten.
