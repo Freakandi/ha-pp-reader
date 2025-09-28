@@ -1,33 +1,42 @@
 """Portfolio Performance Reader custom component for Home Assistant."""
 
+from __future__ import annotations
+
 import logging
+import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
+from importlib import import_module
 from pathlib import Path
-from types import ModuleType
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components import websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import (
     async_register_panel as panel_custom_async_register_panel,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
-from .prices import price_service as price_service_module
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.typing import ConfigType
+
+_NAMESPACE_ALIAS = "pp_reader"
+sys.modules[_NAMESPACE_ALIAS] = sys.modules[__name__]
 
 PRICE_LOGGER_NAMES = [
     "custom_components.pp_reader.prices",
@@ -50,7 +59,7 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
-    return price_service_module
+    return import_module(".prices.price_service", __name__)
 
 
 def _get_websocket_module() -> ModuleType:
