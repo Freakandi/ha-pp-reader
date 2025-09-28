@@ -222,7 +222,15 @@ def iter_security_close_prices(
         message = "end_date muss größer oder gleich start_date sein"
         raise ValueError(message)
 
-    conn = sqlite3.connect(str(db_path))
+    try:
+        conn = sqlite3.connect(str(db_path))
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Öffnen der Datenbank für historische Preise (db_path=%s)",
+            db_path,
+        )
+        return
+
     try:
         sql = [
             "SELECT date, close",
@@ -250,10 +258,17 @@ def iter_security_close_prices(
             )
             return
 
-        for date_value, close_value in cursor:
-            yield int(date_value), int(close_value)
+        try:
+            for date_value, close_value in cursor:
+                yield int(date_value), int(close_value)
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Iterieren historischer Preise (security_uuid=%s)",
+                security_uuid,
+            )
     finally:
-        conn.close()
+        with suppress(sqlite3.Error):
+            conn.close()
 
 
 def get_security_close_prices(

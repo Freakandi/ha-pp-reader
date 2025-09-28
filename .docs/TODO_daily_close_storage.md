@@ -41,7 +41,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Direkt neben dem Generator
       - Ziel: Vollständige Liste der Close-Paare auf Basis des Generators materialisieren, damit Consumer ohne Generator-Handling arbeiten können.
-   c) [ ] Fehlerbehandlung und Logging ergänzen
+   c) [x] Fehlerbehandlung und Logging ergänzen
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Neue Helper aus 3a/3b
       - Ziel: Einheitliches Logging bei SQLite-Fehlern, damit Tests und Nutzer Fehlerursachen nachvollziehen können.
