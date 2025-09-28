@@ -22,7 +22,7 @@ b) [x] Ergänzung: Mikro-Index Validierung
    - Datei: `custom_components/pp_reader/data/db_schema.py`
    - Ziel: Index `idx_portfolio_securities_portfolio` (IF NOT EXISTS) für schnellere Aggregation
 
-c) [ ] Utility `fetch_portfolio_positions_live` (Optional)
+c) [-] Utility `fetch_portfolio_positions_live` (Optional)
    - Datei: `custom_components/pp_reader/data/db_access.py`
    - Ziel: Positionsliste (Name, current_holdings, purchase_value, current_value, Gains) direkt aus DB (für potenzielles späteres Reuse)
    - Optional (Vorbereitung für konsistenten Server-Side Reuse)
@@ -44,7 +44,7 @@ c) [x] Einheitliche Helper-Funktion `_live_portfolios_payload(hass, entry_id)`
    - Datei: `custom_components/pp_reader/data/websocket.py`
    - Ziel: Duplication vermeiden (DRY)
 
-d) [ ] Anpassung `ws_get_portfolio_positions` (Optional)
+d) [-] Anpassung `ws_get_portfolio_positions` (Optional)
    - Datei: `custom_components/pp_reader/data/websocket.py`
    - Ziel: Nutzung `fetch_portfolio_positions_live` falls implementiert
 
@@ -80,7 +80,7 @@ a) [x] Beibehalten bestehender `coordinator.data["portfolios"]` für Sensoren
 b) [x] Kommentar ergänzen: "UI/WS nutzt On-Demand; Coordinator nur für Sensoren"
    - Datei: `custom_components/pp_reader/data/coordinator.py`
 
-c) [ ] (Optional) Kennzeichnung veralteter Aggregationspfad (WARN nur im Debug)
+c) [-] (Optional) Kennzeichnung veralteter Aggregationspfad (WARN nur im Debug)
    - Datei: `custom_components/pp_reader/data/coordinator.py`
 
 ---
@@ -132,7 +132,7 @@ a) [x] Review `attachPortfolioToggleHandler` & `reloadPortfolioPositions`
 b) [x] Kommentar ergänzen: "On-Demand Aggregation ersetzt Client Overrides; Lazy-Positions unverändert"
    - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
 
-c) [ ] (Optional) Retry-Button Behavior bestätigen (Fehlerfall)
+c) [-] (Optional) Retry-Button Behavior bestätigen (Fehlerfall)
    - Datei: `overview.js` (Bereich `reloadPortfolioPositions`)
    - Ziel: UX unverändert
 
@@ -184,7 +184,7 @@ e) [x] `README.md` Abschnitt "Architektur / Live-Preise" anpassen
    - Datei: `README.md`
    - Ziel: Hinweis auf Echtzeit ohne Client Cache
 
-f) [ ] (Optional) `.docs/updateGoals.md` Fortschrittsmarkierung / Referenz
+f) [-] (Optional) `.docs/updateGoals.md` Fortschrittsmarkierung / Referenz
    - Datei: `.docs/updateGoals.md`
    - Ziel: Migrationstatus dokumentiert
 
@@ -214,7 +214,7 @@ b) [x] Neuer Test: WebSocket `pp_reader/get_portfolio_data`
 c) [x] Anpassung existierender Tests falls `coordinator.data["portfolios"]` Assertions -> unverändert lassen (Backward Compatibility)
    - Hinweis: Bestehende Tests enthalten keine Assertions auf `coordinator.data["portfolios"]`; keine Änderungen notwendig.
 
-d) [ ] Performance Test (≥100 Positionen) – Messung Laufzeit
+d) [-] Performance Test (≥100 Positionen) – Messung Laufzeit
    - Datei: `tests/perf/test_live_aggregation_perf.py`
    - Ziel: Basis-Metrik für spätere Optimierungen
 
@@ -247,28 +247,28 @@ a) [x] Entferne alte Kommentare über "Baseline/Overrides"
    - Dateien: `overview.js`, `updateConfigsWS.js`
    - Hinweis: Code durchsucht – keine Alt-Kommentare mehr vorhanden.
 
-b) [ ] Ergänze TODO Marker falls Micro-Caching geplant
+b) [-] Ergänze TODO Marker falls Micro-Caching geplant
    - Datei: `db_access.py` (über `fetch_live_portfolios`)
 
-c) [ ] CODE STYLE: Ruff / ESLint laufen lassen
+c) [x] CODE STYLE: Ruff / ESLint laufen lassen
    - Skripte: `./scripts/lint`
 
 ---
 
 ## 13. Optionale Optimierungen (nicht Blocker)
 
-a) [ ] Micro-Caching (TTL 2–5s) für `fetch_live_portfolios`
+a) [-] Micro-Caching (TTL 2–5s) für `fetch_live_portfolios`
    - Datei: `db_access.py`
    - Ziel: Reduktion DB Load bei schnellem Tab-Wechsel
 
-b) [ ] Batch Positions Prefetch (wenn mehrere Portfolios expandiert)
+b) [-] Batch Positions Prefetch (wenn mehrere Portfolios expandiert)
    - Datei: `websocket.py` (neuer optionaler Command)
    - Ziel: Latenzoptimierung
 
-c) [ ] Frontend Skeleton Loader für erste Portfolio-Werte (falls spürbare Verzögerung)
+c) [-] Frontend Skeleton Loader für erste Portfolio-Werte (falls spürbare Verzögerung)
    - Datei: `overview.js`
 
-d) [ ] Metrics Hook (DEBUG) – Zeitmessung Aggregation
+d) [-] Metrics Hook (DEBUG) – Zeitmessung Aggregation
    - Datei: `db_access.py`
    - Ziel: zukünftiges Tuning
 
@@ -276,9 +276,9 @@ d) [ ] Metrics Hook (DEBUG) – Zeitmessung Aggregation
 
 ## 14. Abschluss
 
-a) [ ] Finaler Review / Diff Audit (kein Override Code mehr)
-b) [ ] CHANGELOG & Manifest konsistent
-c) [ ] Merge in `dev` → später in `main` (Release Flow unverändert)
+a) [x] Finaler Review / Diff Audit (kein Override Code mehr)
+b) [x] CHANGELOG & Manifest konsistent
+c) [x] Merge in `dev` → später in `main` (Release Flow unverändert)
 
 ---
 
