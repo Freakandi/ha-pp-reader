@@ -1,7 +1,7 @@
 # Daily Close Storage – Implementierungs-Checkliste
 
 1. Datenbankschema absichern
-   a) [ ] Index-Migration für `historical_prices`
+   a) [x] Index-Migration für `historical_prices`
       - Datei: `custom_components/pp_reader/data/db_init.py`
       - Abschnitt/Funktion: `initialize_database_schema`, Hilfsfunktionen für Migrationslogik
       - Ziel: Sicherstellen, dass beim Initialisieren/Upgraden ein `CREATE INDEX IF NOT EXISTS idx_historical_prices_security_date ON historical_prices(security_uuid, date)` ausgeführt wird, damit Abfragen auf Zeitreihen performant laufen.
