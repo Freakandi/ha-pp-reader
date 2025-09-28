@@ -27,7 +27,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Datensätze mit Datum > heutiger Tag oder außerhalb des importierten Bereichs verwerfen bzw. protokollieren.
-   e) [ ] Import-Statistiken um Historien-Counter erweitern
+   e) [x] Import-Statistiken um Historien-Counter erweitern
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: Stats-/Logging-Block im Importer
       - Ziel: Anzahl neu geschriebener bzw. übersprungener Close-Zeilen erfassen, um spätere Validierung zu erleichtern.
