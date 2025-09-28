@@ -23,7 +23,6 @@ from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
-from .prices import price_service as price_service_module
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -37,6 +36,8 @@ if TYPE_CHECKING:
 
 _NAMESPACE_ALIAS = "pp_reader"
 sys.modules[_NAMESPACE_ALIAS] = sys.modules[__name__]
+
+from .prices import price_service as price_service_module
 
 PRICE_LOGGER_NAMES = [
     "custom_components.pp_reader.prices",
