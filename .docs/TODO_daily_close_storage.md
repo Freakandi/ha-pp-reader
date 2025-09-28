@@ -37,7 +37,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Neuer Funktionsblock unterhalb bestehender Getter
       - Ziel: Reihenweise `(date, close)` für eine Security optional gefiltert nach `start_date`/`end_date` in aufsteigender Reihenfolge liefern; Eingabewerte validieren.
-   b) [ ] Komfortfunktion `get_security_close_prices`
+   b) [x] Komfortfunktion `get_security_close_prices`
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Direkt neben dem Generator
       - Ziel: Vollständige Liste der Close-Paare auf Basis des Generators materialisieren, damit Consumer ohne Generator-Handling arbeiten können.
