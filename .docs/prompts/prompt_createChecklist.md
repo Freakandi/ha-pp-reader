@@ -1,10 +1,10 @@
 # Promptvorlage: ToDo-Checkliste aus updateGoals.md ableiten
 
 **Ziel:**
-Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Migration auf ausschließlich DB-basierte Berechnungen (Entfall Override-Cache, On-Demand Aggregation im WebSocket-Handler, lazy Positionsdetails), basierend auf den Festlegungen in [.docs/updateGoals.md](.docs/updateGoals.md).
+Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Migration auf ausschließlich DB-basierte Berechnungen (Entfall Override-Cache, On-Demand Aggregation im WebSocket-Handler, lazy Positionsdetails), basierend auf den Festlegungen in [.docs/daily_close_storage.md](.docs/daily_close_storage.md).
 
 **Vorgehen:**
-1. Scanne das gesamte Dokument [.docs/updateGoals.md](.docs/updateGoals.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
+1. Scanne das gesamte Dokument [.docs/daily_close_storage.md](.docs/daily_close_storage.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
 2. Zerlege jeden Anpassungspunkt in einen klaren, atomaren ToDo-Item (eine Änderung pro Punkt).
 3. Formuliere jeden Punkt so, dass er ohne weitere Rückfragen direkt umgesetzt werden kann (inkl. Dateipfad, Funktion/Abschnitt, Ziel der Änderung).
 4. Markiere optionale oder nachgelagerte Optimierungen explizit als solche.
