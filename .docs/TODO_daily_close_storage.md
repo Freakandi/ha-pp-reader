@@ -69,7 +69,7 @@
       - Datei: `tests/test_migration.py`
       - Abschnitt/Funktion: Neuer Testfall `test_creates_historical_price_index`
       - Ziel: Verifizieren, dass Initialisierung/Migration den Index `idx_historical_prices_security_date` anlegt.
-   b) [ ] Import-Deduplikation testen
+   b) [x] Import-Deduplikation testen
       - Datei: `tests/test_sync_from_pclient.py`
       - Abschnitt/Funktion: Neuer Testblock für `_sync_securities`
       - Ziel: Sicherstellen, dass doppelte Close-Daten nicht mehrfach persistiert werden und retired-Securities übersprungen werden.
