@@ -507,6 +507,7 @@ class _SyncRunner:
                 maybe_field(security, "isin"),
                 maybe_field(security, "wkn"),
                 maybe_field(security, "tickerSymbol"),
+                maybe_field(security, "type"),
                 security.currencyCode,
                 security_type,
                 retired,
@@ -516,7 +517,7 @@ class _SyncRunner:
             self.cursor.execute(
                 """
                 SELECT name, isin, wkn, ticker_symbol,
-                       currency_code, type, retired, updated_at
+                       type, currency_code, retired, updated_at
                 FROM securities
                 WHERE uuid = ?
                 """,
@@ -529,8 +530,8 @@ class _SyncRunner:
                     """
                     INSERT INTO securities (
                         uuid, name, isin, wkn, ticker_symbol, feed,
-                        currency_code, type, retired, updated_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                        type, currency_code, retired, updated_at
+                      ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         security.uuid,

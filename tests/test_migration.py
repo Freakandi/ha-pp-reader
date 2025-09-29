@@ -222,6 +222,7 @@ def test_legacy_schema_migrated(tmp_path):
     assert "last_price_fetched_at" in cols, (
         "Migration hat last_price_fetched_at nicht ergänzt"
     )
+    assert cols["type"]["type"].upper() == "TEXT"
 
     # Datenintegrität prüfen
     conn2 = sqlite3.connect(str(db_path))

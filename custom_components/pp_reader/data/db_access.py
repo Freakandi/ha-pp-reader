@@ -130,8 +130,8 @@ def get_securities(db_path: Path) -> dict[str, Security]:
     try:
         cur = conn.execute(
             """
-            SELECT uuid, name, currency_code,
-                   type, isin, wkn, ticker_symbol,
+            SELECT uuid, name, type, currency_code,
+                   isin, wkn, ticker_symbol,
                    retired, updated_at,
                    last_price, last_price_date
             FROM securities
@@ -142,8 +142,8 @@ def get_securities(db_path: Path) -> dict[str, Security]:
             row[0]: Security(
                 uuid=row[0],
                 name=row[1],
-                currency_code=row[2],
-                type=row[3],
+                type=row[2],
+                currency_code=row[3],
                 note=None,  # keine Spalte in Schema → bewusst None
                 isin=row[4],
                 wkn=row[5],

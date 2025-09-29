@@ -31,6 +31,7 @@ def _ensure_minimal_homeassistant_stubs() -> None:
 
         def __init__(self) -> None:
             self.data: dict[str, object] = {}
+            self.loop: asyncio.AbstractEventLoop | None = None
 
         async def async_add_executor_job(self, func, *args):  # noqa: D401
             return func(*args)
@@ -166,6 +167,7 @@ class StubHass:
 
     def __init__(self, store: dict[str, object]) -> None:
         self.data = store
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     async def async_add_executor_job(self, func, *args):
         loop = asyncio.get_running_loop()
@@ -186,7 +188,20 @@ class StubHass:
 def _run_ws_get_security_history(*args, **kwargs) -> None:
     """Execute the websocket handler in a dedicated asyncio loop."""
 
-    asyncio.run(WS_GET_SECURITY_HISTORY(*args, **kwargs))
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        hass = args[0] if args else None
+        if isinstance(hass, StubHass):
+            hass.loop = loop
+        WS_GET_SECURITY_HISTORY(*args, **kwargs)
+        pending = asyncio.all_tasks(loop)
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending))
+        loop.run_until_complete(loop.shutdown_asyncgens())
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
 
 
 @pytest.fixture
