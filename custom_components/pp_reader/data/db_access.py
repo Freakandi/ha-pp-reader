@@ -51,6 +51,7 @@ class Security:
     uuid: str
     name: str
     currency_code: str
+    type: str | None = None
     note: str | None = None
     isin: str | None = None
     wkn: str | None = None
@@ -130,7 +131,7 @@ def get_securities(db_path: Path) -> dict[str, Security]:
         cur = conn.execute(
             """
             SELECT uuid, name, currency_code,
-                   isin, wkn, ticker_symbol,
+                   type, isin, wkn, ticker_symbol,
                    retired, updated_at,
                    last_price, last_price_date
             FROM securities
@@ -142,14 +143,15 @@ def get_securities(db_path: Path) -> dict[str, Security]:
                 uuid=row[0],
                 name=row[1],
                 currency_code=row[2],
+                type=row[3],
                 note=None,  # keine Spalte in Schema → bewusst None
-                isin=row[3],
-                wkn=row[4],
-                ticker_symbol=row[5],
-                retired=bool(row[6]),
-                updated_at=row[7],
-                last_price=row[8],
-                last_price_date=row[9],
+                isin=row[4],
+                wkn=row[5],
+                ticker_symbol=row[6],
+                retired=bool(row[7]),
+                updated_at=row[8],
+                last_price=row[9],
+                last_price_date=row[10],
             )
             for row in cur.fetchall()
         }

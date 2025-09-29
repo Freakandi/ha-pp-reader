@@ -42,6 +42,7 @@ SECURITY_SCHEMA = [
         ticker_symbol TEXT,
         feed TEXT,
         currency_code TEXT,
+        type TEXT,
         retired INTEGER,
         updated_at TEXT,
         last_price INTEGER,           -- Letzter Preis in 10^-8 Einheiten

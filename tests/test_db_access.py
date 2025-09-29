@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import sys
 import types
@@ -86,6 +87,17 @@ def _ensure_minimal_homeassistant_stubs() -> None:
 
         async def async_add_executor_job(self, func, *args, **kwargs):  # noqa: D401
             return func(*args, **kwargs)
+
+        def async_create_background_task(
+            self,
+            coro,
+            _task_name=None,
+            *,
+            eager_start: bool = False,
+        ):
+            del eager_start
+            loop = asyncio.get_running_loop()
+            return loop.create_task(coro)
 
     class ConfigEntry:  # noqa: D401 - simple stub
         """Stub ConfigEntry object."""

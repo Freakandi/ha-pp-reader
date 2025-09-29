@@ -500,12 +500,15 @@ class _SyncRunner:
             retired = 1 if getattr(security, "isRetired", False) else 0
             security_updated_at = maybe_field(security, "updatedAt")
             updated_at = to_iso8601(security_updated_at)
+            security_type = maybe_field(security, "type")
+
             new_security_attrs = (
                 security.name,
                 maybe_field(security, "isin"),
                 maybe_field(security, "wkn"),
                 maybe_field(security, "tickerSymbol"),
                 security.currencyCode,
+                security_type,
                 retired,
                 updated_at,
             )
@@ -513,7 +516,7 @@ class _SyncRunner:
             self.cursor.execute(
                 """
                 SELECT name, isin, wkn, ticker_symbol,
-                       currency_code, retired, updated_at
+                       currency_code, type, retired, updated_at
                 FROM securities
                 WHERE uuid = ?
                 """,
@@ -526,8 +529,8 @@ class _SyncRunner:
                     """
                     INSERT INTO securities (
                         uuid, name, isin, wkn, ticker_symbol, feed,
-                        currency_code, retired, updated_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?)
+                        currency_code, type, retired, updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         security.uuid,
@@ -539,6 +542,7 @@ class _SyncRunner:
                         new_security_attrs[4],
                         new_security_attrs[5],
                         new_security_attrs[6],
+                        new_security_attrs[7],
                     ),
                 )
                 self.changes.securities = True
@@ -548,7 +552,7 @@ class _SyncRunner:
                     """
                     UPDATE securities
                     SET name=?, isin=?, wkn=?, ticker_symbol=?,
-                        currency_code=?, retired=?, updated_at=?
+                        currency_code=?, type=?, retired=?, updated_at=?
                     WHERE uuid=?
                     """,
                     (*new_security_attrs, security.uuid),

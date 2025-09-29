@@ -134,7 +134,12 @@ class _DummySecurity:
 
 def _prepare_portfolio_db(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
-    for statement in db_schema.PORTFOLIO_SCHEMA:
+    schema_statements = (
+        *db_schema.SECURITY_SCHEMA,
+        *db_schema.PORTFOLIO_SCHEMA,
+        *db_schema.PORTFOLIO_SECURITIES_SCHEMA,
+    )
+    for statement in schema_statements:
         conn.executescript(statement)
     conn.commit()
     return conn

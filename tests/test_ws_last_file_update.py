@@ -71,6 +71,7 @@ class StubHass:
         return func(*args)
 
     def async_create_background_task(self, coro, _task_name=None, *, eager_start=False):
+        del eager_start
         loop = asyncio.get_running_loop()
         return loop.create_task(coro)
 
