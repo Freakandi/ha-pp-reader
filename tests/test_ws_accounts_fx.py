@@ -99,6 +99,13 @@ class StubHass:
         """Execute blocking helpers synchronously for tests."""
         return func(*args)
 
+    def async_create_background_task(
+        self, coro, _task_name=None, *, eager_start: bool = False
+    ):
+        """Schedule the coroutine on the running event loop."""
+        loop = asyncio.get_running_loop()
+        return loop.create_task(coro)
+
 
 def _make_account(currency: str, balance: int = 10000) -> object:
     class Account:
