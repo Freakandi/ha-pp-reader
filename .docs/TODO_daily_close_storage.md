@@ -73,7 +73,7 @@
       - Datei: `tests/test_sync_from_pclient.py`
       - Abschnitt/Funktion: Neuer Testblock für `_sync_securities`
       - Ziel: Sicherstellen, dass doppelte Close-Daten nicht mehrfach persistiert werden und retired-Securities übersprungen werden.
-   c) [ ] Datenzugriff-Helper testen
+   c) [x] Datenzugriff-Helper testen
       - Datei: `tests/test_db_access.py` (neu)
       - Abschnitt/Funktion: Tests für `iter_security_close_prices` und `get_security_close_prices`
       - Ziel: Grenzen (`start_date`, `end_date`), Sortierung und leere Resultate abdecken.
