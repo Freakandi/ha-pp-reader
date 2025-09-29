@@ -87,7 +87,7 @@
       - Datei: `ARCHITECTURE.md`
       - Abschnitt/Funktion: Kapitel zu Persistenz/Storage
       - Ziel: Datenfluss des Daily-Close-Speichers, Interaktion mit Importer & WebSocket beschreiben.
-   b) [ ] Änderungsprotokoll aktualisieren
+   b) [x] Änderungsprotokoll aktualisieren
       - Datei: `CHANGELOG.md`
       - Abschnitt/Funktion: Neuer Eintrag unter "Unreleased"
       - Ziel: Einführung der historischen Close-Speicherung und des optionalen History-WebSockets dokumentieren.

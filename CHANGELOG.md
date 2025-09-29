@@ -4,6 +4,11 @@ All noteworthy changes to this project are recorded in this file.
 Format follows: Keep a Changelog
 Versioning: SemVer (minor bump for new functionality without breaking changes).
 
+## [Unreleased]
+### Added
+- Persist daily Close prices for active securities during Portfolio Performance imports and provide helpers to query their time series for future dashboards.【F:custom_components/pp_reader/data/sync_from_pclient.py†L559-L676】【F:custom_components/pp_reader/data/db_access.py†L204-L289】
+- Introduced a feature-flagged WebSocket command (`pp_reader/get_security_history`) that streams Close data when explicitly enabled, paving the way for historical price visualisations.【F:custom_components/pp_reader/data/websocket.py†L396-L496】【F:custom_components/pp_reader/feature_flags.py†L1-L101】
+
 ## [0.11.0] - 2025-09-27
 ### Added
 - New database helper `fetch_live_portfolios` aggregates current portfolio values and position counts on demand as the single source of truth for WebSocket responses and dashboard load paths.【F:custom_components/pp_reader/data/db_access.py†L428-L484】
