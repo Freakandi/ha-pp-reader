@@ -158,7 +158,7 @@ async def test_change_triggers_events(monkeypatch, tmp_path):
             "portfolio_positions": None,
         }
 
-    async def fake_fetch(symbols):
+    async def fake_fetch(self, symbols):
         return {"AAPL": _make_quote("AAPL", 1.05, "USD")}
 
     monkeypatch.setattr(price_service, "_push_update", fake_push)
@@ -189,7 +189,7 @@ async def test_no_change_no_events(monkeypatch, tmp_path):
     async def fake_reval(hass_, conn, uuids):
         return {"portfolio_values": {"pf1": {}}, "portfolio_positions": None}
 
-    async def fake_fetch(symbols):
+    async def fake_fetch(self, symbols):
         return {"AAPL": _make_quote("AAPL", 1.05, "USD")}
 
     monkeypatch.setattr(price_service, "_push_update", fake_push)
@@ -208,7 +208,7 @@ async def test_fetch_uses_configured_timeout(monkeypatch, tmp_path):
     db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", None)
     _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
 
-    async def fake_fetch(symbols):
+    async def fake_fetch(self, symbols):
         return {"AAPL": _make_quote("AAPL", 1.0, "USD")}
 
     async def fake_wait_for(awaitable, timeout, *, loop=None):
@@ -252,7 +252,7 @@ async def test_currency_drift_warn_once(monkeypatch, tmp_path, caplog):
     async def fake_reval(hass_, conn, uuids):
         return {"portfolio_values": {}, "portfolio_positions": None}
 
-    async def fake_fetch(symbols):
+    async def fake_fetch(self, symbols):
         # Quote currency abweichend (EUR vs USD in DB)
         return {"AAPL": _make_quote("AAPL", 1.11, "EUR")}
 
@@ -292,10 +292,10 @@ async def test_error_counter_increment_and_reset(monkeypatch, tmp_path, caplog):
         return {"portfolio_values": {}, "portfolio_positions": None}
 
     # Zero-Quotes (leer)
-    async def empty_fetch(symbols):
+    async def empty_fetch(self, symbols):
         return {}
 
-    async def success_fetch(symbols):
+    async def success_fetch(self, symbols):
         return {"AAPL": _make_quote("AAPL", 2.0, "USD")}
 
     monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
@@ -343,7 +343,7 @@ async def test_no_drift_none_currency(monkeypatch, tmp_path, caplog):
         return {"portfolio_values": {}, "portfolio_positions": None}
 
     # Quote ohne currency (None) -> sollte von Drift-Prüfung ignoriert werden
-    async def fetch_no_currency(symbols):
+    async def fetch_no_currency(self, symbols):
         return {"AAPL": _make_quote("AAPL", 3.0, None)}
 
     monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)

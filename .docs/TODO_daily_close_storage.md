@@ -99,6 +99,8 @@
       - Notiz 2025-03-20: `pytest` läuft jetzt bis zur Integrationseinrichtung durch, scheitert aber an fehlendem Home Assistant
         Loader-Setup (`KeyError: 'integrations'` / `Integration not found`) sowie fehlenden Listener-Stubs (z. B.
         `async_track_time_interval`). Zusätzliche Test-Fixture-Ergänzungen für Loader-Cache und Event-Helfer erforderlich.
+      - Fortschritt 2025-03-21: Loader-/HTTP-Stubs & Coordinator-Noop für Tests ergänzt; Suite bricht nun erst an
+        funktionalen Assertions (Logger-Scope, Zero-Quotes-WARN, WS-Loop) ab.
    b) [ ] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.

@@ -44,7 +44,7 @@ async def test_currency_drift_warn_once(hass, tmp_path, monkeypatch, caplog):
         conn.commit()
 
     # --- Provider Patch: immer gleicher Preis + mismatched currency (EUR) ---
-    async def fake_fetch(symbols):
+    async def fake_fetch(self, symbols):
         assert symbols == ["AAA"]
         return {
             "AAA": Quote(
