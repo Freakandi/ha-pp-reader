@@ -101,7 +101,7 @@
         `async_track_time_interval`). Zusätzliche Test-Fixture-Ergänzungen für Loader-Cache und Event-Helfer erforderlich.
       - Fortschritt 2025-03-21: Loader-/HTTP-Stubs & Coordinator-Noop für Tests ergänzt; Suite bricht nun erst an
         funktionalen Assertions (Logger-Scope, Zero-Quotes-WARN, WS-Loop) ab.
-   b) [ ] Manuelle Importprobe
+   b) [x] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.
    c) [ ] WebSocket-Handschlag prüfen
