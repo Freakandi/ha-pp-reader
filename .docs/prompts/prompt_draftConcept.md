@@ -36,4 +36,4 @@ You are a senior engineer supporting the Home Assistant integration "Portfolio P
 ---
 ## Output Format
 
-Return only the fully elaborated concept document in the described Markdown structure, without any additional commentary.
+Return only the fully elaborated concept document in the described Markdown structure, without any additional commentary. Devise a name for the feature and save the concept to .docs/[feature name].md
