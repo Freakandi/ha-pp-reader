@@ -113,7 +113,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Logging/Telemetry aufbauen, das Lücken in Zeitreihen erkennt und meldet.
-   b) [ ] Retention-Konfiguration einführen *(Optional)*
+   b) [x] Retention-Konfiguration einführen *(Optional)*
       - Datei: `custom_components/pp_reader/const.py` + `custom_components/pp_reader/__init__.py`
       - Abschnitt/Funktion: Konstante & Optionshandling
       - Ziel: Optional begrenzte Aufbewahrungsdauer (z.B. Jahre) steuerbar machen.

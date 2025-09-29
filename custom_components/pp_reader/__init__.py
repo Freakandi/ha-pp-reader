@@ -18,7 +18,12 @@ from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
+from .const import (
+    CONF_DB_PATH,
+    CONF_FILE_PATH,
+    CONF_HISTORY_RETENTION_YEARS,
+    DOMAIN,
+)
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
@@ -100,6 +105,44 @@ def _store_feature_flags(store: dict[str, Any], overrides: Mapping[str, bool]) -
     flags.setdefault("pp_reader_history", False)
     store["feature_flags"] = flags
     return flags
+
+
+def _normalize_history_retention_years(options: Mapping[str, Any]) -> int | None:
+    """Return the configured retention horizon in years or ``None`` for unlimited."""
+
+    raw_value = options.get(CONF_HISTORY_RETENTION_YEARS)
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, str):
+        cleaned = raw_value.strip()
+        if not cleaned:
+            return None
+        if cleaned.lower() in {"none", "unlimited"}:
+            return None
+        raw_value = cleaned
+
+    try:
+        years = int(raw_value)
+    except (TypeError, ValueError):
+        _LOGGER.warning(
+            "Ungültige history_retention_years Option (%r) -> keine Begrenzung",
+            raw_value,
+        )
+        return None
+
+    if years <= 0:
+        return None
+
+    return years
+
+
+def _store_history_retention(store: dict[str, Any], options: Mapping[str, Any]) -> int | None:
+    """Persist the retention configuration in the entry store and return it."""
+
+    retention_years = _normalize_history_retention_years(options)
+    store["history_retention_years"] = retention_years
+    return retention_years
 
 
 def _get_price_interval_seconds(options: Mapping[str, Any]) -> int:
@@ -271,6 +314,7 @@ async def _async_reload_entry_on_update(
     options = _get_entry_options(entry)
     flag_overrides = _extract_feature_flag_options(options)
     _store_feature_flags(store, flag_overrides)
+    _store_history_retention(store, options)
 
     old_cancel = store.get("price_task_cancel")
     old_interval = store.get("price_interval_applied")
@@ -339,6 +383,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         flag_overrides = _extract_feature_flag_options(options)
         _store_feature_flags(store, flag_overrides)
+        _store_history_retention(store, options)
 
         _apply_price_debug_logging(entry)
 
