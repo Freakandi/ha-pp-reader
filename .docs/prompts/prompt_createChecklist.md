@@ -1,15 +1,15 @@
-# Promptvorlage: ToDo-Checkliste aus daily_close_storage.md ableiten
+# Promptvorlage: ToDo-Checkliste aus security_detail_tab.md ableiten
 
 **Ziel:**
-Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Umsetzung/Implementierung der nächsten Entwicklungsziele, basierend auf den Festlegungen in [.docs/daily_close_storage.md](.docs/daily_close_storage.md).
+Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Umsetzung/Implementierung der nächsten Entwicklungsziele, basierend auf den Festlegungen in [.docs/security_detail_tab.md](.docs/security_detail_tab.md).
 
 **Vorgehen:**
-1. Scanne das gesamte Dokument [.docs/daily_close_storage.md](.docs/daily_close_storage.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
+1. Scanne das gesamte Dokument [.docs/security_detail_tab.md](.docs/security_detail_tab.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
 2. Zerlege jeden Anpassungspunkt in einen klaren, atomaren ToDo-Item (eine Änderung pro Punkt).
 3. Formuliere jeden Punkt so, dass er ohne weitere Rückfragen direkt umgesetzt werden kann (inkl. Dateipfad, Funktion/Abschnitt, Ziel der Änderung).
 4. Markiere optionale oder nachgelagerte Optimierungen explizit als solche.
 5. Die Checkliste muss alle notwendigen Code-, Test- und Doku-Änderungen enthalten, um das Zielkonzept vollständig und konsistent umzusetzen.
-6. Die Checkliste soll als neue .md-Datei im Ordner .docs abgelegt werden, wähle selbst einen passenden Dateinamen.
+6. Die Checkliste soll als neue TODO_security_detail_tab.md im Ordner .docs abgelegt werden.
 
 **Format:**
 - Nummerierte Hauptpunkte (1., 2., …)
@@ -66,4 +66,4 @@ Optionale Optimierungen (z.B. Micro-Caching für Positionsabrufe) als "Optional"
 ---
 
 **Anwendung:**
-Nutze diese Vorlage, um aus [.docs/daily_close_storage.md](.docs/daily_close_storage.md) eine vollständige, umsetzbare ToDo-Checkliste für die Migration zu erstellen.
+Nutze diese Vorlage, um aus [.docs/security_detail_tab.md](.docs/security_detail_tab.md) eine vollständige, umsetzbare ToDo-Checkliste für die Migration zu erstellen.
