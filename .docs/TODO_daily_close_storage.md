@@ -108,8 +108,8 @@
       - Datei/Command: `ws`-Request via `websocket_client.py`/DevTools
       - Ziel: Sicherstellen, dass `pp_reader/get_security_history` bei aktivem Flag Daten liefert.
 
-8. Optionale Nacharbeiten
-   a) [ ] Warnungen bei fehlenden Tagesdaten instrumentieren *(Optional)*
+8. Weitere Nacharbeiten
+   a) [ ] Warnungen bei fehlenden Tagesdaten instrumentieren
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Logging/Telemetry aufbauen, das Lücken in Zeitreihen erkennt und meldet.
@@ -117,4 +117,9 @@
       - Datei: `custom_components/pp_reader/const.py` + `custom_components/pp_reader/__init__.py`
       - Abschnitt/Funktion: Konstante & Optionshandling
       - Ziel: Optional begrenzte Aufbewahrungsdauer (z.B. Jahre) steuerbar machen.
+   c) [ ] Belastungs- & End-to-End-Tests für Preis-/WebSocket-Pfade ergänzen *(Optional)*
+      - Datei/Command: `tests/test_price_service.py`, neue Belastungstests in `tests/` + HA-Devinstanz
+      - Abschnitt/Funktion: Preisservice-Batching (`CHUNK_SIZE` = 10) & `websocket.py`-Handler
+      - Ziel: Sehr große Symbolmengen mit reduziertem Yahoo-Chunksize durchspielen und einen realen Home-Assistant-WebSocket-
+        End-to-End-Lauf gegen eine Devinstanz absichern (Async-Wrapper vs. echter Event-Loop vergleichen).
 
