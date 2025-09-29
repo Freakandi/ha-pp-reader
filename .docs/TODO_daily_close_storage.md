@@ -83,7 +83,7 @@
       - Ziel: Erfolgsfall bei aktivem Flag sowie Fehlerantwort bei deaktiviertem Flag validieren.
 
 6. Dokumentation aktualisieren
-   a) [ ] Architektur-Übersicht ergänzen
+   a) [x] Architektur-Übersicht ergänzen
       - Datei: `ARCHITECTURE.md`
       - Abschnitt/Funktion: Kapitel zu Persistenz/Storage
       - Ziel: Datenfluss des Daily-Close-Speichers, Interaktion mit Importer & WebSocket beschreiben.
