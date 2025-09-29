@@ -109,7 +109,7 @@
       - Ziel: Sicherstellen, dass `pp_reader/get_security_history` bei aktivem Flag Daten liefert.
 
 8. Weitere Nacharbeiten
-   a) [ ] Warnungen bei fehlenden Tagesdaten instrumentieren
+   a) [x] Warnungen bei fehlenden Tagesdaten instrumentieren
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Logging/Telemetry aufbauen, das Lücken in Zeitreihen erkennt und meldet.

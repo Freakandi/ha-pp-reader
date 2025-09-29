@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import sqlite3
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,16 @@ class _DummySecurity:
 
     def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
         return getattr(self, name, None) is not None
+
+
+class _FakeTimestamp:
+    """Simple timestamp stub returning a timezone-aware datetime."""
+
+    def __init__(self, *, seconds: int) -> None:
+        self.seconds = seconds
+
+    def ToDatetime(self) -> datetime:
+        return datetime.fromtimestamp(self.seconds, tz=timezone.utc)
 
 
 def _prepare_portfolio_db(path: Path) -> sqlite3.Connection:
@@ -306,13 +317,6 @@ def test_sync_securities_persists_deduplicated_historical_prices(
 ) -> None:
     """Historical Close rows should be deduplicated and ignore retired securities."""
 
-    class _FakeTimestamp:
-        def __init__(self, *, seconds: int) -> None:
-            self.seconds = seconds
-
-        def ToDatetime(self) -> datetime:
-            return datetime.fromtimestamp(self.seconds, tz=timezone.utc)
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -366,3 +370,54 @@ def test_sync_securities_persists_deduplicated_historical_prices(
     ]
     assert runner.stats.historical_prices_written == 2
     assert runner.stats.historical_prices_skipped == 2
+
+
+def test_sync_securities_warns_about_missing_daily_prices(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Missing Tage zwischen zwei Close-Werten sollen Warnungen erzeugen."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    security_with_gap = _DummySecurity(
+        uuid="sec-gap",
+        name="Gap Security",
+        prices=[
+            _DummyPrice(date=20, close=100),
+            _DummyPrice(date=23, close=160),
+        ],
+    )
+    runner.client.securities = [security_with_gap]
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            runner._sync_securities()
+        conn.commit()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    gap_logs = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "Close-Lücke" in record.getMessage()
+    ]
+    assert gap_logs, "Erwarte mindestens eine Warnung für fehlende Tagesdaten"
+    assert runner.stats.historical_price_gap_warnings == len(gap_logs)
+    assert runner.stats.historical_price_gap_days == 2
