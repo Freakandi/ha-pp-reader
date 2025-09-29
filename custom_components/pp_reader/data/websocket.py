@@ -78,7 +78,7 @@ def _wrap_with_loop_fallback(
     @wraps(handler)
     def wrapper(hass, connection, msg):  # type: ignore[override]
         try:
-            return handler(hass, connection, msg)
+            result = handler(hass, connection, msg)
         except RuntimeError as err:  # pragma: no cover - compatibility path
             if "no running event loop" not in str(err):
                 raise
@@ -90,6 +90,30 @@ def _wrap_with_loop_fallback(
             task = loop.create_task(original(hass, connection, msg))
             loop.run_until_complete(task)
             return None
+
+        if asyncio.iscoroutine(result):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                loop = getattr(hass, "loop", None)
+                if loop is None:
+                    loop = asyncio.new_event_loop()
+                    try:
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(result)
+                    finally:
+                        asyncio.set_event_loop(None)
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                        loop.close()
+                    return None
+                if loop.is_running():
+                    task = loop.create_task(result)
+                    loop.run_until_complete(task)
+                    return None
+                loop.run_until_complete(result)
+                return None
+
+        return result
 
     wrapper.__wrapped__ = original  # type: ignore[attr-defined]
     return wrapper

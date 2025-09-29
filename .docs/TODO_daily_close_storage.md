@@ -122,7 +122,7 @@
       - Abschnitt/Funktion: Preisservice-Batching (`CHUNK_SIZE` = 10) & `websocket.py`-Handler
       - Ziel: Sehr große Symbolmengen mit reduziertem Yahoo-Chunksize durchspielen und einen realen Home-Assistant-WebSocket-
         End-to-End-Lauf gegen eine Devinstanz absichern (Async-Wrapper vs. echter Event-Loop vergleichen).
-   d) [ ] WebSocket-Helfer-Warnungen untersuchen
+   d) [x] WebSocket-Helfer-Warnungen untersuchen
       - Datei/Command: `pytest`
       - Abschnitt/Funktion: Warnungen zu nicht awaiteten WebSocket-Helfern (`custom_components/pp_reader/data/websocket.py`)
       - Ziel: Laufzeit-Warnungen aus der Test-Suite eliminieren, um potenzielle Ressourcen-Lecks zu vermeiden.
