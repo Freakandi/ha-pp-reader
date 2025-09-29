@@ -10,7 +10,7 @@ Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
 - .docs/TODO_security_detail_tab.md
 
 Vorgehensweise (strikt einhalten):
-1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md).
+1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
 2. Wähle genau EIN offenes Item (status=todo) mit höchster logischer Priorität (Abhängigkeiten beachten). Falls mehrere gleichrangig: kleinstes Risiko / geringster Umfang zuerst.
 3. Beschreibe kurz:
    - Gewähltes Item (ID + Titel)
