@@ -65,7 +65,13 @@ python -m pip install -r requirements-dev.txt
 - `postCreateCommand` installiert Runtime (`requirements.txt`) und Dev-Dependencies (`requirements-dev.txt`).
 - Start HA Instanz: `./scripts/develop` oder `./scripts/codex_develop`.
 
-### 2.4 Optional: Poetry
+### 2.4 Überprüfung der Home Assistant-Laufzeit
+
+- Nach der Installation (`./scripts/setup_container` **oder** `pip install -r requirements.txt`) einmal `source .venv/bin/activate` ausführen.
+- Kontrolliere die importierbare Version: `python -c "import homeassistant.const as c; print(c.__version__)"`.
+- Erwartete Ausgabe: `2025.2.4` (wie in `requirements.txt` fixiert). Weicht die Version ab oder tritt ein `ModuleNotFoundError` auf, ist das Dependency-Setup unvollständig.
+
+### 2.5 Optional: Poetry
 
 Nicht verwendet (kein `pyproject.toml` / `poetry.lock`). Poetry-Nutzung derzeit nicht vorgesehen.
 

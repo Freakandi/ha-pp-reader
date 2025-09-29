@@ -37,14 +37,14 @@ def _ensure_minimal_homeassistant_stubs() -> None:
             return func(*args)
 
         def async_create_background_task(
-            self, coro, _task_name=None, *, eager_start: bool = False
-        ) -> asyncio.Task:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                if self.loop is None:
-                    raise
-                loop = self.loop
+            self,
+            coro,
+            _task_name=None,
+            *,
+            eager_start: bool = False,
+        ):
+            del eager_start
+            loop = asyncio.get_running_loop()
             return loop.create_task(coro)
 
     class ActiveConnection:  # noqa: D401 - simple stub
@@ -174,14 +174,14 @@ class StubHass:
         return await loop.run_in_executor(None, func, *args)
 
     def async_create_background_task(
-        self, coro, _task_name=None, *, eager_start: bool = False
-    ) -> asyncio.Task:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            if self.loop is None:
-                raise
-            loop = self.loop
+        self,
+        coro,
+        _task_name=None,
+        *,
+        eager_start: bool = False,
+    ):
+        del eager_start
+        loop = asyncio.get_running_loop()
         return loop.create_task(coro)
 
 

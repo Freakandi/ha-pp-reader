@@ -96,9 +96,9 @@
    a) [ ] Unit- und Integrations-Tests ausführen
       - Datei/Command: `pytest`
       - Ziel: Alle neuen Testfälle bestehen.
-      - Notiz 2025-03-18: Testlauf gestartet (`pytest`), schlägt aktuell u. a. wegen fehlender `securities.type`-Spalte und fehlender
-        `async_create_background_task`-Implementierung in Stub-WebSocket-Helpern fehl; weiterer Abgleich mit bestehender
-        Test-Infrastruktur erforderlich.
+      - Notiz 2025-03-20: `pytest` läuft jetzt bis zur Integrationseinrichtung durch, scheitert aber an fehlendem Home Assistant
+        Loader-Setup (`KeyError: 'integrations'` / `Integration not found`) sowie fehlenden Listener-Stubs (z. B.
+        `async_track_time_interval`). Zusätzliche Test-Fixture-Ergänzungen für Loader-Cache und Event-Helfer erforderlich.
    b) [ ] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.

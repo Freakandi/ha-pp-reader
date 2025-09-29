@@ -18,8 +18,13 @@ class StubHass:
         return await loop.run_in_executor(None, func, *args)
 
     def async_create_background_task(
-        self, coro, _task_name=None, *, eager_start: bool = False
+        self,
+        coro,
+        _task_name=None,
+        *,
+        eager_start: bool = False,
     ):
+        del eager_start
         loop = asyncio.get_running_loop()
         return loop.create_task(coro)
 

@@ -100,9 +100,13 @@ class StubHass:
         return func(*args)
 
     def async_create_background_task(
-        self, coro, _task_name=None, *, eager_start: bool = False
+        self,
+        coro,
+        _task_name=None,
+        *,
+        eager_start: bool = False,
     ):
-        """Schedule the coroutine on the running event loop."""
+        del eager_start
         loop = asyncio.get_running_loop()
         return loop.create_task(coro)
 

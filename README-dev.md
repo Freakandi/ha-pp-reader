@@ -15,6 +15,7 @@ Key directories:
 2. Activate the virtual environment in new shells with `source .venv/bin/activate`.【F:AGENTS.md†L7-L8】
 3. Install developer extras when you plan to run tests: `pip install -r requirements-dev.txt`.【F:AGENTS.md†L7-L9】【F:TESTING.md†L38-L59】
 4. For environments without virtualenv support, `./scripts/environment_setup` installs the same dependencies globally.【F:AGENTS.md†L5-L9】【F:TESTING.md†L179-L189】
+5. Validate the runtime by running `python -c "import homeassistant.const as c; print(c.__version__)"` inside the same shell. The command should output the pinned Home Assistant build (`2025.2.4`).
 
 Additional options (Windows, devcontainers) are documented in [TESTING.md §2](TESTING.md).【F:TESTING.md†L40-L71】
 

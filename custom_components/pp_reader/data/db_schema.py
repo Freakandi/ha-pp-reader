@@ -43,6 +43,7 @@ SECURITY_SCHEMA = [
         feed TEXT,
         type TEXT,
         currency_code TEXT,
+        type TEXT,
         retired INTEGER,
         updated_at TEXT,
         last_price INTEGER,           -- Letzter Preis in 10^-8 Einheiten

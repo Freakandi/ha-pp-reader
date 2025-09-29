@@ -500,6 +500,8 @@ class _SyncRunner:
             retired = 1 if getattr(security, "isRetired", False) else 0
             security_updated_at = maybe_field(security, "updatedAt")
             updated_at = to_iso8601(security_updated_at)
+            security_type = maybe_field(security, "type")
+
             new_security_attrs = (
                 security.name,
                 maybe_field(security, "isin"),
@@ -507,6 +509,7 @@ class _SyncRunner:
                 maybe_field(security, "tickerSymbol"),
                 maybe_field(security, "type"),
                 security.currencyCode,
+                security_type,
                 retired,
                 updated_at,
             )
@@ -528,7 +531,7 @@ class _SyncRunner:
                     INSERT INTO securities (
                         uuid, name, isin, wkn, ticker_symbol, feed,
                         type, currency_code, retired, updated_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                      ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         security.uuid,
@@ -550,7 +553,7 @@ class _SyncRunner:
                     """
                     UPDATE securities
                     SET name=?, isin=?, wkn=?, ticker_symbol=?,
-                        type=?, currency_code=?, retired=?, updated_at=?
+                        currency_code=?, type=?, retired=?, updated_at=?
                     WHERE uuid=?
                     """,
                     (*new_security_attrs, security.uuid),
