@@ -104,7 +104,7 @@
    b) [x] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.
-   c) [ ] WebSocket-Handschlag prüfen
+   c) [x] WebSocket-Handschlag prüfen
       - Datei/Command: `ws`-Request via `websocket_client.py`/DevTools
       - Ziel: Sicherstellen, dass `pp_reader/get_security_history` bei aktivem Flag Daten liefert.
 
