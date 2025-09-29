@@ -2,6 +2,7 @@
 
 import asyncio
 import asyncio
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -10,10 +11,48 @@ pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for module imports"
 )
 
-from custom_components.pp_reader.data.websocket import (
-    DOMAIN,
-    ws_get_portfolio_data,
-)
+from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
+
+
+@pytest.fixture
+def initialized_db(tmp_path: Path) -> Path:
+    """Create a minimal portfolio dataset for WebSocket integration tests."""
+
+    db_path = tmp_path / "portfolio_ws.db"
+    initialize_database_schema(db_path)
+
+    import sqlite3
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        portfolios = [
+            ("p1", "Alpha Depot"),
+            ("p2", "Beta Depot"),
+            ("p3", "Gamma Depot"),
+        ]
+        conn.executemany(
+            "INSERT INTO portfolios (uuid, name) VALUES (?, ?)", portfolios
+        )
+
+        securities = [
+            ("p1", "s1", 5.0, 150_000_000, 175_000_000),
+            ("p2", "s3", 10.0, 500_000_000, 620_000_000),
+        ]
+        conn.executemany(
+            """
+            INSERT INTO portfolio_securities (
+                portfolio_uuid, security_uuid, current_holdings,
+                purchase_value, current_value
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            securities,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return db_path
 
 
 class StubConnection:

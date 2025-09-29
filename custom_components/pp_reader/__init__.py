@@ -221,7 +221,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, websocket.ws_get_dashboard_data)
         websocket_api.async_register_command(hass, websocket.ws_get_accounts)
         websocket_api.async_register_command(hass, websocket.ws_get_last_file_update)
-        websocket_api.async_register_command(hass, websocket.ws_get_portfolio_data)
+        websocket_api.async_register_command(hass, websocket.ws_get_portfolio_data_handler)
         websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
         websocket_api.async_register_command(hass, websocket.ws_get_security_history)
         # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
@@ -238,12 +238,12 @@ def _apply_price_debug_logging(entry: ConfigEntry) -> None:
 
     level = logging.DEBUG if enabled else logging.INFO
     effective_levels = {}
+    base_logger = logging.getLogger("custom_components.pp_reader")
+    base_logger.setLevel(logging.INFO)
     for name in PRICE_LOGGER_NAMES:
         logger = logging.getLogger(name)
-        logger.setLevel(
-            level if enabled else logger.level
-        )  # do not downgrade an already higher level explicitly
-        effective_levels[name] = logging.getLogger(name).getEffectiveLevel()
+        logger.setLevel(level)
+        effective_levels[name] = logger.getEffectiveLevel()
 
     if enabled:
         _LOGGER.info(

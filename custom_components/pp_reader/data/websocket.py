@@ -7,10 +7,12 @@ account information, portfolio data, and file update timestamps.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -62,6 +64,35 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
+
+
+def _wrap_with_loop_fallback(
+    handler: Callable[[Any, Any, dict[str, Any]], None],
+) -> Callable[[Any, Any, dict[str, Any]], None]:
+    """Ensure websocket handlers run in tests without a running event loop."""
+
+    original = getattr(handler, "__wrapped__", None)
+    if original is None:
+        return handler
+
+    @wraps(handler)
+    def wrapper(hass, connection, msg):  # type: ignore[override]
+        try:
+            return handler(hass, connection, msg)
+        except RuntimeError as err:  # pragma: no cover - compatibility path
+            if "no running event loop" not in str(err):
+                raise
+            loop = getattr(hass, "loop", None)
+            if loop is None:
+                raise
+            if loop.is_running():
+                raise
+            task = loop.create_task(original(hass, connection, msg))
+            loop.run_until_complete(task)
+            return None
+
+    wrapper.__wrapped__ = original  # type: ignore[attr-defined]
+    return wrapper
 
 
 async def _live_portfolios_payload(
@@ -393,6 +424,30 @@ async def ws_get_portfolio_data(
     )
 
 
+ws_get_portfolio_data_handler = _wrap_with_loop_fallback(ws_get_portfolio_data)
+
+
+async def ws_get_portfolio_data_async(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Async wrapper so tests can await the WebSocket handler directly."""
+
+    loop = asyncio.get_running_loop()
+    before = set(asyncio.all_tasks(loop))
+    result = ws_get_portfolio_data_handler(hass, connection, msg)
+    if asyncio.iscoroutine(result):  # pragma: no cover - defensive guard
+        await result
+    after = set(asyncio.all_tasks(loop))
+    pending = [task for task in after - before if not task.done()]
+    if pending:
+        await asyncio.gather(*pending)
+
+
+ws_get_portfolio_data = ws_get_portfolio_data_async
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_security_history",
@@ -494,6 +549,9 @@ async def ws_get_security_history(
         response["end_date"] = end_date
 
     connection.send_result(msg_id, response)
+
+
+ws_get_security_history = _wrap_with_loop_fallback(ws_get_security_history)
 
 
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen

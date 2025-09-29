@@ -99,6 +99,11 @@
       - Notiz 2025-03-20: `pytest` läuft jetzt bis zur Integrationseinrichtung durch, scheitert aber an fehlendem Home Assistant
         Loader-Setup (`KeyError: 'integrations'` / `Integration not found`) sowie fehlenden Listener-Stubs (z. B.
         `async_track_time_interval`). Zusätzliche Test-Fixture-Ergänzungen für Loader-Cache und Event-Helfer erforderlich.
+      - Fortschritt 2025-03-21: Loader-/HTTP-Stubs & Coordinator-Noop für Tests ergänzt; Suite bricht nun erst an
+        funktionalen Assertions (Logger-Scope, Zero-Quotes-WARN, WS-Loop) ab.
+      - Erledigt 2025-03-22: Preisservice & WS-Compat für QA-Fälle angeglichen (Revaluation-Aufruf über Modulreferenz, Fehlerzäh
+        ler persistent, Zero-Quotes-WARN-Text angepasst) und WebSocket-Handler mit Loop-Fallback versehen – pytest-Suite läuft
+        durch.
    b) [ ] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.
@@ -115,4 +120,9 @@
       - Datei: `custom_components/pp_reader/const.py` + `custom_components/pp_reader/__init__.py`
       - Abschnitt/Funktion: Konstante & Optionshandling
       - Ziel: Optional begrenzte Aufbewahrungsdauer (z.B. Jahre) steuerbar machen.
+   c) [ ] Belastungs- & End-to-End-Tests für Preis-/WebSocket-Pfade ergänzen *(Optional)*
+      - Datei/Command: `tests/test_price_service.py`, neue Belastungstests in `tests/` + HA-Devinstanz
+      - Abschnitt/Funktion: Preisservice-Batching (`CHUNK_SIZE` = 10) & `websocket.py`-Handler
+      - Ziel: Sehr große Symbolmengen mit reduziertem Yahoo-Chunksize durchspielen und einen realen Home-Assistant-WebSocket-
+        End-to-End-Lauf gegen eine Devinstanz absichern (Async-Wrapper vs. echter Event-Loop vergleichen).
 

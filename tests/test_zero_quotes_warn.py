@@ -43,7 +43,7 @@ async def test_zero_quotes_warn_deduplicated(hass, tmp_path, monkeypatch, caplog
         conn.commit()
 
     # --- Patch Provider: immer leeres Dict (0 Quotes) ---
-    async def fake_fetch(_symbols):
+    async def fake_fetch(self, _symbols):
         return {}
 
     monkeypatch.setattr(
