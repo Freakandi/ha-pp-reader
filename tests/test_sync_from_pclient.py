@@ -416,7 +416,7 @@ def test_sync_securities_warns_about_missing_daily_prices(
         record
         for record in caplog.records
         if record.levelno == logging.WARNING
-        and "Close-Lücke" in record.getMessage()
+        and "historische Close" in record.getMessage()
     ]
     assert gap_logs, "Erwarte mindestens eine Warnung für fehlende Tagesdaten"
     assert runner.stats.historical_price_gap_warnings == len(gap_logs)
