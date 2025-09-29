@@ -6,8 +6,8 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
-- .docs/daily_close_storage.md
-- .docs/TODO_daily_close_storage.md
+- .docs/security_detail_tab.md
+- .docs/TODO_security_detail_tab.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md).
@@ -22,7 +22,7 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_daily_close_storage.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_security_detail_tab.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
@@ -45,6 +45,7 @@ Regeln:
 - Kein Entfernen vorhandener Funktionsverträge ohne zwingenden Grund.
 - Logging nur falls spezifiziert oder notwendig.
 - Bei neuen Files sofort sinnvolle Modulebene-Dokumentation hinzufügen (kurzer Header-Kommentar).
+- Tests erst implementieren, wenn zugehörige produktive Module vorhanden (Provider vor Tests!). Wenn ein Test-Item vorzeitig gewählt würde, aber abhängiger Code fehlt → zurückweisen.
 
 Explizite Qualitätskriterien:
 - Einhaltung Zeit-/Formatangaben
