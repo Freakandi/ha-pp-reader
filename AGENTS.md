@@ -2,6 +2,8 @@
 
 This repository hosts the Home Assistant integration **Portfolio Performance Reader**. The integration source lives under `custom_components/pp_reader/` and test fixtures live in `tests/`.
 
+All tests (pytest) must be run in a virtual Python environment in which HomeAssistant is installed (being installed as part of requirements.txt).
+
 ## Development setup
 - Preferred bootstrap: `./scripts/setup_container`. The script installs the required system packages (ffmpeg, libturbojpeg, libpcap, libsqlite3, python3-venv), creates/updates `.venv`, upgrades `pip`, and installs `requirements.txt`.
 - Activate the virtual environment in every new shell with `source .venv/bin/activate`.

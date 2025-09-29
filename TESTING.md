@@ -28,6 +28,8 @@ Empfohlene Qualitäts-Pipeline vor jedem PR:
 
 ## 2. Voraussetzungen & Setup
 
+Alle Tests (pytest) müssen in einer virtuellen Python-Umgebung durchgeführt werden, in der HomeAssistant installiert ist (wird als Teil von reuirements.txt installiert).
+
 | Komponente | Quelle | Hinweis |
 |------------|--------|---------|
 | Python Version | `scripts/setup_container` (Zeile 11–16: `pyenv install -s 3.13.3`) | Zielversion 3.13.3 |
