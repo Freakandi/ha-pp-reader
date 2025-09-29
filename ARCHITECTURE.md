@@ -232,6 +232,11 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
 - Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities (with `last_price_source` and `last_price_fetched_at`), portfolios, transactions, transaction units, historical prices, plans, watchlists, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`, which also performs a runtime migration to add missing price columns.
 - `db_access.py` offers strongly typed dataclasses and helper queries (e.g., `get_portfolio_positions`, `fetch_live_portfolios`, `get_last_file_update`, `get_all_portfolio_securities`). Monetary values are stored as integers (cents) or scaled integers (`last_price` × 1e8) to avoid floating-point drift.
 
+### Historical close series storage
+- `_sync_securities` filters Portfolio Performance price payloads so only active (non-retired) securities write new rows into `historical_prices`. Retired securities retain existing rows for archival reads but no longer receive inserts. Future-dated or malformed entries (missing `date`/`close`, negative epoch days) are skipped with throttled WARN logs.
+- The importer collapses duplicates by date using an in-memory deduplication map before calling `executemany` with `INSERT OR REPLACE`. Prior to persistence the routine deletes any rows whose date exceeds the current UTC day to avoid stale future projections. Import statistics count `historical_prices_written` and `historical_prices_skipped` for diagnostics.
+- `historical_prices` stores `(security_uuid, date, close, high, low, volume)` as integers (Close scaled by 1e8). Read helpers `iter_security_close_prices` and `get_security_close_prices` validate range bounds (`start_date`, `end_date`), stream ordered `(date, close)` pairs, and encapsulate SQLite error logging so downstream consumers can materialise price series efficiently.
+
 ### Backups
 `data.backup_db`:
 - Runs every six hours and on manual trigger.
@@ -289,8 +294,11 @@ The FX helper logs and returns partial results on network or database failures t
 | `pp_reader/get_last_file_update` | `entry_id` | ISO8601 timestamp from metadata. |
 | `pp_reader/get_portfolio_data` | `entry_id` | Live portfolio aggregates using `fetch_live_portfolios`. |
 | `pp_reader/get_portfolio_positions` | `entry_id`, `portfolio_uuid` | Detailed positions including gains and holdings. |
+| `pp_reader/get_security_history` | `entry_id`, `security_uuid`, optional `start_date`, `end_date` | Close price series (epoch-day, scaled close) gated by the `pp_reader_history` feature flag. |
 
 All commands default to the coordinator snapshot when live aggregation fails to keep the dashboard responsive. `_live_portfolios_payload` centralises the fetch logic: it queries SQLite via `fetch_live_portfolios` inside an executor, logs and falls back to coordinator snapshots on error, and normalises results before serialising. The accounts endpoint invokes `ensure_exchange_rates_for_dates`/`load_latest_rates` so FX metadata is up to date when non-EUR accounts are present.
+
+Feature flags are resolved through `feature_flags.is_enabled`, which reads overrides from `hass.data[DOMAIN][entry_id]["feature_flags"]` seeded during `async_setup_entry`. When `pp_reader_history` is disabled the history command returns a `feature_not_enabled` error; enabling the flag surfaces deduplicated Close series sourced from `historical_prices`.
 
 The custom panel lives under `www/pp_reader_dashboard`:
 
@@ -308,7 +316,7 @@ Key entities and their origin:
 | Entity | Source | Important fields | Notes |
 |--------|--------|------------------|-------|
 | Account | SQLite `accounts` + transactions | `uuid`, `name`, `currency_code`, `balance` (cents) | Balances are recomputed per refresh, not stored. |
-| Security | SQLite `securities` | `uuid`, `name`, `ticker_symbol`, `currency_code`, `last_price` (scaled), `last_price_date` | `last_price_source`/`last_price_fetched_at` updated by price service; `historical_prices` table kept for future expansion. |
+| Security | SQLite `securities` | `uuid`, `name`, `ticker_symbol`, `currency_code`, `last_price` (scaled), `last_price_date` | `last_price_source`/`last_price_fetched_at` updated by price service; `historical_prices` captures daily Close series for active securities. |
 | Portfolio | SQLite `portfolios` | `uuid`, `name`, `reference_account`, `is_retired` | Aggregates are derived from `portfolio_securities`. |
 | PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price` | Generated `avg_price` column simplifies average cost lookup. |
 | Transaction | SQLite `transactions` | `type`, `amount`, `currency_code`, `shares`, `security` | `transaction_units` store FX amounts for cross-currency transfers. |
