@@ -96,6 +96,9 @@
    a) [ ] Unit- und Integrations-Tests ausführen
       - Datei/Command: `pytest`
       - Ziel: Alle neuen Testfälle bestehen.
+      - Notiz 2025-03-18: Testlauf gestartet (`pytest`), schlägt aktuell u. a. wegen fehlender `securities.type`-Spalte und fehlender
+        `async_create_background_task`-Implementierung in Stub-WebSocket-Helpern fehl; weiterer Abgleich mit bestehender
+        Test-Infrastruktur erforderlich.
    b) [ ] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.
