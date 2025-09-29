@@ -26,6 +26,7 @@ async def test_batches_count_regression(tmp_path, monkeypatch, caplog):
             uuid TEXT PRIMARY KEY,
             name TEXT,
             ticker_symbol TEXT,
+            type TEXT,
             retired INTEGER DEFAULT 0,
             last_price INTEGER,
             last_price_source TEXT,

@@ -41,6 +41,7 @@ SECURITY_SCHEMA = [
         wkn TEXT,
         ticker_symbol TEXT,
         feed TEXT,
+        type TEXT,
         currency_code TEXT,
         retired INTEGER,
         updated_at TEXT,

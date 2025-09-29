@@ -11,7 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
     """
-    Best-effort Runtime-Migration für neue Preis-Spalten in 'securities'.
+    Best-effort Runtime-Migration für neue Spalten in 'securities'.
 
     Falls eine bestehende DB vor der Schema-Erweiterung existiert, werden die
     Spalten `last_price_source` und `last_price_fetched_at` nachträglich per
@@ -32,6 +32,13 @@ def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
         return
 
     migrations: list[tuple[str, str]] = []
+    if "type" not in existing_cols:
+        migrations.append(
+            (
+                "type",
+                "ALTER TABLE securities ADD COLUMN type TEXT",
+            )
+        )
     if "last_price_source" not in existing_cols:
         migrations.append(
             (
