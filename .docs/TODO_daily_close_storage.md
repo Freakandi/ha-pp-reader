@@ -77,7 +77,7 @@
       - Datei: `tests/test_db_access.py` (neu)
       - Abschnitt/Funktion: Tests für `iter_security_close_prices` und `get_security_close_prices`
       - Ziel: Grenzen (`start_date`, `end_date`), Sortierung und leere Resultate abdecken.
-   d) [ ] WebSocket-Feature-Flag testen
+   d) [x] WebSocket-Feature-Flag testen
       - Datei: `tests/test_ws_security_history.py` (neu)
       - Abschnitt/Funktion: Async-Testcases für `ws_get_security_history`
       - Ziel: Erfolgsfall bei aktivem Flag sowie Fehlerantwort bei deaktiviertem Flag validieren.
