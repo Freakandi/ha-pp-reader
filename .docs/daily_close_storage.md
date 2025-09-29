@@ -133,3 +133,12 @@ No additional decisions.
 - Reinforce `historical_prices` persistence for active securities via enhanced importer logic and batching.
 - Provide read helpers and a guarded API endpoint to unlock future dashboard use of Close series.
 - Maintain compatibility with existing sensors and defer frontend visualisation to subsequent work.
+
+---
+
+## 12. Manual Verification (2025-03-21)
+- Environment prepared with project dependencies (`pip install homeassistant==2025.2.4` and `protobuf`).
+- Created a fresh SQLite database using `db_schema.ALL_SCHEMAS` and constructed a minimal `PClient` message containing one active security with three consecutive close prices.
+- Executed the importer via `sync_from_pclient.sync_from_pclient(...)` without a Home Assistant instance; the run produced only the expected "no event" warning because `hass`/`entry_id` were intentionally omitted during the manual probe.
+- Queried `historical_prices` afterwards and observed three deterministic rows for the security ordered by date: `(19500, 123456789)`, `(19501, 223456789)`, `(19502, 323456789)`.
+- Result: manual import confirmed the deduplicated persistence path for daily closes operates end-to-end outside of the automated test harness.
