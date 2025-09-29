@@ -46,6 +46,8 @@ class SyncStats:
     fx_transactions: int = 0
     historical_prices_written: int = 0
     historical_prices_skipped: int = 0
+    historical_price_gap_warnings: int = 0
+    historical_price_gap_days: int = 0
 
 
 @dataclass(slots=True)
@@ -640,6 +642,7 @@ class _SyncRunner:
                             volume,
                         )
 
+                    sorted_price_items = sorted(dedup_prices.items())
                     rows_to_persist = [
                         (
                             security.uuid,
@@ -649,10 +652,54 @@ class _SyncRunner:
                             low,
                             volume,
                         )
-                        for date_value, (close_value, high, low, volume) in sorted(
-                            dedup_prices.items()
-                        )
+                        for date_value, (close_value, high, low, volume) in sorted_price_items
                     ]
+
+                    if sorted_price_items:
+                        missing_segments: list[tuple[int, int]] = []
+                        previous_date = sorted_price_items[0][0]
+                        for current_date, _ in sorted_price_items[1:]:
+                            gap_start = previous_date + 1
+                            gap_end = current_date - 1
+                            if gap_end >= gap_start:
+                                missing_segments.append((gap_start, gap_end))
+                            previous_date = current_date
+
+                        if missing_segments:
+                            total_missing_days = sum(
+                                (end - start) + 1
+                                for start, end in missing_segments
+                            )
+                            self.stats.historical_price_gap_warnings += len(
+                                missing_segments
+                            )
+                            self.stats.historical_price_gap_days += total_missing_days
+
+                            max_segments_to_log = 3
+                            for start, end in missing_segments[:max_segments_to_log]:
+                                if start == end:
+                                    _LOGGER.warning(
+                                        "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
+                                        security.uuid,
+                                        start,
+                                    )
+                                else:
+                                    gap_days = (end - start) + 1
+                                    _LOGGER.warning(
+                                        "sync_from_pclient: Fehlende historische Close-Werte für %s zwischen %s und %s (%d Tage ohne Daten)",
+                                        security.uuid,
+                                        start,
+                                        end,
+                                        gap_days,
+                                    )
+
+                            remaining_segments = len(missing_segments) - max_segments_to_log
+                            if remaining_segments > 0:
+                                _LOGGER.warning(
+                                    "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
+                                    remaining_segments,
+                                    security.uuid,
+                                )
 
                     self.cursor.execute(
                         "DELETE FROM historical_prices WHERE security_uuid = ? AND date > ?",
@@ -1107,12 +1154,14 @@ class _SyncRunner:
         _LOGGER.info(
             "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, "
             "%d Transaktionen (%d mit Fremdwährung), %d historische Close-Werte "
-            "geschrieben, %d übersprungen",
+            "geschrieben, %d übersprungen, %d Close-Lücken gemeldet (%d Tage ohne Daten)",
             self.stats.securities,
             self.stats.transactions,
             self.stats.fx_transactions,
             self.stats.historical_prices_written,
             self.stats.historical_prices_skipped,
+            self.stats.historical_price_gap_warnings,
+            self.stats.historical_price_gap_days,
         )
 
     def _reset_change_flags(self) -> None:

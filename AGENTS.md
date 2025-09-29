@@ -5,6 +5,7 @@ This repository hosts the Home Assistant integration **Portfolio Performance Rea
 ## Development setup
 - Preferred bootstrap: `./scripts/setup_container`. The script installs the required system packages (ffmpeg, libturbojpeg, libpcap, libsqlite3, python3-venv), creates/updates `.venv`, upgrades `pip`, and installs `requirements.txt`.
 - Activate the virtual environment in every new shell with `source .venv/bin/activate`.
+- Run pytest only from an activated `.venv`; Home Assistant (2025.4.2) and the integration dependencies are preinstalled via `requirements.txt` and won't be importable outside the virtual environment.
 - Install the testing dependencies when you plan to run pytest: `pip install -r requirements-dev.txt`.
 - As a fallback for bare environments, `./scripts/environment_setup` performs the same dependency installation without creating a virtual environment.
 
