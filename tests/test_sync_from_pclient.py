@@ -3,6 +3,7 @@
 # ruff: noqa: S101 - pytest assertions are expected in tests
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -83,6 +84,52 @@ class _DummyClient:
         self.accounts: list[Any] = []
         self.securities: list[Any] = []
         self.portfolios = portfolios
+
+
+class _DummyPrice:
+    """Simple price stub emulating Portfolio Performance historical prices."""
+
+    def __init__(
+        self,
+        *,
+        date: int,
+        close: int,
+        high: int | None = None,
+        low: int | None = None,
+        volume: int | None = None,
+    ) -> None:
+        self.date = date
+        self.close = close
+        self.high = high
+        self.low = low
+        self.volume = volume
+        self.DESCRIPTOR = type("Descriptor", (), {"fields_by_name": {}})()
+
+
+class _DummySecurity:
+    """Minimal security stub with historical prices and retire flag."""
+
+    def __init__(
+        self,
+        *,
+        uuid: str,
+        name: str,
+        currency: str = "EUR",
+        retired: bool = False,
+        prices: list[_DummyPrice] | None = None,
+    ) -> None:
+        self.uuid = uuid
+        self.name = name
+        self.currencyCode = currency
+        self.isRetired = retired
+        self.prices = prices or []
+        self.isin = None
+        self.wkn = None
+        self.tickerSymbol = None
+        self.updatedAt = None
+
+    def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
+        return getattr(self, name, None) is not None
 
 
 def _prepare_portfolio_db(path: Path) -> sqlite3.Connection:
@@ -247,3 +294,70 @@ def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> No
     assert captured == []
 
     conn.close()
+
+
+def test_sync_securities_persists_deduplicated_historical_prices(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Historical Close rows should be deduplicated and ignore retired securities."""
+
+    class _FakeTimestamp:
+        def __init__(self, *, seconds: int) -> None:
+            self.seconds = seconds
+
+        def ToDatetime(self) -> datetime:
+            return datetime.fromtimestamp(self.seconds, tz=timezone.utc)
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    active_security = _DummySecurity(
+        uuid="sec-active",
+        name="Active",
+        prices=[
+            _DummyPrice(date=10, close=100),
+            _DummyPrice(date=10, close=120),
+            _DummyPrice(date=12, close=150),
+        ],
+    )
+    retired_security = _DummySecurity(
+        uuid="sec-retired",
+        name="Retired",
+        retired=True,
+        prices=[_DummyPrice(date=8, close=90)],
+    )
+
+    runner.client.securities = [active_security, retired_security]
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    try:
+        runner._sync_securities()
+        conn.commit()
+        rows = conn.execute(
+            """
+            SELECT security_uuid, date, close
+            FROM historical_prices
+            ORDER BY date
+            """
+        ).fetchall()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    assert rows == [
+        ("sec-active", 10, 120),
+        ("sec-active", 12, 150),
+    ]
+    assert runner.stats.historical_prices_written == 2
+    assert runner.stats.historical_prices_skipped == 2
