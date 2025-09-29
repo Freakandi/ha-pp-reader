@@ -101,9 +101,6 @@
         `async_track_time_interval`). Zusätzliche Test-Fixture-Ergänzungen für Loader-Cache und Event-Helfer erforderlich.
       - Fortschritt 2025-03-21: Loader-/HTTP-Stubs & Coordinator-Noop für Tests ergänzt; Suite bricht nun erst an
         funktionalen Assertions (Logger-Scope, Zero-Quotes-WARN, WS-Loop) ab.
-      - Erledigt 2025-03-22: Preisservice & WS-Compat für QA-Fälle angeglichen (Revaluation-Aufruf über Modulreferenz, Fehlerzäh
-        ler persistent, Zero-Quotes-WARN-Text angepasst) und WebSocket-Handler mit Loop-Fallback versehen – pytest-Suite läuft
-        durch.
    b) [ ] Manuelle Importprobe
       - Datei/Command: Portfolio-Export in Testinstanz laden
       - Ziel: Prüfen, dass `historical_prices` nach Import gefüllt ist und Re-Import ohne Duplikate bleibt.
@@ -111,8 +108,8 @@
       - Datei/Command: `ws`-Request via `websocket_client.py`/DevTools
       - Ziel: Sicherstellen, dass `pp_reader/get_security_history` bei aktivem Flag Daten liefert.
 
-8. Optionale Nacharbeiten
-   a) [ ] Warnungen bei fehlenden Tagesdaten instrumentieren *(Optional)*
+8. Weitere Nacharbeiten
+   a) [ ] Warnungen bei fehlenden Tagesdaten instrumentieren
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_securities`
       - Ziel: Logging/Telemetry aufbauen, das Lücken in Zeitreihen erkennt und meldet.
