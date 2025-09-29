@@ -10,8 +10,14 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from custom_components.pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates_sync,
+    load_latest_rates_sync,
+)
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
@@ -396,6 +402,84 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
             "Fehler beim Laden aller Wertpapiere aus portfolio_securities"
         )
         return []
+    finally:
+        conn.close()
+
+
+def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
+    """Aggregate holdings and EUR-normalised pricing for a security."""
+
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.execute(
+            """
+            SELECT name, currency_code, COALESCE(last_price, 0) AS last_price
+            FROM securities
+            WHERE uuid = ?
+            """,
+            (security_uuid,),
+        )
+        security_row = cursor.fetchone()
+        if security_row is None:
+            raise LookupError(f"Unbekannte security_uuid: {security_uuid}")
+
+        holdings_cursor = conn.execute(
+            """
+            SELECT COALESCE(SUM(current_holdings), 0)
+            FROM portfolio_securities
+            WHERE security_uuid = ?
+            """,
+            (security_uuid,),
+        )
+        holdings_row = holdings_cursor.fetchone()
+        total_holdings = (
+            float(holdings_row[0]) if holdings_row and holdings_row[0] is not None else 0.0
+        )
+
+        raw_price = security_row["last_price"]
+        currency_code: str = security_row["currency_code"] or "EUR"
+
+        last_price_eur = 0.0
+        if raw_price:
+            last_price = float(raw_price) / 10**8
+            if currency_code != "EUR":
+                reference_date = datetime.now()  # noqa: DTZ005
+                try:
+                    ensure_exchange_rates_for_dates_sync(
+                        [reference_date], {currency_code}, db_path
+                    )
+                    fx_rates = load_latest_rates_sync(reference_date, db_path)
+                except Exception:  # pragma: no cover - defensive
+                    _LOGGER.exception(
+                        "Fehler beim Laden der Wechselkurse für %s", currency_code
+                    )
+                    fx_rates = {}
+
+                rate = fx_rates.get(currency_code)
+                if rate:
+                    last_price = last_price / rate
+                else:
+                    _LOGGER.warning(
+                        "Kein Wechselkurs gefunden für %s – Preis bleibt 0", currency_code
+                    )
+                    last_price = 0.0
+
+            last_price_eur = last_price
+
+        market_value_eur = round(total_holdings * last_price_eur, 2)
+
+        return {
+            "name": security_row["name"],
+            "currency_code": currency_code,
+            "total_holdings": round(total_holdings, 6),
+            "last_price_eur": round(last_price_eur, 4),
+            "market_value_eur": market_value_eur,
+        }
     finally:
         conn.close()
 

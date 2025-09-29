@@ -1,7 +1,7 @@
 # Security Detail Tab Implementation Checklist
 
 1. Backend: Security snapshot data endpoint
-   a) [ ] Implement `get_security_snapshot(db_path: Path, security_uuid: str)` to aggregate holdings and normalize EUR values
+   a) [x] Implement `get_security_snapshot(db_path: Path, security_uuid: str)` to aggregate holdings and normalize EUR values
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Neuer Helper unterhalb bestehender snapshot/portfolio Utilities
       - Ziel: Liefert `{name, currency_code, total_holdings, last_price_eur, market_value_eur}` aus `portfolio_securities` + `securities` inkl. FX-Konvertierung
