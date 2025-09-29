@@ -160,10 +160,12 @@ def test_fresh_schema_contains_price_columns(tmp_path):
     initialize_database_schema(db_path)
 
     cols = _get_columns(db_path, "securities")
+    assert "type" in cols, "Spalte type fehlt in frischer DB"
     assert "last_price_source" in cols, "Spalte last_price_source fehlt in frischer DB"
     assert "last_price_fetched_at" in cols, (
         "Spalte last_price_fetched_at fehlt in frischer DB"
     )
+    assert cols["type"]["type"].upper() == "TEXT"
     assert cols["last_price_source"]["type"].upper() == "TEXT"
     assert cols["last_price_fetched_at"]["type"].upper() == "TEXT"
 
@@ -203,10 +205,12 @@ def test_legacy_schema_migrated(tmp_path):
     initialize_database_schema(db_path)
 
     cols = _get_columns(db_path, "securities")
+    assert "type" in cols, "Migration hat type nicht ergänzt"
     assert "last_price_source" in cols, "Migration hat last_price_source nicht ergänzt"
     assert "last_price_fetched_at" in cols, (
         "Migration hat last_price_fetched_at nicht ergänzt"
     )
+    assert cols["type"]["type"].upper() == "TEXT"
 
     # Datenintegrität prüfen
     conn2 = sqlite3.connect(str(db_path))
