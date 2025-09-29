@@ -10,7 +10,7 @@ This repository hosts the Home Assistant integration **Portfolio Performance Rea
 - As a fallback for bare environments, `./scripts/environment_setup` performs the same dependency installation without creating a virtual environment.
 
 ## Day-to-day workflow
-- Start the development Home Assistant instance with `./scripts/develop`. The script ensures `config/` exists, seeds a default configuration if needed, and extends `PYTHONPATH` so Home Assistant finds the integration under `custom_components/`.
+- Start the development Home Assistant instance with `./scripts/develop` from inside the virtual environment. The script ensures `config/` exists, seeds a default configuration if needed, and extends `PYTHONPATH` so Home Assistant finds the integration under `custom_components/`.
 - Format and lint the codebase with `./scripts/lint`. It runs `ruff format .` followed by `ruff check . --fix`.
 - Run the Python test suite with `pytest`. For coverage reporting use `pytest --cov=custom_components/pp_reader --cov-report=term-missing`.
 - Optional validation: run Home Assistant's integration validator with `python -m script.hassfest`.
