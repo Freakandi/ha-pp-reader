@@ -801,12 +801,15 @@ class _SyncRunner:
         )
 
         current_hold_pur: dict[tuple[str, str], dict[str, Any]] = {}
-        for key, purchase_value in purchase_values.items():
-            if key in current_holdings:
-                current_hold_pur[key] = {
-                    "current_holdings": current_holdings[key],
-                    "purchase_value": purchase_value,
-                }
+        for key, holdings in current_holdings.items():
+            purchase_value = purchase_values.get(key, 0.0)
+            # Falls der Kaufwert wegen fehlender FX-Daten noch nicht
+            # berechnet werden konnte, behalten wir die Position dennoch
+            # für die Bewertung bei (purchase_value fällt dann auf 0.0).
+            current_hold_pur[key] = {
+                "current_holdings": holdings,
+                "purchase_value": purchase_value,
+            }
 
         current_holdings_values = db_calculate_holdings_value(
             self.db_path, self.conn, current_hold_pur
