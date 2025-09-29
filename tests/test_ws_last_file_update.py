@@ -70,7 +70,9 @@ class StubHass:
     async def async_add_executor_job(self, func, *args):
         return func(*args)
 
-    def async_create_background_task(self, coro, _task_name=None, *, eager_start=False):
+    def async_create_background_task(
+        self, coro, _task_name=None, *, eager_start: bool = False
+    ):
         loop = asyncio.get_running_loop()
         return loop.create_task(coro)
 

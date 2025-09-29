@@ -17,6 +17,12 @@ class StubHass:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, func, *args)
 
+    def async_create_background_task(
+        self, coro, _task_name=None, *, eager_start: bool = False
+    ):
+        loop = asyncio.get_running_loop()
+        return loop.create_task(coro)
+
 
 @pytest.mark.asyncio
 async def test_revaluation_uses_live_portfolio_values(tmp_path: Path) -> None:
