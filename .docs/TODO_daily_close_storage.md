@@ -93,7 +93,7 @@
       - Ziel: Einführung der historischen Close-Speicherung und des optionalen History-WebSockets dokumentieren.
 
 7. Validierung & QA
-   a) [ ] Unit- und Integrations-Tests ausführen
+   a) [x] Unit- und Integrations-Tests ausführen
       - Datei/Command: `pytest`
       - Ziel: Alle neuen Testfälle bestehen.
       - Notiz 2025-03-20: `pytest` läuft jetzt bis zur Integrationseinrichtung durch, scheitert aber an fehlendem Home Assistant
@@ -122,4 +122,8 @@
       - Abschnitt/Funktion: Preisservice-Batching (`CHUNK_SIZE` = 10) & `websocket.py`-Handler
       - Ziel: Sehr große Symbolmengen mit reduziertem Yahoo-Chunksize durchspielen und einen realen Home-Assistant-WebSocket-
         End-to-End-Lauf gegen eine Devinstanz absichern (Async-Wrapper vs. echter Event-Loop vergleichen).
+   d) [ ] WebSocket-Helfer-Warnungen untersuchen
+      - Datei/Command: `pytest`
+      - Abschnitt/Funktion: Warnungen zu nicht awaiteten WebSocket-Helfern (`custom_components/pp_reader/data/websocket.py`)
+      - Ziel: Laufzeit-Warnungen aus der Test-Suite eliminieren, um potenzielle Ressourcen-Lecks zu vermeiden.
 
