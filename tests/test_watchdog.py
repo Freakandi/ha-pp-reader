@@ -49,7 +49,7 @@ async def test_watchdog_warn(monkeypatch, hass, tmp_path, caplog):
     store["price_symbol_map"] = {"AAPL": ["sec-1"]}
 
     # Fake Provider Fetch (verhindert echten yahooquery Import / Netzwerk)
-    async def fake_fetch(_symbols):
+    async def fake_fetch(self, _symbols):
         return {
             "AAPL": Quote(
                 symbol="AAPL",

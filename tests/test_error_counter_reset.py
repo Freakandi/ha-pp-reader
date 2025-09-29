@@ -60,7 +60,7 @@ async def test_error_counter_reset_after_success(hass, tmp_path, monkeypatch, ca
     # --- Provider Fetch Patch (2x leer, dann Quote) ---
     call_state = {"cycle": 0}
 
-    async def fake_fetch(_symbols):
+    async def fake_fetch(self, _symbols):
         # Jede _run_price_cycle ruft fetch pro Batch einmal auf (eine Symbolgruppe)
         if call_state["cycle"] < 2:
             call_state["cycle"] += 1
