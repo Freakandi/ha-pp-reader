@@ -65,7 +65,7 @@
       - Ziel: Schritte erläutern, wie das History-Flag aktiviert wird (z.B. via YAML/Optionsflow), bis UI-Unterstützung folgt.
 
 5. Tests erweitern
-   a) [ ] Migrationstest für Index hinzufügen
+   a) [x] Migrationstest für Index hinzufügen
       - Datei: `tests/test_migration.py`
       - Abschnitt/Funktion: Neuer Testfall `test_creates_historical_price_index`
       - Ziel: Verifizieren, dass Initialisierung/Migration den Index `idx_historical_prices_security_date` anlegt.
