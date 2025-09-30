@@ -147,7 +147,7 @@
        - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/__tests__/dashboard.test.js` (falls vorhanden) oder `.docs/manual_test_security_detail.md`
        - Abschnitt/Funktion: Navigationstestfälle
        - Ziel: Verifiziert Navigation zwischen Overview- und Detail-Tabs
-    c) [ ] Führe vollständige Pytest-Suite aus
+    c) [x] Führe vollständige Pytest-Suite aus
        - Kommando: `pytest`
        - Ziel: Regressionen vermeiden
     d) [ ] Optional: Starte `./scripts/lint` für konsistente Formatierung
