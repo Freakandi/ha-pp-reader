@@ -155,7 +155,7 @@
        - Ziel: Lint-Compliance sicherstellen
 
 11. Nacharbeiten & Aufräumen
-    a) [ ] Entferne Verweise auf das frühere Test-Tab in Code und Assets
+    a) [x] Entferne Verweise auf das frühere Test-Tab in Code und Assets
        - Dateien: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`, zugehörige Templates/Strings
        - Abschnitt/Funktion: Tab-Registrierung und Übersetzungen
        - Ziel: Kein Legacy-Test-Tab mehr sichtbar
