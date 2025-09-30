@@ -8,8 +8,102 @@ import { flushPendingPositions, flushAllPendingPositions } from '../data/updateC
 let _hassRef = null;
 let _panelConfigRef = null;
 const portfolioPositionsCache = new Map();      // portfolio_uuid -> positions[]
+
+// --- Security-Aggregation für Detail-Ansicht ---
+const HOLDINGS_PRECISION = 1e6;
+
+function toFiniteNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function roundCurrency(value) {
+  const finite = toFiniteNumber(value);
+  return Math.round(finite * 100) / 100;
+}
+
+function roundHoldings(value) {
+  const finite = toFiniteNumber(value);
+  return Math.round(finite * HOLDINGS_PRECISION) / HOLDINGS_PRECISION;
+}
+
+function collectSecurityPositions(securityUuid) {
+  if (!securityUuid) {
+    return [];
+  }
+
+  const matches = [];
+  for (const positions of portfolioPositionsCache.values()) {
+    if (!Array.isArray(positions) || positions.length === 0) {
+      continue;
+    }
+    for (const pos of positions) {
+      if (pos && pos.security_uuid === securityUuid) {
+        matches.push(pos);
+      }
+    }
+  }
+  return matches;
+}
+
+export function getSecurityPositionsFromCache(securityUuid) {
+  const positions = collectSecurityPositions(securityUuid);
+  if (!positions.length) {
+    return [];
+  }
+  return positions.map((pos) => ({ ...pos }));
+}
+
+export function getSecuritySnapshotFromCache(securityUuid) {
+  const positions = collectSecurityPositions(securityUuid);
+  if (!positions.length) {
+    return null;
+  }
+
+  let name = '';
+  let totalHoldings = 0;
+  let totalPurchaseValue = 0;
+  let totalCurrentValue = 0;
+
+  for (const pos of positions) {
+    if (!name && pos?.name) {
+      name = pos.name;
+    }
+    totalHoldings += toFiniteNumber(pos?.current_holdings);
+    totalPurchaseValue += toFiniteNumber(pos?.purchase_value);
+    totalCurrentValue += toFiniteNumber(pos?.current_value);
+  }
+
+  const gainAbs = totalCurrentValue - totalPurchaseValue;
+  const gainPct = totalPurchaseValue > 0
+    ? (gainAbs / totalPurchaseValue) * 100
+    : 0;
+  const lastPriceEur = totalHoldings > 0 ? totalCurrentValue / totalHoldings : null;
+
+  return {
+    security_uuid: securityUuid,
+    name,
+    total_holdings: roundHoldings(totalHoldings),
+    purchase_value_eur: roundCurrency(totalPurchaseValue),
+    current_value_eur: roundCurrency(totalCurrentValue),
+    gain_abs_eur: roundCurrency(gainAbs),
+    gain_pct: Math.round(gainPct * 100) / 100,
+    last_price_eur: lastPriceEur != null ? roundCurrency(lastPriceEur) : null,
+    source: 'cache',
+  };
+}
+
 // Global für Push-Handler (Events); hält ausschließlich Positionsdaten für Lazy-Loads
+portfolioPositionsCache.getSecuritySnapshot = getSecuritySnapshotFromCache;
+portfolioPositionsCache.getSecurityPositions = getSecurityPositionsFromCache;
+
 window.__ppReaderPortfolioPositionsCache = portfolioPositionsCache;
+if (!window.__ppReaderGetSecuritySnapshotFromCache) {
+  window.__ppReaderGetSecuritySnapshotFromCache = getSecuritySnapshotFromCache;
+}
+if (!window.__ppReaderGetSecurityPositionsFromCache) {
+  window.__ppReaderGetSecurityPositionsFromCache = getSecurityPositionsFromCache;
+}
 const expandedPortfolios = new Set();           // gemerkte geöffnete Depots (persistiert über Re-Renders)
 
 // ENTFERNT: Globaler document-Listener (Section 6 Hardening)
