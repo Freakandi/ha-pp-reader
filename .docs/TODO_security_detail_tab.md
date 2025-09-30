@@ -79,7 +79,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Neuer Renderer und Tab-Registrierung
       - Ziel: Baut Header, lädt Daten, verbindet mit Navigation
-   b) [ ] Render Header-Karten (Name, Currency, Holdings, Last Price in Originalwährung, Market Value in EUR) mit vorhandenen Formattern
+   b) [x] Render Header-Karten (Name, Currency, Holdings, Last Price in Originalwährung, Market Value in EUR) mit vorhandenen Formattern
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Header-Rendering
       - Ziel: Konsistentes Kartenlayout zur Overview und zeigt Währungsinformationen korrekt an
