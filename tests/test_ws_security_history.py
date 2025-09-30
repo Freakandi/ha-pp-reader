@@ -313,10 +313,10 @@ def test_ws_get_security_history_returns_filtered_prices(
     ]
 
 
-def test_ws_get_security_history_ignores_missing_feature_flag(
+def test_ws_get_security_history_ignores_unknown_feature_flags(
     seeded_history_db: Path,
 ) -> None:
-    """Handler should ignore legacy feature flag states."""
+    """Handler should ignore unrelated legacy feature flag states."""
 
     entry_id = "entry-2"
     hass = StubHass(
@@ -324,7 +324,7 @@ def test_ws_get_security_history_ignores_missing_feature_flag(
             DOMAIN: {
                 entry_id: {
                     "db_path": seeded_history_db,
-                    "feature_flags": {"pp_reader_history": False},
+                    "feature_flags": {"legacy_flag": False},
                 }
             }
         }
