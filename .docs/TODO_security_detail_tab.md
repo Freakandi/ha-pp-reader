@@ -105,7 +105,7 @@
       - Ziel: Verhindert Speicherlecks bei Tab-Wechsel
 
 7. Frontend: Chart-Helfer bereitstellen
-   a) [ ] Erstelle `charting.js` mit Lightweight-SVG-Line-Chart und Tooltip
+   a) [x] Erstelle `charting.js` mit Lightweight-SVG-Line-Chart und Tooltip
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/content/charting.js`
       - Abschnitt/Funktion: Neue Utility-Funktionen (`renderLineChart`, `updateLineChart`)
       - Ziel: Visualisiert Kursverlauf ohne externe Dependencies
