@@ -294,11 +294,11 @@ The FX helper logs and returns partial results on network or database failures t
 | `pp_reader/get_last_file_update` | `entry_id` | ISO8601 timestamp from metadata. |
 | `pp_reader/get_portfolio_data` | `entry_id` | Live portfolio aggregates using `fetch_live_portfolios`. |
 | `pp_reader/get_portfolio_positions` | `entry_id`, `portfolio_uuid` | Detailed positions including gains and holdings. |
-| `pp_reader/get_security_history` | `entry_id`, `security_uuid`, optional `start_date`, `end_date` | Close price series (epoch-day, scaled close) gated by the `pp_reader_history` feature flag. |
+| `pp_reader/get_security_history` | `entry_id`, `security_uuid`, optional `start_date`, `end_date` | Close price series (epoch-day, scaled close) sourced from persisted historical prices. |
 
 All commands default to the coordinator snapshot when live aggregation fails to keep the dashboard responsive. `_live_portfolios_payload` centralises the fetch logic: it queries SQLite via `fetch_live_portfolios` inside an executor, logs and falls back to coordinator snapshots on error, and normalises results before serialising. The accounts endpoint invokes `ensure_exchange_rates_for_dates`/`load_latest_rates` so FX metadata is up to date when non-EUR accounts are present.
 
-Feature flags are resolved through `feature_flags.is_enabled`, which reads overrides from `hass.data[DOMAIN][entry_id]["feature_flags"]` seeded during `async_setup_entry`. When `pp_reader_history` is disabled the history command returns a `feature_not_enabled` error; enabling the flag surfaces deduplicated Close series sourced from `historical_prices`.
+Feature flags are resolved through `feature_flags.is_enabled`, which reads overrides from `hass.data[DOMAIN][entry_id]["feature_flags"]` seeded during `async_setup_entry`. While no flags are currently active, the infrastructure remains available for future experiments without impacting core commands like security history.
 
 The custom panel lives under `www/pp_reader_dashboard`:
 

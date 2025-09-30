@@ -27,7 +27,7 @@
       - Dateien: `custom_components/pp_reader/__init__.py`, `custom_components/pp_reader/feature_flags.py`
       - Abschnitt/Funktion: Feature-Flag-Initialisierung und Defaults
       - Ziel: Entfernt Flag-Definition und Initialisierung; History gilt als Kernfunktion
-   d) [ ] Bereinige Doku- und Beispielreferenzen auf `pp_reader_history`
+   d) [x] Bereinige Doku- und Beispielreferenzen auf `pp_reader_history`
       - Dateien: `ARCHITECTURE.md`, `README-dev.md`
       - Abschnitt/Funktion: Feature-Flag-Beschreibungen, Tabellen
       - Ziel: Dokumentation aktualisieren, dass History dauerhaft aktiv ist
