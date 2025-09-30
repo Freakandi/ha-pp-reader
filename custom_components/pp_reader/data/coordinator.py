@@ -56,9 +56,7 @@ def _sync_data_to_db(
             "custom_components.pp_reader.data.sync_from_pclient"
         )
     except ModuleNotFoundError as err:  # pragma: no cover - optional dep for tests
-        msg = (
-            "protobuf runtime is required to synchronize Portfolio Performance data"
-        )
+        msg = "protobuf runtime is required to synchronize Portfolio Performance data"
         raise RuntimeError(msg) from err
 
     sync_from_pclient = sync_module.sync_from_pclient

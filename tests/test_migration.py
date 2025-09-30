@@ -11,15 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 def _ensure_minimal_homeassistant_stubs() -> None:
     """Register lightweight Home Assistant module stubs for unit tests."""
-
     if "homeassistant" in sys.modules:
         return
 
     ha_module = types.ModuleType("homeassistant")
     components_module = types.ModuleType("homeassistant.components")
-    websocket_api_module = types.ModuleType(
-        "homeassistant.components.websocket_api"
-    )
+    websocket_api_module = types.ModuleType("homeassistant.components.websocket_api")
     http_module = types.ModuleType("homeassistant.components.http")
     panel_custom_module = types.ModuleType("homeassistant.components.panel_custom")
     const_module = types.ModuleType("homeassistant.const")
@@ -28,7 +25,7 @@ def _ensure_minimal_homeassistant_stubs() -> None:
     event_module = types.ModuleType("homeassistant.helpers.event")
     core_module = types.ModuleType("homeassistant.core")
 
-    class _Platform:  # noqa: D401 - simple stub
+    class _Platform:
         """Stub Platform namespace used in tests."""
 
         SENSOR = "sensor"
@@ -39,10 +36,10 @@ def _ensure_minimal_homeassistant_stubs() -> None:
     class _HomeAssistantError(Exception):
         """Stub HomeAssistantError exception."""
 
-    class StaticPathConfig:  # noqa: D401 - simple stub
+    class StaticPathConfig:
         """Stub for StaticPathConfig constructor."""
 
-        def __init__(self, *args, **kwargs) -> None:  # noqa: D401
+        def __init__(self, *args, **kwargs) -> None:
             self.args = args
             self.kwargs = kwargs
 
@@ -51,36 +48,35 @@ def _ensure_minimal_homeassistant_stubs() -> None:
 
     def async_track_time_interval(*_args, **_kwargs):
         """Stub interval tracker returning a removable callback."""
-
         return lambda: None
 
-    class Event:  # noqa: D401 - simple stub
+    class Event:
         """Stub Event dataclass."""
 
         def __init__(self, event_type: str, data: dict | None = None) -> None:
             self.event_type = event_type
             self.data = data or {}
 
-    class ServiceCall:  # noqa: D401 - simple stub
+    class ServiceCall:
         """Stub ServiceCall placeholder."""
 
-    class HomeAssistant:  # noqa: D401 - simple stub
+    class HomeAssistant:
         """Stub HomeAssistant core object."""
 
         is_running = False
 
         class _Services:
-            def async_register(self, *_args, **_kwargs) -> None:  # noqa: D401
+            def async_register(self, *_args, **_kwargs) -> None:
                 return None
 
         class _Bus:
-            def async_listen_once(self, *_args, **_kwargs) -> None:  # noqa: D401
+            def async_listen_once(self, *_args, **_kwargs) -> None:
                 return None
 
         services = _Services()
         bus = _Bus()
 
-        async def async_add_executor_job(self, func, *args, **kwargs):  # noqa: D401
+        async def async_add_executor_job(self, func, *args, **kwargs):
             return func(*args, **kwargs)
 
         def async_create_background_task(
@@ -238,11 +234,10 @@ def test_legacy_schema_migrated(tmp_path):
 
 def test_creates_historical_price_index(tmp_path):
     """The schema initialisation must ensure the historical price index exists."""
-
     db_path = tmp_path / "index.db"
     initialize_database_schema(db_path)
 
     index_names = _get_index_names(db_path, "historical_prices")
-    assert (
-        "idx_historical_prices_security_date" in index_names
-    ), "Index für historical_prices(security_uuid, date) fehlt"
+    assert "idx_historical_prices_security_date" in index_names, (
+        "Index für historical_prices(security_uuid, date) fehlt"
+    )

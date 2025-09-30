@@ -14,7 +14,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
 
@@ -282,7 +281,6 @@ def get_security_close_prices(
     end_date: int | None = None,
 ) -> list[tuple[int, int]]:
     """Gibt tägliche Schlusskurse eines Wertpapiers als Liste zurück."""
-
     return list(
         iter_security_close_prices(
             db_path=db_path,
@@ -404,7 +402,6 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
 
 def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
     """Aggregate holdings and EUR-normalised pricing for a security."""
-
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
         raise ValueError(message)
@@ -438,7 +435,9 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         )
         holdings_row = holdings_cursor.fetchone()
         total_holdings = (
-            float(holdings_row[0]) if holdings_row and holdings_row[0] is not None else 0.0
+            float(holdings_row[0])
+            if holdings_row and holdings_row[0] is not None
+            else 0.0
         )
 
         raw_price = security_row["last_price"]

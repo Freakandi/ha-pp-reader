@@ -20,7 +20,9 @@ _EVENT_SIZE_MARGIN = 512
 
 def _is_sequence(value: Any) -> bool:
     """Return True for non-string sequences."""
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+    return isinstance(value, Sequence) and not isinstance(
+        value, (str, bytes, bytearray)
+    )
 
 
 def _estimate_event_size(payload: dict[str, Any]) -> int:

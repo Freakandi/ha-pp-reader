@@ -99,7 +99,9 @@ def _extract_feature_flag_options(options: Mapping[str, Any]) -> dict[str, bool]
     return normalized
 
 
-def _store_feature_flags(store: dict[str, Any], overrides: Mapping[str, bool]) -> dict[str, bool]:
+def _store_feature_flags(
+    store: dict[str, Any], overrides: Mapping[str, bool]
+) -> dict[str, bool]:
     """Persist feature flag values in the entry store."""
     flags = dict(overrides)
     store["feature_flags"] = flags
@@ -108,7 +110,6 @@ def _store_feature_flags(store: dict[str, Any], overrides: Mapping[str, bool]) -
 
 def _normalize_history_retention_years(options: Mapping[str, Any]) -> int | None:
     """Return the configured retention horizon in years or ``None`` for unlimited."""
-
     raw_value = options.get(CONF_HISTORY_RETENTION_YEARS)
     if raw_value is None:
         return None
@@ -136,9 +137,10 @@ def _normalize_history_retention_years(options: Mapping[str, Any]) -> int | None
     return years
 
 
-def _store_history_retention(store: dict[str, Any], options: Mapping[str, Any]) -> int | None:
+def _store_history_retention(
+    store: dict[str, Any], options: Mapping[str, Any]
+) -> int | None:
     """Persist the retention configuration in the entry store and return it."""
-
     retention_years = _normalize_history_retention_years(options)
     store["history_retention_years"] = retention_years
     return retention_years
@@ -263,7 +265,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, websocket.ws_get_dashboard_data)
         websocket_api.async_register_command(hass, websocket.ws_get_accounts)
         websocket_api.async_register_command(hass, websocket.ws_get_last_file_update)
-        websocket_api.async_register_command(hass, websocket.ws_get_portfolio_data_handler)
+        websocket_api.async_register_command(
+            hass, websocket.ws_get_portfolio_data_handler
+        )
         websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
         websocket_api.async_register_command(hass, websocket.ws_get_security_history)
         # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001

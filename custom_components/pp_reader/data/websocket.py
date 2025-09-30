@@ -28,6 +28,7 @@ from .db_access import (
     iter_security_close_prices,
 )
 
+
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
     """Return all non-EUR currencies from active accounts."""
     active_currencies: set[str] = set()
@@ -69,7 +70,6 @@ def _wrap_with_loop_fallback(
     handler: Callable[[Any, Any, dict[str, Any]], None],
 ) -> Callable[[Any, Any, dict[str, Any]], None]:
     """Ensure websocket handlers run in tests without a running event loop."""
-
     original = getattr(handler, "__wrapped__", None)
     if original is None:
         return handler
@@ -456,7 +456,6 @@ async def ws_get_portfolio_data_async(
     msg: dict[str, Any],
 ) -> None:
     """Async wrapper so tests can await the WebSocket handler directly."""
-
     loop = asyncio.get_running_loop()
     before = set(asyncio.all_tasks(loop))
     result = ws_get_portfolio_data_handler(hass, connection, msg)
@@ -487,7 +486,6 @@ async def ws_get_security_history(
     msg: dict[str, Any],
 ) -> None:
     """Return historical close prices for a security."""
-
     msg_id = msg.get("id")
     entry_id = msg.get("entry_id")
 
@@ -550,8 +548,7 @@ async def ws_get_security_history(
         return
 
     payload = [
-        {"date": date_value, "close": close_value}
-        for date_value, close_value in prices
+        {"date": date_value, "close": close_value} for date_value, close_value in prices
     ]
 
     response: dict[str, Any] = {
@@ -583,7 +580,6 @@ async def ws_get_security_snapshot(
     msg: dict[str, Any],
 ) -> None:
     """Return aggregated holdings and price snapshot for a security."""
-
     msg_id = msg.get("id")
     entry_id = msg.get("entry_id")
     security_uuid = msg.get("security_uuid")
@@ -637,7 +633,7 @@ async def ws_get_security_snapshot(
     except ValueError as err:
         connection.send_error(msg_id, "invalid_format", str(err))
         return
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.exception(
             "WebSocket: Fehler beim Laden des Snapshots (security_uuid=%s)",
             security_uuid,

@@ -44,8 +44,9 @@ from custom_components.pp_reader.prices import revaluation
 
 async def revalue_after_price_updates(*args, **kwargs):
     """Proxy to the revaluation helper (patchable for tests)."""
-
     return await revaluation.revalue_after_price_updates(*args, **kwargs)
+
+
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
     YahooQueryProvider,
@@ -333,7 +334,6 @@ def _refresh_impacted_portfolio_securities(
     db_path: Path, scaled_updates: dict[str, int]
 ) -> set[str]:
     """Recalculate portfolio/security aggregates for affected securities."""
-
     if not scaled_updates:
         return set()
 
@@ -366,7 +366,13 @@ def _refresh_impacted_portfolio_securities(
                 )
                 return set()
 
-            for portfolio_uuid, security_uuid, cur_hold, purch_val, cur_val in cur.fetchall():
+            for (
+                portfolio_uuid,
+                security_uuid,
+                cur_hold,
+                purch_val,
+                cur_val,
+            ) in cur.fetchall():
                 key = (portfolio_uuid, security_uuid)
                 impacted_pairs.add(key)
                 impacted_portfolios.add(portfolio_uuid)
@@ -758,8 +764,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
                 ):
                     warn_msg = (
-                        "prices_cycle: zero-quotes detected (WARN) - "
-                        "error_counter=%s"
+                        "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
                     )
                     _LOGGER.warning(warn_msg, error_counter)
                     store["price_zero_quotes_warn_ts"] = now_ts

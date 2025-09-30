@@ -11,13 +11,11 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _ensure_minimal_homeassistant_stubs() -> None:
     """Register lightweight Home Assistant module stubs for imports."""
-
     if "homeassistant" in sys.modules:
         return
 
@@ -34,7 +32,7 @@ def _ensure_minimal_homeassistant_stubs() -> None:
     core_module = types.ModuleType("homeassistant.core")
     helpers_typing_module = types.ModuleType("homeassistant.helpers.typing")
 
-    class _Platform:  # noqa: D401 - simple stub
+    class _Platform:
         """Stub Platform namespace used in tests."""
 
         SENSOR = "sensor"
@@ -45,10 +43,10 @@ def _ensure_minimal_homeassistant_stubs() -> None:
     class _HomeAssistantError(Exception):
         """Stub HomeAssistantError exception."""
 
-    class StaticPathConfig:  # noqa: D401 - simple stub
+    class StaticPathConfig:
         """Stub for StaticPathConfig constructor."""
 
-        def __init__(self, *args, **kwargs) -> None:  # noqa: D401
+        def __init__(self, *args, **kwargs) -> None:
             self.args = args
             self.kwargs = kwargs
 
@@ -57,36 +55,35 @@ def _ensure_minimal_homeassistant_stubs() -> None:
 
     def async_track_time_interval(*_args, **_kwargs):
         """Stub interval tracker returning a removable callback."""
-
         return lambda: None
 
-    class Event:  # noqa: D401 - simple stub
+    class Event:
         """Stub Event dataclass."""
 
         def __init__(self, event_type: str, data: dict | None = None) -> None:
             self.event_type = event_type
             self.data = data or {}
 
-    class ServiceCall:  # noqa: D401 - simple stub
+    class ServiceCall:
         """Stub ServiceCall placeholder."""
 
-    class HomeAssistant:  # noqa: D401 - simple stub
+    class HomeAssistant:
         """Stub HomeAssistant core object."""
 
         is_running = False
 
         class _Services:
-            def async_register(self, *_args, **_kwargs) -> None:  # noqa: D401
+            def async_register(self, *_args, **_kwargs) -> None:
                 return None
 
         class _Bus:
-            def async_listen_once(self, *_args, **_kwargs) -> None:  # noqa: D401
+            def async_listen_once(self, *_args, **_kwargs) -> None:
                 return None
 
         services = _Services()
         bus = _Bus()
 
-        async def async_add_executor_job(self, func, *args, **kwargs):  # noqa: D401
+        async def async_add_executor_job(self, func, *args, **kwargs):
             return func(*args, **kwargs)
 
         def async_create_background_task(
@@ -100,10 +97,10 @@ def _ensure_minimal_homeassistant_stubs() -> None:
             loop = asyncio.get_running_loop()
             return loop.create_task(coro)
 
-    class ConfigEntry:  # noqa: D401 - simple stub
+    class ConfigEntry:
         """Stub ConfigEntry object."""
 
-        def __init__(self, **kwargs) -> None:  # noqa: D401
+        def __init__(self, **kwargs) -> None:
             self.__dict__.update(kwargs)
 
     class ConfigType(dict):
@@ -174,7 +171,6 @@ from custom_components.pp_reader.data.db_init import initialize_database_schema
 @pytest.fixture
 def seeded_history_db(tmp_path: Path) -> Path:
     """Create a temporary database with historical price rows for tests."""
-
     db_path = tmp_path / "history.db"
     initialize_database_schema(db_path)
 
@@ -210,7 +206,6 @@ def seeded_history_db(tmp_path: Path) -> Path:
 @pytest.fixture
 def seeded_snapshot_db(tmp_path: Path) -> Path:
     """Create a temporary database with securities and FX data."""
-
     db_path = tmp_path / "snapshot.db"
     initialize_database_schema(db_path)
 
@@ -277,7 +272,6 @@ def test_iter_security_close_prices_orders_and_filters_range(
     seeded_history_db: Path,
 ) -> None:
     """Iterator should return ordered rows and respect the provided bounds."""
-
     all_rows = list(iter_security_close_prices(seeded_history_db, "sec-1"))
     assert all_rows == [
         (20240101, 1000),
@@ -312,7 +306,6 @@ def test_iter_security_close_prices_rejects_invalid_range(
     seeded_history_db: Path,
 ) -> None:
     """Iterator should raise when start date is after end date."""
-
     with pytest.raises(ValueError):
         list(
             iter_security_close_prices(
@@ -328,7 +321,6 @@ def test_get_security_close_prices_materialises_iterator(
     seeded_history_db: Path,
 ) -> None:
     """Helper should return a concrete list mirroring the iterator output."""
-
     result = get_security_close_prices(seeded_history_db, "sec-1")
     assert result == [
         (20240101, 1000),
@@ -351,12 +343,11 @@ def test_get_security_snapshot_multicurrency(
     seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Snapshot helper aggregates holdings and normalises FX prices."""
-
     reference_date = datetime(2024, 5, 1, 12, 0, 0)
 
     class _FixedDatetime(datetime):
         @classmethod
-        def now(cls, tz=None):  # noqa: D401
+        def now(cls, tz=None):
             del tz
             return reference_date
 

@@ -1,8 +1,6 @@
 """WebSocket tests for on-demand portfolio aggregation."""
 
 import asyncio
-import asyncio
-import asyncio
 from pathlib import Path
 
 import pytest
@@ -18,7 +16,6 @@ from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_
 @pytest.fixture
 def initialized_db(tmp_path: Path) -> Path:
     """Create a minimal portfolio dataset for WebSocket integration tests."""
-
     db_path = tmp_path / "portfolio_ws.db"
     initialize_database_schema(db_path)
 

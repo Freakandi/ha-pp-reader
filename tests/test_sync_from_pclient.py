@@ -3,9 +3,9 @@
 # ruff: noqa: S101 - pytest assertions are expected in tests
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import sqlite3
 import logging
+import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +140,7 @@ class _FakeTimestamp:
         self.seconds = seconds
 
     def ToDatetime(self) -> datetime:
-        return datetime.fromtimestamp(self.seconds, tz=timezone.utc)
+        return datetime.fromtimestamp(self.seconds, tz=UTC)
 
 
 def _prepare_portfolio_db(path: Path) -> sqlite3.Connection:
@@ -316,7 +316,6 @@ def test_sync_securities_persists_deduplicated_historical_prices(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Historical Close rows should be deduplicated and ignore retired securities."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -378,7 +377,6 @@ def test_sync_securities_warns_about_missing_daily_prices(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Missing Tage zwischen zwei Close-Werten sollen Warnungen erzeugen."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(

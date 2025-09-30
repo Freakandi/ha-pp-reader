@@ -39,7 +39,6 @@ def normalize_price_to_eur_sync(
     raw_price: int | None, currency_code: str, reference_date: datetime, db_path: Path
 ) -> float:
     """Normalize a raw security price to EUR using stored FX rates."""
-
     if not raw_price:
         return 0.0
 
@@ -51,9 +50,7 @@ def normalize_price_to_eur_sync(
         ensure_exchange_rates_for_dates_sync([reference_date], {currency_code}, db_path)
         fx_rates = load_latest_rates_sync(reference_date, db_path)
     except Exception:  # pragma: no cover - defensive
-        _LOGGER.exception(
-            "Fehler beim Laden der Wechselkurse für %s", currency_code
-        )
+        _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
         return 0.0
     rate = fx_rates.get(currency_code)
     if rate:

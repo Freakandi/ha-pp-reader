@@ -573,7 +573,6 @@ async def test_normal_batch(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_price_update_refreshes_portfolio_gains(monkeypatch, tmp_path):
     """A price change updates portfolio gains alongside the value payload."""
-
     db_path = tmp_path / "portfolio_refresh.db"
     initialize_database_schema(db_path)
 

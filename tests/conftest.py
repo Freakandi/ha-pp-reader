@@ -6,7 +6,6 @@ import asyncio
 from collections.abc import AsyncGenerator
 
 import pytest
-
 from homeassistant.config_entries import ConfigEntries
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import (
@@ -22,9 +21,8 @@ pytest_plugins = ("pytest_asyncio",)
 
 
 @pytest.fixture
-def event_loop() -> AsyncGenerator[asyncio.AbstractEventLoop, None]:
+def event_loop() -> AsyncGenerator[asyncio.AbstractEventLoop]:
     """Create a fresh event loop per test session."""
-
     loop = asyncio.new_event_loop()
     try:
         yield loop
@@ -35,9 +33,10 @@ def event_loop() -> AsyncGenerator[asyncio.AbstractEventLoop, None]:
 
 
 @pytest.fixture
-async def hass(event_loop: asyncio.AbstractEventLoop, tmp_path) -> AsyncGenerator[HomeAssistant, None]:
+async def hass(
+    event_loop: asyncio.AbstractEventLoop, tmp_path
+) -> AsyncGenerator[HomeAssistant]:
     """Provide a running Home Assistant instance backed by a temp config dir."""
-
     asyncio.set_event_loop(event_loop)
     hass = HomeAssistant(str(tmp_path))
     hass.config_entries = ConfigEntries(hass, {})
@@ -59,12 +58,14 @@ async def hass(event_loop: asyncio.AbstractEventLoop, tmp_path) -> AsyncGenerato
 
     # Register the pp_reader integration so loader lookups succeed during tests.
     try:
-        import custom_components  # noqa: PLC0415 - imported for side effect
+        import custom_components
     except ImportError:  # pragma: no cover - repository layout unexpected
         custom_components = None
 
     if custom_components is not None:
-        integration = Integration.resolve_from_root(hass, custom_components, "pp_reader")
+        integration = Integration.resolve_from_root(
+            hass, custom_components, "pp_reader"
+        )
         if integration is None:  # pragma: no cover - would indicate invalid manifest
             raise RuntimeError("Failed to resolve pp_reader integration for tests")
 
@@ -75,7 +76,7 @@ async def hass(event_loop: asyncio.AbstractEventLoop, tmp_path) -> AsyncGenerato
         # using monkeypatch paths like ``custom_components.pp_reader.__init__`` work.
         import custom_components.pp_reader as pp_reader_module
 
-        setattr(custom_components.pp_reader, "__init__", pp_reader_module)
+        custom_components.pp_reader.__init__ = pp_reader_module
 
     # Avoid loading real portfolio data during tests; coordinator sync is patched to no-op.
     from custom_components.pp_reader.data.coordinator import PPReaderCoordinator

@@ -12,13 +12,11 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _ensure_minimal_homeassistant_stubs() -> None:
     """Register lightweight Home Assistant modules for websocket imports."""
-
     if "homeassistant" in sys.modules:
         return
 
@@ -27,14 +25,14 @@ def _ensure_minimal_homeassistant_stubs() -> None:
     websocket_api_module = types.ModuleType("homeassistant.components.websocket_api")
     core_module = types.ModuleType("homeassistant.core")
 
-    class HomeAssistant:  # noqa: D401 - simple stub
+    class HomeAssistant:
         """Stub HomeAssistant core object."""
 
         def __init__(self) -> None:
             self.data: dict[str, object] = {}
             self.loop: asyncio.AbstractEventLoop | None = None
 
-        async def async_add_executor_job(self, func, *args):  # noqa: D401
+        async def async_add_executor_job(self, func, *args):
             return func(*args)
 
         def async_create_background_task(
@@ -48,12 +46,11 @@ def _ensure_minimal_homeassistant_stubs() -> None:
             loop = asyncio.get_running_loop()
             return loop.create_task(coro)
 
-    class ActiveConnection:  # noqa: D401 - simple stub
+    class ActiveConnection:
         """Stub ActiveConnection placeholder."""
 
-        pass
 
-    def websocket_command(_schema):  # noqa: D401 - decorator stub
+    def websocket_command(_schema):
         def decorator(func):
             async def wrapper(*args, **kwargs):
                 return await func(*args, **kwargs)
@@ -63,11 +60,11 @@ def _ensure_minimal_homeassistant_stubs() -> None:
 
         return decorator
 
-    def async_response(func):  # noqa: D401 - decorator stub
+    def async_response(func):
         func.__wrapped__ = func  # type: ignore[attr-defined]
         return func
 
-    def async_register_command(*_args, **_kwargs):  # noqa: D401 - stub
+    def async_register_command(*_args, **_kwargs):
         return None
 
     websocket_api_module.websocket_command = websocket_command
@@ -93,13 +90,13 @@ _ensure_minimal_homeassistant_stubs()
 if "voluptuous" not in sys.modules:
     vol_module = types.ModuleType("voluptuous")
 
-    def _identity(value):  # noqa: D401 - stub helper
+    def _identity(value):
         return value
 
-    def _any(*_args, **_kwargs):  # noqa: D401 - stub helper
+    def _any(*_args, **_kwargs):
         return None
 
-    def _coerce(target_type):  # noqa: D401 - stub helper
+    def _coerce(target_type):
         def _convert(value):
             return target_type(value)
 
@@ -128,7 +125,9 @@ db_init_spec = importlib.util.spec_from_file_location(
     "custom_components.pp_reader.data.db_init",
     REPO_ROOT / "custom_components" / "pp_reader" / "data" / "db_init.py",
 )
-if db_init_spec is None or db_init_spec.loader is None:  # pragma: no cover - defensive guard
+if (
+    db_init_spec is None or db_init_spec.loader is None
+):  # pragma: no cover - defensive guard
     error_message = "Unable to load db_init module spec"
     raise ImportError(error_message)
 _db_init_module = importlib.util.module_from_spec(db_init_spec)
@@ -189,7 +188,6 @@ class StubHass:
 
 def _run_ws_handler(handler, *args, **kwargs) -> None:
     """Execute the given websocket handler inside a dedicated event loop."""
-
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
@@ -208,19 +206,16 @@ def _run_ws_handler(handler, *args, **kwargs) -> None:
 
 def _run_ws_get_security_history(*args, **kwargs) -> None:
     """Execute the history websocket handler."""
-
     _run_ws_handler(WS_GET_SECURITY_HISTORY, *args, **kwargs)
 
 
 def _run_ws_get_security_snapshot(*args, **kwargs) -> None:
     """Execute the snapshot websocket handler."""
-
     _run_ws_handler(WS_GET_SECURITY_SNAPSHOT, *args, **kwargs)
 
 
 def _epoch_day_to_date(value: int) -> date:
     """Convert an integer YYYYMMDD representation into a date object."""
-
     year = value // 10_000
     month = (value % 10_000) // 100
     day = value % 100
@@ -229,14 +224,12 @@ def _epoch_day_to_date(value: int) -> date:
 
 def _date_to_epoch_day(value: date) -> int:
     """Convert a date object into its YYYYMMDD integer representation."""
-
     return value.year * 10_000 + value.month * 100 + value.day
 
 
 @pytest.fixture
 def seeded_history_db(tmp_path: Path) -> Path:
     """Create a temporary database populated with historical prices."""
-
     db_path = tmp_path / "history.db"
     initialize_database_schema(db_path)
 
@@ -294,11 +287,11 @@ def seeded_history_db(tmp_path: Path) -> Path:
 
     return db_path
 
+
 def test_ws_get_security_history_returns_filtered_prices(
     seeded_history_db: Path,
 ) -> None:
     """Handler should stream filtered close prices when enabled."""
-
     entry_id = "entry-1"
     hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
     connection = StubConnection()
@@ -333,7 +326,6 @@ def test_ws_get_security_history_ignores_unknown_feature_flags(
     seeded_history_db: Path,
 ) -> None:
     """Handler should ignore unrelated legacy feature flag states."""
-
     entry_id = "entry-2"
     hass = StubHass(
         {
@@ -377,7 +369,6 @@ def test_ws_get_security_history_supports_predefined_ranges(
     day_count: int,
 ) -> None:
     """Ensure the handler returns stable payloads for the predefined ranges."""
-
     entry_id = "entry-range"
     hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
     connection = StubConnection()
@@ -418,7 +409,6 @@ def test_ws_get_security_history_supports_predefined_ranges(
 
 def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     """Handler should return aggregated holdings for the security."""
-
     entry_id = "entry-3"
     hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
     connection = StubConnection()
@@ -451,7 +441,6 @@ def test_ws_get_security_snapshot_missing_security(
     seeded_history_db: Path,
 ) -> None:
     """Handler should return an error when the security is unknown."""
-
     entry_id = "entry-4"
     hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
     connection = StubConnection()

@@ -13,7 +13,6 @@ import aiohttp
 
 def _normalize_websocket_url(raw_url: str) -> str:
     """Return a WebSocket URL for the Home Assistant API endpoint."""
-
     parsed = urlsplit(raw_url)
     scheme = parsed.scheme or "http"
     if scheme not in {"http", "https", "ws", "wss"}:
@@ -52,7 +51,6 @@ async def _send_history_request(
     verify_ssl: bool,
 ) -> dict[str, Any]:
     """Perform the WebSocket handshake and request security history."""
-
     connector = aiohttp.TCPConnector(ssl=verify_ssl)
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.ws_connect(ws_url, heartbeat=30) as websocket:
@@ -92,7 +90,6 @@ async def _send_history_request(
 
 def _parse_args() -> argparse.Namespace:
     """Return parsed command line arguments."""
-
     parser = argparse.ArgumentParser(
         description=(
             "Send a pp_reader/get_security_history WebSocket request to verify the "
@@ -153,7 +150,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Entry point for the command line utility."""
-
     args = _parse_args()
     ws_url = _normalize_websocket_url(args.url)
 
@@ -170,7 +166,7 @@ def main() -> None:
                 verify_ssl=not args.no_ssl_verify,
             )
         )
-    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as err:
+    except (TimeoutError, aiohttp.ClientError, RuntimeError, ValueError) as err:
         raise SystemExit(f"WebSocket probe failed: {err}") from err
 
     payload = result.get("result", result)

@@ -93,9 +93,7 @@ class StubHass:
         """Store minimal registry data for the target entry."""
         self.data = {DOMAIN: {entry_id: {"db_path": db_path}}}
 
-    async def async_add_executor_job(
-        self, func: Any, *args: Any
-    ) -> Any:
+    async def async_add_executor_job(self, func: Any, *args: Any) -> Any:
         """Execute blocking helpers synchronously for tests."""
         return func(*args)
 

@@ -11,9 +11,9 @@ import pytest
 pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for module imports"
 )
-import google.protobuf.duration_pb2  # noqa: F401 - register dependency
-import google.protobuf.struct_pb2  # noqa: F401 - register dependency
-import google.protobuf.timestamp_pb2  # noqa: F401 - register dependency
+import google.protobuf.duration_pb2
+import google.protobuf.struct_pb2
+import google.protobuf.timestamp_pb2
 import google.protobuf.wrappers_pb2  # noqa: F401 - register dependency
 
 # Provide a minimal stub for the optional pp_reader package used by sync imports.

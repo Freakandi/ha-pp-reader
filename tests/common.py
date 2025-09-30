@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from homeassistant.config_entries import (
     SOURCE_USER,
@@ -38,10 +39,8 @@ class MockConfigEntry(ConfigEntry):
         version: int = 1,
     ) -> None:
         """Initialise a mock config entry with safe defaults."""
-
         normalized_keys = {
-            key: tuple(value)
-            for key, value in (discovery_keys or {}).items()
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
         }
 
         super().__init__(
@@ -66,10 +65,8 @@ class MockConfigEntry(ConfigEntry):
 
     def add_to_hass(self, hass: HomeAssistant) -> None:
         """Register the entry on Home Assistant's config manager."""
-
         hass.config_entries._entries[self.entry_id] = self
 
     def add_to_manager(self, manager: ConfigEntries) -> None:
         """Register the entry on an explicit config manager."""
-
         manager._entries[self.entry_id] = self

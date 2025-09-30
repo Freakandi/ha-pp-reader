@@ -26,9 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 API_URL = "https://api.frankfurter.app"
 SQLITE_TIMEOUT = 30.0
 _WRITE_LOCK = threading.Lock()
-UPSERT_QUERY = (
-    "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)"
-)
+UPSERT_QUERY = "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)"
 
 # --- Hilfsfunktionen ---
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 try:  # pragma: no cover - dependency optional for unit tests
@@ -16,7 +16,6 @@ except ModuleNotFoundError as err:  # pragma: no cover - protobuf dependency mis
 else:
     _TIMESTAMP_IMPORT_ERROR = None
 from homeassistant.core import HomeAssistant
-
 from pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
     load_latest_rates_sync,
@@ -102,6 +101,7 @@ DELETE_TABLE_CONFIG = {
 }
 
 _LOGGER = logging.getLogger(__name__)
+
 
 def _require_timestamp_support() -> None:
     """Ensure the protobuf Timestamp dependency is available."""
@@ -564,7 +564,9 @@ class _SyncRunner:
 
             if security.prices:
                 if not retired:
-                    dedup_prices: dict[int, tuple[int, Optional[int], Optional[int], Optional[int]]] = {}
+                    dedup_prices: dict[
+                        int, tuple[int, int | None, int | None, int | None]
+                    ] = {}
                     skipped_future_dates: set[int] = set()
                     skipped_invalid_dates: set[int] = set()
                     for price in security.prices:
@@ -621,10 +623,14 @@ class _SyncRunner:
                             self.stats.historical_prices_skipped += 1
                             continue
 
-                        high = getattr(price, "high", None) if "high" in fields else None
+                        high = (
+                            getattr(price, "high", None) if "high" in fields else None
+                        )
                         low = getattr(price, "low", None) if "low" in fields else None
                         volume = (
-                            getattr(price, "volume", None) if "volume" in fields else None
+                            getattr(price, "volume", None)
+                            if "volume" in fields
+                            else None
                         )
 
                         if date_value in dedup_prices:
@@ -651,7 +657,12 @@ class _SyncRunner:
                             low,
                             volume,
                         )
-                        for date_value, (close_value, high, low, volume) in sorted_price_items
+                        for date_value, (
+                            close_value,
+                            high,
+                            low,
+                            volume,
+                        ) in sorted_price_items
                     ]
 
                     if sorted_price_items:
@@ -666,8 +677,7 @@ class _SyncRunner:
 
                         if missing_segments:
                             total_missing_days = sum(
-                                (end - start) + 1
-                                for start, end in missing_segments
+                                (end - start) + 1 for start, end in missing_segments
                             )
                             self.stats.historical_price_gap_warnings += len(
                                 missing_segments
@@ -692,7 +702,9 @@ class _SyncRunner:
                                         gap_days,
                                     )
 
-                            remaining_segments = len(missing_segments) - max_segments_to_log
+                            remaining_segments = (
+                                len(missing_segments) - max_segments_to_log
+                            )
                             if remaining_segments > 0:
                                 _LOGGER.warning(
                                     "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",

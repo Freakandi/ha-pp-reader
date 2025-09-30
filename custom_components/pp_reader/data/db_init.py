@@ -74,7 +74,6 @@ def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
 
 def _ensure_historical_price_index(conn: sqlite3.Connection) -> None:
     """Create the historical price index if it does not yet exist."""
-
     try:
         conn.execute(
             """
