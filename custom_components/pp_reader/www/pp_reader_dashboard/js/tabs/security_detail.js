@@ -198,20 +198,34 @@ function buildRangeSelector(activeRange) {
   `;
 }
 
-function buildHistoryPlaceholder(rangeKey, hasHistory) {
-  if (hasHistory) {
-    return `
-      <div class="history-placeholder" data-state="loaded" data-range="${rangeKey}">
-        <p>Daten für ${rangeKey} geladen. Chart folgt im nächsten Schritt.</p>
-      </div>
-    `;
-  }
+function buildHistoryPlaceholder(rangeKey, state = { status: 'empty' }) {
+  const safeRange = rangeKey || '';
 
-  return `
-    <div class="history-placeholder" data-state="empty" data-range="${rangeKey}">
-      <p>Für dieses Wertpapier liegen im Zeitraum ${rangeKey} keine historischen Daten vor.</p>
-    </div>
-  `;
+  switch (state.status) {
+    case 'loaded':
+      return `
+        <div class="history-placeholder" data-state="loaded" data-range="${safeRange}">
+          <p>Daten für ${safeRange || 'den gewählten Zeitraum'} geladen. Chart folgt im nächsten Schritt.</p>
+        </div>
+      `;
+    case 'error': {
+      const message = state?.message
+        ? String(state.message)
+        : 'Die historischen Daten konnten nicht geladen werden.';
+      return `
+        <div class="history-placeholder" data-state="error" data-range="${safeRange}">
+          <p>${message}</p>
+        </div>
+      `;
+    }
+    case 'empty':
+    default:
+      return `
+        <div class="history-placeholder" data-state="empty" data-range="${safeRange}">
+          <p>Für dieses Wertpapier liegen im Zeitraum ${safeRange || 'den gewählten Zeitraum'} keine historischen Daten vor.</p>
+        </div>
+      `;
+  }
 }
 
 function formatHoldings(value) {
@@ -279,6 +293,26 @@ function buildHeaderMeta(snapshot) {
   `;
 }
 
+function normaliseHistoryError(error) {
+  if (!error) {
+    return null;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message || null;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch (_jsonError) {
+    return String(error);
+  }
+}
+
 export async function renderSecurityDetail(root, hass, panelConfig, securityUuid) {
   if (!securityUuid) {
     console.error('renderSecurityDetail: securityUuid fehlt');
@@ -310,6 +344,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
 
   const activeRange = DEFAULT_HISTORY_RANGE;
   let historySeries = [];
+  let historyState = { status: 'empty' };
 
   try {
     const rangeOptions = resolveRangeOptions(activeRange);
@@ -320,11 +355,21 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
       rangeOptions,
     );
     historySeries = normaliseHistorySeries(historyResponse?.prices);
+    historyState = historySeries.length
+      ? { status: 'loaded' }
+      : { status: 'empty' };
   } catch (historyError) {
     console.error(
       'renderSecurityDetail: Historie konnte nicht geladen werden',
       historyError,
     );
+    const message = normaliseHistoryError(historyError);
+    historyState = {
+      status: 'error',
+      message:
+        message ||
+        'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
+    };
   }
 
   const latestNativePrice =
@@ -349,6 +394,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     holdings,
     initialRange: activeRange,
     initialHistory: historySeries,
+    initialHistoryState: historyState,
   });
 
   return `
@@ -357,7 +403,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     ${buildRangeSelector(activeRange)}
     <div class="card security-detail-placeholder">
       <h2>Historie</h2>
-      ${buildHistoryPlaceholder(activeRange, historySeries.length > 0)}
+      ${buildHistoryPlaceholder(activeRange, historyState)}
     </div>
   `;
 }
@@ -393,7 +439,7 @@ function updateInfoBarContent(root, rangeKey, periodGain, dailyGain) {
   infoBar.parentElement.replaceChild(fresh, infoBar);
 }
 
-function updateHistoryPlaceholder(root, rangeKey, hasHistory) {
+function updateHistoryPlaceholder(root, rangeKey, state) {
   const placeholderContainer = root.querySelector('.security-detail-placeholder');
   if (!placeholderContainer) {
     return;
@@ -401,7 +447,7 @@ function updateHistoryPlaceholder(root, rangeKey, hasHistory) {
 
   placeholderContainer.innerHTML = `
     <h2>Historie</h2>
-    ${buildHistoryPlaceholder(rangeKey, hasHistory)}
+    ${buildHistoryPlaceholder(rangeKey, state)}
   `;
 }
 
@@ -414,6 +460,7 @@ function scheduleRangeSetup({
   holdings,
   initialRange,
   initialHistory,
+  initialHistoryState,
 }) {
   if (!root) {
     return;
@@ -432,6 +479,9 @@ function scheduleRangeSetup({
 
     setActiveRange(securityUuid, initialRange);
     updateRangeButtons(rangeSelector, initialRange);
+    if (initialHistoryState) {
+      updateHistoryPlaceholder(root, initialRange, initialHistoryState);
+    }
 
     const handleRangeClick = async (rangeKey) => {
       if (!rangeKey || rangeKey === getActiveRange(securityUuid)) {
@@ -447,6 +497,7 @@ function scheduleRangeSetup({
       }
 
       let historySeries = cache.get(rangeKey) || null;
+      let historyState = null;
       if (!historySeries) {
         try {
           const rangeOptions = resolveRangeOptions(rangeKey);
@@ -458,10 +509,24 @@ function scheduleRangeSetup({
           );
           historySeries = normaliseHistorySeries(historyResponse?.prices);
           cache.set(rangeKey, historySeries);
+          historyState = historySeries.length
+            ? { status: 'loaded' }
+            : { status: 'empty' };
         } catch (error) {
           console.error('Range-Wechsel: Historie konnte nicht geladen werden', error);
           historySeries = [];
+          const message = normaliseHistoryError(error);
+          historyState = {
+            status: 'error',
+            message:
+              message ||
+              'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
+          };
         }
+      } else {
+        historyState = historySeries.length
+          ? { status: 'loaded' }
+          : { status: 'empty' };
       }
 
       const lastClose = historySeries.length
@@ -477,7 +542,7 @@ function scheduleRangeSetup({
       setActiveRange(securityUuid, rangeKey);
       updateRangeButtons(rangeSelector, rangeKey);
       updateInfoBarContent(root, rangeKey, periodGain, dailyGain);
-      updateHistoryPlaceholder(root, rangeKey, historySeries.length > 0);
+      updateHistoryPlaceholder(root, rangeKey, historyState);
     };
 
     rangeSelector.addEventListener('click', (event) => {

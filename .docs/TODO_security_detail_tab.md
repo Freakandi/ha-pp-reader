@@ -91,7 +91,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: State-Management für Range-Auswahl
       - Ziel: Löst History-Fetch aus, markiert aktive Range und cached Antworten pro Range
-   e) [ ] Baue Fehler- und Empty-State-Anzeige bei fehlender History
+   e) [x] Baue Fehler- und Empty-State-Anzeige bei fehlender History
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Fehlerbehandlung
       - Ziel: Zeigt freundliche Nachricht statt Chart bei fehlenden Daten
