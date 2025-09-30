@@ -41,7 +41,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js`
       - Abschnitt/Funktion: WebSocket-Hilfsfunktionen
       - Ziel: Liefert Promise-basierte Wrapper für neue/aktualisierte Backend-Kommandos
-   b) [ ] Entferne Feature-Flag-Abfragen für History-Fetches
+   b) [x] Entferne Feature-Flag-Abfragen für History-Fetches
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js`
       - Abschnitt/Funktion: Bestehende History-Helper
       - Ziel: History-Aufrufe erfolgen ohne Flag-Prüfung, Fehler werden clientseitig abgefangen
