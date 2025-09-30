@@ -125,7 +125,7 @@
       - Ziel: UX-Verbesserung bei erneutem Öffnen derselben Security
 
 9. Dokumentation & Änderungsnachverfolgung
-   a) [ ] Ergänze README-dev.md um Navigationsfluss und neue Backend-APIs
+   a) [x] Ergänze README-dev.md um Navigationsfluss und neue Backend-APIs
       - Datei: `README-dev.md`
       - Abschnitt/Funktion: Dashboard-/WebSocket-Beschreibung
       - Ziel: Entwicklerdoku deckt Security-Detail-Tab vollständig ab
