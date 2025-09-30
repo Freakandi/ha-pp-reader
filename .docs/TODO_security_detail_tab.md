@@ -143,7 +143,7 @@
        - Datei: `tests/test_ws_security_history.py`
        - Abschnitt/Funktion: Bestehende Testklasse erweitern
        - Ziel: Sicherstellen, dass Backend Start/Ende korrekt berechnet und Antworten cached
-    b) [ ] Ergänze Frontend-Test (falls Harness vorhanden) oder dokumentiere manuelle Swipe/Pfeil-Prüfung
+    b) [x] Ergänze Frontend-Test (falls Harness vorhanden) oder dokumentiere manuelle Swipe/Pfeil-Prüfung
        - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/__tests__/dashboard.test.js` (falls vorhanden) oder `.docs/manual_test_security_detail.md`
        - Abschnitt/Funktion: Navigationstestfälle
        - Ziel: Verifiziert Navigation zwischen Overview- und Detail-Tabs

@@ -23,11 +23,12 @@
 3. Click on a position row (avoiding expand toggles) to open the security detail tab.
 4. Confirm that header cards display expected values matching the Portfolio Performance dataset.
 5. Observe the chart render with the default range (1Y). Hover to confirm tooltip accuracy for dates and prices.
-6. Click each range button (1M, 6M, 1Y, 5Y) and verify active state styling and chart refresh behaviour.
-7. If historical data is absent, ensure the empty-state banner appears and no chart is drawn.
-8. Trigger or wait for a live price update, then verify that header and chart data refresh automatically.
-9. Close the tab using the provided control and confirm the overview remains in its prior state.
-10. Review the browser console for warnings or errors; none should be present.
+6. Use the tab-strip arrow buttons to navigate back to the overview and forward to the detail tab again. Verify that the active tab indicator follows each navigation step and that swipe gestures on touch devices mirror the arrow-button behaviour.
+7. Click each range button (1M, 6M, 1Y, 5Y) and verify active state styling and chart refresh behaviour.
+8. If historical data is absent, ensure the empty-state banner appears and no chart is drawn.
+9. Trigger or wait for a live price update, then verify that header and chart data refresh automatically.
+10. Close the tab using the provided control and confirm the overview remains in its prior state.
+11. Review the browser console for warnings or errors; none should be present.
 
 ## Pass/Fail Criteria
 - All scenarios in the matrix complete without UI or console errors.
