@@ -1,10 +1,10 @@
 # Security Detail Tab Implementation Checklist
 
 1. Backend: Security snapshot data endpoint
-   a) [x] Implement `get_security_snapshot(db_path: Path, security_uuid: str)` to aggregate holdings and normalize EUR values
+   a) [x] Implement `get_security_snapshot(db_path: Path, security_uuid: str)` to aggregate holdings, preserve native-currency quotes, and normalize EUR values
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Neuer Helper unterhalb bestehender snapshot/portfolio Utilities
-      - Ziel: Liefert `{name, currency_code, total_holdings, last_price_eur, market_value_eur}` aus `portfolio_securities` + `securities` inkl. FX-Konvertierung
+      - Ziel: Liefert `{name, currency_code, total_holdings, last_price_native, last_price_eur, market_value_eur}` aus `portfolio_securities` + `securities` inkl. FX-Konvertierung
    b) [x] Reuse vorhandene FX/Nominal-Konvertierung aus Portfolio-Logik für `get_security_snapshot`
       - Datei: `custom_components/pp_reader/logic/portfolio.py`
       - Abschnitt/Funktion: Bestehende EUR-Normalisierungsfunktionen referenzieren/auslagern
@@ -79,23 +79,27 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Neuer Renderer und Tab-Registrierung
       - Ziel: Baut Header, lädt Daten, verbindet mit Navigation
-   b) [ ] Render Header-Karten (Name, Holdings, Last Price, Market Value) mit vorhandenen Formattern
+   b) [ ] Render Header-Karten (Name, Currency, Holdings, Last Price in Originalwährung, Market Value in EUR) mit vorhandenen Formattern
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Header-Rendering
-      - Ziel: Konsistentes Kartenlayout zur Overview
-   c) [ ] Implementiere Range-Buttons (1M, 6M, 1Y default, 5Y)
+      - Ziel: Konsistentes Kartenlayout zur Overview und zeigt Währungsinformationen korrekt an
+   c) [ ] Baue Infoleiste oberhalb des Charts, die Gesamtgewinn/-verlust für Zeitraum und letzten Tag in EUR anzeigt
+      - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
+      - Abschnitt/Funktion: Rendering & Datenaggregation für Infoleiste
+      - Ziel: Verbindet Kursbewegungen in Originalwährung mit Portfolioauswirkung in EUR
+   d) [ ] Implementiere Range-Buttons (1M, 6M, 1Y default, 5Y)
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: State-Management für Range-Auswahl
       - Ziel: Löst History-Fetch aus, markiert aktive Range und cached Antworten pro Range
-   d) [ ] Baue Fehler- und Empty-State-Anzeige bei fehlender History
+   e) [ ] Baue Fehler- und Empty-State-Anzeige bei fehlender History
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Fehlerbehandlung
       - Ziel: Zeigt freundliche Nachricht statt Chart bei fehlenden Daten
-   e) [ ] Invaldiere Range-Caches bei Live-Updates des aktiven `security_uuid`
+   f) [ ] Invaldiere Range-Caches bei Live-Updates des aktiven `security_uuid`
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Subscription auf Push-Events
       - Ziel: Sicherstellt aktuelle Chartdaten nach Preis-Updates
-   f) [ ] Räum Listener beim Schließen des Tabs auf
+   g) [ ] Räum Listener beim Schließen des Tabs auf
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Cleanup/Destroy-Routine
       - Ziel: Verhindert Speicherlecks bei Tab-Wechsel

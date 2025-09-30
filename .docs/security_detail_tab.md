@@ -13,8 +13,9 @@ Goal: Introduce an interactive security detail tab that opens from the portfolio
 
 ## 2. Target State
 - Clicking any security row inside an expanded portfolio opens a new dashboard tab labeled with the security name and shows a detail layout aligned with the overview card styling. (custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js)
-- The detail tab header displays: security name, aggregated holdings across all portfolios, last known price per share (EUR), and the EUR market value derived from holdings × last price; values refresh alongside existing WebSocket updates.
-- A price history chart renders below the header, defaulting to the trailing 1-year window with toggle buttons (1M, 6M, 1Y active by default, 5Y) to refetch and redraw the dataset via the existing history WebSocket command on demand.
+- The detail tab header displays: security name, the security's trading currency, aggregated holdings across all portfolios, last known price per share shown in that original currency, and the EUR market value derived from holdings × last price; values refresh alongside existing WebSocket updates.
+- A price history chart renders below the header, defaulting to the trailing 1-year window with toggle buttons (1M, 6M, 1Y active by default, 5Y) to refetch and redraw the dataset via the existing history WebSocket command on demand, plotting share prices in the security's original currency.
+- An informational gain/loss strip sits between the header and chart, summarizing the total EUR gain or loss for the selected period and for the trailing day so users can relate currency movements to overall portfolio impact.
 - Navigating back to the overview keeps expanded state and cached positions untouched; multiple security tabs can be reopened without reloading the base dashboard.
 - The detail tab inherits the same navigation affordances as the overview (tab strip arrows, swipe gestures), ensuring consistent UX across dashboard sections.
 - The feature flag `pp_reader_history` transitions to an always-on embedded capability; the detail tab assumes history support is available and surfaces a dedicated message only when no data exists for the selected security.
@@ -25,10 +26,11 @@ Goal: Introduce an interactive security detail tab that opens from the portfolio
 3. `openSecurityDetail` resolves cumulative holdings and EUR value either from cached rows or via a lightweight backend summary call (`pp_reader/get_security_snapshot`) that joins `portfolio_securities` and `securities`. (custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js)
 4. The dashboard controller replaces the legacy test tab entry with a dynamic detail-tab slot, registers `{ title, render }`, and triggers `renderTab`, keeping navigation arrows and swipe gestures in sync. (custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js)
 5. The new tab renderer `renderSecurityDetail(root, hass, panelConfig, securityUuid)`:
-   1. Requests the snapshot payload (if not already provided) for header metrics and to normalize last price.
+   1. Requests the snapshot payload (if not already provided) for header metrics, preserving native-currency pricing alongside EUR conversions.
    2. Issues `pp_reader/get_security_history` with epoch-day boundaries derived from the selected range whenever the range changes, ensuring data is fetched on demand via WebSocket. (custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js, custom_components/pp_reader/data/websocket.py)
-   3. Transforms the returned `close` values from 10⁻⁸ precision to EUR, filling missing days where needed for chart continuity.
-   4. Renders header cards and injects a chart canvas using a lightweight chart helper (new `charting.js`) driven by plain SVG or Canvas (no external CDN dependency by default).
+   3. Transforms the returned `close` values from 10⁻⁸ precision to the security's original currency for charting while retaining EUR equivalents for gain summaries, filling missing days where needed for chart continuity.
+   4. Computes total gain/loss in EUR for the active range and for the last 24 hours to power the informational strip.
+   5. Renders header cards and injects a chart canvas using a lightweight chart helper (new `charting.js`) driven by plain SVG or Canvas (no external CDN dependency by default).
 6. Range selector buttons mutate component state, reusing cached history responses per range to avoid redundant WebSocket calls while still sourcing each range on demand; stale caches are invalidated when live price push events signal updates for the same `security_uuid`.
 7. Closing the detail tab (via new close control or navigation) removes the dynamic descriptor and returns focus to the overview without leaving orphaned listeners.
 
@@ -58,7 +60,7 @@ Supporting helpers already available:
 ## 6. Incremental Implementation
 
 1. **Backend plumbing**
-   1. Implement `get_security_snapshot(db_path, security_uuid)` returning `{name, total_holdings, last_price_eur, market_value_eur}` by summing `portfolio_securities` rows and converting `securities.last_price` using FX helpers if needed.
+   1. Implement `get_security_snapshot(db_path, security_uuid)` returning `{name, currency_code, total_holdings, last_price_native, last_price_eur, market_value_eur}` by summing `portfolio_securities` rows, retaining the original-currency quote, and converting `securities.last_price` using FX helpers if needed.
    2. Add `pp_reader/get_security_snapshot` WebSocket handler without feature-flag gating (history is now always enabled), including tests covering missing UUID paths.
    3. Extend `ws_get_security_history` unit tests (if present) to assert 1M/5Y range input handling now that the handler is part of the core experience.
 
