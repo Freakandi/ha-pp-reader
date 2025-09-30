@@ -19,6 +19,7 @@ const detailTabOrder = [];
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 let securityDetailTabFactory = null;
+let navigationInProgress = false;
 
 function getVisibleTabs() {
   const detailTabs = detailTabOrder
@@ -26,6 +27,45 @@ function getVisibleTabs() {
     .filter(Boolean);
 
   return [...baseTabs, ...detailTabs];
+}
+
+function clampPageIndex(index) {
+  const tabs = getVisibleTabs();
+  if (!tabs.length) {
+    return 0;
+  }
+  if (index < 0) {
+    return 0;
+  }
+  if (index >= tabs.length) {
+    return tabs.length - 1;
+  }
+  return index;
+}
+
+async function navigateToPage(targetIndex, root, hass, panel) {
+  const clampedIndex = clampPageIndex(targetIndex);
+  if (clampedIndex === currentPage) {
+    return;
+  }
+
+  if (navigationInProgress) {
+    return;
+  }
+
+  navigationInProgress = true;
+  try {
+    currentPage = clampedIndex;
+    await renderTab(root, hass, panel);
+  } catch (error) {
+    console.error('navigateToPage: Fehler beim Rendern des Tabs', error);
+  } finally {
+    navigationInProgress = false;
+  }
+}
+
+function navigateByDelta(delta, root, hass, panel) {
+  navigateToPage(currentPage + delta, root, hass, panel);
 }
 
 export function registerDetailTab(key, descriptor) {
@@ -297,21 +337,8 @@ function setupSwipeOnHeaderCard(root, hass, panel) {
 
   addSwipeEvents(
     headerCard,
-    () => {
-      const tabs = getVisibleTabs();
-      if (currentPage < tabs.length - 1) {
-        currentPage++;
-        renderTab(root, hass, panel); // Lokale Parameter verwenden
-        updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
-      }
-    },
-    () => {
-      if (currentPage > 0) {
-        currentPage--;
-        renderTab(root, hass, panel); // Lokale Parameter verwenden
-        updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
-      }
-    }
+    () => navigateByDelta(1, root, hass, panel),
+    () => navigateByDelta(-1, root, hass, panel)
   );
 }
 
@@ -331,20 +358,11 @@ function setupNavigation(root, hass, panel) {
   }
 
   navLeft.addEventListener('click', () => {
-    if (currentPage > 0) {
-      currentPage--;
-      renderTab(root, hass, panel); // Lokale Parameter verwenden
-      updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
-    }
+    navigateByDelta(-1, root, hass, panel);
   });
 
   navRight.addEventListener('click', () => {
-    const tabs = getVisibleTabs();
-    if (currentPage < tabs.length - 1) {
-      currentPage++;
-      renderTab(root, hass, panel); // Lokale Parameter verwenden
-      updateNavigationState(headerCard); // Zustand der Navigationspfeile aktualisieren
-    }
+    navigateByDelta(1, root, hass, panel);
   });
 
   updateNavigationState(headerCard); // Initialer Zustand der Navigationspfeile

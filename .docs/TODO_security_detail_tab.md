@@ -55,7 +55,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Neue Controller-Funktionen
       - Ziel: Initialisiert Tab-Eintrag, wechselt Navigation und räumt bei Schließen auf
-   c) [ ] Synchronisiere Navigationspfeile und Swipe-Gesten mit dynamischen Tabs
+   c) [x] Synchronisiere Navigationspfeile und Swipe-Gesten mit dynamischen Tabs
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Navigation/Carousel-Handling
       - Ziel: Konsistente UX zwischen Overview- und Detail-Tabs
