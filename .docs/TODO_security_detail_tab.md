@@ -133,7 +133,7 @@
       - Datei: `CHANGELOG.md`
       - Abschnitt/Funktion: Aktueller Unreleased-Block
       - Ziel: Sichtbarkeit der neuen Funktion im Release-Prozess
-   c) [ ] Dokumentiere manuelle Testfälle in `.docs` (z.B. `manual_test_security_detail.md`)
+   c) [x] Dokumentiere manuelle Testfälle in `.docs` (z.B. `manual_test_security_detail.md`)
       - Datei: `.docs/manual_test_security_detail.md` (neu)
       - Abschnitt/Funktion: Testfallbeschreibung
       - Ziel: Liste von Validierungsschritten (Tab öffnen, Range wechseln, fehlende Daten)
