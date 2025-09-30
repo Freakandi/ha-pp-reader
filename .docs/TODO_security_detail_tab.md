@@ -47,7 +47,7 @@
       - Ziel: History-Aufrufe erfolgen ohne Flag-Prüfung, Fehler werden clientseitig abgefangen
 
 4. Frontend: Dashboard-Tab-Verwaltung refaktorieren
-   a) [ ] Ersetze statisches `tabs`-Array durch Registry mit dynamischen Detail-Tabs
+   a) [x] Ersetze statisches `tabs`-Array durch Registry mit dynamischen Detail-Tabs
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Tab-Initialisierung und Navigation
       - Ziel: Ermöglicht Hinzufügen/Entfernen von Security-Detail-Tabs und entfernt Test-Tab

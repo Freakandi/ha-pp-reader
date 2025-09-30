@@ -1,6 +1,5 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview.js';
-import { renderTestTab } from './tabs/test_tab.js';
 import {
   handleAccountUpdate,
   handleLastFileUpdate,
@@ -9,10 +8,61 @@ import {
 } from './data/updateConfigsWS.js';
 import { getEntryId } from './data/api.js';
 
-const tabs = [
-  { title: 'Dashboard', render: renderDashboard },
-  { title: 'Test Tab', render: renderTestTab }
+const OVERVIEW_TAB_KEY = 'overview';
+
+const baseTabs = [
+  { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard }
 ];
+
+const detailTabRegistry = new Map();
+const detailTabOrder = [];
+
+function getVisibleTabs() {
+  const detailTabs = detailTabOrder
+    .map((key) => detailTabRegistry.get(key))
+    .filter(Boolean);
+
+  return [...baseTabs, ...detailTabs];
+}
+
+export function registerDetailTab(key, descriptor) {
+  if (!key || !descriptor || typeof descriptor.render !== 'function') {
+    console.error('registerDetailTab: Ungültiger Tab-Descriptor', key, descriptor);
+    return;
+  }
+
+  const normalizedDescriptor = {
+    ...descriptor,
+    key,
+  };
+
+  detailTabRegistry.set(key, normalizedDescriptor);
+
+  if (!detailTabOrder.includes(key)) {
+    detailTabOrder.push(key);
+  }
+}
+
+export function unregisterDetailTab(key) {
+  if (!key) {
+    return;
+  }
+
+  detailTabRegistry.delete(key);
+
+  const index = detailTabOrder.indexOf(key);
+  if (index >= 0) {
+    detailTabOrder.splice(index, 1);
+  }
+}
+
+export function hasDetailTab(key) {
+  return detailTabRegistry.has(key);
+}
+
+export function getDetailTabDescriptor(key) {
+  return detailTabRegistry.get(key) || null;
+}
 
 let currentPage = 0;
 let observer; // Globale Variable für Debugging
@@ -28,6 +78,11 @@ async function renderTab(root, hass, panel) {
       // Suche nach unserem Webcomponent
       Object.values(hass.panels).find(p => p?.webcomponent_name === 'pp-reader-panel') ||
       null;
+  }
+
+  const tabs = getVisibleTabs();
+  if (currentPage >= tabs.length) {
+    currentPage = Math.max(0, tabs.length - 1);
   }
 
   const tab = tabs[currentPage];
@@ -53,7 +108,7 @@ async function renderTab(root, hass, panel) {
   root.innerHTML = content;
 
   // NEU (Section 6): Scoped Listener für Portfolio-Expand nur für Overview-Tab (Index 0 / Titel 'Dashboard')
-  if (tabs[currentPage]?.render === renderDashboard) {
+  if (tab.render === renderDashboard) {
     attachPortfolioToggleHandler(root);
   }
 
@@ -126,6 +181,7 @@ function setupSwipeOnHeaderCard(root, hass, panel) {
   addSwipeEvents(
     headerCard,
     () => {
+      const tabs = getVisibleTabs();
       if (currentPage < tabs.length - 1) {
         currentPage++;
         renderTab(root, hass, panel); // Lokale Parameter verwenden
@@ -166,6 +222,7 @@ function setupNavigation(root, hass, panel) {
   });
 
   navRight.addEventListener('click', () => {
+    const tabs = getVisibleTabs();
     if (currentPage < tabs.length - 1) {
       currentPage++;
       renderTab(root, hass, panel); // Lokale Parameter verwenden
@@ -191,6 +248,7 @@ function updateNavigationState(headerCard) {
   }
 
   if (navRight) {
+    const tabs = getVisibleTabs();
     if (currentPage === tabs.length - 1) {
       navRight.disabled = true;
       navRight.classList.add('disabled');
