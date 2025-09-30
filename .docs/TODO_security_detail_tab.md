@@ -83,7 +83,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Header-Rendering
       - Ziel: Konsistentes Kartenlayout zur Overview und zeigt Währungsinformationen korrekt an
-   c) [ ] Baue Infoleiste oberhalb des Charts, die Gesamtgewinn/-verlust für Zeitraum und letzten Tag in EUR anzeigt
+   c) [x] Baue Infoleiste oberhalb des Charts, die Gesamtgewinn/-verlust für Zeitraum und letzten Tag in EUR anzeigt
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Rendering & Datenaggregation für Infoleiste
       - Ziel: Verbindet Kursbewegungen in Originalwährung mit Portfolioauswirkung in EUR
