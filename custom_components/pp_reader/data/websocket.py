@@ -27,8 +27,6 @@ from .db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
-from ..feature_flags import is_enabled as is_feature_enabled
-
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
     """Return all non-EUR currencies from active accounts."""
@@ -488,21 +486,13 @@ async def ws_get_security_history(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return historical close prices for a security when the feature flag is enabled."""
+    """Return historical close prices for a security."""
 
     msg_id = msg.get("id")
     entry_id = msg.get("entry_id")
 
     if not entry_id:
         connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
-        return
-
-    if not is_feature_enabled("pp_reader_history", hass, entry_id=entry_id):
-        connection.send_error(
-            msg_id,
-            "feature_not_enabled",
-            "Historische Kursdaten sind derzeit deaktiviert.",
-        )
         return
 
     domain_entries = hass.data.get(DOMAIN)
