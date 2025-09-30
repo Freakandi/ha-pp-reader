@@ -7,7 +7,11 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 ### Added
 - Persist daily Close prices for active securities during Portfolio Performance imports and provide helpers to query their time series for future dashboards.【F:custom_components/pp_reader/data/sync_from_pclient.py†L559-L676】【F:custom_components/pp_reader/data/db_access.py†L204-L289】
-- Introduced a feature-flagged WebSocket command (`pp_reader/get_security_history`) that streams Close data when explicitly enabled, paving the way for historical price visualisations.【F:custom_components/pp_reader/data/websocket.py†L396-L496】【F:custom_components/pp_reader/feature_flags.py†L1-L101】
+- Delivered a security detail dashboard tab that opens from portfolio positions, renders snapshot metrics, and charts range-selectable history with lightweight SVG tooling and cache invalidation for live updates.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L1-L205】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js†L1-L210】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/content/charting.js†L1-L196】
+- Exposed always-on WebSocket commands for security drilldowns, including snapshot aggregation and history queries consumed by new frontend API wrappers.【F:custom_components/pp_reader/data/websocket.py†L574-L755】【F:custom_components/pp_reader/data/db_access.py†L291-L384】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js†L69-L135】
+
+### Changed
+- Removed the deprecated `pp_reader_history` feature flag so historical price access is part of the core experience without configuration toggles.【F:custom_components/pp_reader/feature_flags.py†L1-L67】【F:custom_components/pp_reader/data/websocket.py†L537-L755】
 
 ## [0.11.0] - 2025-09-27
 ### Added
