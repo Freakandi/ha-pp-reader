@@ -59,7 +59,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Navigation/Carousel-Handling
       - Ziel: Konsistente UX zwischen Overview- und Detail-Tabs
-   d) [ ] Optional: Begrenze gleichzeitige Detail-Tabs auf einen Eintrag pro Security UUID
+   d) [x] Optional: Begrenze gleichzeitige Detail-Tabs auf einen Eintrag pro Security UUID
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Tab-Registry-Verwaltung
       - Ziel: Verhindert Tab-Flut bei wiederholtem Öffnen derselben Security
