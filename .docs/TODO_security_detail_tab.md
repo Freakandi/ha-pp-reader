@@ -75,7 +75,7 @@
       - Ziel: Übergibt Snapshot-Daten oder löst Fallback-Fetch über Dashboard-Controller aus
 
 6. Frontend: Security-Detail-Renderer implementieren
-   a) [ ] Lege neue Datei `security_detail.js` mit `renderSecurityDetail` & `registerSecurityDetailTab` an
+   a) [x] Lege neue Datei `security_detail.js` mit `renderSecurityDetail` & `registerSecurityDetailTab` an
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Neuer Renderer und Tab-Registrierung
       - Ziel: Baut Header, lädt Daten, verbindet mit Navigation
