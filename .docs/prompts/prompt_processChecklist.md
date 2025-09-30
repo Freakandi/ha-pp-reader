@@ -46,6 +46,7 @@ Regeln:
 - Logging nur falls spezifiziert oder notwendig.
 - Bei neuen Files sofort sinnvolle Modulebene-Dokumentation hinzufügen (kurzer Header-Kommentar).
 - Tests erst implementieren, wenn zugehörige produktive Module vorhanden (Provider vor Tests!). Wenn ein Test-Item vorzeitig gewählt würde, aber abhängiger Code fehlt → zurückweisen.
+- Durchführen von Tests nur in virtueller Python-Umgebung (source .venv/bin/activate), da nur dort HomeAssistant installiert wird
 
 Explizite Qualitätskriterien:
 - Einhaltung Zeit-/Formatangaben
