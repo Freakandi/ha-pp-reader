@@ -115,7 +115,7 @@
       - Ziel: Konsistentes Erscheinungsbild mit bestehendem Dashboard-Styling
 
 8. State- und Cache-Management
-   a) [ ] Cache History-Daten pro Range und Security im Frontend
+   a) [x] Cache History-Daten pro Range und Security im Frontend
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Lokaler State/Cache
       - Ziel: Verhindert redundante WebSocket-Aufrufe bei Range-Wechseln

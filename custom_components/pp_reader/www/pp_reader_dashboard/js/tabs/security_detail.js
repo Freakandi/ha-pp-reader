@@ -421,33 +421,42 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
   }
 
   const activeRange = DEFAULT_HISTORY_RANGE;
-  let historySeries = [];
+  const cache = ensureHistoryCache(securityUuid);
+  let historySeries = cache.has(activeRange) ? cache.get(activeRange) : null;
   let historyState = { status: 'empty' };
 
-  try {
-    const rangeOptions = resolveRangeOptions(activeRange);
-    const historyResponse = await fetchSecurityHistoryWS(
-      hass,
-      panelConfig,
-      securityUuid,
-      rangeOptions,
-    );
-    historySeries = normaliseHistorySeries(historyResponse?.prices);
+  if (Array.isArray(historySeries)) {
     historyState = historySeries.length
       ? { status: 'loaded' }
       : { status: 'empty' };
-  } catch (historyError) {
-    console.error(
-      'renderSecurityDetail: Historie konnte nicht geladen werden',
-      historyError,
-    );
-    const message = normaliseHistoryError(historyError);
-    historyState = {
-      status: 'error',
-      message:
-        message ||
-        'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
-    };
+  } else {
+    historySeries = [];
+    try {
+      const rangeOptions = resolveRangeOptions(activeRange);
+      const historyResponse = await fetchSecurityHistoryWS(
+        hass,
+        panelConfig,
+        securityUuid,
+        rangeOptions,
+      );
+      historySeries = normaliseHistorySeries(historyResponse?.prices);
+      cache.set(activeRange, historySeries);
+      historyState = historySeries.length
+        ? { status: 'loaded' }
+        : { status: 'empty' };
+    } catch (historyError) {
+      console.error(
+        'renderSecurityDetail: Historie konnte nicht geladen werden',
+        historyError,
+      );
+      const message = normaliseHistoryError(historyError);
+      historyState = {
+        status: 'error',
+        message:
+          message ||
+          'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
+      };
+    }
   }
 
   const latestNativePrice =
@@ -551,7 +560,9 @@ function scheduleRangeSetup({
     }
 
     const cache = ensureHistoryCache(securityUuid);
-    if (Array.isArray(initialHistory)) {
+    const shouldCacheInitial =
+      Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
+    if (shouldCacheInitial) {
       cache.set(initialRange, initialHistory);
     }
 
