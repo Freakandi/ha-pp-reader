@@ -100,9 +100,8 @@ def _extract_feature_flag_options(options: Mapping[str, Any]) -> dict[str, bool]
 
 
 def _store_feature_flags(store: dict[str, Any], overrides: Mapping[str, bool]) -> dict[str, bool]:
-    """Persist feature flag values in the entry store with defaults applied."""
+    """Persist feature flag values in the entry store."""
     flags = dict(overrides)
-    flags.setdefault("pp_reader_history", False)
     store["feature_flags"] = flags
     return flags
 

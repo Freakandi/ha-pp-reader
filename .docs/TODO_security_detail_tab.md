@@ -23,7 +23,7 @@
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Handler `ws_get_security_history`
       - Ziel: Historien-Endpunkt ist standardmäßig aktiv und liefert Fehler nur bei fehlenden Daten
-   c) [ ] Passe Feature-Flag-Defaults an, so dass `pp_reader_history` nicht mehr existiert
+   c) [x] Passe Feature-Flag-Defaults an, so dass `pp_reader_history` nicht mehr existiert
       - Dateien: `custom_components/pp_reader/__init__.py`, `custom_components/pp_reader/feature_flags.py`
       - Abschnitt/Funktion: Feature-Flag-Initialisierung und Defaults
       - Ziel: Entfernt Flag-Definition und Initialisierung; History gilt als Kernfunktion

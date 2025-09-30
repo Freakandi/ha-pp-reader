@@ -9,9 +9,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
-_DEFAULT_FLAGS: dict[str, bool] = {
-    "pp_reader_history": False,
-}
+_DEFAULT_FLAGS: dict[str, bool] = {}
 
 
 def _normalize_name(name: str) -> str:
