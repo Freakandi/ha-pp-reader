@@ -12,12 +12,36 @@ const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 };
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 };
 const PRICE_SCALE = 1e8;
 const DEFAULT_HISTORY_RANGE = '1Y';
+const AVAILABLE_HISTORY_RANGES = ['1M', '6M', '1Y', '5Y'];
 const RANGE_DAY_COUNTS = {
   '1M': 30,
   '6M': 182,
   '1Y': 365,
   '5Y': 1826,
 };
+
+const SECURITY_HISTORY_CACHE = new Map(); // securityUuid -> Map(rangeKey -> series[])
+const RANGE_STATE_REGISTRY = new Map(); // securityUuid -> { activeRange }
+
+function ensureHistoryCache(securityUuid) {
+  if (!SECURITY_HISTORY_CACHE.has(securityUuid)) {
+    SECURITY_HISTORY_CACHE.set(securityUuid, new Map());
+  }
+  return SECURITY_HISTORY_CACHE.get(securityUuid);
+}
+
+function setActiveRange(securityUuid, rangeKey) {
+  if (!RANGE_STATE_REGISTRY.has(securityUuid)) {
+    RANGE_STATE_REGISTRY.set(securityUuid, { activeRange: rangeKey });
+    return;
+  }
+  const state = RANGE_STATE_REGISTRY.get(securityUuid);
+  state.activeRange = rangeKey;
+}
+
+function getActiveRange(securityUuid) {
+  return RANGE_STATE_REGISTRY.get(securityUuid)?.activeRange || DEFAULT_HISTORY_RANGE;
+}
 
 function toEpochDay(date) {
   const year = date.getUTCFullYear();
@@ -152,6 +176,44 @@ function buildInfoBar(rangeKey, periodGain, dailyGain) {
   `;
 }
 
+function buildRangeSelector(activeRange) {
+  const buttons = AVAILABLE_HISTORY_RANGES.map((rangeKey) => {
+    const activeClass = rangeKey === activeRange ? ' active' : '';
+    return `
+      <button
+        type="button"
+        class="security-range-button${activeClass}"
+        data-range="${rangeKey}"
+        aria-pressed="${rangeKey === activeRange}"
+      >
+        ${rangeKey}
+      </button>
+    `;
+  });
+
+  return `
+    <div class="security-range-selector" role="group" aria-label="Zeitraum">
+      ${buttons.join('\n')}
+    </div>
+  `;
+}
+
+function buildHistoryPlaceholder(rangeKey, hasHistory) {
+  if (hasHistory) {
+    return `
+      <div class="history-placeholder" data-state="loaded" data-range="${rangeKey}">
+        <p>Daten für ${rangeKey} geladen. Chart folgt im nächsten Schritt.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="history-placeholder" data-state="empty" data-range="${rangeKey}">
+      <p>Für dieses Wertpapier liegen im Zeitraum ${rangeKey} keine historischen Daten vor.</p>
+    </div>
+  `;
+}
+
 function formatHoldings(value) {
   if (value == null || Number.isNaN(value)) {
     return '—';
@@ -278,14 +340,155 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
   );
   const infoBar = buildInfoBar(activeRange, periodGain, dailyGain);
 
+  scheduleRangeSetup({
+    root,
+    hass,
+    panelConfig,
+    securityUuid,
+    snapshot,
+    holdings,
+    initialRange: activeRange,
+    initialHistory: historySeries,
+  });
+
   return `
     ${headerCard.outerHTML}
     ${infoBar}
+    ${buildRangeSelector(activeRange)}
     <div class="card security-detail-placeholder">
       <h2>Historie</h2>
-      <p>Für dieses Wertpapier liegen derzeit keine historischen Daten vor.</p>
+      ${buildHistoryPlaceholder(activeRange, historySeries.length > 0)}
     </div>
   `;
+}
+
+function updateRangeButtons(container, activeRange) {
+  if (!container) {
+    return;
+  }
+
+  container.dataset.activeRange = activeRange;
+  container.querySelectorAll('.security-range-button').forEach((button) => {
+    const rangeKey = button.dataset.range;
+    const isActive = rangeKey === activeRange;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    button.disabled = false;
+    button.classList.remove('loading');
+  });
+}
+
+function updateInfoBarContent(root, rangeKey, periodGain, dailyGain) {
+  const infoBar = root.querySelector('.security-info-bar');
+  if (!infoBar || !infoBar.parentElement) {
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = buildInfoBar(rangeKey, periodGain, dailyGain).trim();
+  const fresh = wrapper.firstElementChild;
+  if (!fresh) {
+    return;
+  }
+  infoBar.parentElement.replaceChild(fresh, infoBar);
+}
+
+function updateHistoryPlaceholder(root, rangeKey, hasHistory) {
+  const placeholderContainer = root.querySelector('.security-detail-placeholder');
+  if (!placeholderContainer) {
+    return;
+  }
+
+  placeholderContainer.innerHTML = `
+    <h2>Historie</h2>
+    ${buildHistoryPlaceholder(rangeKey, hasHistory)}
+  `;
+}
+
+function scheduleRangeSetup({
+  root,
+  hass,
+  panelConfig,
+  securityUuid,
+  snapshot,
+  holdings,
+  initialRange,
+  initialHistory,
+}) {
+  if (!root) {
+    return;
+  }
+
+  setTimeout(() => {
+    const rangeSelector = root.querySelector('.security-range-selector');
+    if (!rangeSelector) {
+      return;
+    }
+
+    const cache = ensureHistoryCache(securityUuid);
+    if (Array.isArray(initialHistory)) {
+      cache.set(initialRange, initialHistory);
+    }
+
+    setActiveRange(securityUuid, initialRange);
+    updateRangeButtons(rangeSelector, initialRange);
+
+    const handleRangeClick = async (rangeKey) => {
+      if (!rangeKey || rangeKey === getActiveRange(securityUuid)) {
+        return;
+      }
+
+      const button = rangeSelector.querySelector(
+        `.security-range-button[data-range="${rangeKey}"]`,
+      );
+      if (button) {
+        button.disabled = true;
+        button.classList.add('loading');
+      }
+
+      let historySeries = cache.get(rangeKey) || null;
+      if (!historySeries) {
+        try {
+          const rangeOptions = resolveRangeOptions(rangeKey);
+          const historyResponse = await fetchSecurityHistoryWS(
+            hass,
+            panelConfig,
+            securityUuid,
+            rangeOptions,
+          );
+          historySeries = normaliseHistorySeries(historyResponse?.prices);
+          cache.set(rangeKey, historySeries);
+        } catch (error) {
+          console.error('Range-Wechsel: Historie konnte nicht geladen werden', error);
+          historySeries = [];
+        }
+      }
+
+      const lastClose = historySeries.length
+        ? historySeries[historySeries.length - 1].close
+        : snapshot?.last_price_native;
+      const activeFxRate = deriveFxRate(snapshot, lastClose);
+      const { periodGain, dailyGain } = computeGainValues(
+        historySeries,
+        holdings,
+        activeFxRate,
+      );
+
+      setActiveRange(securityUuid, rangeKey);
+      updateRangeButtons(rangeSelector, rangeKey);
+      updateInfoBarContent(root, rangeKey, periodGain, dailyGain);
+      updateHistoryPlaceholder(root, rangeKey, historySeries.length > 0);
+    };
+
+    rangeSelector.addEventListener('click', (event) => {
+      const button = event.target.closest('.security-range-button');
+      if (!button || button.disabled) {
+        return;
+      }
+      const { range } = button.dataset;
+      handleRangeClick(range);
+    });
+  }, 0);
 }
 
 export function registerSecurityDetailTab({ setSecurityDetailTabFactory }) {
