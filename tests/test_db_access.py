@@ -6,6 +6,7 @@ import asyncio
 import sqlite3
 import sys
 import types
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -164,6 +165,7 @@ sys.modules.setdefault("custom_components.pp_reader.data", data_pkg)
 
 from custom_components.pp_reader.data.db_access import (
     get_security_close_prices,
+    get_security_snapshot,
     iter_security_close_prices,
 )
 from custom_components.pp_reader.data.db_init import initialize_database_schema
@@ -197,6 +199,72 @@ def seeded_history_db(tmp_path: Path) -> Path:
             ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             rows,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return db_path
+
+
+@pytest.fixture
+def seeded_snapshot_db(tmp_path: Path) -> Path:
+    """Create a temporary database with securities and FX data."""
+
+    db_path = tmp_path / "snapshot.db"
+    initialize_database_schema(db_path)
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.executemany(
+            """
+            INSERT INTO securities (
+                uuid,
+                name,
+                ticker_symbol,
+                currency_code,
+                retired,
+                last_price
+            ) VALUES (?, ?, ?, ?, 0, ?)
+            """,
+            [
+                (
+                    "eur-sec",
+                    "Euro Equity",
+                    "EUEQ",
+                    "EUR",
+                    int(42.5 * 1e8),
+                ),
+                (
+                    "usd-sec",
+                    "US Tech",
+                    "USTK",
+                    "USD",
+                    int(200 * 1e8),
+                ),
+            ],
+        )
+
+        conn.executemany(
+            """
+            INSERT INTO portfolio_securities (
+                portfolio_uuid,
+                security_uuid,
+                current_holdings,
+                purchase_value,
+                current_value
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                ("p-eur", "eur-sec", 2.5, 0, 0),
+                ("p-usd-a", "usd-sec", 1.5, 0, 0),
+                ("p-usd-b", "usd-sec", 2.25, 0, 0),
+            ],
+        )
+
+        conn.execute(
+            "INSERT INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
+            ("2024-05-01", "USD", 1.25),
         )
         conn.commit()
     finally:
@@ -277,3 +345,33 @@ def test_get_security_close_prices_materialises_iterator(
         end_date=20240102,
     )
     assert filtered == [(20240102, 1100)]
+
+
+def test_get_security_snapshot_multicurrency(
+    seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Snapshot helper aggregates holdings and normalises FX prices."""
+
+    reference_date = datetime(2024, 5, 1, 12, 0, 0)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: D401
+            del tz
+            return reference_date
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.data.db_access.datetime",
+        _FixedDatetime,
+    )
+
+    snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
+
+    assert snapshot["name"] == "US Tech"
+    assert snapshot["currency_code"] == "USD"
+    assert snapshot["total_holdings"] == pytest.approx(3.75, rel=0, abs=1e-6)
+    assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
+    assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
+
+    with pytest.raises(LookupError):
+        get_security_snapshot(seeded_snapshot_db, "missing")

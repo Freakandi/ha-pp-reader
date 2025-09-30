@@ -9,7 +9,7 @@
       - Datei: `custom_components/pp_reader/logic/portfolio.py`
       - Abschnitt/Funktion: Bestehende EUR-Normalisierungsfunktionen referenzieren/auslagern
       - Ziel: Sicherstellen, dass Snapshot-Werte mit Portfolio-Bewertungen identisch berechnet werden
-   c) [ ] Ergänze Tests für `get_security_snapshot` mit gemischten Währungsportfolios
+   c) [x] Ergänze Tests für `get_security_snapshot` mit gemischten Währungsportfolios
       - Datei: `tests/test_db_access.py`
       - Abschnitt/Funktion: Neuer Testfall `test_get_security_snapshot_multicurrency`
       - Ziel: Validiert Aggregation, FX-Konvertierung und Fehlerpfad für unbekannte UUIDs
