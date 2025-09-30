@@ -7,6 +7,7 @@ import importlib.util
 import sqlite3
 import sys
 import types
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -217,6 +218,21 @@ def _run_ws_get_security_snapshot(*args, **kwargs) -> None:
     _run_ws_handler(WS_GET_SECURITY_SNAPSHOT, *args, **kwargs)
 
 
+def _epoch_day_to_date(value: int) -> date:
+    """Convert an integer YYYYMMDD representation into a date object."""
+
+    year = value // 10_000
+    month = (value % 10_000) // 100
+    day = value % 100
+    return date(year, month, day)
+
+
+def _date_to_epoch_day(value: date) -> int:
+    """Convert a date object into its YYYYMMDD integer representation."""
+
+    return value.year * 10_000 + value.month * 100 + value.day
+
+
 @pytest.fixture
 def seeded_history_db(tmp_path: Path) -> Path:
     """Create a temporary database populated with historical prices."""
@@ -344,6 +360,60 @@ def test_ws_get_security_history_ignores_unknown_feature_flags(
 
     assert connection.errors == []
     assert connection.sent and connection.sent[0][1]["prices"]
+
+
+@pytest.mark.parametrize(
+    ("range_key", "day_count"),
+    [
+        ("1M", 30),
+        ("6M", 182),
+        ("1Y", 365),
+        ("5Y", 1826),
+    ],
+)
+def test_ws_get_security_history_supports_predefined_ranges(
+    seeded_history_db: Path,
+    range_key: str,
+    day_count: int,
+) -> None:
+    """Ensure the handler returns stable payloads for the predefined ranges."""
+
+    entry_id = "entry-range"
+    hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
+    connection = StubConnection()
+
+    # Align the range to the seeded dataset which ends on 2024-01-03.
+    end_date = 20240103
+    end_date_obj = _epoch_day_to_date(end_date)
+    start_delta = timedelta(days=day_count - 1) if day_count > 0 else timedelta(0)
+    start_date_obj = end_date_obj - start_delta
+    start_date = _date_to_epoch_day(start_date_obj)
+
+    _run_ws_get_security_history(
+        hass,
+        connection,
+        {
+            "id": 100 + day_count,
+            "type": "pp_reader/get_security_history",
+            "entry_id": entry_id,
+            "security_uuid": "sec-1",
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+    )
+
+    assert connection.errors == []
+    assert connection.sent, f"no payload for range {range_key}"
+    _, payload = connection.sent[-1]
+
+    assert payload["security_uuid"] == "sec-1"
+    assert payload.get("start_date") == start_date
+    assert payload.get("end_date") == end_date
+    assert payload["prices"] == [
+        {"date": 20240101, "close": 10_000},
+        {"date": 20240102, "close": 10_500},
+        {"date": 20240103, "close": 10_750},
+    ]
 
 
 def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
