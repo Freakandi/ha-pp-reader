@@ -139,7 +139,7 @@
       - Ziel: Liste von Validierungsschritten (Tab öffnen, Range wechseln, fehlende Daten)
 
 10. Tests & Validierung
-    a) [ ] Aktualisiere `tests/test_ws_security_history.py` für Range-Varianten (1M, 6M, 1Y, 5Y)
+    a) [x] Aktualisiere `tests/test_ws_security_history.py` für Range-Varianten (1M, 6M, 1Y, 5Y)
        - Datei: `tests/test_ws_security_history.py`
        - Abschnitt/Funktion: Bestehende Testklasse erweitern
        - Ziel: Sicherstellen, dass Backend Start/Ende korrekt berechnet und Antworten cached
