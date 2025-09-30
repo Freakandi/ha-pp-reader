@@ -14,10 +14,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from custom_components.pp_reader.currencies.fx import (
-    ensure_exchange_rates_for_dates_sync,
-    load_latest_rates_sync,
-)
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
@@ -416,6 +412,10 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
+        from custom_components.pp_reader.logic.portfolio import (  # local import
+            normalize_price_to_eur_sync,
+        )
+
         cursor = conn.execute(
             """
             SELECT name, currency_code, COALESCE(last_price, 0) AS last_price
@@ -443,34 +443,10 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
 
         raw_price = security_row["last_price"]
         currency_code: str = security_row["currency_code"] or "EUR"
-
-        last_price_eur = 0.0
-        if raw_price:
-            last_price = float(raw_price) / 10**8
-            if currency_code != "EUR":
-                reference_date = datetime.now()  # noqa: DTZ005
-                try:
-                    ensure_exchange_rates_for_dates_sync(
-                        [reference_date], {currency_code}, db_path
-                    )
-                    fx_rates = load_latest_rates_sync(reference_date, db_path)
-                except Exception:  # pragma: no cover - defensive
-                    _LOGGER.exception(
-                        "Fehler beim Laden der Wechselkurse für %s", currency_code
-                    )
-                    fx_rates = {}
-
-                rate = fx_rates.get(currency_code)
-                if rate:
-                    last_price = last_price / rate
-                else:
-                    _LOGGER.warning(
-                        "Kein Wechselkurs gefunden für %s – Preis bleibt 0", currency_code
-                    )
-                    last_price = 0.0
-
-            last_price_eur = last_price
-
+        reference_date = datetime.now()  # noqa: DTZ005
+        last_price_eur = normalize_price_to_eur_sync(
+            raw_price, currency_code, reference_date, db_path
+        )
         market_value_eur = round(total_holdings * last_price_eur, 2)
 
         return {
