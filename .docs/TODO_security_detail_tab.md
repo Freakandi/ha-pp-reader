@@ -87,7 +87,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Rendering & Datenaggregation für Infoleiste
       - Ziel: Verbindet Kursbewegungen in Originalwährung mit Portfolioauswirkung in EUR
-   d) [ ] Implementiere Range-Buttons (1M, 6M, 1Y default, 5Y)
+   d) [x] Implementiere Range-Buttons (1M, 6M, 1Y default, 5Y)
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: State-Management für Range-Auswahl
       - Ziel: Löst History-Fetch aus, markiert aktive Range und cached Antworten pro Range
