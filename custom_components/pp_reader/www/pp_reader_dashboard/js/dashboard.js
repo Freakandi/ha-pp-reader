@@ -16,6 +16,9 @@ const baseTabs = [
 
 const detailTabRegistry = new Map();
 const detailTabOrder = [];
+const SECURITY_DETAIL_TAB_PREFIX = 'security:';
+
+let securityDetailTabFactory = null;
 
 function getVisibleTabs() {
   const detailTabs = detailTabOrder
@@ -62,6 +65,120 @@ export function hasDetailTab(key) {
 
 export function getDetailTabDescriptor(key) {
   return detailTabRegistry.get(key) || null;
+}
+
+export function setSecurityDetailTabFactory(factory) {
+  if (factory != null && typeof factory !== 'function') {
+    console.error('setSecurityDetailTabFactory: Erwartet Funktion oder null', factory);
+    return;
+  }
+
+  securityDetailTabFactory = factory || null;
+}
+
+function getSecurityDetailTabKey(securityUuid) {
+  return `${SECURITY_DETAIL_TAB_PREFIX}${securityUuid}`;
+}
+
+function requestDashboardRender() {
+  const dashboardElement = document.querySelector('pp-reader-dashboard');
+  if (!dashboardElement) {
+    console.warn('requestDashboardRender: Kein pp-reader-dashboard Element gefunden');
+    return;
+  }
+
+  if (typeof dashboardElement._renderIfInitialized === 'function') {
+    dashboardElement._renderIfInitialized();
+    return;
+  }
+
+  if (typeof dashboardElement._render === 'function') {
+    dashboardElement._render();
+  }
+}
+
+export function openSecurityDetail(securityUuid) {
+  if (!securityUuid) {
+    console.error('openSecurityDetail: Ungültige securityUuid', securityUuid);
+    return false;
+  }
+
+  const tabKey = getSecurityDetailTabKey(securityUuid);
+  let descriptor = getDetailTabDescriptor(tabKey);
+
+  if (!descriptor && typeof securityDetailTabFactory === 'function') {
+    try {
+      const maybeDescriptor = securityDetailTabFactory(securityUuid);
+      if (maybeDescriptor && typeof maybeDescriptor.render === 'function') {
+        registerDetailTab(tabKey, maybeDescriptor);
+        descriptor = getDetailTabDescriptor(tabKey);
+      } else {
+        console.error('openSecurityDetail: Factory lieferte ungültigen Descriptor', maybeDescriptor);
+      }
+    } catch (error) {
+      console.error('openSecurityDetail: Fehler beim Erzeugen des Tab-Descriptors', error);
+    }
+  }
+
+  if (!descriptor) {
+    console.warn(`openSecurityDetail: Kein Detail-Tab für ${securityUuid} verfügbar`);
+    return false;
+  }
+
+  const tabs = getVisibleTabs();
+  let targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
+
+  if (targetIndex === -1) {
+    const updatedTabs = getVisibleTabs();
+    targetIndex = updatedTabs.findIndex((tab) => tab.key === tabKey);
+    if (targetIndex === -1) {
+      console.error('openSecurityDetail: Tab nach Registrierung nicht auffindbar');
+      return false;
+    }
+  }
+
+  currentPage = targetIndex;
+  requestDashboardRender();
+  return true;
+}
+
+export function closeSecurityDetail(securityUuid) {
+  if (!securityUuid) {
+    console.error('closeSecurityDetail: Ungültige securityUuid', securityUuid);
+    return false;
+  }
+
+  const tabKey = getSecurityDetailTabKey(securityUuid);
+  if (!hasDetailTab(tabKey)) {
+    return false;
+  }
+
+  const tabsBefore = getVisibleTabs();
+  const tabIndexBefore = tabsBefore.findIndex((tab) => tab.key === tabKey);
+  const wasActive = tabIndexBefore === currentPage;
+
+  unregisterDetailTab(tabKey);
+
+  const tabsAfter = getVisibleTabs();
+  if (!tabsAfter.length) {
+    currentPage = 0;
+    requestDashboardRender();
+    return true;
+  }
+
+  if (wasActive) {
+    const overviewIndex = tabsAfter.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
+    if (overviewIndex >= 0) {
+      currentPage = overviewIndex;
+    } else {
+      currentPage = Math.min(Math.max(tabIndexBefore - 1, 0), tabsAfter.length - 1);
+    }
+  } else if (currentPage >= tabsAfter.length) {
+    currentPage = Math.max(0, tabsAfter.length - 1);
+  }
+
+  requestDashboardRender();
+  return true;
 }
 
 let currentPage = 0;
