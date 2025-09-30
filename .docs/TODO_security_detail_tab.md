@@ -69,7 +69,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
       - Abschnitt/Funktion: Event-Listener nach Lazy-Load
       - Ziel: Öffnet Security-Detail-Tab und ignoriert Klicks auf Expand/Collapse-Buttons
-   b) [ ] Stelle sicher, dass `portfolioPositionsCache` Security-Daten bereitstellt
+   b) [x] Stelle sicher, dass `portfolioPositionsCache` Security-Daten bereitstellt
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
       - Abschnitt/Funktion: Cache-Verwaltung
       - Ziel: Übergibt Snapshot-Daten oder löst Fallback-Fetch über Dashboard-Controller aus
