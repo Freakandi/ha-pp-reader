@@ -19,7 +19,7 @@
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Neuer `@websocket_api.websocket_command` für Typ `pp_reader/get_security_snapshot`
       - Ziel: Validiert Payload, ruft `get_security_snapshot` via Executor und sendet Snapshot-Resultat
-   b) [ ] Entferne Feature-Flag-Gating für `pp_reader/get_security_history`
+   b) [x] Entferne Feature-Flag-Gating für `pp_reader/get_security_history`
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Handler `ws_get_security_history`
       - Ziel: Historien-Endpunkt ist standardmäßig aktiv und liefert Fehler nur bei fehlenden Daten
