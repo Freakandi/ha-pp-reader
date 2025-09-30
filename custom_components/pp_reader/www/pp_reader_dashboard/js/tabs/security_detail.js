@@ -12,6 +12,10 @@ const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 };
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 };
 
 function formatHoldings(value) {
+  if (value == null || Number.isNaN(value)) {
+    return '—';
+  }
+
   const numeric = Number.isFinite(value) ? value : Number.parseFloat(value) || 0;
   const hasFraction = Math.abs(numeric % 1) > 0;
   const minFraction = hasFraction ? 2 : HOLDINGS_FRACTION_DIGITS.min;
@@ -23,6 +27,10 @@ function formatHoldings(value) {
 }
 
 function formatPrice(value) {
+  if (value == null || Number.isNaN(value)) {
+    return '—';
+  }
+
   const numeric = Number.isFinite(value) ? value : Number.parseFloat(value) || 0;
   return numeric.toLocaleString('de-DE', {
     minimumFractionDigits: PRICE_FRACTION_DIGITS.min,
@@ -36,8 +44,14 @@ function buildHeaderMeta(snapshot) {
   }
 
   const currency = snapshot.currency_code || 'EUR';
-  const holdings = formatHoldings(snapshot.total_holdings ?? 0);
-  const lastPriceEur = formatPrice(snapshot.last_price_eur ?? 0);
+  const holdings = formatHoldings(snapshot.total_holdings);
+  const lastPriceNative =
+    snapshot.last_price_native ?? snapshot.last_price?.native ?? snapshot.last_price_eur;
+  const formattedLastPrice = formatPrice(lastPriceNative);
+  const lastPriceDisplay =
+    formattedLastPrice === '—'
+      ? '—'
+      : `${formattedLastPrice}${currency ? `&nbsp;${currency}` : ''}`;
   const marketValue = formatNumber(snapshot.market_value_eur ?? 0);
 
   return `
@@ -51,8 +65,8 @@ function buildHeaderMeta(snapshot) {
         <span class="value">${holdings}</span>
       </div>
       <div class="security-meta-item">
-        <span class="label">Letzter Preis (EUR)</span>
-        <span class="value">${lastPriceEur}&nbsp;€</span>
+        <span class="label">Letzter Preis (${currency})</span>
+        <span class="value">${lastPriceDisplay}</span>
       </div>
       <div class="security-meta-item">
         <span class="label">Marktwert (EUR)</span>
