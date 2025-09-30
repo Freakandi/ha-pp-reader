@@ -6,7 +6,9 @@ from pathlib import Path
 
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates,
+    ensure_exchange_rates_for_dates_sync,
     load_latest_rates,
+    load_latest_rates_sync,
 )
 from custom_components.pp_reader.data.db_access import (
     Security,
@@ -31,6 +33,38 @@ def normalize_price(raw_price: int) -> float:
 def normalize_shares(raw_shares: int) -> float:
     """Convert raw shares with 8 decimal places to a float."""
     return raw_shares / 10**8
+
+
+def normalize_price_to_eur_sync(
+    raw_price: int | None, currency_code: str, reference_date: datetime, db_path: Path
+) -> float:
+    """Normalize a raw security price to EUR using stored FX rates."""
+
+    if not raw_price:
+        return 0.0
+
+    price = normalize_price(raw_price)
+    if currency_code == "EUR":
+        return price
+
+    try:
+        ensure_exchange_rates_for_dates_sync([reference_date], {currency_code}, db_path)
+        fx_rates = load_latest_rates_sync(reference_date, db_path)
+    except Exception:  # pragma: no cover - defensive
+        _LOGGER.exception(
+            "Fehler beim Laden der Wechselkurse für %s", currency_code
+        )
+        return 0.0
+    rate = fx_rates.get(currency_code)
+    if rate:
+        return price / rate
+
+    _LOGGER.warning(
+        "⚠️ Kein Wechselkurs für %s (%s)",
+        currency_code,
+        reference_date.strftime("%Y-%m-%d"),
+    )
+    return 0.0
 
 
 def calculate_holdings(transactions: list[Transaction]) -> dict[str, float]:

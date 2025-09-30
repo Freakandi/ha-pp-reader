@@ -5,7 +5,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: Neuer Helper unterhalb bestehender snapshot/portfolio Utilities
       - Ziel: Liefert `{name, currency_code, total_holdings, last_price_eur, market_value_eur}` aus `portfolio_securities` + `securities` inkl. FX-Konvertierung
-   b) [ ] Reuse vorhandene FX/Nominal-Konvertierung aus Portfolio-Logik für `get_security_snapshot`
+   b) [x] Reuse vorhandene FX/Nominal-Konvertierung aus Portfolio-Logik für `get_security_snapshot`
       - Datei: `custom_components/pp_reader/logic/portfolio.py`
       - Abschnitt/Funktion: Bestehende EUR-Normalisierungsfunktionen referenzieren/auslagern
       - Ziel: Sicherstellen, dass Snapshot-Werte mit Portfolio-Bewertungen identisch berechnet werden
