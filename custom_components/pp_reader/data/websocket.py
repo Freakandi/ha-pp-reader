@@ -24,6 +24,7 @@ from .db_access import (
     get_accounts,
     get_last_file_update,
     get_portfolio_positions,
+    get_security_snapshot,
     iter_security_close_prices,
 )
 from ..feature_flags import is_enabled as is_feature_enabled
@@ -578,6 +579,98 @@ async def ws_get_security_history(
 ws_get_security_history = _wrap_with_loop_fallback(ws_get_security_history)
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_security_snapshot",
+        vol.Required("entry_id"): str,
+        vol.Required("security_uuid"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_security_snapshot(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return aggregated holdings and price snapshot for a security."""
+
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+    security_uuid = msg.get("security_uuid")
+
+    if not entry_id:
+        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
+        return
+
+    if not security_uuid:
+        connection.send_error(
+            msg_id,
+            "invalid_format",
+            "security_uuid erforderlich",
+        )
+        return
+
+    domain_entries = hass.data.get(DOMAIN)
+    if not isinstance(domain_entries, dict):
+        connection.send_error(
+            msg_id,
+            "not_found",
+            "Keine pp_reader Config Entries registriert",
+        )
+        return
+
+    entry_data = domain_entries.get(entry_id)
+    if not isinstance(entry_data, dict):
+        connection.send_error(msg_id, "not_found", f"entry_id {entry_id} unknown")
+        return
+
+    db_path_raw = entry_data.get("db_path")
+    if db_path_raw is None:
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "db_path für den Config Entry fehlt",
+        )
+        return
+
+    db_path = Path(db_path_raw)
+
+    try:
+        snapshot = await hass.async_add_executor_job(
+            get_security_snapshot,
+            db_path,
+            security_uuid,
+        )
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg_id, "invalid_format", str(err))
+        return
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Laden des Snapshots (security_uuid=%s)",
+            security_uuid,
+        )
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "Fehler beim Laden des Snapshots",
+        )
+        return
+
+    connection.send_result(
+        msg_id,
+        {
+            "security_uuid": security_uuid,
+            "snapshot": snapshot,
+        },
+    )
+
+
+ws_get_security_snapshot = _wrap_with_loop_fallback(ws_get_security_snapshot)
+
+
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen
 # oder analog zu anderen)
 @websocket_api.websocket_command(
@@ -669,3 +762,4 @@ def async_register_commands(hass: HomeAssistant) -> None:
     """Registriert alle WebSocket-Commands dieses Modules."""
     websocket_api.async_register_command(hass, ws_get_portfolio_positions)
     websocket_api.async_register_command(hass, ws_get_security_history)
+    websocket_api.async_register_command(hass, ws_get_security_snapshot)

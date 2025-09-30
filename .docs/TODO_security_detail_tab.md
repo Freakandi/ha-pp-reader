@@ -15,7 +15,7 @@
       - Ziel: Validiert Aggregation, FX-Konvertierung und Fehlerpfad für unbekannte UUIDs
 
 2. Backend: WebSocket API erweitern
-   a) [ ] Registriere neuen Handler `ws_get_security_snapshot`
+   a) [x] Registriere neuen Handler `ws_get_security_snapshot`
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Neuer `@websocket_api.websocket_command` für Typ `pp_reader/get_security_snapshot`
       - Ziel: Validiert Payload, ruft `get_security_snapshot` via Executor und sendet Snapshot-Resultat
