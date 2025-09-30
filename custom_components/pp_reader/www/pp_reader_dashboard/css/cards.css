@@ -199,6 +199,211 @@ tbody tr:hover {
   border-top: 2px solid #ccc;
 }
 
+/* ===== Security Detail Tab Styles ===== */
+.security-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
+  box-shadow: inset 0 0 0 1px var(--divider-color);
+}
+
+.security-info-item {
+  flex: 1 1 220px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.security-info-item .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-text-color);
+}
+
+.security-info-item .value {
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--primary-text-color);
+}
+
+.security-info-item .value.neutral {
+  color: var(--secondary-text-color);
+}
+
+.security-range-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+}
+
+.security-range-button {
+  border: 1px solid var(--divider-color);
+  border-radius: 999px;
+  background: var(--card-background-color);
+  color: var(--primary-text-color);
+  padding: 0.4rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.security-range-button:hover:not(.active):not(.loading) {
+  background: var(--secondary-background-color, rgba(0, 0, 0, 0.08));
+}
+
+.security-range-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(63, 81, 181, 0.35);
+}
+
+.security-range-button.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--text-primary-color, #fff);
+  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.3);
+}
+
+.security-range-button.loading {
+  position: relative;
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.security-range-button.loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  animation: security-range-loading 1.2s ease-in-out infinite;
+}
+
+@keyframes security-range-loading {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.security-detail-placeholder {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.history-placeholder {
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  background: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
+  text-align: center;
+  color: var(--secondary-text-color);
+  line-height: 1.5;
+}
+
+.history-placeholder[data-state='error'] {
+  color: var(--error-color);
+  background: rgba(244, 67, 54, 0.12);
+}
+
+.history-placeholder[data-state='loaded'] {
+  color: var(--primary-text-color);
+  background: rgba(63, 81, 181, 0.08);
+}
+
+.line-chart-container {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  margin: 0 auto;
+}
+
+.line-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.line-chart-path {
+  stroke: var(--pp-reader-chart-line, #3f51b5);
+}
+
+.line-chart-area {
+  fill: var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12));
+}
+
+.line-chart-focus-line {
+  stroke-dasharray: 4 4;
+  stroke-width: 1px;
+  stroke: var(--divider-color);
+}
+
+.line-chart-focus-circle {
+  stroke: var(--pp-reader-chart-line, #3f51b5);
+  fill: var(--card-background-color);
+}
+
+.chart-tooltip {
+  min-width: 140px;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--card-background-color);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  color: var(--primary-text-color);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.chart-tooltip-date {
+  font-size: 0.85rem;
+  color: var(--secondary-text-color);
+  margin-bottom: 0.35rem;
+}
+
+.chart-tooltip-value {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .security-info-bar {
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .security-info-item {
+    min-width: 160px;
+  }
+
+  .security-range-selector {
+    gap: 0.4rem;
+  }
+
+  .security-range-button {
+    padding: 0.35rem 0.9rem;
+  }
+}
+
 .positive {
   color: var(--success-color);
   /* HA-Variable für positive Werte */

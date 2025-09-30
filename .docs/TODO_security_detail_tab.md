@@ -109,7 +109,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/content/charting.js`
       - Abschnitt/Funktion: Neue Utility-Funktionen (`renderLineChart`, `updateLineChart`)
       - Ziel: Visualisiert Kursverlauf ohne externe Dependencies
-   b) [ ] Ergänze Styles für Chart-Container, Buttons, Tooltip
+   b) [x] Ergänze Styles für Chart-Container, Buttons, Tooltip
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css`
       - Abschnitt/Funktion: Neuer Style-Block für Security-Detail-Karten
       - Ziel: Konsistentes Erscheinungsbild mit bestehendem Dashboard-Styling
