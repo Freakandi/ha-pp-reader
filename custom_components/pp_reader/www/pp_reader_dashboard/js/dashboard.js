@@ -17,7 +17,17 @@ const baseTabs = [
 
 const detailTabRegistry = new Map();
 const detailTabOrder = [];
+const securityTabLookup = new Map();
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
+
+function extractSecurityUuidFromKey(key) {
+  if (typeof key !== 'string' || !key.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
+    return null;
+  }
+
+  const uuid = key.slice(SECURITY_DETAIL_TAB_PREFIX.length);
+  return uuid || null;
+}
 
 let securityDetailTabFactory = null;
 let navigationInProgress = false;
@@ -75,12 +85,24 @@ export function registerDetailTab(key, descriptor) {
     return;
   }
 
+  const securityUuid = extractSecurityUuidFromKey(key);
+  if (securityUuid) {
+    const existingKey = securityTabLookup.get(securityUuid);
+    if (existingKey && existingKey !== key) {
+      unregisterDetailTab(existingKey);
+    }
+  }
+
   const normalizedDescriptor = {
     ...descriptor,
     key,
   };
 
   detailTabRegistry.set(key, normalizedDescriptor);
+
+  if (securityUuid) {
+    securityTabLookup.set(securityUuid, key);
+  }
 
   if (!detailTabOrder.includes(key)) {
     detailTabOrder.push(key);
@@ -97,6 +119,11 @@ export function unregisterDetailTab(key) {
   const index = detailTabOrder.indexOf(key);
   if (index >= 0) {
     detailTabOrder.splice(index, 1);
+  }
+
+  const securityUuid = extractSecurityUuidFromKey(key);
+  if (securityUuid && securityTabLookup.get(securityUuid) === key) {
+    securityTabLookup.delete(securityUuid);
   }
 }
 
