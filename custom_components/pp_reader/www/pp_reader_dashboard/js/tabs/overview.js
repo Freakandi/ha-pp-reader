@@ -1,4 +1,5 @@
 import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct } from '../content/elements.js';
+import { openSecurityDetail } from '../dashboard.js';
 import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS, fetchPortfolioPositionsWS } from '../data/api.js';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS.js';
 
@@ -55,6 +56,20 @@ function renderPositionsTable(positions) {
           th.classList.add('sortable-col');
         }
       });
+      const bodyRows = table.querySelectorAll('tbody tr');
+      bodyRows.forEach((tr, idx) => {
+        if (tr.classList.contains('footer-row')) {
+          return;
+        }
+        const pos = positions[idx];
+        if (!pos) {
+          return;
+        }
+        if (pos.security_uuid) {
+          tr.dataset.security = pos.security_uuid;
+        }
+        tr.classList.add('position-row');
+      });
       // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
@@ -72,6 +87,50 @@ export function renderPortfolioPositions(positions) {
   return renderPositionsTable(positions);
 }
 window.__ppReaderRenderPositionsTable = renderPositionsTable;
+
+function attachSecurityDetailDelegation(root, portfolioUuid) {
+  if (!root || !portfolioUuid) return;
+  const detailsRow = root.querySelector(`.portfolio-details[data-portfolio="${portfolioUuid}"]`);
+  if (!detailsRow) return;
+  const container = detailsRow.querySelector('.positions-container');
+  if (!container || container.__ppReaderSecurityClickBound) return;
+
+  container.__ppReaderSecurityClickBound = true;
+
+  container.addEventListener('click', (event) => {
+    const interactive = event.target.closest('button, a');
+    if (interactive && container.contains(interactive)) {
+      return;
+    }
+
+    const row = event.target.closest('tr[data-security]');
+    if (!row || !container.contains(row)) {
+      return;
+    }
+
+    const securityUuid = row.getAttribute('data-security');
+    if (!securityUuid) {
+      return;
+    }
+
+    try {
+      const opened = openSecurityDetail(securityUuid);
+      if (!opened) {
+        console.warn('attachSecurityDetailDelegation: Detail-Tab konnte nicht geöffnet werden für', securityUuid);
+      }
+    } catch (err) {
+      console.error('attachSecurityDetailDelegation: Fehler beim Öffnen des Detail-Tabs', err);
+    }
+  });
+}
+
+export function attachSecurityDetailListener(root, portfolioUuid) {
+  attachSecurityDetailDelegation(root, portfolioUuid);
+}
+
+if (!window.__ppReaderAttachSecurityDetailListener) {
+  window.__ppReaderAttachSecurityDetailListener = attachSecurityDetailListener;
+}
 
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
 function buildExpandablePortfolioTable(depots) {
@@ -416,6 +475,11 @@ async function reloadPortfolioPositions(portfolioUuid, containerEl, root) {
     } catch (e) {
       console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", e);
     }
+    try {
+      attachSecurityDetailListener(root, portfolioUuid);
+    } catch (e) {
+      console.warn('reloadPortfolioPositions: Security-Listener konnte nicht gebunden werden:', e);
+    }
   } catch (e) {
     targetContainer.innerHTML = `<div class="error">Fehler: ${e.message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
   }
@@ -530,6 +594,11 @@ export function attachPortfolioToggleHandler(root) {
                 } catch (e) {
                   console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", e);
                 }
+                try {
+                  attachSecurityDetailListener(root, portfolioUuid);
+                } catch (e) {
+                  console.warn('attachPortfolioToggleHandler: Security-Listener konnte nicht gebunden werden:', e);
+                }
               }
             } catch (err) {
               const containerEl = detailsRow.querySelector('.positions-container');
@@ -543,6 +612,11 @@ export function attachPortfolioToggleHandler(root) {
             if (containerEl) {
               containerEl.innerHTML = renderPositionsTable(portfolioPositionsCache.get(portfolioUuid));
               attachPortfolioPositionsSorting(root, portfolioUuid);
+              try {
+                attachSecurityDetailListener(root, portfolioUuid);
+              } catch (e) {
+                console.warn('attachPortfolioToggleHandler: Security-Listener (Cache) Fehler:', e);
+              }
             }
           }
         } else {
@@ -711,6 +785,7 @@ export async function renderDashboard(root, hass, panelConfig) {
         try {
           if (portfolioPositionsCache.has(pid)) {
             attachPortfolioPositionsSorting(root, pid);
+            attachSecurityDetailListener(root, pid);
           }
         } catch (e) {
           console.warn("Init-Sortierung für expandiertes Depot fehlgeschlagen:", pid, e);
