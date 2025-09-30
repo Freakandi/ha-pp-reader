@@ -37,7 +37,7 @@
       - Ziel: Sicherstellen, dass Snapshot-Handler und History-Handler ohne Flag funktionieren
 
 3. Frontend: API-Schicht aktualisieren
-   a) [ ] Ergänze `fetchSecuritySnapshotWS` und `fetchSecurityHistoryWS`
+   a) [x] Ergänze `fetchSecuritySnapshotWS` und `fetchSecurityHistoryWS`
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js`
       - Abschnitt/Funktion: WebSocket-Hilfsfunktionen
       - Ziel: Liefert Promise-basierte Wrapper für neue/aktualisierte Backend-Kommandos

@@ -90,3 +90,65 @@ export async function fetchPortfolioPositionsWS(hass, panelConfig, portfolio_uui
     portfolio_uuid,
   });
 }
+
+// Security snapshot for detail tab
+export async function fetchSecuritySnapshotWS(
+  hass,
+  panelConfig,
+  securityUuid,
+) {
+  const entry_id = deriveEntryId(hass, panelConfig);
+  if (!hass || !entry_id) {
+    throw new Error(
+      `fetchSecuritySnapshotWS: fehlendes hass oder entry_id (${entry_id})`,
+    );
+  }
+  if (!securityUuid) {
+    throw new Error("fetchSecuritySnapshotWS: fehlendes securityUuid");
+  }
+
+  return await hass.connection.sendMessagePromise({
+    type: "pp_reader/get_security_snapshot",
+    entry_id,
+    security_uuid: securityUuid,
+  });
+}
+
+// Historical prices for detail tab charting
+export async function fetchSecurityHistoryWS(
+  hass,
+  panelConfig,
+  securityUuid,
+  options = {},
+) {
+  const entry_id = deriveEntryId(hass, panelConfig);
+  if (!hass || !entry_id) {
+    throw new Error(
+      `fetchSecurityHistoryWS: fehlendes hass oder entry_id (${entry_id})`,
+    );
+  }
+  if (!securityUuid) {
+    throw new Error("fetchSecurityHistoryWS: fehlendes securityUuid");
+  }
+
+  const payload = {
+    type: "pp_reader/get_security_history",
+    entry_id,
+    security_uuid: securityUuid,
+  };
+
+  const { startDate, endDate, start_date: start_date_raw, end_date: end_date_raw } =
+    options || {};
+
+  const resolvedStart = startDate ?? start_date_raw;
+  if (resolvedStart !== undefined && resolvedStart !== null) {
+    payload.start_date = resolvedStart;
+  }
+
+  const resolvedEnd = endDate ?? end_date_raw;
+  if (resolvedEnd !== undefined && resolvedEnd !== null) {
+    payload.end_date = resolvedEnd;
+  }
+
+  return await hass.connection.sendMessagePromise(payload);
+}
