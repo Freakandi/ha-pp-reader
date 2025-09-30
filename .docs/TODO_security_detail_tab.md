@@ -31,7 +31,7 @@
       - Dateien: `ARCHITECTURE.md`, `README-dev.md`
       - Abschnitt/Funktion: Feature-Flag-Beschreibungen, Tabellen
       - Ziel: Dokumentation aktualisieren, dass History dauerhaft aktiv ist
-   e) [ ] Ergänze WebSocket-Tests für Snapshot-Endpoint und History ohne Flag
+   e) [x] Ergänze WebSocket-Tests für Snapshot-Endpoint und History ohne Flag
       - Dateien: `tests/test_ws_security_history.py`, `tests/test_ws_portfolios_live.py` (falls Interaktion)
       - Abschnitt/Funktion: Neue Tests für Erfolgs- und Fehlerpfade (`test_ws_security_snapshot_success`, `test_ws_security_snapshot_missing`)
       - Ziel: Sicherstellen, dass Snapshot-Handler und History-Handler ohne Flag funktionieren

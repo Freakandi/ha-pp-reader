@@ -146,6 +146,7 @@ SPEC.loader.exec_module(_websocket_module)
 
 DOMAIN = _websocket_module.DOMAIN
 WS_GET_SECURITY_HISTORY = _websocket_module.ws_get_security_history
+WS_GET_SECURITY_SNAPSHOT = _websocket_module.ws_get_security_snapshot
 
 
 class StubConnection:
@@ -185,8 +186,8 @@ class StubHass:
         return loop.create_task(coro)
 
 
-def _run_ws_get_security_history(*args, **kwargs) -> None:
-    """Execute the websocket handler in a dedicated asyncio loop."""
+def _run_ws_handler(handler, *args, **kwargs) -> None:
+    """Execute the given websocket handler inside a dedicated event loop."""
 
     loop = asyncio.new_event_loop()
     try:
@@ -194,7 +195,7 @@ def _run_ws_get_security_history(*args, **kwargs) -> None:
         hass = args[0] if args else None
         if isinstance(hass, StubHass):
             hass.loop = loop
-        WS_GET_SECURITY_HISTORY(*args, **kwargs)
+        handler(*args, **kwargs)
         pending = asyncio.all_tasks(loop)
         if pending:
             loop.run_until_complete(asyncio.gather(*pending))
@@ -204,6 +205,18 @@ def _run_ws_get_security_history(*args, **kwargs) -> None:
         loop.close()
 
 
+def _run_ws_get_security_history(*args, **kwargs) -> None:
+    """Execute the history websocket handler."""
+
+    _run_ws_handler(WS_GET_SECURITY_HISTORY, *args, **kwargs)
+
+
+def _run_ws_get_security_snapshot(*args, **kwargs) -> None:
+    """Execute the snapshot websocket handler."""
+
+    _run_ws_handler(WS_GET_SECURITY_SNAPSHOT, *args, **kwargs)
+
+
 @pytest.fixture
 def seeded_history_db(tmp_path: Path) -> Path:
     """Create a temporary database populated with historical prices."""
@@ -211,7 +224,7 @@ def seeded_history_db(tmp_path: Path) -> Path:
     db_path = tmp_path / "history.db"
     initialize_database_schema(db_path)
 
-    rows = [
+    price_rows = [
         ("sec-1", 20240101, 10_000, None, None, None),
         ("sec-1", 20240102, 10_500, None, None, None),
         ("sec-1", 20240103, 10_750, None, None, None),
@@ -231,7 +244,33 @@ def seeded_history_db(tmp_path: Path) -> Path:
                 volume
             ) VALUES (?, ?, ?, ?, ?, ?)
             """,
-            rows,
+            price_rows,
+        )
+        conn.executemany(
+            """
+            INSERT INTO securities (uuid, name, currency_code, last_price)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("sec-1", "Acme Corp", "EUR", 1_250_000_000),
+                ("sec-2", "Globex Inc", "EUR", 9_999_000_000),
+            ],
+        )
+        conn.executemany(
+            """
+            INSERT INTO portfolio_securities (
+                portfolio_uuid,
+                security_uuid,
+                current_holdings,
+                purchase_value,
+                current_value
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                ("portfolio-1", "sec-1", 1.5, 0, 0),
+                ("portfolio-2", "sec-1", 2.0, 0, 0),
+            ],
         )
         conn.commit()
     finally:
@@ -239,57 +278,13 @@ def seeded_history_db(tmp_path: Path) -> Path:
 
     return db_path
 
-def test_ws_get_security_history_requires_enabled_flag(
-    seeded_history_db: Path,
-) -> None:
-    """Handler should reject requests when the feature flag is disabled."""
-
-    entry_id = "entry-1"
-    hass = StubHass(
-        {
-            DOMAIN: {
-                entry_id: {
-                    "db_path": seeded_history_db,
-                    "feature_flags": {"pp_reader_history": False},
-                }
-            }
-        }
-    )
-    connection = StubConnection()
-
-    _run_ws_get_security_history(
-        hass,
-        connection,
-        {
-            "id": 1,
-            "type": "pp_reader/get_security_history",
-            "entry_id": entry_id,
-            "security_uuid": "sec-1",
-        },
-    )
-
-    assert connection.sent == []
-    assert connection.errors == [
-        (1, "feature_not_enabled", "Historische Kursdaten sind derzeit deaktiviert."),
-    ]
-
-
 def test_ws_get_security_history_returns_filtered_prices(
     seeded_history_db: Path,
 ) -> None:
     """Handler should stream filtered close prices when enabled."""
 
     entry_id = "entry-1"
-    hass = StubHass(
-        {
-            DOMAIN: {
-                entry_id: {
-                    "db_path": seeded_history_db,
-                    "feature_flags": {"pp_reader_history": True},
-                }
-            }
-        }
-    )
+    hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
     connection = StubConnection()
 
     _run_ws_get_security_history(
@@ -315,4 +310,94 @@ def test_ws_get_security_history_returns_filtered_prices(
     assert payload["prices"] == [
         {"date": 20240102, "close": 10_500},
         {"date": 20240103, "close": 10_750},
+    ]
+
+
+def test_ws_get_security_history_ignores_missing_feature_flag(
+    seeded_history_db: Path,
+) -> None:
+    """Handler should ignore legacy feature flag states."""
+
+    entry_id = "entry-2"
+    hass = StubHass(
+        {
+            DOMAIN: {
+                entry_id: {
+                    "db_path": seeded_history_db,
+                    "feature_flags": {"pp_reader_history": False},
+                }
+            }
+        }
+    )
+    connection = StubConnection()
+
+    _run_ws_get_security_history(
+        hass,
+        connection,
+        {
+            "id": 11,
+            "type": "pp_reader/get_security_history",
+            "entry_id": entry_id,
+            "security_uuid": "sec-1",
+        },
+    )
+
+    assert connection.errors == []
+    assert connection.sent and connection.sent[0][1]["prices"]
+
+
+def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
+    """Handler should return aggregated holdings for the security."""
+
+    entry_id = "entry-3"
+    hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
+    connection = StubConnection()
+
+    _run_ws_get_security_snapshot(
+        hass,
+        connection,
+        {
+            "id": 21,
+            "type": "pp_reader/get_security_snapshot",
+            "entry_id": entry_id,
+            "security_uuid": "sec-1",
+        },
+    )
+
+    assert connection.errors == []
+    assert connection.sent and connection.sent[0][0] == 21
+    payload = connection.sent[0][1]
+    assert payload["security_uuid"] == "sec-1"
+    assert payload["snapshot"] == {
+        "name": "Acme Corp",
+        "currency_code": "EUR",
+        "total_holdings": 3.5,
+        "last_price_eur": 12.5,
+        "market_value_eur": 43.75,
+    }
+
+
+def test_ws_get_security_snapshot_missing_security(
+    seeded_history_db: Path,
+) -> None:
+    """Handler should return an error when the security is unknown."""
+
+    entry_id = "entry-4"
+    hass = StubHass({DOMAIN: {entry_id: {"db_path": seeded_history_db}}})
+    connection = StubConnection()
+
+    _run_ws_get_security_snapshot(
+        hass,
+        connection,
+        {
+            "id": 22,
+            "type": "pp_reader/get_security_snapshot",
+            "entry_id": entry_id,
+            "security_uuid": "does-not-exist",
+        },
+    )
+
+    assert connection.sent == []
+    assert connection.errors == [
+        (22, "not_found", "Unbekannte security_uuid: does-not-exist"),
     ]
