@@ -114,6 +114,15 @@ export function unregisterDetailTab(key) {
     return;
   }
 
+  const descriptor = detailTabRegistry.get(key);
+  if (descriptor && typeof descriptor.cleanup === 'function') {
+    try {
+      descriptor.cleanup({ key });
+    } catch (error) {
+      console.error('unregisterDetailTab: Fehler beim Ausführen von cleanup', error);
+    }
+  }
+
   detailTabRegistry.delete(key);
 
   const index = detailTabOrder.indexOf(key);

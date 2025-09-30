@@ -99,7 +99,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Subscription auf Push-Events
       - Ziel: Sicherstellt aktuelle Chartdaten nach Preis-Updates
-   g) [ ] Räum Listener beim Schließen des Tabs auf
+   g) [x] Räum Listener beim Schließen des Tabs auf
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Cleanup/Destroy-Routine
       - Ziel: Verhindert Speicherlecks bei Tab-Wechsel

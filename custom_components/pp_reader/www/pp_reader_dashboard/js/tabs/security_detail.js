@@ -83,6 +83,31 @@ function ensureLiveUpdateSubscription(securityUuid) {
   }
 }
 
+function removeLiveUpdateSubscription(securityUuid) {
+  if (!securityUuid || !LIVE_UPDATE_HANDLERS.has(securityUuid)) {
+    return;
+  }
+
+  const handler = LIVE_UPDATE_HANDLERS.get(securityUuid);
+  try {
+    window.removeEventListener(LIVE_UPDATE_EVENT, handler);
+  } catch (error) {
+    console.error('removeLiveUpdateSubscription: Entfernen des Listeners fehlgeschlagen', error);
+  }
+
+  LIVE_UPDATE_HANDLERS.delete(securityUuid);
+}
+
+function cleanupSecurityDetailState(securityUuid) {
+  if (!securityUuid) {
+    return;
+  }
+
+  removeLiveUpdateSubscription(securityUuid);
+  invalidateHistoryCache(securityUuid);
+  RANGE_STATE_REGISTRY.delete(securityUuid);
+}
+
 function setActiveRange(securityUuid, rangeKey) {
   if (!RANGE_STATE_REGISTRY.has(securityUuid)) {
     RANGE_STATE_REGISTRY.set(securityUuid, { activeRange: rangeKey });
@@ -620,5 +645,6 @@ export function registerSecurityDetailTab({ setSecurityDetailTabFactory }) {
   setSecurityDetailTabFactory((securityUuid) => ({
     title: 'Wertpapier',
     render: (root, hass, panelConfig) => renderSecurityDetail(root, hass, panelConfig, securityUuid),
+    cleanup: () => cleanupSecurityDetailState(securityUuid),
   }));
 }
