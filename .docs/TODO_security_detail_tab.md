@@ -129,7 +129,7 @@
       - Datei: `README-dev.md`
       - Abschnitt/Funktion: Dashboard-/WebSocket-Beschreibung
       - Ziel: Entwicklerdoku deckt Security-Detail-Tab vollständig ab
-   b) [ ] Ergänze CHANGELOG.md mit Eintrag zum Security-Detail-Tab
+   b) [x] Ergänze CHANGELOG.md mit Eintrag zum Security-Detail-Tab
       - Datei: `CHANGELOG.md`
       - Abschnitt/Funktion: Aktueller Unreleased-Block
       - Ziel: Sichtbarkeit der neuen Funktion im Release-Prozess
