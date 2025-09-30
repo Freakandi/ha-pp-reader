@@ -1,5 +1,6 @@
 import { addSwipeEvents } from './interaction/tab_control.js';
 import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview.js';
+import { registerSecurityDetailTab } from './tabs/security_detail.js';
 import {
   handleAccountUpdate,
   handleLastFileUpdate,
@@ -697,3 +698,7 @@ class PPReaderDashboard extends HTMLElement {
 customElements.define('pp-reader-dashboard', PPReaderDashboard);
 
 console.log("PPReader dashboard.js v20250914b geladen");
+
+registerSecurityDetailTab({
+  setSecurityDetailTabFactory,
+});
