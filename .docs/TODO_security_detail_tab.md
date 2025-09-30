@@ -95,7 +95,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Fehlerbehandlung
       - Ziel: Zeigt freundliche Nachricht statt Chart bei fehlenden Daten
-   f) [ ] Invaldiere Range-Caches bei Live-Updates des aktiven `security_uuid`
+   f) [x] Invaldiere Range-Caches bei Live-Updates des aktiven `security_uuid`
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js`
       - Abschnitt/Funktion: Subscription auf Push-Events
       - Ziel: Sicherstellt aktuelle Chartdaten nach Preis-Updates

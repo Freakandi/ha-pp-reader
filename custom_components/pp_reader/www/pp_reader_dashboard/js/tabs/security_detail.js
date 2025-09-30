@@ -22,12 +22,65 @@ const RANGE_DAY_COUNTS = {
 
 const SECURITY_HISTORY_CACHE = new Map(); // securityUuid -> Map(rangeKey -> series[])
 const RANGE_STATE_REGISTRY = new Map(); // securityUuid -> { activeRange }
+const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
+const LIVE_UPDATE_HANDLERS = new Map(); // securityUuid -> handler
 
 function ensureHistoryCache(securityUuid) {
   if (!SECURITY_HISTORY_CACHE.has(securityUuid)) {
     SECURITY_HISTORY_CACHE.set(securityUuid, new Map());
   }
   return SECURITY_HISTORY_CACHE.get(securityUuid);
+}
+
+function invalidateHistoryCache(securityUuid) {
+  if (!securityUuid) {
+    return;
+  }
+
+  if (SECURITY_HISTORY_CACHE.has(securityUuid)) {
+    try {
+      const cache = SECURITY_HISTORY_CACHE.get(securityUuid);
+      if (cache && typeof cache.clear === 'function') {
+        cache.clear();
+      }
+    } catch (error) {
+      console.warn('invalidateHistoryCache: Konnte Cache nicht leeren', securityUuid, error);
+    }
+    SECURITY_HISTORY_CACHE.delete(securityUuid);
+  }
+}
+
+function handleLiveUpdateForSecurity(securityUuid, detail) {
+  if (!securityUuid || !detail) {
+    return;
+  }
+
+  const payload = detail.securityUuids;
+  const candidates = Array.isArray(payload) ? payload : [];
+
+  if (candidates.includes(securityUuid)) {
+    invalidateHistoryCache(securityUuid);
+  }
+}
+
+function ensureLiveUpdateSubscription(securityUuid) {
+  if (!securityUuid || LIVE_UPDATE_HANDLERS.has(securityUuid)) {
+    return;
+  }
+
+  const handler = (event) => {
+    if (!event || !event.detail) {
+      return;
+    }
+    handleLiveUpdateForSecurity(securityUuid, event.detail);
+  };
+
+  try {
+    window.addEventListener(LIVE_UPDATE_EVENT, handler);
+    LIVE_UPDATE_HANDLERS.set(securityUuid, handler);
+  } catch (error) {
+    console.error('ensureLiveUpdateSubscription: Registrierung fehlgeschlagen', error);
+  }
 }
 
 function setActiveRange(securityUuid, rangeKey) {
@@ -476,6 +529,8 @@ function scheduleRangeSetup({
     if (Array.isArray(initialHistory)) {
       cache.set(initialRange, initialHistory);
     }
+
+    ensureLiveUpdateSubscription(securityUuid);
 
     setActiveRange(securityUuid, initialRange);
     updateRangeButtons(rangeSelector, initialRange);

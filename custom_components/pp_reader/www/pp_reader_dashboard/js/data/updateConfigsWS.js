@@ -3,6 +3,7 @@ import { sortTableRows } from '../content/elements.js'; // NEU: generische Sorti
 
 const PENDING_RETRY_INTERVAL = 500;
 const PENDING_MAX_ATTEMPTS = 10;
+const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
 
 function ensurePendingMap() {
   if (!window.__ppReaderPendingPositions) {
@@ -416,6 +417,34 @@ export function handlePortfolioPositionsUpdate(update, root) {
     pendingMap.set(portfolio_uuid, { positions, error });
     if (result.reason !== 'hidden') {
       schedulePendingRetry(root, portfolio_uuid);
+    }
+  }
+
+  if (!error && Array.isArray(positions) && positions.length > 0) {
+    const securityUuids = Array.from(
+      new Set(
+        positions
+          .map((pos) => pos?.security_uuid)
+          .filter((uuid) => typeof uuid === 'string' && uuid.length > 0),
+      ),
+    );
+
+    if (securityUuids.length && typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(
+          new CustomEvent(PORTFOLIO_POSITIONS_UPDATED_EVENT, {
+            detail: {
+              portfolioUuid: portfolio_uuid,
+              securityUuids,
+            },
+          }),
+        );
+      } catch (dispatchError) {
+        console.warn(
+          'handlePortfolioPositionsUpdate: Dispatch des Portfolio-Events fehlgeschlagen',
+          dispatchError,
+        );
+      }
     }
   }
 }
