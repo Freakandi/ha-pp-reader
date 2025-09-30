@@ -51,7 +51,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Tab-Initialisierung und Navigation
       - Ziel: Ermöglicht Hinzufügen/Entfernen von Security-Detail-Tabs und entfernt Test-Tab
-   b) [ ] Implementiere `openSecurityDetail(securityUuid)` und `closeSecurityDetail(securityUuid)`
+   b) [x] Implementiere `openSecurityDetail(securityUuid)` und `closeSecurityDetail(securityUuid)`
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`
       - Abschnitt/Funktion: Neue Controller-Funktionen
       - Ziel: Initialisiert Tab-Eintrag, wechselt Navigation und räumt bei Schließen auf
