@@ -159,7 +159,7 @@
        - Dateien: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js`, zugehörige Templates/Strings
        - Abschnitt/Funktion: Tab-Registrierung und Übersetzungen
        - Ziel: Kein Legacy-Test-Tab mehr sichtbar
-    b) [ ] Bereinige ungenutzte Imports nach Refactoring
+    b) [x] Bereinige ungenutzte Imports nach Refactoring
        - Dateien: Alle betroffenen JS/Python-Dateien
        - Abschnitt/Funktion: Kopfbereiche der Dateien
        - Ziel: Sauberer Build ohne Lint-Warnungen
