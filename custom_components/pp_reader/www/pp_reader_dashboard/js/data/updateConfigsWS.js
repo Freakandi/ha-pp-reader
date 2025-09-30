@@ -45,6 +45,14 @@ function restoreSortAndInit(containerEl, rootEl, pid) {
   } catch (e) {
     console.warn('restoreSortAndInit: attachPortfolioPositionsSorting Fehler:', e);
   }
+
+  try {
+    if (window.__ppReaderAttachSecurityDetailListener) {
+      window.__ppReaderAttachSecurityDetailListener(rootEl, pid);
+    }
+  } catch (e) {
+    console.warn('restoreSortAndInit: attachSecurityDetailListener Fehler:', e);
+  }
 }
 
 function applyPortfolioPositionsToDom(root, portfolioUuid, positions, error) {
@@ -462,6 +470,17 @@ function renderPositionsTableInline(positions) {
         if (!key) return;
         th.setAttribute('data-sort-key', key);
         th.classList.add('sortable-col');
+      });
+      const bodyRows = table.querySelectorAll('tbody tr');
+      bodyRows.forEach((tr, idx) => {
+        if (tr.classList.contains('footer-row')) {
+          return;
+        }
+        const pos = positions[idx];
+        if (pos?.security_uuid) {
+          tr.dataset.security = pos.security_uuid;
+        }
+        tr.classList.add('position-row');
       });
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';

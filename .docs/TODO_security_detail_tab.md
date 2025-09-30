@@ -65,7 +65,7 @@
       - Ziel: Verhindert Tab-Flut bei wiederholtem Öffnen derselben Security
 
 5. Frontend: Overview-Interaktionen erweitern
-   a) [ ] Delegiere Klicks auf `.positions-container tr[data-security]`
+   a) [x] Delegiere Klicks auf `.positions-container tr[data-security]`
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js`
       - Abschnitt/Funktion: Event-Listener nach Lazy-Load
       - Ziel: Öffnet Security-Detail-Tab und ignoriert Klicks auf Expand/Collapse-Buttons
