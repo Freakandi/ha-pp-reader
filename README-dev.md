@@ -27,7 +27,15 @@ Additional options (Windows, devcontainers) are documented in [TESTING.md §2](T
 
 ### Accessing the development UI
 
-Once `./scripts/develop` reports that Home Assistant is listening on port `8123`, open <http://127.0.0.1:8123> in a browser on the same machine to complete onboarding and validate the dashboard changes you are working on. The script binds to all interfaces by default, so the loopback adapter is always available without extra flags.
+Once `./scripts/develop` reports that Home Assistant is listening on port `8123`, open <http://127.0.0.1:8123> in a browser on the same machine to finish onboarding and validate dashboard changes. The script binds to all interfaces by default, so the loopback adapter is always available without extra flags.
+
+1. Click **CREATE MY SMART HOME** to start the onboarding wizard.
+2. Create the local account with the following credentials so that automated fixtures and screenshots stay consistent:
+   - **Name:** `Dev`
+   - **Username:** `dev`
+   - **Password / Confirm password:** `dev`
+3. Walk through the remaining onboarding steps with the defaults (choose any country when prompted) and click **Finish**. Home Assistant will display the login screen.
+4. Sign in with the `dev` credentials and navigate to <http://127.0.0.1:8123/portfolio> to open the integration dashboard.
 
 ## Feature flags
 
