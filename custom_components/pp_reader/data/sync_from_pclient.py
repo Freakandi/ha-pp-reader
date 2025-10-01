@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from functools import lru_cache
 from statistics import median
 from typing import TYPE_CHECKING, Any
@@ -39,6 +39,7 @@ from .event_push import _compact_event_data, _push_update  # noqa: F401
 
 SECONDS_PER_DAY = 86400
 UTC_ZONE = ZoneInfo("UTC")
+UNIX_EPOCH_DATE = date(1970, 1, 1)
 
 # Only warn about missing price segments if they are recent. Historical exports
 # often contain long gaps that cannot be resolved retroactively and needlessly
@@ -191,6 +192,20 @@ def to_iso8601(ts: Timestamp) -> str:
     return ts.ToDatetime().isoformat() if ts is not None and ts.seconds != 0 else None
 
 
+def _iso8601_to_epoch_day(value: str | None) -> int | None:
+    """Convert an ISO 8601 date string into a Unix epoch day."""
+
+    if not value:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    return (parsed.date() - UNIX_EPOCH_DATE).days
+
+
 def delete_missing_entries(
     conn: Connection, table: str, id_column: str, current_ids: Iterable[str]
 ) -> None:
@@ -310,6 +325,7 @@ class _SyncRunner:
         self.accounts_currency_map: dict[str, str] = {}
         self.all_transactions: list[Any] = []
         self.tx_units: dict[str, dict[str, Any]] = {}
+        self.security_first_activity: dict[str, int] = {}
         self.cursor: Cursor | None = None
 
     def run(self) -> None:
@@ -403,6 +419,7 @@ class _SyncRunner:
         self.conn.commit()
         self.tx_units = self._rebuild_transaction_units()
         self.all_transactions = self._load_all_transactions()
+        self._index_security_activity()
 
     def _rebuild_transaction_units(self) -> dict[str, dict[str, Any]]:
         if self.cursor is None:
@@ -469,6 +486,23 @@ class _SyncRunner:
                 "(all_transactions leer)."
             )
             return []
+
+    def _index_security_activity(self) -> None:
+        """Map securities to the first transaction date (epoch day)."""
+
+        self.security_first_activity = {}
+        for transaction in self.all_transactions:
+            security_uuid = getattr(transaction, "security", None)
+            if not security_uuid:
+                continue
+
+            epoch_day = _iso8601_to_epoch_day(getattr(transaction, "date", None))
+            if epoch_day is None:
+                continue
+
+            previous = self.security_first_activity.get(security_uuid)
+            if previous is None or epoch_day < previous:
+                self.security_first_activity[security_uuid] = epoch_day
 
     def _sync_accounts(self) -> None:
         if self.cursor is None:
@@ -773,7 +807,17 @@ class _SyncRunner:
                                 ignored_weekend_segments = 0
                                 ignored_stale_segments = 0
                                 ignored_short_segments = 0
+                                ignored_pre_activity_segments = 0
+                                activity_start_day = self.security_first_activity.get(
+                                    security.uuid
+                                )
                                 for start, end in missing_segments:
+                                    if (
+                                        activity_start_day is not None
+                                        and end < activity_start_day
+                                    ):
+                                        ignored_pre_activity_segments += 1
+                                        continue
                                     if _segment_is_weekend_only(start, end):
                                         ignored_weekend_segments += 1
                                         continue
@@ -842,6 +886,12 @@ class _SyncRunner:
                                         "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) für %s",
                                         ignored_short_segments,
                                         MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING,
+                                        security.uuid,
+                                    )
+                                if ignored_pre_activity_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d Lücken vor der ersten Transaktion für %s",
+                                        ignored_pre_activity_segments,
                                         security.uuid,
                                     )
 
