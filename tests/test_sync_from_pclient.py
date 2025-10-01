@@ -393,17 +393,18 @@ def test_sync_securities_warns_about_missing_daily_prices(
         datetime.now(tz=UTC).timestamp() // sync_module.SECONDS_PER_DAY
     )
     start_day = today_epoch_day - 6
-    end_day = start_day + 3
+    end_day = start_day + 5
     for delta in range(6, 15):
         candidate_start = today_epoch_day - delta
-        candidate_end = candidate_start + 3
-        if any(
+        candidate_end = candidate_start + 5
+        business_days = sum(
             datetime.fromtimestamp(
                 missing_day * sync_module.SECONDS_PER_DAY, tz=UTC
             ).weekday()
             < 5
             for missing_day in range(candidate_start + 1, candidate_end)
-        ):
+        )
+        if business_days >= 4:
             start_day = candidate_start
             end_day = candidate_end
             break
@@ -437,7 +438,7 @@ def test_sync_securities_warns_about_missing_daily_prices(
     ]
     assert gap_logs, "Erwarte mindestens eine Warnung für fehlende Tagesdaten"
     assert runner.stats.historical_price_gap_warnings == len(gap_logs)
-    assert runner.stats.historical_price_gap_days == 2
+    assert runner.stats.historical_price_gap_days == 4
 
 
 def test_sync_securities_skips_stale_gap_warnings(
@@ -545,5 +546,63 @@ def test_sync_securities_ignores_weekend_gaps(
     ]
     assert not weekend_logs
     assert rows == [("sec-weekend", friday), ("sec-weekend", monday)]
+    assert runner.stats.historical_price_gap_warnings == 0
+    assert runner.stats.historical_price_gap_days == 0
+
+
+def test_sync_securities_ignores_short_holiday_gaps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Kurzfristige Feiertagslücken sollen nicht zu Warnungen führen."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    start = int(datetime(2024, 12, 23, tzinfo=UTC).timestamp() // 86400)
+    end = int(datetime(2024, 12, 27, tzinfo=UTC).timestamp() // 86400)
+
+    holiday_security = _DummySecurity(
+        uuid="sec-holiday",
+        name="Holiday Gap Security",
+        prices=[
+            _DummyPrice(date=start, close=100),
+            _DummyPrice(date=end, close=120),
+        ],
+    )
+    runner.client.securities = [holiday_security]
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            runner._sync_securities()
+        conn.commit()
+        rows = conn.execute(
+            "SELECT security_uuid, date FROM historical_prices ORDER BY date"
+        ).fetchall()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    holiday_logs = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "historische Close" in record.getMessage()
+    ]
+    assert not holiday_logs
+    assert rows == [("sec-holiday", start), ("sec-holiday", end)]
     assert runner.stats.historical_price_gap_warnings == 0
     assert runner.stats.historical_price_gap_days == 0
