@@ -26,8 +26,13 @@ Vorgehensweise (strikt einhalten):
 7. Führe eine kurze Selbstprüfung durch:
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
-8. Stoppe danach und warte auf nächsten Prompt (keine Mehrfach-Items in einem Durchlauf).
-9. Wenn Blocker (fehlende Info / Ambiguität) → Statt Code:
+8. Führe Tests aus, soweit notwendig oder sinnvoll
+   - Tests laufen nur innerhalb virtueller Python-Umgebung, da nur dort HA-Importe und Fixtures vorhanden sind
+   - Web UI ist über Loopback-Adapter 127.0.0.1:8123 erreichbar, wenn innerhalb der virtuellen Umgebung in einer separaten Terminal-Session scripts/develop ausgeführt wurde
+   - Zur Anmeldung am Frontend zunächst Button "CREATE A NEW SMART HOME" verwenden und neue Konfiguration mit User: dev anlegen (kein Passwort)
+   - Das Dashboard dieser Integration liegt dann unter 127.0.0.1:8123/ppreader
+9. Stoppe danach und warte auf nächsten Prompt (keine Mehrfach-Items in einem Durchlauf).
+10. Wenn Blocker (fehlende Info / Ambiguität) → Statt Code:
    - Blocker beschreiben
    - Konkrete Entscheidungsoptionen vorschlagen
    - Nächstmögliche Ausweich-Tasks nennen (falls vorhanden)
