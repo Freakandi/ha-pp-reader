@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components import websocket_api
+from homeassistant.components.frontend import (
+    async_remove_panel as frontend_async_remove_panel,
+)
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import (
     async_register_panel as panel_custom_async_register_panel,
@@ -189,15 +192,31 @@ def _schedule_price_interval(
 
 
 async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Register the custom panel if Home Assistant does not have it yet."""
-    if any(
-        panel.frontend_url_path == "ppreader"
-        for panel in hass.data.get("frontend_panels", {}).values()
-    ):
-        _LOGGER.warning(
-            "Das Panel 'ppreader' ist bereits registriert. Überspringe Registrierung."
-        )
-        return
+    """Ensure the custom panel exists and refresh it when already present."""
+    existing_panel = next(
+        (
+            panel
+            for panel in hass.data.get("frontend_panels", {}).values()
+            if panel.frontend_url_path == "ppreader"
+        ),
+        None,
+    )
+
+    if existing_panel is not None:
+        existing_entry_id = (existing_panel.config or {}).get("entry_id")
+        if existing_entry_id == entry.entry_id:
+            _LOGGER.debug(
+                "Aktualisiere bestehendes Panel 'ppreader' für entry_id=%s",
+                entry.entry_id,
+            )
+        else:
+            _LOGGER.info(
+                "Ersetze vorhandenes Panel 'ppreader' (alt=%s) durch entry_id=%s",
+                existing_entry_id,
+                entry.entry_id,
+            )
+
+        frontend_async_remove_panel(hass, "ppreader", warn_if_unknown=False)
 
     try:
         cache_bust = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
