@@ -44,6 +44,11 @@ UTC_ZONE = ZoneInfo("UTC")
 # spam the Home Assistant log.
 MAX_PRICE_GAP_WARNING_AGE_DAYS = 365
 
+# Short gaps across banking holidays are common for many exchanges. Allow a
+# couple of missing business days before escalating to a warning to keep the
+# Home Assistant log noise-free.
+MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING = 3
+
 
 @lru_cache(maxsize=4096)
 def _weekday_from_epoch_day(epoch_day: int) -> int:
@@ -56,6 +61,12 @@ def _segment_is_weekend_only(start: int, end: int) -> bool:
     """Check whether the missing date segment only covers weekend days."""
 
     return all(_weekday_from_epoch_day(day) >= 5 for day in range(start, end + 1))
+
+
+def _count_business_days(start: int, end: int) -> int:
+    """Return how many days in the segment fall on weekdays."""
+
+    return sum(1 for day in range(start, end + 1) if _weekday_from_epoch_day(day) < 5)
 
 
 @dataclass(slots=True)
@@ -707,12 +718,19 @@ class _SyncRunner:
                             unexpected_segments: list[tuple[int, int]] = []
                             ignored_weekend_segments = 0
                             ignored_stale_segments = 0
+                            ignored_short_segments = 0
                             for start, end in missing_segments:
                                 if _segment_is_weekend_only(start, end):
                                     ignored_weekend_segments += 1
                                     continue
                                 if today_epoch_day - end > MAX_PRICE_GAP_WARNING_AGE_DAYS:
                                     ignored_stale_segments += 1
+                                    continue
+                                if (
+                                    _count_business_days(start, end)
+                                    <= MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING
+                                ):
+                                    ignored_short_segments += 1
                                     continue
                                 unexpected_segments.append((start, end))
 
@@ -767,6 +785,13 @@ class _SyncRunner:
                                     "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) für %s",
                                     ignored_stale_segments,
                                     MAX_PRICE_GAP_WARNING_AGE_DAYS,
+                                    security.uuid,
+                                )
+                            if ignored_short_segments:
+                                _LOGGER.debug(
+                                    "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) für %s",
+                                    ignored_short_segments,
+                                    MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING,
                                     security.uuid,
                                 )
 
