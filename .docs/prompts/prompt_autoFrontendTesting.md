@@ -38,6 +38,7 @@ Repeat the following steps until all interactive elements have been exercised wi
      - Add or update automated tests (frontend or backend) if practical to prevent regression.
      - Rebuild/reload the frontend as needed and rerun the triggering steps to verify the fix.
 5. **Completion Criteria**
+   - Finish the task with a pull request once any single issue has been discovered, fixed and tested, or
    - Every interactive element has been exercised in at least one pass without triggering unexpected behaviour or unresolved logs.
    - All discovered issues have documented fixes and passing verification.
 
