@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
-from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.sync_from_pclient import (
@@ -41,6 +40,7 @@ from custom_components.pp_reader.logic.securities import (
     db_calculate_sec_purchase_value,
 )
 from custom_components.pp_reader.prices import revaluation
+from custom_components.pp_reader.util import async_run_executor_job
 
 
 async def revalue_after_price_updates(*args, **kwargs):
@@ -246,9 +246,10 @@ def _detect_price_changes(
     return updates, changed
 
 
-def _load_prices_and_currencies(db_path: Path) -> tuple[dict[str, int], dict[str, str | None]]:
+def _load_prices_and_currencies(
+    db_path: Path,
+) -> tuple[dict[str, int], dict[str, str | None]]:
     """Synchronously load cached prices and security currencies from SQLite."""
-
     with sqlite3.connect(str(db_path)) as conn:
         return _load_old_prices(conn), _load_security_currencies(conn)
 
@@ -698,6 +699,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             all_quotes: list[Quote] = []
             skipped_running = False
             chunk_failure_count = 0
+            provider_import_error = False
 
             for idx, batch_symbols in enumerate(batches, start=1):
                 _LOGGER.debug(
@@ -762,28 +764,31 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             else:
                 store["price_error_counter"] = error_counter
 
+            provider_import_error = has_import_error()
+
             if len(all_quotes) == 0:
                 error_counter += 1
                 store["price_error_counter"] = error_counter
-                now_ts = time.time()
-                last_warn = store.get("price_zero_quotes_warn_ts")
-                if (
-                    last_warn is None
-                    or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
-                ):
-                    warn_msg = (
-                        "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
-                    )
-                    _LOGGER.warning(warn_msg, error_counter)
-                    store["price_zero_quotes_warn_ts"] = now_ts
-                else:
-                    _LOGGER.debug(
-                        (
-                            "prices_cycle: zero-quotes detected (WARN gedrosselt) -> "
-                            "error_counter=%s"
-                        ),
-                        error_counter,
-                    )
+                if not provider_import_error:
+                    now_ts = time.time()
+                    last_warn = store.get("price_zero_quotes_warn_ts")
+                    if (
+                        last_warn is None
+                        or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
+                    ):
+                        warn_msg = (
+                            "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
+                        )
+                        _LOGGER.warning(warn_msg, error_counter)
+                        store["price_zero_quotes_warn_ts"] = now_ts
+                    else:
+                        _LOGGER.debug(
+                            (
+                                "prices_cycle: zero-quotes detected (WARN gedrosselt) -> "
+                                "error_counter=%s"
+                            ),
+                            error_counter,
+                        )
             else:
                 store["price_error_counter"] = error_counter
 
@@ -1109,6 +1114,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 not skipped_running
                 and store.get("price_error_counter", 0) >= CONSECUTIVE_ERROR_THRESHOLD
                 and len(all_quotes) == 0
+                and not provider_import_error
             ):
                 _LOGGER.warning(
                     (
@@ -1119,7 +1125,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     CONSECUTIVE_ERROR_THRESHOLD,
                 )
 
-            if has_import_error() and not store.get("price_provider_disabled"):
+            if provider_import_error and not store.get("price_provider_disabled"):
                 store["price_provider_disabled"] = True
                 _LOGGER.error(
                     (
