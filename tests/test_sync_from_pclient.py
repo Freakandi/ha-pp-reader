@@ -13,6 +13,7 @@ import pytest
 
 from custom_components.pp_reader.data import db_schema
 from custom_components.pp_reader.data import sync_from_pclient as sync_module
+from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.data.sync_from_pclient import (
     _compact_event_data,
     _SyncRunner,
@@ -439,6 +440,83 @@ def test_sync_securities_warns_about_missing_daily_prices(
     assert gap_logs, "Erwarte mindestens eine Warnung für fehlende Tagesdaten"
     assert runner.stats.historical_price_gap_warnings == len(gap_logs)
     assert runner.stats.historical_price_gap_days == 4
+
+
+def test_sync_securities_ignores_gap_before_first_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Price gaps before any transaction should not raise warnings."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    today_epoch_day = int(
+        datetime.now(tz=UTC).timestamp() // sync_module.SECONDS_PER_DAY
+    )
+    start_day = today_epoch_day - 40
+    end_day = today_epoch_day - 30
+    security_with_gap = _DummySecurity(
+        uuid="sec-gap-pre-activity",
+        name="Gap Ignored",
+        prices=[
+            _DummyPrice(date=start_day, close=100),
+            _DummyPrice(date=end_day, close=110),
+        ],
+    )
+    runner.client.securities = [security_with_gap]
+
+    first_tx_day = end_day + 5
+    tx_datetime = datetime.fromtimestamp(
+        first_tx_day * sync_module.SECONDS_PER_DAY, tz=UTC
+    ).replace(tzinfo=None)
+    runner.all_transactions = [
+        Transaction(
+            uuid="tx-1",
+            type=0,
+            account=None,
+            portfolio=None,
+            other_account=None,
+            other_portfolio=None,
+            date=tx_datetime.isoformat(),
+            currency_code="EUR",
+            amount=0,
+            shares=0,
+            security="sec-gap-pre-activity",
+        )
+    ]
+    runner._index_security_activity()
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            runner._sync_securities()
+        conn.commit()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    gap_logs = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "historische Close" in record.getMessage()
+    ]
+    assert not gap_logs
+    assert runner.stats.historical_price_gap_warnings == 0
+    assert runner.stats.historical_price_gap_days == 0
 
 
 def test_sync_securities_skips_stale_gap_warnings(
