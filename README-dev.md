@@ -25,6 +25,10 @@ Additional options (Windows, devcontainers) are documented in [TESTING.md §2](T
 - **Formatting & linting:** Execute `./scripts/lint` to run `ruff format .` followed by `ruff check . --fix`.【F:AGENTS.md†L13-L14】【F:TESTING.md†L179-L189】
 - **Source layout awareness:** The integration registers a custom panel (`ppreader`) and WebSocket commands during setup; ensure changes keep the static asset paths and registration logic intact.【F:custom_components/pp_reader/__init__.py†L121-L199】
 
+### Accessing the development UI
+
+Once `./scripts/develop` reports that Home Assistant is listening on port `8123`, open <http://127.0.0.1:8123> in a browser on the same machine to complete onboarding and validate the dashboard changes you are working on. The script binds to all interfaces by default, so the loopback adapter is always available without extra flags.
+
 ## Feature flags
 
 The integration retains a feature-flag infrastructure to stage experimental capabilities when required. Flags are normalised to lower-case strings and resolved against defaults defined in `feature_flags.py`. At the moment no flags are active and all features, including the security history WebSocket command, are enabled by default. When new flags are introduced they can be toggled via the config entry options in `.storage/core.config_entries` using the `feature_flags` mapping.【F:custom_components/pp_reader/feature_flags.py†L11-L101】【F:custom_components/pp_reader/data/websocket.py†L408-L453】
