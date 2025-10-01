@@ -74,42 +74,55 @@ def _wrap_with_loop_fallback(
     if original is None:
         return handler
 
+    def _resolve_loop(candidate: Any) -> asyncio.AbstractEventLoop | None:
+        if isinstance(candidate, asyncio.AbstractEventLoop):
+            return candidate
+        return None
+
+    def _drain_coroutine(
+        coro: Any,
+        loop: asyncio.AbstractEventLoop | None,
+    ) -> None:
+        if not asyncio.iscoroutine(coro):
+            return
+
+        if loop is not None:
+            task = loop.create_task(coro)
+            loop.run_until_complete(task)
+            return
+
+        temp_loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(temp_loop)
+            temp_loop.run_until_complete(coro)
+        finally:
+            asyncio.set_event_loop(None)
+            temp_loop.run_until_complete(temp_loop.shutdown_asyncgens())
+            temp_loop.close()
+
     @wraps(handler)
     def wrapper(hass, connection, msg):  # type: ignore[override]
+        loop = _resolve_loop(getattr(hass, "loop", None))
+
+        if loop is not None and not loop.is_running():
+            _drain_coroutine(original(hass, connection, msg), loop)
+            return None
+
         try:
             result = handler(hass, connection, msg)
         except RuntimeError as err:  # pragma: no cover - compatibility path
             if "no running event loop" not in str(err):
                 raise
-            loop = getattr(hass, "loop", None)
-            if loop is None:
-                raise
-            if loop.is_running():
-                raise
-            task = loop.create_task(original(hass, connection, msg))
-            loop.run_until_complete(task)
+            loop = _resolve_loop(getattr(hass, "loop", None))
+            _drain_coroutine(original(hass, connection, msg), loop)
             return None
 
         if asyncio.iscoroutine(result):
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
-                loop = getattr(hass, "loop", None)
-                if loop is None:
-                    loop = asyncio.new_event_loop()
-                    try:
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(result)
-                    finally:
-                        asyncio.set_event_loop(None)
-                        loop.run_until_complete(loop.shutdown_asyncgens())
-                        loop.close()
-                    return None
-                if loop.is_running():
-                    task = loop.create_task(result)
-                    loop.run_until_complete(task)
-                    return None
-                loop.run_until_complete(result)
+                loop = _resolve_loop(getattr(hass, "loop", None))
+                _drain_coroutine(result, loop)
                 return None
 
         return result
