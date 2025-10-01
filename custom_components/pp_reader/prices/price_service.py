@@ -245,6 +245,13 @@ def _detect_price_changes(
     return updates, changed
 
 
+def _load_prices_and_currencies(db_path: Path) -> tuple[dict[str, int], dict[str, str | None]]:
+    """Synchronously load cached prices and security currencies from SQLite."""
+
+    with sqlite3.connect(str(db_path)) as conn:
+        return _load_old_prices(conn), _load_security_currencies(conn)
+
+
 def _apply_price_updates(
     db_path: Path,
     updates: dict[str, int],
@@ -783,9 +790,10 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             existing_prices: dict[str, int] = {}
             security_currencies: dict[str, str | None] = {}
             try:
-                with sqlite3.connect(str(db_path)) as conn:
-                    existing_prices = _load_old_prices(conn)
-                    security_currencies = _load_security_currencies(conn)
+                existing_prices, security_currencies = await hass.async_add_executor_job(
+                    _load_prices_and_currencies,
+                    db_path,
+                )
             except sqlite3.Error:
                 warn_msg = (
                     "prices_cycle: Unerwarteter Fehler beim Laden bestehender Preise / "
@@ -823,8 +831,12 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     changed_count = 0
                 else:
                     fetched_at = _utc_now_iso()
-                    updated_rows = _apply_price_updates(
-                        db_path, scaled_updates, fetched_at=fetched_at, source="yahoo"
+                    updated_rows = await hass.async_add_executor_job(
+                        _apply_price_updates,
+                        db_path,
+                        scaled_updates,
+                        fetched_at,
+                        "yahoo",
                     )
                     if updated_rows != detected_changes:
                         debug_msg = (
