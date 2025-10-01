@@ -4,7 +4,7 @@
     "mounts": [
         "source=${localWorkspaceFolder}/config,target=/config,type=bind,consistency=cached"
     ],
-    "postCreateCommand": "scripts/setup && python3 -m pip install --requirement requirements-dev.txt",
+    "postCreateCommand": "scripts/setup_VSC && python3 -m pip install --requirement requirements-dev.txt",
     "forwardPorts": [
         8123
     ],
@@ -21,7 +21,10 @@
                 "github.vscode-pull-request-github",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
-                "ryanluker.vscode-coverage-gutters"
+                "ryanluker.vscode-coverage-gutters",
+                "openai.chatgpt",
+                "ms-azuretools.vscode-containers",
+                "github.vscode-github-actions"
             ],
             "settings": {
                 "files.eol": "\n",
