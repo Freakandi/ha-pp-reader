@@ -200,12 +200,25 @@ def cleanup_old_backups(backup_dir: Path) -> None:
     weekly = {}
 
     for b in backups:
+        stem_parts = b.stem.rsplit("_", 2)
+        if len(stem_parts) < 3:
+            _LOGGER.debug(
+                "⏭️ Überspringe Backup mit unerwartetem Dateinamen: %s", b.name
+            )
+            continue
+
+        dt_str = "_".join(stem_parts[-2:])  # 20250430_143000
+
         try:
-            dt_str = "_".join(b.stem.split("_")[-2:])  # 20250430_1430
             dt = datetime.strptime(dt_str, "%Y%m%d_%H%M%S")  # noqa: DTZ007
         except ValueError as exc:
-            # Replace ValueError with the specific exception expected
-            _LOGGER.warning("⚠️ Fehler beim Verarbeiten des Backups: %s", exc)
+            _LOGGER.debug(
+                "⏭️ Überspringe Backup %s wegen ungültigem Zeitstempel '%s': %s",
+                b.name,
+                dt_str,
+                exc,
+            )
+            continue
 
         key = dt.date()
         age = (now - dt).days  # Alter des Backups in Tagen berechnen
