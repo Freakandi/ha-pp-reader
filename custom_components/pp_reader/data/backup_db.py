@@ -18,6 +18,8 @@ from pathlib import Path
 from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_track_time_interval
 
+from custom_components.pp_reader.util import async_run_executor_job
+
 _LOGGER = logging.getLogger(__name__)
 
 BACKUP_SUBDIR = "backups"
@@ -30,12 +32,12 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
     interval = timedelta(hours=6)
 
     async def _periodic_backup(_now: datetime) -> None:
-        await hass.async_add_executor_job(run_backup_cycle, db_path)
+        await async_run_executor_job(hass, run_backup_cycle, db_path)
 
     async_track_time_interval(hass, _periodic_backup, interval)
 
     async def async_trigger_debug_backup(_call: ServiceCall) -> None:
-        await hass.async_add_executor_job(run_backup_cycle, db_path)
+        await async_run_executor_job(hass, run_backup_cycle, db_path)
 
     async def register_backup_service(_event: Event) -> None:
         """
