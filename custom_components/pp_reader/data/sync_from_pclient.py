@@ -501,15 +501,20 @@ class _SyncRunner:
             retired = 1 if getattr(security, "isRetired", False) else 0
             security_updated_at = maybe_field(security, "updatedAt")
             updated_at = to_iso8601(security_updated_at)
+
+            name = security.name
+            isin = maybe_field(security, "isin")
+            wkn = maybe_field(security, "wkn")
+            ticker_symbol = maybe_field(security, "tickerSymbol")
             security_type = maybe_field(security, "type")
+            currency_code = security.currencyCode
 
             new_security_attrs = (
-                security.name,
-                maybe_field(security, "isin"),
-                maybe_field(security, "wkn"),
-                maybe_field(security, "tickerSymbol"),
-                maybe_field(security, "type"),
-                security.currencyCode,
+                name,
+                isin,
+                wkn,
+                ticker_symbol,
+                currency_code,
                 security_type,
                 retired,
                 updated_at,
@@ -518,7 +523,7 @@ class _SyncRunner:
             self.cursor.execute(
                 """
                 SELECT name, isin, wkn, ticker_symbol,
-                       type, currency_code, retired, updated_at
+                       currency_code, type, retired, updated_at
                 FROM securities
                 WHERE uuid = ?
                 """,
@@ -536,15 +541,15 @@ class _SyncRunner:
                     """,
                     (
                         security.uuid,
-                        new_security_attrs[0],
-                        new_security_attrs[1],
-                        new_security_attrs[2],
-                        new_security_attrs[3],
+                        name,
+                        isin,
+                        wkn,
+                        ticker_symbol,
                         None,
-                        new_security_attrs[4],
-                        new_security_attrs[5],
-                        new_security_attrs[6],
-                        new_security_attrs[7],
+                        security_type,
+                        currency_code,
+                        retired,
+                        updated_at,
                     ),
                 )
                 self.changes.securities = True
