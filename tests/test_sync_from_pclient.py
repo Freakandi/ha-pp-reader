@@ -389,12 +389,31 @@ def test_sync_securities_warns_about_missing_daily_prices(
     )
     runner.cursor = conn.cursor()
 
+    today_epoch_day = int(
+        datetime.now(tz=UTC).timestamp() // sync_module.SECONDS_PER_DAY
+    )
+    start_day = today_epoch_day - 6
+    end_day = start_day + 3
+    for delta in range(6, 15):
+        candidate_start = today_epoch_day - delta
+        candidate_end = candidate_start + 3
+        if any(
+            datetime.fromtimestamp(
+                missing_day * sync_module.SECONDS_PER_DAY, tz=UTC
+            ).weekday()
+            < 5
+            for missing_day in range(candidate_start + 1, candidate_end)
+        ):
+            start_day = candidate_start
+            end_day = candidate_end
+            break
+
     security_with_gap = _DummySecurity(
         uuid="sec-gap",
         name="Gap Security",
         prices=[
-            _DummyPrice(date=20, close=100),
-            _DummyPrice(date=23, close=160),
+            _DummyPrice(date=start_day, close=100),
+            _DummyPrice(date=end_day, close=160),
         ],
     )
     runner.client.securities = [security_with_gap]
@@ -419,6 +438,57 @@ def test_sync_securities_warns_about_missing_daily_prices(
     assert gap_logs, "Erwarte mindestens eine Warnung für fehlende Tagesdaten"
     assert runner.stats.historical_price_gap_warnings == len(gap_logs)
     assert runner.stats.historical_price_gap_days == 2
+
+
+def test_sync_securities_skips_stale_gap_warnings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Gaps far in the past should be ignored to avoid log spam."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    stale_security = _DummySecurity(
+        uuid="sec-stale",
+        name="Stale Gap Security",
+        prices=[
+            _DummyPrice(date=20, close=100),
+            _DummyPrice(date=23, close=160),
+        ],
+    )
+    runner.client.securities = [stale_security]
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            runner._sync_securities()
+        conn.commit()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    stale_logs = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "historische Close" in record.getMessage()
+    ]
+    assert not stale_logs
+    assert runner.stats.historical_price_gap_warnings == 0
+    assert runner.stats.historical_price_gap_days == 0
 
 
 def test_sync_securities_ignores_weekend_gaps(

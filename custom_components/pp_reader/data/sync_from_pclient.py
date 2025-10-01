@@ -39,6 +39,11 @@ from .event_push import _compact_event_data, _push_update  # noqa: F401
 SECONDS_PER_DAY = 86400
 UTC_ZONE = ZoneInfo("UTC")
 
+# Only warn about missing price segments if they are recent. Historical exports
+# often contain long gaps that cannot be resolved retroactively and needlessly
+# spam the Home Assistant log.
+MAX_PRICE_GAP_WARNING_AGE_DAYS = 365
+
 
 @lru_cache(maxsize=4096)
 def _weekday_from_epoch_day(epoch_day: int) -> int:
@@ -700,14 +705,16 @@ class _SyncRunner:
 
                         if missing_segments:
                             unexpected_segments: list[tuple[int, int]] = []
+                            ignored_weekend_segments = 0
+                            ignored_stale_segments = 0
                             for start, end in missing_segments:
                                 if _segment_is_weekend_only(start, end):
+                                    ignored_weekend_segments += 1
+                                    continue
+                                if today_epoch_day - end > MAX_PRICE_GAP_WARNING_AGE_DAYS:
+                                    ignored_stale_segments += 1
                                     continue
                                 unexpected_segments.append((start, end))
-
-                            ignored_weekend_segments = (
-                                len(missing_segments) - len(unexpected_segments)
-                            )
 
                             if unexpected_segments:
                                 total_missing_days = sum(
@@ -753,6 +760,13 @@ class _SyncRunner:
                                 _LOGGER.debug(
                                     "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden für %s",
                                     ignored_weekend_segments,
+                                    security.uuid,
+                                )
+                            if ignored_stale_segments:
+                                _LOGGER.debug(
+                                    "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) für %s",
+                                    ignored_stale_segments,
+                                    MAX_PRICE_GAP_WARNING_AGE_DAYS,
                                     security.uuid,
                                 )
 
