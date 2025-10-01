@@ -157,8 +157,29 @@ function getSecurityDetailTabKey(securityUuid) {
   return `${SECURITY_DETAIL_TAB_PREFIX}${securityUuid}`;
 }
 
+function findDashboardElement() {
+  const direct = document.querySelector('pp-reader-dashboard');
+  if (direct) {
+    return direct;
+  }
+
+  const panelElements = document.querySelectorAll('pp-reader-panel');
+  for (const panelElement of panelElements) {
+    if (!panelElement || !panelElement.shadowRoot) {
+      continue;
+    }
+
+    const nested = panelElement.shadowRoot.querySelector('pp-reader-dashboard');
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
 function requestDashboardRender() {
-  const dashboardElement = document.querySelector('pp-reader-dashboard');
+  const dashboardElement = findDashboardElement();
   if (!dashboardElement) {
     console.warn('requestDashboardRender: Kein pp-reader-dashboard Element gefunden');
     return;
