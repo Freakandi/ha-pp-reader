@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
+from statistics import median
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -49,6 +50,13 @@ MAX_PRICE_GAP_WARNING_AGE_DAYS = 365
 # Home Assistant log noise-free.
 MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING = 3
 
+# Price series that are regularly sampled less often than once per week should not
+# raise missing data warnings. Analyse the spacing of recent data points to detect
+# such sparse series and keep the log noise-free.
+SPARSE_PRICE_RECENT_SAMPLE_SIZE = 24
+SPARSE_PRICE_MIN_INTERVALS = 4
+SPARSE_PRICE_MEDIAN_THRESHOLD_DAYS = 7
+
 
 @lru_cache(maxsize=4096)
 def _weekday_from_epoch_day(epoch_day: int) -> int:
@@ -67,6 +75,25 @@ def _count_business_days(start: int, end: int) -> int:
     """Return how many days in the segment fall on weekdays."""
 
     return sum(1 for day in range(start, end + 1) if _weekday_from_epoch_day(day) < 5)
+
+
+def _evaluate_price_series_spacing(price_dates: Iterable[int]) -> tuple[bool, float | None]:
+    """Analyse price date spacing to determine if warnings should be suppressed."""
+
+    sorted_dates = sorted(price_dates)
+    if len(sorted_dates) < 2:
+        return False, None
+
+    sample = sorted_dates[-(SPARSE_PRICE_RECENT_SAMPLE_SIZE + 1):]
+    if len(sample) < 2:
+        return False, None
+
+    intervals = [b - a for a, b in zip(sample, sample[1:]) if b > a]
+    if len(intervals) < SPARSE_PRICE_MIN_INTERVALS:
+        return False, None
+
+    median_interval = float(median(intervals))
+    return median_interval >= SPARSE_PRICE_MEDIAN_THRESHOLD_DAYS, median_interval
 
 
 @dataclass(slots=True)
@@ -703,6 +730,7 @@ class _SyncRunner:
                             volume,
                         ) in sorted_price_items
                     ]
+                    price_dates = [date_value for date_value, _ in sorted_price_items]
 
                     if sorted_price_items:
                         missing_segments: list[tuple[int, int]] = []
@@ -715,85 +743,107 @@ class _SyncRunner:
                             previous_date = current_date
 
                         if missing_segments:
-                            unexpected_segments: list[tuple[int, int]] = []
-                            ignored_weekend_segments = 0
-                            ignored_stale_segments = 0
-                            ignored_short_segments = 0
-                            for start, end in missing_segments:
-                                if _segment_is_weekend_only(start, end):
-                                    ignored_weekend_segments += 1
-                                    continue
-                                if today_epoch_day - end > MAX_PRICE_GAP_WARNING_AGE_DAYS:
-                                    ignored_stale_segments += 1
-                                    continue
-                                if (
-                                    _count_business_days(start, end)
-                                    <= MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING
-                                ):
-                                    ignored_short_segments += 1
-                                    continue
-                                unexpected_segments.append((start, end))
-
-                            if unexpected_segments:
-                                total_missing_days = sum(
-                                    (end - start) + 1
-                                    for start, end in unexpected_segments
+                            calendar_value = maybe_field(security, "calendar")
+                            calendar_hint = (
+                                calendar_value.strip().lower()
+                                if isinstance(calendar_value, str)
+                                else ""
+                            )
+                            suppress_reason: str | None = None
+                            if calendar_hint and "month" in calendar_hint:
+                                suppress_reason = f"Kalender '{calendar_value}'"
+                            else:
+                                is_sparse_series, median_interval = (
+                                    _evaluate_price_series_spacing(price_dates)
                                 )
-                                self.stats.historical_price_gap_warnings += len(
-                                    unexpected_segments
+                                if is_sparse_series:
+                                    suppress_reason = (
+                                        f"Medianintervall {median_interval:.1f} Tage"
+                                        if median_interval is not None
+                                        else "spärliche Preiszeitreihe"
+                                    )
+                            if suppress_reason:
+                                _LOGGER.debug(
+                                    "sync_from_pclient: Unterdrücke Warnungen zu historischen Preis-Lücken für %s (%s)",
+                                    security.uuid,
+                                    suppress_reason,
                                 )
-                                self.stats.historical_price_gap_days += total_missing_days
+                            else:
+                                unexpected_segments: list[tuple[int, int]] = []
+                                ignored_weekend_segments = 0
+                                ignored_stale_segments = 0
+                                ignored_short_segments = 0
+                                for start, end in missing_segments:
+                                    if _segment_is_weekend_only(start, end):
+                                        ignored_weekend_segments += 1
+                                        continue
+                                    if today_epoch_day - end > MAX_PRICE_GAP_WARNING_AGE_DAYS:
+                                        ignored_stale_segments += 1
+                                        continue
+                                    if (
+                                        _count_business_days(start, end)
+                                        <= MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING
+                                    ):
+                                        ignored_short_segments += 1
+                                        continue
+                                    unexpected_segments.append((start, end))
 
-                                max_segments_to_log = 3
-                                for start, end in unexpected_segments[
-                                    :max_segments_to_log
-                                ]:
-                                    if start == end:
+                                if unexpected_segments:
+                                    total_missing_days = sum(
+                                        (end - start) + 1
+                                        for start, end in unexpected_segments
+                                    )
+                                    self.stats.historical_price_gap_warnings += len(
+                                        unexpected_segments
+                                    )
+                                    self.stats.historical_price_gap_days += total_missing_days
+
+                                    max_segments_to_log = 3
+                                    for start, end in unexpected_segments[:max_segments_to_log]:
+                                        if start == end:
+                                            _LOGGER.warning(
+                                                "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
+                                                security.uuid,
+                                                start,
+                                            )
+                                        else:
+                                            gap_days = (end - start) + 1
+                                            _LOGGER.warning(
+                                                "sync_from_pclient: Fehlende historische Close-Werte für %s zwischen %s und %s (%d Tage ohne Daten)",
+                                                security.uuid,
+                                                start,
+                                                end,
+                                                gap_days,
+                                            )
+
+                                    remaining_segments = len(unexpected_segments) - max_segments_to_log
+                                    if remaining_segments > 0:
                                         _LOGGER.warning(
-                                            "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
+                                            "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
+                                            remaining_segments,
                                             security.uuid,
-                                            start,
-                                        )
-                                    else:
-                                        gap_days = (end - start) + 1
-                                        _LOGGER.warning(
-                                            "sync_from_pclient: Fehlende historische Close-Werte für %s zwischen %s und %s (%d Tage ohne Daten)",
-                                            security.uuid,
-                                            start,
-                                            end,
-                                            gap_days,
                                         )
 
-                                remaining_segments = (
-                                    len(unexpected_segments) - max_segments_to_log
-                                )
-                                if remaining_segments > 0:
-                                    _LOGGER.warning(
-                                        "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
-                                        remaining_segments,
+                                if ignored_weekend_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden für %s",
+                                        ignored_weekend_segments,
                                         security.uuid,
                                     )
-
-                            if ignored_weekend_segments:
-                                _LOGGER.debug(
-                                    "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden für %s",
-                                    ignored_weekend_segments,
-                                    security.uuid,
-                                )
-                            if ignored_stale_segments:
-                                _LOGGER.debug(
-                                    "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) für %s",
-                                    ignored_stale_segments,
-                                    MAX_PRICE_GAP_WARNING_AGE_DAYS,
-                                    security.uuid,
-                                )
-                            if ignored_short_segments:
-                                _LOGGER.debug(
-                                    "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) für %s",
-                                    ignored_short_segments,
-                                    MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING,
-                                    security.uuid,
-                                )
+                                if ignored_stale_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) für %s",
+                                        ignored_stale_segments,
+                                        MAX_PRICE_GAP_WARNING_AGE_DAYS,
+                                        security.uuid,
+                                    )
+                                if ignored_short_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) für %s",
+                                        ignored_short_segments,
+                                        MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING,
+                                        security.uuid,
+                                    )
 
                     self.cursor.execute(
                         "DELETE FROM historical_prices WHERE security_uuid = ? AND date > ?",
