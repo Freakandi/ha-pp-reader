@@ -731,7 +731,9 @@ class PPReaderDashboard extends HTMLElement {
   }
 }
 
-customElements.define('pp-reader-dashboard', PPReaderDashboard);
+if (!customElements.get('pp-reader-dashboard')) {
+  customElements.define('pp-reader-dashboard', PPReaderDashboard);
+}
 
 console.log("PPReader dashboard.js v20250914b geladen");
 
