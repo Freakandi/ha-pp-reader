@@ -42,7 +42,8 @@ A. Summary (Item + Begründung)
 B. Änderungen (Stichpunkte)
 C. Code (nur geänderte / neue Dateien in gefordertem 4-Backticks-Format)
 D. Checklisten-Updates (Diff oder kurzer Hinweis)
-E. Review / Risiken / Next Suggestions
+E. Ergebnisse aus durchgeführten Tests (falls zutreffend)
+F. Review / Risiken / Next Suggestions
 
 Regeln:
 - Keine Ausführung mehrerer Items in einem Durchlauf.
