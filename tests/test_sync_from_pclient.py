@@ -419,3 +419,61 @@ def test_sync_securities_warns_about_missing_daily_prices(
     assert gap_logs, "Erwarte mindestens eine Warnung für fehlende Tagesdaten"
     assert runner.stats.historical_price_gap_warnings == len(gap_logs)
     assert runner.stats.historical_price_gap_days == 2
+
+
+def test_sync_securities_ignores_weekend_gaps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Warnungen sollten bei fehlenden Wochenendpreisen unterdrückt werden."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    friday = int(datetime(2024, 1, 5, tzinfo=UTC).timestamp() // 86400)
+    monday = int(datetime(2024, 1, 8, tzinfo=UTC).timestamp() // 86400)
+
+    weekend_security = _DummySecurity(
+        uuid="sec-weekend",
+        name="Weekend Gap Security",
+        prices=[
+            _DummyPrice(date=friday, close=100),
+            _DummyPrice(date=monday, close=110),
+        ],
+    )
+    runner.client.securities = [weekend_security]
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            runner._sync_securities()
+        conn.commit()
+        rows = conn.execute(
+            "SELECT security_uuid, date FROM historical_prices ORDER BY date"
+        ).fetchall()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    weekend_logs = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "historische Close" in record.getMessage()
+    ]
+    assert not weekend_logs
+    assert rows == [("sec-weekend", friday), ("sec-weekend", monday)]
+    assert runner.stats.historical_price_gap_warnings == 0
+    assert runner.stats.historical_price_gap_days == 0
