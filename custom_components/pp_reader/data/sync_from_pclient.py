@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -33,6 +34,23 @@ from .db_access import (
     get_transactions,
 )
 from .event_push import _compact_event_data, _push_update  # noqa: F401
+
+
+SECONDS_PER_DAY = 86400
+UTC_ZONE = ZoneInfo("UTC")
+
+
+@lru_cache(maxsize=4096)
+def _weekday_from_epoch_day(epoch_day: int) -> int:
+    """Return the weekday (0=Monday) for a Unix epoch day value."""
+
+    return datetime.fromtimestamp(epoch_day * SECONDS_PER_DAY, tz=UTC_ZONE).weekday()
+
+
+def _segment_is_weekend_only(start: int, end: int) -> bool:
+    """Check whether the missing date segment only covers weekend days."""
+
+    return all(_weekday_from_epoch_day(day) >= 5 for day in range(start, end + 1))
 
 
 @dataclass(slots=True)
@@ -495,7 +513,7 @@ class _SyncRunner:
         security_ids = {security.uuid for security in self.client.securities}
         delete_missing_entries(self.conn, "securities", "uuid", security_ids)
 
-        today_epoch_day = int(datetime.now(tz=ZoneInfo("UTC")).timestamp() // 86400)
+        today_epoch_day = int(datetime.now(tz=UTC_ZONE).timestamp() // SECONDS_PER_DAY)
 
         for security in self.client.securities:
             retired = 1 if getattr(security, "isRetired", False) else 0
@@ -681,39 +699,60 @@ class _SyncRunner:
                             previous_date = current_date
 
                         if missing_segments:
-                            total_missing_days = sum(
-                                (end - start) + 1 for start, end in missing_segments
-                            )
-                            self.stats.historical_price_gap_warnings += len(
-                                missing_segments
-                            )
-                            self.stats.historical_price_gap_days += total_missing_days
+                            unexpected_segments: list[tuple[int, int]] = []
+                            for start, end in missing_segments:
+                                if _segment_is_weekend_only(start, end):
+                                    continue
+                                unexpected_segments.append((start, end))
 
-                            max_segments_to_log = 3
-                            for start, end in missing_segments[:max_segments_to_log]:
-                                if start == end:
+                            ignored_weekend_segments = (
+                                len(missing_segments) - len(unexpected_segments)
+                            )
+
+                            if unexpected_segments:
+                                total_missing_days = sum(
+                                    (end - start) + 1
+                                    for start, end in unexpected_segments
+                                )
+                                self.stats.historical_price_gap_warnings += len(
+                                    unexpected_segments
+                                )
+                                self.stats.historical_price_gap_days += total_missing_days
+
+                                max_segments_to_log = 3
+                                for start, end in unexpected_segments[
+                                    :max_segments_to_log
+                                ]:
+                                    if start == end:
+                                        _LOGGER.warning(
+                                            "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
+                                            security.uuid,
+                                            start,
+                                        )
+                                    else:
+                                        gap_days = (end - start) + 1
+                                        _LOGGER.warning(
+                                            "sync_from_pclient: Fehlende historische Close-Werte für %s zwischen %s und %s (%d Tage ohne Daten)",
+                                            security.uuid,
+                                            start,
+                                            end,
+                                            gap_days,
+                                        )
+
+                                remaining_segments = (
+                                    len(unexpected_segments) - max_segments_to_log
+                                )
+                                if remaining_segments > 0:
                                     _LOGGER.warning(
-                                        "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
+                                        "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
+                                        remaining_segments,
                                         security.uuid,
-                                        start,
-                                    )
-                                else:
-                                    gap_days = (end - start) + 1
-                                    _LOGGER.warning(
-                                        "sync_from_pclient: Fehlende historische Close-Werte für %s zwischen %s und %s (%d Tage ohne Daten)",
-                                        security.uuid,
-                                        start,
-                                        end,
-                                        gap_days,
                                     )
 
-                            remaining_segments = (
-                                len(missing_segments) - max_segments_to_log
-                            )
-                            if remaining_segments > 0:
-                                _LOGGER.warning(
-                                    "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
-                                    remaining_segments,
+                            if ignored_weekend_segments:
+                                _LOGGER.debug(
+                                    "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden für %s",
+                                    ignored_weekend_segments,
                                     security.uuid,
                                 )
 
@@ -1222,7 +1261,3 @@ def fetch_positions_for_portfolios(
     return result
 
 
-# (Sicherstellen, dass am Modulende kein ausführbarer Code steht - nur
-# Funktions- oder Konstantendefinitionen)
-# Entferne ggf. versehentlich hinzugefügte Debug- oder Testaufrufe wie:
-# sync_from_pclient(...), print(...), o.Ä.
