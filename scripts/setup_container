@@ -24,8 +24,22 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install --requirement requirements.txt
 
-if [ ! -d "config" ]; then
-    mkdir -p "config"
+CONFIG_DIR="${PWD}/config"
+if [ ! -d "${CONFIG_DIR}" ]; then
+    mkdir -p "${CONFIG_DIR}"
+fi
+
+if [ ! -e "/config" ]; then
+    ln -s "${CONFIG_DIR}" /config
+elif [ -L "/config" ]; then
+    current_target="$(readlink /config)"
+    if [ "${current_target}" != "${CONFIG_DIR}" ]; then
+        rm /config
+        ln -s "${CONFIG_DIR}" /config
+    fi
+elif [ ! -d "/config" ]; then
+    echo "Refusing to overwrite /config because it exists and is not a symlink" >&2
+    exit 1
 fi
 
 echo "Setup complete. Run ./scripts/develop to start Home Assistant."
