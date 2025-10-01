@@ -105,4 +105,6 @@ class PPReaderPanel extends HTMLElement {
 }
 
 // Custom Element registrieren
-customElements.define('pp-reader-panel', PPReaderPanel);
+if (!customElements.get('pp-reader-panel')) {
+  customElements.define('pp-reader-panel', PPReaderPanel);
+}
