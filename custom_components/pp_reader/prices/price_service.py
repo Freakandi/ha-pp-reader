@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
+from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.sync_from_pclient import (
@@ -790,7 +791,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             existing_prices: dict[str, int] = {}
             security_currencies: dict[str, str | None] = {}
             try:
-                existing_prices, security_currencies = await hass.async_add_executor_job(
+                existing_prices, security_currencies = await async_run_executor_job(
+                    hass,
                     _load_prices_and_currencies,
                     db_path,
                 )
@@ -831,7 +833,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     changed_count = 0
                 else:
                     fetched_at = _utc_now_iso()
-                    updated_rows = await hass.async_add_executor_job(
+                    updated_rows = await async_run_executor_job(
+                        hass,
                         _apply_price_updates,
                         db_path,
                         scaled_updates,
@@ -850,7 +853,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         )
                     if updated_rows > 0:
                         try:
-                            impacted_portfolios = await hass.async_add_executor_job(
+                            impacted_portfolios = await async_run_executor_job(
+                                hass,
                                 _refresh_impacted_portfolio_securities,
                                 db_path,
                                 scaled_updates,
@@ -907,12 +911,14 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             fallback = {}
                             for pid in affected_portfolios:
                                 try:
-                                    val, cnt = await hass.async_add_executor_job(
+                                    val, cnt = await async_run_executor_job(
+                                        hass,
                                         db_calculate_portfolio_value_and_count,
                                         pid,
                                         db_path,
                                     )
-                                    purch = await hass.async_add_executor_job(
+                                    purch = await async_run_executor_job(
+                                        hass,
                                         db_calculate_portfolio_purchase_sum,
                                         pid,
                                         db_path,

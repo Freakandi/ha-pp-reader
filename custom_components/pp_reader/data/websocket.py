@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from custom_components.pp_reader.util import async_run_executor_job
 
 from .db_access import (
     fetch_live_portfolios,  # NEU: On-Demand Aggregation
@@ -150,7 +151,9 @@ async def _live_portfolios_payload(
 
     result: list[dict[str, Any]] | None = None
     try:
-        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+        portfolios = await async_run_executor_job(
+            hass, fetch_live_portfolios, db_path
+        )
     except Exception:  # noqa: BLE001 - broad catch keeps coordinator fallback intact
         context_suffix = f" ({log_context})" if log_context else ""
         _LOGGER.warning(
@@ -275,7 +278,7 @@ async def ws_get_accounts(
     try:
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        accounts = await hass.async_add_executor_job(get_accounts, db_path)
+        accounts = await async_run_executor_job(hass, get_accounts, db_path)
 
         # FX laden
         try:
@@ -386,8 +389,8 @@ async def ws_get_last_file_update(
 
         db_path = Path(db_path_raw)
 
-        last_file_update_raw = await hass.async_add_executor_job(
-            get_last_file_update, db_path
+        last_file_update_raw = await async_run_executor_job(
+            hass, get_last_file_update, db_path
         )
 
         if last_file_update_raw:
@@ -544,7 +547,7 @@ async def ws_get_security_history(
         )
 
     try:
-        prices = await hass.async_add_executor_job(_collect_prices)
+        prices = await async_run_executor_job(hass, _collect_prices)
     except (TypeError, ValueError) as err:
         connection.send_error(msg_id, "invalid_format", str(err))
         return
@@ -635,7 +638,8 @@ async def ws_get_security_snapshot(
     db_path = Path(db_path_raw)
 
     try:
-        snapshot = await hass.async_add_executor_job(
+        snapshot = await async_run_executor_job(
+            hass,
             get_security_snapshot,
             db_path,
             security_uuid,
@@ -716,7 +720,7 @@ async def ws_get_portfolio_positions(
         except Exception:  # noqa: BLE001
             return False
 
-    exists = await hass.async_add_executor_job(_portfolio_exists)
+    exists = await async_run_executor_job(hass, _portfolio_exists)
     if not exists:
         # Explizite Fehlerrückgabe statt leerer Liste
         connection.send_result(
@@ -730,8 +734,8 @@ async def ws_get_portfolio_positions(
         return
 
     try:
-        positions = await hass.async_add_executor_job(
-            get_portfolio_positions, db_path, portfolio_uuid
+        positions = await async_run_executor_job(
+            hass, get_portfolio_positions, db_path, portfolio_uuid
         )
     except Exception:
         _LOGGER.exception(
