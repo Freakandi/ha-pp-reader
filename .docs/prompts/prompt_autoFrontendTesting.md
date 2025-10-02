@@ -16,6 +16,7 @@ Execute an end-to-end exploratory test pass on the Portfolio Performance Reader 
 2. Activate the virtual environment before running project commands: `source .venv/bin/activate`.
 3. Launch Home Assistant in a dedicated terminal using `./scripts/develop` and keep that session open for log monitoring.
 4. Confirm the pp_reader panel is available at `http://127.0.0.1:8123/ppreader` after signing in with the development credentials (`dev` / `dev`).
+**Make sure that all prerequisites, especially UI access, are in place before proceeding, so you can visually confirm every suggested fix before drafting your final diffs and response**
 
 ## Exploratory Testing Loop
 Repeat the following steps until all interactive elements have been exercised without unexpected behaviour:
