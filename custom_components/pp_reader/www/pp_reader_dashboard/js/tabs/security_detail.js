@@ -149,7 +149,8 @@ function cleanupSecurityDetailState(securityUuid) {
 
   removeLiveUpdateSubscription(securityUuid);
   invalidateHistoryCache(securityUuid);
-  RANGE_STATE_REGISTRY.delete(securityUuid);
+  // RANGE_STATE_REGISTRY intentionally left intact so the last chosen
+  // range remains active when the user reopens the security detail.
 }
 
 function setActiveRange(securityUuid, rangeKey) {
