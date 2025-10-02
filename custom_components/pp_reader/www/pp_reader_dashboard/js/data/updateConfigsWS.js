@@ -243,7 +243,19 @@ export function handlePortfolioUpdate(update, root) {
     root?.querySelector('.portfolio-table table') ||
     root?.querySelector('table.expandable-portfolio-table');
   if (!table) {
-    console.warn("handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden.");
+    const overviewHost = root?.querySelector('.portfolio-table');
+    const detailViewActive =
+      !overviewHost &&
+      (root?.querySelector('.security-range-selector') ||
+        root?.querySelector('.security-detail-placeholder'));
+
+    if (detailViewActive) {
+      console.debug(
+        "handlePortfolioUpdate: Übersicht nicht aktiv – Update wird später angewendet."
+      );
+    } else {
+      console.warn("handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden.");
+    }
     return;
   }
   const tbody = table.tBodies?.[0];
