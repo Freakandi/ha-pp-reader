@@ -164,6 +164,16 @@ pytest -vv -o log_cli=true --log-cli-level=DEBUG -k "debug_scope"
 
 (Quellhinweis: Parameter `hass` in `tests/prices/test_zero_quotes_warn.py:53`)
 
+### 4.6 Frontend-Regressionstests & jsdom-Hintergrund
+
+#### Was ist jsdom?
+
+`jsdom` ist eine in Node.js implementierte, standardkonforme Simulation der Browser-DOM-APIs. Die Bibliothek stellt zentrale Webplattform-Schnittstellen (z. B. `window`, `document`, Event-Dispatching, DOMParser) als reine JavaScript-Objekte bereit, sodass Skripte, die üblicherweise im Browser laufen, in einer serverseitigen oder Test-Umgebung ausgeführt werden können. Da `jsdom` keine Rendering-Engine (wie Chromium oder WebKit) enthält, bleibt der Fokus auf DOM- und JavaScript-Verhalten; Layout, Grafik oder Medien werden nicht emuliert. Im Produktivbetrieb von Home Assistant wird `jsdom` **nicht** benötigt – der reale Browser des Nutzers stellt die vollständige DOM-Umgebung bereit. Entsprechend hat die Aufnahme von `jsdom` ausschließlich Auswirkungen auf die lokalen Dev-/Test-Dependencies und nicht auf das gebündelte Frontend, das an Home Assistant ausgeliefert wird.
+
+#### Einsatzzweck im Repository
+
+Wir nutzen `jsdom` als leichtgewichtige DOM-Umgebung, um die Logik der Portfolio-Frontend-Bundles isoliert testen zu können. Konkret rekonstruiert das Skript `tests/frontend/portfolio_update_gain_abs.mjs` den Lebenszyklus der Websocket-Aktualisierungen: Es lädt die kompilierten Dashboard-Module, injiziert eine `window`/`document`-Umgebung aus `jsdom` und simuliert anschließend eingehende Portfolio-Nachrichten. Diese Simulation erlaubt es, Edge-Cases wie „Kaufkosten = 0“ reproduzierbar auszuführen, ohne einen echten Browser oder Home-Assistant-Frontend zu starten. Die zugehörige Pytest-Hülle `tests/frontend/test_portfolio_update_gain_abs.py` ruft das Node-Skript auf und verifiziert, dass die Gain-Werte unverändert bleiben. Damit bleibt der Test rein lokal, schnell und CI-fähig, während das produktive Frontend weiterhin unverändert in realen Browsern läuft.
+
 ---
 
 ## 5. Home Assistant spezifische Tests
