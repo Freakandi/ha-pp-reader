@@ -32,6 +32,9 @@ function extractSecurityUuidFromKey(key) {
 let securityDetailTabFactory = null;
 let navigationInProgress = false;
 
+const HEADER_CARD_POLL_INTERVAL_MS = 50;
+const HEADER_CARD_TIMEOUT_MS = 2000;
+
 function getVisibleTabs() {
   const detailTabs = detailTabOrder
     .map((key) => detailTabRegistry.get(key))
@@ -291,6 +294,46 @@ export function closeSecurityDetail(securityUuid) {
 let currentPage = 0;
 let observer; // Globale Variable für Debugging
 
+function waitForHeaderCard(root) {
+  return new Promise((resolve) => {
+    if (!root) {
+      resolve(null);
+      return;
+    }
+
+    let resolved = false;
+    let intervalId;
+    let timeoutId;
+    const cleanup = (result) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      clearInterval(intervalId);
+      clearTimeout(timeoutId);
+      resolve(result || null);
+    };
+
+    const checkForHeader = () => {
+      if (!root.isConnected) {
+        cleanup(null);
+        return;
+      }
+
+      const headerCard = root.querySelector('.header-card');
+      if (headerCard) {
+        cleanup(headerCard);
+      }
+    };
+
+    timeoutId = setTimeout(() => cleanup(null), HEADER_CARD_TIMEOUT_MS);
+    intervalId = setInterval(checkForHeader, HEADER_CARD_POLL_INTERVAL_MS);
+
+    // Sofort prüfen, damit wir nicht immer bis zum ersten Tick warten müssen
+    checkForHeader();
+  });
+}
+
 async function renderTab(root, hass, panel) {
   // Fallback: Panel-Konfiguration aus hass.panels ableiten, falls panel undefined
   let effectivePanel = panel;
@@ -337,24 +380,14 @@ async function renderTab(root, hass, panel) {
   }
 
   // Warte, bis die `.header-card` im DOM verfügbar ist
-  const waitForHeaderCard = () => new Promise((resolve) => {
-    const interval = setInterval(() => {
-      const headerCard = root.querySelector('.header-card');
-      if (headerCard) {
-        clearInterval(interval);
-        resolve(headerCard);
-      }
-    }, 50);
-  });
-
-  const headerCard = await waitForHeaderCard();
+  const headerCard = await waitForHeaderCard(root);
   if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
+    console.warn('Header-Card wurde nicht gefunden. Überspringe Navigations-Setup für diesen Renderdurchlauf.');
     return;
   }
 
   // #anchor erstellen und vor der header-card platzieren
-  let anchor = document.getElementById('anchor');
+  let anchor = root.querySelector('#anchor');
   if (!anchor) {
     anchor = document.createElement('div');
     anchor.id = 'anchor';
@@ -368,12 +401,21 @@ async function renderTab(root, hass, panel) {
 }
 
 function setupHeaderScrollBehavior(root) {
+  if (observer) {
+    try {
+      observer.disconnect();
+    } catch (error) {
+      console.warn('setupHeaderScrollBehavior: Konnte alten Observer nicht entfernen', error);
+    }
+    observer = null;
+  }
+
   const headerCard = root.querySelector('.header-card');
   const scrollBorder = root;
   const anchor = root.querySelector('#anchor');
 
   if (!headerCard || !scrollBorder || !anchor) {
-    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
+    console.warn('Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.');
     return;
   }
 
@@ -398,7 +440,7 @@ function setupHeaderScrollBehavior(root) {
 function setupSwipeOnHeaderCard(root, hass, panel) {
   const headerCard = root.querySelector('.header-card');
   if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
+    console.warn('Header-Card nicht gefunden, Swipe-Navigation wird übersprungen.');
     return;
   }
 
@@ -412,7 +454,7 @@ function setupSwipeOnHeaderCard(root, hass, panel) {
 function setupNavigation(root, hass, panel) {
   const headerCard = root.querySelector('.header-card');
   if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
+    console.warn('Header-Card nicht gefunden, Navigation wird übersprungen.');
     return;
   }
 
