@@ -788,8 +788,8 @@ export async function renderDashboard(root, hass, panelConfig) {
 
   // 5. Header (ohne Last-File-Update – kommt jetzt wieder in Footer-Karte)
   const headerMeta = `
-    <div id="headerMeta">
-      <div>💰 Gesamtvermögen: <strong>${formatNumber(totalWealth)}&nbsp;€</strong></div>
+    <div class="header-meta-row">
+      💰 Gesamtvermögen: <strong class="total-wealth-value">${formatNumber(totalWealth)}&nbsp;€</strong>
     </div>
   `;
   const headerCard = createHeaderCard('Übersicht', headerMeta);
