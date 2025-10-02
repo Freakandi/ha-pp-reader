@@ -9,6 +9,8 @@ import {
 } from './data/updateConfigsWS.js';
 import { getEntryId } from './data/api.js';
 
+const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
+
 const OVERVIEW_TAB_KEY = 'overview';
 
 const baseTabs = [
@@ -353,11 +355,11 @@ async function renderTab(root, hass, panel) {
     return;
   }
 
-  // #anchor erstellen und vor der header-card platzieren
-  let anchor = document.getElementById('anchor');
+  // Sticky-Anchor für IntersectionObserver erstellen (scoped innerhalb des Root-Elements)
+  let anchor = root.querySelector(`#${STICKY_HEADER_ANCHOR_ID}`);
   if (!anchor) {
     anchor = document.createElement('div');
-    anchor.id = 'anchor';
+    anchor.id = STICKY_HEADER_ANCHOR_ID;
     headerCard.parentNode.insertBefore(anchor, headerCard);
   }
 
@@ -370,7 +372,7 @@ async function renderTab(root, hass, panel) {
 function setupHeaderScrollBehavior(root) {
   const headerCard = root.querySelector('.header-card');
   const scrollBorder = root;
-  const anchor = root.querySelector('#anchor');
+  const anchor = root.querySelector(`#${STICKY_HEADER_ANCHOR_ID}`);
 
   if (!headerCard || !scrollBorder || !anchor) {
     console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
