@@ -300,7 +300,7 @@ export function handlePortfolioUpdate(update, root) {
     const curVal = Number(u.current_value ?? u.value ?? 0);
     const purchase = Number(u.purchase_sum ?? u.purchaseSum ?? 0);
 
-    const gainAbs = purchase > 0 ? curVal - purchase : 0;
+    const gainAbs = curVal - purchase;
     const gainPct = purchase > 0 ? (gainAbs / purchase) * 100 : 0;
 
     const oldCur = parseNumLoose(curValCell.textContent);

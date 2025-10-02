@@ -1,0 +1,19 @@
+{
+  "name": "ha-pp-reader",
+  "version": "1.0.0",
+  "description": "Portfolio Performance Reader brings your local Portfolio Performance (`.portfolio`) file into Home Assistant with live prices, consolidated sensors, and a purpose-built dashboard panel. The integration parses your portfolios on the server, keeps a dedicated SQLite database in sync, and surfaces aggregated values to both the UI and automations.【F:ARCHITECTURE.md†L29-L44】",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "jsdom": "^27.0.0"
+  }
+}
