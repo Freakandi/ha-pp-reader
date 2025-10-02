@@ -109,19 +109,24 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     timeout = aiohttp.ClientTimeout(total=10)
 
     try:
-        async with (
-            aiohttp.ClientSession(timeout=timeout) as session,
-            session.get(url) as response,
-        ):
-            if response.status != 200:  # noqa: PLR2004
-                _LOGGER.warning(
-                    "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
-                    date,
-                    response.status,
-                )
-                return {}
-            data = await response.json()
-            return {k: float(v) for k, v in data.get("rates", {}).items()}
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as response:
+                if response.status != 200:  # noqa: PLR2004
+                    _LOGGER.warning(
+                        "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                        date,
+                        response.status,
+                    )
+                    return {}
+                data = await response.json()
+                return {k: float(v) for k, v in data.get("rates", {}).items()}
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+        _LOGGER.warning(
+            "⚠️ Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
+            date,
+            err,
+        )
+        return {}
     except Exception:
         _LOGGER.exception("❌ Fehler beim Abruf der Wechselkurse")
         return {}
