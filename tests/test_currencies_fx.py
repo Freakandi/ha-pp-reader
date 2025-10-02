@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import threading
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -164,3 +165,41 @@ async def test_fetch_exchange_rates_handles_network_issues(
         "Netzwerkproblem" in message for message in caplog.messages
     )
     assert all(record.levelno < logging.ERROR for record in caplog.records)  # noqa: S101
+
+
+async def test_fetch_exchange_rates_logs_once(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Repeated failures should only emit a single warning per day/currency set."""
+
+    class FailingRequest:
+        async def __aenter__(self) -> None:  # noqa: D401 - simple stub
+            raise OSError("Network is unreachable")
+
+        async def __aexit__(self, *_exc: Any) -> bool:
+            return False
+
+    class FakeSession:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeSession":
+            return self
+
+        async def __aexit__(self, *_exc: Any) -> bool:
+            return False
+
+        def get(self, *_args: Any, **_kwargs: Any) -> FailingRequest:
+            return FailingRequest()
+
+    monkeypatch.setattr(fx.aiohttp, "ClientSession", FakeSession)
+    monkeypatch.setattr(fx, "_FAILED_WARNINGS", defaultdict(set))
+
+    caplog.set_level(logging.WARNING)
+
+    for _ in range(2):
+        await fx._fetch_exchange_rates("2025-01-01", {"USD", "JPY"})  # noqa: SLF001
+
+    warning_count = sum("Netzwerkproblem" in message for message in caplog.messages)
+    assert warning_count == 1  # noqa: S101

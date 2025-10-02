@@ -13,6 +13,7 @@ import asyncio
 import logging
 import sqlite3
 import threading
+from collections import defaultdict
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import datetime
@@ -27,6 +28,23 @@ API_URL = "https://api.frankfurter.app"
 SQLITE_TIMEOUT = 30.0
 _WRITE_LOCK = threading.Lock()
 UPSERT_QUERY = "INSERT OR REPLACE INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)"
+
+# Dedupe repeated warning logs for the same date/currency combination.
+_FAILED_WARNINGS: dict[str, set[frozenset[str]]] = defaultdict(set)
+_FAILED_WARNINGS_LOCK = threading.Lock()
+
+
+def _should_log_warning(date: str, currencies: set[str]) -> bool:
+    """Return True when the warning for the given date/currencies should be emitted."""
+
+    # Normalize currencies to ensure deterministic comparison.
+    key = frozenset(currencies or {"__none__"})
+    with _FAILED_WARNINGS_LOCK:
+        logged = _FAILED_WARNINGS[date]
+        if key in logged:
+            return False
+        logged.add(key)
+    return True
 
 # --- Hilfsfunktionen ---
 
@@ -112,20 +130,22 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
                 if response.status != 200:  # noqa: PLR2004
-                    _LOGGER.warning(
-                        "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
-                        date,
-                        response.status,
-                    )
+                    if _should_log_warning(date, currencies):
+                        _LOGGER.warning(
+                            "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                            date,
+                            response.status,
+                        )
                     return {}
                 data = await response.json()
                 return {k: float(v) for k, v in data.get("rates", {}).items()}
     except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
-        _LOGGER.warning(
-            "⚠️ Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
-            date,
-            err,
-        )
+        if _should_log_warning(date, currencies):
+            _LOGGER.warning(
+                "⚠️ Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
+                date,
+                err,
+            )
         return {}
     except Exception:
         _LOGGER.exception("❌ Fehler beim Abruf der Wechselkurse")
@@ -262,9 +282,10 @@ async def ensure_exchange_rates_for_dates(
                 if fetched:
                     await _save_rates(db_path, date_str, fetched)
                 else:
-                    _LOGGER.warning(
-                        "⚠️ Keine Kurse erhalten für %s am %s", missing, date_str
-                    )
+                    if _should_log_warning(date_str, missing):
+                        _LOGGER.warning(
+                            "⚠️ Keine Kurse erhalten für %s am %s", missing, date_str
+                        )
             except Exception:
                 _LOGGER.exception("❌ Fehler beim Laden der Kurse")
 
