@@ -243,6 +243,43 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
         )
 
 
+async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
+    """Register a lightweight placeholder panel so /ppreader never 404s."""
+
+    existing_panel = next(
+        (
+            panel
+            for panel in hass.data.get("frontend_panels", {}).values()
+            if panel.frontend_url_path == "ppreader"
+        ),
+        None,
+    )
+
+    if existing_panel is not None:
+        return
+
+    try:
+        await panel_custom_async_register_panel(
+            hass,
+            frontend_url_path="ppreader",
+            webcomponent_name="pp-reader-panel",
+            module_url="/pp_reader_dashboard/panel.js?v=bootstrap",
+            sidebar_title="Portfolio Dashboard",
+            sidebar_icon="mdi:chart-line",
+            require_admin=False,
+            config={"entry_id": None, "placeholder": True},
+        )
+        _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
+    except ValueError:
+        _LOGGER.exception(
+            "❌ Fehler bei der Registrierung des Panel-Platzhalters"
+        )
+    except AttributeError:
+        _LOGGER.exception(
+            "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+        )
+
+
 def _initialize_price_tasks(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -276,6 +313,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
             )
         ]
     )
+
+    await _ensure_placeholder_panel(hass)
 
     # Websocket-API registrieren
     try:
