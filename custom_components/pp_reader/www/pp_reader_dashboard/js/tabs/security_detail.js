@@ -25,6 +25,50 @@ const RANGE_STATE_REGISTRY = new Map(); // securityUuid -> { activeRange }
 const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
 const LIVE_UPDATE_HANDLERS = new Map(); // securityUuid -> handler
 
+function buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache }) {
+  const reasons = [];
+  if (fallbackUsed) {
+    reasons.push(
+      'Der aktuelle Snapshot konnte nicht geladen werden. Es werden die zuletzt gespeicherten Werte angezeigt.',
+    );
+  }
+  if (flaggedAsCache && !fallbackUsed) {
+    reasons.push(
+      'Der Snapshot ist vom Datenanbieter als Zwischenspeicherstand markiert.',
+    );
+  }
+
+  const reasonText = reasons.length
+    ? reasons.join(' ')
+    : 'Die Daten stammen aus dem Zwischenspeicher.';
+
+  return `
+    <div class="card warning-card stale-notice" role="status" aria-live="polite">
+      <h2>Zwischengespeicherte Werte</h2>
+      <p>${reasonText}</p>
+      <p class="stale-notice__hint">Die angezeigten Beträge können von den aktuellen Marktwerten abweichen. Laden Sie die Ansicht erneut, sobald eine Verbindung verfügbar ist.</p>
+    </div>
+  `;
+}
+
+function getCachedSecuritySnapshot(securityUuid) {
+  if (!securityUuid || typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const getter = window.__ppReaderGetSecuritySnapshotFromCache;
+    if (typeof getter === 'function') {
+      const snapshot = getter(securityUuid);
+      return snapshot && typeof snapshot === 'object' ? snapshot : null;
+    }
+  } catch (error) {
+    console.warn('getCachedSecuritySnapshot: Zugriff auf Cache fehlgeschlagen', error);
+  }
+
+  return null;
+}
+
 function ensureHistoryCache(securityUuid) {
   if (!SECURITY_HISTORY_CACHE.has(securityUuid)) {
     SECURITY_HISTORY_CACHE.set(securityUuid, new Map());
@@ -347,7 +391,9 @@ function buildHeaderMeta(snapshot) {
     formattedLastPrice === '—'
       ? '—'
       : `${formattedLastPrice}${currency ? `&nbsp;${currency}` : ''}`;
-  const marketValue = formatNumber(snapshot.market_value_eur ?? 0);
+  const marketValue = formatNumber(
+    snapshot.market_value_eur ?? snapshot.current_value_eur ?? 0,
+  );
 
   return `
     <div class="security-meta-grid">
@@ -397,6 +443,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     return '<div class="card"><h2>Fehler</h2><p>Kein Wertpapier angegeben.</p></div>';
   }
 
+  const cachedSnapshot = getCachedSecuritySnapshot(securityUuid);
   let snapshot = null;
   let error = null;
 
@@ -419,12 +466,20 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     error = err instanceof Error ? err.message : String(err);
   }
 
-  const headerTitle = snapshot?.name || 'Wertpapierdetails';
-  const headerCard = createHeaderCard(headerTitle, buildHeaderMeta(snapshot));
+  const effectiveSnapshot = snapshot || cachedSnapshot;
+  const fallbackUsed = Boolean(cachedSnapshot && !snapshot);
+  const flaggedAsCache = effectiveSnapshot?.source === 'cache';
+  const staleNotice =
+    effectiveSnapshot && (fallbackUsed || flaggedAsCache)
+      ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
+      : '';
+  const headerTitle = effectiveSnapshot?.name || 'Wertpapierdetails';
+  const headerCard = createHeaderCard(headerTitle, buildHeaderMeta(effectiveSnapshot));
 
   if (error) {
     return `
       ${headerCard.outerHTML}
+      ${staleNotice}
       <div class="card error-card">
         <h2>Fehler beim Laden</h2>
         <p>${error}</p>
@@ -474,9 +529,9 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
   const latestNativePrice =
     historySeries.length > 0
       ? historySeries[historySeries.length - 1].close
-      : snapshot?.last_price_native;
-  const fxRate = deriveFxRate(snapshot, latestNativePrice);
-  const holdings = snapshot?.total_holdings ?? 0;
+      : effectiveSnapshot?.last_price_native;
+  const fxRate = deriveFxRate(effectiveSnapshot, latestNativePrice);
+  const holdings = effectiveSnapshot?.total_holdings ?? 0;
   const { periodGain, dailyGain } = computeGainValues(
     historySeries,
     holdings,
@@ -489,7 +544,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     hass,
     panelConfig,
     securityUuid,
-    snapshot,
+    snapshot: effectiveSnapshot,
     holdings,
     initialRange: activeRange,
     initialHistory: historySeries,
@@ -498,6 +553,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
 
   return `
     ${headerCard.outerHTML}
+    ${staleNotice}
     ${infoBar}
     ${buildRangeSelector(activeRange)}
     <div class="card security-detail-placeholder">
