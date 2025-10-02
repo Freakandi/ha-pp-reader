@@ -33,6 +33,23 @@ class PPReaderPanel extends HTMLElement {
       console.error("[pp_reader] Dashboard Element nicht gefunden – Rendering unmöglich.");
     } else {
       console.debug("[pp_reader] Dashboard Element referenziert.");
+      try {
+        if (!window.__ppReaderDashboardElements) {
+          window.__ppReaderDashboardElements = new Set();
+        }
+        window.__ppReaderDashboardElements.add(this._dashboardEl);
+      } catch (error) {
+        console.warn('[pp_reader] Konnte Dashboard-Referenz nicht registrieren', error);
+      }
+    }
+
+    try {
+      if (!window.__ppReaderPanelHosts) {
+        window.__ppReaderPanelHosts = new Set();
+      }
+      window.__ppReaderPanelHosts.add(this);
+    } catch (error) {
+      console.warn('[pp_reader] Konnte Panel-Instanz nicht verfolgen', error);
     }
 
     container.querySelector('.menu-button').addEventListener('click', () => {
@@ -107,6 +124,12 @@ class PPReaderPanel extends HTMLElement {
   disconnectedCallback() {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
+    }
+    if (window.__ppReaderPanelHosts instanceof Set) {
+      window.__ppReaderPanelHosts.delete(this);
+    }
+    if (window.__ppReaderDashboardElements instanceof Set && this._dashboardEl) {
+      window.__ppReaderDashboardElements.delete(this._dashboardEl);
     }
   }
 }

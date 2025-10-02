@@ -158,6 +158,15 @@ function getSecurityDetailTabKey(securityUuid) {
 }
 
 function findDashboardElement() {
+  const registered = window.__ppReaderDashboardElements;
+  if (registered instanceof Set) {
+    for (const element of registered) {
+      if (element && element.isConnected) {
+        return element;
+      }
+    }
+  }
+
   const direct = document.querySelector('pp-reader-dashboard');
   if (direct) {
     return direct;
