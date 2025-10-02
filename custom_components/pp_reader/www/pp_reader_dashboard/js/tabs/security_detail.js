@@ -401,7 +401,19 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
   let error = null;
 
   try {
-    snapshot = await fetchSecuritySnapshotWS(hass, panelConfig, securityUuid);
+    const response = await fetchSecuritySnapshotWS(
+      hass,
+      panelConfig,
+      securityUuid,
+    );
+    if (response && typeof response === 'object') {
+      snapshot =
+        response.snapshot && typeof response.snapshot === 'object'
+          ? response.snapshot
+          : response;
+    } else {
+      snapshot = response;
+    }
   } catch (err) {
     console.error('renderSecurityDetail: Snapshot konnte nicht geladen werden', err);
     error = err instanceof Error ? err.message : String(err);
