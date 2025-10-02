@@ -33,6 +33,19 @@ function extractSecurityUuidFromKey(key) {
 
 let securityDetailTabFactory = null;
 let navigationInProgress = false;
+let lastClosedSecurityUuid = null;
+
+function tryReopenLastDetail() {
+  if (!lastClosedSecurityUuid) {
+    return false;
+  }
+
+  const reopened = openSecurityDetail(lastClosedSecurityUuid);
+  if (!reopened) {
+    lastClosedSecurityUuid = null;
+  }
+  return reopened;
+}
 
 function getVisibleTabs() {
   const detailTabs = detailTabOrder
@@ -40,6 +53,17 @@ function getVisibleTabs() {
     .filter(Boolean);
 
   return [...baseTabs, ...detailTabs];
+}
+
+function rememberCurrentPageScroll() {
+  try {
+    const dashboardElement = findDashboardElement();
+    if (dashboardElement && typeof dashboardElement.rememberScrollPosition === 'function') {
+      dashboardElement.rememberScrollPosition();
+    }
+  } catch (error) {
+    console.warn('rememberCurrentPageScroll: konnte Scroll-Position nicht sichern', error);
+  }
 }
 
 function clampPageIndex(index) {
@@ -60,8 +84,13 @@ async function navigateToPage(targetIndex, root, hass, panel) {
   const tabs = getVisibleTabs();
   const clampedIndex = clampPageIndex(targetIndex);
   if (clampedIndex === currentPage) {
+    if (targetIndex > currentPage) {
+      tryReopenLastDetail();
+    }
     return;
   }
+
+  rememberCurrentPageScroll();
 
   const currentTab = tabs[currentPage];
   const targetTab = tabs[clampedIndex];
@@ -247,6 +276,8 @@ export function openSecurityDetail(securityUuid) {
     return false;
   }
 
+  rememberCurrentPageScroll();
+
   const tabs = getVisibleTabs();
   let targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
 
@@ -260,6 +291,7 @@ export function openSecurityDetail(securityUuid) {
   }
 
   currentPage = targetIndex;
+  lastClosedSecurityUuid = null;
   requestDashboardRender();
   return true;
 }
@@ -287,6 +319,8 @@ export function closeSecurityDetail(securityUuid) {
     requestDashboardRender();
     return true;
   }
+
+  lastClosedSecurityUuid = securityUuid;
 
   if (wasActive) {
     const overviewIndex = tabsAfter.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
@@ -466,13 +500,10 @@ function updateNavigationState(headerCard) {
 
   if (navRight) {
     const tabs = getVisibleTabs();
-    if (currentPage === tabs.length - 1) {
-      navRight.disabled = true;
-      navRight.classList.add('disabled');
-    } else {
-      navRight.disabled = false;
-      navRight.classList.remove('disabled');
-    }
+    const atEnd = currentPage === tabs.length - 1;
+    const shouldEnable = !atEnd || !!lastClosedSecurityUuid;
+    navRight.disabled = !shouldEnable;
+    navRight.classList.toggle('disabled', !shouldEnable);
   }
 }
 
@@ -723,6 +754,19 @@ class PPReaderDashboard extends HTMLElement {
     if (this._initialized) {
       this._render();
     }
+  }
+
+  rememberScrollPosition(page = currentPage) {
+    if (!this._root) {
+      return;
+    }
+
+    const targetPage = Number.isInteger(page) ? page : currentPage;
+    if (targetPage == null) {
+      return;
+    }
+
+    this._scrollPositions[targetPage] = this._root.scrollTop || 0;
   }
 
   _render() {
