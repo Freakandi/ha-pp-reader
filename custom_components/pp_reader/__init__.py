@@ -380,6 +380,8 @@ async def _async_reload_entry_on_update(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
+    panel_registered = False
+
     try:
         setup_backup_system = backup_db_module.setup_backup_system
         coordinator_cls = coordinator_module.PPReaderCoordinator
@@ -410,6 +412,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         _apply_price_debug_logging(entry)
 
+        await _register_panel_if_absent(hass, entry)
+        panel_registered = True
+
         coordinator = coordinator_cls(
             hass,
             db_path=db_path,
@@ -430,12 +435,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems")
 
-        await _register_panel_if_absent(hass, entry)
-
         return True  # noqa: TRY300
 
     except Exception:
         _LOGGER.exception("Fehler beim Setup des Config Entries")
+        if panel_registered:
+            frontend_async_remove_panel(hass, "ppreader", warn_if_unknown=False)
         raise
 
 
