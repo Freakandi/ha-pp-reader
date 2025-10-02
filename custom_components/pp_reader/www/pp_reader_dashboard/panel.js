@@ -1,4 +1,4 @@
-import './js/dashboard.js?v=20250914b'; // Cache-Bust Version
+import './js/dashboard.module.js';
 
 const ASSET_BASE_URL = new URL('./', import.meta.url);
 
