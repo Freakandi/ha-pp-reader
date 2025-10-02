@@ -57,8 +57,21 @@ function clampPageIndex(index) {
 }
 
 async function navigateToPage(targetIndex, root, hass, panel) {
+  const tabs = getVisibleTabs();
   const clampedIndex = clampPageIndex(targetIndex);
   if (clampedIndex === currentPage) {
+    return;
+  }
+
+  const currentTab = tabs[currentPage];
+  const targetTab = tabs[clampedIndex];
+  const currentSecurityUuid = extractSecurityUuidFromKey(currentTab?.key);
+
+  if (
+    currentSecurityUuid &&
+    targetTab?.key === OVERVIEW_TAB_KEY &&
+    closeSecurityDetail(currentSecurityUuid)
+  ) {
     return;
   }
 
