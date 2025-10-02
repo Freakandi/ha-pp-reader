@@ -64,6 +64,7 @@ class PPReaderPanel extends HTMLElement {
 
     this._resizeObserver = new ResizeObserver(() => this._updateWidth());
     this._resizeObserver.observe(this);
+    this._updateScheduled = false;
   }
 
   // Funktion zum Laden von CSS-Dateien ins Shadow DOM
@@ -109,15 +110,33 @@ class PPReaderPanel extends HTMLElement {
 
   // Dashboard aktualisieren
   _updateDashboard() {
+    if (this._updateScheduled) {
+      return;
+    }
+
+    const runUpdate = () => {
+      this._updateScheduled = false;
+      this._applyDashboardBindings();
+    };
+
+    this._updateScheduled = true;
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(runUpdate);
+    } else {
+      Promise.resolve().then(runUpdate);
+    }
+  }
+
+  _applyDashboardBindings() {
     // Fallback: falls beim ersten Setter noch nicht gesetzt, jetzt versuchen
     if (!this._dashboardEl) {
       this._dashboardEl = this.shadowRoot?.querySelector('pp-reader-dashboard') || null;
       if (!this._dashboardEl) return; // nichts zu tun
     }
-    if (this._hass) this._dashboardEl.hass = this._hass;
     if (this._panel) this._dashboardEl.panel = this._panel;
-    if (this._narrow !== undefined) this._dashboardEl.narrow = this._narrow;
     if (this._route) this._dashboardEl.route = this._route;
+    if (this._narrow !== undefined) this._dashboardEl.narrow = this._narrow;
+    if (this._hass) this._dashboardEl.hass = this._hass;
   }
 
   // Cleanup beim Entfernen des Elements
