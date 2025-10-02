@@ -6,6 +6,8 @@ refresh is still running during Home Assistant startup.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from homeassistant.const import CONF_FILE_PATH
 from homeassistant.core import HomeAssistant
@@ -61,3 +63,28 @@ async def test_panel_registered_before_first_refresh(
     assert call_order, "Expected patched functions to be invoked"
     assert call_order[0] == "register_panel"
     assert call_order.index("register_panel") < call_order.index("first_refresh")
+
+
+@pytest.mark.asyncio
+async def test_placeholder_panel_registered_during_setup(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """A placeholder panel should be registered during component setup."""
+
+    captured_configs: list[dict[str, Any]] = []
+
+    async def fake_register_panel(*args, **kwargs):  # noqa: ANN002, ANN003
+        captured_configs.append(kwargs.get("config", {}))
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.__init__.panel_custom_async_register_panel",
+        fake_register_panel,
+    )
+
+    import custom_components.pp_reader as integration
+
+    assert await integration.async_setup(hass, {})
+    assert captured_configs, "Expected the placeholder registration to run"
+    placeholder_config = captured_configs[0]
+    assert placeholder_config.get("entry_id") is None
+    assert placeholder_config.get("placeholder") is True
