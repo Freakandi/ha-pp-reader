@@ -130,6 +130,21 @@
   margin-top: 1rem;
 }
 
+.card.warning-card {
+  border-left: 4px solid var(--warning-color, #f0ad4e);
+  background-color: rgba(240, 173, 78, 0.12);
+}
+
+.card.warning-card h2 {
+  color: var(--warning-color, #f0ad4e);
+  margin-top: 0;
+}
+
+.card.warning-card p {
+  margin: 0.25rem 0;
+  color: var(--primary-text-color);
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;
