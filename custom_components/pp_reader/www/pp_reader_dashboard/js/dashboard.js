@@ -478,6 +478,7 @@ class PPReaderDashboard extends HTMLElement {
     this._initialized = false; // Initialisierungs-Flag
     this._hasNewData = false; // Flag für neue Daten
     this._pendingUpdates = []; // Gespeicherte WS-Updates zur Re-Anwendung nach Re-Renders
+    this._entryIdWaitWarned = false; // Verhindert Log-Spam während wir auf entry_id warten
   }
 
   set hass(hass) {
@@ -529,13 +530,18 @@ class PPReaderDashboard extends HTMLElement {
     }
 
     const entryId = getEntryId(this._hass, this._panel);
-    if (entryId) {
-      console.debug("PPReaderDashboard: entry_id (fallback) =", entryId);
-    } else {
-      console.warn("PPReaderDashboard: kein entry_id ermittelbar – versuche dennoch Initialisierung (API wirft dann klaren Fehler).");
+    if (!entryId) {
+      if (!this._entryIdWaitWarned) {
+        console.warn("PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration.");
+        this._entryIdWaitWarned = true;
+      }
+      return;
     }
+
+    this._entryIdWaitWarned = false;
+    console.debug("PPReaderDashboard: entry_id (fallback) =", entryId);
     this._initialized = true;
-    this._initializeEventListeners(entryId || '');
+    this._initializeEventListeners(entryId);
     this._render();
   }
 
