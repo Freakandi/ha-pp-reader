@@ -57,7 +57,7 @@
   transform: scale(1.25);
 }
 
-#anchor {
+#pp-reader-sticky-anchor {
   height: 1px;
   position: relative;
   top: 1rem;
