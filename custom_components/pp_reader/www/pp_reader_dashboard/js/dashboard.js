@@ -489,6 +489,9 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   set panel(panel) {
+    if (this._panel === panel) {
+      return;
+    }
     this._panel = panel;
     // Debug
     // console.debug("PPReaderDashboard: panel setter", panel);
@@ -496,11 +499,17 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   set narrow(narrow) {
+    if (this._narrow === narrow) {
+      return;
+    }
     this._narrow = narrow;
     this._renderIfInitialized(); // Rendere nur, wenn initialisiert
   }
 
   set route(route) {
+    if (this._route === route) {
+      return;
+    }
     this._route = route;
     this._renderIfInitialized(); // Rendere nur, wenn initialisiert
   }
