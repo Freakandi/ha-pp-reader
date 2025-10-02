@@ -166,10 +166,17 @@ function getActiveRange(securityUuid) {
 }
 
 function toEpochDay(date) {
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth() + 1;
-  const day = date.getUTCDate();
-  return year * 10000 + month * 100 + day;
+  // Portfolio Performance liefert Datumswerte als epoch day (Tage seit 1970-01-01).
+  // Vorher wurde ein "YYYYMMDD" Format verwendet, wodurch alle Filter leer liefen
+  // und die Historie im Frontend dauerhaft als leer angezeigt wurde. Mit der
+  // Umstellung auf eine echte Epoch-Day-Berechnung sprechen Frontend und Backend
+  // wieder dieselbe Sprache und historische Kurse werden korrekt geladen.
+  const epochMs = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+  );
+  return Math.floor(epochMs / 86400000);
 }
 
 function normaliseDate(date) {
