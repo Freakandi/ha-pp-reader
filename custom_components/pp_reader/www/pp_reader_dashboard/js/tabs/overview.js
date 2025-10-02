@@ -1,5 +1,5 @@
 import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct } from '../content/elements.js';
-import { openSecurityDetail } from '../dashboard.js';
+import { openSecurityDetail } from '../dashboard.module.js';
 import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS, fetchPortfolioPositionsWS } from '../data/api.js';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS.js';
 
