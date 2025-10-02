@@ -487,7 +487,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     `;
   }
 
-  const activeRange = DEFAULT_HISTORY_RANGE;
+  const activeRange = getActiveRange(securityUuid);
   const cache = ensureHistoryCache(securityUuid);
   let historySeries = cache.has(activeRange) ? cache.get(activeRange) : null;
   let historyState = { status: 'empty' };
