@@ -64,15 +64,19 @@ async function navigateToPage(targetIndex, root, hass, panel) {
   }
 
   const currentTab = tabs[currentPage];
-  const targetTab = tabs[clampedIndex];
   const currentSecurityUuid = extractSecurityUuidFromKey(currentTab?.key);
+  let nextIndex = clampedIndex;
 
-  if (
-    currentSecurityUuid &&
-    targetTab?.key === OVERVIEW_TAB_KEY &&
-    closeSecurityDetail(currentSecurityUuid)
-  ) {
-    return;
+  if (currentSecurityUuid) {
+    const intendedTarget = tabs[clampedIndex];
+    if (intendedTarget?.key === OVERVIEW_TAB_KEY) {
+      const closed = closeSecurityDetail(currentSecurityUuid, { suppressRender: true });
+      if (closed) {
+        const updatedTabs = getVisibleTabs();
+        const overviewIndex = updatedTabs.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
+        nextIndex = overviewIndex >= 0 ? overviewIndex : 0;
+      }
+    }
   }
 
   if (navigationInProgress) {
@@ -81,7 +85,7 @@ async function navigateToPage(targetIndex, root, hass, panel) {
 
   navigationInProgress = true;
   try {
-    currentPage = clampedIndex;
+    currentPage = clampPageIndex(nextIndex);
     await renderTab(root, hass, panel);
   } catch (error) {
     console.error('navigateToPage: Fehler beim Rendern des Tabs', error);
@@ -264,11 +268,13 @@ export function openSecurityDetail(securityUuid) {
   return true;
 }
 
-export function closeSecurityDetail(securityUuid) {
+export function closeSecurityDetail(securityUuid, options = {}) {
   if (!securityUuid) {
     console.error('closeSecurityDetail: Ungültige securityUuid', securityUuid);
     return false;
   }
+
+  const { suppressRender = false } = options;
 
   const tabKey = getSecurityDetailTabKey(securityUuid);
   if (!hasDetailTab(tabKey)) {
@@ -284,7 +290,9 @@ export function closeSecurityDetail(securityUuid) {
   const tabsAfter = getVisibleTabs();
   if (!tabsAfter.length) {
     currentPage = 0;
-    requestDashboardRender();
+    if (!suppressRender) {
+      requestDashboardRender();
+    }
     return true;
   }
 
@@ -299,7 +307,9 @@ export function closeSecurityDetail(securityUuid) {
     currentPage = Math.max(0, tabsAfter.length - 1);
   }
 
-  requestDashboardRender();
+  if (!suppressRender) {
+    requestDashboardRender();
+  }
   return true;
 }
 
