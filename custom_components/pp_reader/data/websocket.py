@@ -50,6 +50,62 @@ def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
     return active_currencies
 
 
+async def _load_accounts_payload(
+    hass: "HomeAssistant", db_path: Path
+) -> list[dict[str, Any]]:
+    """Return account details formatted for websocket responses."""
+
+    accounts = await async_run_executor_job(hass, get_accounts, db_path)
+
+    fx_rates: dict[str, float] = {}
+    try:
+        active_fx_currencies = _collect_active_fx_currencies(accounts)
+        if active_fx_currencies:
+            ensure_rates = ensure_exchange_rates_for_dates
+            load_rates = load_latest_rates
+            if ensure_rates is None or load_rates is None:
+                _LOGGER.warning(
+                    "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+                )
+            else:
+                today = datetime.now(timezone.utc)
+                await ensure_rates([today], active_fx_currencies, db_path)
+                fx_rates = await load_rates(today, db_path)
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+        )
+        fx_rates = {}
+
+    account_data: list[dict[str, Any]] = []
+    for account in accounts:
+        if getattr(account, "is_retired", False):
+            continue
+
+        currency = getattr(account, "currency_code", "EUR") or "EUR"
+        orig_balance = account.balance / 100.0
+        if currency != "EUR":
+            rate = fx_rates.get(currency)
+            if rate:
+                eur_balance = orig_balance / rate
+            else:
+                eur_balance = 0.0
+                _LOGGER.warning("FX: Kein Kurs für %s - setze EUR-Wert=0", currency)
+        else:
+            eur_balance = orig_balance
+
+        account_data.append(
+            {
+                "name": account.name,
+                "currency_code": currency,
+                "orig_balance": round(orig_balance, 2),
+                "balance": round(eur_balance, 2),
+            }
+        )
+
+    return account_data
+
+
 try:
     from custom_components.pp_reader.currencies.fx import (
         ensure_exchange_rates_for_dates,
@@ -236,13 +292,20 @@ async def ws_get_dashboard_data(
     coordinator = entry_data.get("coordinator")
 
     # Accounts & Transactions weiter wie zuvor (Snapshot / bestehende Helper)
-    accounts = {}
+    accounts: list[dict[str, Any]] = []
     transactions = []
     last_file_update = None
     if coordinator:
-        accounts = coordinator.data.get("accounts", {})
         transactions = coordinator.data.get("transactions", [])
         last_file_update = coordinator.data.get("last_update")
+
+    db_path_raw = entry_data.get("db_path")
+    if db_path_raw:
+        try:
+            accounts = await _load_accounts_payload(hass, Path(db_path_raw))
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Fehler beim Laden der Kontodaten für das Dashboard")
+            accounts = []
 
     # NEU: Live Portfolios
     portfolios = await _live_portfolios_payload(
@@ -278,59 +341,10 @@ async def ws_get_accounts(
     try:
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        accounts = await async_run_executor_job(hass, get_accounts, db_path)
-
-        # FX laden
-        try:
-            active_fx_currencies = _collect_active_fx_currencies(accounts)
-            fx_rates = {}
-            if active_fx_currencies:
-                ensure_rates = ensure_exchange_rates_for_dates
-                load_rates = load_latest_rates
-                if ensure_rates is None or load_rates is None:
-                    message = (
-                        "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
-                        "setze Fremdwährungswerte=0 EUR."
-                    )
-                    _LOGGER.warning(message)
-                else:
-                    today = datetime.now(timezone.utc)  # noqa: UP017
-                    await ensure_rates([today], active_fx_currencies, db_path)
-                    fx_rates = await load_rates(today, db_path)
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze "
-                "Fremdwährungswerte=0 EUR."
-            )
-            fx_rates = {}
-
-        account_data = []
-        for a in accounts:
-            if a.is_retired:
-                continue
-            currency = getattr(a, "currency_code", "EUR") or "EUR"
-            orig_balance = a.balance / 100.0  # Originalbetrag (Konto-Währung)
-            if currency != "EUR":
-                rate = fx_rates.get(currency)
-                eur_balance = (orig_balance / rate) if rate else 0.0
-            else:
-                eur_balance = orig_balance
-            account_data.append(
-                {
-                    "name": a.name,
-                    "currency_code": currency,
-                    "orig_balance": round(orig_balance, 2),
-                    "balance": round(eur_balance, 2),  # EUR-Wert
-                }
-            )
-
-        connection.send_result(
-            msg["id"],
-            {
-                "accounts": account_data,
-            },
-        )
-
+        account_data = await _load_accounts_payload(hass, Path(db_path))
+        connection.send_result(msg["id"], {"accounts": account_data})
+    except KeyError:
+        connection.send_error(msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten")
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))
