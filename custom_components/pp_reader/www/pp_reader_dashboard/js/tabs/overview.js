@@ -859,37 +859,43 @@ export async function renderDashboard(root, hass, panelConfig) {
     ${footerCard}
   `;
 
-  // Nach Render prüfen ob Buttons vorhanden; sonst Recovery (z.B. falls alte Funktion überschrieben)
-  queueMicrotask(() => {
+  schedulePostRenderSetup(root, depots);
+
+  return markup;
+}
+
+function schedulePostRenderSetup(root, depots) {
+  if (!root) {
+    return;
+  }
+
+  const run = () => {
     try {
       const wrapper = root;
-      const btns = wrapper.querySelectorAll('.portfolio-table .portfolio-toggle');
-      if (btns.length === 0) {
-        console.debug("Recovery: Tabelle ohne Buttons – erneuter Aufbau");
-        const tableHost = wrapper.querySelector('.portfolio-table');
-        if (tableHost) {
-          tableHost.innerHTML = buildExpandablePortfolioTable(depots);
-        }
+      const tableHost = wrapper.querySelector('.portfolio-table');
+      if (tableHost && tableHost.querySelectorAll('.portfolio-toggle').length === 0) {
+        console.debug('Recovery: Tabelle ohne Buttons – erneuter Aufbau');
+        tableHost.innerHTML = buildExpandablePortfolioTable(depots);
       }
+
       attachPortfolioToggleHandler(root);
       ensurePortfolioRowFallbackListener(root);
 
-      // NEU (Sortier-Hook für bereits expandierte Depots mit gecachten Positionen)
-      expandedPortfolios.forEach(pid => {
+      expandedPortfolios.forEach((pid) => {
         try {
           if (portfolioPositionsCache.has(pid)) {
             attachPortfolioPositionsSorting(root, pid);
             attachSecurityDetailListener(root, pid);
           }
         } catch (e) {
-          console.warn("Init-Sortierung für expandiertes Depot fehlgeschlagen:", pid, e);
+          console.warn('Init-Sortierung für expandiertes Depot fehlgeschlagen:', pid, e);
         }
       });
 
       try {
         updatePortfolioFooterFromDom(wrapper);
       } catch (footerErr) {
-        console.warn("renderDashboard: Footer-Summe konnte nicht aktualisiert werden:", footerErr);
+        console.warn('renderDashboard: Footer-Summe konnte nicht aktualisiert werden:', footerErr);
       }
 
       try {
@@ -898,11 +904,15 @@ export async function renderDashboard(root, hass, panelConfig) {
         console.warn('renderDashboard: Pending-Positions konnten nicht angewendet werden:', pendingErr);
       }
 
-      console.debug("renderDashboard: portfolio-toggle Buttons:", wrapper.querySelectorAll('.portfolio-toggle').length);
+      console.debug('renderDashboard: portfolio-toggle Buttons:', wrapper.querySelectorAll('.portfolio-toggle').length);
     } catch (e) {
-      console.error("renderDashboard: Fehler bei Recovery/Listener", e);
+      console.error('renderDashboard: Fehler bei Recovery/Listener', e);
     }
-  });
+  };
 
-  return markup;
+  const schedule = typeof requestAnimationFrame === 'function'
+    ? (cb) => requestAnimationFrame(cb)
+    : (cb) => setTimeout(cb, 0);
+
+  schedule(() => schedule(run));
 }
