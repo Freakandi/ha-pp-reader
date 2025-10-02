@@ -274,6 +274,15 @@ export function handlePortfolioUpdate(update, root) {
 
   let patched = 0;
 
+  const formatPositionCount = (value) => {
+    const numeric = Number.isFinite(value) ? value : 0;
+    try {
+      return numeric.toLocaleString('de-DE');
+    } catch (_error) {
+      return numeric.toString();
+    }
+  };
+
   for (const u of update) {
     if (!u || !u.uuid) continue;
     const row = rowMap.get(u.uuid);
@@ -298,7 +307,7 @@ export function handlePortfolioUpdate(update, root) {
     const oldCnt = parseNumLoose(posCountCell.textContent);
 
     if (oldCnt !== posCount) {
-      posCountCell.textContent = posCount.toString();
+      posCountCell.textContent = formatPositionCount(posCount);
     }
     if (Math.abs(oldCur - curVal) >= 0.005) {
       curValCell.textContent = formatNumber(curVal) + ' €';
