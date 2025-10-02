@@ -1,5 +1,7 @@
 import './js/dashboard.js?v=20250914b'; // Cache-Bust Version
 
+const ASSET_BASE_URL = new URL('./', import.meta.url);
+
 class PPReaderPanel extends HTMLElement {
   constructor() {
     super();
@@ -20,9 +22,9 @@ class PPReaderPanel extends HTMLElement {
         </div>
       </div>
     `;
-    this._loadCss('/pp_reader_dashboard/css/base.css');
-    this._loadCss('/pp_reader_dashboard/css/cards.css');
-    this._loadCss('/pp_reader_dashboard/css/nav.css');
+    this._loadCss('css/base.css');
+    this._loadCss('css/cards.css');
+    this._loadCss('css/nav.css');
     this.shadowRoot.appendChild(container);
 
     // NEU: Referenz auf das Dashboard-Element sichern
@@ -48,10 +50,15 @@ class PPReaderPanel extends HTMLElement {
   }
 
   // Funktion zum Laden von CSS-Dateien ins Shadow DOM
-  _loadCss(href) {
+  _loadCss(relativePath) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = href;
+    try {
+      link.href = new URL(relativePath, ASSET_BASE_URL).href;
+    } catch (error) {
+      console.error('[pp_reader] Fehler beim Auflösen des CSS-Pfades', relativePath, error);
+      return;
+    }
     this.shadowRoot.appendChild(link);
   }
 
