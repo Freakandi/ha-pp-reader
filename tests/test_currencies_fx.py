@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sqlite3
 import threading
 import time
@@ -124,3 +125,42 @@ async def test_concurrent_writes_are_serialized(
     await asyncio.gather(*(call_save() for _ in range(3)))
 
     assert max_concurrent == 1  # noqa: S101
+
+
+async def test_fetch_exchange_rates_handles_network_issues(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Network errors should be logged as warnings without raising exceptions."""
+
+    class FailingRequest:
+        async def __aenter__(self) -> None:  # noqa: D401 - simple stub
+            raise OSError("Network is unreachable")
+
+        async def __aexit__(self, *_exc: Any) -> bool:
+            return False
+
+    class FakeSession:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        async def __aenter__(self) -> "FakeSession":
+            return self
+
+        async def __aexit__(self, *_exc: Any) -> bool:
+            return False
+
+        def get(self, *_args: Any, **_kwargs: Any) -> FailingRequest:
+            return FailingRequest()
+
+    monkeypatch.setattr(fx.aiohttp, "ClientSession", FakeSession)
+
+    caplog.set_level(logging.WARNING)
+
+    result = await fx._fetch_exchange_rates("2025-01-01", {"USD"})  # noqa: SLF001
+
+    assert result == {}  # noqa: S101
+    assert any(  # noqa: S101
+        "Netzwerkproblem" in message for message in caplog.messages
+    )
+    assert all(record.levelno < logging.ERROR for record in caplog.records)  # noqa: S101
