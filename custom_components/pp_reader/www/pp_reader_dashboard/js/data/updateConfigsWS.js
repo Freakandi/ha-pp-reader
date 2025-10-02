@@ -305,8 +305,12 @@ export function handlePortfolioUpdate(update, root) {
       row.classList.add('flash-update');
       setTimeout(() => row.classList.remove('flash-update'), 800);
     }
-    if (gainAbsCell) gainAbsCell.textContent = formatNumber(gainAbs) + ' €';
-    if (gainPctCell) gainPctCell.textContent = formatNumber(gainPct) + ' %';
+    if (gainAbsCell) {
+      gainAbsCell.innerHTML = formatGain(gainAbs);
+    }
+    if (gainPctCell) {
+      gainPctCell.innerHTML = formatGainPct(gainPct);
+    }
 
     row.dataset.positionCount = String(posCount);
     row.dataset.currentValue = String(curVal);
