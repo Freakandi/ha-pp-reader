@@ -403,37 +403,54 @@ export function handlePortfolioUpdate(update, root) {
  * @param {{portfolio_uuid: string, positions: Array}} update
  * @param {HTMLElement} root
  */
-export function handlePortfolioPositionsUpdate(update, root) {
-  if (!update || !update.portfolio_uuid) {
-    console.warn("handlePortfolioPositionsUpdate: Ungültiges Update:", update);
-    return;
+function normalizePortfolioUuid(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
   }
-  const { portfolio_uuid, error } = update;
-  const positions = update.positions || [];
+  const direct = payload.portfolio_uuid;
+  if (typeof direct === 'string' && direct) {
+    return direct;
+  }
+  const camelCase = payload.portfolioUuid;
+  if (typeof camelCase === 'string' && camelCase) {
+    return camelCase;
+  }
+  return null;
+}
+
+function processPortfolioPositionsUpdate(update, root) {
+  const portfolioUuid = normalizePortfolioUuid(update);
+  if (!portfolioUuid) {
+    console.warn("handlePortfolioPositionsUpdate: Ungültiges Update:", update);
+    return false;
+  }
+
+  const error = update?.error;
+  const positions = Array.isArray(update?.positions) ? update.positions : [];
 
   // Positions-Cache aktualisieren (Lazy-Load bleibt bestehen)
   try {
     const cache = window.__ppReaderPortfolioPositionsCache;
     if (cache && typeof cache.set === 'function' && !error) {
-      cache.set(portfolio_uuid, positions);
+      cache.set(portfolioUuid, positions);
     }
   } catch (e) {
     console.warn("handlePortfolioPositionsUpdate: Positions-Cache konnte nicht aktualisiert werden:", e);
   }
 
-  const result = applyPortfolioPositionsToDom(root, portfolio_uuid, positions, error);
+  const result = applyPortfolioPositionsToDom(root, portfolioUuid, positions, error);
   const pendingMap = ensurePendingMap();
 
   if (result.applied) {
-    pendingMap.delete(portfolio_uuid);
+    pendingMap.delete(portfolioUuid);
   } else {
-    pendingMap.set(portfolio_uuid, { positions, error });
+    pendingMap.set(portfolioUuid, { positions, error });
     if (result.reason !== 'hidden') {
-      schedulePendingRetry(root, portfolio_uuid);
+      schedulePendingRetry(root, portfolioUuid);
     }
   }
 
-  if (!error && Array.isArray(positions) && positions.length > 0) {
+  if (!error && positions.length > 0) {
     const securityUuids = Array.from(
       new Set(
         positions
@@ -447,7 +464,7 @@ export function handlePortfolioPositionsUpdate(update, root) {
         window.dispatchEvent(
           new CustomEvent(PORTFOLIO_POSITIONS_UPDATED_EVENT, {
             detail: {
-              portfolioUuid: portfolio_uuid,
+              portfolioUuid,
               securityUuids,
             },
           }),
@@ -460,6 +477,25 @@ export function handlePortfolioPositionsUpdate(update, root) {
       }
     }
   }
+
+  return true;
+}
+
+export function handlePortfolioPositionsUpdate(update, root) {
+  if (Array.isArray(update)) {
+    let handled = false;
+    for (const item of update) {
+      if (processPortfolioPositionsUpdate(item, root)) {
+        handled = true;
+      }
+    }
+    if (!handled && update.length) {
+      console.warn("handlePortfolioPositionsUpdate: Kein gültiges Element im Array:", update);
+    }
+    return;
+  }
+
+  processPortfolioPositionsUpdate(update, root);
 }
 
 /* ------------------ Hilfsfunktionen (lokal) ------------------ */
