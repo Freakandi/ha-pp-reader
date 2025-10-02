@@ -1,6 +1,14 @@
 function deriveEntryId(hass, panelConfig) {
-  // Direkt gesetzte einfache Variante
+  // Direkt gesetzte einfache Variante (neuer Panelspeicher)
   let entry_id = panelConfig?.config?.entry_id;
+
+  // Neu: Home Assistant liefert den entry_id-Wert inzwischen auch auf Root-Ebene
+  // des panelConfig-Objekts. Ohne diesen Fallback konnten wir in seltenen Fällen
+  // keinen entry_id bestimmen (z.B. wenn hass.panels noch nicht gefüllt war),
+  // wodurch sämtliche Websocket-Aufrufe mit "fehlendes hass oder entry_id" brachen.
+  if (!entry_id) {
+    entry_id = panelConfig?.entry_id;
+  }
 
   // Legacy verschachtelte Struktur (panel_custom)
   if (!entry_id) {
