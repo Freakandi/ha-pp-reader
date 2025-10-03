@@ -6,6 +6,7 @@
   box-sizing: border-box;
   overflow: hidden;
   --pp-reader-flash-color: rgba(3, 169, 244, 0.22);
+  --pp-reader-sticky-offset: 0px;
 }
 
 /* Panel-Root */
