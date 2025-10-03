@@ -801,7 +801,25 @@ export async function renderDashboard(root, hass, panelConfig) {
 
   // 7. Konten-Tabellen
   const eurAccounts = accounts.filter(a => (a.currency_code || 'EUR') === 'EUR');
-  const fxAccounts = accounts.filter(a => (a.currency_code || 'EUR') !== 'EUR');
+  let fxRateWarning = false;
+  const fxAccounts = accounts
+    .filter(a => (a.currency_code || 'EUR') !== 'EUR')
+    .map(a => {
+      const origBalance = typeof a.orig_balance === 'number' ? a.orig_balance : 0;
+      const eurBalance = typeof a.balance === 'number' ? a.balance : 0;
+      const missingRate =
+        Math.abs(origBalance) > 0 && Math.abs(eurBalance) < 0.005;
+      if (missingRate) {
+        fxRateWarning = true;
+      }
+      return {
+        ...a,
+        fx_display: `${(a.orig_balance ?? 0).toLocaleString('de-DE', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}&nbsp;${a.currency_code}`
+      };
+    });
 
   const accountsHtml = `
     <div class="card">
@@ -814,17 +832,11 @@ export async function renderDashboard(root, hass, panelConfig) {
       </div>
     </div>
     ${fxAccounts.length ? `
-      <div class="card">
+      <div class="card fx-accounts-card">
         <h2>Fremdwährungen</h2>
         <div class="scroll-container fx-account-table">
           ${makeTable(
-    fxAccounts.map(a => ({
-      ...a,
-      fx_display: `${(a.orig_balance ?? 0).toLocaleString('de-DE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })}&nbsp;${a.currency_code}`
-    })),
+    fxAccounts,
     [
       { key: 'name', label: 'Name' },
       { key: 'fx_display', label: 'Betrag (FX)' },
@@ -833,6 +845,7 @@ export async function renderDashboard(root, hass, panelConfig) {
     ['balance']
   )}
         </div>
+        ${fxRateWarning ? '<p class="fx-rate-warning">⚠️ Wechselkurse konnten nicht geladen werden. EUR-Beträge werden vorübergehend als 0,00&nbsp;€ angezeigt.</p>' : ''}
       </div>` : ''}
   `;
 

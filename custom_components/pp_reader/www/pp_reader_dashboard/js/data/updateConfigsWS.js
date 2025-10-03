@@ -190,7 +190,24 @@ function updateAccountTable(accounts, root) {
   const fxContainer = root.querySelector('.fx-account-table');
 
   const eurAccounts = accounts.filter(a => (a.currency_code || 'EUR') === 'EUR');
-  const fxAccounts = accounts.filter(a => (a.currency_code || 'EUR') !== 'EUR');
+  let fxRateWarning = false;
+  const fxAccounts = accounts
+    .filter(a => (a.currency_code || 'EUR') !== 'EUR')
+    .map(a => {
+      const origBalance = typeof a.orig_balance === 'number' ? a.orig_balance : 0;
+      const eurBalance = typeof a.balance === 'number' ? a.balance : 0;
+      const missingRate = Math.abs(origBalance) > 0 && Math.abs(eurBalance) < 0.005;
+      if (missingRate) {
+        fxRateWarning = true;
+      }
+      return {
+        ...a,
+        fx_display: `${(a.orig_balance ?? 0).toLocaleString('de-DE', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}\u00A0${a.currency_code}`
+      };
+    });
 
   if (eurContainer) {
     eurContainer.innerHTML = makeTable(eurAccounts, [
@@ -203,13 +220,7 @@ function updateAccountTable(accounts, root) {
 
   if (fxContainer) {
     fxContainer.innerHTML = makeTable(
-      fxAccounts.map(a => ({
-        ...a,
-        fx_display: `${(a.orig_balance ?? 0).toLocaleString('de-DE', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })}\u00A0${a.currency_code}`
-      })),
+      fxAccounts,
       [
         { key: 'name', label: 'Name' },
         { key: 'fx_display', label: 'Betrag (FX)' },
@@ -217,6 +228,24 @@ function updateAccountTable(accounts, root) {
       ],
       ['balance']
     );
+
+    const warningMessage = '⚠️ Wechselkurse konnten nicht geladen werden. EUR-Beträge werden vorübergehend als 0,00 € angezeigt.';
+    const card = fxContainer.closest('.card');
+    if (card) {
+      let warningEl = card.querySelector('.fx-rate-warning');
+      if (fxRateWarning) {
+        if (!warningEl) {
+          warningEl = document.createElement('p');
+          warningEl.className = 'fx-rate-warning';
+          warningEl.textContent = warningMessage;
+          card.appendChild(warningEl);
+        } else {
+          warningEl.textContent = warningMessage;
+        }
+      } else if (warningEl) {
+        warningEl.remove();
+      }
+    }
   } else if (fxAccounts.length) {
     console.warn("updateAccountTable: .fx-account-table nicht gefunden, obwohl FX-Konten vorhanden sind.");
   }
