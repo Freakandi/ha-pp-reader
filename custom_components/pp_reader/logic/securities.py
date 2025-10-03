@@ -224,6 +224,7 @@ def db_calculate_holdings_value(
                     "⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
                     currency_code,
                 )
+                data["current_value"] = None
                 continue  # Überspringe die Berechnung für diese Währung
         else:
             rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0

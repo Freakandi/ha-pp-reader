@@ -99,15 +99,15 @@ async def _load_accounts_payload(
         else:
             eur_balance = orig_balance
 
-        account_data.append(
-            {
-                "name": account.name,
-                "currency_code": currency,
-                "orig_balance": round(orig_balance, 2),
-                "balance": round(eur_balance, 2) if eur_balance is not None else None,
-                "fx_unavailable": fx_unavailable,
-            }
-        )
+        account_entry = {
+            "name": account.name,
+            "currency_code": currency,
+            "orig_balance": round(orig_balance, 2),
+            "balance": round(eur_balance, 2) if eur_balance is not None else None,
+        }
+        if fx_unavailable:
+            account_entry["fx_unavailable"] = True
+        account_data.append(account_entry)
 
     return account_data
 

@@ -558,6 +558,14 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
 
     current_value = _cent_to_eur(row["current_value"])
     purchase_sum = _cent_to_eur(row["purchase_sum"])
+    missing_value_positions = 0
+    if "missing_value_positions" in row.keys():
+        try:
+            missing_value_positions = int(row["missing_value_positions"] or 0)
+        except (TypeError, ValueError):
+            missing_value_positions = 0
+
+    has_current_value = missing_value_positions == 0
 
     gain_abs = round(current_value - purchase_sum, 2)
     gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum > 0 else 0.0, 2)
@@ -572,6 +580,8 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
         "position_count": row["position_count"]
         if row["position_count"] is not None
         else 0,
+        "missing_value_positions": missing_value_positions,
+        "has_current_value": has_current_value,
     }
 
 
@@ -622,7 +632,13 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             p.name AS name,
             COALESCE(SUM(ps.current_value), 0) AS current_value,
             COALESCE(SUM(ps.purchase_value), 0) AS purchase_sum,
-            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count
+            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count,
+            SUM(
+                CASE
+                    WHEN ps.current_holdings > 0 AND ps.current_value IS NULL THEN 1
+                    ELSE 0
+                END
+            ) AS missing_value_positions
         FROM portfolios p
         LEFT JOIN portfolio_securities ps
           ON p.uuid = ps.portfolio_uuid
