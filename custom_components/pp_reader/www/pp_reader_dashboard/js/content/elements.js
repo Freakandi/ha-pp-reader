@@ -93,6 +93,15 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
    */
   const { sortable = false, defaultSort = { key: '', dir: 'asc' } } = options || {};
 
+  const escapeAttribute = (value) => {
+    if (value == null) {
+      return '';
+    }
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;');
+  };
+
   let html = '<table><thead><tr>';
   cols.forEach(c => {
     const alignClass = c.align === 'right' ? ' class="align-right"' : '';
@@ -141,6 +150,19 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     }
   }
 
+  const aggregatedGainPct = Number.isFinite(sums['gain_pct']) ? sums['gain_pct'] : null;
+  let aggregatedGainPctLabel = '';
+  let aggregatedGainPctSign = 'neutral';
+
+  if (aggregatedGainPct != null) {
+    aggregatedGainPctLabel = `${formatNumber(aggregatedGainPct)}\u00a0%`;
+    if (aggregatedGainPct > 0) {
+      aggregatedGainPctSign = 'positive';
+    } else if (aggregatedGainPct < 0) {
+      aggregatedGainPctSign = 'negative';
+    }
+  }
+
   html += '<tr class="footer-row">';
   cols.forEach((c, idx) => {
     const alignClass = c.align === 'right' ? ' class="align-right"' : '';
@@ -150,7 +172,11 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     }
 
     if (sums[c.key] != null) {
-      html += `<td${alignClass}>${formatValue(c.key, sums[c.key], undefined, sumMeta[c.key])}</td>`;
+      let extraAttributes = '';
+      if (c.key === 'gain_abs' && aggregatedGainPctLabel) {
+        extraAttributes = ` data-gain-pct="${escapeAttribute(aggregatedGainPctLabel)}" data-gain-sign="${escapeAttribute(aggregatedGainPctSign)}"`;
+      }
+      html += `<td${alignClass}${extraAttributes}>${formatValue(c.key, sums[c.key], undefined, sumMeta[c.key])}</td>`;
       return;
     }
 
