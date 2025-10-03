@@ -42,18 +42,23 @@ Repeat the following steps until every screen and component renders without visu
 7. **Accessibility & Contrast Spot Checks**
    - Verify there is sufficient contrast between text and background.
    - Ensure semantic indicators (icons, colors) have accompanying text or tooltips for clarity.
-8. **Documentation**
-   - Capture screenshots of any visual anomalies.
-   - Describe the issue, suspected cause, and recommended fix focusing on CSS, layout, component props, or content updates.
+8. **Documentation & Fix Drafting**
+   - Capture comprehensive evidence (screenshots, notes, metrics) for every anomaly you encounter.
+   - Select the single most critical visual or content defect and gather additional detail to explain why it occurs and how to address it.
+   - Trace the defect to the exact source files (frontend bundle, component templates, stylesheets) that require modification and sketch the concrete changes.
+   - Draft the implementation as precise code edits so the final report can supply a ready-to-apply patch.
 
 ## Completion Criteria
-- Every identified visual or content issue has an associated fix or actionable recommendation.
-- All affected screens have been rechecked after changes to confirm the visual defect is resolved.
-- No new misalignments, formatting errors, or incorrect values appear during regression passes.
+- You have investigated the UI thoroughly enough to justify choosing a single visual or content defect to highlight.
+- The selected defect is documented with root-cause reasoning, a concrete fix, and supporting evidence.
+- The proposed fix includes rationale explaining why and how it resolves the defect without introducing regressions.
+- The report delivers a unified diff (or equivalent explicit code edits) that implements the fix and is immediately suitable for a pull request.
+- The report specifies any tests, linting, or manual verification steps needed to validate the patch.
 
 ## Reporting Template
-Provide a final report containing:
-- **Summary**: High-level overview of the UI areas inspected and any visual improvements delivered.
-- **Findings**: Detailed log of visual discrepancies, their impact, and implemented fixes or recommendations.
-- **Verification**: Screenshots, manual checks, and any commands used to rebuild or reload the frontend.
-- **Follow-ups**: Outstanding visual tasks or content refinements to consider later.
+Provide a final report centered on the single most critical defect you investigated:
+- **Issue Overview**: Describe the UI view, state, or interaction where the defect appears and why it matters to the user.
+- **Detailed Diagnosis**: Explain the visual or content inconsistency, including suspected root cause and any relevant code or styling context.
+- **Implementation Patch**: Supply a fenced code block containing the unified diff (or explicit file rewrites) that apply the fix, including file paths and sufficient context for `git apply`.
+- **Fix Rationale**: Justify why the proposed fix addresses the root cause and how it prevents regressions or related issues.
+- **Verification Plan**: Document the screenshots, manual checks, or commands required to confirm the defect is resolved after applying the fix, including any automated tests or linting.
