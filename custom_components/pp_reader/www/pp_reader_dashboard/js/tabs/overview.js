@@ -782,8 +782,14 @@ export async function renderDashboard(root, hass, panelConfig) {
   }
 
   // 4. Gesamtvermögen berechnen (nur Anzeige)
-  const totalAccounts = accounts.reduce((s, a) => s + (isNaN(a.balance) ? 0 : a.balance), 0);
-  const totalDepots = depots.reduce((s, d) => s + (isNaN(d.current_value) ? 0 : d.current_value), 0);
+  const totalAccounts = accounts.reduce(
+    (sum, account) => sum + (Number.isFinite(account.balance) ? account.balance : 0),
+    0,
+  );
+  const totalDepots = depots.reduce(
+    (sum, depot) => sum + (Number.isFinite(depot.current_value) ? depot.current_value : 0),
+    0,
+  );
   const totalWealth = totalAccounts + totalDepots;
 
   // 5. Header (ohne Last-File-Update – kommt jetzt wieder in Footer-Karte)
@@ -802,6 +808,16 @@ export async function renderDashboard(root, hass, panelConfig) {
   // 7. Konten-Tabellen
   const eurAccounts = accounts.filter(a => (a.currency_code || 'EUR') === 'EUR');
   const fxAccounts = accounts.filter(a => (a.currency_code || 'EUR') !== 'EUR');
+
+  const fxWarningNeeded = fxAccounts.some(a => a.fx_unavailable);
+  const fxWarning = fxWarningNeeded
+    ? `
+        <p class="table-note" role="note">
+          <span class="table-note__icon" aria-hidden="true">⚠️</span>
+          <span>Wechselkurse konnten nicht geladen werden. EUR-Werte werden derzeit nicht angezeigt.</span>
+        </p>
+      `
+    : '';
 
   const accountsHtml = `
     <div class="card">
@@ -833,6 +849,7 @@ export async function renderDashboard(root, hass, panelConfig) {
     ['balance']
   )}
         </div>
+        ${fxWarning}
       </div>` : ''}
   `;
 

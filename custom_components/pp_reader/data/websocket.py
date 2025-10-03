@@ -84,13 +84,18 @@ async def _load_accounts_payload(
 
         currency = getattr(account, "currency_code", "EUR") or "EUR"
         orig_balance = account.balance / 100.0
+        fx_unavailable = False
         if currency != "EUR":
             rate = fx_rates.get(currency)
             if rate:
                 eur_balance = orig_balance / rate
             else:
-                eur_balance = 0.0
-                _LOGGER.warning("FX: Kein Kurs für %s - setze EUR-Wert=0", currency)
+                eur_balance = None
+                fx_unavailable = True
+                _LOGGER.warning(
+                    "FX: Kein Kurs für %s – EUR-Wert nicht verfügbar",
+                    currency,
+                )
         else:
             eur_balance = orig_balance
 
@@ -99,7 +104,8 @@ async def _load_accounts_payload(
                 "name": account.name,
                 "currency_code": currency,
                 "orig_balance": round(orig_balance, 2),
-                "balance": round(eur_balance, 2),
+                "balance": round(eur_balance, 2) if eur_balance is not None else None,
+                "fx_unavailable": fx_unavailable,
             }
         )
 

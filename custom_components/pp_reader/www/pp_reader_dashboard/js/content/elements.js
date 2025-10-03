@@ -1,12 +1,37 @@
-export function formatValue(key, value) {
+export function formatValue(key, value, row = undefined, context = undefined) {
   let formatted;
 
-  // Zahlen absichern
-  const safeNumber = (v, minFrac = 2, maxFrac = 2) =>
-    (isNaN(v) ? 0 : v).toLocaleString('de-DE', {
+  const toNumber = (v) => {
+    if (typeof v === 'number') {
+      return v;
+    }
+    if (typeof v === 'string' && v.trim() !== '') {
+      const cleaned = v
+        .replace(/\s+/g, '')
+        .replace(/[^0-9,.-]/g, '')
+        .replace(/\.(?=\d{3}(\D|$))/g, '')
+        .replace(',', '.');
+      const parsed = Number.parseFloat(cleaned);
+      return Number.isNaN(parsed) ? Number.NaN : parsed;
+    }
+    return Number.NaN;
+  };
+
+  const safeNumber = (v, minFrac = 2, maxFrac = 2) => {
+    const num = typeof v === 'number' ? v : toNumber(v);
+    if (!Number.isFinite(num)) {
+      return '';
+    }
+    return num.toLocaleString('de-DE', {
       minimumFractionDigits: minFrac,
       maximumFractionDigits: maxFrac
     });
+  };
+
+  const renderMissingValue = (reason = '') => {
+    const title = reason || 'Kein Wert verfügbar';
+    return `<span class="missing-value" role="note" aria-label="${title}" title="${title}">—</span>`;
+  };
 
   if (['gain_abs', 'gain_pct'].includes(key)) {
     const symbol = key === 'gain_pct' ? '%' : '€';
@@ -17,9 +42,17 @@ export function formatValue(key, value) {
   } else if (key === 'position_count') {
     formatted = (isNaN(value) ? 0 : value).toLocaleString('de-DE');
   } else if (['balance', 'current_value', 'purchase_value'].includes(key)) {
-    // Währungswerte (EUR)
-    const num = isNaN(value) ? 0 : value;
-    formatted = safeNumber(num) + '&nbsp;€';
+    const numeric = typeof value === 'number' ? value : toNumber(value);
+    if (!Number.isFinite(numeric)) {
+      if (row?.fx_unavailable) {
+        return renderMissingValue('Wechselkurs nicht verfügbar – EUR-Wert unbekannt');
+      }
+      if (context && context.hasValue === false) {
+        return renderMissingValue();
+      }
+      return renderMissingValue();
+    }
+    formatted = safeNumber(numeric) + '&nbsp;€';
   } else if (key === 'current_holdings') {
     // Bestände (Anzahl Anteile) – etwas mehr Präzision (bis 4 Nachkommastellen), aber ohne unnötige Nullen
     const num = isNaN(value) ? 0 : value;
@@ -43,6 +76,10 @@ export function formatValue(key, value) {
       }
     }
   }
+  if (formatted === '' || formatted == null) {
+    return renderMissingValue();
+  }
+
   return formatted;
 }
 
@@ -72,19 +109,27 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     html += '<tr>';
     cols.forEach(c => {
       const alignClass = c.align === 'right' ? ' class="align-right"' : '';
-      html += `<td${alignClass}>${formatValue(c.key, r[c.key])}</td>`;
+      html += `<td${alignClass}>${formatValue(c.key, r[c.key], r)}</td>`;
     });
     html += '</tr>';
   });
 
   // Summen berechnen (unverändert)
   const sums = {};
+  const sumMeta = {};
   cols.forEach(c => {
     if (sumColumns.includes(c.key)) {
-      sums[c.key] = rows.reduce((acc, row) => {
+      let total = 0;
+      let hasValue = false;
+      rows.forEach(row => {
         const v = row[c.key];
-        return acc + (typeof v === 'number' && !isNaN(v) ? v : 0);
-      }, 0);
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          total += v;
+          hasValue = true;
+        }
+      });
+      sums[c.key] = hasValue ? total : null;
+      sumMeta[c.key] = { hasValue };
     }
   });
 
@@ -102,9 +147,9 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     if (idx === 0) {
       html += `<td${alignClass}>Summe</td>`;
     } else if (sums[c.key] != null) {
-      html += `<td${alignClass}>${formatValue(c.key, sums[c.key])}</td>`;
+      html += `<td${alignClass}>${formatValue(c.key, sums[c.key], undefined, sumMeta[c.key])}</td>`;
     } else if (c.key === 'gain_pct' && sums['gain_pct'] != null) {
-      html += `<td${alignClass}>${formatValue('gain_pct', sums['gain_pct'])}</td>`;
+      html += `<td${alignClass}>${formatValue('gain_pct', sums['gain_pct'], undefined, sumMeta[c.key])}</td>`;
     } else {
       html += '<td></td>';
     }

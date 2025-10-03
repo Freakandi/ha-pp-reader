@@ -1139,14 +1139,16 @@ class _SyncRunner:
         for account in db_accounts:
             currency = account["currency_code"]
             orig_balance = account["raw_balance"] / 100.0
+            fx_unavailable = False
             if currency != "EUR":
                 rate = fx_rates.get(currency)
                 if rate:
                     eur_balance = orig_balance / rate
                 else:
-                    eur_balance = 0.0
+                    eur_balance = None
+                    fx_unavailable = True
                     _LOGGER.warning(
-                        "FX: Kein Kurs für %s - setze EUR-Wert=0",
+                        "FX: Kein Kurs für %s – EUR-Wert nicht verfügbar",
                         currency,
                     )
             else:
@@ -1157,7 +1159,8 @@ class _SyncRunner:
                     "name": account["name"],
                     "currency_code": currency,
                     "orig_balance": round(orig_balance, 2),
-                    "balance": round(eur_balance, 2),
+                    "balance": round(eur_balance, 2) if eur_balance is not None else None,
+                    "fx_unavailable": fx_unavailable,
                 }
             )
 
