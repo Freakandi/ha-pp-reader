@@ -1,4 +1,4 @@
-import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct } from '../content/elements.js';
+import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct, formatValue } from '../content/elements.js';
 import { openSecurityDetail } from '../dashboard.module.js';
 import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS, fetchPortfolioPositionsWS } from '../data/api.js';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS.js';
@@ -257,6 +257,15 @@ if (!window.__ppReaderAttachSecurityDetailListener) {
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
 function buildExpandablePortfolioTable(depots) {
   console.debug("buildExpandablePortfolioTable: render", depots.length, "portfolios");
+  const escapeAttribute = (value) => {
+    if (value == null) {
+      return '';
+    }
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;');
+  };
+
   let html = '<table class="expandable-portfolio-table"><thead><tr>';
   const cols = [
     { key: 'name', label: 'Name' },
@@ -274,29 +283,57 @@ function buildExpandablePortfolioTable(depots) {
   depots.forEach(d => {
     if (!d || !d.uuid) return;
     const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
-    const currentValue = Number.isFinite(d.current_value) ? d.current_value : 0;
     const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
-    const gainAbs = Number.isFinite(d.gain_abs) ? d.gain_abs : (currentValue - purchaseSum);
-    const gainPct = purchaseSum > 0 ? (gainAbs / purchaseSum) * 100 : 0;
+    const hasValue = d.hasValue !== false;
+    const currentValue = hasValue && Number.isFinite(d.current_value) ? d.current_value : null;
+    const gainAbs = hasValue && Number.isFinite(d.gain_abs)
+      ? d.gain_abs
+      : (hasValue && Number.isFinite(d.current_value) ? d.current_value - purchaseSum : null);
+    const gainPct = hasValue && Number.isFinite(d.gain_pct)
+      ? d.gain_pct
+      : (hasValue && purchaseSum > 0 && Number.isFinite(currentValue)
+        ? ((currentValue - purchaseSum) / purchaseSum) * 100
+        : null);
 
     const expanded = expandedPortfolios.has(d.uuid);
     const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
     const detailId = `portfolio-details-${d.uuid}`;
-    const gainPctLabel = Number.isFinite(gainPct)
+    const rowData = {
+      fx_unavailable: !hasValue,
+      current_value: currentValue,
+      gain_abs: gainAbs,
+      gain_pct: gainPct
+    };
+    const valueContext = { hasValue };
+    const currentValueCell = formatValue('current_value', rowData.current_value, rowData, valueContext);
+    const gainAbsCell = formatValue('gain_abs', rowData.gain_abs, rowData, valueContext);
+    const gainPctCell = formatValue('gain_pct', rowData.gain_pct, rowData, valueContext);
+
+    const gainPctLabel = hasValue && Number.isFinite(gainPct)
       ? `${formatNumber(gainPct)} %`
-      : '—';
-    const gainPctSign = Number.isFinite(gainPct)
+      : '';
+    const gainPctSign = hasValue && Number.isFinite(gainPct)
       ? (gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral')
-      : 'neutral';
+      : '';
+
+    const datasetCurrentValue = hasValue && Number.isFinite(currentValue) ? currentValue : '';
+    const datasetGainAbs = hasValue && Number.isFinite(gainAbs) ? gainAbs : '';
+    const datasetGainPct = hasValue && Number.isFinite(gainPct) ? gainPct : '';
+
+    let gainAbsAttributes = '';
+    if (gainPctLabel) {
+      gainAbsAttributes = ` data-gain-pct="${escapeAttribute(gainPctLabel)}" data-gain-sign="${escapeAttribute(gainPctSign)}"`;
+    }
 
     html += `<tr class="portfolio-row"
                 data-portfolio="${d.uuid}"
                 data-position-count="${positionCount}"
-                data-current-value="${currentValue}"
-                data-purchase-sum="${purchaseSum}"
-                data-gain-abs="${gainAbs}"
-                data-gain-pct="${gainPct}">
-      <td>
+                data-current-value="${escapeAttribute(datasetCurrentValue)}"
+                data-purchase-sum="${escapeAttribute(purchaseSum)}"
+                data-gain-abs="${escapeAttribute(datasetGainAbs)}"
+                data-gain-pct="${escapeAttribute(datasetGainPct)}"
+                data-has-value="${hasValue ? 'true' : 'false'}">`;
+    html += `<td>
         <button type="button"
                 class="${toggleClass}"
                 data-portfolio="${d.uuid}"
@@ -305,12 +342,12 @@ function buildExpandablePortfolioTable(depots) {
           <span class="caret">${expanded ? '▼' : '▶'}</span>
           <span class="portfolio-name">${d.name}</span>
         </button>
-      </td>
-      <td class="align-right">${positionCount}</td>
-      <td class="align-right">${formatNumber(currentValue)}&nbsp;€</td>
-      <td class="align-right" data-gain-pct="${gainPctLabel}" data-gain-sign="${gainPctSign}">${formatGain(gainAbs)}</td>
-      <td class="align-right gain-pct-cell">${formatGainPct(gainPct)}</td>
-    </tr>`;
+      </td>`;
+    html += `<td class="align-right">${positionCount}</td>`;
+    html += `<td class="align-right">${currentValueCell}</td>`;
+    html += `<td class="align-right"${gainAbsAttributes}>${gainAbsCell}</td>`;
+    html += `<td class="align-right gain-pct-cell">${gainPctCell}</td>`;
+    html += '</tr>';
 
     html += `<tr class="portfolio-details${expanded ? '' : ' hidden'}"
                 data-portfolio="${d.uuid}"
@@ -321,37 +358,55 @@ function buildExpandablePortfolioTable(depots) {
         <div class="positions-container">${expanded
         ? (portfolioPositionsCache.has(d.uuid)
           ? renderPositionsTable(portfolioPositionsCache.get(d.uuid))
-          : '<div class="loading">Lade Positionen...</div>')
+          : '<div class=\"loading\">Lade Positionen...</div>')
         : ''
       }</div>
       </td>
     </tr>`;
   });
 
-  const sumCurrent = depots.reduce((a, d) => a + (Number.isFinite(d.current_value) ? d.current_value : 0), 0);
-  const sumPurchase = depots.reduce((a, d) => a + (Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0), 0);
-  const sumGainAbs = depots.reduce((a, d) => {
-    if (Number.isFinite(d.gain_abs)) return a + d.gain_abs;
-    const cv = Number.isFinite(d.current_value) ? d.current_value : 0;
-    const ps = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
-    return a + (cv - ps);
+  const availableDepots = depots.filter(d => d && d.hasValue !== false);
+  const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d?.position_count) ? d.position_count : 0), 0);
+  const sumCurrent = availableDepots.reduce((a, d) => a + (Number.isFinite(d.current_value) ? d.current_value : 0), 0);
+  const sumPurchase = availableDepots.reduce((a, d) => a + (Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0), 0);
+  const sumGainAbs = availableDepots.reduce((a, d) => {
+    const current = Number.isFinite(d.current_value) ? d.current_value : 0;
+    const purchase = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
+    return a + (current - purchase);
   }, 0);
-  const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
-  const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0), 0);
+  const sumHasValue = availableDepots.length === depots.length;
+  const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
 
-  const sumGainPctLabel = Number.isFinite(sumGainPct)
-    ? `${formatNumber(sumGainPct)} %`
-    : '—';
-  const sumGainPctSign = Number.isFinite(sumGainPct)
-    ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
-    : 'neutral';
+  const sumRowData = {
+    fx_unavailable: !sumHasValue,
+    current_value: sumHasValue ? sumCurrent : null,
+    gain_abs: sumHasValue ? sumGainAbs : null,
+    gain_pct: sumHasValue ? sumGainPct : null
+  };
+  const sumContext = { hasValue: sumHasValue };
+  const sumCurrentCell = formatValue('current_value', sumRowData.current_value, sumRowData, sumContext);
+  const sumGainAbsCell = formatValue('gain_abs', sumRowData.gain_abs, sumRowData, sumContext);
+  const sumGainPctCell = formatValue('gain_pct', sumRowData.gain_pct, sumRowData, sumContext);
 
-  html += `<tr class="footer-row">
+  let sumGainAbsAttributes = '';
+  if (sumHasValue && Number.isFinite(sumGainPct)) {
+    const sumGainPctLabel = `${formatNumber(sumGainPct)} %`;
+    const sumGainPctSign = sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral';
+    sumGainAbsAttributes = ` data-gain-pct="${escapeAttribute(sumGainPctLabel)}" data-gain-sign="${escapeAttribute(sumGainPctSign)}"`;
+  }
+
+  html += `<tr class="footer-row"
+    data-position-count="${sumPositions}"
+    data-current-value="${escapeAttribute(sumHasValue ? sumCurrent : '')}"
+    data-purchase-sum="${escapeAttribute(sumHasValue ? sumPurchase : '')}"
+    data-gain-abs="${escapeAttribute(sumHasValue ? sumGainAbs : '')}"
+    data-gain-pct="${escapeAttribute(sumHasValue && Number.isFinite(sumGainPct) ? sumGainPct : '')}"
+    data-has-value="${sumHasValue ? 'true' : 'false'}">
     <td>Summe</td>
-    <td class="align-right">${sumPositions}</td>
-    <td class="align-right">${formatNumber(sumCurrent)}&nbsp;€</td>
-    <td class="align-right" data-gain-pct="${sumGainPctLabel}" data-gain-sign="${sumGainPctSign}">${formatGain(sumGainAbs)}</td>
-    <td class="align-right gain-pct-cell">${formatGainPct(sumGainPct)}</td>
+    <td class="align-right">${Math.round(sumPositions).toLocaleString('de-DE')}</td>
+    <td class="align-right">${sumCurrentCell}</td>
+    <td class="align-right"${sumGainAbsAttributes}>${sumGainAbsCell}</td>
+    <td class="align-right gain-pct-cell">${sumGainPctCell}</td>
   </tr>`;
 
   html += '</tbody></table>';
@@ -413,25 +468,38 @@ export function updatePortfolioFooterFromDom(target) {
   let sumCurrent = 0;
   let sumPurchase = 0;
   let sumGainAbs = 0;
+  let missingRows = 0;
 
   for (const row of rows) {
+    const hasValueAttr = row.dataset.hasValue;
+    const hasValue = !(hasValueAttr === 'false' || hasValueAttr === '0' || hasValueAttr === '' || hasValueAttr == null);
     const posCount = readDatasetNumber(row.dataset.positionCount) ?? extractNumericFromCell(row.cells[1]);
+    sumPositions += posCount;
+
+    if (!hasValue) {
+      missingRows += 1;
+      continue;
+    }
+
     const currentValue = readDatasetNumber(row.dataset.currentValue) ?? extractNumericFromCell(row.cells[2]);
     const gainAbs = readDatasetNumber(row.dataset.gainAbs) ?? extractNumericFromCell(row.cells[3]);
     const purchaseSumDataset = readDatasetNumber(row.dataset.purchaseSum);
     const purchaseSum = purchaseSumDataset != null ? purchaseSumDataset : (currentValue - gainAbs);
 
-    sumPositions += posCount;
     sumCurrent += currentValue;
     sumGainAbs += gainAbs;
     sumPurchase += purchaseSum;
   }
 
-  if (sumPurchase <= 0) {
+  const sumHasValue = missingRows === 0;
+  if (!sumHasValue && sumPurchase > 0) {
+    sumPurchase = sumCurrent - sumGainAbs;
+  }
+  if (sumHasValue && sumPurchase <= 0) {
     sumPurchase = sumCurrent - sumGainAbs;
   }
 
-  const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
+  const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
 
   let footer = tbody.querySelector('tr.footer-row');
   if (!footer) {
@@ -442,18 +510,33 @@ export function updatePortfolioFooterFromDom(target) {
 
   const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
 
+  const renderMissingValue = (reason = 'Wert nicht verfügbar') =>
+    `<span class="missing-value" role="note" aria-label="${reason}" title="${reason}">—</span>`;
+  const missingReason = 'Teilweise fehlende Wechselkurse – Wert unbekannt';
+
+  const currentValueHtml = sumHasValue
+    ? `${formatNumber(sumCurrent)}&nbsp;€`
+    : renderMissingValue(missingReason);
+  const gainAbsHtml = sumHasValue
+    ? formatGain(sumGainAbs)
+    : renderMissingValue(missingReason);
+  const gainPctHtml = sumHasValue && sumGainPct != null
+    ? formatGainPct(sumGainPct)
+    : renderMissingValue(missingReason);
+
   footer.innerHTML = `
     <td>Summe</td>
     <td class="align-right">${sumPositionsDisplay}</td>
-    <td class="align-right">${formatNumber(sumCurrent)}&nbsp;€</td>
-    <td class="align-right">${formatGain(sumGainAbs)}</td>
-    <td class="align-right">${formatGainPct(sumGainPct)}</td>
+    <td class="align-right">${currentValueHtml}</td>
+    <td class="align-right">${gainAbsHtml}</td>
+    <td class="align-right">${gainPctHtml}</td>
   `;
   footer.dataset.positionCount = String(Math.round(sumPositions));
-  footer.dataset.currentValue = String(sumCurrent);
-  footer.dataset.purchaseSum = String(sumPurchase);
-  footer.dataset.gainAbs = String(sumGainAbs);
-  footer.dataset.gainPct = String(sumGainPct);
+  footer.dataset.currentValue = sumHasValue ? String(sumCurrent) : '';
+  footer.dataset.purchaseSum = sumHasValue ? String(sumPurchase) : '';
+  footer.dataset.gainAbs = sumHasValue ? String(sumGainAbs) : '';
+  footer.dataset.gainPct = sumHasValue && sumGainPct != null ? String(sumGainPct) : '';
+  footer.dataset.hasValue = sumHasValue ? 'true' : 'false';
 }
 window.__ppReaderUpdatePortfolioFooter = updatePortfolioFooterFromDom;
 
@@ -799,10 +882,17 @@ export async function renderDashboard(root, hass, panelConfig) {
 
   const portfoliosResp = await fetchPortfoliosWS(hass, panelConfig);
   let depots = (portfoliosResp.portfolios || []).map(p => {
-    const current_value = typeof p.current_value === 'number' ? p.current_value : 0;
+    const missingPositions = typeof p.missing_value_positions === 'number'
+      ? p.missing_value_positions
+      : 0;
+    const hasCurrentValue = p.has_current_value != null
+      ? Boolean(p.has_current_value)
+      : missingPositions === 0;
+    const baseCurrentValue = typeof p.current_value === 'number' ? p.current_value : 0;
     const purchase_sum = typeof p.purchase_sum === 'number' ? p.purchase_sum : 0;
-    const gain_abs = current_value - purchase_sum;
-    const gain_pct = purchase_sum > 0 ? (gain_abs / purchase_sum) * 100 : 0;
+    const current_value = hasCurrentValue ? baseCurrentValue : null;
+    const gain_abs = hasCurrentValue ? baseCurrentValue - purchase_sum : null;
+    const gain_pct = hasCurrentValue && purchase_sum > 0 ? (gain_abs / purchase_sum) * 100 : null;
     return {
       uuid: p.uuid,
       name: p.name,
@@ -810,7 +900,10 @@ export async function renderDashboard(root, hass, panelConfig) {
       current_value,
       purchase_sum,
       gain_abs,
-      gain_pct
+      gain_pct,
+      hasValue: hasCurrentValue,
+      missing_value_positions: missingPositions,
+      fx_unavailable: !hasCurrentValue
     };
   });
 
@@ -827,16 +920,24 @@ export async function renderDashboard(root, hass, panelConfig) {
     (sum, account) => sum + (Number.isFinite(account.balance) ? account.balance : 0),
     0,
   );
+  const anyPortfolioMissing = depots.some(depot => depot.hasValue === false);
   const totalDepots = depots.reduce(
-    (sum, depot) => sum + (Number.isFinite(depot.current_value) ? depot.current_value : 0),
+    (sum, depot) => sum + ((depot.hasValue && Number.isFinite(depot.current_value)) ? depot.current_value : 0),
     0,
   );
   const totalWealth = totalAccounts + totalDepots;
+  const missingWealthReason = 'Teilweise fehlende Wechselkurse – Gesamtvermögen unbekannt';
+  const wealthValueMarkup = anyPortfolioMissing
+    ? `<span class="missing-value" role="note" aria-label="${missingWealthReason}" title="${missingWealthReason}">—</span>`
+    : `${formatNumber(totalWealth)}&nbsp;€`;
+  const wealthNote = anyPortfolioMissing
+    ? `<span class="total-wealth-note">${missingWealthReason}</span>`
+    : '';
 
   // 5. Header (ohne Last-File-Update – kommt jetzt wieder in Footer-Karte)
   const headerMeta = `
     <div class="header-meta-row">
-      💰 Gesamtvermögen: <strong class="total-wealth-value">${formatNumber(totalWealth)}&nbsp;€</strong>
+      💰 Gesamtvermögen: <strong class="total-wealth-value">${wealthValueMarkup}</strong>${wealthNote}
     </div>
   `;
   const headerCard = createHeaderCard('Übersicht', headerMeta);

@@ -115,6 +115,20 @@
   opacity: 1;
 }
 
+.header-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.header-meta-row .total-wealth-note {
+  font-size: 0.9rem;
+  color: var(--warning-color, #f0ad4e);
+  font-weight: 500;
+}
+
 .header-card.sticky .meta {
   max-height: 0;
   opacity: 0;
@@ -572,6 +586,10 @@ tbody tr:hover {
 .negative {
   color: var(--error-color);
   /* HA-Variable für negative Werte */
+}
+
+.neutral {
+  color: var(--secondary-text-color, var(--primary-text-color));
 }
 
 /* ===== Expandierbare Depot-Tabelle ===== */

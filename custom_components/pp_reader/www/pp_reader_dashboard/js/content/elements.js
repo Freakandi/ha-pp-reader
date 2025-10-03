@@ -34,10 +34,24 @@ export function formatValue(key, value, row = undefined, context = undefined) {
   };
 
   if (['gain_abs', 'gain_pct'].includes(key)) {
+    const missingReason = row?.fx_unavailable
+      ? 'Wechselkurs nicht verfügbar – EUR-Wert unbekannt'
+      : '';
+    if (value == null || (context && context.hasValue === false)) {
+      return renderMissingValue(missingReason);
+    }
+    const numeric = typeof value === 'number' ? value : toNumber(value);
+    if (!Number.isFinite(numeric)) {
+      return renderMissingValue(missingReason);
+    }
     const symbol = key === 'gain_pct' ? '%' : '€';
-    const num = isNaN(value) ? 0 : value;
-    formatted = safeNumber(num) + `&nbsp;${symbol}`;
-    const cls = num >= 0 ? 'positive' : 'negative';
+    formatted = safeNumber(numeric) + `&nbsp;${symbol}`;
+    let cls = 'neutral';
+    if (numeric > 0) {
+      cls = 'positive';
+    } else if (numeric < 0) {
+      cls = 'negative';
+    }
     return `<span class="${cls}">${formatted}</span>`;
   } else if (key === 'position_count') {
     const numeric = typeof value === 'number' ? value : toNumber(value);
@@ -255,13 +269,23 @@ export function formatNumber(value, minFrac = 2, maxFrac = 2) {
 
 export function formatGain(value) {
   const num = isNaN(value) ? 0 : value;
-  const cls = num >= 0 ? 'positive' : 'negative';
+  let cls = 'neutral';
+  if (num > 0) {
+    cls = 'positive';
+  } else if (num < 0) {
+    cls = 'negative';
+  }
   return `<span class="${cls}">${formatNumber(num)}&nbsp;€</span>`;
 }
 
 export function formatGainPct(value) {
   const num = isNaN(value) ? 0 : value;
-  const cls = num >= 0 ? 'positive' : 'negative';
+  let cls = 'neutral';
+  if (num > 0) {
+    cls = 'positive';
+  } else if (num < 0) {
+    cls = 'negative';
+  }
   return `<span class="${cls}">${formatNumber(num)}&nbsp;%</span>`;
 }
 

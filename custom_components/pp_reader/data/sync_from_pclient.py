@@ -1013,7 +1013,11 @@ class _SyncRunner:
         for (portfolio_uuid, security_uuid), data in current_holdings_values.items():
             current_holdings_val = data.get("current_holdings", 0)
             purchase_value = data.get("purchase_value", 0)
-            current_value = data.get("current_value", 0)
+            current_value_raw = data.get("current_value", 0)
+            if current_value_raw is None:
+                current_value_cent: int | None = None
+            else:
+                current_value_cent = int(round(current_value_raw * 100))
 
             self.cursor.execute(
                 """
@@ -1027,8 +1031,8 @@ class _SyncRunner:
 
             expected_values = (
                 current_holdings_val,
-                int(purchase_value * 100),
-                int(current_value * 100),
+                int(round(purchase_value * 100)),
+                current_value_cent,
             )
             if not existing_entry or existing_entry != expected_values:
                 self.changes.portfolio_securities = True
