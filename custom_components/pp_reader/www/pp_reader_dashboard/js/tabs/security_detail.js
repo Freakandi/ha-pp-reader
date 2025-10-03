@@ -221,13 +221,20 @@ function normaliseHistorySeries(prices) {
 }
 
 function deriveFxRate(snapshot, latestNativePrice) {
+  const currency = String(snapshot?.currency_code || '').toUpperCase();
+  if (!currency || currency === 'EUR') {
+    // Kein Fremdwährungsrisiko – Werte liegen bereits in EUR vor.
+    return 1;
+  }
+
   const lastPriceEurRaw = snapshot?.last_price_eur;
   const lastPriceEur = Number.isFinite(lastPriceEurRaw)
     ? lastPriceEurRaw
     : Number.parseFloat(lastPriceEurRaw);
 
   if (!Number.isFinite(lastPriceEur) || lastPriceEur <= 0) {
-    return 1;
+    // Ohne EUR-Referenzkurs können wir nicht in EUR umrechnen.
+    return null;
   }
 
   const snapshotNativeRaw = snapshot?.last_price_native;
@@ -239,11 +246,14 @@ function deriveFxRate(snapshot, latestNativePrice) {
     return lastPriceEur / snapshotNative;
   }
 
-  if (Number.isFinite(latestNativePrice) && latestNativePrice > 0) {
-    return lastPriceEur / latestNativePrice;
+  const historyNative = Number.isFinite(latestNativePrice)
+    ? latestNativePrice
+    : Number.parseFloat(latestNativePrice);
+  if (Number.isFinite(historyNative) && historyNative > 0) {
+    return lastPriceEur / historyNative;
   }
 
-  return 1;
+  return null;
 }
 
 function roundCurrency(value) {
@@ -264,7 +274,11 @@ function computeGainValues(historySeries, holdings, fxRate) {
     ? holdings
     : Number.parseFloat(holdings);
   const safeHoldings = Number.isFinite(holdingsNumeric) ? holdingsNumeric : 0;
-  const safeFx = Number.isFinite(fxRate) && fxRate > 0 ? fxRate : 1;
+  const safeFx = Number.isFinite(fxRate) && fxRate > 0 ? fxRate : null;
+
+  if (safeFx == null) {
+    return { periodGain: null, dailyGain: null };
+  }
 
   const lastEntry = historySeries[historySeries.length - 1];
   const firstEntry = historySeries[0];
