@@ -198,6 +198,94 @@ th {
   text-align: left;
 }
 
+@media (max-width: 600px) {
+  .card {
+    padding: 0.75rem;
+  }
+
+  th,
+  td {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .expandable-portfolio-table th,
+  .expandable-portfolio-table td,
+  .sortable-positions th,
+  .sortable-positions td {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 0.6rem;
+  }
+
+  th,
+  td {
+    padding: 0.35rem 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .expandable-portfolio-table th,
+  .expandable-portfolio-table td,
+  .sortable-positions th,
+  .sortable-positions td {
+    padding: 0.35rem 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .portfolio-toggle {
+    gap: 0.4rem;
+  }
+
+  .portfolio-toggle .portfolio-name {
+    font-size: 0.9rem;
+  }
+
+  .expandable-portfolio-table th:nth-child(5),
+  .expandable-portfolio-table td:nth-child(5),
+  .sortable-positions th:nth-child(6),
+  .sortable-positions td:nth-child(6) {
+    display: none;
+  }
+
+  .expandable-portfolio-table th:nth-child(4)::after,
+  .sortable-positions th:nth-child(5)::after {
+    content: '\a%';
+    white-space: pre;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--secondary-text-color);
+  }
+
+  .expandable-portfolio-table td[data-gain-pct]::after,
+  .sortable-positions td[data-gain-pct]::after {
+    content: attr(data-gain-pct);
+    display: block;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    margin-top: 0.1rem;
+  }
+
+  .expandable-portfolio-table td[data-gain-pct][data-gain-sign='positive']::after,
+  .sortable-positions td[data-gain-pct][data-gain-sign='positive']::after {
+    color: var(--success-color);
+  }
+
+  .expandable-portfolio-table td[data-gain-pct][data-gain-sign='negative']::after,
+  .sortable-positions td[data-gain-pct][data-gain-sign='negative']::after {
+    color: var(--error-color);
+  }
+
+  .expandable-portfolio-table td[data-gain-pct][data-gain-sign='neutral']::after,
+  .sortable-positions td[data-gain-pct][data-gain-sign='neutral']::after {
+    color: var(--secondary-text-color);
+  }
+}
+
 .align-right {
   text-align: right;
 }
