@@ -234,7 +234,7 @@ function buildExpandablePortfolioTable(depots) {
     { key: 'name', label: 'Name' },
     { key: 'position_count', label: 'Anzahl Positionen', align: 'right' },
     { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
-    { key: 'gain_abs', label: 'gesamt +/-', align: 'right' },
+    { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' },
     { key: 'gain_pct', label: '%', align: 'right' }
   ];
   cols.forEach(c => {
@@ -841,7 +841,7 @@ export async function renderDashboard(root, hass, panelConfig) {
     <div class="card footer-card">
       <div class="meta">
         <div class="last-file-update">
-          📂 Letzte Aktualisierung Datei: <strong>${lastFileUpdate || 'Unbekannt'}</strong>
+          📂 Letzte Aktualisierung der Datei: <strong>${lastFileUpdate || 'Unbekannt'}</strong>
         </div>
       </div>
     </div>
