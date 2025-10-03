@@ -228,6 +228,16 @@ td {
   font-size: 1.25rem;
 }
 
+.card table th {
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .card table th {
+    white-space: normal;
+  }
+}
+
 th {
   background: var(--primary-background-color, #fafafa);
   font-weight: 600;
