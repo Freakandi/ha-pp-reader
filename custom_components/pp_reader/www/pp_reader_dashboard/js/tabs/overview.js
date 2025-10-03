@@ -110,6 +110,33 @@ const expandedPortfolios = new Set();           // gemerkte geöffnete Depots (p
 // Stattdessen scoped Listener über attachPortfolioToggleHandler(root)
 
 // Rendert die Positions-Tabelle für ein Depot
+function applyGainPctMetadata(tableEl) {
+  if (!tableEl) {
+    return;
+  }
+  const bodyRows = tableEl.querySelectorAll('tbody tr');
+  bodyRows.forEach(row => {
+    const gainAbsCell = row.cells?.[4];
+    const gainPctCell = row.cells?.[5];
+    if (!gainAbsCell || !gainPctCell) {
+      return;
+    }
+    const pctText = (gainPctCell.textContent || '').trim() || '—';
+    let pctSign = 'neutral';
+    if (gainPctCell.querySelector('.positive')) {
+      pctSign = 'positive';
+    } else if (gainPctCell.querySelector('.negative')) {
+      pctSign = 'negative';
+    }
+    gainAbsCell.dataset.gainPct = pctText;
+    gainAbsCell.dataset.gainSign = pctSign;
+  });
+}
+
+if (!window.__ppReaderApplyGainPctMetadata) {
+  window.__ppReaderApplyGainPctMetadata = (tableEl) => applyGainPctMetadata(tableEl);
+}
+
 function renderPositionsTable(positions) {
   if (!positions || !positions.length) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
@@ -167,6 +194,7 @@ function renderPositionsTable(positions) {
       // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
+      applyGainPctMetadata(table);
       return table.outerHTML;
     }
   } catch (e) {
@@ -254,6 +282,12 @@ function buildExpandablePortfolioTable(depots) {
     const expanded = expandedPortfolios.has(d.uuid);
     const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
     const detailId = `portfolio-details-${d.uuid}`;
+    const gainPctLabel = Number.isFinite(gainPct)
+      ? `${formatNumber(gainPct)} %`
+      : '—';
+    const gainPctSign = Number.isFinite(gainPct)
+      ? (gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral')
+      : 'neutral';
 
     html += `<tr class="portfolio-row"
                 data-portfolio="${d.uuid}"
@@ -274,8 +308,8 @@ function buildExpandablePortfolioTable(depots) {
       </td>
       <td class="align-right">${positionCount}</td>
       <td class="align-right">${formatNumber(currentValue)}&nbsp;€</td>
-      <td class="align-right">${formatGain(gainAbs)}</td>
-      <td class="align-right">${formatGainPct(gainPct)}</td>
+      <td class="align-right" data-gain-pct="${gainPctLabel}" data-gain-sign="${gainPctSign}">${formatGain(gainAbs)}</td>
+      <td class="align-right gain-pct-cell">${formatGainPct(gainPct)}</td>
     </tr>`;
 
     html += `<tr class="portfolio-details${expanded ? '' : ' hidden'}"
@@ -305,12 +339,19 @@ function buildExpandablePortfolioTable(depots) {
   const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
   const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0), 0);
 
+  const sumGainPctLabel = Number.isFinite(sumGainPct)
+    ? `${formatNumber(sumGainPct)} %`
+    : '—';
+  const sumGainPctSign = Number.isFinite(sumGainPct)
+    ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
+    : 'neutral';
+
   html += `<tr class="footer-row">
     <td>Summe</td>
     <td class="align-right">${sumPositions}</td>
     <td class="align-right">${formatNumber(sumCurrent)}&nbsp;€</td>
-    <td class="align-right">${formatGain(sumGainAbs)}</td>
-    <td class="align-right">${formatGainPct(sumGainPct)}</td>
+    <td class="align-right" data-gain-pct="${sumGainPctLabel}" data-gain-sign="${sumGainPctSign}">${formatGain(sumGainAbs)}</td>
+    <td class="align-right gain-pct-cell">${formatGainPct(sumGainPct)}</td>
   </tr>`;
 
   html += '</tbody></table>';

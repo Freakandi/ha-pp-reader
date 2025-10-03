@@ -328,6 +328,12 @@ export function handlePortfolioUpdate(update, root) {
     }
     if (gainAbsCell) {
       gainAbsCell.innerHTML = formatGain(gainAbs);
+      gainAbsCell.dataset.gainPct = Number.isFinite(gainPct)
+        ? `${formatNumber(gainPct)} %`
+        : '—';
+      gainAbsCell.dataset.gainSign = Number.isFinite(gainPct)
+        ? (gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral')
+        : 'neutral';
     }
     if (gainPctCell) {
       gainPctCell.innerHTML = formatGainPct(gainPct);
@@ -574,6 +580,29 @@ function renderPositionsTableInline(positions) {
       });
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
+      if (window.__ppReaderApplyGainPctMetadata) {
+        try {
+          window.__ppReaderApplyGainPctMetadata(table);
+        } catch (err) {
+          console.warn('renderPositionsTableInline: applyGainPctMetadata failed', err);
+        }
+      } else {
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+          const gainCell = row.cells?.[4];
+          const pctCell = row.cells?.[5];
+          if (!gainCell || !pctCell) return;
+          const pctText = (pctCell.textContent || '').trim() || '—';
+          let pctSign = 'neutral';
+          if (pctCell.querySelector('.positive')) {
+            pctSign = 'positive';
+          } else if (pctCell.querySelector('.negative')) {
+            pctSign = 'negative';
+          }
+          gainCell.dataset.gainPct = pctText;
+          gainCell.dataset.gainSign = pctSign;
+        });
+      }
       return table.outerHTML;
     }
   } catch (e) {
@@ -656,6 +685,15 @@ function updatePortfolioFooter(table) {
     <td class="align-right">${formatGain(sumGainAbs)}</td>
     <td class="align-right">${formatGainPct(sumGainPct)}</td>
   `;
+  const footerGainAbsCell = footer.cells?.[3];
+  if (footerGainAbsCell) {
+    footerGainAbsCell.dataset.gainPct = Number.isFinite(sumGainPct)
+      ? `${formatNumber(sumGainPct)} %`
+      : '—';
+    footerGainAbsCell.dataset.gainSign = Number.isFinite(sumGainPct)
+      ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
+      : 'neutral';
+  }
   footer.dataset.positionCount = String(Math.round(sumPositions));
   footer.dataset.currentValue = String(sumCurrent);
   footer.dataset.purchaseSum = String(sumPurchase);
