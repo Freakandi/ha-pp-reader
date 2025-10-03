@@ -537,7 +537,7 @@ function renderPositionsTableInline(positions) {
     rows,
     [
       { key: 'name', label: 'Wertpapier' },
-      { key: 'current_holdings', label: 'Bestand' },
+      { key: 'current_holdings', label: 'Bestand', align: 'right' },
       { key: 'purchase_value', label: 'Kaufwert', align: 'right' },
       { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
       { key: 'gain_abs', label: '+/-', align: 'right' },
