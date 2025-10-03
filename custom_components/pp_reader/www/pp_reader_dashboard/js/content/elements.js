@@ -40,7 +40,11 @@ export function formatValue(key, value, row = undefined, context = undefined) {
     const cls = num >= 0 ? 'positive' : 'negative';
     return `<span class="${cls}">${formatted}</span>`;
   } else if (key === 'position_count') {
-    formatted = (isNaN(value) ? 0 : value).toLocaleString('de-DE');
+    const numeric = typeof value === 'number' ? value : toNumber(value);
+    if (!Number.isFinite(numeric)) {
+      return renderMissingValue();
+    }
+    formatted = numeric.toLocaleString('de-DE');
   } else if (['balance', 'current_value', 'purchase_value'].includes(key)) {
     const numeric = typeof value === 'number' ? value : toNumber(value);
     if (!Number.isFinite(numeric)) {
@@ -55,9 +59,12 @@ export function formatValue(key, value, row = undefined, context = undefined) {
     formatted = safeNumber(numeric) + '&nbsp;€';
   } else if (key === 'current_holdings') {
     // Bestände (Anzahl Anteile) – etwas mehr Präzision (bis 4 Nachkommastellen), aber ohne unnötige Nullen
-    const num = isNaN(value) ? 0 : value;
-    const hasFraction = Math.abs(num % 1) > 0;
-    formatted = num.toLocaleString('de-DE', {
+    const numeric = typeof value === 'number' ? value : toNumber(value);
+    if (!Number.isFinite(numeric)) {
+      return renderMissingValue();
+    }
+    const hasFraction = Math.abs(numeric % 1) > 0;
+    formatted = numeric.toLocaleString('de-DE', {
       minimumFractionDigits: hasFraction ? 2 : 0,
       maximumFractionDigits: 4
     });
