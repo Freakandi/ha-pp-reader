@@ -146,13 +146,21 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     const alignClass = c.align === 'right' ? ' class="align-right"' : '';
     if (idx === 0) {
       html += `<td${alignClass}>Summe</td>`;
-    } else if (sums[c.key] != null) {
-      html += `<td${alignClass}>${formatValue(c.key, sums[c.key], undefined, sumMeta[c.key])}</td>`;
-    } else if (c.key === 'gain_pct' && sums['gain_pct'] != null) {
-      html += `<td${alignClass}>${formatValue('gain_pct', sums['gain_pct'], undefined, sumMeta[c.key])}</td>`;
-    } else {
-      html += '<td></td>';
+      return;
     }
+
+    if (sums[c.key] != null) {
+      html += `<td${alignClass}>${formatValue(c.key, sums[c.key], undefined, sumMeta[c.key])}</td>`;
+      return;
+    }
+
+    if (c.key === 'gain_pct' && sums['gain_pct'] != null) {
+      html += `<td${alignClass}>${formatValue('gain_pct', sums['gain_pct'], undefined, sumMeta[c.key])}</td>`;
+      return;
+    }
+
+    const fallbackContext = sumMeta[c.key] ?? { hasValue: false };
+    html += `<td${alignClass}>${formatValue(c.key, null, undefined, fallbackContext)}</td>`;
   });
   html += '</tr>';
 
