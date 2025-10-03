@@ -24,7 +24,8 @@
                 "ryanluker.vscode-coverage-gutters",
                 "openai.chatgpt",
                 "ms-azuretools.vscode-containers",
-                "github.vscode-github-actions"
+                "github.vscode-github-actions",
+                "pamaron.pytest-runner"
             ],
             "settings": {
                 "files.eol": "\n",
