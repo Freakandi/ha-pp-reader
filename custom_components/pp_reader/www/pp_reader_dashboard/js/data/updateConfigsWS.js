@@ -806,8 +806,8 @@ export function handleLastFileUpdate(update, root) {
   // Format abhängig vom Ort (Footer behält <strong>)
   if (el.closest('.footer-card')) {
     el.innerHTML = value
-      ? `📂 Letzte Aktualisierung Datei: <strong>${value}</strong>`
-      : `📂 Letzte Aktualisierung Datei: <strong>Unbekannt</strong>`;
+      ? `📂 Letzte Aktualisierung der Datei: <strong>${value}</strong>`
+      : `📂 Letzte Aktualisierung der Datei: <strong>Unbekannt</strong>`;
   } else {
     // Header/Meta-Version (schlichter Text)
     el.textContent = value

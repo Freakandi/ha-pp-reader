@@ -526,6 +526,38 @@ tbody tr:hover {
   }
 }
 
+@media (max-width: 600px) {
+  .expandable-portfolio-table th,
+  .expandable-portfolio-table td {
+    padding: 0.4rem 0.4rem;
+    font-size: 0.85rem;
+    line-height: 1.2;
+  }
+
+  .expandable-portfolio-table .portfolio-name {
+    font-size: 0.95rem;
+  }
+
+  .positions-container table th,
+  .positions-container table td {
+    padding: 0.35rem 0.3rem;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .expandable-portfolio-table th,
+  .expandable-portfolio-table td {
+    padding: 0.35rem 0.35rem;
+    font-size: 0.8rem;
+  }
+
+  .positions-container table th,
+  .positions-container table td {
+    font-size: 0.65rem;
+  }
+}
+
 /* === Sortierbare Tabellen (Änderung 9) ===
    Nutzt Klassen/Zustände die JS setzt:
    - th[data-sort-key] (generisch)
