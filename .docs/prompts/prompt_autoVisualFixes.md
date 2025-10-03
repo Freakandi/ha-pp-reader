@@ -43,17 +43,19 @@ Repeat the following steps until every screen and component renders without visu
    - Verify there is sufficient contrast between text and background.
    - Ensure semantic indicators (icons, colors) have accompanying text or tooltips for clarity.
 8. **Documentation**
-   - Capture screenshots of any visual anomalies.
-   - Describe the issue, suspected cause, and recommended fix focusing on CSS, layout, component props, or content updates.
+   - Capture comprehensive evidence (screenshots, notes, metrics) for every anomaly you encounter.
+   - Select the single most critical visual or content defect and gather additional detail to explain why it occurs and how to address it.
+   - Prepare to articulate both the defect and the corrective action in depth, focusing on CSS, layout, component props, or content updates.
 
 ## Completion Criteria
-- Every identified visual or content issue has an associated fix or actionable recommendation.
-- All affected screens have been rechecked after changes to confirm the visual defect is resolved.
-- No new misalignments, formatting errors, or incorrect values appear during regression passes.
+- You have investigated the UI thoroughly enough to justify choosing a single visual or content defect to highlight.
+- The selected defect is documented with root-cause reasoning, a concrete fix, and supporting evidence.
+- The proposed fix includes rationale explaining why and how it resolves the defect without introducing regressions.
 
 ## Reporting Template
-Provide a final report containing:
-- **Summary**: High-level overview of the UI areas inspected and any visual improvements delivered.
-- **Findings**: Detailed log of visual discrepancies, their impact, and implemented fixes or recommendations.
-- **Verification**: Screenshots, manual checks, and any commands used to rebuild or reload the frontend.
-- **Follow-ups**: Outstanding visual tasks or content refinements to consider later.
+Provide a final report centered on the single most critical defect you investigated:
+- **Issue Overview**: Describe the UI view, state, or interaction where the defect appears and why it matters to the user.
+- **Detailed Diagnosis**: Explain the visual or content inconsistency, including suspected root cause and any relevant code or styling context.
+- **Proposed Fix**: Outline the exact change to make (CSS rule, layout adjustment, content update, etc.), including implementation details.
+- **Fix Rationale**: Justify why the proposed fix addresses the root cause and how it prevents regressions or related issues.
+- **Verification Plan**: Document the screenshots, manual checks, or commands required to confirm the defect is resolved after applying the fix.
