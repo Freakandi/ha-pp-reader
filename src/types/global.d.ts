@@ -7,7 +7,7 @@ import type {
   flushPendingPositions,
   reapplyPositionsSort,
 } from '../data/updateConfigsWS';
-import type { PortfolioPosition } from '../data/api';
+import type { SecuritySnapshotLike, PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 import type {
   attachPortfolioPositionsSorting,
   attachSecurityDetailListener,
@@ -16,13 +16,27 @@ import type {
   updatePortfolioFooterFromDom,
 } from '../tabs/overview';
 
-type DashboardPortfolioPosition = PortfolioPosition | Record<string, unknown>;
+type CachedSecurityPositions = ReturnType<typeof getSecurityPositionsFromCache>;
+type DashboardPortfolioPosition = CachedSecurityPositions extends Array<infer Item>
+  ? Item
+  : never;
 
 type GainPctMetadataApplier = (table: HTMLTableElement) => void;
-type RenderPositionsTable = (positions: DashboardPortfolioPosition[]) => string;
+type RenderPositionsTable = (positions: readonly DashboardPortfolioPosition[]) => string;
+
+interface PendingPortfolioPosition {
+  security_uuid?: string | null;
+  name?: string | null;
+  current_holdings?: number | null;
+  purchase_value?: number | null;
+  current_value?: number | null;
+  gain_abs?: number | null;
+  gain_pct?: number | null;
+  [key: string]: unknown;
+}
 
 type PendingPortfolioUpdate = {
-  positions: DashboardPortfolioPosition[];
+  positions: PendingPortfolioPosition[];
   error?: unknown;
 };
 
@@ -32,8 +46,12 @@ type PendingRetryMeta = {
 };
 
 interface PortfolioPositionsCache extends Map<string, DashboardPortfolioPosition[]> {
-  getSecuritySnapshot?: typeof getSecuritySnapshotFromCache;
-  getSecurityPositions?: typeof getSecurityPositionsFromCache;
+  getSecuritySnapshot?: (
+    securityUuid: string | null | undefined,
+  ) => SecuritySnapshotLike | null;
+  getSecurityPositions?: (
+    securityUuid: string | null | undefined,
+  ) => DashboardPortfolioPosition[];
 }
 
 declare global {
@@ -53,6 +71,14 @@ declare global {
     __ppReaderFlushAllPendingPositions?: typeof flushAllPendingPositions;
     __ppReaderUpdatePortfolioFooter?: typeof updatePortfolioFooterFromDom;
     __ppReaderReapplyPositionsSort?: typeof reapplyPositionsSort;
+  }
+
+  interface WindowEventMap {
+    'pp-reader:portfolio-positions-updated': CustomEvent<PortfolioPositionsUpdatedEventDetail>;
+  }
+
+  interface GlobalEventHandlersEventMap {
+    'pp-reader:portfolio-positions-updated': CustomEvent<PortfolioPositionsUpdatedEventDetail>;
   }
 
   interface HTMLElement {

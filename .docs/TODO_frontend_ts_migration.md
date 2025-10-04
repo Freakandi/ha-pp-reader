@@ -91,7 +91,7 @@
       - Dateien: `src/tabs/security_detail.ts`, `src/content/charting.ts` (oder deklarative Typdatei)
       - Abschnitt: Snapshot-Verarbeitung, Range-Handling, Chart-Integration
       - Ziel: Entferne `@ts-nocheck`, führe typsichere States für History-Ranges/-Cache ein und beschreibe Chart-Hilfsfunktionen inkl. Event-Subscription.
-   g) [ ] Aktualisiere globale Deklarationen für die Tab-APIs
+   g) [x] Aktualisiere globale Deklarationen für die Tab-APIs
       - Datei: `src/types/global.d.ts`
       - Abschnitt: Window-/HTMLElement-Erweiterungen
       - Ziel: Passe die globalen Signaturen (`__ppReader...`) an die neuen Tab-Typen und Map-Erweiterungen an.
