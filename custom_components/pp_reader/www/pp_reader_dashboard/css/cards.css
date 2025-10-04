@@ -16,7 +16,7 @@
 
 .card h2 {
   position: sticky;
-  top: var(--pp-reader-sticky-offset, 0px);
+  top: 0;
   z-index: 2;
   font-size: 1.35rem;
   padding-top: 0.5rem;
@@ -256,7 +256,7 @@ th {
   background: var(--primary-background-color, #fafafa);
   font-weight: 600;
   position: sticky;
-  top: var(--pp-reader-sticky-offset, 0px);
+  top: 0;
   z-index: 1;
   text-align: left;
 }
