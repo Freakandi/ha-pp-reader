@@ -191,12 +191,30 @@ function computePoints(series, dimensions, accessors) {
   const safeMinY = Number.isFinite(minY) ? minY : 0;
   const safeMaxY = Number.isFinite(maxY) ? maxY : safeMinY + 1;
 
+  const desiredYTicks = Math.max(
+    2,
+    Math.min(
+      6,
+      Math.round(
+        Math.max(height - margin.top - margin.bottom, 0) / 60,
+      ) || 4,
+    ),
+  );
+  const { niceMin: domainMinY, niceMax: domainMaxY } = computeNiceDomain(
+    safeMinY,
+    safeMaxY,
+    desiredYTicks,
+  );
+
+  const effectiveMinY = Number.isFinite(domainMinY) ? domainMinY : safeMinY;
+  const effectiveMaxY = Number.isFinite(domainMaxY) ? domainMaxY : safeMaxY;
+
   const rangeX = safeMaxX - safeMinX || 1;
-  const rangeY = safeMaxY - safeMinY || 1;
+  const rangeY = effectiveMaxY - effectiveMinY || 1;
 
   const points = rawPoints.map((point) => {
     const ratioX = rangeX === 0 ? 0.5 : (point.xValue - safeMinX) / rangeX;
-    const ratioY = rangeY === 0 ? 0.5 : (point.yValue - safeMinY) / rangeY;
+    const ratioY = rangeY === 0 ? 0.5 : (point.yValue - effectiveMinY) / rangeY;
     const x = margin.left + ratioX * boundedWidth;
     const y = margin.top + (1 - ratioY) * boundedHeight;
     return {
@@ -211,8 +229,8 @@ function computePoints(series, dimensions, accessors) {
     range: {
       minX: safeMinX,
       maxX: safeMaxX,
-      minY: safeMinY,
-      maxY: safeMaxY,
+      minY: effectiveMinY,
+      maxY: effectiveMaxY,
       boundedWidth,
       boundedHeight,
     },
@@ -254,7 +272,13 @@ function updateTooltipPosition(state, point) {
   const tooltipWidth = tooltip.offsetWidth || 0;
   const tooltipHeight = tooltip.offsetHeight || 0;
   const horizontal = clamp(point.x - tooltipWidth / 2, margin.left, width - margin.right - tooltipWidth);
-  const vertical = clamp(point.y - tooltipHeight - 12, 0, baselineY - tooltipHeight);
+  const maxVertical = Math.max(baselineY - tooltipHeight, 0);
+  const padding = 12;
+  let vertical = point.y + padding;
+  if (vertical > maxVertical) {
+    vertical = point.y - tooltipHeight - padding;
+  }
+  vertical = clamp(vertical, 0, maxVertical);
   tooltip.style.transform = `translate(${Math.round(horizontal)}px, ${Math.round(vertical)}px)`;
 }
 
@@ -632,6 +656,43 @@ function updateAxes(state) {
       yAxis.appendChild(tick);
     });
   }
+}
+
+function computeNiceDomain(minValue, maxValue, desiredTicks = 4) {
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return {
+      niceMin: minValue,
+      niceMax: maxValue,
+    };
+  }
+
+  const safeTicks = Math.max(2, desiredTicks);
+
+  if (maxValue === minValue) {
+    const padding = niceStep(Math.abs(minValue) || 1);
+    return {
+      niceMin: minValue - padding,
+      niceMax: maxValue + padding,
+    };
+  }
+
+  const range = maxValue - minValue;
+  const rawStep = range / (safeTicks - 1);
+  const step = niceStep(rawStep);
+  const niceMin = Math.floor(minValue / step) * step;
+  const niceMax = Math.ceil(maxValue / step) * step;
+
+  if (niceMin === niceMax) {
+    return {
+      niceMin: minValue,
+      niceMax: maxValue + step,
+    };
+  }
+
+  return {
+    niceMin,
+    niceMax,
+  };
 }
 
 function generateTimeAxisTicks(state, minTimestamp, maxTimestamp, desiredTicks, rangeDays) {
