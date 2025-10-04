@@ -260,9 +260,9 @@ function formatTooltip(state, point) {
   });
 }
 
-function updateTooltipPosition(state, point, origin = {}) {
+function updateTooltipPosition(state, point) {
   const { tooltip, width, margin } = state;
-  if (!tooltip || !point) {
+  if (!tooltip) {
     return;
   }
 
@@ -271,18 +271,12 @@ function updateTooltipPosition(state, point, origin = {}) {
   tooltip.style.opacity = '1';
   const tooltipWidth = tooltip.offsetWidth || 0;
   const tooltipHeight = tooltip.offsetHeight || 0;
-  const pointerX = Number.isFinite(origin.pointerX) ? origin.pointerX : point.x;
-  const pointerY = Number.isFinite(origin.pointerY) ? origin.pointerY : point.y;
-  const horizontal = clamp(
-    pointerX - tooltipWidth / 2,
-    margin.left,
-    width - margin.right - tooltipWidth,
-  );
+  const horizontal = clamp(point.x - tooltipWidth / 2, margin.left, width - margin.right - tooltipWidth);
   const maxVertical = Math.max(baselineY - tooltipHeight, 0);
   const padding = 12;
-  let vertical = pointerY + padding;
+  let vertical = point.y + padding;
   if (vertical > maxVertical) {
-    vertical = pointerY - tooltipHeight - padding;
+    vertical = point.y - tooltipHeight - padding;
   }
   vertical = clamp(vertical, 0, maxVertical);
   tooltip.style.transform = `translate(${Math.round(horizontal)}px, ${Math.round(vertical)}px)`;
@@ -313,16 +307,8 @@ function attachPointerHandlers(container, state) {
       return;
     }
 
-    if (!state.svg || typeof state.svg.getBoundingClientRect !== 'function') {
-      hideTooltip(state);
-      return;
-    }
-
     const rect = state.svg.getBoundingClientRect();
-    const hasClientX = typeof event.clientX === 'number' && Number.isFinite(event.clientX);
-    const hasClientY = typeof event.clientY === 'number' && Number.isFinite(event.clientY);
-    const pointerX = hasClientX ? event.clientX - rect.left : state.points[0].x;
-    const pointerY = hasClientY ? event.clientY - rect.top : state.points[0].y;
+    const pointerX = event.clientX - rect.left;
     let closest = state.points[0];
     let minDistance = Math.abs(pointerX - closest.x);
 
@@ -359,10 +345,7 @@ function attachPointerHandlers(container, state) {
 
     if (state.tooltip) {
       state.tooltip.innerHTML = formatTooltip(state, closest);
-      updateTooltipPosition(state, closest, {
-        pointerX,
-        pointerY,
-      });
+      updateTooltipPosition(state, closest);
     }
   };
 
