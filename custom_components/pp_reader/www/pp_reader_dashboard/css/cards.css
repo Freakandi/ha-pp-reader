@@ -684,6 +684,11 @@ tbody tr:hover {
   font-size: 0.85rem;
 }
 
+.positions-container table tr.position-row,
+.positions-container table tr.position-row td {
+  cursor: pointer;
+}
+
 /* Kleinere Screens: etwas kompakter */
 @media (max-width: 800px) {
 
