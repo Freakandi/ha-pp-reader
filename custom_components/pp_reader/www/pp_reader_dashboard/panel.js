@@ -186,6 +186,11 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('css/nav.css');
     this.shadowRoot.appendChild(container);
 
+    this._upgradeProperty('hass');
+    this._upgradeProperty('panel');
+    this._upgradeProperty('route');
+    this._upgradeProperty('narrow');
+
     // NEU: Referenz auf das Dashboard-Element sichern
     this._dashboardEl = container.querySelector('pp-reader-dashboard');
     if (!this._dashboardEl) {
@@ -309,6 +314,15 @@ class PPReaderPanel extends HTMLElement {
     if (window.__ppReaderDashboardElements instanceof Set && this._dashboardEl) {
       window.__ppReaderDashboardElements.delete(this._dashboardEl);
     }
+  }
+
+  _upgradeProperty(propertyName) {
+    if (!Object.prototype.hasOwnProperty.call(this, propertyName)) {
+      return;
+    }
+    const value = this[propertyName];
+    delete this[propertyName];
+    this[propertyName] = value;
   }
 }
 
