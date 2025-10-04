@@ -57,7 +57,7 @@
       - Datei: `scripts/update_dashboard_module.mjs` (neu) oder Bundler-Plugin
       - Abschnitt: Skript-Hauptfunktion
       - Ziel: Schreibt nach jedem Build den neuen Dateinamen/Hash in `dashboard.module.js`.
-   c) [ ] Stelle sicher, dass `panel.js` weiterhin funktional bleibt
+   c) [x] Stelle sicher, dass `panel.js` weiterhin funktional bleibt
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/panel.js`
       - Abschnitt: Importstatement & Initialisierung
       - Ziel: Prüfe und passe ggf. den Importpfad auf das bundlergenerierte Modul an, ohne öffentliches API zu ändern.
