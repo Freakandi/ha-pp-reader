@@ -63,14 +63,14 @@ function ensurePendingMap(): Map<string, PendingPortfolioUpdate> {
   if (!window.__ppReaderPendingPositions) {
     window.__ppReaderPendingPositions = new Map<string, PendingPortfolioUpdate>();
   }
-  return window.__ppReaderPendingPositions;
+  return window.__ppReaderPendingPositions!;
 }
 
 function ensurePendingRetryMeta(): Map<string, PendingRetryMeta> {
   if (!window.__ppReaderPendingRetryMeta) {
     window.__ppReaderPendingRetryMeta = new Map<string, PendingRetryMeta>();
   }
-  return window.__ppReaderPendingRetryMeta;
+  return window.__ppReaderPendingRetryMeta!;
 }
 
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
