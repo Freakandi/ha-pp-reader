@@ -123,7 +123,7 @@
       - Datei: `tests/frontend/test_dashboard_smoke.py` (neu) oder `tests/frontend/test_dashboard.spec.ts`
       - Abschnitt: Testfälle für DOM-Output
       - Ziel: Verifiziere, dass gerenderte DOM-Strukturen und Events weiterhin wie erwartet funktionieren (z.B. mit jsdom oder Playwright).
-   c) [ ] Ergänze Bundle-Integritätsprüfung
+   c) [x] Ergänze Bundle-Integritätsprüfung
       - Datei: `tests/frontend/test_build_artifacts.py` (neu)
       - Abschnitt: Assertions zu existierenden Artefakten
       - Ziel: Testet, dass `dashboard.js` & Begleit-Chunks im `www` Verzeichnis vorhanden sind.
