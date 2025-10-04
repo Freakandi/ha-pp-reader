@@ -1,4 +1,4 @@
-# Standard-Prompt zur Umsetzung der Live-Preis Integration (YahooQuery)
+# Standard-Prompt zur Umsetzung der nächsten Weiterentwicklung
 
 PROMPT:
 
@@ -6,8 +6,8 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
-- .docs/security_detail_tab.md
-- .docs/TODO_security_detail_tab.md
+- .docs/frontend_ts_migration.md
+- .docs/TODO_frontend_ts_migration.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -22,14 +22,14 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_security_detail_tab.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_frontend_ts_migration.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
 8. Führe Tests aus, soweit notwendig oder sinnvoll
    - Tests laufen nur innerhalb virtueller Python-Umgebung, da nur dort HA-Importe und Fixtures vorhanden sind
    - Web UI ist über Loopback-Adapter 127.0.0.1:8123 erreichbar, wenn innerhalb der virtuellen Umgebung in einer separaten Terminal-Session scripts/develop ausgeführt wurde
-   - Zur Anmeldung am Frontend zunächst Button "CREATE A NEW SMART HOME" verwenden und neue Konfiguration mit User: dev anlegen (kein Passwort)
+   - Anmeldung am Frontend mit User / PW: dev / dev
    - Das Dashboard dieser Integration liegt dann unter 127.0.0.1:8123/ppreader
 9. Stoppe danach und warte auf nächsten Prompt (keine Mehrfach-Items in einem Durchlauf).
 10. Wenn Blocker (fehlende Info / Ambiguität) → Statt Code:
