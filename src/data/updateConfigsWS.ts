@@ -5,7 +5,10 @@
 import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import type { SortDirection } from '../content/elements';
+import type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 import type { AccountSummary, PortfolioSummary } from './api';
+
+export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 
 type QueryRoot = HTMLElement | Document;
 
@@ -54,7 +57,7 @@ interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
 
 const PENDING_RETRY_INTERVAL = 500;
 const PENDING_MAX_ATTEMPTS = 10;
-const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
+export const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
 
 function ensurePendingMap(): Map<string, PendingPortfolioUpdate> {
   if (!window.__ppReaderPendingPositions) {
@@ -580,12 +583,15 @@ function processPortfolioPositionsUpdate(
     if (securityUuids.length && typeof window !== 'undefined') {
       try {
         window.dispatchEvent(
-          new CustomEvent(PORTFOLIO_POSITIONS_UPDATED_EVENT, {
-            detail: {
-              portfolioUuid,
-              securityUuids,
+          new CustomEvent<PortfolioPositionsUpdatedEventDetail>(
+            PORTFOLIO_POSITIONS_UPDATED_EVENT,
+            {
+              detail: {
+                portfolioUuid,
+                securityUuids,
+              },
             },
-          }),
+          ),
         );
       } catch (dispatchError) {
         console.warn(
