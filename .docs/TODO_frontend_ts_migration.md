@@ -39,7 +39,7 @@
       - Datei: `src/types/home-assistant.d.ts` (neu)
       - Abschnitt: Schnittstellen für `hass`, Panels, WebSocket-Strukturen
       - Ziel: Statische Typen für häufig genutzte Objekte bereitstellen und unbekannte Felder über optionale Properties erlauben.
-   b) [ ] Ergänze globale Fenstererweiterungen
+   b) [x] Ergänze globale Fenstererweiterungen
       - Datei: `src/types/global.d.ts` (neu)
       - Abschnitt: `declare global { interface Window { ... } }`
       - Ziel: Formalisiere bisherige `window.__ppReader...` Zugriffe für TypeScript-Striktheit.
