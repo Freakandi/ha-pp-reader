@@ -27,9 +27,6 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('css/nav.css');
     this.shadowRoot.appendChild(container);
 
-    this._headerObserver = null;
-    this._headerMutationObserver = null;
-
     // NEU: Referenz auf das Dashboard-Element sichern
     this._dashboardEl = container.querySelector('pp-reader-dashboard');
     if (!this._dashboardEl) {
@@ -44,8 +41,6 @@ class PPReaderPanel extends HTMLElement {
       } catch (error) {
         console.warn('[pp_reader] Konnte Dashboard-Referenz nicht registrieren', error);
       }
-
-      this._initializeHeaderOffsetTracking();
     }
 
     try {
@@ -149,14 +144,6 @@ class PPReaderPanel extends HTMLElement {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
     }
-    if (this._headerObserver) {
-      this._headerObserver.disconnect();
-      this._headerObserver = null;
-    }
-    if (this._headerMutationObserver) {
-      this._headerMutationObserver.disconnect();
-      this._headerMutationObserver = null;
-    }
     if (window.__ppReaderPanelHosts instanceof Set) {
       window.__ppReaderPanelHosts.delete(this);
     }
@@ -165,60 +152,6 @@ class PPReaderPanel extends HTMLElement {
     }
   }
 }
-
-PPReaderPanel.prototype._initializeHeaderOffsetTracking = function _initializeHeaderOffsetTracking() {
-  if (!this._dashboardEl) {
-    return;
-  }
-
-  const attachObserver = (headerCard) => {
-    if (!headerCard) {
-      return false;
-    }
-
-    if (this._headerObserver) {
-      this._headerObserver.disconnect();
-    }
-
-    const updateOffset = (height) => {
-      this.style.setProperty('--pp-reader-sticky-offset', `${Math.ceil(height)}px`);
-    };
-
-    updateOffset(headerCard.getBoundingClientRect().height);
-
-    this._headerObserver = new ResizeObserver((entries) => {
-      const entry = entries && entries[0];
-      if (!entry) {
-        return;
-      }
-      updateOffset(entry.contentRect.height);
-    });
-    this._headerObserver.observe(headerCard);
-    return true;
-  };
-
-  const tryAttach = () => attachObserver(this._dashboardEl.querySelector('.header-card'));
-
-  if (tryAttach()) {
-    return;
-  }
-
-  if (this._headerMutationObserver) {
-    this._headerMutationObserver.disconnect();
-  }
-
-  this._headerMutationObserver = new MutationObserver(() => {
-    if (tryAttach() && this._headerMutationObserver) {
-      this._headerMutationObserver.disconnect();
-      this._headerMutationObserver = null;
-    }
-  });
-
-  this._headerMutationObserver.observe(this._dashboardEl, {
-    childList: true,
-    subtree: true,
-  });
-};
 
 // Custom Element registrieren
 if (!customElements.get('pp-reader-panel')) {
