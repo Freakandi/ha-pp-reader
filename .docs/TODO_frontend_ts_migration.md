@@ -101,7 +101,7 @@
       - Ziel: Erreiche strikte Typprüfung ohne Laufzeitverhalten zu ändern.
 
 6. Build- und Lint-Integration in Repository-Workflows
-   a) [ ] Ergänze npm-Skripte in Dokumentation der Entwickler-Workflows
+   a) [x] Ergänze npm-Skripte in Dokumentation der Entwickler-Workflows
       - Datei: `README-dev.md`
       - Abschnitt: Setup/Development Steps
       - Ziel: Beschreibe Installation, `npm run dev`, `npm run build`, `npm run typecheck`, Lint-Befehle.
