@@ -129,7 +129,7 @@
       - Ziel: Testet, dass `dashboard.js` & Begleit-Chunks im `www` Verzeichnis vorhanden sind.
 
 8. Validierung & Release-Vorbereitung
-   a) [ ] Führe `npm run build` und `npm run typecheck` lokal aus
+   a) [x] Führe `npm run build` und `npm run typecheck` lokal aus
       - Ziel: Validierung, dass neue Toolchain fehlerfrei arbeitet und Artefakte erzeugt.
    b) [ ] Starte Home Assistant Dev-Server und prüfe Dashboard-Funktionalität
       - Datei/Tool: `./scripts/develop`
