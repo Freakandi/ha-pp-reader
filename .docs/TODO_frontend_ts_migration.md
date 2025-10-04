@@ -95,7 +95,7 @@
       - Datei: `src/types/global.d.ts`
       - Abschnitt: Window-/HTMLElement-Erweiterungen
       - Ziel: Passe die globalen Signaturen (`__ppReader...`) an die neuen Tab-Typen und Map-Erweiterungen an.
-   h) [ ] Beseitige `any`/`unknown` in Kernmodulen mit sinnvollen Typ-Guards
+   h) [x] Beseitige `any`/`unknown` in Kernmodulen mit sinnvollen Typ-Guards
       - Dateien: `src/dashboard/index.ts`, `src/dashboard.ts`
       - Abschnitt: State-Management, Event-Hooks
       - Ziel: Erreiche strikte Typprüfung ohne Laufzeitverhalten zu ändern.

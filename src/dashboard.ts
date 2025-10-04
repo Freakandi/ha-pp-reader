@@ -1,34 +1,203 @@
-// @ts-nocheck
-
 /**
  * Mirrors the legacy dashboard controller for initial TypeScript migration.
  */
 
-import { addSwipeEvents } from './interaction/tab_control';
+import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
 import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
 import {
   handleAccountUpdate,
   handleLastFileUpdate,
   handlePortfolioUpdate,
-  handlePortfolioPositionsUpdate
+  handlePortfolioPositionsUpdate,
 } from './data/updateConfigsWS';
 import { getEntryId } from './data/api';
+import type {
+  DashboardTabDescriptor,
+  PanelConfigLike,
+} from './tabs/types';
+import type {
+  HassEvent,
+  HassPanel,
+  HassPanels,
+  HassRoute,
+  HassUnsubscribe,
+  HomeAssistant,
+} from './types/home-assistant';
+
+type AddSwipeEvents = (
+  element: HTMLElement,
+  onSwipeLeft: () => void,
+  onSwipeRight: () => void,
+) => void;
+
+const addSwipeEvents = addSwipeEventsUnsafe as AddSwipeEvents;
+
+type PanelLike = PanelConfigLike | HassPanel | null | undefined;
+
+type AccountsUpdatePayload = Parameters<typeof handleAccountUpdate>[0];
+type LastFileUpdatePayload = Parameters<typeof handleLastFileUpdate>[0];
+type PortfolioValuesUpdatePayload = Parameters<typeof handlePortfolioUpdate>[0];
+type PortfolioPositionsUpdatePayload = Parameters<typeof handlePortfolioPositionsUpdate>[0];
+
+type PortfolioPositionsSingleUpdate = Extract<
+  PortfolioPositionsUpdatePayload,
+  Record<string, unknown>
+>;
+
+type PortfolioPositionsArrayUpdate = Extract<
+  PortfolioPositionsUpdatePayload,
+  readonly unknown[]
+>;
+
+type DashboardUpdateType =
+  | 'accounts'
+  | 'last_file_update'
+  | 'portfolio_values'
+  | 'portfolio_positions';
+
+type DashboardUpdatePayloadMap = {
+  accounts: AccountsUpdatePayload;
+  last_file_update: LastFileUpdatePayload;
+  portfolio_values: PortfolioValuesUpdatePayload;
+  portfolio_positions: PortfolioPositionsUpdatePayload;
+};
+
+type DashboardUpdateQueueEntry<T extends DashboardUpdateType = DashboardUpdateType> = {
+  type: T;
+  data: DashboardUpdatePayloadMap[T] | null | undefined;
+  portfolioUuid?: string | null;
+};
+
+interface PanelsUpdatedEventData {
+  entry_id?: string | null;
+  data_type?: string | null;
+  data?: unknown;
+  [key: string]: unknown;
+}
+
+type PanelsUpdatedEvent = HassEvent<PanelsUpdatedEventData>;
+
+interface DashboardElement extends HTMLElement {
+  rememberScrollPosition?: (page?: number) => void;
+  _renderIfInitialized?: () => void;
+  _render?: () => void;
+}
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
-
 const OVERVIEW_TAB_KEY = 'overview';
-
-const baseTabs = [
-  { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard }
-];
-
-const detailTabRegistry = new Map();
-const detailTabOrder = [];
-const securityTabLookup = new Map();
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
-function extractSecurityUuidFromKey(key) {
+const baseTabs: DashboardTabDescriptor[] = [
+  { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
+];
+
+const detailTabRegistry = new Map<string, DashboardTabDescriptor>();
+const detailTabOrder: string[] = [];
+const securityTabLookup = new Map<string, string>();
+
+let securityDetailTabFactory: DetailTabFactory | null = null;
+let navigationInProgress = false;
+let lastClosedSecurityUuid: string | null = null;
+let currentPage = 0;
+let observer: IntersectionObserver | null = null;
+
+type DetailTabDescriptorInput = {
+  title: string;
+  render: DashboardTabDescriptor['render'];
+  cleanup?: DashboardTabDescriptor['cleanup'];
+  key?: string;
+  [key: string]: unknown;
+};
+type DetailTabFactory = (securityUuid: string) => DetailTabDescriptorInput | null | undefined;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
+  return (
+    value === 'accounts' ||
+    value === 'last_file_update' ||
+    value === 'portfolio_values' ||
+    value === 'portfolio_positions'
+  );
+}
+
+function extractPortfolioUuidFromSingleUpdate(
+  update: PortfolioPositionsSingleUpdate,
+): string | null {
+  const uuidCandidate = update.portfolio_uuid;
+  if (typeof uuidCandidate === 'string' && uuidCandidate) {
+    return uuidCandidate;
+  }
+  const camelCaseCandidate = (update as Record<string, unknown>).portfolioUuid;
+  if (typeof camelCaseCandidate === 'string' && camelCaseCandidate) {
+    return camelCaseCandidate;
+  }
+  return null;
+}
+
+function extractPortfolioUuidFromPositionsUpdate(
+  update: PortfolioPositionsUpdatePayload | null | undefined,
+): string | null {
+  if (!update) {
+    return null;
+  }
+  if (Array.isArray(update)) {
+    for (const item of update as PortfolioPositionsArrayUpdate) {
+      if (isRecord(item)) {
+        const uuid = extractPortfolioUuidFromSingleUpdate(item as PortfolioPositionsSingleUpdate);
+        if (uuid) {
+          return uuid;
+        }
+      }
+    }
+    return null;
+  }
+  if (!isRecord(update)) {
+    return null;
+  }
+  return extractPortfolioUuidFromSingleUpdate(update as PortfolioPositionsSingleUpdate);
+}
+
+function normalizeDashboardUpdate(
+  dataType: DashboardUpdateType,
+  data: unknown,
+): DashboardUpdateQueueEntry | null {
+  switch (dataType) {
+    case 'accounts':
+      return {
+        type: dataType,
+        data: Array.isArray(data) ? (data as AccountsUpdatePayload) : null,
+      };
+    case 'last_file_update':
+      if (typeof data === 'string') {
+        return { type: dataType, data: data as LastFileUpdatePayload };
+      }
+      if (isRecord(data)) {
+        return { type: dataType, data: data as LastFileUpdatePayload };
+      }
+      return { type: dataType, data: null };
+    case 'portfolio_values':
+      if (Array.isArray(data)) {
+        return { type: dataType, data: data as PortfolioValuesUpdatePayload };
+      }
+      return { type: dataType, data: null };
+    case 'portfolio_positions':
+      if (Array.isArray(data)) {
+        return { type: dataType, data: data as PortfolioPositionsUpdatePayload };
+      }
+      if (isRecord(data)) {
+        return { type: dataType, data: data as PortfolioPositionsUpdatePayload };
+      }
+      return { type: dataType, data: null };
+    default:
+      return null;
+  }
+}
+
+function extractSecurityUuidFromKey(key: string | null | undefined): string | null {
   if (typeof key !== 'string' || !key.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
     return null;
   }
@@ -37,11 +206,7 @@ function extractSecurityUuidFromKey(key) {
   return uuid || null;
 }
 
-let securityDetailTabFactory = null;
-let navigationInProgress = false;
-let lastClosedSecurityUuid = null;
-
-function tryReopenLastDetail() {
+function tryReopenLastDetail(): boolean {
   if (!lastClosedSecurityUuid) {
     return false;
   }
@@ -53,15 +218,14 @@ function tryReopenLastDetail() {
   return reopened;
 }
 
-function getVisibleTabs() {
+function getVisibleTabs(): DashboardTabDescriptor[] {
   const detailTabs = detailTabOrder
     .map((key) => detailTabRegistry.get(key))
-    .filter(Boolean);
+    .filter((descriptor): descriptor is DashboardTabDescriptor => Boolean(descriptor));
 
   return [...baseTabs, ...detailTabs];
 }
-
-function rememberCurrentPageScroll() {
+function rememberCurrentPageScroll(): void {
   try {
     const dashboardElement = findDashboardElement();
     if (dashboardElement && typeof dashboardElement.rememberScrollPosition === 'function') {
@@ -72,7 +236,7 @@ function rememberCurrentPageScroll() {
   }
 }
 
-function clampPageIndex(index) {
+function clampPageIndex(index: number): number {
   const tabs = getVisibleTabs();
   if (!tabs.length) {
     return 0;
@@ -86,7 +250,12 @@ function clampPageIndex(index) {
   return index;
 }
 
-async function navigateToPage(targetIndex, root, hass, panel) {
+async function navigateToPage(
+  targetIndex: number,
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panel: PanelLike,
+): Promise<void> {
   const tabs = getVisibleTabs();
   const clampedIndex = clampPageIndex(targetIndex);
   if (clampedIndex === currentPage) {
@@ -129,11 +298,19 @@ async function navigateToPage(targetIndex, root, hass, panel) {
   }
 }
 
-function navigateByDelta(delta, root, hass, panel) {
-  navigateToPage(currentPage + delta, root, hass, panel);
+function navigateByDelta(
+  delta: number,
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panel: PanelLike,
+): void {
+  void navigateToPage(currentPage + delta, root, hass, panel);
 }
 
-export function registerDetailTab(key, descriptor) {
+export function registerDetailTab(
+  key: string,
+  descriptor: DetailTabDescriptorInput | null | undefined,
+): void {
   if (!key || !descriptor || typeof descriptor.render !== 'function') {
     console.error('registerDetailTab: Ungültiger Tab-Descriptor', key, descriptor);
     return;
@@ -147,7 +324,7 @@ export function registerDetailTab(key, descriptor) {
     }
   }
 
-  const normalizedDescriptor = {
+  const normalizedDescriptor: DashboardTabDescriptor = {
     ...descriptor,
     key,
   };
@@ -163,7 +340,7 @@ export function registerDetailTab(key, descriptor) {
   }
 }
 
-export function unregisterDetailTab(key) {
+export function unregisterDetailTab(key: string | null | undefined): void {
   if (!key) {
     return;
   }
@@ -190,49 +367,51 @@ export function unregisterDetailTab(key) {
   }
 }
 
-export function hasDetailTab(key) {
+export function hasDetailTab(key: string): boolean {
   return detailTabRegistry.has(key);
 }
 
-export function getDetailTabDescriptor(key) {
-  return detailTabRegistry.get(key) || null;
+export function getDetailTabDescriptor(key: string): DashboardTabDescriptor | null {
+  return detailTabRegistry.get(key) ?? null;
 }
 
-export function setSecurityDetailTabFactory(factory) {
+export function setSecurityDetailTabFactory(
+  factory: DetailTabFactory | null | undefined,
+): void {
   if (factory != null && typeof factory !== 'function') {
     console.error('setSecurityDetailTabFactory: Erwartet Funktion oder null', factory);
     return;
   }
 
-  securityDetailTabFactory = factory || null;
+  securityDetailTabFactory = factory ?? null;
 }
 
-function getSecurityDetailTabKey(securityUuid) {
+function getSecurityDetailTabKey(securityUuid: string): string {
   return `${SECURITY_DETAIL_TAB_PREFIX}${securityUuid}`;
 }
 
-function findDashboardElement() {
+function findDashboardElement(): DashboardElement | null {
   const registered = window.__ppReaderDashboardElements;
   if (registered instanceof Set) {
     for (const element of registered) {
       if (element && element.isConnected) {
-        return element;
+        return element as DashboardElement;
       }
     }
   }
 
-  const direct = document.querySelector('pp-reader-dashboard');
+  const direct = document.querySelector<DashboardElement>('pp-reader-dashboard');
   if (direct) {
     return direct;
   }
 
-  const panelElements = document.querySelectorAll('pp-reader-panel');
+  const panelElements = document.querySelectorAll<HTMLElement>('pp-reader-panel');
   for (const panelElement of panelElements) {
     if (!panelElement || !panelElement.shadowRoot) {
       continue;
     }
 
-    const nested = panelElement.shadowRoot.querySelector('pp-reader-dashboard');
+    const nested = panelElement.shadowRoot.querySelector<DashboardElement>('pp-reader-dashboard');
     if (nested) {
       return nested;
     }
@@ -241,7 +420,7 @@ function findDashboardElement() {
   return null;
 }
 
-function requestDashboardRender() {
+function requestDashboardRender(): void {
   const dashboardElement = findDashboardElement();
   if (!dashboardElement) {
     console.warn('requestDashboardRender: Kein pp-reader-dashboard Element gefunden');
@@ -258,7 +437,7 @@ function requestDashboardRender() {
   }
 }
 
-export function openSecurityDetail(securityUuid) {
+export function openSecurityDetail(securityUuid: string | null | undefined): boolean {
   if (!securityUuid) {
     console.error('openSecurityDetail: Ungültige securityUuid', securityUuid);
     return false;
@@ -306,7 +485,14 @@ export function openSecurityDetail(securityUuid) {
   return true;
 }
 
-export function closeSecurityDetail(securityUuid, options = {}) {
+interface CloseSecurityDetailOptions {
+  suppressRender?: boolean;
+}
+
+export function closeSecurityDetail(
+  securityUuid: string | null | undefined,
+  options: CloseSecurityDetailOptions = {},
+): boolean {
   if (!securityUuid) {
     console.error('closeSecurityDetail: Ungültige securityUuid', securityUuid);
     return false;
@@ -352,20 +538,18 @@ export function closeSecurityDetail(securityUuid, options = {}) {
   }
   return true;
 }
-
-let currentPage = 0;
-let observer; // Globale Variable für Debugging
-
-async function renderTab(root, hass, panel) {
-  // Fallback: Panel-Konfiguration aus hass.panels ableiten, falls panel undefined
+async function renderTab(
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panel: PanelLike,
+): Promise<void> {
   let effectivePanel = panel;
   if (!effectivePanel && hass?.panels) {
-    // Versuche spezifische Keys
+    const panels: HassPanels = hass.panels;
     effectivePanel =
-      hass.panels.ppreader ||
-      hass.panels.pp_reader ||
-      // Suche nach unserem Webcomponent
-      Object.values(hass.panels).find(p => p?.webcomponent_name === 'pp-reader-panel') ||
+      panels.ppreader ||
+      panels.pp_reader ||
+      Object.values(panels).find((p) => p?.webcomponent_name === 'pp-reader-panel') ||
       null;
   }
 
@@ -375,72 +559,74 @@ async function renderTab(root, hass, panel) {
   }
 
   const tab = tabs[currentPage];
-  if (!tab || !tab.render) {
-    console.error("renderTab: Kein gültiger Tab oder keine render-Methode gefunden!");
+  if (!tab || typeof tab.render !== 'function') {
+    console.error('renderTab: Kein gültiger Tab oder keine render-Methode gefunden!');
     return;
   }
 
-  let content;
+  let content: string | void;
   try {
-    content = await tab.render(root, hass, effectivePanel); // effectivePanel statt panel
+    content = await tab.render(root, hass, effectivePanel);
   } catch (error) {
-    console.error("renderTab: Fehler beim Rendern des Tabs:", error);
-    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${(error && error.message) || error}</pre></div>`;
+    console.error('renderTab: Fehler beim Rendern des Tabs:', error);
+    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${(error as Error)?.message || error}</pre></div>`;
     return;
   }
 
   if (!root) {
-    console.error("renderTab: Root-Element nicht gefunden!");
+    console.error('renderTab: Root-Element nicht gefunden!');
     return;
   }
 
-  root.innerHTML = content;
+  root.innerHTML = content ?? '';
 
-  // NEU (Section 6): Scoped Listener für Portfolio-Expand nur für Overview-Tab (Index 0 / Titel 'Dashboard')
   if (tab.render === renderDashboard) {
     attachPortfolioToggleHandler(root);
   }
 
-  // Warte, bis die `.header-card` im DOM verfügbar ist
-  const waitForHeaderCard = () => new Promise((resolve) => {
-    const interval = setInterval(() => {
-      const headerCard = root.querySelector('.header-card');
-      if (headerCard) {
-        clearInterval(interval);
-        resolve(headerCard);
-      }
-    }, 50);
-  });
+  const waitForHeaderCard = (): Promise<HTMLElement> =>
+    new Promise((resolve) => {
+      const interval = window.setInterval(() => {
+        const headerCard = root.querySelector<HTMLElement>('.header-card');
+        if (headerCard) {
+          clearInterval(interval);
+          resolve(headerCard);
+        }
+      }, 50);
+    });
 
   const headerCard = await waitForHeaderCard();
   if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
+    console.error('Header-Card nicht gefunden!');
     return;
   }
 
-  // Sticky-Anchor für IntersectionObserver erstellen (scoped innerhalb des Root-Elements)
-  let anchor = root.querySelector(`#${STICKY_HEADER_ANCHOR_ID}`);
+  let anchor = root.querySelector<HTMLElement>(`#${STICKY_HEADER_ANCHOR_ID}`);
   if (!anchor) {
     anchor = document.createElement('div');
     anchor.id = STICKY_HEADER_ANCHOR_ID;
-    headerCard.parentNode.insertBefore(anchor, headerCard);
+    const parent = headerCard.parentNode as (ParentNode & Node) | null;
+    if (parent && 'insertBefore' in parent) {
+      parent.insertBefore(anchor, headerCard);
+    }
   }
 
-  // Navigation und Scrollverhalten einrichten
-  setupNavigation(root, hass, panel); // Lokale Parameter übergeben
-  setupSwipeOnHeaderCard(root, hass, panel); // Lokale Parameter übergeben
+  setupNavigation(root, hass, panel);
+  setupSwipeOnHeaderCard(root, hass, panel);
   setupHeaderScrollBehavior(root);
 }
 
-function setupHeaderScrollBehavior(root) {
-  const headerCard = root.querySelector('.header-card');
+function setupHeaderScrollBehavior(root: HTMLElement): void {
+  const headerCard = root.querySelector<HTMLElement>('.header-card');
   const scrollBorder = root;
-  const anchor = root.querySelector(`#${STICKY_HEADER_ANCHOR_ID}`);
+  const anchor = root.querySelector<HTMLElement>(`#${STICKY_HEADER_ANCHOR_ID}`);
 
   if (!headerCard || !scrollBorder || !anchor) {
-    console.error("Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.");
+    console.error('Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.');
     return;
   }
+
+  observer?.disconnect();
 
   observer = new IntersectionObserver(
     ([entry]) => {
@@ -452,40 +638,48 @@ function setupHeaderScrollBehavior(root) {
     },
     {
       root: null,
-      rootMargin: `0px 0px 0px 0px`,
-      threshold: 0
-    }
+      rootMargin: '0px 0px 0px 0px',
+      threshold: 0,
+    },
   );
 
   observer.observe(anchor);
 }
 
-function setupSwipeOnHeaderCard(root, hass, panel) {
-  const headerCard = root.querySelector('.header-card');
+function setupSwipeOnHeaderCard(
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panel: PanelLike,
+): void {
+  const headerCard = root.querySelector<HTMLElement>('.header-card');
   if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
+    console.error('Header-Card nicht gefunden!');
     return;
   }
 
   addSwipeEvents(
     headerCard,
     () => navigateByDelta(1, root, hass, panel),
-    () => navigateByDelta(-1, root, hass, panel)
+    () => navigateByDelta(-1, root, hass, panel),
   );
 }
 
-function setupNavigation(root, hass, panel) {
-  const headerCard = root.querySelector('.header-card');
+function setupNavigation(
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panel: PanelLike,
+): void {
+  const headerCard = root.querySelector<HTMLElement>('.header-card');
   if (!headerCard) {
-    console.error("Header-Card nicht gefunden!");
+    console.error('Header-Card nicht gefunden!');
     return;
   }
 
-  const navLeft = headerCard.querySelector('#nav-left');
-  const navRight = headerCard.querySelector('#nav-right');
+  const navLeft = headerCard.querySelector<HTMLButtonElement>('#nav-left');
+  const navRight = headerCard.querySelector<HTMLButtonElement>('#nav-right');
 
   if (!navLeft || !navRight) {
-    console.error("Navigationspfeile nicht gefunden!");
+    console.error('Navigationspfeile nicht gefunden!');
     return;
   }
 
@@ -497,12 +691,12 @@ function setupNavigation(root, hass, panel) {
     navigateByDelta(1, root, hass, panel);
   });
 
-  updateNavigationState(headerCard); // Initialer Zustand der Navigationspfeile
+  updateNavigationState(headerCard);
 }
 
-function updateNavigationState(headerCard) {
-  const navLeft = headerCard.querySelector('#nav-left');
-  const navRight = headerCard.querySelector('#nav-right');
+function updateNavigationState(headerCard: HTMLElement): void {
+  const navLeft = headerCard.querySelector<HTMLButtonElement>('#nav-left');
+  const navRight = headerCard.querySelector<HTMLButtonElement>('#nav-right');
 
   if (navLeft) {
     if (currentPage === 0) {
@@ -524,203 +718,250 @@ function updateNavigationState(headerCard) {
 }
 
 class PPReaderDashboard extends HTMLElement {
+  private _root: HTMLElement;
+
+  private _hass: HomeAssistant | null = null;
+
+  private _panel: PanelLike = null;
+
+  private _narrow: boolean | null = null;
+
+  private _route: HassRoute | null = null;
+
+  private _lastPanel: PanelLike = null;
+
+  private _lastNarrow: boolean | null = null;
+
+  private _lastRoute: HassRoute | null = null;
+
+  private _lastPage: number | null = null;
+
+  private _scrollPositions: Record<number, number> = {};
+
+  private _unsubscribeEvents: HassUnsubscribe | null = null;
+
+  private _initialized = false;
+
+  private _hasNewData = false;
+
+  private _pendingUpdates: DashboardUpdateQueueEntry[] = [];
+
+  private _entryIdWaitWarned = false;
+
   constructor() {
     super();
     this._root = document.createElement('div');
     this._root.className = 'pp-reader-dashboard';
     this.appendChild(this._root);
-
-    this._lastPanel = null;
-    this._lastNarrow = null;
-    this._lastRoute = null;
-    this._lastPage = null;
-    this._scrollPositions = {}; // Speichert die Scroll-Position pro Tab
-
-    this._unsubscribeEvents = null; // Event-Bus-Listener für Updates
-    this._initialized = false; // Initialisierungs-Flag
-    this._hasNewData = false; // Flag für neue Daten
-    this._pendingUpdates = []; // Gespeicherte WS-Updates zur Re-Anwendung nach Re-Renders
-    this._entryIdWaitWarned = false; // Verhindert Log-Spam während wir auf entry_id warten
   }
 
-  set hass(hass) {
-    this._hass = hass;
-    this._checkInitialization(); // Überprüfe die Initialisierung
+  set hass(hass: HomeAssistant | null | undefined) {
+    this._hass = hass ?? null;
+    this._checkInitialization();
   }
 
-  set panel(panel) {
+  set panel(panel: PanelLike) {
     if (this._panel === panel) {
       return;
     }
-    this._panel = panel;
-    // Debug
-    // console.debug("PPReaderDashboard: panel setter", panel);
+    this._panel = panel ?? null;
     this._checkInitialization();
   }
 
-  set narrow(narrow) {
-    if (this._narrow === narrow) {
+  set narrow(narrow: boolean | null | undefined) {
+    if (this._narrow === (narrow ?? null)) {
       return;
     }
-    this._narrow = narrow;
-    this._renderIfInitialized(); // Rendere nur, wenn initialisiert
+    this._narrow = narrow ?? null;
+    this._renderIfInitialized();
   }
 
-  set route(route) {
-    if (this._route === route) {
+  set route(route: HassRoute | null | undefined) {
+    if (this._route === (route ?? null)) {
       return;
     }
-    this._route = route;
-    this._renderIfInitialized(); // Rendere nur, wenn initialisiert
+    this._route = route ?? null;
+    this._renderIfInitialized();
   }
 
-  connectedCallback() {
+  connectedCallback(): void {
     this._checkInitialization();
   }
 
-  disconnectedCallback() {
-    // Wenn das Element aus dem DOM fliegt, sauber abmelden
-    if (typeof this._unsubscribeEvents === "function") {
-      this._unsubscribeEvents();
-      // console.debug("PPReaderDashboard: Event-Listener entfernt");
-      this._unsubscribeEvents = null;
-    }
-    super.disconnectedCallback && super.disconnectedCallback();
+  disconnectedCallback(): void {
+    this._removeEventListeners();
   }
 
-  _checkInitialization() {
-    if (!this._hass || this._initialized) return;
+  public _checkInitialization(): void {
+    if (!this._hass || this._initialized) {
+      return;
+    }
 
-    // Panel-Fallback falls nicht gesetzt
     if (!this._panel && this._hass.panels) {
+      const panels: HassPanels = this._hass.panels;
       this._panel =
-        this._hass.panels.ppreader ||
-        this._hass.panels.pp_reader ||
-        Object.values(this._hass.panels).find(p => p?.config?._panel_custom?.module_url?.includes('pp_reader_dashboard')) ||
+        panels.ppreader ||
+        panels.pp_reader ||
+        (Object.values(panels).find(
+          (panelConfig) => panelConfig?.webcomponent_name === 'pp-reader-panel',
+        ) as PanelLike) ||
         null;
     }
 
     const entryId = getEntryId(this._hass, this._panel);
     if (!entryId) {
       if (!this._entryIdWaitWarned) {
-        console.warn("PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration.");
+        console.warn('PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration.');
         this._entryIdWaitWarned = true;
       }
       return;
     }
 
     this._entryIdWaitWarned = false;
-    console.debug("PPReaderDashboard: entry_id (fallback) =", entryId);
+    console.debug('PPReaderDashboard: entry_id (fallback) =', entryId);
     this._initialized = true;
-    this._initializeEventListeners(entryId);
+    this._initializeEventListeners();
     this._render();
   }
 
-  _initializeEventListeners(entryId) {
-    // Wenn schon mal registriert, vorher sauber abmelden
-    if (this._unsubscribeEvents) {
-      this._unsubscribeEvents();
-      this._unsubscribeEvents = null;
-    }
+  private _initializeEventListeners(): void {
+    this._removeEventListeners();
 
     const conn = this._hass?.connection;
-    if (!conn || typeof conn.subscribeEvents !== "function") {
-      console.error("PPReaderDashboard: keine valide WebSocket-Verbindung oder subscribeEvents fehlt");
+    if (!conn || typeof conn.subscribeEvents !== 'function') {
+      console.error('PPReaderDashboard: keine valide WebSocket-Verbindung oder subscribeEvents fehlt');
       return;
     }
 
-    // Korrektur: Richtiger Event-Typ ist 'panels_updated' (Wert von HA CONST EVENT_PANELS_UPDATED)
-    // Zur Sicherheit auch Legacy-Fehlwert registrieren (wird einfach nie feuern)
-    const eventTypes = ["panels_updated"]; // früher fälschlich: "EVENT_PANELS_UPDATED"
+    const eventTypes: readonly string[] = ['panels_updated'];
 
-    const subs = [];
+    const subs: HassUnsubscribe[] = [];
     Promise.all(
-      eventTypes.map(et =>
+      eventTypes.map((et) =>
         conn
           .subscribeEvents(this._handleBusEvent.bind(this), et)
-          .then(unsub => {
-            if (typeof unsub === "function") {
+          .then((unsub) => {
+            if (typeof unsub === 'function') {
               subs.push(unsub);
-              console.debug("PPReaderDashboard: subscribed to", et);
+              console.debug('PPReaderDashboard: subscribed to', et);
             } else {
-              console.error("PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für", et, unsub);
+              console.error(
+                'PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für',
+                et,
+                unsub,
+              );
             }
           })
-          .catch(err => {
-            console.error("PPReaderDashboard: Fehler bei subscribeEvents für", et, err);
-          })
-      )
+          .catch((err) => {
+            console.error('PPReaderDashboard: Fehler bei subscribeEvents für', et, err);
+          }),
+      ),
     ).then(() => {
       this._unsubscribeEvents = () => {
-        subs.forEach(f => {
-          try { f(); } catch (e) { /* noop */ }
+        subs.forEach((unsubscribe) => {
+          try {
+            unsubscribe();
+          } catch (error) {
+            // ignore cleanup errors
+          }
         });
-        console.debug("PPReaderDashboard: alle Event-Subscriptions entfernt");
+        console.debug('PPReaderDashboard: alle Event-Subscriptions entfernt');
       };
     });
   }
-
-  _removeEventListeners() {
-    if (typeof this._unsubscribeEvents === "function") {
+  private _removeEventListeners(): void {
+    if (typeof this._unsubscribeEvents === 'function') {
       try {
         this._unsubscribeEvents();
-        this._unsubscribeEvents = null;
-        // console.debug("PPReaderDashboard: Event-Listener erfolgreich entfernt.");
       } catch (error) {
-        console.error("PPReaderDashboard: Fehler beim Entfernen der Event-Listener:", error);
+        console.error('PPReaderDashboard: Fehler beim Entfernen der Event-Listener:', error);
       }
-    } else {
-      console.warn("PPReaderDashboard: Kein gültiger Event-Listener zum Entfernen gefunden.");
     }
+    this._unsubscribeEvents = null;
   }
 
-  _handleBusEvent(event) {
+  private _handleBusEvent(event: PanelsUpdatedEvent): void {
     const currentEntryId = getEntryId(this._hass, this._panel);
-    if (!currentEntryId || event.data.entry_id !== currentEntryId) return;
-
-    console.debug("PPReaderDashboard: Bus-Update erhalten", event.data);
-
-    this._queueUpdate(event.data.data_type, event.data.data);
-    // Daten direkt ins Rendern einfließen lassen
-    this._doRender(event.data.data_type, event.data.data);
-  }
-
-  _doRender(dataType, pushedData) {
-    if (dataType === "accounts") {
-      handleAccountUpdate(pushedData, this._root);
-    } else if (dataType === "last_file_update") {
-      handleLastFileUpdate(pushedData, this._root);
-    } else if (dataType === "portfolio_values") {
-      handlePortfolioUpdate(pushedData, this._root);
-    } else if (dataType === "portfolio_positions") {
-      // NEU: Einzelpositions-Update für ein bestimmtes Depot
-      handlePortfolioPositionsUpdate(pushedData, this._root);
-    } else {
-      console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
-    }
-  }
-
-  _queueUpdate(dataType, pushedData) {
-    if (!dataType) {
+    if (!currentEntryId) {
       return;
     }
 
-    if (!Array.isArray(this._pendingUpdates)) {
-      this._pendingUpdates = [];
+    const eventData = event?.data;
+    if (!eventData || !isDashboardUpdateType(eventData.data_type)) {
+      return;
     }
 
-    const entry = { type: dataType, data: this._cloneData(pushedData) };
+    if (eventData.entry_id && eventData.entry_id !== currentEntryId) {
+      return;
+    }
+
+    const normalized = normalizeDashboardUpdate(eventData.data_type, eventData.data);
+    if (!normalized) {
+      return;
+    }
+
+    this._queueUpdate(normalized.type, normalized.data);
+    this._doRender(normalized.type, normalized.data);
+  }
+
+  private _doRender<T extends DashboardUpdateType>(
+    dataType: T,
+    pushedData: DashboardUpdatePayloadMap[T] | null | undefined,
+  ): void {
+    switch (dataType) {
+      case 'accounts':
+        handleAccountUpdate(
+          pushedData as DashboardUpdatePayloadMap['accounts'],
+          this._root,
+        );
+        break;
+      case 'last_file_update':
+        handleLastFileUpdate(
+          pushedData as DashboardUpdatePayloadMap['last_file_update'],
+          this._root,
+        );
+        break;
+      case 'portfolio_values':
+        handlePortfolioUpdate(
+          pushedData as DashboardUpdatePayloadMap['portfolio_values'],
+          this._root,
+        );
+        break;
+      case 'portfolio_positions':
+        handlePortfolioPositionsUpdate(
+          pushedData as DashboardUpdatePayloadMap['portfolio_positions'],
+          this._root,
+        );
+        break;
+      default:
+        console.warn('PPReaderDashboard: Unbekannter Datentyp:', dataType);
+        break;
+    }
+  }
+
+  private _queueUpdate<T extends DashboardUpdateType>(
+    dataType: T,
+    pushedData: DashboardUpdatePayloadMap[T] | null | undefined,
+  ): void {
+    const clonedData = this._cloneData(pushedData);
+    const entry: DashboardUpdateQueueEntry<T> = {
+      type: dataType,
+      data: clonedData,
+    };
+
+    if (dataType === 'portfolio_positions') {
+      entry.portfolioUuid = extractPortfolioUuidFromPositionsUpdate(
+        clonedData as DashboardUpdatePayloadMap['portfolio_positions'],
+      );
+    }
 
     let index = -1;
-    if (dataType === "portfolio_positions" && pushedData && pushedData.portfolio_uuid) {
+    if (dataType === 'portfolio_positions' && entry.portfolioUuid) {
       index = this._pendingUpdates.findIndex(
-        (item) =>
-          item.type === dataType &&
-          item.data &&
-          item.data.portfolio_uuid === pushedData.portfolio_uuid
+        (item) => item.type === dataType && item.portfolioUuid === entry.portfolioUuid,
       );
     } else {
-      index = this._pendingUpdates.findIndex(item => item.type === dataType);
+      index = this._pendingUpdates.findIndex((item) => item.type === dataType);
     }
 
     if (index >= 0) {
@@ -732,26 +973,28 @@ class PPReaderDashboard extends HTMLElement {
     this._hasNewData = true;
   }
 
-  _cloneData(data) {
+  private _cloneData<T>(data: T): T {
     if (data == null) {
       return data;
     }
+
     try {
-      if (typeof structuredClone === "function") {
+      if (typeof structuredClone === 'function') {
         return structuredClone(data);
       }
-    } catch (err) {
-      console.warn("PPReaderDashboard: structuredClone fehlgeschlagen, falle auf JSON zurück", err);
+    } catch (error) {
+      console.warn('PPReaderDashboard: structuredClone fehlgeschlagen, falle auf JSON zurück', error);
     }
+
     try {
-      return JSON.parse(JSON.stringify(data));
-    } catch (err) {
-      console.warn("PPReaderDashboard: JSON-Clone fehlgeschlagen, referenziere Originaldaten", err);
+      return JSON.parse(JSON.stringify(data)) as T;
+    } catch (error) {
+      console.warn('PPReaderDashboard: JSON-Clone fehlgeschlagen, referenziere Originaldaten', error);
       return data;
     }
   }
 
-  _reapplyPendingUpdates() {
+  private _reapplyPendingUpdates(): void {
     if (!Array.isArray(this._pendingUpdates) || this._pendingUpdates.length === 0) {
       return;
     }
@@ -760,19 +1003,18 @@ class PPReaderDashboard extends HTMLElement {
       try {
         this._doRender(item.type, this._cloneData(item.data));
       } catch (error) {
-        console.error("PPReaderDashboard: Fehler beim erneuten Anwenden eines Updates", item, error);
+        console.error('PPReaderDashboard: Fehler beim erneuten Anwenden eines Updates', item, error);
       }
     }
   }
 
-  _renderIfInitialized() {
-    // Rendere nur, wenn die Initialisierung abgeschlossen ist
+  public _renderIfInitialized(): void {
     if (this._initialized) {
       this._render();
     }
   }
 
-  rememberScrollPosition(page = currentPage) {
+  public rememberScrollPosition(page: number = currentPage): void {
     if (!this._root) {
       return;
     }
@@ -785,42 +1027,39 @@ class PPReaderDashboard extends HTMLElement {
     this._scrollPositions[targetPage] = this._root.scrollTop || 0;
   }
 
-  _render() {
+  private _render(): void {
     if (!this._hass) {
-      console.warn("pp-reader-dashboard: noch kein hass, überspringe _render()");
+      console.warn('pp-reader-dashboard: noch kein hass, überspringe _render()');
       return;
     }
     if (!this._initialized) {
-      console.debug("pp-reader-dashboard: _render aufgerufen bevor initialisiert");
+      console.debug('pp-reader-dashboard: _render aufgerufen bevor initialisiert');
       return;
     }
 
-    // Prüfen, ob ein Render notwendig ist
     const page = currentPage;
     if (
-      !this._hasNewData && // Nur rendern, wenn neue Daten vorliegen
+      !this._hasNewData &&
       this._panel === this._lastPanel &&
       this._narrow === this._lastNarrow &&
       this._route === this._lastRoute &&
       this._lastPage === page
     ) {
-      // console.log("pp-reader-dashboard: keine Änderungen → skip render");
       return;
     }
 
-    // Alte Scroll-Position merken (pro Tab)
     if (this._lastPage != null) {
       this._scrollPositions[this._lastPage] = this._root.scrollTop;
     }
 
     const maybePromise = renderTab(this._root, this._hass, this._panel);
-    if (maybePromise && typeof maybePromise.then === "function") {
-      maybePromise
+    if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
+      (maybePromise as Promise<void>)
         .then(() => {
           this._afterRender(page);
         })
         .catch((error) => {
-          console.error("PPReaderDashboard: Fehler beim Rendern des Tabs", error);
+          console.error('PPReaderDashboard: Fehler beim Rendern des Tabs', error);
           this._afterRender(page);
         });
     } else {
@@ -828,7 +1067,7 @@ class PPReaderDashboard extends HTMLElement {
     }
   }
 
-  _afterRender(page) {
+  private _afterRender(page: number): void {
     if (!this._root) {
       return;
     }
@@ -844,7 +1083,7 @@ class PPReaderDashboard extends HTMLElement {
     try {
       this._reapplyPendingUpdates();
     } catch (error) {
-      console.error("PPReaderDashboard: Fehler beim Wiederanlegen der Updates", error);
+      console.error('PPReaderDashboard: Fehler beim Wiederanlegen der Updates', error);
     }
 
     this._hasNewData = false;
@@ -855,7 +1094,7 @@ if (!customElements.get('pp-reader-dashboard')) {
   customElements.define('pp-reader-dashboard', PPReaderDashboard);
 }
 
-console.log("PPReader dashboard.js v20250914b geladen");
+console.log('PPReader dashboard.js v20250914b geladen');
 
 registerSecurityDetailTab({
   setSecurityDetailTabFactory,
