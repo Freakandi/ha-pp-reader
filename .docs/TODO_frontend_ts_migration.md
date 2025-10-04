@@ -138,7 +138,7 @@
       - Datei: `CHANGELOG.md`
       - Abschnitt: Unreleased / aktuelles Release
       - Ziel: Dokumentiere Einführung der TypeScript-Buildkette und gleichbleibendes Verhalten.
-   d) [ ] Ergänze Hinweise im `README.md` zu neuen Build-Schritten
+   d) [x] Ergänze Hinweise im `README.md` zu neuen Build-Schritten
       - Datei: `README.md`
       - Abschnitt: Installation/Entwicklung
       - Ziel: Endanwender und Entwickler über nötige Schritte informieren.
