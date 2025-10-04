@@ -21,7 +21,7 @@
       - Ziel: Linting-Regeln für das neue TypeScript-Quellverzeichnis bereitstellen.
 
 2. TypeScript-Quellstruktur anlegen
-   a) [ ] Erstelle `src/` Verzeichnis spiegelnd zum bisherigen `js/`
+   a) [x] Erstelle `src/` Verzeichnis spiegelnd zum bisherigen `js/`
       - Datei: `src/` (neu, Struktur nach `custom_components/pp_reader/www/pp_reader_dashboard/js/`)
       - Abschnitt: Alle Module (`dashboard`, `data`, `interaction`, `content` etc.)
       - Ziel: Kopiere bestehende Logik unverändert als `.ts` Dateien, um später schrittweise zu typisieren.
