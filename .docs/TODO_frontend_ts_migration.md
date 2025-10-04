@@ -11,7 +11,7 @@
       - Datei: `tsconfig.json` (neu)
       - Abschnitt: Compileroptionen
       - Ziel: Aktiviere Strict-Modus, ESM-Ausgabe, Source-Maps und passende Pfade für bundlergesteuerte Ausgabe.
-   d) [ ] Richte Vite/Rollup Konfiguration ein
+   d) [x] Richte Vite/Rollup Konfiguration ein
       - Datei: `vite.config.mjs` (neu)
       - Abschnitt: Exportierte Config
       - Ziel: Definiere Entry `src/dashboard.ts`, Ausgabepfad `custom_components/pp_reader/www/pp_reader_dashboard/js/`, Cache-Busting Hash und Source-Map-Generierung.
