@@ -87,7 +87,7 @@
       - Datei: `src/tabs/overview.ts`
       - Abschnitt: Toggle-/Sortier-Listener, Reload-Hilfen, DOM-Dataset-Konvertierung
       - Ziel: Schaffe typsichere Signaturen für `attachPortfolioToggleHandler`, Sorting/Retry-Helfer und DOM-Zugriffe auf `HTMLElement`/`QueryRoot`.
-   f) [ ] Typisiere Security-Detail-Tab inklusive Historienverwaltung
+   f) [x] Typisiere Security-Detail-Tab inklusive Historienverwaltung
       - Dateien: `src/tabs/security_detail.ts`, `src/content/charting.ts` (oder deklarative Typdatei)
       - Abschnitt: Snapshot-Verarbeitung, Range-Handling, Chart-Integration
       - Ziel: Entferne `@ts-nocheck`, führe typsichere States für History-Ranges/-Cache ein und beschreibe Chart-Hilfsfunktionen inkl. Event-Subscription.

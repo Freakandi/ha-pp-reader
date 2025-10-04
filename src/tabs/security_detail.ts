@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 /**
  * Security detail tab renderer migrated verbatim for TypeScript.
  */
@@ -13,27 +11,96 @@
  */
 import { createHeaderCard, formatNumber, formatGain } from '../content/elements';
 import { renderLineChart, updateLineChart } from '../content/charting';
-import { fetchSecuritySnapshotWS, fetchSecurityHistoryWS } from '../data/api';
+import type { LineChartOptions } from '../content/charting';
+import {
+  fetchSecuritySnapshotWS,
+  fetchSecurityHistoryWS,
+} from '../data/api';
+import type {
+  SecuritySnapshotResponse,
+  SecurityHistoryResponse,
+  SecurityHistoryOptions,
+} from '../data/api';
+import type { HomeAssistant } from '../types/home-assistant';
+import type {
+  DashboardTabRenderFn,
+  PanelConfigLike,
+  PortfolioPositionsUpdatedEventDetail,
+  SecurityHistoryRangeKey,
+  SecurityHistoryRangeState,
+  SecuritySnapshotLike,
+} from './types';
 
-const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 };
-const PRICE_FRACTION_DIGITS = { min: 2, max: 4 };
+const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
+const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
 const PRICE_SCALE = 1e8;
-const DEFAULT_HISTORY_RANGE = '1Y';
-const AVAILABLE_HISTORY_RANGES = ['1M', '6M', '1Y', '5Y'];
-const RANGE_DAY_COUNTS = {
+const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = '1Y';
+const AVAILABLE_HISTORY_RANGES: readonly SecurityHistoryRangeKey[] = [
+  '1M',
+  '6M',
+  '1Y',
+  '5Y',
+];
+const RANGE_DAY_COUNTS: Record<SecurityHistoryRangeKey, number> = {
   '1M': 30,
   '6M': 182,
   '1Y': 365,
   '5Y': 1826,
 };
 
-const SECURITY_HISTORY_CACHE = new Map(); // securityUuid -> Map(rangeKey -> series[])
-const RANGE_STATE_REGISTRY = new Map(); // securityUuid -> { activeRange }
-const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
-const LIVE_UPDATE_HANDLERS = new Map(); // securityUuid -> handler
+type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'>> & {
+  security_uuid?: string | null;
+  name?: string | null;
+  total_holdings?: number | string | null;
+  total_holdings_precise?: number | string | null;
+  last_price_native?: number | string | null;
+  last_price_eur?: number | string | null;
+  market_value_eur?: number | string | null;
+  current_value_eur?: number | string | null;
+  currency_code?: string | null;
+  last_price?: {
+    native?: number | string | null;
+    [key: string]: unknown;
+  } | null;
+  source?: string | null;
+  [key: string]: unknown;
+};
 
-function buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache }) {
-  const reasons = [];
+interface RawHistoryEntry {
+  date?: unknown;
+  close?: unknown;
+  [key: string]: unknown;
+}
+
+interface NormalizedHistoryEntry {
+  date: Date | string | number;
+  close: number;
+}
+
+type HistoryPlaceholderState =
+  | { status: 'loaded' }
+  | { status: 'empty' }
+  | { status: 'error'; message?: string };
+
+type SecurityHistoryCache = Map<SecurityHistoryRangeKey, NormalizedHistoryEntry[]>;
+
+type HistoryCacheRegistry = Map<string, SecurityHistoryCache>;
+
+type RangeStateRegistry = Map<string, SecurityHistoryRangeState>;
+
+type LiveUpdateHandler = (event: Event) => void;
+
+const SECURITY_HISTORY_CACHE: HistoryCacheRegistry = new Map();
+const RANGE_STATE_REGISTRY: RangeStateRegistry = new Map();
+const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
+const LIVE_UPDATE_HANDLERS = new Map<string, LiveUpdateHandler>();
+
+function buildCachedSnapshotNotice(params: {
+  fallbackUsed: boolean;
+  flaggedAsCache: boolean;
+}): string {
+  const { fallbackUsed, flaggedAsCache } = params;
+  const reasons: string[] = [];
   if (fallbackUsed) {
     reasons.push(
       'Der aktuelle Snapshot konnte nicht geladen werden. Es werden die zuletzt gespeicherten Werte angezeigt.',
@@ -58,7 +125,9 @@ function buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache }) {
   `;
 }
 
-function getCachedSecuritySnapshot(securityUuid) {
+function getCachedSecuritySnapshot(
+  securityUuid: string | null | undefined,
+): SecuritySnapshotDetail | null {
   if (!securityUuid || typeof window === 'undefined') {
     return null;
   }
@@ -67,7 +136,9 @@ function getCachedSecuritySnapshot(securityUuid) {
     const getter = window.__ppReaderGetSecuritySnapshotFromCache;
     if (typeof getter === 'function') {
       const snapshot = getter(securityUuid);
-      return snapshot && typeof snapshot === 'object' ? snapshot : null;
+      if (snapshot && typeof snapshot === 'object') {
+        return snapshot as SecuritySnapshotDetail;
+      }
     }
   } catch (error) {
     console.warn('getCachedSecuritySnapshot: Zugriff auf Cache fehlgeschlagen', error);
@@ -76,14 +147,14 @@ function getCachedSecuritySnapshot(securityUuid) {
   return null;
 }
 
-function ensureHistoryCache(securityUuid) {
+function ensureHistoryCache(securityUuid: string): SecurityHistoryCache {
   if (!SECURITY_HISTORY_CACHE.has(securityUuid)) {
     SECURITY_HISTORY_CACHE.set(securityUuid, new Map());
   }
-  return SECURITY_HISTORY_CACHE.get(securityUuid);
+  return SECURITY_HISTORY_CACHE.get(securityUuid) as SecurityHistoryCache;
 }
 
-function invalidateHistoryCache(securityUuid) {
+function invalidateHistoryCache(securityUuid: string | null | undefined): void {
   if (!securityUuid) {
     return;
   }
@@ -91,9 +162,7 @@ function invalidateHistoryCache(securityUuid) {
   if (SECURITY_HISTORY_CACHE.has(securityUuid)) {
     try {
       const cache = SECURITY_HISTORY_CACHE.get(securityUuid);
-      if (cache && typeof cache.clear === 'function') {
-        cache.clear();
-      }
+      cache?.clear();
     } catch (error) {
       console.warn('invalidateHistoryCache: Konnte Cache nicht leeren', securityUuid, error);
     }
@@ -101,7 +170,10 @@ function invalidateHistoryCache(securityUuid) {
   }
 }
 
-function handleLiveUpdateForSecurity(securityUuid, detail) {
+function handleLiveUpdateForSecurity(
+  securityUuid: string,
+  detail: PortfolioPositionsUpdatedEventDetail,
+): void {
   if (!securityUuid || !detail) {
     return;
   }
@@ -114,34 +186,40 @@ function handleLiveUpdateForSecurity(securityUuid, detail) {
   }
 }
 
-function ensureLiveUpdateSubscription(securityUuid) {
+function ensureLiveUpdateSubscription(securityUuid: string): void {
   if (!securityUuid || LIVE_UPDATE_HANDLERS.has(securityUuid)) {
     return;
   }
 
-  const handler = (event) => {
-    if (!event || !event.detail) {
+  const handler: LiveUpdateHandler = (event) => {
+    if (!(event instanceof CustomEvent)) {
       return;
     }
-    handleLiveUpdateForSecurity(securityUuid, event.detail);
+    const detail = event.detail as PortfolioPositionsUpdatedEventDetail | undefined;
+    if (!detail) {
+      return;
+    }
+    handleLiveUpdateForSecurity(securityUuid, detail);
   };
 
   try {
-    window.addEventListener(LIVE_UPDATE_EVENT, handler);
+    window.addEventListener(LIVE_UPDATE_EVENT, handler as EventListener);
     LIVE_UPDATE_HANDLERS.set(securityUuid, handler);
   } catch (error) {
     console.error('ensureLiveUpdateSubscription: Registrierung fehlgeschlagen', error);
   }
 }
 
-function removeLiveUpdateSubscription(securityUuid) {
+function removeLiveUpdateSubscription(securityUuid: string): void {
   if (!securityUuid || !LIVE_UPDATE_HANDLERS.has(securityUuid)) {
     return;
   }
 
   const handler = LIVE_UPDATE_HANDLERS.get(securityUuid);
   try {
-    window.removeEventListener(LIVE_UPDATE_EVENT, handler);
+    if (handler) {
+      window.removeEventListener(LIVE_UPDATE_EVENT, handler as EventListener);
+    }
   } catch (error) {
     console.error('removeLiveUpdateSubscription: Entfernen des Listeners fehlgeschlagen', error);
   }
@@ -149,7 +227,7 @@ function removeLiveUpdateSubscription(securityUuid) {
   LIVE_UPDATE_HANDLERS.delete(securityUuid);
 }
 
-function cleanupSecurityDetailState(securityUuid) {
+function cleanupSecurityDetailState(securityUuid: string): void {
   if (!securityUuid) {
     return;
   }
@@ -160,25 +238,24 @@ function cleanupSecurityDetailState(securityUuid) {
   // range remains active when the user reopens the security detail.
 }
 
-function setActiveRange(securityUuid, rangeKey) {
+function setActiveRange(securityUuid: string, rangeKey: SecurityHistoryRangeKey): void {
   if (!RANGE_STATE_REGISTRY.has(securityUuid)) {
     RANGE_STATE_REGISTRY.set(securityUuid, { activeRange: rangeKey });
     return;
   }
   const state = RANGE_STATE_REGISTRY.get(securityUuid);
-  state.activeRange = rangeKey;
+  if (state) {
+    state.activeRange = rangeKey;
+  }
 }
 
-function getActiveRange(securityUuid) {
-  return RANGE_STATE_REGISTRY.get(securityUuid)?.activeRange || DEFAULT_HISTORY_RANGE;
+function getActiveRange(securityUuid: string): SecurityHistoryRangeKey {
+  return (
+    RANGE_STATE_REGISTRY.get(securityUuid)?.activeRange ?? DEFAULT_HISTORY_RANGE
+  );
 }
 
-function toEpochDay(date) {
-  // Portfolio Performance liefert Datumswerte als epoch day (Tage seit 1970-01-01).
-  // Vorher wurde ein "YYYYMMDD" Format verwendet, wodurch alle Filter leer liefen
-  // und die Historie im Frontend dauerhaft als leer angezeigt wurde. Mit der
-  // Umstellung auf eine echte Epoch-Day-Berechnung sprechen Frontend und Backend
-  // wieder dieselbe Sprache und historische Kurse werden korrekt geladen.
+function toEpochDay(date: Date): number {
   const epochMs = Date.UTC(
     date.getUTCFullYear(),
     date.getUTCMonth(),
@@ -187,16 +264,31 @@ function toEpochDay(date) {
   return Math.floor(epochMs / 86400000);
 }
 
-function normaliseDate(date) {
+function normaliseDate(date: Date): Date {
   const clone = new Date(date.getTime());
   clone.setUTCHours(0, 0, 0, 0);
   return clone;
 }
 
-function resolveRangeOptions(rangeKey) {
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function resolveRangeOptions(rangeKey: SecurityHistoryRangeKey): SecurityHistoryOptions {
   const now = normaliseDate(new Date());
   const rangeDays = RANGE_DAY_COUNTS[rangeKey];
-  const options = { end_date: toEpochDay(now) };
+  const options: SecurityHistoryOptions = { end_date: toEpochDay(now) };
 
   if (Number.isFinite(rangeDays) && rangeDays > 0) {
     const start = new Date(now.getTime());
@@ -207,7 +299,7 @@ function resolveRangeOptions(rangeKey) {
   return options;
 }
 
-function parseHistoryDate(raw) {
+function parseHistoryDate(raw: unknown): Date | null {
   if (!raw) {
     return null;
   }
@@ -217,7 +309,6 @@ function parseHistoryDate(raw) {
   }
 
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    // Backend liefert Epoch Days (Tage seit 1970-01-01).
     const timestamp = raw * 86400000;
     if (Number.isFinite(timestamp)) {
       return new Date(timestamp);
@@ -251,83 +342,81 @@ function parseHistoryDate(raw) {
   return null;
 }
 
-function normaliseHistorySeries(prices) {
+function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
   if (!Array.isArray(prices)) {
     return [];
   }
 
-  return prices
-    .map(entry => {
-      const rawClose = Number(entry?.close);
-      if (!Number.isFinite(rawClose)) {
+  return (prices as RawHistoryEntry[])
+    .map((entry) => {
+      const numericClose = toFiniteNumber(entry?.close);
+      if (numericClose == null) {
         return null;
       }
 
       const dateValue = parseHistoryDate(entry?.date);
 
       return {
-        date: dateValue || entry?.date,
-        close: rawClose / PRICE_SCALE,
+        date: dateValue ?? (entry?.date as Date | string | number),
+        close: numericClose / PRICE_SCALE,
       };
     })
-    .filter(Boolean);
+    .filter((entry): entry is NormalizedHistoryEntry => Boolean(entry));
 }
 
-function deriveFxRate(snapshot, latestNativePrice) {
+function deriveFxRate(
+  snapshot: SecuritySnapshotDetail | null,
+  latestNativePrice: unknown,
+): number | null {
   const currency = String(snapshot?.currency_code || '').toUpperCase();
   if (!currency || currency === 'EUR') {
-    // Kein Fremdwährungsrisiko – Werte liegen bereits in EUR vor.
     return 1;
   }
 
-  const lastPriceEurRaw = snapshot?.last_price_eur;
-  const lastPriceEur = Number.isFinite(lastPriceEurRaw)
-    ? lastPriceEurRaw
-    : Number.parseFloat(lastPriceEurRaw);
+  const lastPriceEur = toFiniteNumber(snapshot?.last_price_eur);
 
-  if (!Number.isFinite(lastPriceEur) || lastPriceEur <= 0) {
-    // Ohne EUR-Referenzkurs können wir nicht in EUR umrechnen.
+  if (lastPriceEur == null || lastPriceEur <= 0) {
     return null;
   }
 
-  const snapshotNativeRaw = snapshot?.last_price_native;
-  const snapshotNative = Number.isFinite(snapshotNativeRaw)
-    ? snapshotNativeRaw
-    : Number.parseFloat(snapshotNativeRaw);
+  const snapshotNative = toFiniteNumber(snapshot?.last_price_native);
 
-  if (Number.isFinite(snapshotNative) && snapshotNative > 0) {
+  if (snapshotNative != null && snapshotNative > 0) {
     return lastPriceEur / snapshotNative;
   }
 
-  const historyNative = Number.isFinite(latestNativePrice)
-    ? latestNativePrice
-    : Number.parseFloat(latestNativePrice);
-  if (Number.isFinite(historyNative) && historyNative > 0) {
+  const historyNative = toFiniteNumber(latestNativePrice);
+  if (historyNative != null && historyNative > 0) {
     return lastPriceEur / historyNative;
   }
 
   return null;
 }
 
-function roundCurrency(value) {
-  if (!Number.isFinite(value)) {
+function roundCurrency(value: unknown): number | null {
+  const numeric = toFiniteNumber(value);
+  if (numeric == null) {
     return null;
   }
 
-  const rounded = Math.round(value * 100) / 100;
+  const rounded = Math.round(numeric * 100) / 100;
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
-function computeGainValues(historySeries, holdings, fxRate) {
+function computeGainValues(
+  historySeries: readonly NormalizedHistoryEntry[],
+  holdings: unknown,
+  fxRate: number | null,
+): { periodGain: number | null; dailyGain: number | null } {
   if (!Array.isArray(historySeries) || historySeries.length === 0) {
     return { periodGain: null, dailyGain: null };
   }
 
-  const holdingsNumeric = Number.isFinite(holdings)
-    ? holdings
-    : Number.parseFloat(holdings);
-  const safeHoldings = Number.isFinite(holdingsNumeric) ? holdingsNumeric : 0;
-  const safeFx = Number.isFinite(fxRate) && fxRate > 0 ? fxRate : null;
+  const holdingsNumeric = toFiniteNumber(holdings);
+  const safeHoldings = holdingsNumeric ?? 0;
+  const safeFx = typeof fxRate === 'number' && Number.isFinite(fxRate) && fxRate > 0
+    ? fxRate
+    : null;
 
   if (safeFx == null) {
     return { periodGain: null, dailyGain: null };
@@ -349,7 +438,7 @@ function computeGainValues(historySeries, holdings, fxRate) {
   };
 }
 
-function formatGainValue(value) {
+function formatGainValue(value: number | null): string {
   if (value == null || Number.isNaN(value)) {
     return '<span class="value neutral">—</span>';
   }
@@ -357,7 +446,11 @@ function formatGainValue(value) {
   return `<span class="value">${formatGain(value)}</span>`;
 }
 
-function buildInfoBar(rangeKey, periodGain, dailyGain) {
+function buildInfoBar(
+  rangeKey: SecurityHistoryRangeKey | string,
+  periodGain: number | null,
+  dailyGain: number | null,
+): string {
   const rangeLabel = rangeKey ? rangeKey : '';
   return `
     <div class="security-info-bar" data-range="${rangeLabel}">
@@ -373,7 +466,7 @@ function buildInfoBar(rangeKey, periodGain, dailyGain) {
   `;
 }
 
-function buildRangeSelector(activeRange) {
+function buildRangeSelector(activeRange: SecurityHistoryRangeKey): string {
   const buttons = AVAILABLE_HISTORY_RANGES.map((rangeKey) => {
     const activeClass = rangeKey === activeRange ? ' active' : '';
     return `
@@ -395,7 +488,10 @@ function buildRangeSelector(activeRange) {
   `;
 }
 
-function buildHistoryPlaceholder(rangeKey, state = { status: 'empty' }) {
+function buildHistoryPlaceholder(
+  rangeKey: SecurityHistoryRangeKey,
+  state: HistoryPlaceholderState = { status: 'empty' },
+): string {
   const safeRange = rangeKey || '';
 
   switch (state.status) {
@@ -429,12 +525,12 @@ function buildHistoryPlaceholder(rangeKey, state = { status: 'empty' }) {
   }
 }
 
-function formatHoldings(value) {
-  if (value == null || Number.isNaN(value)) {
+function formatHoldings(value: unknown): string {
+  const numeric = toFiniteNumber(value);
+  if (numeric == null) {
     return '—';
   }
 
-  const numeric = Number.isFinite(value) ? value : Number.parseFloat(value) || 0;
   const hasFraction = Math.abs(numeric % 1) > 0;
   const minFraction = hasFraction ? 2 : HOLDINGS_FRACTION_DIGITS.min;
   const maxFraction = hasFraction ? HOLDINGS_FRACTION_DIGITS.max : HOLDINGS_FRACTION_DIGITS.min;
@@ -444,19 +540,19 @@ function formatHoldings(value) {
   });
 }
 
-function formatPrice(value) {
-  if (value == null || Number.isNaN(value)) {
+function formatPrice(value: unknown): string {
+  const numeric = toFiniteNumber(value);
+  if (numeric == null) {
     return '—';
   }
 
-  const numeric = Number.isFinite(value) ? value : Number.parseFloat(value) || 0;
   return numeric.toLocaleString('de-DE', {
     minimumFractionDigits: PRICE_FRACTION_DIGITS.min,
     maximumFractionDigits: PRICE_FRACTION_DIGITS.max,
   });
 }
 
-function buildHeaderMeta(snapshot) {
+function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
   if (!snapshot) {
     return '<div class="meta-error">Keine Snapshot-Daten verfügbar.</div>';
   }
@@ -470,9 +566,11 @@ function buildHeaderMeta(snapshot) {
     formattedLastPrice === '—'
       ? '—'
       : `${formattedLastPrice}${currency ? `&nbsp;${currency}` : ''}`;
-  const marketValue = formatNumber(
-    snapshot.market_value_eur ?? snapshot.current_value_eur ?? 0,
-  );
+  const marketValueRaw =
+    toFiniteNumber(snapshot.market_value_eur) ??
+    toFiniteNumber(snapshot.current_value_eur) ??
+    0;
+  const marketValue = formatNumber(marketValueRaw);
 
   return `
     <div class="security-meta-grid">
@@ -496,7 +594,7 @@ function buildHeaderMeta(snapshot) {
   `;
 }
 
-function normaliseHistoryError(error) {
+function normaliseHistoryError(error: unknown): string | null {
   if (!error) {
     return null;
   }
@@ -516,18 +614,279 @@ function normaliseHistoryError(error) {
   }
 }
 
-export async function renderSecurityDetail(root, hass, panelConfig, securityUuid) {
+function getHistoryChartOptions(
+  host: HTMLElement,
+  series: readonly NormalizedHistoryEntry[],
+  { currency }: { currency?: string | null | undefined } = {},
+): LineChartOptions {
+  const measuredWidth = host.clientWidth || host.offsetWidth || 0;
+  const width = measuredWidth > 0 ? measuredWidth : 640;
+  const height = Math.min(Math.max(Math.floor(width * 0.55), 220), 420);
+  const safeCurrency = (currency || '').toUpperCase() || 'EUR';
+
+  return {
+    width,
+    height,
+    margin: { top: 16, right: 20, bottom: 32, left: 20 },
+    series,
+    yFormatter: (value) => formatPrice(value),
+    tooltipRenderer: ({ xFormatted, yFormatted }) => `
+      <div class="chart-tooltip-date">${xFormatted}</div>
+      <div class="chart-tooltip-value">${yFormatted}&nbsp;${safeCurrency}</div>
+    `,
+  };
+}
+
+const HISTORY_CHART_INSTANCES = new WeakMap<
+  HTMLElement,
+  ReturnType<typeof renderLineChart>
+>();
+
+function renderHistoryChart(
+  host: HTMLElement,
+  series: readonly NormalizedHistoryEntry[],
+  options: { currency?: string | null | undefined } = {},
+): void {
+  if (!host || !Array.isArray(series) || series.length === 0) {
+    return;
+  }
+
+  const chartOptions = getHistoryChartOptions(host, series, options);
+  let chartContainer = HISTORY_CHART_INSTANCES.get(host) || null;
+
+  if (!chartContainer || !host.contains(chartContainer)) {
+    host.innerHTML = '';
+    chartContainer = renderLineChart(host, chartOptions);
+    if (chartContainer) {
+      HISTORY_CHART_INSTANCES.set(host, chartContainer);
+    }
+    return;
+  }
+
+  updateLineChart(chartContainer, chartOptions);
+}
+
+function updateRangeButtons(
+  container: HTMLElement | null,
+  activeRange: SecurityHistoryRangeKey,
+): void {
+  if (!container) {
+    return;
+  }
+
+  container.dataset.activeRange = activeRange;
+  container.querySelectorAll<HTMLButtonElement>('.security-range-button').forEach((button) => {
+    const rangeKey = button.dataset.range as SecurityHistoryRangeKey | undefined;
+    const isActive = rangeKey === activeRange;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    button.disabled = false;
+    button.classList.remove('loading');
+  });
+}
+
+function updateInfoBarContent(
+  root: HTMLElement,
+  rangeKey: SecurityHistoryRangeKey,
+  periodGain: number | null,
+  dailyGain: number | null,
+): void {
+  const infoBar = root.querySelector('.security-info-bar');
+  if (!infoBar || !infoBar.parentElement) {
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = buildInfoBar(rangeKey, periodGain, dailyGain).trim();
+  const fresh = wrapper.firstElementChild;
+  if (!fresh) {
+    return;
+  }
+  infoBar.parentElement.replaceChild(fresh, infoBar);
+}
+
+function updateHistoryPlaceholder(
+  root: HTMLElement,
+  rangeKey: SecurityHistoryRangeKey,
+  state: HistoryPlaceholderState,
+  historySeries: readonly NormalizedHistoryEntry[],
+  options: { currency?: string | null | undefined } = {},
+): void {
+  const placeholderContainer = root.querySelector('.security-detail-placeholder');
+  if (!placeholderContainer) {
+    return;
+  }
+
+  placeholderContainer.innerHTML = `
+    <h2>Historie</h2>
+    ${buildHistoryPlaceholder(rangeKey, state)}
+  `;
+
+  if (state?.status === 'loaded' && Array.isArray(historySeries) && historySeries.length) {
+    const host = placeholderContainer.querySelector<HTMLElement>('.history-chart');
+    if (host) {
+      requestAnimationFrame(() => {
+        renderHistoryChart(host, historySeries, options);
+      });
+    }
+  }
+}
+
+interface ScheduleRangeSetupOptions {
+  root: HTMLElement;
+  hass: HomeAssistant | null | undefined;
+  panelConfig: PanelConfigLike | null | undefined;
+  securityUuid: string;
+  snapshot: SecuritySnapshotDetail | null;
+  holdings: unknown;
+  initialRange: SecurityHistoryRangeKey;
+  initialHistory: NormalizedHistoryEntry[];
+  initialHistoryState: HistoryPlaceholderState;
+}
+
+function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
+  const {
+    root,
+    hass,
+    panelConfig,
+    securityUuid,
+    snapshot,
+    holdings,
+    initialRange,
+    initialHistory,
+    initialHistoryState,
+  } = options;
+
+  if (!root) {
+    return;
+  }
+
+  setTimeout(() => {
+    const rangeSelector = root.querySelector<HTMLElement>('.security-range-selector');
+    if (!rangeSelector) {
+      return;
+    }
+
+    const cache = ensureHistoryCache(securityUuid);
+    const shouldCacheInitial =
+      Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
+    if (shouldCacheInitial) {
+      cache.set(initialRange, initialHistory);
+    }
+
+    ensureLiveUpdateSubscription(securityUuid);
+
+    setActiveRange(securityUuid, initialRange);
+    updateRangeButtons(rangeSelector, initialRange);
+    if (initialHistoryState) {
+      updateHistoryPlaceholder(
+        root,
+        initialRange,
+        initialHistoryState,
+        initialHistory,
+        { currency: snapshot?.currency_code },
+      );
+    }
+
+    const handleRangeClick = async (rangeKey: SecurityHistoryRangeKey): Promise<void> => {
+      if (!rangeKey || rangeKey === getActiveRange(securityUuid)) {
+        return;
+      }
+
+      const button = rangeSelector.querySelector<HTMLButtonElement>(
+        `.security-range-button[data-range="${rangeKey}"]`,
+      );
+      if (button) {
+        button.disabled = true;
+        button.classList.add('loading');
+      }
+
+      let historySeries = cache.get(rangeKey) || null;
+      let historyState: HistoryPlaceholderState | null = null;
+      if (!historySeries) {
+        try {
+          const rangeOptions = resolveRangeOptions(rangeKey);
+          const historyResponse = await fetchSecurityHistoryWS(
+            hass,
+            panelConfig,
+            securityUuid,
+            rangeOptions,
+          );
+          historySeries = normaliseHistorySeries(historyResponse?.prices);
+          cache.set(rangeKey, historySeries);
+          historyState = historySeries.length
+            ? { status: 'loaded' }
+            : { status: 'empty' };
+        } catch (error) {
+          console.error('Range-Wechsel: Historie konnte nicht geladen werden', error);
+          historySeries = [];
+          const message = normaliseHistoryError(error);
+          historyState = {
+            status: 'error',
+            message:
+              message ||
+              'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
+          };
+        }
+      } else {
+        historyState = historySeries.length
+          ? { status: 'loaded' }
+          : { status: 'empty' };
+      }
+
+      const lastClose = historySeries.length
+        ? historySeries[historySeries.length - 1].close
+        : snapshot?.last_price_native;
+      const activeFxRate = deriveFxRate(snapshot, lastClose);
+      const { periodGain, dailyGain } = computeGainValues(
+        historySeries,
+        holdings,
+        activeFxRate,
+      );
+
+      setActiveRange(securityUuid, rangeKey);
+      updateRangeButtons(rangeSelector, rangeKey);
+      updateInfoBarContent(root, rangeKey, periodGain, dailyGain);
+      updateHistoryPlaceholder(
+        root,
+        rangeKey,
+        historyState,
+        historySeries,
+        { currency: snapshot?.currency_code },
+      );
+    };
+
+    rangeSelector.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('.security-range-button');
+      if (!button || button.disabled) {
+        return;
+      }
+      const { range } = button.dataset;
+      if (!range || !AVAILABLE_HISTORY_RANGES.includes(range as SecurityHistoryRangeKey)) {
+        return;
+      }
+      handleRangeClick(range as SecurityHistoryRangeKey);
+    });
+  }, 0);
+}
+
+export async function renderSecurityDetail(
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panelConfig: PanelConfigLike | null | undefined,
+  securityUuid: string | null | undefined,
+): Promise<string> {
   if (!securityUuid) {
     console.error('renderSecurityDetail: securityUuid fehlt');
     return '<div class="card"><h2>Fehler</h2><p>Kein Wertpapier angegeben.</p></div>';
   }
 
   const cachedSnapshot = getCachedSecuritySnapshot(securityUuid);
-  let snapshot = null;
-  let error = null;
+  let snapshot: SecuritySnapshotDetail | null = null;
+  let error: string | null = null;
 
   try {
-    const response = await fetchSecuritySnapshotWS(
+    const response: SecuritySnapshotResponse = await fetchSecuritySnapshotWS(
       hass,
       panelConfig,
       securityUuid,
@@ -535,10 +894,10 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     if (response && typeof response === 'object') {
       snapshot =
         response.snapshot && typeof response.snapshot === 'object'
-          ? response.snapshot
-          : response;
+          ? (response.snapshot as SecuritySnapshotDetail)
+          : (response as unknown as SecuritySnapshotDetail);
     } else {
-      snapshot = response;
+      snapshot = response as unknown as SecuritySnapshotDetail;
     }
   } catch (err) {
     console.error('renderSecurityDetail: Snapshot konnte nicht geladen werden', err);
@@ -547,7 +906,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
 
   const effectiveSnapshot = snapshot || cachedSnapshot;
   const fallbackUsed = Boolean(cachedSnapshot && !snapshot);
-  const flaggedAsCache = effectiveSnapshot?.source === 'cache';
+  const flaggedAsCache = (effectiveSnapshot?.source ?? '') === 'cache';
   const staleNotice =
     effectiveSnapshot && (fallbackUsed || flaggedAsCache)
       ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
@@ -568,8 +927,8 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
 
   const activeRange = getActiveRange(securityUuid);
   const cache = ensureHistoryCache(securityUuid);
-  let historySeries = cache.has(activeRange) ? cache.get(activeRange) : null;
-  let historyState = { status: 'empty' };
+  let historySeries = cache.has(activeRange) ? cache.get(activeRange) ?? null : null;
+  let historyState: HistoryPlaceholderState = { status: 'empty' };
 
   if (Array.isArray(historySeries)) {
     historyState = historySeries.length
@@ -579,7 +938,7 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
     historySeries = [];
     try {
       const rangeOptions = resolveRangeOptions(activeRange);
-      const historyResponse = await fetchSecurityHistoryWS(
+      const historyResponse: SecurityHistoryResponse = await fetchSecurityHistoryWS(
         hass,
         panelConfig,
         securityUuid,
@@ -642,221 +1001,20 @@ export async function renderSecurityDetail(root, hass, panelConfig, securityUuid
   `;
 }
 
-function updateRangeButtons(container, activeRange) {
-  if (!container) {
-    return;
-  }
-
-  container.dataset.activeRange = activeRange;
-  container.querySelectorAll('.security-range-button').forEach((button) => {
-    const rangeKey = button.dataset.range;
-    const isActive = rangeKey === activeRange;
-    button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    button.disabled = false;
-    button.classList.remove('loading');
-  });
+interface RegisterSecurityDetailTabOptions {
+  setSecurityDetailTabFactory?: ((
+    factory: (securityUuid: string) => {
+      title: string;
+      render: DashboardTabRenderFn;
+      cleanup: (context?: { key: string }) => void;
+    },
+  ) => void) | null;
 }
 
-function updateInfoBarContent(root, rangeKey, periodGain, dailyGain) {
-  const infoBar = root.querySelector('.security-info-bar');
-  if (!infoBar || !infoBar.parentElement) {
-    return;
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = buildInfoBar(rangeKey, periodGain, dailyGain).trim();
-  const fresh = wrapper.firstElementChild;
-  if (!fresh) {
-    return;
-  }
-  infoBar.parentElement.replaceChild(fresh, infoBar);
-}
-
-const HISTORY_CHART_INSTANCES = new WeakMap();
-
-function getHistoryChartOptions(host, series, { currency } = {}) {
-  const measuredWidth = host.clientWidth || host.offsetWidth || 0;
-  const width = measuredWidth > 0 ? measuredWidth : 640;
-  const height = Math.min(Math.max(Math.floor(width * 0.55), 220), 420);
-  const safeCurrency = (currency || '').toUpperCase() || 'EUR';
-
-  return {
-    width,
-    height,
-    margin: { top: 16, right: 20, bottom: 32, left: 20 },
-    series,
-    yFormatter: formatPrice,
-    tooltipRenderer: ({ xFormatted, yFormatted }) => `
-      <div class="chart-tooltip-date">${xFormatted}</div>
-      <div class="chart-tooltip-value">${yFormatted}&nbsp;${safeCurrency}</div>
-    `,
-  };
-}
-
-function renderHistoryChart(host, series, options) {
-  if (!host || !Array.isArray(series) || series.length === 0) {
-    return;
-  }
-
-  const chartOptions = getHistoryChartOptions(host, series, options);
-  let chartContainer = HISTORY_CHART_INSTANCES.get(host);
-
-  if (!chartContainer || !host.contains(chartContainer)) {
-    host.innerHTML = '';
-    chartContainer = renderLineChart(host, chartOptions) || null;
-    if (chartContainer) {
-      HISTORY_CHART_INSTANCES.set(host, chartContainer);
-    }
-    return;
-  }
-
-  updateLineChart(chartContainer, chartOptions);
-}
-
-function updateHistoryPlaceholder(root, rangeKey, state, historySeries, options = {}) {
-  const placeholderContainer = root.querySelector('.security-detail-placeholder');
-  if (!placeholderContainer) {
-    return;
-  }
-
-  placeholderContainer.innerHTML = `
-    <h2>Historie</h2>
-    ${buildHistoryPlaceholder(rangeKey, state)}
-  `;
-
-  if (state?.status === 'loaded' && Array.isArray(historySeries) && historySeries.length) {
-    const host = placeholderContainer.querySelector('.history-chart');
-    if (host) {
-      requestAnimationFrame(() => {
-        renderHistoryChart(host, historySeries, options);
-      });
-    }
-  }
-}
-
-function scheduleRangeSetup({
-  root,
-  hass,
-  panelConfig,
-  securityUuid,
-  snapshot,
-  holdings,
-  initialRange,
-  initialHistory,
-  initialHistoryState,
-}) {
-  if (!root) {
-    return;
-  }
-
-  setTimeout(() => {
-    const rangeSelector = root.querySelector('.security-range-selector');
-    if (!rangeSelector) {
-      return;
-    }
-
-    const cache = ensureHistoryCache(securityUuid);
-    const shouldCacheInitial =
-      Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
-    if (shouldCacheInitial) {
-      cache.set(initialRange, initialHistory);
-    }
-
-    ensureLiveUpdateSubscription(securityUuid);
-
-    setActiveRange(securityUuid, initialRange);
-    updateRangeButtons(rangeSelector, initialRange);
-    if (initialHistoryState) {
-      updateHistoryPlaceholder(
-        root,
-        initialRange,
-        initialHistoryState,
-        initialHistory,
-        { currency: snapshot?.currency_code },
-      );
-    }
-
-    const handleRangeClick = async (rangeKey) => {
-      if (!rangeKey || rangeKey === getActiveRange(securityUuid)) {
-        return;
-      }
-
-      const button = rangeSelector.querySelector(
-        `.security-range-button[data-range="${rangeKey}"]`,
-      );
-      if (button) {
-        button.disabled = true;
-        button.classList.add('loading');
-      }
-
-      let historySeries = cache.get(rangeKey) || null;
-      let historyState = null;
-      if (!historySeries) {
-        try {
-          const rangeOptions = resolveRangeOptions(rangeKey);
-          const historyResponse = await fetchSecurityHistoryWS(
-            hass,
-            panelConfig,
-            securityUuid,
-            rangeOptions,
-          );
-          historySeries = normaliseHistorySeries(historyResponse?.prices);
-          cache.set(rangeKey, historySeries);
-          historyState = historySeries.length
-            ? { status: 'loaded' }
-            : { status: 'empty' };
-        } catch (error) {
-          console.error('Range-Wechsel: Historie konnte nicht geladen werden', error);
-          historySeries = [];
-          const message = normaliseHistoryError(error);
-          historyState = {
-            status: 'error',
-            message:
-              message ||
-              'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
-          };
-        }
-      } else {
-        historyState = historySeries.length
-          ? { status: 'loaded' }
-          : { status: 'empty' };
-      }
-
-      const lastClose = historySeries.length
-        ? historySeries[historySeries.length - 1].close
-        : snapshot?.last_price_native;
-      const activeFxRate = deriveFxRate(snapshot, lastClose);
-      const { periodGain, dailyGain } = computeGainValues(
-        historySeries,
-        holdings,
-        activeFxRate,
-      );
-
-      setActiveRange(securityUuid, rangeKey);
-      updateRangeButtons(rangeSelector, rangeKey);
-      updateInfoBarContent(root, rangeKey, periodGain, dailyGain);
-      updateHistoryPlaceholder(
-        root,
-        rangeKey,
-        historyState,
-        historySeries,
-        { currency: snapshot?.currency_code },
-      );
-    };
-
-    rangeSelector.addEventListener('click', (event) => {
-      const button = event.target.closest('.security-range-button');
-      if (!button || button.disabled) {
-        return;
-      }
-      const { range } = button.dataset;
-      handleRangeClick(range);
-    });
-  }, 0);
-}
-
-export function registerSecurityDetailTab({ setSecurityDetailTabFactory }) {
+export function registerSecurityDetailTab(
+  options: RegisterSecurityDetailTabOptions,
+): void {
+  const { setSecurityDetailTabFactory } = options;
   if (typeof setSecurityDetailTabFactory !== 'function') {
     console.error('registerSecurityDetailTab: Ungültige Factory-Funktion übergeben');
     return;

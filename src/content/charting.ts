@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 /**
  * Chart preparation utilities preserved from the legacy dashboard.
  */
@@ -16,14 +14,116 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 260;
-const DEFAULT_MARGIN = { top: 12, right: 16, bottom: 24, left: 16 };
+const DEFAULT_MARGIN = { top: 12, right: 16, bottom: 24, left: 16 } as const;
 const DEFAULT_COLOR = 'var(--pp-reader-chart-line, #3f51b5)';
 const DEFAULT_AREA = 'var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))';
 const DEFAULT_TICK_FONT = '0.75rem';
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-function createSvgElement(tag, attrs = {}) {
-  const element = document.createElementNS(SVG_NS, tag);
+export type LineChartInputDatum = unknown;
+
+export type LineChartAccessor = (
+  entry: LineChartInputDatum,
+  index: number,
+) => unknown;
+
+export type LineChartFormatter = (
+  value: number,
+  entry: LineChartInputDatum,
+  index: number,
+) => string;
+
+export interface LineChartTooltipPayload {
+  point: LineChartComputedPoint;
+  xFormatted: string;
+  yFormatted: string;
+  data: LineChartInputDatum;
+  index: number;
+}
+
+export type LineChartTooltipRenderer = (
+  payload: LineChartTooltipPayload,
+) => string;
+
+export interface ChartMargin {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+interface ChartDimensions {
+  width: number;
+  height: number;
+  margin: ChartMargin;
+}
+
+export interface LineChartOptions {
+  series?: readonly LineChartInputDatum[];
+  width?: number;
+  height?: number;
+  margin?: Partial<ChartMargin>;
+  xAccessor?: LineChartAccessor;
+  yAccessor?: LineChartAccessor;
+  xFormatter?: LineChartFormatter;
+  yFormatter?: LineChartFormatter;
+  tooltipRenderer?: LineChartTooltipRenderer;
+  color?: string;
+  areaColor?: string;
+}
+
+interface LineChartRange {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  boundedWidth: number;
+  boundedHeight: number;
+}
+
+export interface LineChartComputedPoint {
+  index: number;
+  data: LineChartInputDatum;
+  xValue: number;
+  yValue: number;
+  x: number;
+  y: number;
+}
+
+interface LineChartInternalState extends ChartDimensions {
+  svg: SVGSVGElement | null;
+  areaPath: SVGPathElement | null;
+  linePath: SVGPathElement | null;
+  focusLine: SVGLineElement | null;
+  focusCircle: SVGCircleElement | null;
+  overlay: SVGRectElement | null;
+  tooltip: HTMLDivElement | null;
+  xAxis?: HTMLDivElement;
+  yAxis?: HTMLDivElement;
+  series: LineChartInputDatum[];
+  points: LineChartComputedPoint[];
+  range: LineChartRange | null;
+  xAccessor: LineChartAccessor;
+  yAccessor: LineChartAccessor;
+  xFormatter: LineChartFormatter;
+  yFormatter: LineChartFormatter;
+  tooltipRenderer: LineChartTooltipRenderer;
+  color: string;
+  areaColor: string;
+  handlersAttached: boolean;
+  handlePointerMove?: (event: PointerEvent) => void;
+  handlePointerLeave?: (event: PointerEvent) => void;
+}
+
+interface LineChartContainerElement extends HTMLDivElement {
+  __chartState?: LineChartInternalState;
+}
+
+function createSvgElement<K extends keyof SVGElementTagNameMap>(
+  tag: K,
+  attrs: Record<string, unknown> = {},
+): SVGElementTagNameMap[K] {
+  const element = document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
   Object.entries(attrs).forEach(([key, value]) => {
     if (value == null) {
       return;
@@ -33,7 +133,7 @@ function createSvgElement(tag, attrs = {}) {
   return element;
 }
 
-function toNumber(value, fallback = null) {
+function toNumber(value: unknown, fallback: number | null = null): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
@@ -48,10 +148,10 @@ function toNumber(value, fallback = null) {
   return fallback;
 }
 
-function toTimestamp(value, index) {
+function toTimestamp(value: unknown, fallbackIndex: number): number {
   if (value instanceof Date) {
     const timestamp = value.getTime();
-    return Number.isFinite(timestamp) ? timestamp : index;
+    return Number.isFinite(timestamp) ? timestamp : fallbackIndex;
   }
 
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -65,10 +165,24 @@ function toTimestamp(value, index) {
     }
   }
 
-  return index;
+  return fallbackIndex;
 }
 
-function defaultXFormatter(timestamp, dataPoint) {
+const defaultXAccessor: LineChartAccessor = (entry) => {
+  if (entry && typeof entry === 'object' && 'date' in entry) {
+    return (entry as { date?: unknown }).date;
+  }
+  return undefined;
+};
+
+const defaultYAccessor: LineChartAccessor = (entry) => {
+  if (entry && typeof entry === 'object' && 'close' in entry) {
+    return (entry as { close?: unknown }).close;
+  }
+  return undefined;
+};
+
+const defaultXFormatter: LineChartFormatter = (timestamp, dataPoint, _index) => {
   if (Number.isFinite(timestamp)) {
     const date = new Date(timestamp);
     if (!Number.isNaN(date.getTime())) {
@@ -76,8 +190,9 @@ function defaultXFormatter(timestamp, dataPoint) {
     }
   }
 
-  if (dataPoint?.date) {
-    return String(dataPoint.date);
+  if (dataPoint && typeof dataPoint === 'object' && 'date' in dataPoint) {
+    const raw = (dataPoint as { date?: unknown }).date;
+    return raw != null ? String(raw) : '';
   }
 
   if (timestamp == null) {
@@ -85,31 +200,51 @@ function defaultXFormatter(timestamp, dataPoint) {
   }
 
   return String(timestamp);
-}
+};
 
-function defaultYFormatter(value) {
-  const numeric = Number.isFinite(value) ? value : Number.parseFloat(value) || 0;
+const defaultYFormatter: LineChartFormatter = (value, _dataPoint, _index) => {
+  const numeric = Number.isFinite(value) ? value : Number.parseFloat(String(value)) || 0;
   return numeric.toLocaleString('de-DE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
+};
 
-function defaultTooltipRenderer({ xFormatted, yFormatted }) {
-  return `
+const defaultTooltipRenderer: LineChartTooltipRenderer = ({ xFormatted, yFormatted }) => `
     <div class="chart-tooltip-date">${xFormatted}</div>
     <div class="chart-tooltip-value">${yFormatted}&nbsp;€</div>
   `;
-}
 
-function ensureChartState(container) {
+function ensureChartState(container: LineChartContainerElement): LineChartInternalState {
   if (!container.__chartState) {
-    container.__chartState = {};
+    container.__chartState = {
+      svg: null,
+      areaPath: null,
+      linePath: null,
+      focusLine: null,
+      focusCircle: null,
+      overlay: null,
+      tooltip: null,
+      width: DEFAULT_WIDTH,
+      height: DEFAULT_HEIGHT,
+      margin: { ...DEFAULT_MARGIN },
+      series: [],
+      points: [],
+      range: null,
+      xAccessor: defaultXAccessor,
+      yAccessor: defaultYAccessor,
+      xFormatter: defaultXFormatter,
+      yFormatter: defaultYFormatter,
+      tooltipRenderer: defaultTooltipRenderer,
+      color: DEFAULT_COLOR,
+      areaColor: DEFAULT_AREA,
+      handlersAttached: false,
+    };
   }
   return container.__chartState;
 }
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) {
     return min;
   }
@@ -122,7 +257,7 @@ function clamp(value, min, max) {
   return value;
 }
 
-function buildAreaPath(points, baselineY) {
+function buildAreaPath(points: readonly LineChartComputedPoint[], baselineY: number): string {
   if (!Array.isArray(points) || points.length === 0) {
     return '';
   }
@@ -134,14 +269,12 @@ function buildAreaPath(points, baselineY) {
     })
     .join(' ');
 
-  const closing = `L${points[points.length - 1].x.toFixed(2)} ${baselineY.toFixed(
-    2,
-  )} L${points[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+  const closing = `L${points[points.length - 1].x.toFixed(2)} ${baselineY.toFixed(2)} L${points[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
 
   return `${moveLine} ${closing}`;
 }
 
-function buildLinePath(points) {
+function buildLinePath(points: readonly LineChartComputedPoint[]): string {
   if (!Array.isArray(points) || points.length === 0) {
     return '';
   }
@@ -154,7 +287,11 @@ function buildLinePath(points) {
     .join(' ');
 }
 
-function computePoints(series, dimensions, accessors) {
+function computePoints(
+  series: readonly LineChartInputDatum[],
+  dimensions: ChartDimensions,
+  accessors: { xAccessor: LineChartAccessor; yAccessor: LineChartAccessor },
+): { points: LineChartComputedPoint[]; range: LineChartRange | null } {
   const { width, height, margin } = dimensions;
   const { xAccessor, yAccessor } = accessors;
 
@@ -167,7 +304,7 @@ function computePoints(series, dimensions, accessors) {
       const rawX = xAccessor(entry, index);
       const rawY = yAccessor(entry, index);
       const xValue = toTimestamp(rawX, index);
-      const yValue = toNumber(rawY);
+      const yValue = toNumber(rawY, Number.NaN);
       if (!Number.isFinite(yValue)) {
         return null;
       }
@@ -178,7 +315,7 @@ function computePoints(series, dimensions, accessors) {
         yValue,
       };
     })
-    .filter(Boolean);
+    .filter((point): point is { index: number; data: LineChartInputDatum; xValue: number; yValue: number } => Boolean(point));
 
   if (rawPoints.length === 0) {
     return { points: [], range: null };
@@ -227,7 +364,7 @@ function computePoints(series, dimensions, accessors) {
       ...point,
       x,
       y,
-    };
+    } satisfies LineChartComputedPoint;
   });
 
   return {
@@ -243,18 +380,23 @@ function computePoints(series, dimensions, accessors) {
   };
 }
 
-function assignDimensions(state, width, height, margin) {
-  state.width = Number.isFinite(width) ? width : DEFAULT_WIDTH;
-  state.height = Number.isFinite(height) ? height : DEFAULT_HEIGHT;
+function assignDimensions(
+  state: LineChartInternalState,
+  width: number | undefined,
+  height: number | undefined,
+  margin: Partial<ChartMargin> | undefined,
+): void {
+  state.width = Number.isFinite(width) ? Number(width) : DEFAULT_WIDTH;
+  state.height = Number.isFinite(height) ? Number(height) : DEFAULT_HEIGHT;
   state.margin = {
-    top: Number.isFinite(margin?.top) ? margin.top : DEFAULT_MARGIN.top,
-    right: Number.isFinite(margin?.right) ? margin.right : DEFAULT_MARGIN.right,
-    bottom: Number.isFinite(margin?.bottom) ? margin.bottom : DEFAULT_MARGIN.bottom,
-    left: Number.isFinite(margin?.left) ? margin.left : DEFAULT_MARGIN.left,
+    top: Number.isFinite(margin?.top) ? Number(margin?.top) : DEFAULT_MARGIN.top,
+    right: Number.isFinite(margin?.right) ? Number(margin?.right) : DEFAULT_MARGIN.right,
+    bottom: Number.isFinite(margin?.bottom) ? Number(margin?.bottom) : DEFAULT_MARGIN.bottom,
+    left: Number.isFinite(margin?.left) ? Number(margin?.left) : DEFAULT_MARGIN.left,
   };
 }
 
-function formatTooltip(state, point) {
+function formatTooltip(state: LineChartInternalState, point: LineChartComputedPoint): string {
   const xFormatted = state.xFormatter(point.xValue, point.data, point.index);
   const yFormatted = state.yFormatter(point.yValue, point.data, point.index);
   return state.tooltipRenderer({
@@ -266,13 +408,17 @@ function formatTooltip(state, point) {
   });
 }
 
-function updateTooltipPosition(state, point, pointerY) {
-  const { tooltip, width, margin } = state;
+function updateTooltipPosition(
+  state: LineChartInternalState,
+  point: LineChartComputedPoint,
+  pointerY: number | null,
+): void {
+  const { tooltip, width, margin, height } = state;
   if (!tooltip) {
     return;
   }
 
-  const baselineY = state.height - margin.bottom;
+  const baselineY = height - margin.bottom;
   tooltip.style.visibility = 'visible';
   tooltip.style.opacity = '1';
   const tooltipWidth = tooltip.offsetWidth || 0;
@@ -281,7 +427,7 @@ function updateTooltipPosition(state, point, pointerY) {
   const maxVertical = Math.max(baselineY - tooltipHeight, 0);
   const padding = 12;
   const anchorY = Number.isFinite(pointerY)
-    ? clamp(pointerY, margin.top, baselineY)
+    ? clamp(pointerY ?? 0, margin.top, baselineY)
     : point.y;
   let vertical = anchorY + padding;
   if (vertical > maxVertical) {
@@ -291,7 +437,7 @@ function updateTooltipPosition(state, point, pointerY) {
   tooltip.style.transform = `translate(${Math.round(horizontal)}px, ${Math.round(vertical)}px)`;
 }
 
-function hideTooltip(state) {
+function hideTooltip(state: LineChartInternalState): void {
   const { tooltip, focusLine, focusCircle } = state;
   if (tooltip) {
     tooltip.style.opacity = '0';
@@ -305,13 +451,16 @@ function hideTooltip(state) {
   }
 }
 
-function attachPointerHandlers(container, state) {
-  if (state.handlersAttached) {
+function attachPointerHandlers(
+  container: LineChartContainerElement,
+  state: LineChartInternalState,
+): void {
+  if (state.handlersAttached || !state.overlay) {
     return;
   }
 
-  const handlePointerMove = (event) => {
-    if (!state.points || state.points.length === 0) {
+  const handlePointerMove = (event: PointerEvent) => {
+    if (!state.points || state.points.length === 0 || !state.svg) {
       hideTooltip(state);
       return;
     }
@@ -370,15 +519,20 @@ function attachPointerHandlers(container, state) {
   state.handlersAttached = true;
   state.handlePointerMove = handlePointerMove;
   state.handlePointerLeave = handlePointerLeave;
+
+  container.addEventListener('pointercancel', handlePointerLeave);
 }
 
-export function renderLineChart(root, options = {}) {
+export function renderLineChart(
+  root: HTMLElement,
+  options: LineChartOptions = {},
+): LineChartContainerElement | null {
   if (!root) {
     console.error('renderLineChart: root element is required');
     return null;
   }
 
-  const container = document.createElement('div');
+  const container = document.createElement('div') as LineChartContainerElement;
   container.className = 'line-chart-container';
   container.dataset.chartType = 'line';
   container.style.position = 'relative';
@@ -462,13 +616,13 @@ export function renderLineChart(root, options = {}) {
   state.focusCircle = focusCircle;
   state.overlay = overlay;
   state.tooltip = tooltip;
-  state.xAccessor = options.xAccessor || ((entry) => entry?.date);
-  state.yAccessor = options.yAccessor || ((entry) => entry?.close);
-  state.xFormatter = options.xFormatter || defaultXFormatter;
-  state.yFormatter = options.yFormatter || defaultYFormatter;
-  state.tooltipRenderer = options.tooltipRenderer || defaultTooltipRenderer;
-  state.color = options.color || DEFAULT_COLOR;
-  state.areaColor = options.areaColor || DEFAULT_AREA;
+  state.xAccessor = options.xAccessor ?? defaultXAccessor;
+  state.yAccessor = options.yAccessor ?? defaultYAccessor;
+  state.xFormatter = options.xFormatter ?? defaultXFormatter;
+  state.yFormatter = options.yFormatter ?? defaultYFormatter;
+  state.tooltipRenderer = options.tooltipRenderer ?? defaultTooltipRenderer;
+  state.color = options.color ?? DEFAULT_COLOR;
+  state.areaColor = options.areaColor ?? DEFAULT_AREA;
   state.handlersAttached = false;
 
   if (!state.xAxis) {
@@ -503,10 +657,18 @@ export function renderLineChart(root, options = {}) {
 
   assignDimensions(state, options.width, options.height, options.margin);
 
-  linePath.setAttribute('stroke', state.color);
-  focusLine.setAttribute('stroke', state.color);
-  focusCircle.setAttribute('stroke', state.color);
-  areaPath.setAttribute('fill', state.areaColor);
+  if (state.linePath) {
+    state.linePath.setAttribute('stroke', state.color);
+  }
+  if (state.focusLine) {
+    state.focusLine.setAttribute('stroke', state.color);
+  }
+  if (state.focusCircle) {
+    state.focusCircle.setAttribute('stroke', state.color);
+  }
+  if (state.areaPath) {
+    state.areaPath.setAttribute('fill', state.areaColor);
+  }
 
   updateLineChart(container, options);
   attachPointerHandlers(container, state);
@@ -514,7 +676,10 @@ export function renderLineChart(root, options = {}) {
   return container;
 }
 
-export function updateLineChart(container, options = {}) {
+export function updateLineChart(
+  container: LineChartContainerElement | null,
+  options: LineChartOptions = {},
+): void {
   if (!container) {
     console.error('updateLineChart: container element is required');
     return;
@@ -544,8 +709,12 @@ export function updateLineChart(container, options = {}) {
   if (options.color) {
     state.color = options.color;
     state.linePath.setAttribute('stroke', state.color);
-    state.focusLine.setAttribute('stroke', state.color);
-    state.focusCircle.setAttribute('stroke', state.color);
+    if (state.focusLine) {
+      state.focusLine.setAttribute('stroke', state.color);
+    }
+    if (state.focusCircle) {
+      state.focusCircle.setAttribute('stroke', state.color);
+    }
   }
   if (options.areaColor) {
     state.areaColor = options.areaColor;
@@ -557,8 +726,8 @@ export function updateLineChart(container, options = {}) {
   assignDimensions(state, options.width, options.height, options.margin);
 
   const { width, height, margin } = state;
-  state.svg.setAttribute('width', width);
-  state.svg.setAttribute('height', height);
+  state.svg.setAttribute('width', String(width));
+  state.svg.setAttribute('height', String(height));
   state.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
   state.overlay.setAttribute('x', margin.left.toFixed(2));
@@ -573,7 +742,7 @@ export function updateLineChart(container, options = {}) {
   );
 
   const series = Array.isArray(options.series) ? options.series : state.series;
-  state.series = series || [];
+  state.series = Array.isArray(series) ? [...series] : [];
 
   const { points, range } = computePoints(state.series, state, {
     xAccessor: state.xAccessor,
@@ -604,8 +773,8 @@ export function updateLineChart(container, options = {}) {
   updateAxes(state);
 }
 
-function updateAxes(state) {
-  const { xAxis, yAxis, range, margin, width, height, yFormatter } = state;
+function updateAxes(state: LineChartInternalState): void {
+  const { xAxis, yAxis, range, margin, height, yFormatter } = state;
   if (!xAxis || !yAxis) {
     return;
   }
@@ -656,6 +825,7 @@ function updateAxes(state) {
   if (hasValidY && effectiveHeight > 0) {
     const desiredTicks = Math.max(2, Math.min(6, Math.round(effectiveHeight / 60) || 4));
     const yTicks = generateNumericAxisTicks(minY, maxY, desiredTicks);
+    const applyFormatter = yFormatter ?? defaultYFormatter;
     yTicks.forEach(({ value, positionRatio }) => {
       const tick = document.createElement('div');
       tick.className = 'line-chart-axis-tick line-chart-axis-tick-y';
@@ -664,13 +834,17 @@ function updateAxes(state) {
       const clampedRatio = clamp(positionRatio, 0, 1);
       const top = (1 - clampedRatio) * effectiveHeight;
       tick.style.top = `${top}px`;
-      tick.textContent = yFormatter ? yFormatter(value) : defaultYFormatter(value);
+      tick.textContent = applyFormatter(value, null, -1);
       yAxis.appendChild(tick);
     });
   }
 }
 
-function computeNiceDomain(minValue, maxValue, desiredTicks = 4) {
+function computeNiceDomain(
+  minValue: number,
+  maxValue: number,
+  desiredTicks = 4,
+): { niceMin: number; niceMax: number } {
   if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
     return {
       niceMin: minValue,
@@ -707,7 +881,13 @@ function computeNiceDomain(minValue, maxValue, desiredTicks = 4) {
   };
 }
 
-function generateTimeAxisTicks(state, minTimestamp, maxTimestamp, desiredTicks, rangeDays) {
+function generateTimeAxisTicks(
+  state: LineChartInternalState,
+  minTimestamp: number,
+  maxTimestamp: number,
+  desiredTicks: number,
+  rangeDays: number,
+): Array<{ positionRatio: number; label: string }> {
   if (!Number.isFinite(minTimestamp) || !Number.isFinite(maxTimestamp) || maxTimestamp < minTimestamp) {
     return [];
   }
@@ -723,7 +903,7 @@ function generateTimeAxisTicks(state, minTimestamp, maxTimestamp, desiredTicks, 
   }
 
   const tickCount = Math.max(2, desiredTicks);
-  const ticks = [];
+  const ticks: Array<{ positionRatio: number; label: string }> = [];
   const range = maxTimestamp - minTimestamp;
   for (let index = 0; index < tickCount; index += 1) {
     const ratio = tickCount === 1 ? 0.5 : index / (tickCount - 1);
@@ -736,7 +916,11 @@ function generateTimeAxisTicks(state, minTimestamp, maxTimestamp, desiredTicks, 
   return ticks;
 }
 
-function formatXAxisLabel(state, timestamp, rangeDays) {
+function formatXAxisLabel(
+  state: LineChartInternalState,
+  timestamp: number,
+  rangeDays: number,
+): string {
   const date = new Date(timestamp);
   if (Number.isFinite(date.getTime())) {
     if (rangeDays > 1095) {
@@ -769,7 +953,11 @@ function formatXAxisLabel(state, timestamp, rangeDays) {
   return state.xFormatter ? state.xFormatter(timestamp, null, -1) : String(timestamp);
 }
 
-function generateNumericAxisTicks(minValue, maxValue, desiredTicks) {
+function generateNumericAxisTicks(
+  minValue: number,
+  maxValue: number,
+  desiredTicks: number,
+): Array<{ value: number; positionRatio: number }> {
   if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
     return [];
   }
@@ -790,7 +978,7 @@ function generateNumericAxisTicks(minValue, maxValue, desiredTicks) {
   const start = Math.floor(minValue / step) * step;
   const end = Math.ceil(maxValue / step) * step;
 
-  const ticks = [];
+  const ticks: Array<{ value: number; positionRatio: number }> = [];
   for (let value = start; value <= end + step / 2; value += step) {
     const ratio = (value - minValue) / (maxValue - minValue);
     ticks.push({
@@ -806,14 +994,14 @@ function generateNumericAxisTicks(minValue, maxValue, desiredTicks) {
   return ticks;
 }
 
-function niceStep(value) {
+function niceStep(value: number): number {
   if (!Number.isFinite(value) || value === 0) {
     return 1;
   }
 
   const exponent = Math.floor(Math.log10(Math.abs(value)));
   const fraction = Math.abs(value) / 10 ** exponent;
-  let niceFraction;
+  let niceFraction: number;
   if (fraction <= 1) {
     niceFraction = 1;
   } else if (fraction <= 2) {
