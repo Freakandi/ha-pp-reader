@@ -71,7 +71,7 @@
       - Datei: `src/data/api.ts`
       - Abschnitt: Anfrage-/Antwortfabriken
       - Ziel: Ersetze dynamische `any` Checks durch typed Interfaces für Nachrichten und `entry_id` Handling.
-   b) [ ] Typisiere Update-Handler und DOM-Utilities
+   b) [x] Typisiere Update-Handler und DOM-Utilities
       - Datei: `src/data/updateConfigsWS.ts`, `src/content/elements.ts`
       - Abschnitt: Fenster-Caches, DOM-Manipulationen
       - Ziel: Nutze strukturierte Interfaces und vermeide untypisierte `window`-Zugriffe.

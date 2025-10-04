@@ -1,46 +1,92 @@
-// @ts-nocheck
-
 /**
  * Live update handlers mirrored from the legacy websocket client.
  */
 
 import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
+import type { SortDirection } from '../content/elements';
+import type { AccountSummary, PortfolioSummary } from './api';
+
+type QueryRoot = HTMLElement | Document;
+
+interface PortfolioPositionData {
+  security_uuid?: string | null;
+  name?: string | null;
+  current_holdings?: number | null;
+  purchase_value?: number | null;
+  current_value?: number | null;
+  gain_abs?: number | null;
+  gain_pct?: number | null;
+  [key: string]: unknown;
+}
+
+interface PortfolioPositionsUpdatePayload {
+  portfolio_uuid?: string | null;
+  portfolioUuid?: string | null;
+  positions?: PortfolioPositionData[] | null;
+  error?: unknown;
+  [key: string]: unknown;
+}
+
+interface PendingPortfolioUpdate {
+  positions: PortfolioPositionData[];
+  error?: unknown;
+}
+
+interface PendingRetryMeta {
+  attempts: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+interface ApplyPositionsResult {
+  applied: boolean;
+  reason?: 'invalid' | 'missing' | 'hidden';
+}
+
+interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
+  uuid?: string | null;
+  value?: number | null;
+  purchaseSum?: number | null;
+  count?: number | null;
+  position_count?: number | null;
+  [key: string]: unknown;
+}
 
 const PENDING_RETRY_INTERVAL = 500;
 const PENDING_MAX_ATTEMPTS = 10;
 const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
 
-function ensurePendingMap() {
+function ensurePendingMap(): Map<string, PendingPortfolioUpdate> {
   if (!window.__ppReaderPendingPositions) {
-    window.__ppReaderPendingPositions = new Map();
+    window.__ppReaderPendingPositions = new Map<string, PendingPortfolioUpdate>();
   }
   return window.__ppReaderPendingPositions;
 }
 
-function ensurePendingRetryMeta() {
+function ensurePendingRetryMeta(): Map<string, PendingRetryMeta> {
   if (!window.__ppReaderPendingRetryMeta) {
-    window.__ppReaderPendingRetryMeta = new Map();
+    window.__ppReaderPendingRetryMeta = new Map<string, PendingRetryMeta>();
   }
   return window.__ppReaderPendingRetryMeta;
 }
 
-function renderPositionsError(error, portfolioUuid) {
-  const safeError = typeof error === 'string' ? error : String(error || 'Unbekannter Fehler');
+function renderPositionsError(error: unknown, portfolioUuid: string): string {
+  const safeError = typeof error === 'string' ? error : String(error ?? 'Unbekannter Fehler');
   return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
 }
 
-function restoreSortAndInit(containerEl, rootEl, pid) {
-  const table = containerEl.querySelector('table.sortable-positions');
+function restoreSortAndInit(containerEl: HTMLElement, rootEl: QueryRoot, pid: string): void {
+  const table = containerEl.querySelector<HTMLTableElement>('table.sortable-positions');
   if (!table) return;
 
   const key = containerEl.dataset.sortKey || table.dataset.defaultSort || 'name';
-  const dir = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  const dirValue = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  const direction: SortDirection = dirValue === 'desc' ? 'desc' : 'asc';
   containerEl.dataset.sortKey = key;
-  containerEl.dataset.sortDir = dir;
+  containerEl.dataset.sortDir = direction;
 
   try {
-    sortTableRows(table, key, dir, true);
+    sortTableRows(table, key, direction, true);
   } catch (e) {
     console.warn('restoreSortAndInit: sortTableRows Fehler:', e);
   }
@@ -62,19 +108,24 @@ function restoreSortAndInit(containerEl, rootEl, pid) {
   }
 }
 
-function applyPortfolioPositionsToDom(root, portfolioUuid, positions, error) {
+function applyPortfolioPositionsToDom(
+  root: QueryRoot | null | undefined,
+  portfolioUuid: string | null | undefined,
+  positions: PortfolioPositionData[],
+  error?: unknown,
+): ApplyPositionsResult {
   if (!root || !portfolioUuid) {
     return { applied: false, reason: 'invalid' };
   }
 
-  const detailsRow = root.querySelector(
+  const detailsRow = root.querySelector<HTMLTableRowElement>(
     `.portfolio-table .portfolio-details[data-portfolio="${portfolioUuid}"]`
   );
   if (!detailsRow) {
     return { applied: false, reason: 'missing' };
   }
 
-  const container = detailsRow.querySelector('.positions-container');
+  const container = detailsRow.querySelector<HTMLElement>('.positions-container');
   if (!container) {
     return { applied: false, reason: 'missing' };
   }
@@ -91,7 +142,7 @@ function applyPortfolioPositionsToDom(root, portfolioUuid, positions, error) {
   const prevKey = container.dataset.sortKey;
   const prevDir = container.dataset.sortDir;
 
-  container.innerHTML = renderPositionsTableInline(positions || []);
+  container.innerHTML = renderPositionsTableInline(positions);
 
   if (prevKey) container.dataset.sortKey = prevKey;
   if (prevDir) container.dataset.sortDir = prevDir;
@@ -100,7 +151,7 @@ function applyPortfolioPositionsToDom(root, portfolioUuid, positions, error) {
   return { applied: true };
 }
 
-export function flushPendingPositions(root, portfolioUuid) {
+export function flushPendingPositions(root: QueryRoot | null | undefined, portfolioUuid: string): boolean {
   const pendingMap = ensurePendingMap();
   const pending = pendingMap.get(portfolioUuid);
   if (!pending) return false;
@@ -117,7 +168,7 @@ export function flushPendingPositions(root, portfolioUuid) {
   return result.applied;
 }
 
-export function flushAllPendingPositions(root) {
+export function flushAllPendingPositions(root: QueryRoot | null | undefined): boolean {
   const pendingMap = ensurePendingMap();
   let appliedAny = false;
   for (const [portfolioUuid] of pendingMap) {
@@ -128,9 +179,12 @@ export function flushAllPendingPositions(root) {
   return appliedAny;
 }
 
-function schedulePendingRetry(root, portfolioUuid) {
+function schedulePendingRetry(root: QueryRoot | null | undefined, portfolioUuid: string): void {
   const retryMetaMap = ensurePendingRetryMeta();
-  const meta = retryMetaMap.get(portfolioUuid) || { attempts: 0, timer: null };
+  const meta: PendingRetryMeta = retryMetaMap.get(portfolioUuid) ?? {
+    attempts: 0,
+    timer: null,
+  };
 
   if (meta.timer) {
     return;
@@ -156,31 +210,39 @@ function schedulePendingRetry(root, portfolioUuid) {
 
 /**
  * Handler für Kontodaten-Updates (Accounts, inkl. FX).
- * @param {Array} update - Die empfangenen Kontodaten (mit currency_code, orig_balance, balance(EUR)).
- * @param {HTMLElement} root - Das Root-Element des Dashboards.
+ * @param update Die empfangenen Kontodaten (mit currency_code, orig_balance, balance(EUR)).
+ * @param root Das Root-Element des Dashboards.
  */
-export function handleAccountUpdate(update, root) {
-  console.log("updateConfigsWS: Kontodaten-Update erhalten:", update);
-  const updatedAccounts = update || [];
+export function handleAccountUpdate(
+  update: AccountSummary[] | null | undefined,
+  root: QueryRoot | null | undefined,
+): void {
+  console.log('updateConfigsWS: Kontodaten-Update erhalten:', update);
+  const updatedAccounts = Array.isArray(update) ? update : [];
+
+  if (!root) {
+    return;
+  }
 
   // Tabellen aktualisieren (EUR + FX)
   updateAccountTable(updatedAccounts, root);
 
   // Portfolios aus aktueller Tabelle lesen (für Total-Neuberechnung)
-  const portfolioTable = root.querySelector('.portfolio-table table');
+  const portfolioTable = root.querySelector<HTMLTableElement>('.portfolio-table table');
   const portfolios = portfolioTable
-    ? Array.from(portfolioTable.querySelectorAll('tbody tr:not(.footer-row)')).map(row => {
-      // Spalten: Name | position_count | current_value | gain_abs | gain_pct
-      const currentValueCell = row.cells[2];
-      return {
-        current_value: parseFloat(
-          (currentValueCell?.textContent || '')
-            .replace(/\./g, '')
-            .replace(',', '.')
-            .replace(/[^\d.-]/g, '')
-        ) || 0
-      };
-    })
+    ? Array.from(
+        portfolioTable.querySelectorAll<HTMLTableRowElement>('tbody tr:not(.footer-row)'),
+      ).map(row => {
+        // Spalten: Name | position_count | current_value | gain_abs | gain_pct
+        const currentValueCell = row.cells.item(2);
+        const textContent = currentValueCell?.textContent ?? '';
+        const numeric = parseFloat(
+          textContent.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, ''),
+        );
+        return {
+          current_value: Number.isFinite(numeric) ? numeric : 0,
+        };
+      })
     : [];
 
   updateTotalWealth(updatedAccounts, portfolios, root);
@@ -191,40 +253,44 @@ export function handleAccountUpdate(update, root) {
  * @param {Array} accounts - Alle Kontodaten.
  * @param {HTMLElement} root - Root-Element.
  */
-function updateAccountTable(accounts, root) {
-  const eurContainer = root.querySelector('.account-table');
-  const fxContainer = root.querySelector('.fx-account-table');
+function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
+  const eurContainer = root.querySelector<HTMLElement>('.account-table');
+  const fxContainer = root.querySelector<HTMLElement>('.fx-account-table');
 
-  const eurAccounts = accounts.filter(a => (a.currency_code || 'EUR') === 'EUR');
-  const fxAccounts = accounts.filter(a => (a.currency_code || 'EUR') !== 'EUR');
+  const eurAccounts = accounts.filter(account => (account.currency_code || 'EUR') === 'EUR');
+  const fxAccounts = accounts.filter(account => (account.currency_code || 'EUR') !== 'EUR');
 
   if (eurContainer) {
-    eurContainer.innerHTML = makeTable(eurAccounts, [
-      { key: 'name', label: 'Name' },
-      { key: 'balance', label: 'Kontostand (EUR)', align: 'right' }
-    ], ['balance']);
+    eurContainer.innerHTML = makeTable(
+      eurAccounts,
+      [
+        { key: 'name', label: 'Name' },
+        { key: 'balance', label: 'Kontostand (EUR)', align: 'right' },
+      ],
+      ['balance'],
+    );
   } else {
-    console.warn("updateAccountTable: .account-table nicht gefunden.");
+    console.warn('updateAccountTable: .account-table nicht gefunden.');
   }
 
   if (fxContainer) {
     fxContainer.innerHTML = makeTable(
-      fxAccounts.map(a => ({
-        ...a,
-        fx_display: `${(a.orig_balance ?? 0).toLocaleString('de-DE', {
+      fxAccounts.map(account => ({
+        ...account,
+        fx_display: `${(account.orig_balance ?? 0).toLocaleString('de-DE', {
           minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })}\u00A0${a.currency_code}`
+          maximumFractionDigits: 2,
+        })}\u00A0${account.currency_code}`,
       })),
       [
         { key: 'name', label: 'Name' },
         { key: 'fx_display', label: 'Betrag (FX)' },
-        { key: 'balance', label: 'EUR', align: 'right' }
+        { key: 'balance', label: 'EUR', align: 'right' },
       ],
-      ['balance']
+      ['balance'],
     );
   } else if (fxAccounts.length) {
-    console.warn("updateAccountTable: .fx-account-table nicht gefunden, obwohl FX-Konten vorhanden sind.");
+    console.warn('updateAccountTable: .fx-account-table nicht gefunden, obwohl FX-Konten vorhanden sind.');
   }
 }
 
@@ -232,91 +298,113 @@ function updateAccountTable(accounts, root) {
  * Handler für Depot-Updates (aggregierte Portfolio-Werte).
  * Ersetzt die bisherige komplette Tabellen-Neuerstellung durch ein gezieltes Patchen
  * der vorhandenen expandierbaren Tabelle (gebaut in overview.js).
- * @param {Array} update - Die empfangenen Depotdaten (uuid, name, current_value, purchase_sum, position_count)
- * @param {HTMLElement} root - Root-Element.
  */
-export function handlePortfolioUpdate(update, root) {
+export function handlePortfolioUpdate(
+  update: PortfolioUpdatePayload[] | null | undefined,
+  root: QueryRoot | null | undefined,
+): void {
   if (!Array.isArray(update)) {
-    console.warn("handlePortfolioUpdate: Update ist kein Array:", update);
+    console.warn('handlePortfolioUpdate: Update ist kein Array:', update);
     return;
   }
+
   try {
-    console.debug("handlePortfolioUpdate: payload=", update);
-  } catch (_) { }
+    console.debug('handlePortfolioUpdate: payload=', update);
+  } catch {
+    // no-op for browsers without console.debug
+  }
+
+  if (!root) {
+    return;
+  }
 
   // Tabelle finden (neuer Selektor unterstützt beide Varianten)
   const table =
-    root?.querySelector('.portfolio-table table') ||
-    root?.querySelector('table.expandable-portfolio-table');
+    root.querySelector<HTMLTableElement>('.portfolio-table table') ||
+    root.querySelector<HTMLTableElement>('table.expandable-portfolio-table');
   if (!table) {
-    const overviewHost = root?.querySelector('.portfolio-table');
+    const overviewHost = root.querySelector('.portfolio-table');
     const detailViewActive =
       !overviewHost &&
-      (root?.querySelector('.security-range-selector') ||
-        root?.querySelector('.security-detail-placeholder'));
+      (root.querySelector('.security-range-selector') ||
+        root.querySelector('.security-detail-placeholder'));
 
     if (detailViewActive) {
       console.debug(
-        "handlePortfolioUpdate: Übersicht nicht aktiv – Update wird später angewendet."
+        'handlePortfolioUpdate: Übersicht nicht aktiv – Update wird später angewendet.',
       );
     } else {
-      console.warn("handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden.");
+      console.warn('handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden.');
     }
     return;
   }
-  const tbody = table.tBodies?.[0];
+
+  const tbody = table.tBodies.item(0) ?? table.querySelector('tbody');
   if (!tbody) {
-    console.warn("handlePortfolioUpdate: Kein <tbody> in Tabelle.");
+    console.warn('handlePortfolioUpdate: Kein <tbody> in Tabelle.');
     return;
   }
 
   // Helper Formatierer (lokal oder einfacher Fallback)
-  const formatNumber = (val) => {
+  const formatNumberLocal = (val: number): string => {
     if (window.Intl) {
       try {
         return new Intl.NumberFormat(navigator.language || 'de-DE', {
           minimumFractionDigits: 2,
-          maximumFractionDigits: 2
+          maximumFractionDigits: 2,
         }).format(val);
-      } catch (_) { }
+      } catch {
+        // fallback below
+      }
     }
     return (Math.round(val * 100) / 100).toFixed(2).replace('.', ',');
   };
 
   // Map: uuid -> Row
-  const rowMap = new Map(
-    Array.from(tbody.querySelectorAll('tr.portfolio-row'))
-      .filter(r => r.dataset && r.dataset.portfolio)
-      .map(r => [r.dataset.portfolio, r])
+  const rowMap = new Map<string, HTMLTableRowElement>(
+    Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr.portfolio-row'))
+      .filter(row => Boolean(row.dataset?.portfolio))
+      .map(row => [row.dataset.portfolio as string, row]),
   );
 
   let patched = 0;
 
-  const formatPositionCount = (value) => {
-    const numeric = Number.isFinite(value) ? value : 0;
+  const formatPositionCount = (value: number | null | undefined): string => {
+    const numeric = Number.isFinite(value) ? Number(value) : 0;
     try {
       return numeric.toLocaleString('de-DE');
-    } catch (_error) {
+    } catch {
       return numeric.toString();
     }
   };
 
-  for (const u of update) {
-    if (!u || !u.uuid) continue;
-    const row = rowMap.get(u.uuid);
-    if (!row) continue;
+  for (const entry of update) {
+    const uuid = entry?.uuid;
+    if (typeof uuid !== 'string' || !uuid) {
+      continue;
+    }
+    const row = rowMap.get(uuid);
+    if (!row) {
+      continue;
+    }
 
-    if (row.cells.length < 3) continue;
+    if (row.cells.length < 3) {
+      continue;
+    }
 
-    const posCountCell = row.cells[1];
-    const curValCell = row.cells[2];
-    const gainAbsCell = row.cells[3];
-    const gainPctCell = row.cells[4];
+    const posCountCell = row.cells.item(1);
+    const curValCell = row.cells.item(2);
+    const gainAbsCell = row.cells.item(3);
+    const gainPctCell = row.cells.item(4);
+
+    if (!posCountCell || !curValCell) {
+      continue;
+    }
 
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
-    const posCount = Number(u.position_count ?? u.count ?? 0);
-    const curVal = Number(u.current_value ?? u.value ?? 0);
-    const purchase = Number(u.purchase_sum ?? u.purchaseSum ?? 0);
+    const posCount = Number(entry.position_count ?? entry.count ?? 0);
+    const curVal = Number(entry.current_value ?? entry.value ?? 0);
+    const purchase = Number(entry.purchase_sum ?? entry.purchaseSum ?? 0);
 
     const gainAbs = curVal - purchase;
     const gainPct = purchase > 0 ? (gainAbs / purchase) * 100 : 0;
@@ -328,17 +416,21 @@ export function handlePortfolioUpdate(update, root) {
       posCountCell.textContent = formatPositionCount(posCount);
     }
     if (Math.abs(oldCur - curVal) >= 0.005) {
-      curValCell.textContent = formatNumber(curVal) + ' €';
+      curValCell.textContent = `${formatNumberLocal(curVal)} €`;
       row.classList.add('flash-update');
       setTimeout(() => row.classList.remove('flash-update'), 800);
     }
     if (gainAbsCell) {
       gainAbsCell.innerHTML = formatGain(gainAbs);
       gainAbsCell.dataset.gainPct = Number.isFinite(gainPct)
-        ? `${formatNumber(gainPct)} %`
+        ? `${formatNumberLocal(gainPct)} %`
         : '—';
       gainAbsCell.dataset.gainSign = Number.isFinite(gainPct)
-        ? (gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral')
+        ? gainPct > 0
+          ? 'positive'
+          : gainPct < 0
+            ? 'negative'
+            : 'neutral'
         : 'neutral';
     }
     if (gainPctCell) {
@@ -351,28 +443,27 @@ export function handlePortfolioUpdate(update, root) {
     row.dataset.gainAbs = String(gainAbs);
     row.dataset.gainPct = String(gainPct);
 
-    patched++;
-
+    patched += 1;
   }
 
   if (patched === 0) {
-    console.debug("handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.");
+    console.debug('handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.');
   } else {
     console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht.`);
   }
 
   try {
     updatePortfolioFooter(table);
-  } catch (e) {
-    console.warn("handlePortfolioUpdate: Fehler bei Summen-Neuberechnung:", e);
+  } catch (error) {
+    console.warn('handlePortfolioUpdate: Fehler bei Summen-Neuberechnung:', error);
   }
 
   // Total-Wealth neu berechnen (Accounts + Portfolios)
   try {
-    const findTable = (...selectors) => {
+    const findTable = (...selectors: Array<string | null | undefined>): HTMLTableElement | null => {
       for (const selector of selectors) {
         if (!selector) continue;
-        const tableEl = root?.querySelector(selector);
+        const tableEl = root.querySelector<HTMLTableElement>(selector);
         if (tableEl) return tableEl;
       }
       return null;
@@ -381,22 +472,22 @@ export function handlePortfolioUpdate(update, root) {
     const eurTable = findTable(
       '.account-table table',
       '.accounts-eur-table table',
-      '.accounts-table table'
+      '.accounts-table table',
     );
     const fxTable = findTable(
       '.fx-account-table table',
-      '.accounts-fx-table table'
+      '.accounts-fx-table table',
     );
 
-    const extractAccounts = (tbl, isFx) => {
+    const extractAccounts = (tbl: HTMLTableElement | null, isFx: boolean): Array<{ balance: number }> => {
       if (!tbl) return [];
-      const accountRows = tbl.querySelectorAll('tbody tr.account-row');
+      const accountRows = tbl.querySelectorAll<HTMLTableRowElement>('tbody tr.account-row');
       const rows = accountRows.length
         ? Array.from(accountRows)
-        : Array.from(tbl.querySelectorAll('tbody tr:not(.footer-row)'));
+        : Array.from(tbl.querySelectorAll<HTMLTableRowElement>('tbody tr:not(.footer-row)'));
 
-      return rows.map(r => {
-        const cell = isFx ? r.cells[2] : r.cells[1];
+      return rows.map(row => {
+        const cell = isFx ? row.cells.item(2) : row.cells.item(1);
         return { balance: parseNumLoose(cell?.textContent) };
       });
     };
@@ -406,19 +497,17 @@ export function handlePortfolioUpdate(update, root) {
     ];
 
     const portfolioDomValues = Array.from(
-      table.querySelectorAll('tbody tr.portfolio-row')
-    ).map(r => {
-      const cv = parseNumLoose(r.cells[2]?.textContent);
-      const gain = parseNumLoose(r.cells[3]?.textContent);
+      table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'),
+    ).map(row => {
+      const cv = parseNumLoose(row.cells.item(2)?.textContent);
+      const gain = parseNumLoose(row.cells.item(3)?.textContent);
       const ps = cv - gain;
       return { current_value: cv, purchase_sum: ps };
     });
 
-    if (typeof updateTotalWealth === 'function') {
-      updateTotalWealth(accounts, portfolioDomValues, root);
-    }
-  } catch (e) {
-    console.warn("handlePortfolioUpdate: Fehler bei Total-Neuberechnung:", e);
+    updateTotalWealth(accounts, portfolioDomValues, root);
+  } catch (error) {
+    console.warn('handlePortfolioUpdate: Fehler bei Total-Neuberechnung:', error);
   }
 }
 
@@ -427,7 +516,7 @@ export function handlePortfolioUpdate(update, root) {
  * @param {{portfolio_uuid: string, positions: Array}} update
  * @param {HTMLElement} root
  */
-function normalizePortfolioUuid(payload) {
+function normalizePortfolioUuid(payload: PortfolioPositionsUpdatePayload | null | undefined): string | null {
   if (!payload || typeof payload !== 'object') {
     return null;
   }
@@ -442,15 +531,20 @@ function normalizePortfolioUuid(payload) {
   return null;
 }
 
-function processPortfolioPositionsUpdate(update, root) {
+function processPortfolioPositionsUpdate(
+  update: PortfolioPositionsUpdatePayload | null | undefined,
+  root: QueryRoot | null | undefined,
+): boolean {
   const portfolioUuid = normalizePortfolioUuid(update);
   if (!portfolioUuid) {
-    console.warn("handlePortfolioPositionsUpdate: Ungültiges Update:", update);
+    console.warn('handlePortfolioPositionsUpdate: Ungültiges Update:', update);
     return false;
   }
 
   const error = update?.error;
-  const positions = Array.isArray(update?.positions) ? update.positions : [];
+  const positions = Array.isArray(update?.positions)
+    ? update.positions.filter((pos): pos is PortfolioPositionData => Boolean(pos))
+    : [];
 
   // Positions-Cache aktualisieren (Lazy-Load bleibt bestehen)
   try {
@@ -478,8 +572,8 @@ function processPortfolioPositionsUpdate(update, root) {
     const securityUuids = Array.from(
       new Set(
         positions
-          .map((pos) => pos?.security_uuid)
-          .filter((uuid) => typeof uuid === 'string' && uuid.length > 0),
+          .map(pos => pos?.security_uuid)
+          .filter((uuid): uuid is string => typeof uuid === 'string' && uuid.length > 0),
       ),
     );
 
@@ -505,7 +599,10 @@ function processPortfolioPositionsUpdate(update, root) {
   return true;
 }
 
-export function handlePortfolioPositionsUpdate(update, root) {
+export function handlePortfolioPositionsUpdate(
+  update: PortfolioPositionsUpdatePayload | PortfolioPositionsUpdatePayload[] | null | undefined,
+  root: QueryRoot | null | undefined,
+): void {
   if (Array.isArray(update)) {
     let handled = false;
     for (const item of update) {
@@ -514,7 +611,7 @@ export function handlePortfolioPositionsUpdate(update, root) {
       }
     }
     if (!handled && update.length) {
-      console.warn("handlePortfolioPositionsUpdate: Kein gültiges Element im Array:", update);
+      console.warn('handlePortfolioPositionsUpdate: Kein gültiges Element im Array:', update);
     }
     return;
   }
@@ -524,7 +621,7 @@ export function handlePortfolioPositionsUpdate(update, root) {
 
 /* ------------------ Hilfsfunktionen (lokal) ------------------ */
 
-function renderPositionsTableInline(positions) {
+function renderPositionsTableInline(positions: PortfolioPositionData[]): string {
   // Konsistenz Push vs Lazy:
   try {
     if (window.__ppReaderRenderPositionsTable) {
@@ -535,13 +632,13 @@ function renderPositionsTableInline(positions) {
   if (!positions || !positions.length) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
-  const rows = positions.map(p => ({
-    name: p.name,
-    current_holdings: p.current_holdings,
-    purchase_value: p.purchase_value,
-    current_value: p.current_value,
-    gain_abs: p.gain_abs,
-    gain_pct: p.gain_pct
+  const rows = positions.map(position => ({
+    name: position.name,
+    current_holdings: position.current_holdings,
+    purchase_value: position.purchase_value,
+    current_value: position.current_value,
+    gain_abs: position.gain_abs,
+    gain_pct: position.gain_pct,
   }));
 
   // Basis HTML
@@ -562,10 +659,10 @@ function renderPositionsTableInline(positions) {
   try {
     const tpl = document.createElement('template');
     tpl.innerHTML = raw.trim();
-    const table = tpl.content.querySelector('table');
+    const table = tpl.content.querySelector<HTMLTableElement>('table');
     if (table) {
       table.classList.add('sortable-positions');
-      const ths = table.querySelectorAll('thead th');
+      const ths = table.querySelectorAll<HTMLTableCellElement>('thead th');
       const colKeys = ['name', 'current_holdings', 'purchase_value', 'current_value', 'gain_abs', 'gain_pct'];
       ths.forEach((th, i) => {
         const key = colKeys[i];
@@ -573,7 +670,7 @@ function renderPositionsTableInline(positions) {
         th.setAttribute('data-sort-key', key);
         th.classList.add('sortable-col');
       });
-      const bodyRows = table.querySelectorAll('tbody tr');
+      const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
       bodyRows.forEach((tr, idx) => {
         if (tr.classList.contains('footer-row')) {
           return;
@@ -593,7 +690,7 @@ function renderPositionsTableInline(positions) {
           console.warn('renderPositionsTableInline: applyGainPctMetadata failed', err);
         }
       } else {
-        const rows = table.querySelectorAll('tbody tr');
+        const rows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
         rows.forEach(row => {
           const gainCell = row.cells?.[4];
           const pctCell = row.cells?.[5];
@@ -626,7 +723,7 @@ if (!window.__ppReaderFlushAllPendingPositions) {
   window.__ppReaderFlushAllPendingPositions = (root) => flushAllPendingPositions(root);
 }
 
-function updatePortfolioFooter(table) {
+function updatePortfolioFooter(table: HTMLTableElement | null): void {
   if (!table) return;
   try {
     const helper = window.__ppReaderUpdatePortfolioFooter;
@@ -638,7 +735,7 @@ function updatePortfolioFooter(table) {
     console.warn("updatePortfolioFooter: global Helper schlug fehl:", err);
   }
 
-  const rows = Array.from(table.querySelectorAll('tbody tr.portfolio-row'));
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'));
   let sumCurrent = 0;
   let sumGainAbs = 0;
   let sumPurchase = 0;
@@ -648,17 +745,17 @@ function updatePortfolioFooter(table) {
     const datasetCount = Number(r.dataset?.positionCount);
     const posCount = Number.isFinite(datasetCount)
       ? datasetCount
-      : parseInt((r.cells[1]?.textContent || '').replace(/\./g, ''), 10) || 0;
+      : parseInt((r.cells.item(1)?.textContent || '').replace(/\./g, ''), 10) || 0;
 
     const datasetCurrent = Number(r.dataset?.currentValue);
     const currentValue = Number.isFinite(datasetCurrent)
       ? datasetCurrent
-      : parseNumLoose(r.cells[2]?.textContent);
+      : parseNumLoose(r.cells.item(2)?.textContent);
 
     const datasetGain = Number(r.dataset?.gainAbs);
     const gainAbs = Number.isFinite(datasetGain)
       ? datasetGain
-      : parseNumLoose(r.cells[3]?.textContent);
+      : parseNumLoose(r.cells.item(3)?.textContent);
 
     const datasetPurchase = Number(r.dataset?.purchaseSum);
     const purchase = Number.isFinite(datasetPurchase)
@@ -676,7 +773,7 @@ function updatePortfolioFooter(table) {
   }
   const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
 
-  let footer = table.querySelector('tr.footer-row');
+  let footer = table.querySelector<HTMLTableRowElement>('tr.footer-row');
   if (!footer) {
     footer = document.createElement('tr');
     footer.className = 'footer-row';
@@ -707,33 +804,27 @@ function updatePortfolioFooter(table) {
   footer.dataset.gainPct = String(sumGainPct);
 }
 
-function parseLocaleNumber(txt = '') {
-  if (!txt) return 0;
-  return parseFloat(
-    txt
-      .replace(/[^0-9,.\-]/g, '')
-      .replace(/\./g, '')
-      .replace(',', '.')
-  ) || 0;
-}
-
-function formatNumber(v) {
-  return (isNaN(v) ? 0 : v).toLocaleString('de-DE', {
+function formatNumber(v: number): string {
+  return (Number.isNaN(v) ? 0 : v).toLocaleString('de-DE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 }
-function formatGain(v) {
+function formatGain(v: number): string {
   const cls = v >= 0 ? 'positive' : 'negative';
   return `<span class="${cls}">${formatNumber(v)}&nbsp;€</span>`;
 }
-function formatGainPct(v) {
+function formatGainPct(v: number): string {
   const cls = v >= 0 ? 'positive' : 'negative';
   return `<span class="${cls}">${formatNumber(v)}&nbsp;%</span>`;
 }
 
-function updateTotalWealth(accounts, portfolios, root) {
-  const targetRoot = root || document;
+function updateTotalWealth(
+  accounts: Array<{ balance?: number | null; current_value?: number | null; value?: number | null }> | null | undefined,
+  portfolios: Array<{ current_value?: number | null; value?: number | null; purchase_sum?: number | null }> | null | undefined,
+  root: QueryRoot | null | undefined,
+): void {
+  const targetRoot: QueryRoot = root || document;
 
   const accountSum = (Array.isArray(accounts) ? accounts : []).reduce((acc, entry) => {
     const value = entry != null && typeof entry === 'object'
@@ -753,13 +844,15 @@ function updateTotalWealth(accounts, portfolios, root) {
 
   const totalWealth = accountSum + portfolioSum;
 
-  const headerMeta = targetRoot?.querySelector('#headerMeta');
+  const headerMeta = targetRoot?.querySelector<HTMLElement>('#headerMeta');
   if (!headerMeta) {
     console.warn('updateTotalWealth: #headerMeta nicht gefunden.');
     return;
   }
 
-  const valueElement = headerMeta.querySelector('strong') || headerMeta.querySelector('.total-wealth-value');
+  const valueElement =
+    headerMeta.querySelector<HTMLElement>('strong') ||
+    headerMeta.querySelector<HTMLElement>('.total-wealth-value');
   if (valueElement) {
     valueElement.textContent = `${formatNumber(totalWealth)}\u00A0€`;
   } else {
@@ -782,64 +875,35 @@ function updateTotalWealth(accounts, portfolios, root) {
 // Entfernte Legacy-Funktion:
 // function updatePortfolioTable(...) { /* veraltet, entfernt */ }
 
-// Helper: Erzeuge (Portfolio-Hauptzeile + Detailzeile) HTML-Strings
-function createPortfolioRowHtml(p, expanded = false) {
-  const detailId = `portfolio-details-${p.uuid}`;
-  const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
-  return {
-    main: `<tr class="portfolio-row" data-portfolio="${p.uuid}">
-      <td>
-        <button type="button"
-                class="${toggleClass}"
-                data-portfolio="${p.uuid}"
-                aria-expanded="${expanded ? 'true' : 'false'}"
-                aria-controls="${detailId}">
-          <span class="caret">${expanded ? '▼' : '▶'}</span>
-          <span class="portfolio-name">${p.name}</span>
-        </button>
-      </td>
-      <td class="align-right">${(p.position_count ?? 0).toLocaleString('de-DE')}</td>
-      <td class="align-right">${formatNumber(p.current_value)}&nbsp;€</td>
-      <td class="align-right">${formatGain(p.current_value - p.purchase_sum)}</td>
-      <td class="align-right">${formatGainPct(p.purchase_sum > 0 ? ((p.current_value - p.purchase_sum) / p.purchase_sum) * 100 : 0)}</td>
-    </tr>`,
-    detail: `<tr class="portfolio-details hidden"
-                 data-portfolio="${p.uuid}"
-                 id="${detailId}"
-                 role="region"
-                 aria-label="Positionen für ${p.name}">
-        <td colspan="5">
-          <div class="positions-container"></div>
-        </td>
-      </tr>`
-  };
-}
-
 // ==== Last File Update Handler (canonical) ====
 // (Ändere zu export function, damit unten kein Sammel-Export nötig ist)
-export function handleLastFileUpdate(update, root) {
+export function handleLastFileUpdate(
+  update: string | { last_file_update?: string | null } | null | undefined,
+  root: QueryRoot | null | undefined,
+): void {
   const value = typeof update === 'string'
     ? update
     : (update && update.last_file_update) || '';
 
   if (!root) {
-    console.warn("handleLastFileUpdate: root fehlt");
+    console.warn('handleLastFileUpdate: root fehlt');
     return;
   }
 
   // Bevorzugt Footer-Karte, sonst erste passende Stelle
-  let el = root.querySelector('.footer-card .last-file-update') ||
-    root.querySelector('.last-file-update');
+  let el =
+    root.querySelector<HTMLElement>('.footer-card .last-file-update') ||
+    root.querySelector<HTMLElement>('.last-file-update');
 
   if (!el) {
     // Fallback: existierende Meta-Hosts durchsuchen
     const metaHost =
-      root.querySelector('.footer-card .meta') ||
-      root.querySelector('#headerMeta') ||
-      root.querySelector('.header-card .meta') ||
-      root.querySelector('.header-card');
+      root.querySelector<HTMLElement>('.footer-card .meta') ||
+      root.querySelector<HTMLElement>('#headerMeta') ||
+      root.querySelector<HTMLElement>('.header-card .meta') ||
+      root.querySelector<HTMLElement>('.header-card');
     if (!metaHost) {
-      console.warn("handleLastFileUpdate: Kein Einfügepunkt gefunden.");
+      console.warn('handleLastFileUpdate: Kein Einfügepunkt gefunden.');
       return;
     }
     el = document.createElement('div');
@@ -851,7 +915,7 @@ export function handleLastFileUpdate(update, root) {
   if (el.closest('.footer-card')) {
     el.innerHTML = value
       ? `📂 Letzte Aktualisierung der Datei: <strong>${value}</strong>`
-      : `📂 Letzte Aktualisierung der Datei: <strong>Unbekannt</strong>`;
+      : '📂 Letzte Aktualisierung der Datei: <strong>Unbekannt</strong>';
   } else {
     // Header/Meta-Version (schlichter Text)
     el.textContent = value
@@ -868,21 +932,22 @@ export function handleLastFileUpdate(update, root) {
  * Nutzt sortTableRows(..., true) für Positions-Mapping.
  * @param {HTMLElement} containerEl .positions-container
  */
-export function reapplyPositionsSort(containerEl) {
+export function reapplyPositionsSort(containerEl: HTMLElement | null): void {
   if (!containerEl) return;
-  const table = containerEl.querySelector('table.sortable-positions');
+  const table = containerEl.querySelector<HTMLTableElement>('table.sortable-positions');
   if (!table) return;
   const key = containerEl.dataset.sortKey || table.dataset.defaultSort || 'name';
-  const dir = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  const dirValue = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  const direction: SortDirection = dirValue === 'desc' ? 'desc' : 'asc';
   // Persistiere (falls erstmalig)
   containerEl.dataset.sortKey = key;
-  containerEl.dataset.sortDir = dir;
-  sortTableRows(table, key, dir, true);
+  containerEl.dataset.sortDir = direction;
+  sortTableRows(table, key, direction, true);
 }
 window.__ppReaderReapplyPositionsSort = reapplyPositionsSort; // Optional global für Lazy-Load-Code
 
 // === Globale / modulweite Utilities ===
-function parseNumLoose(txt) {
+function parseNumLoose(txt: string | null | undefined): number {
   if (txt == null) return 0;
   return parseFloat(
     String(txt)
