@@ -13,6 +13,8 @@ const DEFAULT_HEIGHT = 260;
 const DEFAULT_MARGIN = { top: 12, right: 16, bottom: 24, left: 16 };
 const DEFAULT_COLOR = 'var(--pp-reader-chart-line, #3f51b5)';
 const DEFAULT_AREA = 'var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))';
+const DEFAULT_TICK_FONT = '0.75rem';
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function createSvgElement(tag, attrs = {}) {
   const element = document.createElementNS(SVG_NS, tag);
@@ -433,6 +435,36 @@ export function renderLineChart(root, options = {}) {
   state.areaColor = options.areaColor || DEFAULT_AREA;
   state.handlersAttached = false;
 
+  if (!state.xAxis) {
+    const xAxis = document.createElement('div');
+    xAxis.className = 'line-chart-axis line-chart-axis-x';
+    xAxis.style.position = 'absolute';
+    xAxis.style.left = '0';
+    xAxis.style.right = '0';
+    xAxis.style.bottom = '0';
+    xAxis.style.pointerEvents = 'none';
+    xAxis.style.fontSize = DEFAULT_TICK_FONT;
+    xAxis.style.color = 'var(--secondary-text-color)';
+    xAxis.style.display = 'block';
+    container.appendChild(xAxis);
+    state.xAxis = xAxis;
+  }
+
+  if (!state.yAxis) {
+    const yAxis = document.createElement('div');
+    yAxis.className = 'line-chart-axis line-chart-axis-y';
+    yAxis.style.position = 'absolute';
+    yAxis.style.top = '0';
+    yAxis.style.bottom = '0';
+    yAxis.style.left = '0';
+    yAxis.style.pointerEvents = 'none';
+    yAxis.style.fontSize = DEFAULT_TICK_FONT;
+    yAxis.style.color = 'var(--secondary-text-color)';
+    yAxis.style.display = 'block';
+    container.appendChild(yAxis);
+    state.yAxis = yAxis;
+  }
+
   assignDimensions(state, options.width, options.height, options.margin);
 
   linePath.setAttribute('stroke', state.color);
@@ -520,6 +552,7 @@ export function updateLineChart(container, options = {}) {
       state.areaPath.setAttribute('d', '');
     }
     hideTooltip(state);
+    updateAxes(state);
     return;
   }
 
@@ -531,4 +564,191 @@ export function updateLineChart(container, options = {}) {
     const areaD = buildAreaPath(points, baselineY);
     state.areaPath.setAttribute('d', areaD);
   }
+
+  updateAxes(state);
+}
+
+function updateAxes(state) {
+  const { xAxis, yAxis, range, margin, width, height, yFormatter } = state;
+  if (!xAxis || !yAxis) {
+    return;
+  }
+
+  if (!range) {
+    xAxis.innerHTML = '';
+    yAxis.innerHTML = '';
+    return;
+  }
+
+  const { minX, maxX, minY, maxY, boundedWidth, boundedHeight } = range;
+
+  const hasValidX = Number.isFinite(minX) && Number.isFinite(maxX) && maxX >= minX;
+  const hasValidY = Number.isFinite(minY) && Number.isFinite(maxY) && maxY >= minY;
+
+  const effectiveWidth = Math.max(boundedWidth, 0);
+  const effectiveHeight = Math.max(boundedHeight, 0);
+
+  xAxis.style.left = `${margin.left}px`;
+  xAxis.style.width = `${effectiveWidth}px`;
+  xAxis.style.top = `${height - margin.bottom + 6}px`;
+  xAxis.innerHTML = '';
+
+  if (hasValidX && effectiveWidth > 0) {
+    const rangeDays = (maxX - minX) / ONE_DAY_MS;
+    const desiredTicks = Math.max(2, Math.min(6, Math.round(effectiveWidth / 140) || 4));
+    const xTicks = generateTimeAxisTicks(state, minX, maxX, desiredTicks, rangeDays);
+    xTicks.forEach(({ positionRatio, label }) => {
+      const tick = document.createElement('div');
+      tick.className = 'line-chart-axis-tick line-chart-axis-tick-x';
+      tick.style.position = 'absolute';
+      tick.style.bottom = '0';
+      tick.style.transform = 'translateX(-50%)';
+      const ratio = clamp(positionRatio, 0, 1);
+      tick.style.left = `${ratio * effectiveWidth}px`;
+      tick.textContent = label;
+      xAxis.appendChild(tick);
+    });
+  }
+
+  yAxis.style.top = `${margin.top}px`;
+  yAxis.style.height = `${effectiveHeight}px`;
+  const yAxisWidth = Math.max(margin.left - 6, 0);
+  yAxis.style.left = '0';
+  yAxis.style.width = `${Math.max(yAxisWidth, 0)}px`;
+  yAxis.innerHTML = '';
+
+  if (hasValidY && effectiveHeight > 0) {
+    const desiredTicks = Math.max(2, Math.min(6, Math.round(effectiveHeight / 60) || 4));
+    const yTicks = generateNumericAxisTicks(minY, maxY, desiredTicks);
+    yTicks.forEach(({ value, positionRatio }) => {
+      const tick = document.createElement('div');
+      tick.className = 'line-chart-axis-tick line-chart-axis-tick-y';
+      tick.style.position = 'absolute';
+      tick.style.left = '0';
+      const clampedRatio = clamp(positionRatio, 0, 1);
+      const top = (1 - clampedRatio) * effectiveHeight;
+      tick.style.top = `${top}px`;
+      tick.textContent = yFormatter ? yFormatter(value) : defaultYFormatter(value);
+      yAxis.appendChild(tick);
+    });
+  }
+}
+
+function generateTimeAxisTicks(state, minTimestamp, maxTimestamp, desiredTicks, rangeDays) {
+  if (!Number.isFinite(minTimestamp) || !Number.isFinite(maxTimestamp) || maxTimestamp < minTimestamp) {
+    return [];
+  }
+
+  if (!Number.isFinite(rangeDays) || rangeDays <= 0) {
+    const label = formatXAxisLabel(state, minTimestamp, rangeDays || 0);
+    return [
+      {
+        positionRatio: 0.5,
+        label,
+      },
+    ];
+  }
+
+  const tickCount = Math.max(2, desiredTicks);
+  const ticks = [];
+  const range = maxTimestamp - minTimestamp;
+  for (let index = 0; index < tickCount; index += 1) {
+    const ratio = tickCount === 1 ? 0.5 : index / (tickCount - 1);
+    const value = minTimestamp + ratio * range;
+    ticks.push({
+      positionRatio: ratio,
+      label: formatXAxisLabel(state, value, rangeDays),
+    });
+  }
+  return ticks;
+}
+
+function formatXAxisLabel(state, timestamp, rangeDays) {
+  const date = new Date(timestamp);
+  if (Number.isFinite(date.getTime())) {
+    if (rangeDays > 1095) {
+      return String(date.getFullYear());
+    }
+    if (rangeDays > 365) {
+      return date.toLocaleDateString('de-DE', {
+        year: 'numeric',
+        month: 'short',
+      });
+    }
+    if (rangeDays > 90) {
+      return date.toLocaleDateString('de-DE', {
+        year: '2-digit',
+        month: 'short',
+      });
+    }
+    if (rangeDays > 30) {
+      return date.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: 'short',
+      });
+    }
+    return date.toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+    });
+  }
+
+  return state.xFormatter ? state.xFormatter(timestamp, null, -1) : String(timestamp);
+}
+
+function generateNumericAxisTicks(minValue, maxValue, desiredTicks) {
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return [];
+  }
+
+  if (maxValue === minValue) {
+    return [
+      {
+        value: minValue,
+        positionRatio: 0.5,
+      },
+    ];
+  }
+
+  const range = maxValue - minValue;
+  const tickCount = Math.max(2, desiredTicks);
+  const rawStep = range / (tickCount - 1);
+  const step = niceStep(rawStep);
+  const start = Math.floor(minValue / step) * step;
+  const end = Math.ceil(maxValue / step) * step;
+
+  const ticks = [];
+  for (let value = start; value <= end + step / 2; value += step) {
+    const ratio = (value - minValue) / (maxValue - minValue);
+    ticks.push({
+      value,
+      positionRatio: clamp(ratio, 0, 1),
+    });
+  }
+
+  if (ticks.length > tickCount + 2) {
+    return ticks.filter((_, index) => index % 2 === 0);
+  }
+
+  return ticks;
+}
+
+function niceStep(value) {
+  if (!Number.isFinite(value) || value === 0) {
+    return 1;
+  }
+
+  const exponent = Math.floor(Math.log10(Math.abs(value)));
+  const fraction = Math.abs(value) / 10 ** exponent;
+  let niceFraction;
+  if (fraction <= 1) {
+    niceFraction = 1;
+  } else if (fraction <= 2) {
+    niceFraction = 2;
+  } else if (fraction <= 5) {
+    niceFraction = 5;
+  } else {
+    niceFraction = 10;
+  }
+  return niceFraction * 10 ** exponent;
 }

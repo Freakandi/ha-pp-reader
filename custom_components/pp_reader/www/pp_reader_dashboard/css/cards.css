@@ -540,6 +540,34 @@ tbody tr:hover {
   display: block;
 }
 
+.line-chart-axis {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  pointer-events: none;
+}
+
+.line-chart-axis-x {
+  height: 20px;
+}
+
+.line-chart-axis-y {
+  text-align: right;
+}
+
+.line-chart-axis-tick {
+  white-space: nowrap;
+  color: inherit;
+}
+
+.line-chart-axis-tick-y {
+  transform: translateY(50%);
+  padding-right: 0.35rem;
+}
+
+.line-chart-axis-tick-x {
+  bottom: 0;
+}
+
 .line-chart-path {
   stroke: var(--pp-reader-chart-line, #3f51b5);
 }
