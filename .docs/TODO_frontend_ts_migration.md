@@ -75,7 +75,7 @@
       - Datei: `src/data/updateConfigsWS.ts`, `src/content/elements.ts`
       - Abschnitt: Fenster-Caches, DOM-Manipulationen
       - Ziel: Nutze strukturierte Interfaces und vermeide untypisierte `window`-Zugriffe.
-   c) [ ] Etabliere gemeinsame Tab-Typen und API-Exports
+   c) [x] Etabliere gemeinsame Tab-Typen und API-Exports
       - Dateien: `src/tabs/types.ts` (neu), `src/data/api.ts`, `src/data/updateConfigsWS.ts`
       - Abschnitt: Panel-Konfiguration, Tab-Descriptoren, Event-Payloads
       - Ziel: Liefere wiederverwendbare Typdefinitionen für Panel-/Tab-Kontext (inkl. `PanelConfigLike`, History-Ranges, Security-Snapshots) und exportiere das Event-Payload für `pp-reader:portfolio-positions-updated`.

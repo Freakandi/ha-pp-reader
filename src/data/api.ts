@@ -2,21 +2,8 @@
  * Home Assistant websocket API helpers carried over for TypeScript migration.
  */
 
+import type { PanelConfigLike } from "../tabs/types";
 import type { HomeAssistant } from "../types/home-assistant";
-
-interface PanelConfigLike {
-  entry_id?: string | null;
-  config?: {
-    entry_id?: string | null;
-    _panel_custom?: {
-      config?: {
-        entry_id?: string | null;
-      } | null;
-    } | null;
-  } | null;
-  webcomponent_name?: string | null;
-  [key: string]: unknown;
-}
 
 export interface AccountSummary {
   name?: string | null;
