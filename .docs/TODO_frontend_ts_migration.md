@@ -119,7 +119,7 @@
       - Datei: `.github/workflows/<name>.yml` (neu oder bestehend erweitern)
       - Abschnitt: Jobs für `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint:ts`
       - Ziel: Sicherstellen, dass TypeScript-Pipeline auf CI ausgeführt wird.
-   b) [ ] Implementiere Smoke-Tests für generiertes Dashboard
+   b) [x] Implementiere Smoke-Tests für generiertes Dashboard
       - Datei: `tests/frontend/test_dashboard_smoke.py` (neu) oder `tests/frontend/test_dashboard.spec.ts`
       - Abschnitt: Testfälle für DOM-Output
       - Ziel: Verifiziere, dass gerenderte DOM-Strukturen und Events weiterhin wie erwartet funktionieren (z.B. mit jsdom oder Playwright).
