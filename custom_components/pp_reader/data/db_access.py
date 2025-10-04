@@ -410,6 +410,7 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
     conn.row_factory = sqlite3.Row
     try:
         from custom_components.pp_reader.logic.portfolio import (  # local import
+            normalize_price,
             normalize_price_to_eur_sync,
         )
 
@@ -443,6 +444,12 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         raw_price = security_row["last_price"]
         currency_code: str = security_row["currency_code"] or "EUR"
         reference_date = datetime.now()  # noqa: DTZ005
+        last_price_native = None
+        if raw_price:
+            try:
+                last_price_native = round(normalize_price(raw_price), 4)
+            except Exception:  # pragma: no cover - defensive
+                last_price_native = None
         last_price_eur = normalize_price_to_eur_sync(
             raw_price, currency_code, reference_date, db_path
         )
@@ -452,6 +459,7 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "name": security_row["name"],
             "currency_code": currency_code,
             "total_holdings": round(total_holdings, 6),
+            "last_price_native": last_price_native,
             "last_price_eur": round(last_price_eur, 4),
             "market_value_eur": market_value_eur,
         }

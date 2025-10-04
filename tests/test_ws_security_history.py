@@ -432,6 +432,7 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "name": "Acme Corp",
         "currency_code": "EUR",
         "total_holdings": 3.5,
+        "last_price_native": 12.5,
         "last_price_eur": 12.5,
         "market_value_eur": 43.75,
     }
