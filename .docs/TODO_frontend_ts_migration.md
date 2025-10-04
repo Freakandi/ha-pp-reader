@@ -49,7 +49,7 @@
       - Ziel: Stelle `.d.ts` Artefakte für Editor-Unterstützung bereit.
 
 4. Build-Output an das bestehende Frontend anbinden
-   a) [ ] Aktualisiere `dashboard.module.js` auf bundlergenerierten Specifier
+   a) [x] Aktualisiere `dashboard.module.js` auf bundlergenerierten Specifier
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js`
       - Abschnitt: `export * from` Zeile
       - Ziel: Lass den Build-Prozess Hash/Version-Parameter automatisch setzen.
