@@ -1,4 +1,30 @@
-import './js/dashboard.module.js';
+// Die Panel-Logik muss das Dashboard-Modul laden, bevor der Custom Element Code
+// ausgeführt wird. Wir nutzen Top-Level-Await, um zuerst das gebaute Bundle zu
+// importieren und bei Bedarf auf die Legacy-Datei zurückzufallen.
+const DASHBOARD_MODULE_SPECIFIER = './js/dashboard.module.js';
+const LEGACY_DASHBOARD_SPECIFIER = './js/dashboard.js';
+
+async function loadDashboardModule() {
+  try {
+    await import(DASHBOARD_MODULE_SPECIFIER);
+  } catch (error) {
+    console.warn(
+      '[pp_reader] Konnte gebundeltes Dashboard nicht laden, versuche Legacy-Fallback.',
+      error,
+    );
+    try {
+      await import(LEGACY_DASHBOARD_SPECIFIER);
+    } catch (fallbackError) {
+      console.error(
+        '[pp_reader] Fallback dashboard.js konnte ebenfalls nicht geladen werden.',
+        fallbackError,
+      );
+      throw fallbackError;
+    }
+  }
+}
+
+await loadDashboardModule();
 
 const ASSET_BASE_URL = new URL('./', import.meta.url);
 
