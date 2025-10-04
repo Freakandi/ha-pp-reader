@@ -9,6 +9,7 @@
 import { defineConfig } from 'vite';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 const entryFile = resolve(projectRoot, 'src/dashboard.ts');
@@ -17,19 +18,40 @@ const outputDirectory = resolve(
   'custom_components/pp_reader/www/pp_reader_dashboard/js',
 );
 
-export default defineConfig({
-  publicDir: false,
-  build: {
-    sourcemap: true,
-    emptyOutDir: false,
-    outDir: outputDirectory,
-    rollupOptions: {
-      input: entryFile,
-      output: {
-        entryFileNames: 'dashboard.[hash].js',
-        chunkFileNames: 'chunks/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash][extname]',
+export default defineConfig(() => {
+  const analyzerFlag = (process.env.PP_READER_ANALYZE_BUNDLE ?? '').toLowerCase();
+  const enableAnalyzer = analyzerFlag === '1' || analyzerFlag === 'true';
+
+  const analyzerPlugins = enableAnalyzer
+    ? [
+        visualizer({
+          filename: resolve(projectRoot, '.docs', 'bundle-analysis.html'),
+          template: 'treemap',
+          gzipSize: true,
+          brotliSize: true,
+        }),
+        visualizer({
+          filename: resolve(projectRoot, '.docs', 'bundle-analysis.json'),
+          template: 'raw-data',
+        }),
+      ]
+    : [];
+
+  return {
+    publicDir: false,
+    build: {
+      sourcemap: true,
+      emptyOutDir: false,
+      outDir: outputDirectory,
+      rollupOptions: {
+        input: entryFile,
+        output: {
+          entryFileNames: 'dashboard.[hash].js',
+          chunkFileNames: 'chunks/[name].[hash].js',
+          assetFileNames: 'assets/[name].[hash][extname]',
+        },
+        plugins: analyzerPlugins,
       },
     },
-  },
+  };
 });
