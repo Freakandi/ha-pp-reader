@@ -1,5 +1,5 @@
 1. Toolchain bootstrap
-   a) [ ] Extend Node dependencies and scripts for TypeScript workflow
+   a) [x] Extend Node dependencies and scripts for TypeScript workflow
       - Datei: `package.json`
       - Abschnitt: `dependencies`, `devDependencies`, `scripts`
       - Ziel: Füge TypeScript, Vite/Rollup, ESLint (TS Plugin) hinzu und richte `npm run build`, `npm run dev`, `npm run typecheck`, `npm run lint:ts` ein.
