@@ -15,7 +15,7 @@
       - Datei: `vite.config.mjs` (neu)
       - Abschnitt: Exportierte Config
       - Ziel: Definiere Entry `src/dashboard.ts`, Ausgabepfad `custom_components/pp_reader/www/pp_reader_dashboard/js/`, Cache-Busting Hash und Source-Map-Generierung.
-   e) [ ] Ergänze ESLint-Konfiguration für TypeScript
+   e) [x] Ergänze ESLint-Konfiguration für TypeScript
       - Datei: `.eslintrc.cjs` (neu oder aktualisiert)
       - Abschnitt: Parser, Plugins, Overrides für TypeScript
       - Ziel: Linting-Regeln für das neue TypeScript-Quellverzeichnis bereitstellen.
