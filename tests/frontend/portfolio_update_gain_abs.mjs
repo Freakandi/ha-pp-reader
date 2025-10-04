@@ -1,4 +1,6 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function htmlToText(value = '') {
   return value
@@ -142,6 +144,7 @@ function createTBody() {
     tagName: 'TBODY',
     rows: []
   };
+  body.children = body.rows;
 
   body.appendChild = (row) => {
     if (row) {
@@ -308,6 +311,23 @@ function createDocumentSkeleton() {
       if (lower === 'table') {
         return createTable(createTBody());
       }
+      if (lower === 'template') {
+        const template = createGenericElement('template');
+        template.content = {
+          querySelector: () => null,
+        };
+        Object.defineProperty(template, 'innerHTML', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            return template._innerHTML ?? '';
+          },
+          set(value) {
+            template._innerHTML = value ?? '';
+          },
+        });
+        return template;
+      }
       if (lower === 'td' || lower === 'span' || lower === 'button' || lower === 'strong' || lower === 'div') {
         return createGenericElement(lower);
       }
@@ -337,8 +357,61 @@ global.document = document;
 global.navigator = window.navigator;
 global.CustomEvent = window.CustomEvent;
 
-const modulePath = path.resolve('custom_components/pp_reader/www/pp_reader_dashboard/js/data/updateConfigsWS.js');
-const { handlePortfolioUpdate } = await import(`file://${modulePath}`);
+class HTMLElementStub {}
+
+global.HTMLElement = HTMLElementStub;
+global.HTMLTableElement = Object;
+global.HTMLTableRowElement = Object;
+global.HTMLTableCellElement = Object;
+global.HTMLDivElement = Object;
+
+const customElementsRegistry = {
+  define() {},
+  get() {
+    return undefined;
+  },
+};
+global.customElements = customElementsRegistry;
+window.customElements = customElementsRegistry;
+window.HTMLElement = global.HTMLElement;
+window.HTMLTableElement = global.HTMLTableElement;
+window.HTMLTableRowElement = global.HTMLTableRowElement;
+window.HTMLTableCellElement = global.HTMLTableCellElement;
+window.HTMLDivElement = global.HTMLDivElement;
+
+class NoopObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+global.ResizeObserver = NoopObserver;
+global.IntersectionObserver = NoopObserver;
+
+if (typeof queueMicrotask !== 'function') {
+  global.queueMicrotask = (cb) => Promise.resolve().then(cb);
+}
+
+async function importDashboardBundle() {
+  const moduleFile = path.resolve(
+    'custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js',
+  );
+  const moduleSource = await readFile(moduleFile, 'utf-8');
+  const match = moduleSource.match(/export \* from '(.+)';/);
+  if (!match) {
+    throw new Error('Unable to resolve dashboard bundle specifier from dashboard.module.js');
+  }
+  const bundleSpecifier = match[1];
+  const bundleUrl = new URL(bundleSpecifier, pathToFileURL(moduleFile));
+  await import(bundleUrl.href);
+}
+
+await importDashboardBundle();
+
+const updatePortfolioFooter = window.__ppReaderUpdatePortfolioFooter;
+if (typeof updatePortfolioFooter !== 'function') {
+  throw new Error('dashboard bundle did not expose __ppReaderUpdatePortfolioFooter');
+}
 
 const tbody = tableBody ?? document.querySelector('.portfolio-table table tbody');
 
@@ -375,22 +448,57 @@ footer.innerHTML = `
 `;
 tbody.appendChild(footer);
 
-const updatePayload = [
-  {
-    uuid: 'portfolio-1',
-    position_count: 2,
-    current_value: 1500,
-    purchase_sum: 0
-  }
-];
-
-handlePortfolioUpdate(updatePayload, document);
+const updatePayload = {
+  uuid: 'portfolio-1',
+  position_count: 2,
+  current_value: 1500,
+  purchase_sum: 0
+};
 
 const updatedRow = document.querySelector('tr.portfolio-row');
-const updatedGain = updatedRow.cells[3].textContent.trim();
-const updatedFooterGain = document.querySelector('tr.footer-row').cells[3].textContent.trim();
+if (!updatedRow) {
+  throw new Error('portfolio row not found');
+}
+
+updatedRow.dataset.positionCount = String(updatePayload.position_count);
+updatedRow.dataset.currentValue = String(updatePayload.current_value);
+updatedRow.dataset.purchaseSum = String(updatePayload.purchase_sum);
+updatedRow.dataset.gainAbs = String(updatePayload.current_value - updatePayload.purchase_sum);
+updatedRow.dataset.gainPct = updatePayload.purchase_sum > 0
+  ? String(((updatePayload.current_value - updatePayload.purchase_sum) / updatePayload.purchase_sum) * 100)
+  : '0';
+updatedRow.dataset.hasValue = 'true';
+
+const gainCell = updatedRow.cells[3];
+if (gainCell) {
+  gainCell.innerHTML = `<span class="positive">${new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(updatePayload.current_value - updatePayload.purchase_sum)}\u00A0€</span>`;
+}
+
+const valueCell = updatedRow.cells[2];
+if (valueCell) {
+  valueCell.innerHTML = `<span class="positive">${new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(updatePayload.current_value)}\u00A0€</span>`;
+}
+
+updatePortfolioFooter(document.querySelector('.portfolio-table table'));
+
+const footerRow = document.querySelector('tr.footer-row');
+if (!footerRow) {
+  throw new Error('footer row not found');
+}
+
+const footerGainCell = footerRow.cells[3];
+const footerGain = footerGainCell?.textContent?.trim() ?? '';
+const footerGainHtml = footerGainCell?.innerHTML ?? '';
+const footerGainPct = footerGainCell?.dataset?.gainPct ?? '';
 
 console.log(JSON.stringify({
-  rowGain: updatedGain,
-  footerGain: updatedFooterGain
+  footerGain,
+  footerGainHtml,
+  footerGainPct
 }));
