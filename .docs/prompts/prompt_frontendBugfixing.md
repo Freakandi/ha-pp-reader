@@ -7,6 +7,13 @@ Frontend context:
 - Frontend bundle source: `custom_components/pp_reader/panel/`
 - Integration backend (for reference): `custom_components/pp_reader/`
 - Existing behaviour is correct unless the supplied evidence shows otherwise.
+- Development scripts: `./scripts/setup_container`, `./scripts/develop`
+
+## Prerequisites
+1. Assume the environment has been bootstrapped via `./scripts/setup_container`.
+2. Activate the virtual environment before running project commands: `source .venv/bin/activate`.
+3. Launch Home Assistant in a dedicated terminal using `./scripts/develop` to expose the pp_reader panel at `http://127.0.0.1:8123/ppreader` (login: `dev` / `dev`).
+4. Ensure you can capture screenshots and make detailed visual observations for every issue you diagnose.
 
 Error summary (optional — leave placeholder or remove if not used):
 <<<ERROR_DESCRIPTION_GOES_HERE>>>
