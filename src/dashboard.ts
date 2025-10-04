@@ -4,16 +4,16 @@
  * Mirrors the legacy dashboard controller for initial TypeScript migration.
  */
 
-import { addSwipeEvents } from './interaction/tab_control.js';
-import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview.js';
-import { registerSecurityDetailTab } from './tabs/security_detail.js';
+import { addSwipeEvents } from './interaction/tab_control';
+import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview';
+import { registerSecurityDetailTab } from './tabs/security_detail';
 import {
   handleAccountUpdate,
   handleLastFileUpdate,
   handlePortfolioUpdate,
   handlePortfolioPositionsUpdate
-} from './data/updateConfigsWS.js';
-import { getEntryId } from './data/api.js';
+} from './data/updateConfigsWS';
+import { getEntryId } from './data/api';
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 
