@@ -144,10 +144,11 @@
       - Ziel: Endanwender und Entwickler über nötige Schritte informieren.
 
 9. Optional: Nachgelagerte Optimierungen
-   a) [ ] Evaluieren der Veröffentlichung lokaler Typdefinitionen
+   a) [x] Evaluieren der Veröffentlichung lokaler Typdefinitionen
       - Datei: `package.json`, evtl. `types/`
       - Abschnitt: `types` Feld
       - Ziel: Optionales Bereitstellen der `.d.ts` Dateien für externe Nutzung.
+      - Ergebnis: Veröffentlichung aktuell nicht sinnvoll, da die Integration nicht als npm-Paket verteilt wird und die Generierungsartefakte ausschließlich der lokalen Entwicklung dienen.
    b) [ ] Mikro-Bundle-Analyse durchführen
       - Datei/Tool: Bundler-Report (z.B. `rollup-plugin-visualizer`)
       - Ziel: Optional Optimierungen für Bundle-Größe identifizieren.

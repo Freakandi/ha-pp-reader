@@ -116,3 +116,10 @@ Supporting helpers:
 - **Source migration** – Completed. All dashboard logic has been ported to the `src/` TypeScript tree with typed modules for tabs, websocket accessors, and DOM helpers.
 - **Runtime alignment** – Completed. Bundled output integrates with `dashboard.module.js` and `panel.js`, keeping Home Assistant loading semantics intact.
 - **Quality gates** – In progress. Follow-up work (CI automation, smoke tests, and release documentation) is tracked in `.docs/TODO_frontend_ts_migration.md`.
+
+## 13. Optional Type Definition Publishing Evaluation
+
+- `tsc -p tsconfig.json` already emits declaration files into the ignored `types/` directory (mirroring the runtime module graph) for local editor support.
+- Publishing those declarations would require shipping `types/` alongside the integration artifacts, but the project is delivered as a Home Assistant custom component rather than an npm package. The Home Assistant distribution flow strips Node-based build artefacts, so external consumers would not naturally receive or install the declarations.
+- The declaration files reference internal module layout (e.g., `dashboard/`, `tabs/`, `data/`) instead of a stable API surface. Exposing them would lock in the current tree and impede future refactors without delivering practical benefits to integration users.
+- Decision: keep the declarations local for now and revisit packaging only if the frontend toolkit is ever published separately (e.g., as a reusable npm module).
