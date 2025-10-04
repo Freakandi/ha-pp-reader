@@ -105,7 +105,7 @@
       - Datei: `README-dev.md`
       - Abschnitt: Setup/Development Steps
       - Ziel: Beschreibe Installation, `npm run dev`, `npm run build`, `npm run typecheck`, Lint-Befehle.
-   b) [ ] Aktualisiere Projekt-Dokumentation zur TypeScript-Migration
+   b) [x] Aktualisiere Projekt-Dokumentation zur TypeScript-Migration
       - Datei: `.docs/frontend_ts_migration.md`
       - Abschnitt: Abschließende Hinweise oder Status
       - Ziel: Dokumentiere Fortschritt, ggf. verweise auf neue TODO-Liste.
