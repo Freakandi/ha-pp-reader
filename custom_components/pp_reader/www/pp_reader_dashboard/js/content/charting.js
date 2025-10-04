@@ -260,7 +260,7 @@ function formatTooltip(state, point) {
   });
 }
 
-function updateTooltipPosition(state, point) {
+function updateTooltipPosition(state, point, pointerY) {
   const { tooltip, width, margin } = state;
   if (!tooltip) {
     return;
@@ -274,9 +274,12 @@ function updateTooltipPosition(state, point) {
   const horizontal = clamp(point.x - tooltipWidth / 2, margin.left, width - margin.right - tooltipWidth);
   const maxVertical = Math.max(baselineY - tooltipHeight, 0);
   const padding = 12;
-  let vertical = point.y + padding;
+  const anchorY = Number.isFinite(pointerY)
+    ? clamp(pointerY, margin.top, baselineY)
+    : point.y;
+  let vertical = anchorY + padding;
   if (vertical > maxVertical) {
-    vertical = point.y - tooltipHeight - padding;
+    vertical = anchorY - tooltipHeight - padding;
   }
   vertical = clamp(vertical, 0, maxVertical);
   tooltip.style.transform = `translate(${Math.round(horizontal)}px, ${Math.round(vertical)}px)`;
@@ -309,6 +312,7 @@ function attachPointerHandlers(container, state) {
 
     const rect = state.svg.getBoundingClientRect();
     const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
     let closest = state.points[0];
     let minDistance = Math.abs(pointerX - closest.x);
 
@@ -345,7 +349,7 @@ function attachPointerHandlers(container, state) {
 
     if (state.tooltip) {
       state.tooltip.innerHTML = formatTooltip(state, closest);
-      updateTooltipPosition(state, closest);
+      updateTooltipPosition(state, closest, pointerY);
     }
   };
 
