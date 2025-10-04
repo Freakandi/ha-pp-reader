@@ -134,7 +134,7 @@
    b) [x] Starte Home Assistant Dev-Server und prüfe Dashboard-Funktionalität
       - Datei/Tool: `./scripts/develop`
       - Ziel: Manuelle Regressionstests (Tabs, WebSocket-Updates, DOM-Interaktionen).
-   c) [ ] Aktualisiere `CHANGELOG.md` mit TypeScript-Migrationshinweis
+   c) [x] Aktualisiere `CHANGELOG.md` mit TypeScript-Migrationshinweis
       - Datei: `CHANGELOG.md`
       - Abschnitt: Unreleased / aktuelles Release
       - Ziel: Dokumentiere Einführung der TypeScript-Buildkette und gleichbleibendes Verhalten.
