@@ -35,7 +35,7 @@
       - Ziel: Bewahre bestehende öffentliche APIs, damit importierende Module unverändert funktionieren.
 
 3. Typisierungsgrundlagen schaffen
-   a) [ ] Definiere Home Assistant spezifische Typ-Deklarationen
+   a) [x] Definiere Home Assistant spezifische Typ-Deklarationen
       - Datei: `src/types/home-assistant.d.ts` (neu)
       - Abschnitt: Schnittstellen für `hass`, Panels, WebSocket-Strukturen
       - Ziel: Statische Typen für häufig genutzte Objekte bereitstellen und unbekannte Felder über optionale Properties erlauben.
