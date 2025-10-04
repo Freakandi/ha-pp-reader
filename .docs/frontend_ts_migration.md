@@ -109,3 +109,10 @@ Supporting helpers:
 - Home Assistant-facing module specifiers (`panel.js`, `dashboard.module.js`) remain stable, with only query parameters managed automatically.
 - Local type declarations will capture Home Assistant-specific contracts to unlock TypeScript’s benefits.
 - Documentation and CI will be updated to enforce the new build and type-check steps.
+
+## 12. Implementation Status
+
+- **Toolchain bootstrap** – Completed. The repository now ships with TypeScript-aware npm scripts, a strict compiler configuration, and a Vite build that produces hashed dashboard assets.
+- **Source migration** – Completed. All dashboard logic has been ported to the `src/` TypeScript tree with typed modules for tabs, websocket accessors, and DOM helpers.
+- **Runtime alignment** – Completed. Bundled output integrates with `dashboard.module.js` and `panel.js`, keeping Home Assistant loading semantics intact.
+- **Quality gates** – In progress. Follow-up work (CI automation, smoke tests, and release documentation) is tracked in `.docs/TODO_frontend_ts_migration.md`.
