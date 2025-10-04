@@ -155,9 +155,14 @@ pp_reader_pkg = types.ModuleType("custom_components.pp_reader")
 pp_reader_pkg.__path__ = [str(REPO_ROOT / "custom_components" / "pp_reader")]
 sys.modules.setdefault("custom_components.pp_reader", pp_reader_pkg)
 
+# Ensure hierarchical attributes exist so monkeypatch resolution works when
+# submodules have not been imported yet.
+setattr(custom_components_pkg, "pp_reader", pp_reader_pkg)
+
 data_pkg = types.ModuleType("custom_components.pp_reader.data")
 data_pkg.__path__ = [str(REPO_ROOT / "custom_components" / "pp_reader" / "data")]
 sys.modules.setdefault("custom_components.pp_reader.data", data_pkg)
+setattr(pp_reader_pkg, "data", data_pkg)
 
 
 from custom_components.pp_reader.data.db_access import (
@@ -361,6 +366,7 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["name"] == "US Tech"
     assert snapshot["currency_code"] == "USD"
     assert snapshot["total_holdings"] == pytest.approx(3.75, rel=0, abs=1e-6)
+    assert snapshot["last_price_native"] == pytest.approx(200.0, rel=0, abs=1e-4)
     assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
     assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
 
