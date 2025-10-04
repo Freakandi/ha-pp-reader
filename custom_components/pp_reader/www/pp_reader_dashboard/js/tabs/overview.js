@@ -501,7 +501,9 @@ export function updatePortfolioFooterFromDom(target) {
 
   const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
 
-  let footer = tbody.querySelector('tr.footer-row');
+  let footer = Array.from(tbody.children).find((child) =>
+    child instanceof HTMLTableRowElement && child.classList.contains('footer-row')
+  );
   if (!footer) {
     footer = document.createElement('tr');
     footer.classList.add('footer-row');
