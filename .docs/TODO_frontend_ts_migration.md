@@ -61,7 +61,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/panel.js`
       - Abschnitt: Importstatement & Initialisierung
       - Ziel: Prüfe und passe ggf. den Importpfad auf das bundlergenerierte Modul an, ohne öffentliches API zu ändern.
-   d) [ ] Entferne obsolete JavaScript-Quellversionen nach erfolgreicher Migration
+   d) [x] Entferne obsolete JavaScript-Quellversionen nach erfolgreicher Migration
       - Dateien: `custom_components/pp_reader/www/pp_reader_dashboard/js/**/*.js` (Quellkopien)
       - Abschnitt: Nicht mehr verwendete Module
       - Ziel: Verlasse ausschließlich generierte Artefakte im `js/` Verzeichnis.
