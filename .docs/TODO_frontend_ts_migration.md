@@ -3,7 +3,7 @@
       - Datei: `package.json`
       - Abschnitt: `dependencies`, `devDependencies`, `scripts`
       - Ziel: Füge TypeScript, Vite/Rollup, ESLint (TS Plugin) hinzu und richte `npm run build`, `npm run dev`, `npm run typecheck`, `npm run lint:ts` ein.
-   b) [ ] Sperre Node-Version und Projekt-Metadaten für den neuen Build
+   b) [x] Sperre Node-Version und Projekt-Metadaten für den neuen Build
       - Datei: `package.json`
       - Abschnitt: `engines`, Projektbeschreibung
       - Ziel: Stelle sicher, dass die erforderliche Node-Version und Hinweise zur TypeScript-Buildpipeline dokumentiert sind.
