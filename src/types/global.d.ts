@@ -7,6 +7,7 @@ import type {
   flushPendingPositions,
   reapplyPositionsSort,
 } from '../data/updateConfigsWS';
+import type { PortfolioPosition } from '../data/api';
 import type {
   attachPortfolioPositionsSorting,
   attachSecurityDetailListener,
@@ -15,13 +16,13 @@ import type {
   updatePortfolioFooterFromDom,
 } from '../tabs/overview';
 
-type PortfolioPosition = Record<string, unknown>;
+type DashboardPortfolioPosition = PortfolioPosition | Record<string, unknown>;
 
 type GainPctMetadataApplier = (table: HTMLTableElement) => void;
-type RenderPositionsTable = (positions: PortfolioPosition[]) => string;
+type RenderPositionsTable = (positions: DashboardPortfolioPosition[]) => string;
 
 type PendingPortfolioUpdate = {
-  positions: PortfolioPosition[];
+  positions: DashboardPortfolioPosition[];
   error?: unknown;
 };
 
@@ -30,7 +31,7 @@ type PendingRetryMeta = {
   timer: ReturnType<typeof setTimeout> | null;
 };
 
-interface PortfolioPositionsCache extends Map<string, PortfolioPosition[]> {
+interface PortfolioPositionsCache extends Map<string, DashboardPortfolioPosition[]> {
   getSecuritySnapshot?: typeof getSecuritySnapshotFromCache;
   getSecurityPositions?: typeof getSecurityPositionsFromCache;
 }

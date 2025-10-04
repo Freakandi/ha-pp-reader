@@ -79,7 +79,7 @@
       - Dateien: `src/tabs/types.ts` (neu), `src/data/api.ts`, `src/data/updateConfigsWS.ts`
       - Abschnitt: Panel-Konfiguration, Tab-Descriptoren, Event-Payloads
       - Ziel: Liefere wiederverwendbare Typdefinitionen für Panel-/Tab-Kontext (inkl. `PanelConfigLike`, History-Ranges, Security-Snapshots) und exportiere das Event-Payload für `pp-reader:portfolio-positions-updated`.
-   d) [ ] Typisiere Daten- und Renderlogik des Overview-Tabs
+   d) [x] Typisiere Daten- und Renderlogik des Overview-Tabs
       - Datei: `src/tabs/overview.ts`
       - Abschnitt: Portfolio-Cache, Tabellenaufbau, `renderDashboard`
       - Ziel: Entferne `@ts-nocheck`, versehe Positions-/Depotdaten mit expliziten Interfaces und strukturiere Hilfsfunktionen so, dass das Dashboard-Markup strikt typisiert entsteht.
