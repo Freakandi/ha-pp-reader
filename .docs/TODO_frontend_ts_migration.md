@@ -131,7 +131,7 @@
 8. Validierung & Release-Vorbereitung
    a) [x] Führe `npm run build` und `npm run typecheck` lokal aus
       - Ziel: Validierung, dass neue Toolchain fehlerfrei arbeitet und Artefakte erzeugt.
-   b) [ ] Starte Home Assistant Dev-Server und prüfe Dashboard-Funktionalität
+   b) [x] Starte Home Assistant Dev-Server und prüfe Dashboard-Funktionalität
       - Datei/Tool: `./scripts/develop`
       - Ziel: Manuelle Regressionstests (Tabs, WebSocket-Updates, DOM-Interaktionen).
    c) [ ] Aktualisiere `CHANGELOG.md` mit TypeScript-Migrationshinweis
