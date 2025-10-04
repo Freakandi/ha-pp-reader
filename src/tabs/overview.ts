@@ -59,6 +59,39 @@ interface NormalizedAccountRow {
   fx_unavailable: boolean;
 }
 
+type PortfolioQueryRoot = Document | HTMLElement;
+
+type PortfolioPositionsSortKey =
+  | 'name'
+  | 'current_holdings'
+  | 'purchase_value'
+  | 'current_value'
+  | 'gain_abs'
+  | 'gain_pct';
+
+type PortfolioSortDirection = 'asc' | 'desc';
+
+const PORTFOLIO_SORT_KEYS: readonly PortfolioPositionsSortKey[] = [
+  'name',
+  'current_holdings',
+  'purchase_value',
+  'current_value',
+  'gain_abs',
+  'gain_pct',
+];
+
+function isPortfolioPositionsSortKey(
+  value: string | null | undefined,
+): value is PortfolioPositionsSortKey {
+  return PORTFOLIO_SORT_KEYS.includes(value as PortfolioPositionsSortKey);
+}
+
+function isPortfolioSortDirection(
+  value: string | null | undefined,
+): value is PortfolioSortDirection {
+  return value === 'asc' || value === 'desc';
+}
+
 // === Modul-weiter State für Expand/Collapse & Lazy Load ===
 // On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.
 let _hassRef: HomeAssistant | null = null;
@@ -192,7 +225,7 @@ function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): voi
 }
 
 if (!window.__ppReaderApplyGainPctMetadata) {
-  window.__ppReaderApplyGainPctMetadata = (tableEl) => applyGainPctMetadata(tableEl);
+  window.__ppReaderApplyGainPctMetadata = (tableEl: HTMLTableElement) => applyGainPctMetadata(tableEl);
 }
 
 function renderPositionsTable(positions: readonly PortfolioPositionLike[]): string {
@@ -279,7 +312,7 @@ export function renderPortfolioPositions(positions: readonly PortfolioPositionLi
 }
 window.__ppReaderRenderPositionsTable = renderPositionsTable;
 
-function attachSecurityDetailDelegation(root: HTMLElement | Document, portfolioUuid: string): void {
+function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid: string): void {
   if (!portfolioUuid) return;
   const detailsRow = root.querySelector<HTMLTableRowElement>(
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
@@ -322,7 +355,7 @@ function attachSecurityDetailDelegation(root: HTMLElement | Document, portfolioU
   });
 }
 
-export function attachSecurityDetailListener(root: HTMLElement | Document, portfolioUuid: string): void {
+export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolioUuid: string): void {
   attachSecurityDetailDelegation(root, portfolioUuid);
 }
 
@@ -503,7 +536,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
   return html;
 }
 
-function resolvePortfolioTable(target: Element | Document | null | undefined): HTMLTableElement | null {
+function resolvePortfolioTable(target: Element | PortfolioQueryRoot | null | undefined): HTMLTableElement | null {
   if (target instanceof HTMLTableElement) {
     return target;
   }
@@ -549,7 +582,7 @@ function extractNumericFromCell(cell: HTMLTableCellElement | null | undefined): 
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function updatePortfolioFooterFromDom(target: Element | Document | null | undefined): void {
+export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoot | null | undefined): void {
   const table = resolvePortfolioTable(target);
   if (!table) {
     return;
@@ -671,7 +704,7 @@ export function setExpandedPortfolios(portfolioIds: Array<string | null | undefi
 }
 
 // NEU: Helper zum Anhängen der Sortier-Logik an eine Positions-Tabelle eines bestimmten Portfolios
-export function attachPortfolioPositionsSorting(root: HTMLElement | Document, portfolioUuid: string): void {
+export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfolioUuid: string): void {
   if (!portfolioUuid) return;
   const detailsRow = root.querySelector<HTMLTableRowElement>(
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
@@ -684,7 +717,10 @@ export function attachPortfolioPositionsSorting(root: HTMLElement | Document, po
 
   table.__ppReaderSortingBound = true;
 
-  const applySort = (key: string, dir: string): void => {
+  const applySort = (
+    key: PortfolioPositionsSortKey,
+    dir: PortfolioSortDirection,
+  ): void => {
     const tbody = table.querySelector<HTMLTableSectionElement>('tbody');
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr'))
@@ -705,7 +741,7 @@ export function attachPortfolioPositionsSorting(root: HTMLElement | Document, po
     };
 
     rows.sort((a, b) => {
-      const idxMap: Record<string, number> = {
+      const idxMap: Record<PortfolioPositionsSortKey, number> = {
         name: 0,
         current_holdings: 1,
         purchase_value: 2,
@@ -744,8 +780,22 @@ export function attachPortfolioPositionsSorting(root: HTMLElement | Document, po
   };
 
   // Initial ggf. gespeicherten Zustand anwenden
-  const currentKey = container.dataset.sortKey || table.dataset.defaultSort || 'name';
-  const currentDir = container.dataset.sortDir || table.dataset.defaultDir || 'asc';
+  const containerKey = container.dataset.sortKey;
+  const containerDir = container.dataset.sortDir;
+  const defaultKey = table.dataset.defaultSort;
+  const defaultDir = table.dataset.defaultDir;
+
+  const currentKey = isPortfolioPositionsSortKey(containerKey)
+    ? containerKey
+    : isPortfolioPositionsSortKey(defaultKey)
+      ? defaultKey
+      : 'name';
+  const currentDir = isPortfolioSortDirection(containerDir)
+    ? containerDir
+    : isPortfolioSortDirection(defaultDir)
+      ? defaultDir
+      : 'asc';
+
   applySort(currentKey, currentDir);
 
   table.addEventListener('click', (event: MouseEvent) => {
@@ -755,16 +805,21 @@ export function attachPortfolioPositionsSorting(root: HTMLElement | Document, po
     }
     const th = target.closest('th[data-sort-key]');
     if (!th || !table.contains(th)) return;
-    const key = th.getAttribute('data-sort-key');
-    if (!key) return;
-
-    let dir = 'asc';
-    if (container.dataset.sortKey === key) {
-      dir = container.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+    const keyAttr = th.getAttribute('data-sort-key');
+    if (!isPortfolioPositionsSortKey(keyAttr)) {
+      return;
     }
-    container.dataset.sortKey = key;
+
+    let dir: PortfolioSortDirection = 'asc';
+    if (container.dataset.sortKey === keyAttr) {
+      const existing = isPortfolioSortDirection(container.dataset.sortDir)
+        ? container.dataset.sortDir
+        : 'asc';
+      dir = existing === 'asc' ? 'desc' : 'asc';
+    }
+    container.dataset.sortKey = keyAttr;
     container.dataset.sortDir = dir;
-    applySort(key, dir);
+    applySort(keyAttr, dir);
   });
 }
 

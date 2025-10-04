@@ -83,7 +83,7 @@
       - Datei: `src/tabs/overview.ts`
       - Abschnitt: Portfolio-Cache, Tabellenaufbau, `renderDashboard`
       - Ziel: Entferne `@ts-nocheck`, versehe Positions-/Depotdaten mit expliziten Interfaces und strukturiere Hilfsfunktionen so, dass das Dashboard-Markup strikt typisiert entsteht.
-   e) [ ] Typisiere Event-Handler und Lazy-Load-Fluss im Overview-Tab
+   e) [x] Typisiere Event-Handler und Lazy-Load-Fluss im Overview-Tab
       - Datei: `src/tabs/overview.ts`
       - Abschnitt: Toggle-/Sortier-Listener, Reload-Hilfen, DOM-Dataset-Konvertierung
       - Ziel: Schaffe typsichere Signaturen für `attachPortfolioToggleHandler`, Sorting/Retry-Helfer und DOM-Zugriffe auf `HTMLElement`/`QueryRoot`.
