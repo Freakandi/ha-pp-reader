@@ -21,7 +21,11 @@
     "noFallthroughCasesInSwitch": true,
     "useDefineForClassFields": true,
     "sourceMap": true,
-    "inlineSources": true
+    "inlineSources": true,
+    "declaration": true,
+    "declarationMap": true,
+    "declarationDir": "types",
+    "emitDeclarationOnly": true
   },
   "include": [
     "src/**/*.ts",
