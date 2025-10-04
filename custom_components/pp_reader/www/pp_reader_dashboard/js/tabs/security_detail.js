@@ -6,6 +6,7 @@
  * dashboard controller.
  */
 import { createHeaderCard, formatNumber, formatGain } from '../content/elements.js';
+import { renderLineChart, updateLineChart } from '../content/charting.js';
 import { fetchSecuritySnapshotWS, fetchSecurityHistoryWS } from '../data/api.js';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 };
@@ -200,6 +201,50 @@ function resolveRangeOptions(rangeKey) {
   return options;
 }
 
+function parseHistoryDate(raw) {
+  if (!raw) {
+    return null;
+  }
+
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return new Date(raw.getTime());
+  }
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    // Backend liefert Epoch Days (Tage seit 1970-01-01).
+    const timestamp = raw * 86400000;
+    if (Number.isFinite(timestamp)) {
+      return new Date(timestamp);
+    }
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (/^\d{8}$/.test(trimmed)) {
+      const year = Number.parseInt(trimmed.slice(0, 4), 10);
+      const month = Number.parseInt(trimmed.slice(4, 6), 10) - 1;
+      const day = Number.parseInt(trimmed.slice(6, 8), 10);
+      if (
+        Number.isFinite(year) &&
+        Number.isFinite(month) &&
+        Number.isFinite(day)
+      ) {
+        const date = new Date(Date.UTC(year, month, day));
+        if (!Number.isNaN(date.getTime())) {
+          return date;
+        }
+      }
+    }
+
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed);
+    }
+  }
+
+  return null;
+}
+
 function normaliseHistorySeries(prices) {
   if (!Array.isArray(prices)) {
     return [];
@@ -212,8 +257,10 @@ function normaliseHistorySeries(prices) {
         return null;
       }
 
+      const dateValue = parseHistoryDate(entry?.date);
+
       return {
-        date: entry?.date,
+        date: dateValue || entry?.date,
         close: rawClose / PRICE_SCALE,
       };
     })
@@ -348,9 +395,13 @@ function buildHistoryPlaceholder(rangeKey, state = { status: 'empty' }) {
   switch (state.status) {
     case 'loaded':
       return `
-        <div class="history-placeholder" data-state="loaded" data-range="${safeRange}">
-          <p>Daten für ${safeRange || 'den gewählten Zeitraum'} geladen. Chart folgt im nächsten Schritt.</p>
-        </div>
+        <div
+          class="history-chart"
+          data-state="loaded"
+          data-range="${safeRange}"
+          role="img"
+          aria-label="Preisverlauf${safeRange ? ` für ${safeRange}` : ''}"
+        ></div>
       `;
     case 'error': {
       const message = state?.message
@@ -616,7 +667,48 @@ function updateInfoBarContent(root, rangeKey, periodGain, dailyGain) {
   infoBar.parentElement.replaceChild(fresh, infoBar);
 }
 
-function updateHistoryPlaceholder(root, rangeKey, state) {
+const HISTORY_CHART_INSTANCES = new WeakMap();
+
+function getHistoryChartOptions(host, series, { currency } = {}) {
+  const measuredWidth = host.clientWidth || host.offsetWidth || 0;
+  const width = measuredWidth > 0 ? measuredWidth : 640;
+  const height = Math.min(Math.max(Math.floor(width * 0.55), 220), 420);
+  const safeCurrency = (currency || '').toUpperCase() || 'EUR';
+
+  return {
+    width,
+    height,
+    margin: { top: 16, right: 20, bottom: 32, left: 20 },
+    series,
+    yFormatter: formatPrice,
+    tooltipRenderer: ({ xFormatted, yFormatted }) => `
+      <div class="chart-tooltip-date">${xFormatted}</div>
+      <div class="chart-tooltip-value">${yFormatted}&nbsp;${safeCurrency}</div>
+    `,
+  };
+}
+
+function renderHistoryChart(host, series, options) {
+  if (!host || !Array.isArray(series) || series.length === 0) {
+    return;
+  }
+
+  const chartOptions = getHistoryChartOptions(host, series, options);
+  let chartContainer = HISTORY_CHART_INSTANCES.get(host);
+
+  if (!chartContainer || !host.contains(chartContainer)) {
+    host.innerHTML = '';
+    chartContainer = renderLineChart(host, chartOptions) || null;
+    if (chartContainer) {
+      HISTORY_CHART_INSTANCES.set(host, chartContainer);
+    }
+    return;
+  }
+
+  updateLineChart(chartContainer, chartOptions);
+}
+
+function updateHistoryPlaceholder(root, rangeKey, state, historySeries, options = {}) {
   const placeholderContainer = root.querySelector('.security-detail-placeholder');
   if (!placeholderContainer) {
     return;
@@ -626,6 +718,15 @@ function updateHistoryPlaceholder(root, rangeKey, state) {
     <h2>Historie</h2>
     ${buildHistoryPlaceholder(rangeKey, state)}
   `;
+
+  if (state?.status === 'loaded' && Array.isArray(historySeries) && historySeries.length) {
+    const host = placeholderContainer.querySelector('.history-chart');
+    if (host) {
+      requestAnimationFrame(() => {
+        renderHistoryChart(host, historySeries, options);
+      });
+    }
+  }
 }
 
 function scheduleRangeSetup({
@@ -661,7 +762,13 @@ function scheduleRangeSetup({
     setActiveRange(securityUuid, initialRange);
     updateRangeButtons(rangeSelector, initialRange);
     if (initialHistoryState) {
-      updateHistoryPlaceholder(root, initialRange, initialHistoryState);
+      updateHistoryPlaceholder(
+        root,
+        initialRange,
+        initialHistoryState,
+        initialHistory,
+        { currency: snapshot?.currency_code },
+      );
     }
 
     const handleRangeClick = async (rangeKey) => {
@@ -723,7 +830,13 @@ function scheduleRangeSetup({
       setActiveRange(securityUuid, rangeKey);
       updateRangeButtons(rangeSelector, rangeKey);
       updateInfoBarContent(root, rangeKey, periodGain, dailyGain);
-      updateHistoryPlaceholder(root, rangeKey, historyState);
+      updateHistoryPlaceholder(
+        root,
+        rangeKey,
+        historyState,
+        historySeries,
+        { currency: snapshot?.currency_code },
+      );
     };
 
     rangeSelector.addEventListener('click', (event) => {

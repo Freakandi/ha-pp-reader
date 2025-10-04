@@ -510,9 +510,21 @@ tbody tr:hover {
   background: rgba(244, 67, 54, 0.12);
 }
 
+
 .history-placeholder[data-state='loaded'] {
   color: var(--primary-text-color);
   background: rgba(63, 81, 181, 0.08);
+}
+
+.history-chart {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+  display: block;
+}
+
+.history-chart .line-chart-container {
+  width: 100%;
 }
 
 .line-chart-container {
