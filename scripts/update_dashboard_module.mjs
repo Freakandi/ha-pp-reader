@@ -11,7 +11,7 @@ import { promises as fs } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const HASHED_ENTRY_PATTERN = /^dashboard\.[a-f0-9]+\.js$/i;
+const HASHED_ENTRY_PATTERN = /^dashboard\.[\da-zA-Z]+\.js$/;
 const MODULE_EXPORT_PATTERN = /export \* from ['"](?<specifier>.+?)['"];?/;
 
 async function findLatestBundle(directory) {
