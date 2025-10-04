@@ -7,7 +7,7 @@
     "test": "tests"
   },
   "scripts": {
-    "build": "vite build && npm run build:types",
+    "build": "vite build && node ./scripts/update_dashboard_module.mjs && npm run build:types",
     "dev": "vite dev",
     "typecheck": "tsc --noEmit",
     "build:types": "tsc -p tsconfig.json",

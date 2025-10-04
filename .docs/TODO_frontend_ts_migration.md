@@ -53,7 +53,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js`
       - Abschnitt: `export * from` Zeile
       - Ziel: Lass den Build-Prozess Hash/Version-Parameter automatisch setzen.
-   b) [ ] Ergänze Post-Build-Skript zur Aktualisierung des Modul-Pfads
+   b) [x] Ergänze Post-Build-Skript zur Aktualisierung des Modul-Pfads
       - Datei: `scripts/update_dashboard_module.mjs` (neu) oder Bundler-Plugin
       - Abschnitt: Skript-Hauptfunktion
       - Ziel: Schreibt nach jedem Build den neuen Dateinamen/Hash in `dashboard.module.js`.
