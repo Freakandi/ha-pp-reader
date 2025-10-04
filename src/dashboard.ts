@@ -82,6 +82,7 @@ interface DashboardElement extends HTMLElement {
   rememberScrollPosition?: (page?: number) => void;
   _renderIfInitialized?: () => void;
   _render?: () => void;
+  handleExternalRender?: (page: number) => void;
 }
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
@@ -291,6 +292,7 @@ async function navigateToPage(
   try {
     currentPage = clampPageIndex(nextIndex);
     await renderTab(root, hass, panel);
+    notifyExternalRender(currentPage);
   } catch (error) {
     console.error('navigateToPage: Fehler beim Rendern des Tabs', error);
   } finally {
@@ -434,6 +436,21 @@ function requestDashboardRender(): void {
 
   if (typeof dashboardElement._render === 'function') {
     dashboardElement._render();
+  }
+}
+
+function notifyExternalRender(page: number): void {
+  const dashboardElement = findDashboardElement();
+  if (!dashboardElement) {
+    return;
+  }
+
+  if (typeof dashboardElement.handleExternalRender === 'function') {
+    try {
+      dashboardElement.handleExternalRender(page);
+    } catch (error) {
+      console.warn('notifyExternalRender: Fehler beim Synchronisieren des Dashboards', error);
+    }
   }
 }
 
@@ -1012,6 +1029,10 @@ class PPReaderDashboard extends HTMLElement {
     if (this._initialized) {
       this._render();
     }
+  }
+
+  public handleExternalRender(page: number): void {
+    this._afterRender(page);
   }
 
   public rememberScrollPosition(page: number = currentPage): void {
