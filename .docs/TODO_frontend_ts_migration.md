@@ -25,7 +25,7 @@
       - Datei: `src/` (neu, Struktur nach `custom_components/pp_reader/www/pp_reader_dashboard/js/`)
       - Abschnitt: Alle Module (`dashboard`, `data`, `interaction`, `content` etc.)
       - Ziel: Kopiere bestehende Logik unverändert als `.ts` Dateien, um später schrittweise zu typisieren.
-   b) [ ] Richte TypeScript-Einstiegspunkte ein
+   b) [x] Richte TypeScript-Einstiegspunkte ein
       - Dateien: `src/dashboard.ts`, `src/panel.ts` (neu)
       - Abschnitt: Exporte & Initialisierung
       - Ziel: Spiegele Verhalten von `dashboard.js` und `panel.js`, sodass Bundler einen konsistenten Einstieg hat.
