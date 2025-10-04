@@ -115,7 +115,7 @@
       - Ziel: Erkläre, wie Entwickler Source-Maps im Browser verwenden.
 
 7. CI- und Testabsicherung
-   a) [ ] Ergänze CI-Workflow für Node-Build und Typprüfung
+   a) [x] Ergänze CI-Workflow für Node-Build und Typprüfung
       - Datei: `.github/workflows/<name>.yml` (neu oder bestehend erweitern)
       - Abschnitt: Jobs für `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint:ts`
       - Ziel: Sicherstellen, dass TypeScript-Pipeline auf CI ausgeführt wird.
