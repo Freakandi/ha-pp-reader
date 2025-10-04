@@ -75,11 +75,27 @@
       - Datei: `src/data/updateConfigsWS.ts`, `src/content/elements.ts`
       - Abschnitt: Fenster-Caches, DOM-Manipulationen
       - Ziel: Nutze strukturierte Interfaces und vermeide untypisierte `window`-Zugriffe.
-   c) [ ] Überführe Tab-Controller in typisierte Module
-      - Dateien: `src/tabs/**/*.ts`
-      - Abschnitt: Tab-Factories, Lifecycle-Funktionen
-      - Ziel: Definiere klare Typsignaturen für Parameter (z.B. Portfolio-Daten, Event-Handler).
-   d) [ ] Beseitige `any`/`unknown` in Kernmodulen mit sinnvollen Typ-Guards
+   c) [ ] Etabliere gemeinsame Tab-Typen und API-Exports
+      - Dateien: `src/tabs/types.ts` (neu), `src/data/api.ts`, `src/data/updateConfigsWS.ts`
+      - Abschnitt: Panel-Konfiguration, Tab-Descriptoren, Event-Payloads
+      - Ziel: Liefere wiederverwendbare Typdefinitionen für Panel-/Tab-Kontext (inkl. `PanelConfigLike`, History-Ranges, Security-Snapshots) und exportiere das Event-Payload für `pp-reader:portfolio-positions-updated`.
+   d) [ ] Typisiere Daten- und Renderlogik des Overview-Tabs
+      - Datei: `src/tabs/overview.ts`
+      - Abschnitt: Portfolio-Cache, Tabellenaufbau, `renderDashboard`
+      - Ziel: Entferne `@ts-nocheck`, versehe Positions-/Depotdaten mit expliziten Interfaces und strukturiere Hilfsfunktionen so, dass das Dashboard-Markup strikt typisiert entsteht.
+   e) [ ] Typisiere Event-Handler und Lazy-Load-Fluss im Overview-Tab
+      - Datei: `src/tabs/overview.ts`
+      - Abschnitt: Toggle-/Sortier-Listener, Reload-Hilfen, DOM-Dataset-Konvertierung
+      - Ziel: Schaffe typsichere Signaturen für `attachPortfolioToggleHandler`, Sorting/Retry-Helfer und DOM-Zugriffe auf `HTMLElement`/`QueryRoot`.
+   f) [ ] Typisiere Security-Detail-Tab inklusive Historienverwaltung
+      - Dateien: `src/tabs/security_detail.ts`, `src/content/charting.ts` (oder deklarative Typdatei)
+      - Abschnitt: Snapshot-Verarbeitung, Range-Handling, Chart-Integration
+      - Ziel: Entferne `@ts-nocheck`, führe typsichere States für History-Ranges/-Cache ein und beschreibe Chart-Hilfsfunktionen inkl. Event-Subscription.
+   g) [ ] Aktualisiere globale Deklarationen für die Tab-APIs
+      - Datei: `src/types/global.d.ts`
+      - Abschnitt: Window-/HTMLElement-Erweiterungen
+      - Ziel: Passe die globalen Signaturen (`__ppReader...`) an die neuen Tab-Typen und Map-Erweiterungen an.
+   h) [ ] Beseitige `any`/`unknown` in Kernmodulen mit sinnvollen Typ-Guards
       - Dateien: `src/dashboard/index.ts`, `src/dashboard.ts`
       - Abschnitt: State-Management, Event-Hooks
       - Ziel: Erreiche strikte Typprüfung ohne Laufzeitverhalten zu ändern.
