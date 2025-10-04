@@ -26,6 +26,12 @@ Portfolio Performance Reader brings your local Portfolio Performance (`.portfoli
 2. Copy `custom_components/pp_reader/` into your Home Assistant `config/custom_components/` directory, preserving the folder structure shown below.【F:ARCHITECTURE.md†L47-L100】
 3. Restart Home Assistant and add the integration through **Settings → Devices & Services**.
 
+### Building the dashboard assets (from source checkouts)
+- Releases ship with compiled dashboard files under `custom_components/pp_reader/www/`, so most users do not need to run the Node build chain.
+- When working from a git checkout or tweaking the TypeScript sources under `src/`, install Node.js **18.18** (or newer) and npm **10+** to satisfy the repository engines.
+- Run `npm install` once to install the toolchain, then rebuild the dashboard with `npm run build`. The command compiles the TypeScript entrypoints via Vite and refreshes `dashboard.module.js` to reference the latest hashed artifact.
+- For iterative development, `npm run dev` keeps Vite in watch mode and writes updated bundles directly into the Home Assistant `www` directory served by this integration.
+
 ## Configuration
 1. Start the config flow and provide the path to your `.portfolio` file. The wizard validates that the file exists and can be parsed before continuing.【F:custom_components/pp_reader/config_flow.py†L43-L99】
 2. Choose whether to use the default database location (`/config/pp_reader_data/<portfolio>.db`) or supply a custom directory.【F:custom_components/pp_reader/config_flow.py†L84-L155】
