@@ -123,3 +123,24 @@ Supporting helpers:
 - Publishing those declarations would require shipping `types/` alongside the integration artifacts, but the project is delivered as a Home Assistant custom component rather than an npm package. The Home Assistant distribution flow strips Node-based build artefacts, so external consumers would not naturally receive or install the declarations.
 - The declaration files reference internal module layout (e.g., `dashboard/`, `tabs/`, `data/`) instead of a stable API surface. Exposing them would lock in the current tree and impede future refactors without delivering practical benefits to integration users.
 - Decision: keep the declarations local for now and revisit packaging only if the frontend toolkit is ever published separately (e.g., as a reusable npm module).
+
+## 14. Bundle Size Snapshot (May 2025)
+
+- Bundle analysis leverages `rollup-plugin-visualizer` gated behind the `PP_READER_ANALYZE_BUNDLE` flag. Running `PP_READER_ANALYZE_BUNDLE=1 npm run build` writes a treemap report to `.docs/bundle-analysis.html` alongside raw JSON data for automation consumers.
+- The current production bundle totals **82.49 kB** (23.96 kB gzip) for `dashboard.CExe4k42.js`; source maps account for an additional 304.07 kB but are excluded from runtime delivery.
+- Module contributions (pre-compression):
+
+  | Module | Size (bytes) | Size (KiB) |
+  | --- | --- | --- |
+  | `src/tabs/overview.ts` | 40,886 | 39.93 |
+  | `src/data/updateConfigsWS.ts` | 24,516 | 23.94 |
+  | `src/content/charting.ts` | 24,263 | 23.69 |
+  | `src/tabs/security_detail.ts` | 24,031 | 23.47 |
+  | `src/dashboard.ts` | 23,855 | 23.30 |
+  | `src/content/elements.ts` | 11,158 | 10.90 |
+  | `src/data/api.ts` | 4,113 | 4.02 |
+  | `src/interaction/tab_control.ts` | 1,195 | 1.17 |
+
+- Optimisation hints:
+  - The Overview tab dominates the bundle footprint, indicating the biggest payoff for future refactors (e.g., shared table helpers or lazy-loading tab logic).
+  - Chart rendering helpers cluster closely with the security detail tab; any extraction into shared, dynamically imported modules would reduce upfront payload.

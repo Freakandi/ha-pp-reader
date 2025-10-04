@@ -1,0 +1,281 @@
+{
+  "version": 2,
+  "tree": {
+    "name": "root",
+    "children": [
+      {
+        "name": "dashboard.CExe4k42.js",
+        "children": [
+          {
+            "name": "src",
+            "children": [
+              {
+                "name": "interaction/tab_control.ts",
+                "uid": "eff9e1b2-1"
+              },
+              {
+                "name": "content",
+                "children": [
+                  {
+                    "uid": "eff9e1b2-3",
+                    "name": "elements.ts"
+                  },
+                  {
+                    "uid": "eff9e1b2-11",
+                    "name": "charting.ts"
+                  }
+                ]
+              },
+              {
+                "name": "data",
+                "children": [
+                  {
+                    "uid": "eff9e1b2-5",
+                    "name": "api.ts"
+                  },
+                  {
+                    "uid": "eff9e1b2-7",
+                    "name": "updateConfigsWS.ts"
+                  }
+                ]
+              },
+              {
+                "name": "tabs",
+                "children": [
+                  {
+                    "uid": "eff9e1b2-9",
+                    "name": "overview.ts"
+                  },
+                  {
+                    "uid": "eff9e1b2-13",
+                    "name": "security_detail.ts"
+                  }
+                ]
+              },
+              {
+                "uid": "eff9e1b2-15",
+                "name": "dashboard.ts"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "isRoot": true
+  },
+  "nodeParts": {
+    "eff9e1b2-1": {
+      "renderedLength": 1195,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-0"
+    },
+    "eff9e1b2-3": {
+      "renderedLength": 11158,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-2"
+    },
+    "eff9e1b2-5": {
+      "renderedLength": 4113,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-4"
+    },
+    "eff9e1b2-7": {
+      "renderedLength": 24516,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-6"
+    },
+    "eff9e1b2-9": {
+      "renderedLength": 40886,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-8"
+    },
+    "eff9e1b2-11": {
+      "renderedLength": 24263,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-10"
+    },
+    "eff9e1b2-13": {
+      "renderedLength": 24031,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-12"
+    },
+    "eff9e1b2-15": {
+      "renderedLength": 23855,
+      "gzipLength": 0,
+      "brotliLength": 0,
+      "metaUid": "eff9e1b2-14"
+    }
+  },
+  "nodeMetas": {
+    "eff9e1b2-0": {
+      "id": "/src/interaction/tab_control.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-1"
+      },
+      "imported": [],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-14"
+        }
+      ]
+    },
+    "eff9e1b2-2": {
+      "id": "/src/content/elements.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-3"
+      },
+      "imported": [],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-8"
+        },
+        {
+          "uid": "eff9e1b2-12"
+        },
+        {
+          "uid": "eff9e1b2-6"
+        }
+      ]
+    },
+    "eff9e1b2-4": {
+      "id": "/src/data/api.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-5"
+      },
+      "imported": [],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-14"
+        },
+        {
+          "uid": "eff9e1b2-8"
+        },
+        {
+          "uid": "eff9e1b2-12"
+        }
+      ]
+    },
+    "eff9e1b2-6": {
+      "id": "/src/data/updateConfigsWS.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-7"
+      },
+      "imported": [
+        {
+          "uid": "eff9e1b2-2"
+        }
+      ],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-14"
+        },
+        {
+          "uid": "eff9e1b2-8"
+        }
+      ]
+    },
+    "eff9e1b2-8": {
+      "id": "/src/tabs/overview.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-9"
+      },
+      "imported": [
+        {
+          "uid": "eff9e1b2-2"
+        },
+        {
+          "uid": "eff9e1b2-14"
+        },
+        {
+          "uid": "eff9e1b2-4"
+        },
+        {
+          "uid": "eff9e1b2-6"
+        }
+      ],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-14"
+        }
+      ]
+    },
+    "eff9e1b2-10": {
+      "id": "/src/content/charting.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-11"
+      },
+      "imported": [],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-12"
+        }
+      ]
+    },
+    "eff9e1b2-12": {
+      "id": "/src/tabs/security_detail.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-13"
+      },
+      "imported": [
+        {
+          "uid": "eff9e1b2-2"
+        },
+        {
+          "uid": "eff9e1b2-10"
+        },
+        {
+          "uid": "eff9e1b2-4"
+        }
+      ],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-14"
+        }
+      ]
+    },
+    "eff9e1b2-14": {
+      "id": "/src/dashboard.ts",
+      "moduleParts": {
+        "dashboard.CExe4k42.js": "eff9e1b2-15"
+      },
+      "imported": [
+        {
+          "uid": "eff9e1b2-0"
+        },
+        {
+          "uid": "eff9e1b2-8"
+        },
+        {
+          "uid": "eff9e1b2-12"
+        },
+        {
+          "uid": "eff9e1b2-6"
+        },
+        {
+          "uid": "eff9e1b2-4"
+        }
+      ],
+      "importedBy": [
+        {
+          "uid": "eff9e1b2-8"
+        }
+      ],
+      "isEntry": true
+    }
+  },
+  "env": {
+    "rollup": "4.52.4"
+  },
+  "options": {
+    "gzip": false,
+    "brotli": false,
+    "sourcemap": false
+  }
+}
