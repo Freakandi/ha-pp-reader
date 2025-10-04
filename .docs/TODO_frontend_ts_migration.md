@@ -43,7 +43,7 @@
       - Datei: `src/types/global.d.ts` (neu)
       - Abschnitt: `declare global { interface Window { ... } }`
       - Ziel: Formalisiere bisherige `window.__ppReader...` Zugriffe für TypeScript-Striktheit.
-   c) [ ] Generiere Deklarationsdateien beim Build
+   c) [x] Generiere Deklarationsdateien beim Build
       - Datei: `tsconfig.json`
       - Abschnitt: `declaration`, `emitDeclarationOnly` (für separates Kommando)
       - Ziel: Stelle `.d.ts` Artefakte für Editor-Unterstützung bereit.

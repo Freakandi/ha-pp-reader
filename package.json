@@ -7,9 +7,10 @@
     "test": "tests"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && npm run build:types",
     "dev": "vite dev",
     "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.json",
     "lint:ts": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
