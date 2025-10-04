@@ -109,7 +109,7 @@
       - Datei: `.docs/frontend_ts_migration.md`
       - Abschnitt: Abschließende Hinweise oder Status
       - Ziel: Dokumentiere Fortschritt, ggf. verweise auf neue TODO-Liste.
-   c) [ ] Dokumentiere Source-Map Nutzung und Debugging-Hinweise
+   c) [x] Dokumentiere Source-Map Nutzung und Debugging-Hinweise
       - Datei: `README-dev.md`
       - Abschnitt: Debugging
       - Ziel: Erkläre, wie Entwickler Source-Maps im Browser verwenden.

@@ -36,6 +36,16 @@ The dashboard assets under `src/` are authored in TypeScript and compiled into `
 
 When iterating on the frontend while Home Assistant is running, keep both `./scripts/develop` and `npm run dev` active to ensure the backend serves fresh assets.
 
+#### Debugging with source maps
+
+The Vite configuration emits source maps in both watch (`npm run dev`) and production (`npm run build`) modes so that browser devtools can map bundled output back to the original TypeScript files. When debugging:
+
+- Open the browser devtools and switch to the **Sources** (Chrome) or **Debugger** (Firefox) tab. The compiled dashboard exposes a virtual `src/` tree mirroring the repository layout, making it easy to set breakpoints in `.ts` modules instead of generated `.js` chunks.
+- If the panel is already loaded, refresh the page once after starting `npm run dev` so the browser fetches the latest source-map references.
+- Console stack traces automatically resolve to TypeScript line numbers; click a frame to jump directly to the underlying source.
+
+When shipping release builds, keep the generated `.map` files alongside the JavaScript bundles in `custom_components/pp_reader/www/pp_reader_dashboard/js/` so troubleshooting in Home Assistant installations remains straightforward.
+
 ### Accessing the development UI
 
 Once `./scripts/develop` reports that Home Assistant is listening on port `8123`, open <http://127.0.0.1:8123> in a browser on the same machine to finish onboarding and validate dashboard changes. The script binds to all interfaces by default, so the loopback adapter is always available without extra flags.
