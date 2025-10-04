@@ -67,7 +67,7 @@
       - Ziel: Verlasse ausschließlich generierte Artefakte im `js/` Verzeichnis.
 
 5. TypeScript-Refactor & Striktheitsverbesserungen
-   a) [ ] Portiere WebSocket-API mit starken Typen
+   a) [x] Portiere WebSocket-API mit starken Typen
       - Datei: `src/data/api.ts`
       - Abschnitt: Anfrage-/Antwortfabriken
       - Ziel: Ersetze dynamische `any` Checks durch typed Interfaces für Nachrichten und `entry_id` Handling.
