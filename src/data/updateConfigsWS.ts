@@ -4,8 +4,8 @@
  * Live update handlers mirrored from the legacy websocket client.
  */
 
-import { makeTable } from '../content/elements.js';
-import { sortTableRows } from '../content/elements.js'; // NEU: generische Sortier-Utility
+import { makeTable } from '../content/elements';
+import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 
 const PENDING_RETRY_INTERVAL = 500;
 const PENDING_MAX_ATTEMPTS = 10;

@@ -29,7 +29,7 @@
       - Dateien: `src/dashboard.ts`, `src/panel.ts` (neu)
       - Abschnitt: Exporte & Initialisierung
       - Ziel: Spiegele Verhalten von `dashboard.js` und `panel.js`, sodass Bundler einen konsistenten Einstieg hat.
-   c) [ ] Ergänze Re-Exports für bestehende Tabs und Utilities
+   c) [x] Ergänze Re-Exports für bestehende Tabs und Utilities
       - Dateien: `src/dashboard/index.ts`, `src/dashboard/tabs/*.ts`, `src/data/*.ts`
       - Abschnitt: Modul-Exporte
       - Ziel: Bewahre bestehende öffentliche APIs, damit importierende Module unverändert funktionieren.

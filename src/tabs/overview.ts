@@ -4,10 +4,22 @@
  * Overview tab renderer copied for the TypeScript source tree.
  */
 
-import { createHeaderCard, makeTable, formatNumber, formatGain, formatGainPct, formatValue } from '../content/elements.js';
-import { openSecurityDetail } from '../dashboard.module.js';
-import { fetchAccountsWS, fetchLastFileUpdateWS, fetchPortfoliosWS, fetchPortfolioPositionsWS } from '../data/api.js';
-import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS.js';
+import {
+  createHeaderCard,
+  makeTable,
+  formatNumber,
+  formatGain,
+  formatGainPct,
+  formatValue,
+} from '../content/elements';
+import { openSecurityDetail } from '../dashboard';
+import {
+  fetchAccountsWS,
+  fetchLastFileUpdateWS,
+  fetchPortfoliosWS,
+  fetchPortfolioPositionsWS,
+} from '../data/api';
+import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
 
 // === Modul-weiter State für Expand/Collapse & Lazy Load ===
 // On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.

@@ -11,9 +11,9 @@
  * exposes a helper to register the descriptor factory with the
  * dashboard controller.
  */
-import { createHeaderCard, formatNumber, formatGain } from '../content/elements.js';
-import { renderLineChart, updateLineChart } from '../content/charting.js';
-import { fetchSecuritySnapshotWS, fetchSecurityHistoryWS } from '../data/api.js';
+import { createHeaderCard, formatNumber, formatGain } from '../content/elements';
+import { renderLineChart, updateLineChart } from '../content/charting';
+import { fetchSecuritySnapshotWS, fetchSecurityHistoryWS } from '../data/api';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 };
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 };
