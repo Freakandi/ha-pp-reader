@@ -7,7 +7,7 @@
       - Datei: `package.json`
       - Abschnitt: `engines`, Projektbeschreibung
       - Ziel: Stelle sicher, dass die erforderliche Node-Version und Hinweise zur TypeScript-Buildpipeline dokumentiert sind.
-   c) [ ] Lege TypeScript-Konfiguration an
+   c) [x] Lege TypeScript-Konfiguration an
       - Datei: `tsconfig.json` (neu)
       - Abschnitt: Compileroptionen
       - Ziel: Aktiviere Strict-Modus, ESM-Ausgabe, Source-Maps und passende Pfade für bundlergesteuerte Ausgabe.
