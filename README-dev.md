@@ -25,6 +25,17 @@ Additional options (Windows, devcontainers) are documented in [TESTING.md §2](T
 - **Formatting & linting:** Execute `./scripts/lint` to run `ruff format .` followed by `ruff check . --fix`.【F:AGENTS.md†L13-L14】【F:TESTING.md†L179-L189】
 - **Source layout awareness:** The integration registers a custom panel (`ppreader`) and WebSocket commands during setup; ensure changes keep the static asset paths and registration logic intact.【F:custom_components/pp_reader/__init__.py†L121-L199】
 
+### Frontend TypeScript workflow
+
+The dashboard assets under `src/` are authored in TypeScript and compiled into `custom_components/pp_reader/www/pp_reader_dashboard/js/` through Vite. Install Node dependencies once with `npm install` (or `npm ci` in CI) and use the provided scripts during development:
+
+- `npm run dev` – starts Vite in watch mode and rebuilds the dashboard whenever files in `src/` change. The generated output is written directly into the Home Assistant `www` directory so reloading the browser reflects updates immediately.
+- `npm run build` – produces the production bundle with hashed filenames and updates `dashboard.module.js` to reference the latest artifact.
+- `npm run typecheck` – executes `tsc --noEmit` to validate the strict TypeScript configuration and declaration outputs.
+- `npm run lint:ts` – runs the ESLint ruleset dedicated to the TypeScript sources.
+
+When iterating on the frontend while Home Assistant is running, keep both `./scripts/develop` and `npm run dev` active to ensure the backend serves fresh assets.
+
 ### Accessing the development UI
 
 Once `./scripts/develop` reports that Home Assistant is listening on port `8123`, open <http://127.0.0.1:8123> in a browser on the same machine to finish onboarding and validate dashboard changes. The script binds to all interfaces by default, so the loopback adapter is always available without extra flags.
