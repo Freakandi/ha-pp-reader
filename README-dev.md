@@ -29,12 +29,23 @@ Additional options (Windows, devcontainers) are documented in [TESTING.md §2](T
 
 The dashboard assets under `src/` are authored in TypeScript and compiled into `custom_components/pp_reader/www/pp_reader_dashboard/js/` through Vite. Install Node dependencies once with `npm install` (or `npm ci` in CI) and use the provided scripts during development:
 
-- `npm run dev` – starts Vite in watch mode and rebuilds the dashboard whenever files in `src/` change. The generated output is written directly into the Home Assistant `www` directory so reloading the browser reflects updates immediately.
+- `npm run dev` – starts the Vite dev server for hot reload. See below for enabling the Home Assistant panel to stream assets directly from the dev server during development.
 - `npm run build` – produces the production bundle with hashed filenames and updates `dashboard.module.js` to reference the latest artifact.
 - `npm run typecheck` – executes `tsc --noEmit` to validate the strict TypeScript configuration and declaration outputs.
 - `npm run lint:ts` – runs the ESLint ruleset dedicated to the TypeScript sources.
 
 When iterating on the frontend while Home Assistant is running, keep both `./scripts/develop` and `npm run dev` active to ensure the backend serves fresh assets.
+
+#### Hot reload inside Home Assistant
+
+The panel can load TypeScript sources directly from the Vite dev server so that edits appear instantly without rebuilding hashed bundles:
+
+1. Start Home Assistant via `./scripts/develop`.
+2. In a separate shell, run `npm run dev` to launch Vite (listening on <http://127.0.0.1:5173> by default).
+3. Open the dashboard at <http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173>. The query parameter stores the dev-server origin in `localStorage`, so subsequent visits use hot reload automatically.
+4. Make TypeScript changes under `src/`; the browser will refresh affected modules immediately through Vite’s HMR connection.
+
+To temporarily disable hot reload, append `?pp_reader_dev_server=disable` to the dashboard URL or clear the `pp_reader:viteDevServer` key from the browser’s storage. The panel falls back to the bundled assets whenever the dev server is unreachable.
 
 #### Debugging with source maps
 

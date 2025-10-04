@@ -3,8 +3,141 @@
 // importieren und bei Bedarf auf die Legacy-Datei zurückzufallen.
 const DASHBOARD_MODULE_SPECIFIER = './js/dashboard.module.js';
 const LEGACY_DASHBOARD_SPECIFIER = './js/dashboard.js';
+const DEV_SERVER_QUERY_PARAM = 'pp_reader_dev_server';
+const DEV_SERVER_STORAGE_KEY = 'pp_reader:viteDevServer';
+const DEV_SERVER_GLOBAL_KEY = '__PP_READER_VITE_DEV_SERVER__';
+
+function normaliseDevServerUrl(candidate) {
+  if (typeof candidate !== 'string') {
+    return null;
+  }
+
+  const trimmed = candidate.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const ensureProtocol = (value) => {
+    try {
+      const parsed = new URL(value);
+      return parsed;
+    } catch (error) {
+      try {
+        const fallback = new URL(`http://${value}`);
+        return fallback;
+      } catch (fallbackError) {
+        console.warn(
+          '[pp_reader] Ungültige Dev-Server-URL, kann nicht normalisieren:',
+          value,
+          fallbackError,
+        );
+        return null;
+      }
+    }
+  };
+
+  const parsed = ensureProtocol(trimmed);
+  if (!parsed) {
+    return null;
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    console.warn('[pp_reader] Dev-Server-URL benötigt http oder https:', parsed.href);
+    return null;
+  }
+
+  const origin = parsed.origin;
+  if (!origin) {
+    return null;
+  }
+
+  return origin.replace(/\/$/, '');
+}
+
+function persistDevServerUrl(url) {
+  try {
+    window.localStorage.setItem(DEV_SERVER_STORAGE_KEY, url);
+  } catch (error) {
+    console.warn('[pp_reader] Konnte Dev-Server-URL nicht speichern:', error);
+  }
+}
+
+function clearDevServerPreference() {
+  try {
+    window.localStorage.removeItem(DEV_SERVER_STORAGE_KEY);
+  } catch (error) {
+    console.warn('[pp_reader] Konnte Dev-Server-URL nicht entfernen:', error);
+  }
+}
+
+function resolveDevServerUrl() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const query = new URLSearchParams(window.location.search);
+    if (query.has(DEV_SERVER_QUERY_PARAM)) {
+      const raw = query.get(DEV_SERVER_QUERY_PARAM);
+      if (raw && raw.toLowerCase() === 'disable') {
+        clearDevServerPreference();
+        console.info('[pp_reader] Dev-Server-Hot-Reload deaktiviert.');
+        return null;
+      }
+
+      const fromQuery = normaliseDevServerUrl(raw ?? '');
+      if (fromQuery) {
+        persistDevServerUrl(fromQuery);
+        return fromQuery;
+      }
+    }
+  } catch (error) {
+    console.warn('[pp_reader] Konnte Dev-Server-Parameter nicht auswerten:', error);
+  }
+
+  const globalValue = window[DEV_SERVER_GLOBAL_KEY];
+  if (typeof globalValue === 'string') {
+    const fromGlobal = normaliseDevServerUrl(globalValue);
+    if (fromGlobal) {
+      return fromGlobal;
+    }
+  }
+
+  try {
+    const stored = window.localStorage.getItem(DEV_SERVER_STORAGE_KEY);
+    const fromStorage = normaliseDevServerUrl(stored ?? '');
+    if (fromStorage) {
+      return fromStorage;
+    }
+  } catch (error) {
+    console.warn('[pp_reader] Konnte gespeicherte Dev-Server-URL nicht lesen:', error);
+  }
+
+  return null;
+}
+
+async function bootViaDevServer(devServerUrl) {
+  const base = devServerUrl.replace(/\/$/, '');
+  await import(/* @vite-ignore */ `${base}/@vite/client`);
+  await import(/* @vite-ignore */ `${base}/src/panel.ts`);
+}
 
 async function loadDashboardModule() {
+  const devServerUrl = resolveDevServerUrl();
+  if (devServerUrl) {
+    try {
+      await bootViaDevServer(devServerUrl);
+      console.info('[pp_reader] Hot-Reload aktiv über Vite Dev-Server:', devServerUrl);
+      return;
+    } catch (error) {
+      console.warn(
+        '[pp_reader] Dev-Server konnte nicht geladen werden, falle auf Bundle zurück.',
+        error,
+      );
+      clearDevServerPreference();
+    }
+  }
+
   try {
     await import(DASHBOARD_MODULE_SPECIFIER);
   } catch (error) {

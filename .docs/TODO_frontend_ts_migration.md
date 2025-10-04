@@ -152,6 +152,7 @@
    b) [x] Mikro-Bundle-Analyse durchführen
       - Datei/Tool: Bundler-Report (z.B. `rollup-plugin-visualizer`)
       - Ziel: Optional Optimierungen für Bundle-Größe identifizieren.
-   c) [ ] Einrichtung eines Watch-basierten Hot-Reload-Workflows in Home Assistant
-      - Datei: `vite.config.mjs`, `package.json`
+   c) [x] Einrichtung eines Watch-basierten Hot-Reload-Workflows in Home Assistant
+      - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/panel.js`, `README-dev.md`
       - Ziel: Optional schnellere lokale Iteration durch Proxy/Reload.
+      - Ergebnis: Panel lädt bei gesetztem `pp_reader_dev_server`-Parameter Module direkt vom Vite Dev-Server (inkl. Persistenz per `localStorage`) und fällt andernfalls auf gebaute Bundles zurück; Dokumentation beschreibt Aktivierung sowie Deaktivierung.
