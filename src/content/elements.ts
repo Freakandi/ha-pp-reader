@@ -1,13 +1,40 @@
-// @ts-nocheck
-
 /**
  * HTML rendering helpers mirrored from the legacy dashboard implementation.
  */
 
-export function formatValue(key, value, row = undefined, context = undefined) {
-  let formatted;
+export type SortDirection = 'asc' | 'desc';
 
-  const toNumber = (v) => {
+export type TableAlignment = 'left' | 'right' | 'center';
+
+export interface TableColumn {
+  key: string;
+  label: string;
+  align?: TableAlignment;
+}
+
+export interface TableFooterContext {
+  hasValue?: boolean;
+}
+
+export interface TableOptions {
+  sortable?: boolean;
+  defaultSort?: {
+    key: string;
+    dir?: SortDirection;
+  };
+}
+
+export type TableRow = Record<string, unknown>;
+
+export function formatValue(
+  key: string,
+  value: unknown,
+  row: TableRow | undefined = undefined,
+  context: TableFooterContext | undefined = undefined,
+): string {
+  let formatted: string | null = null;
+
+  const toNumber = (v: unknown): number => {
     if (typeof v === 'number') {
       return v;
     }
@@ -23,7 +50,7 @@ export function formatValue(key, value, row = undefined, context = undefined) {
     return Number.NaN;
   };
 
-  const safeNumber = (v, minFrac = 2, maxFrac = 2) => {
+  const safeNumber = (v: unknown, minFrac = 2, maxFrac = 2): string => {
     const num = typeof v === 'number' ? v : toNumber(v);
     if (!Number.isFinite(num)) {
       return '';
@@ -34,13 +61,14 @@ export function formatValue(key, value, row = undefined, context = undefined) {
     });
   };
 
-  const renderMissingValue = (reason = '') => {
+  const renderMissingValue = (reason = ''): string => {
     const title = reason || 'Kein Wert verfügbar';
     return `<span class="missing-value" role="note" aria-label="${title}" title="${title}">—</span>`;
   };
 
   if (['gain_abs', 'gain_pct'].includes(key)) {
-    const missingReason = row?.fx_unavailable
+    const rowWithFlags = row as (TableRow & { fx_unavailable?: boolean }) | undefined;
+    const missingReason = rowWithFlags?.fx_unavailable
       ? 'Wechselkurs nicht verfügbar – EUR-Wert unbekannt'
       : '';
     if (value == null || (context && context.hasValue === false)) {
@@ -89,8 +117,9 @@ export function formatValue(key, value, row = undefined, context = undefined) {
       maximumFractionDigits: 4
     });
   } else {
-    formatted = value;
-    if (typeof formatted === 'string') {
+    const base = typeof value === 'string' ? value : value != null ? String(value) : '';
+    formatted = base;
+    if (formatted) {
       const MAX_LEN = 60;
       if (formatted.length > MAX_LEN) {
         formatted = formatted.slice(0, MAX_LEN - 1) + '…';
@@ -103,14 +132,19 @@ export function formatValue(key, value, row = undefined, context = undefined) {
       }
     }
   }
-  if (formatted === '' || formatted == null) {
+  if (formatted == null || formatted === '') {
     return renderMissingValue();
   }
 
   return formatted;
 }
 
-export function makeTable(rows, cols, sumColumns = [], options = {}) {
+export function makeTable(
+  rows: TableRow[],
+  cols: TableColumn[],
+  sumColumns: readonly string[] = [],
+  options: TableOptions = {},
+): string {
   /**
    * Erweiterung (optional):
    * options.sortable    -> true | false (default false)
@@ -118,9 +152,11 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
    *
    * Bestehende Aufrufer (3 Parameter) bleiben kompatibel.
    */
-  const { sortable = false, defaultSort = { key: '', dir: 'asc' } } = options || {};
+  const { sortable = false, defaultSort } = options || {};
+  const defaultSortKey = defaultSort?.key ?? '';
+  const defaultSortDir: SortDirection = defaultSort?.dir === 'desc' ? 'desc' : 'asc';
 
-  const escapeAttribute = (value) => {
+  const escapeAttribute = (value: unknown): string => {
     if (value == null) {
       return '';
     }
@@ -151,8 +187,8 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
   });
 
   // Summen berechnen (unverändert)
-  const sums = {};
-  const sumMeta = {};
+  const sums: Record<string, number | null> = {};
+  const sumMeta: Record<string, TableFooterContext> = {};
   cols.forEach(c => {
     if (sumColumns.includes(c.key)) {
       let total = 0;
@@ -169,15 +205,20 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     }
   });
 
-  if ('gain_abs' in sums) {
-    if ('purchase_value' in sums && sums.purchase_value > 0) {
-      sums['gain_pct'] = (sums['gain_abs'] / sums['purchase_value']) * 100;
-    } else if ('current_value' in sums && sums.current_value !== 0) {
-      sums['gain_pct'] = (sums['gain_abs'] / (sums['current_value'] - sums['gain_abs'])) * 100;
+  const gainAbsSum = sums['gain_abs'] ?? null;
+  if (gainAbsSum != null) {
+    const purchaseSum = sums['purchase_value'] ?? null;
+    if (purchaseSum != null && purchaseSum > 0) {
+      sums['gain_pct'] = (gainAbsSum / purchaseSum) * 100;
+    } else {
+      const currentValueSum = sums['current_value'] ?? null;
+      if (currentValueSum != null && currentValueSum !== 0) {
+        sums['gain_pct'] = (gainAbsSum / (currentValueSum - gainAbsSum)) * 100;
+      }
     }
   }
 
-  const aggregatedGainPct = Number.isFinite(sums['gain_pct']) ? sums['gain_pct'] : null;
+  const aggregatedGainPct = Number.isFinite(sums['gain_pct'] ?? NaN) ? sums['gain_pct'] : null;
   let aggregatedGainPctLabel = '';
   let aggregatedGainPctSign = 'neutral';
 
@@ -224,12 +265,12 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
     try {
       const tpl = document.createElement('template');
       tpl.innerHTML = html.trim();
-      const table = tpl.content.querySelector('table');
+      const table = tpl.content.querySelector<HTMLTableElement>('table');
       if (table) {
         table.classList.add('sortable-table');
-        if (defaultSort?.key) {
-          table.dataset.defaultSort = defaultSort.key;
-          table.dataset.defaultDir = defaultSort.dir === 'desc' ? 'desc' : 'asc';
+        if (defaultSortKey) {
+          table.dataset.defaultSort = defaultSortKey;
+          table.dataset.defaultDir = defaultSortDir;
         }
         return table.outerHTML;
       }
@@ -241,7 +282,7 @@ export function makeTable(rows, cols, sumColumns = [], options = {}) {
   return html;
 }
 
-export function createHeaderCard(headerTitle, meta) {
+export function createHeaderCard(headerTitle: string, meta: string): HTMLDivElement {
   const headerCard = document.createElement('div');
   headerCard.className = 'header-card';
 
@@ -266,15 +307,16 @@ export function createHeaderCard(headerTitle, meta) {
 }
 
 // === NEU: Vereinheitlichte Format-Helfer für andere Module (z.B. overview.js) ===
-export function formatNumber(value, minFrac = 2, maxFrac = 2) {
-  return (isNaN(value) ? 0 : value).toLocaleString('de-DE', {
+export function formatNumber(value: number, minFrac = 2, maxFrac = 2): string {
+  const numeric = Number.isNaN(value) ? 0 : value;
+  return numeric.toLocaleString('de-DE', {
     minimumFractionDigits: minFrac,
     maximumFractionDigits: maxFrac
   });
 }
 
-export function formatGain(value) {
-  const num = isNaN(value) ? 0 : value;
+export function formatGain(value: number): string {
+  const num = Number.isNaN(value) ? 0 : value;
   let cls = 'neutral';
   if (num > 0) {
     cls = 'positive';
@@ -284,8 +326,8 @@ export function formatGain(value) {
   return `<span class="${cls}">${formatNumber(num)}&nbsp;€</span>`;
 }
 
-export function formatGainPct(value) {
-  const num = isNaN(value) ? 0 : value;
+export function formatGainPct(value: number): string {
+  const num = Number.isNaN(value) ? 0 : value;
   let cls = 'neutral';
   if (num > 0) {
     cls = 'positive';
@@ -313,20 +355,25 @@ export function formatGainPct(value) {
  *
  * Footer-Zeile ('.footer-row') bleibt am Ende erhalten.
  */
-export function sortTableRows(tableEl, key, dir = 'asc', isPositions = false) {
+export function sortTableRows(
+  tableEl: HTMLTableElement | null | undefined,
+  key: string,
+  dir: SortDirection = 'asc',
+  isPositions = false,
+): HTMLTableRowElement[] {
   if (!tableEl) return [];
   const tbody = tableEl.querySelector('tbody');
   if (!tbody) return [];
 
-  const footer = tbody.querySelector('tr.footer-row');
+  const footer = tbody.querySelector<HTMLTableRowElement>('tr.footer-row');
   const rows = Array
-    .from(tbody.querySelectorAll('tr'))
+    .from(tbody.querySelectorAll<HTMLTableRowElement>('tr'))
     .filter(r => r !== footer);
 
   // Spaltenindex bestimmen
   let colIdx = -1;
   if (isPositions) {
-    const posMap = {
+    const posMap: Record<string, number> = {
       name: 0,
       current_holdings: 1,
       purchase_value: 2,
@@ -337,7 +384,7 @@ export function sortTableRows(tableEl, key, dir = 'asc', isPositions = false) {
     colIdx = posMap[key];
   } else {
     // Generisch über thead th[data-sort-key]
-    const ths = Array.from(tableEl.querySelectorAll('thead th'));
+    const ths = Array.from(tableEl.querySelectorAll<HTMLTableCellElement>('thead th'));
     for (let i = 0; i < ths.length; i++) {
       if (ths[i].getAttribute('data-sort-key') === key) {
         colIdx = i;
@@ -347,7 +394,7 @@ export function sortTableRows(tableEl, key, dir = 'asc', isPositions = false) {
   }
   if (colIdx == null || colIdx < 0) return rows;
 
-  const toNumber = (txt) => {
+  const toNumber = (txt: string): number => {
     if (txt == null) return NaN;
     const cleaned = txt
       .replace(/\u00A0/g, ' ')
@@ -362,14 +409,17 @@ export function sortTableRows(tableEl, key, dir = 'asc', isPositions = false) {
   };
 
   rows.sort((a, b) => {
-    const aTxt = a.cells[colIdx]?.textContent.trim() || '';
-    const bTxt = b.cells[colIdx]?.textContent.trim() || '';
+    const aCell = a.cells.item(colIdx);
+    const bCell = b.cells.item(colIdx);
+    const aTxt = (aCell?.textContent ?? '').trim();
+    const bTxt = (bCell?.textContent ?? '').trim();
 
     const aNum = toNumber(aTxt);
     const bNum = toNumber(bTxt);
 
-    let cmp;
-    if (!isNaN(aNum) && !isNaN(bNum) && (aTxt.match(/[0-9]/) || bTxt.match(/[0-9]/))) {
+    let cmp: number;
+    const hasNumericContext = /[0-9]/.test(aTxt) || /[0-9]/.test(bTxt);
+    if (!Number.isNaN(aNum) && !Number.isNaN(bNum) && hasNumericContext) {
       cmp = aNum - bNum;
     } else {
       cmp = aTxt.localeCompare(bTxt, 'de', { sensitivity: 'base' });
@@ -385,7 +435,7 @@ export function sortTableRows(tableEl, key, dir = 'asc', isPositions = false) {
   tableEl.querySelectorAll('thead th.sort-active').forEach(th => {
     th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
   });
-  const activeTh = tableEl.querySelector(`thead th[data-sort-key="${key}"]`);
+  const activeTh = tableEl.querySelector<HTMLElement>(`thead th[data-sort-key="${key}"]`);
   if (activeTh) {
     activeTh.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
   }
