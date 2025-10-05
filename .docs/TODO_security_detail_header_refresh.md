@@ -69,7 +69,7 @@
       - Datei: `.docs/security_detail_header_refresh.md`
       - Abschnitt: Ergänzung "Implementation" bzw. Hinweis auf Fertigstellung
       - Ziel: Status und Learnings dokumentieren
-   b) [ ] Changelog-Eintrag zur UI-Anpassung hinzufügen
+   b) [x] Changelog-Eintrag zur UI-Anpassung hinzufügen
       - Datei: `CHANGELOG.md`
       - Abschnitt: Neuer Eintrag unter "Unreleased"
       - Ziel: Benutzer über erweiterten Header, ALL-Range und Baseline informieren
