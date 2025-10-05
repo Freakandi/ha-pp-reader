@@ -618,6 +618,16 @@ function ensureSnapshotMetrics(
   return metrics;
 }
 
+function getSnapshotMetrics(
+  securityUuid: string | null | undefined,
+): SecuritySnapshotMetrics | null {
+  if (!securityUuid) {
+    return null;
+  }
+
+  return SNAPSHOT_METRICS_REGISTRY.get(securityUuid) ?? null;
+}
+
 function computeGainValues(
   historySeries: readonly NormalizedHistoryEntry[],
   holdings: unknown,
@@ -767,13 +777,18 @@ function formatPrice(value: unknown): string {
   });
 }
 
-function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
+function buildHeaderMeta(
+  snapshot: SecuritySnapshotDetail | null,
+  metrics: SecuritySnapshotMetrics | null = null,
+): string {
   if (!snapshot) {
     return '<div class="meta-error">Keine Snapshot-Daten verfügbar.</div>';
   }
 
   const currency = snapshot.currency_code || 'EUR';
-  const holdings = formatHoldings(snapshot.total_holdings);
+  const holdingsSource =
+    metrics?.holdings ?? snapshot.total_holdings_precise ?? snapshot.total_holdings;
+  const holdings = formatHoldings(holdingsSource);
   const lastPriceNative =
     snapshot.last_price_native ?? snapshot.last_price?.native ?? snapshot.last_price_eur;
   const formattedLastPrice = formatPrice(lastPriceNative);
@@ -954,6 +969,7 @@ interface ScheduleRangeSetupOptions {
   securityUuid: string;
   snapshot: SecuritySnapshotDetail | null;
   holdings: unknown;
+  metrics: SecuritySnapshotMetrics | null | undefined;
   initialRange: SecurityHistoryRangeKey;
   initialHistory: NormalizedHistoryEntry[];
   initialHistoryState: HistoryPlaceholderState;
@@ -967,6 +983,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     securityUuid,
     snapshot,
     holdings,
+    metrics,
     initialRange,
     initialHistory,
     initialHistoryState,
@@ -983,6 +1000,8 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     }
 
     const cache = ensureHistoryCache(securityUuid);
+    const snapshotMetrics = metrics ?? getSnapshotMetrics(securityUuid);
+    const holdingsForGains = snapshotMetrics?.holdings ?? holdings;
     const shouldCacheInitial =
       Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
     if (shouldCacheInitial) {
@@ -1055,7 +1074,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       const activeFxRate = deriveFxRate(snapshot, lastClose);
       const { periodGain, dailyGain } = computeGainValues(
         historySeries,
-        holdings,
+        holdingsForGains,
         activeFxRate,
       );
 
@@ -1122,16 +1141,20 @@ export async function renderSecurityDetail(
   const effectiveSnapshot = snapshot || cachedSnapshot;
   const fallbackUsed = Boolean(cachedSnapshot && !snapshot);
   const flaggedAsCache = (effectiveSnapshot?.source ?? '') === 'cache';
+  let snapshotMetrics: SecuritySnapshotMetrics | null = null;
   if (securityUuid) {
     cacheSecuritySnapshotDetail(securityUuid, effectiveSnapshot ?? null);
-    ensureSnapshotMetrics(securityUuid, effectiveSnapshot ?? null);
+    snapshotMetrics = ensureSnapshotMetrics(securityUuid, effectiveSnapshot ?? null);
   }
   const staleNotice =
     effectiveSnapshot && (fallbackUsed || flaggedAsCache)
       ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
       : '';
   const headerTitle = effectiveSnapshot?.name || 'Wertpapierdetails';
-  const headerCard = createHeaderCard(headerTitle, buildHeaderMeta(effectiveSnapshot));
+  const headerCard = createHeaderCard(
+    headerTitle,
+    buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
+  );
 
   if (error) {
     return `
@@ -1188,7 +1211,8 @@ export async function renderSecurityDetail(
       ? historySeries[historySeries.length - 1].close
       : effectiveSnapshot?.last_price_native;
   const fxRate = deriveFxRate(effectiveSnapshot, latestNativePrice);
-  const holdings = effectiveSnapshot?.total_holdings ?? 0;
+  const holdings =
+    snapshotMetrics?.holdings ?? effectiveSnapshot?.total_holdings ?? 0;
   const { periodGain, dailyGain } = computeGainValues(
     historySeries,
     holdings,
@@ -1203,6 +1227,7 @@ export async function renderSecurityDetail(
     securityUuid,
     snapshot: effectiveSnapshot,
     holdings,
+    metrics: snapshotMetrics,
     initialRange: activeRange,
     initialHistory: historySeries,
     initialHistoryState: historyState,
