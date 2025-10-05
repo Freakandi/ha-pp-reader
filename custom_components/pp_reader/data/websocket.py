@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -127,6 +127,87 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
+
+
+def _coerce_float(value: Any, *, default: float = 0.0) -> float:
+    """Return ``value`` as float with a graceful fallback."""
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if value is None:
+        return default
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_optional_float(value: Any) -> float | None:
+    """Return ``value`` as float or ``None`` when conversion fails."""
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Normalise snapshot payload for websocket transmission."""
+    if not snapshot:
+        return {
+            "name": "",
+            "currency_code": "EUR",
+            "total_holdings": 0.0,
+            "last_price_native": None,
+            "last_price_eur": None,
+            "market_value_eur": 0.0,
+            "purchase_value_eur": 0.0,
+            "average_purchase_price_native": None,
+            "last_close_native": None,
+            "last_close_eur": None,
+        }
+
+    data = dict(snapshot)
+
+    raw_name = snapshot.get("name")
+    data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
+
+    raw_currency = snapshot.get("currency_code")
+    if isinstance(raw_currency, str):
+        currency = raw_currency.strip().upper() or "EUR"
+    else:
+        currency = "EUR"
+    data["currency_code"] = currency
+
+    data["total_holdings"] = _coerce_float(snapshot.get("total_holdings"))
+    data["last_price_native"] = _coerce_optional_float(
+        snapshot.get("last_price_native")
+    )
+    data["last_price_eur"] = _coerce_optional_float(snapshot.get("last_price_eur"))
+    data["market_value_eur"] = _coerce_float(snapshot.get("market_value_eur"))
+    data["purchase_value_eur"] = _coerce_float(snapshot.get("purchase_value_eur"))
+    data["average_purchase_price_native"] = _coerce_optional_float(
+        snapshot.get("average_purchase_price_native")
+    )
+    data["last_close_native"] = _coerce_optional_float(
+        snapshot.get("last_close_native")
+    )
+    data["last_close_eur"] = _coerce_optional_float(snapshot.get("last_close_eur"))
+
+    last_price_raw = snapshot.get("last_price")
+    if isinstance(last_price_raw, Mapping):
+        data["last_price"] = {
+            "native": _coerce_optional_float(last_price_raw.get("native")),
+            "eur": _coerce_optional_float(last_price_raw.get("eur")),
+        }
+
+    return data
 
 
 def _wrap_with_loop_fallback(
@@ -658,7 +739,7 @@ async def ws_get_security_snapshot(
     db_path = Path(db_path_raw)
 
     try:
-        snapshot = await async_run_executor_job(
+        raw_snapshot = await async_run_executor_job(
             hass,
             get_security_snapshot,
             db_path,
@@ -681,6 +762,12 @@ async def ws_get_security_snapshot(
             "Fehler beim Laden des Snapshots",
         )
         return
+
+    snapshot = (
+        _serialise_security_snapshot(raw_snapshot)
+        if isinstance(raw_snapshot, Mapping)
+        else _serialise_security_snapshot(None)
+    )
 
     connection.send_result(
         msg_id,
