@@ -11,7 +11,7 @@
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt: Handler `ws_get_security_snapshot`
       - Ziel: Stellt sicher, dass die erweiterten Snapshot-Daten im WebSocket-Payload erscheinen
-   d) [ ] Schreibe/aktualisiere Tests für Snapshot-Edge-Cases
+   d) [x] Schreibe/aktualisiere Tests für Snapshot-Edge-Cases
       - Datei: `tests/custom_components/pp_reader/data/test_db_access.py`
       - Abschnitt: Neue/erweiterte Tests für `get_security_snapshot`
       - Ziel: Prüft Null-Bestände, fehlende Käufe und fehlenden Schlusskurs
