@@ -59,7 +59,7 @@
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css`
       - Abschnitt: Selektoren für Security-Header-Karten
       - Ziel: Gruppenlayout, Responsive-Anpassungen und Gain-Farben implementieren
-   b) [ ] Styling für Chart-Baseline ergänzen
+   b) [x] Styling für Chart-Baseline ergänzen
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css`
       - Abschnitt: Neuer Selektor für Baseline/Dash-Linie (ggf. globaler Chart-Abschnitt)
       - Ziel: Dezente Darstellung der Durchschnittskurs-Linie sicherstellen
