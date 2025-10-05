@@ -75,7 +75,7 @@
       - Ziel: Benutzer über erweiterten Header, ALL-Range und Baseline informieren
 
 7. Tests & Validierung
-   a) [ ] Frontend-Build/Linting ausführen
+   a) [x] Frontend-Build/Linting ausführen
       - Befehl: `npm run lint`
       - Ziel: Statische Prüfung der TypeScript-/CSS-Anpassungen
    b) [ ] Python-Test-Suite laufen lassen
