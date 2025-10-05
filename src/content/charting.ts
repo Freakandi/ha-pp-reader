@@ -18,6 +18,8 @@ const DEFAULT_MARGIN = { top: 12, right: 16, bottom: 24, left: 16 } as const;
 const DEFAULT_COLOR = 'var(--pp-reader-chart-line, #3f51b5)';
 const DEFAULT_AREA = 'var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))';
 const DEFAULT_TICK_FONT = '0.75rem';
+const DEFAULT_BASELINE_COLOR = 'var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))';
+const DEFAULT_BASELINE_DASH = '6 4';
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export type LineChartInputDatum = unknown;
@@ -70,6 +72,13 @@ export interface LineChartOptions {
   tooltipRenderer?: LineChartTooltipRenderer;
   color?: string;
   areaColor?: string;
+  baseline?: LineChartBaselineOptions | null;
+}
+
+export interface LineChartBaselineOptions {
+  value: number | null | undefined;
+  color?: string;
+  dashArray?: string;
 }
 
 interface LineChartRange {
@@ -94,6 +103,7 @@ interface LineChartInternalState extends ChartDimensions {
   svg: SVGSVGElement | null;
   areaPath: SVGPathElement | null;
   linePath: SVGPathElement | null;
+  baselineLine: SVGLineElement | null;
   focusLine: SVGLineElement | null;
   focusCircle: SVGCircleElement | null;
   overlay: SVGRectElement | null;
@@ -110,6 +120,7 @@ interface LineChartInternalState extends ChartDimensions {
   tooltipRenderer: LineChartTooltipRenderer;
   color: string;
   areaColor: string;
+  baseline: LineChartBaselineOptions | null;
   handlersAttached: boolean;
   handlePointerMove?: (event: PointerEvent) => void;
   handlePointerLeave?: (event: PointerEvent) => void;
@@ -221,6 +232,7 @@ function ensureChartState(container: LineChartContainerElement): LineChartIntern
       svg: null,
       areaPath: null,
       linePath: null,
+      baselineLine: null,
       focusLine: null,
       focusCircle: null,
       overlay: null,
@@ -238,6 +250,7 @@ function ensureChartState(container: LineChartContainerElement): LineChartIntern
       tooltipRenderer: defaultTooltipRenderer,
       color: DEFAULT_COLOR,
       areaColor: DEFAULT_AREA,
+      baseline: null,
       handlersAttached: false,
     };
   }
@@ -285,6 +298,51 @@ function buildLinePath(points: readonly LineChartComputedPoint[]): string {
       return `${command}${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
     })
     .join(' ');
+}
+
+function applyBaselineAppearance(state: LineChartInternalState): void {
+  const { baselineLine, baseline } = state;
+  if (!baselineLine) {
+    return;
+  }
+
+  const stroke = baseline?.color ?? DEFAULT_BASELINE_COLOR;
+  const dashArray = baseline?.dashArray ?? DEFAULT_BASELINE_DASH;
+
+  baselineLine.setAttribute('stroke', stroke);
+  baselineLine.setAttribute('stroke-dasharray', dashArray);
+}
+
+function updateBaselineLine(state: LineChartInternalState): void {
+  const { baselineLine, baseline, range, margin, width } = state;
+  if (!baselineLine) {
+    return;
+  }
+
+  const baselineValue = baseline?.value;
+  if (!range || baselineValue == null || !Number.isFinite(baselineValue)) {
+    baselineLine.style.opacity = '0';
+    return;
+  }
+
+  const { minY, maxY, boundedHeight } = range;
+  const safeMinY = Number.isFinite(minY) ? minY : baselineValue;
+  const safeMaxY = Number.isFinite(maxY) ? maxY : safeMinY + 1;
+  const denominator = safeMaxY - safeMinY;
+  const ratio = denominator === 0 ? 0.5 : (baselineValue - safeMinY) / denominator;
+  const clampedRatio = clamp(ratio, 0, 1);
+
+  const effectiveHeight = Math.max(boundedHeight, 0);
+  const y = margin.top + (1 - clampedRatio) * effectiveHeight;
+  const effectiveWidth = Math.max(width - margin.left - margin.right, 0);
+  const x1 = margin.left;
+  const x2 = margin.left + effectiveWidth;
+
+  baselineLine.setAttribute('x1', x1.toFixed(2));
+  baselineLine.setAttribute('x2', x2.toFixed(2));
+  baselineLine.setAttribute('y1', y.toFixed(2));
+  baselineLine.setAttribute('y2', y.toFixed(2));
+  baselineLine.style.opacity = '1';
 }
 
 function computePoints(
@@ -553,6 +611,14 @@ export function renderLineChart(
     stroke: 'none',
   });
 
+  const baselineLine = createSvgElement('line', {
+    class: 'line-chart-baseline',
+    stroke: DEFAULT_BASELINE_COLOR,
+    'stroke-width': 1,
+    'stroke-dasharray': DEFAULT_BASELINE_DASH,
+    opacity: 0,
+  });
+
   const linePath = createSvgElement('path', {
     class: 'line-chart-path',
     fill: 'none',
@@ -589,6 +655,7 @@ export function renderLineChart(
   });
 
   svg.appendChild(areaPath);
+  svg.appendChild(baselineLine);
   svg.appendChild(linePath);
   svg.appendChild(focusLine);
   svg.appendChild(focusCircle);
@@ -612,6 +679,7 @@ export function renderLineChart(
   state.svg = svg;
   state.areaPath = areaPath;
   state.linePath = linePath;
+  state.baselineLine = baselineLine;
   state.focusLine = focusLine;
   state.focusCircle = focusCircle;
   state.overlay = overlay;
@@ -623,6 +691,7 @@ export function renderLineChart(
   state.tooltipRenderer = options.tooltipRenderer ?? defaultTooltipRenderer;
   state.color = options.color ?? DEFAULT_COLOR;
   state.areaColor = options.areaColor ?? DEFAULT_AREA;
+  state.baseline = options.baseline ?? null;
   state.handlersAttached = false;
 
   if (!state.xAxis) {
@@ -723,6 +792,12 @@ export function updateLineChart(
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(options, 'baseline')) {
+    state.baseline = options.baseline ?? null;
+  }
+
+  applyBaselineAppearance(state);
+
   assignDimensions(state, options.width, options.height, options.margin);
 
   const { width, height, margin } = state;
@@ -758,6 +833,7 @@ export function updateLineChart(
     }
     hideTooltip(state);
     updateAxes(state);
+    updateBaselineLine(state);
     return;
   }
 
@@ -771,6 +847,7 @@ export function updateLineChart(
   }
 
   updateAxes(state);
+  updateBaselineLine(state);
 }
 
 function updateAxes(state: LineChartInternalState): void {

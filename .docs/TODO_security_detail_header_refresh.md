@@ -45,7 +45,7 @@
       - Ziel: Zeigt Letzten Preis, Tagesänderung, Gesamtänderung, Bestand, Marktwert mit passenden Styles
 
 4. Frontend: Chart-Baseline hinzufügen
-   a) [ ] `renderLineChart` um `baseline`-Option erweitern
+   a) [x] `renderLineChart` um `baseline`-Option erweitern
       - Datei: `src/content/charting.ts`
       - Abschnitt: Funktionen `renderLineChart`, `updateLineChart`
       - Ziel: Zeichnet horizontale Linie auf Durchschnittskursniveau und entfernt sie bei fehlenden Daten
