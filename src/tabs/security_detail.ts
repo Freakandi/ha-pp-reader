@@ -40,12 +40,14 @@ const AVAILABLE_HISTORY_RANGES: readonly SecurityHistoryRangeKey[] = [
   '6M',
   '1Y',
   '5Y',
+  'ALL',
 ];
 const RANGE_DAY_COUNTS: Record<SecurityHistoryRangeKey, number> = {
   '1M': 30,
   '6M': 182,
   '1Y': 365,
   '5Y': 1826,
+  'ALL': Number.POSITIVE_INFINITY,
 };
 
 type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'>> & {

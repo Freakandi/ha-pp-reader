@@ -31,7 +31,7 @@
       - Ziel: Wiederverwendbare Berechnungsschritte mit Guarding gegen Null-Bestände
 
 3. Frontend: Range-Handling und Header-Rendering anpassen
-   a) [ ] Range-Selector um Option `ALL` erweitern
+   a) [x] Range-Selector um Option `ALL` erweitern
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: Konstante `AVAILABLE_HISTORY_RANGES`, Funktion `resolveRangeOptions`, Button-Rendering
       - Ziel: Ermöglicht volle Historie ohne `start_date`-Filter

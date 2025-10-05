@@ -44,7 +44,7 @@ export interface DashboardTabDescriptor {
   [key: string]: unknown;
 }
 
-export type SecurityHistoryRangeKey = "1M" | "6M" | "1Y" | "5Y";
+export type SecurityHistoryRangeKey = "1M" | "6M" | "1Y" | "5Y" | "ALL";
 
 export interface SecurityHistoryRangeState {
   activeRange: SecurityHistoryRangeKey;
