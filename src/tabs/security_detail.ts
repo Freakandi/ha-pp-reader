@@ -598,13 +598,14 @@ function ensureSnapshotMetrics(
 
   const totalChangeFallbackDiff = computeDelta(currentValueEur, purchaseValueEur);
   const totalChangeEur =
-    totalChangeEurDirect ??
-    (totalChangeFallbackDiff != null ? roundCurrency(totalChangeFallbackDiff) : null);
+    totalChangeFallbackDiff != null
+      ? roundCurrency(totalChangeFallbackDiff)
+      : totalChangeEurDirect;
 
   const totalChangePct =
+    computePercentageChange(currentValueEur, purchaseValueEur) ??
     computePercentageChange(lastPriceNative, averagePurchaseNative) ??
-    computePercentageChange(lastPriceEur, averagePurchaseEur) ??
-    computePercentageChange(currentValueEur, purchaseValueEur);
+    computePercentageChange(lastPriceEur, averagePurchaseEur);
 
   const metrics: SecuritySnapshotMetrics = {
     holdings: safeHoldings,
