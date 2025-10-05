@@ -435,6 +435,10 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "last_price_native": 12.5,
         "last_price_eur": 12.5,
         "market_value_eur": 43.75,
+        "purchase_value_eur": 0.0,
+        "average_purchase_price_native": None,
+        "last_close_native": 0.0001,
+        "last_close_eur": 0.0001,
     }
 
 

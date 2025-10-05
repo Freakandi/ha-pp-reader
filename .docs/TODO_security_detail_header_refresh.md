@@ -78,7 +78,7 @@
    a) [x] Frontend-Build/Linting ausführen
       - Befehl: `npm run lint`
       - Ziel: Statische Prüfung der TypeScript-/CSS-Anpassungen
-   b) [ ] Python-Test-Suite laufen lassen
+   b) [x] Python-Test-Suite laufen lassen
       - Befehl: `pytest`
       - Ziel: Sicherstellen, dass Backend-Änderungen korrekt funktionieren
    c) [ ] Manuelle Validierung der Oberfläche
