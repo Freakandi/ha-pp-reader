@@ -6,6 +6,7 @@ refresh is still running during Home Assistant startup.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -88,3 +89,10 @@ async def test_placeholder_panel_registered_during_setup(
     placeholder_config = captured_configs[0]
     assert placeholder_config.get("entry_id") is None
     assert placeholder_config.get("placeholder") is True
+
+    assert hass.http.registered_static_paths, "Expected dashboard static path"
+    static_path = hass.http.registered_static_paths[0]
+    expected_folder = (
+        Path(integration.__file__).parent / "www" / "pp_reader_dashboard"
+    )
+    assert Path(static_path.path) == expected_folder.resolve()
