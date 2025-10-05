@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 
+from typing import Any
+
 import pytest
 from homeassistant.config_entries import ConfigEntries
 from homeassistant.core import HomeAssistant
@@ -43,7 +45,11 @@ async def hass(
     await hass.config_entries.async_initialize()
 
     class _HttpStub:
-        async def async_register_static_paths(self, _paths):
+        def __init__(self) -> None:
+            self.registered_static_paths: list[Any] = []
+
+        async def async_register_static_paths(self, paths):  # noqa: ANN001
+            self.registered_static_paths.extend(paths)
             return None
 
         async def async_register_view(self, _view):  # pragma: no cover - compatibility

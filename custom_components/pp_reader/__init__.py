@@ -307,7 +307,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                path=hass.config.path(str(dashboard_folder)),
+                path=str(dashboard_folder.resolve()),
                 url_path="/pp_reader_dashboard",
                 cache_headers=False,
             )
