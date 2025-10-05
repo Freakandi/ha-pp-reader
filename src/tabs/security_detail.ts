@@ -58,6 +58,9 @@ type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'
   market_value_eur?: number | string | null;
   current_value_eur?: number | string | null;
   currency_code?: string | null;
+  average_purchase_price_native?: number | string | null;
+  last_close_native?: number | string | null;
+  last_close_eur?: number | string | null;
   last_price?: {
     native?: number | string | null;
     [key: string]: unknown;

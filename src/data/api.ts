@@ -65,9 +65,14 @@ export interface SecuritySnapshotResponse {
     name?: string;
     currency_code?: string;
     total_holdings?: number;
+    purchase_value_eur?: number;
+    current_value_eur?: number;
     last_price_native?: number | null;
     last_price_eur?: number;
     market_value_eur?: number;
+    average_purchase_price_native?: number | null;
+    last_close_native?: number | null;
+    last_close_eur?: number | null;
     [key: string]: unknown;
   };
   [key: string]: unknown;

@@ -54,12 +54,17 @@ export interface SecurityHistoryRangeState {
 export interface SecuritySnapshotLike {
   security_uuid: string;
   name: string;
+  currency_code?: string | null;
   total_holdings: number;
   purchase_value_eur: number;
   current_value_eur: number;
   gain_abs_eur: number;
   gain_pct: number;
+  last_price_native?: number | null;
   last_price_eur: number | null;
+  last_close_native?: number | null;
+  last_close_eur?: number | null;
+  average_purchase_price_native?: number | null;
   source?: string;
   [key: string]: unknown;
 }
