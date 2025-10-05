@@ -49,7 +49,7 @@
       - Datei: `src/content/charting.ts`
       - Abschnitt: Funktionen `renderLineChart`, `updateLineChart`
       - Ziel: Zeichnet horizontale Linie auf Durchschnittskursniveau und entfernt sie bei fehlenden Daten
-   b) [ ] Chart-Aufruf im Security-Detail mit Baseline versorgen
+   b) [x] Chart-Aufruf im Security-Detail mit Baseline versorgen
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: Chart-Initialisierung und -Update
       - Ziel: Übermittelt berechnete Durchschnittskurslinie an Chart-Funktionen
