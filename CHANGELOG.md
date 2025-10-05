@@ -13,6 +13,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ### Changed
 - Migrated the dashboard frontend to a TypeScript build pipeline powered by Vite, emitting hashed bundles and declaration files while keeping the module loader in sync for cache busting without altering Home Assistant imports.【F:vite.config.mjs†L1-L34】【F:tsconfig.json†L1-L39】【F:scripts/update_dashboard_module.mjs†L1-L70】【F:src/dashboard.ts†L1-L105】
 - Removed the deprecated `pp_reader_history` feature flag so historical price access is part of the core experience without configuration toggles.【F:custom_components/pp_reader/feature_flags.py†L1-L67】【F:custom_components/pp_reader/data/websocket.py†L537-L755】
+- Refreshed the security detail header with snapshot-based day/total gain metrics, added an `ALL` range selector, and overlaid an average purchase price baseline on the chart for consistent comparisons.【F:src/tabs/security_detail.ts†L32-L611】【F:src/content/charting.ts†L1-L261】【F:custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css†L1-L221】
 
 ## [0.11.0] - 2025-09-27
 ### Added
