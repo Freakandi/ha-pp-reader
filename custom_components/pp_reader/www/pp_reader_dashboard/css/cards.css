@@ -41,10 +41,10 @@
 .header-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  padding: 1rem;
-  border-radius: 0.5rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
   position: relative;
   box-shadow: 0 2px 8px var(--divider-color);
   /* HA-Variable für Schatten */
@@ -52,7 +52,7 @@
   /* HA-Variable für Karten-Hintergrund */
   color: var(--primary-text-color);
   /* HA-Variable für Textfarbe */
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 /* Sticky Header-Card */
@@ -69,48 +69,37 @@
 /* Neue Klasse für die Flexbox-Anordnung */
 .header-card .header-content {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 0.75rem;
   width: 100%;
 }
 
-.header-card h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  transition: font-size 0.3s ease;
-  text-align: center;
-  flex-grow: 1;
-}
-
+.header-card h1,
 .header-card .header-content h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.65rem;
+  font-weight: 600;
   transition: font-size 0.3s ease;
-  text-align: center;
+  text-align: left;
   flex-grow: 1;
 }
 
-.header-card.sticky .header-content h1 {
-  margin: 0;
-  font-size: 1rem;
-  text-align: center;
-}
-
+.header-card.sticky .header-content h1,
 .header-card.sticky h1 {
   margin: 0;
-  font-size: 1rem;
-  text-align: center;
+  font-size: 1.1rem;
+  text-align: left;
 }
 
-/* Meta-Informationen bleiben unverändert */
+/* Meta-Informationen Container */
 .header-card .meta {
-  text-align: center;
   width: 100%;
   margin-top: 0.3rem;
   display: flex;
   justify-content: center;
   transition: max-height 0.3s ease, opacity 0.3s ease;
-  max-height: 200px;
+  max-height: 440px;
   overflow: hidden;
   opacity: 1;
 }
@@ -138,17 +127,21 @@
 
 .security-meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem 1.5rem;
   margin: 0.75rem 0 1.25rem;
   width: 100%;
 }
 
+.security-meta-grid.security-meta-grid--expanded {
+  gap: 1rem 1.75rem;
+}
+
 .security-meta-item {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  align-items: center;
+  gap: 0.45rem;
+  align-items: flex-start;
 }
 
 .security-meta-item .label {
@@ -158,20 +151,105 @@
   color: var(--secondary-text-color);
 }
 
+.security-meta-item .value-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
 .security-meta-item .value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
   font-size: 1.35rem;
   font-weight: 600;
   color: var(--primary-text-color);
 }
 
+.security-meta-item .value--price {
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.security-meta-item .value--holdings,
+.security-meta-item .value--market-value {
+  font-size: 1.25rem;
+}
+
+.security-meta-item .value--absolute {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.security-meta-item .value--percentage {
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--secondary-text-color);
+}
+
+.security-meta-item .value--gain .positive,
+.security-meta-item .value--gain .negative,
+.security-meta-item .value--gain .neutral {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.security-meta-item .value--gain-percentage .positive,
+.security-meta-item .value--gain-percentage .negative,
+.security-meta-item .value--gain-percentage .neutral {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.security-meta-item .value--missing {
+  color: var(--secondary-text-color);
+  font-weight: 500;
+}
+
+.security-meta-item .value--missing .positive,
+.security-meta-item .value--missing .negative,
+.security-meta-item .value--missing .neutral {
+  color: inherit;
+}
+
 @media (max-width: 600px) {
-  .security-meta-grid {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 0.5rem 1rem;
+  .header-card {
+    padding: 1rem;
   }
 
-  .security-meta-item {
-    align-items: flex-start;
+  .header-card h1,
+  .header-card .header-content h1 {
+    font-size: 1.4rem;
+  }
+
+  .header-card.sticky h1,
+  .header-card.sticky .header-content h1 {
+    font-size: 1rem;
+  }
+
+  .security-meta-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.6rem 1rem;
+  }
+
+  .security-meta-item .value {
+    font-size: 1.2rem;
+  }
+
+  .security-meta-item .value--price {
+    font-size: 1.45rem;
+  }
+
+  .security-meta-item .value--percentage,
+  .security-meta-item .value--gain-percentage .positive,
+  .security-meta-item .value--gain-percentage .negative,
+  .security-meta-item .value--gain-percentage .neutral {
+    font-size: 0.9rem;
   }
 }
 

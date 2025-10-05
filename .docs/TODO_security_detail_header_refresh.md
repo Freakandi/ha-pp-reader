@@ -55,7 +55,7 @@
       - Ziel: Übermittelt berechnete Durchschnittskurslinie an Chart-Funktionen
 
 5. Styling: Header- und Baseline-Darstellung anpassen
-   a) [ ] Grid-Layout und Typografie des Header-Cards aktualisieren
+   a) [x] Grid-Layout und Typografie des Header-Cards aktualisieren
       - Datei: `custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css`
       - Abschnitt: Selektoren für Security-Header-Karten
       - Ziel: Gruppenlayout, Responsive-Anpassungen und Gain-Farben implementieren
