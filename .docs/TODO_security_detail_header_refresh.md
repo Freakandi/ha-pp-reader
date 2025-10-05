@@ -25,7 +25,7 @@
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: `renderSecurityDetail` bzw. neue Helper (z.B. `ensureSnapshotMetrics`)
       - Ziel: Tages- und Gesamtänderungen (EUR/%), Durchschnittskurs und Währungswerte einmalig aus Snapshot ableiten
-   c) [ ] Lagere Berechnung in pure Helper-Funktionen aus
+   c) [x] Lagere Berechnung in pure Helper-Funktionen aus
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: Neue Helper-Funktionen für EUR-/Prozentberechnungen
       - Ziel: Wiederverwendbare Berechnungsschritte mit Guarding gegen Null-Bestände

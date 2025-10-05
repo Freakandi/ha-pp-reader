@@ -452,6 +452,89 @@ function roundCurrency(value: unknown): number | null {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
+function isFiniteNumber(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isPositiveFinite(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function roundPercentage(value: number | null): number | null {
+  if (value == null || Number.isNaN(value)) {
+    return null;
+  }
+
+  const rounded = Math.round(value * 100) / 100;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function computeDelta(
+  current: number | null | undefined,
+  reference: number | null | undefined,
+): number | null {
+  if (!isFiniteNumber(current) || !isFiniteNumber(reference)) {
+    return null;
+  }
+
+  return current - reference;
+}
+
+function convertNativeDiffToEur(
+  diffNative: number | null,
+  fxRate: number | null,
+): number | null {
+  if (!isFiniteNumber(diffNative) || !isPositiveFinite(fxRate)) {
+    return null;
+  }
+
+  return diffNative * fxRate;
+}
+
+function computeHoldingsAdjustedEurChange(
+  holdings: number | null,
+  diffNative: number | null,
+  diffEur: number | null,
+  fxRate: number | null,
+): number | null {
+  if (!isFiniteNumber(holdings)) {
+    return null;
+  }
+
+  const nativeInEur = convertNativeDiffToEur(diffNative, fxRate);
+  if (nativeInEur != null) {
+    return roundCurrency(nativeInEur * holdings);
+  }
+
+  if (isFiniteNumber(diffEur)) {
+    return roundCurrency(diffEur * holdings);
+  }
+
+  return null;
+}
+
+function computeAveragePurchaseEur(
+  purchaseValueEur: number | null,
+  holdings: number | null,
+): number | null {
+  if (!isPositiveFinite(holdings) || !isFiniteNumber(purchaseValueEur)) {
+    return null;
+  }
+
+  return purchaseValueEur / holdings;
+}
+
+function computePercentageChange(
+  current: number | null,
+  reference: number | null,
+): number | null {
+  if (!isFiniteNumber(reference) || reference === 0 || !isFiniteNumber(current)) {
+    return null;
+  }
+
+  return roundPercentage(((current - reference) / reference) * 100);
+}
+
 function ensureSnapshotMetrics(
   securityUuid: string | null | undefined,
   snapshot: SecuritySnapshotDetail | null,
@@ -475,10 +558,7 @@ function ensureSnapshotMetrics(
   const averagePurchaseNative = toFiniteNumber(
     snapshot.average_purchase_price_native,
   );
-  const averagePurchaseEur =
-    holdings != null && Number.isFinite(holdings) && holdings > 0 && purchaseValueEur != null
-      ? purchaseValueEur / holdings
-      : null;
+  const averagePurchaseEur = computeAveragePurchaseEur(purchaseValueEur, holdings);
   const lastPriceNative =
     toFiniteNumber(snapshot.last_price_native) ??
     toFiniteNumber(snapshot.last_price?.native) ??
@@ -488,110 +568,36 @@ function ensureSnapshotMetrics(
   const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
 
   const fxRate = deriveFxRate(snapshot, lastPriceNative);
-  const safeFxRate =
-    fxRate != null && Number.isFinite(fxRate) && fxRate > 0 ? fxRate : null;
-  const safeHoldings =
-    holdings != null && Number.isFinite(holdings) ? holdings : null;
+  const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
+  const safeHoldings = isFiniteNumber(holdings) ? holdings : null;
 
-  const roundPercentage = (value: number | null): number | null => {
-    if (value == null || Number.isNaN(value)) {
-      return null;
-    }
-    const rounded = Math.round(value * 100) / 100;
-    return Object.is(rounded, -0) ? 0 : rounded;
-  };
+  const dayChangeEur = computeHoldingsAdjustedEurChange(
+    safeHoldings,
+    computeDelta(lastPriceNative, lastCloseNative),
+    computeDelta(lastPriceEur, lastCloseEur),
+    safeFxRate,
+  );
 
-  const convertNativeToEur = (nativeValue: number | null): number | null => {
-    if (nativeValue == null) {
-      return null;
-    }
-    if (safeFxRate != null) {
-      return nativeValue * safeFxRate;
-    }
-    return null;
-  };
+  const dayChangePct =
+    computePercentageChange(lastPriceNative, lastCloseNative) ??
+    computePercentageChange(lastPriceEur, lastCloseEur);
 
-  let dayChangeEur: number | null = null;
-  if (safeHoldings != null) {
-    if (lastPriceNative != null && lastCloseNative != null) {
-      const diffNative = lastPriceNative - lastCloseNative;
-      const diffEur = convertNativeToEur(diffNative);
-      if (diffEur != null) {
-        dayChangeEur = roundCurrency(diffEur * safeHoldings);
-      }
-    }
+  const totalChangeEurDirect = computeHoldingsAdjustedEurChange(
+    safeHoldings,
+    computeDelta(lastPriceNative, averagePurchaseNative),
+    computeDelta(lastPriceEur, averagePurchaseEur),
+    safeFxRate,
+  );
 
-    if (dayChangeEur == null && lastPriceEur != null && lastCloseEur != null) {
-      const diffEur = lastPriceEur - lastCloseEur;
-      dayChangeEur = roundCurrency(diffEur * safeHoldings);
-    }
-  }
+  const totalChangeFallbackDiff = computeDelta(currentValueEur, purchaseValueEur);
+  const totalChangeEur =
+    totalChangeEurDirect ??
+    (totalChangeFallbackDiff != null ? roundCurrency(totalChangeFallbackDiff) : null);
 
-  let dayChangePct: number | null = null;
-  if (lastCloseNative != null && lastCloseNative !== 0 && lastPriceNative != null) {
-    dayChangePct = roundPercentage(
-      ((lastPriceNative - lastCloseNative) / lastCloseNative) * 100,
-    );
-  } else if (
-    lastCloseEur != null &&
-    lastCloseEur !== 0 &&
-    lastPriceEur != null
-  ) {
-    dayChangePct = roundPercentage(
-      ((lastPriceEur - lastCloseEur) / lastCloseEur) * 100,
-    );
-  }
-
-  let totalChangeEur: number | null = null;
-  if (safeHoldings != null) {
-    if (lastPriceNative != null && averagePurchaseNative != null) {
-      const diffNative = lastPriceNative - averagePurchaseNative;
-      const diffEur = convertNativeToEur(diffNative);
-      if (diffEur != null) {
-        totalChangeEur = roundCurrency(diffEur * safeHoldings);
-      }
-    }
-
-    if (
-      totalChangeEur == null &&
-      lastPriceEur != null &&
-      averagePurchaseEur != null
-    ) {
-      const diffEur = lastPriceEur - averagePurchaseEur;
-      totalChangeEur = roundCurrency(diffEur * safeHoldings);
-    }
-  }
-
-  if (totalChangeEur == null && currentValueEur != null && purchaseValueEur != null) {
-    totalChangeEur = roundCurrency(currentValueEur - purchaseValueEur);
-  }
-
-  let totalChangePct: number | null = null;
-  if (
-    averagePurchaseNative != null &&
-    averagePurchaseNative !== 0 &&
-    lastPriceNative != null
-  ) {
-    totalChangePct = roundPercentage(
-      ((lastPriceNative - averagePurchaseNative) / averagePurchaseNative) * 100,
-    );
-  } else if (
-    averagePurchaseEur != null &&
-    averagePurchaseEur !== 0 &&
-    lastPriceEur != null
-  ) {
-    totalChangePct = roundPercentage(
-      ((lastPriceEur - averagePurchaseEur) / averagePurchaseEur) * 100,
-    );
-  } else if (
-    purchaseValueEur != null &&
-    purchaseValueEur !== 0 &&
-    currentValueEur != null
-  ) {
-    totalChangePct = roundPercentage(
-      ((currentValueEur - purchaseValueEur) / purchaseValueEur) * 100,
-    );
-  }
+  const totalChangePct =
+    computePercentageChange(lastPriceNative, averagePurchaseNative) ??
+    computePercentageChange(lastPriceEur, averagePurchaseEur) ??
+    computePercentageChange(currentValueEur, purchaseValueEur);
 
   const metrics: SecuritySnapshotMetrics = {
     holdings: safeHoldings,
