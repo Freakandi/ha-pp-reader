@@ -17,7 +17,7 @@
       - Ziel: Prüft Null-Bestände, fehlende Käufe und fehlenden Schlusskurs
 
 2. Frontend: Typ- und Snapshot-Verarbeitung erweitern
-   a) [ ] Ergänze Snapshot-Typdefinitionen um neue Felder
+   a) [x] Ergänze Snapshot-Typdefinitionen um neue Felder
       - Datei: `src/tabs/types.ts`
       - Abschnitt: Typen `SecuritySnapshotLike`, verwandte Interfaces
       - Ziel: Typisierte Felder für Kaufwerte, Durchschnittskurs und Schlusskurs bereitstellen
