@@ -122,6 +122,23 @@ async function bootViaDevServer(devServerUrl) {
   await import(/* @vite-ignore */ `${base}/src/panel.ts`);
 }
 
+function resolveModuleUrl(specifier) {
+  try {
+    const moduleUrl = new URL(specifier, import.meta.url);
+    const panelUrl = new URL(import.meta.url);
+    if (panelUrl.search && !moduleUrl.search) {
+      moduleUrl.search = panelUrl.search;
+    }
+    return moduleUrl.href;
+  } catch (error) {
+    console.warn(
+      '[pp_reader] Konnte gebündelten Modulpfad nicht auflösen, verwende Fallback-Spezifier.',
+      error,
+    );
+    return specifier;
+  }
+}
+
 async function loadDashboardModule() {
   const devServerUrl = resolveDevServerUrl();
   if (devServerUrl) {
@@ -139,14 +156,16 @@ async function loadDashboardModule() {
   }
 
   try {
-    await import(DASHBOARD_MODULE_SPECIFIER);
+    const bundledModuleUrl = resolveModuleUrl(DASHBOARD_MODULE_SPECIFIER);
+    await import(/* @vite-ignore */ bundledModuleUrl);
   } catch (error) {
     console.warn(
       '[pp_reader] Konnte gebundeltes Dashboard nicht laden, versuche Legacy-Fallback.',
       error,
     );
     try {
-      await import(LEGACY_DASHBOARD_SPECIFIER);
+      const legacyModuleUrl = resolveModuleUrl(LEGACY_DASHBOARD_SPECIFIER);
+      await import(/* @vite-ignore */ legacyModuleUrl);
     } catch (fallbackError) {
       console.error(
         '[pp_reader] Fallback dashboard.js konnte ebenfalls nicht geladen werden.',
