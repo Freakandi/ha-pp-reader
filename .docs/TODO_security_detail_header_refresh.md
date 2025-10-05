@@ -81,7 +81,7 @@
    b) [x] Python-Test-Suite laufen lassen
       - Befehl: `pytest`
       - Ziel: Sicherstellen, dass Backend-Änderungen korrekt funktionieren
-   c) [ ] Manuelle Validierung der Oberfläche
+   c) [x] Manuelle Validierung der Oberfläche
       - Schritte: Start `./scripts/develop`, Security-Detail öffnen, Range-Wechsel testen, Baseline-Sichtbarkeit prüfen
       - Ziel: UI-Verhalten und Datenkonsistenz bestätigen
 
