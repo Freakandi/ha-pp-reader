@@ -1,119 +1,83 @@
 # Developer Guide – Portfolio Performance Reader
 
-This guide summarises how to work on the Portfolio Performance Reader integration, from preparing your environment to cutting a release. It complements the user-facing [README](README.md) and the in-depth [Architecture](ARCHITECTURE.md) and [Testing](TESTING.md) references.
+This document targets contributors working on the Portfolio Performance Reader integration. It complements the user-facing [README](README.md) as well as in-depth references such as [ARCHITECTURE.md](ARCHITECTURE.md) and [TESTING.md](TESTING.md).
 
 ## Repository layout
-Runtime code lives under `custom_components/pp_reader/` with sub-packages for data ingestion, pricing, sensors, and the frontend dashboard. Supporting assets such as scripts and tests sit at the repository root.【F:ARCHITECTURE.md†L47-L100】
+Runtime code resides in `custom_components/pp_reader/` with dedicated packages for configuration flows, database access, pricing, and the dashboard assets that ship with the integration. Supporting assets live at the repository root.
 
-Key directories:
-- `custom_components/pp_reader/` – Integration entrypoints, config flow, price orchestration, SQLite helpers, and dashboard assets.【F:ARCHITECTURE.md†L47-L100】
-- `scripts/` – Bootstrap, development, lint, and release helpers (see below).【F:TESTING.md†L179-L189】
-- `tests/` – Pytest suite covering price orchestration, WebSocket flows, and regression scenarios.【F:CHANGELOG.md†L8-L15】【F:TESTING.md†L9-L24】
+| Path | Purpose |
+| --- | --- |
+| `custom_components/pp_reader/` | Integration entry points, config flow, Yahoo Finance polling, SQLite helpers, WebSocket handlers, and compiled dashboard bundles. |
+| `src/` | TypeScript sources compiled into `custom_components/pp_reader/www/pp_reader_dashboard/`. |
+| `scripts/` | Helper scripts for setup, development server management, linting, and release preparation. |
+| `tests/` | Pytest suite plus lightweight Node-based dashboard smoke tests. |
+| `config/` | Sample Home Assistant configuration seeded by `./scripts/develop`. |
 
-## Environment setup
-1. Run `./scripts/setup_container` once to install system packages, create `.venv`, and install runtime dependencies.【F:AGENTS.md†L5-L9】
-2. Activate the virtual environment in new shells with `source .venv/bin/activate`.【F:AGENTS.md†L7-L8】
-3. Install developer extras when you plan to run tests: `pip install -r requirements-dev.txt`.【F:AGENTS.md†L7-L9】【F:TESTING.md†L38-L59】
-4. For environments without virtualenv support, `./scripts/environment_setup` installs the same dependencies globally.【F:AGENTS.md†L5-L9】【F:TESTING.md†L179-L189】
-5. Validate the runtime by running `python -c "import homeassistant.const as c; print(c.__version__)"` inside the same shell. The command should output the pinned Home Assistant build (`2025.2.4`).
+## Development environment setup
+1. Run `./scripts/setup_container` (preferred) to install system packages, create `.venv`, and install runtime dependencies from `requirements.txt`.
+2. Activate the virtual environment in every new shell via `source .venv/bin/activate`.
+3. Install contributor extras when you plan to run tests: `pip install -r requirements-dev.txt`.
+4. For bare environments without virtualenv support, `./scripts/environment_setup` installs the same dependencies globally.
+5. Confirm the Home Assistant version pinned for development: `python -c "import homeassistant.const as c; print(c.__version__)"` should output `2025.2.4`.
 
-Additional options (Windows, devcontainers) are documented in [TESTING.md §2](TESTING.md).【F:TESTING.md†L40-L71】
+Additional setup variations (Windows, devcontainers) are covered in [TESTING.md §2](TESTING.md).
 
-## Day-to-day development workflow
-- **Start Home Assistant locally:** `./scripts/develop` seeds the sample config and adjusts `PYTHONPATH` so the custom component is discovered.【F:AGENTS.md†L11-L13】【F:TESTING.md†L63-L67】
-- **Alternative launcher:** `./scripts/codex_develop` runs Home Assistant from the virtualenv binary when you cannot keep the shell activated.【F:TESTING.md†L179-L189】
-- **Formatting & linting:** Execute `./scripts/lint` to run `ruff format .` followed by `ruff check . --fix`.【F:AGENTS.md†L13-L14】【F:TESTING.md†L179-L189】
-- **Source layout awareness:** The integration registers a custom panel (`ppreader`) and WebSocket commands during setup; ensure changes keep the static asset paths and registration logic intact.【F:custom_components/pp_reader/__init__.py†L121-L199】
+### Useful scripts
+| Command | Description |
+| --- | --- |
+| `./scripts/develop` | Starts Home Assistant using the local integration, seeds `config/`, and exports the dashboard so you can test UI changes in <http://127.0.0.1:8123>. |
+| `./scripts/codex_develop` | Alternate launcher that runs Home Assistant with the virtualenv Python binary for shells where activation is inconvenient. |
+| `./scripts/lint` | Runs `ruff format .` followed by `ruff check . --fix`. |
+| `./scripts/prepare_main_pr.sh` | Generates a clean worktree with release artefacts when preparing pull requests against `main`. |
 
-### Frontend TypeScript workflow
+## Working on the backend
+- The integration bootstraps state under `hass.data[DOMAIN][entry_id]` and relies on `fetch_live_portfolios` to aggregate data for WebSocket commands and events. Schema changes must keep this helper in sync.
+- Live pricing uses `yahooquery` with a minimum polling interval of 300 seconds. Respect the coordinator locks and logging expectations when adjusting the price service or revaluation logic.
+- The SQLite layer persists portfolio mirrors as well as daily close history for securities. Imports run diff-based updates, and automatic backups create snapshots every six hours; manual backups are exposed through `pp_reader.trigger_backup_debug`.
 
-The dashboard assets under `src/` are authored in TypeScript and compiled into `custom_components/pp_reader/www/pp_reader_dashboard/js/` through Vite. Install Node dependencies once with `npm install` (or `npm ci` in CI) and use the provided scripts during development:
+## Frontend workflow
+The dashboard is authored in TypeScript and built with Vite. Bundles live in `custom_components/pp_reader/www/pp_reader_dashboard/js/` and are referenced by `dashboard.module.js`.
 
-- `npm run dev` – starts the Vite dev server for hot reload. See below for enabling the Home Assistant panel to stream assets directly from the dev server during development.
-- `npm run build` – produces the production bundle with hashed filenames and updates `dashboard.module.js` to reference the latest artifact.
-- `npm run typecheck` – executes `tsc --noEmit` to validate the strict TypeScript configuration and declaration outputs.
-- `npm run lint:ts` – runs the ESLint ruleset dedicated to the TypeScript sources.
+1. Install Node.js **18.18+** and npm **10+**, then run `npm install` once.
+2. Use `npm run dev` to launch Vite for hot module reloads while Home Assistant runs. Open <http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173> to stream assets directly from the dev server. Append `?pp_reader_dev_server=disable` to fall back to bundled assets.
+3. Run `npm run build` for production bundles; the script updates `dashboard.module.js` with the latest hashed filename.
+4. Auxiliary commands: `npm run typecheck` (strict `tsc --noEmit`) and `npm run lint:ts` (ESLint ruleset for `src/`).
 
-When iterating on the frontend while Home Assistant is running, keep both `./scripts/develop` and `npm run dev` active to ensure the backend serves fresh assets.
-
-#### Hot reload inside Home Assistant
-
-The panel can load TypeScript sources directly from the Vite dev server so that edits appear instantly without rebuilding hashed bundles:
-
-1. Start Home Assistant via `./scripts/develop`.
-2. In a separate shell, run `npm run dev` to launch Vite (listening on <http://127.0.0.1:5173> by default).
-3. Open the dashboard at <http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173>. The query parameter stores the dev-server origin in `localStorage`, so subsequent visits use hot reload automatically.
-4. Make TypeScript changes under `src/`; the browser will refresh affected modules immediately through Vite’s HMR connection.
-
-To temporarily disable hot reload, append `?pp_reader_dev_server=disable` to the dashboard URL or clear the `pp_reader:viteDevServer` key from the browser’s storage. The panel falls back to the bundled assets whenever the dev server is unreachable.
-
-#### Debugging with source maps
-
-The Vite configuration emits source maps in both watch (`npm run dev`) and production (`npm run build`) modes so that browser devtools can map bundled output back to the original TypeScript files. When debugging:
-
-- Open the browser devtools and switch to the **Sources** (Chrome) or **Debugger** (Firefox) tab. The compiled dashboard exposes a virtual `src/` tree mirroring the repository layout, making it easy to set breakpoints in `.ts` modules instead of generated `.js` chunks.
-- If the panel is already loaded, refresh the page once after starting `npm run dev` so the browser fetches the latest source-map references.
-- Console stack traces automatically resolve to TypeScript line numbers; click a frame to jump directly to the underlying source.
-
-When shipping release builds, keep the generated `.map` files alongside the JavaScript bundles in `custom_components/pp_reader/www/pp_reader_dashboard/js/` so troubleshooting in Home Assistant installations remains straightforward.
-
-### Accessing the development UI
-
-Once `./scripts/develop` reports that Home Assistant is listening on port `8123`, open <http://127.0.0.1:8123> in a browser on the same machine to finish onboarding and validate dashboard changes. The script binds to all interfaces by default, so the loopback adapter is always available without extra flags.
-
-1. Click **CREATE MY SMART HOME** to start the onboarding wizard.
-2. Create the local account with the following credentials so that automated fixtures and screenshots stay consistent:
-   - **Name:** `Dev`
-   - **Username:** `dev`
-   - **Password / Confirm password:** `dev`
-3. Walk through the remaining onboarding steps with the defaults (choose any country when prompted) and click **Finish**. Home Assistant will display the login screen.
-4. Sign in with the `dev` credentials and navigate to <http://127.0.0.1:8123/portfolio> to open the integration dashboard.
-
-## Feature flags
-
-The integration retains a feature-flag infrastructure to stage experimental capabilities when required. Flags are normalised to lower-case strings and resolved against defaults defined in `feature_flags.py`. At the moment no flags are active and all features, including the security history WebSocket command, are enabled by default. When new flags are introduced they can be toggled via the config entry options in `.storage/core.config_entries` using the `feature_flags` mapping.【F:custom_components/pp_reader/feature_flags.py†L11-L101】【F:custom_components/pp_reader/data/websocket.py†L408-L453】
-
-## Dashboard navigation and security drilldowns
-
-The custom panel uses a dynamic tab registry so the overview dashboard and per-security detail pages share navigation affordances. `dashboard.js` exposes helpers such as `registerDetailTab`, `openSecurityDetail`, and `closeSecurityDetail` to register descriptors, ensure only one tab per security UUID, and wire navigation arrows or swipe gestures to the active tab list.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L14-L258】 Lazy-loaded portfolio tables delegate row clicks to `openSecurityDetail`, allowing security rows to spawn a matching detail tab without interfering with expand/collapse buttons.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js†L1-L210】 The security tab factory is provided by `registerSecurityDetailTab`, which renders the drilldown view and cleans up listeners when the tab closes.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L734-L740】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js†L650-L660】
-
-### Security snapshot and history APIs
-
-Security headers pull data from the new `pp_reader/get_security_snapshot` WebSocket command that aggregates holdings, normalises the latest EUR price using existing FX helpers, and returns the payload under the calling security UUID.【F:custom_components/pp_reader/data/db_access.py†L360-L438】【F:custom_components/pp_reader/data/websocket.py†L574-L635】 Historical chart ranges are sourced via the permanently enabled `pp_reader/get_security_history` command; the frontend invokes both endpoints through `fetchSecuritySnapshotWS` and `fetchSecurityHistoryWS`, which forward the current config entry ID and optional date boundaries.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js†L63-L140】【F:custom_components/pp_reader/data/websocket.py†L408-L520】 The detail renderer caches responses per security and range, recalculates EUR gains for the active period and latest day, and reuses existing formatting utilities for header cards and info bars.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js†L1-L637】 Live portfolio updates invalidate cached history and tear down event listeners through `cleanupSecurityDetailState` to keep subsequent openings fresh.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js†L23-L109】
+The security detail tab introduced in v0.12.0 consumes WebSocket commands `pp_reader/get_security_snapshot` and `pp_reader/get_security_history` to render snapshots and SVG charts using the imported daily close data. Keep these APIs backward compatible when evolving the dashboard.
 
 ## Testing & quality checks
-Follow the recommended pipeline before submitting a PR: lint, run targeted tests, then run the full suite with coverage and optional hassfest.【F:AGENTS.md†L13-L15】【F:TESTING.md†L20-L96】
+Follow the recommended sequence before submitting a pull request:
 
-Common commands:
 ```bash
 ./scripts/lint
 pytest -q
 pytest --cov=custom_components/pp_reader --cov-report=term-missing
-python -m script.hassfest  # optional validation
+python -m script.hassfest  # optional
 ```
-【F:AGENTS.md†L13-L15】【F:TESTING.md†L74-L96】
 
-Pytest structure and tips:
-- Async-heavy tests live in `tests/prices/` and use `pytest-homeassistant-custom-component` fixtures (`hass`, `MockConfigEntry`).【F:TESTING.md†L107-L176】
-- Logging-heavy scenarios (price debug scope, zero quotes) help verify option handling and event ordering introduced in recent releases.【F:CHANGELOG.md†L8-L19】【F:TESTING.md†L107-L148】
-- When debugging frontend changes, run Home Assistant via `./scripts/develop` and watch the browser console alongside the `custom_components.pp_reader.*` loggers declared in the manifest.【F:custom_components/pp_reader/manifest.json†L19-L24】【F:AGENTS.md†L11-L14】
+- Pytest relies on fixtures from `pytest-homeassistant-custom-component`; ensure the virtualenv is active and `requirements-dev.txt` is installed.
+- Frontend smoke tests live under `tests/frontend/` and execute Node scripts (powered by `jsdom`) to validate dashboard bundles.
+- For verbose logging during async tests, invoke `pytest -vv -o log_cli=true --log-cli-level=INFO`.
+
+More background on the available fixtures and test structure is available in [TESTING.md](TESTING.md).
 
 ## Coding standards
-- Ruff is the canonical formatter and linter; do not mix in `black` or alternative tools.【F:AGENTS.md†L13-L14】【F:TESTING.md†L179-L200】
-- Target Python 3.13 features conservatively—tooling pins to 3.13.3 via the setup scripts.【F:TESTING.md†L31-L49】
-- Keep documentation changes in English and update user docs (`README.md`, `CHANGELOG.md`) alongside functional work.【F:AGENTS.md†L17-L21】
+- Ruff is the canonical formatter and linter for Python; do not mix alternative formatters.
+- TypeScript code must pass the ESLint configuration and strict type checking via `npm run typecheck`.
+- Documentation updates should accompany behavioural changes so that `README.md`, `README-dev.md`, and `CHANGELOG.md` stay accurate.
+- All documentation must remain in English.
 
 ## Release process
-1. Develop features on topic branches and merge into `dev`; maintainers promote `dev` to `main` for releases.【F:AGENTS.md†L17-L20】
-2. Use `scripts/prepare_main_pr.sh` to create a clean worktree containing only release artefacts (`custom_components/` and curated root files) before opening a PR against `main` or the release branch.【F:scripts/prepare_main_pr.sh†L4-L45】
-3. Ensure the changelog, documentation, and manifest version reflect the release payload.【F:AGENTS.md†L17-L21】【F:custom_components/pp_reader/manifest.json†L1-L25】
+1. Develop features on topic branches and target pull requests at `dev`. Maintainers promote `dev` to `main` when publishing releases.
+2. Run `./scripts/prepare_main_pr.sh` to create a clean worktree containing release artefacts before opening a release PR.
+3. Bump the integration version in `custom_components/pp_reader/manifest.json` and update `CHANGELOG.md` as part of the release commit.
 
 ## Architecture highlights for contributors
-- Portfolio data is ingested into SQLite and kept consistent via diff sync; `fetch_live_portfolios` powers WebSocket responses and event payloads, so schema changes must consider this helper first.【F:ARCHITECTURE.md†L29-L44】【F:custom_components/pp_reader/data/db_access.py†L428-L486】
-- Live pricing depends on Yahoo Finance (`yahooquery`) with default 15‑minute polling; respect the minimum interval (300 s) when adjusting behaviour or tests.【F:custom_components/pp_reader/__init__.py†L51-L109】【F:custom_components/pp_reader/config_flow.py†L159-L244】【F:CHANGELOG.md†L82-L105】
-- Backups run every six hours and expose `pp_reader.trigger_backup_debug`—ensure schema migrations keep backups restorable.【F:custom_components/pp_reader/data/backup_db.py†L28-L93】【F:custom_components/pp_reader/services.yaml†L1-L4】
+- `fetch_live_portfolios` is the single source of truth for portfolio totals; WebSocket responses, price events, and the dashboard footer all consume its output.
+- WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) must handle coordinator fallbacks and return aggregated data sourced from SQLite.
+- Daily close history stored during sync powers the security charts. Migrations or schema changes must ensure historical data and backups remain restorable across upgrades.
 
 ## Additional resources
-- [Architecture.md](ARCHITECTURE.md) for deeper module documentation.
-- [Testing.md](TESTING.md) for extensive quality assurance guidance.
-- [CHANGELOG.md](CHANGELOG.md) to track behaviour changes affecting tests or docs.
+- [ARCHITECTURE.md](ARCHITECTURE.md) – module responsibilities and data flow diagrams.
+- [TESTING.md](TESTING.md) – QA workflows, fixtures, and script documentation.
+- [CHANGELOG.md](CHANGELOG.md) – release history and behavioural changes.

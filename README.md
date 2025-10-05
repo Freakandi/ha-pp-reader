@@ -1,59 +1,78 @@
 # Portfolio Performance Reader for Home Assistant
 
-Portfolio Performance Reader brings your local Portfolio Performance (`.portfolio`) file into Home Assistant with live prices, consolidated sensors, and a purpose-built dashboard panel. The integration parses your portfolios on the server, keeps a dedicated SQLite database in sync, and surfaces aggregated values to both the UI and automations.【F:ARCHITECTURE.md†L29-L44】
+Portfolio Performance Reader syncs your local [Portfolio Performance](https://www.portfolio-performance.info/) export with Home Assistant. It ingests `.portfolio` files, keeps a dedicated SQLite database in `/config/pp_reader_data`, refreshes live prices, and exposes consolidated sensors alongside a custom dashboard panel.
+
+## Overview
+- Imports accounts, portfolios, and transactions from Portfolio Performance on every file change.
+- Stores the latest live quote per security and aggregates totals directly from SQLite so sensors, services, and the dashboard all use the same data pipeline.
+- Ships a sidebar dashboard that streams live updates via WebSockets, including detail views for individual securities with daily close history charts.
+- Runs entirely on your Home Assistant host; external requests are limited to the optional pricing providers you enable.
 
 ## Features
-- **End-to-end portfolio sync** – Parses Portfolio Performance protobuf data, mirrors accounts, portfolios, and gains into Home Assistant, and exposes them through sensors and the dashboard.【F:ARCHITECTURE.md†L29-L44】【F:ARCHITECTURE.md†L47-L100】
-- **Live valuation with Yahoo Finance** – Uses `yahooquery` to fetch the latest quotes, stores the most recent price only, and revalues affected portfolios before pushing compact Home Assistant events.【F:ARCHITECTURE.md†L32-L35】【F:CHANGELOG.md†L82-L105】
-- **Single source of truth aggregation** – `fetch_live_portfolios` aggregates up-to-date values directly from SQLite for WebSocket responses, events, and the dashboard footer.【F:CHANGELOG.md†L8-L15】【F:custom_components/pp_reader/data/db_access.py†L428-L486】
-- **Automatic resilience** – Six-hour rolling backups protect the portfolio database, and a manual service lets you trigger an immediate snapshot when needed.【F:ARCHITECTURE.md†L32-L35】【F:custom_components/pp_reader/data/backup_db.py†L28-L93】【F:custom_components/pp_reader/services.yaml†L1-L4】
-- **Custom dashboard panel** – Registers a sidebar entry (`Portfolio Dashboard`) that streams portfolio updates via WebSockets and refreshes DOM totals without client-side caches.【F:custom_components/pp_reader/__init__.py†L121-L199】【F:CHANGELOG.md†L12-L15】
+- **Automatic portfolio sync:** Watches your `.portfolio` file, normalises identifiers, and mirrors portfolio/account balances in Home Assistant entities.
+- **Live valuations with Yahoo Finance:** Fetches current quotes through `yahooquery`, recalculates affected portfolios, and emits compact update events only when prices change.
+- **Security drilldowns:** Security tabs show snapshot metrics (current value, gains, holdings) and chart historic closes captured during each import.
+- **Built-in dashboard panel:** Adds a persistent "Portfolio Dashboard" sidebar entry with streaming updates, expandable portfolio tables, and detail navigation.
+- **Resilient storage:** Maintains six-hour rolling backups of the integration database and offers a manual service to trigger extra snapshots.
 
 ## Requirements
-- Home Assistant **2025.4.1** or newer for HACS-managed installs.【F:hacs.json†L1-L8】
-- Integration version **0.11.0** (see `manifest.json`).【F:custom_components/pp_reader/manifest.json†L1-L25】
-- A Portfolio Performance desktop export (`.portfolio`) accessible to Home Assistant.
-- Optional internet access for Yahoo Finance prices (`yahooquery`) and EUR FX rates (Frankfurter API).【F:ARCHITECTURE.md†L32-L35】【F:ARCHITECTURE.md†L112-L124】
+- Home Assistant **2025.4.1** or newer when installed via HACS (matches the integration manifest).
+- Portfolio Performance Reader **0.12.0** or later.
+- Access to at least one Portfolio Performance `.portfolio` file from your Home Assistant host.
+- Optional outbound internet access for Yahoo Finance quotes (`yahooquery`) and the Frankfurter EUR FX API.
 
 ## Installation
-### Via HACS (recommended)
-1. In HACS → Integrations, add this repository (`Freakandi/ha-pp-reader`) as a custom repository if it is not listed automatically.【F:hacs.json†L1-L8】
-2. Install **Portfolio Performance Reader** and restart Home Assistant.
-3. After restart, navigate to **Settings → Devices & Services → Add Integration** and search for "Portfolio Performance Reader".
+### HACS (recommended)
+1. In HACS → **Integrations**, add `Freakandi/ha-pp-reader` as a custom repository if it is not already listed.
+2. Install **Portfolio Performance Reader**.
+3. Restart Home Assistant, then go to **Settings → Devices & Services → Add Integration** and search for "Portfolio Performance Reader".
 
-### Manual installation
-1. Download the latest release archive.
-2. Copy `custom_components/pp_reader/` into your Home Assistant `config/custom_components/` directory, preserving the folder structure shown below.【F:ARCHITECTURE.md†L47-L100】
+### Manual install
+1. Download the latest release archive from GitHub.
+2. Copy `custom_components/pp_reader/` into `config/custom_components/` inside your Home Assistant instance.
 3. Restart Home Assistant and add the integration through **Settings → Devices & Services**.
 
-### Building the dashboard assets (from source checkouts)
-- Releases ship with compiled dashboard files under `custom_components/pp_reader/www/`, so most users do not need to run the Node build chain.
-- When working from a git checkout or tweaking the TypeScript sources under `src/`, install Node.js **18.18** (or newer) and npm **10+** to satisfy the repository engines.
-- Run `npm install` once to install the toolchain, then rebuild the dashboard with `npm run build`. The command compiles the TypeScript entrypoints via Vite and refreshes `dashboard.module.js` to reference the latest hashed artifact.
-- For iterative development, `npm run dev` keeps Vite in watch mode and writes updated bundles directly into the Home Assistant `www` directory served by this integration.
+### Building dashboard assets from source
+Releases include pre-built dashboard bundles. When working from a git checkout:
+1. Install Node.js **18.18+** and npm **10+**.
+2. Run `npm install` to install the frontend toolchain.
+3. Use `npm run build` to compile the TypeScript dashboard into `custom_components/pp_reader/www/` or `npm run dev` for a watch build while Home Assistant runs.
 
 ## Configuration
-1. Start the config flow and provide the path to your `.portfolio` file. The wizard validates that the file exists and can be parsed before continuing.【F:custom_components/pp_reader/config_flow.py†L43-L99】
-2. Choose whether to use the default database location (`/config/pp_reader_data/<portfolio>.db`) or supply a custom directory.【F:custom_components/pp_reader/config_flow.py†L84-L155】
-3. After setup, open the integration options to adjust:
-   - `price_update_interval_seconds` (default 900 s, minimum 300 s).【F:custom_components/pp_reader/config_flow.py†L159-L244】
-   - `enable_price_debug` to confine verbose logging to the price namespace.【F:custom_components/pp_reader/config_flow.py†L162-L244】【F:custom_components/pp_reader/manifest.json†L19-L24】
+1. Start the config flow and supply the absolute path to your `.portfolio` file. The wizard validates the file before continuing.
+2. Accept the default database path (`/config/pp_reader_data/<portfolio>.db`) or choose a custom directory.
+3. Review the integration options (accessible after setup):
+   - **Live price interval:** `price_update_interval_seconds` (default 900 seconds, minimum 300 seconds).
+   - **Price debug logging:** `enable_price_debug` limits verbose logs to the pricing namespace.
 
-> **Tip:** Respect Yahoo Finance rate limits—intervals of 15 minutes or more avoid throttling while still keeping valuations fresh.【F:CHANGELOG.md†L101-L104】
+### Services
+- `pp_reader.trigger_backup_debug` – run from **Developer Tools → Services** to create an immediate database backup.
 
 ## Usage
-- **Sensors:** The integration creates sensors for portfolio values, purchase sums, gains, and account balances. Names follow your Portfolio Performance entities and surface aggregated totals in EUR.【F:ARCHITECTURE.md†L29-L44】【F:ARCHITECTURE.md†L47-L95】
-- **Dashboard panel:** Look for **Portfolio Dashboard** in the sidebar. It loads live data via WebSockets and updates automatically when price events or file syncs run.【F:custom_components/pp_reader/__init__.py†L121-L199】【F:CHANGELOG.md†L12-L15】
-- **Backups:** Automatic backups run every six hours; trigger `pp_reader.trigger_backup_debug` to create an immediate snapshot (e.g., via Developer Tools → Services).【F:custom_components/pp_reader/data/backup_db.py†L28-L93】【F:custom_components/pp_reader/services.yaml†L1-L4】
+### Sensors and entities
+- Portfolio value sensors expose current value, purchase sum, and gains in EUR for each portfolio.
+- Account balance sensors mirror the accounts from Portfolio Performance.
+- Last file update and backup sensors surface sync status information for automations.
+
+### Dashboard panel
+- The sidebar entry **Portfolio Dashboard** lists all portfolios with live updates, includes total footers, and highlights updated rows.
+- Clicking a portfolio position opens a security detail tab with snapshot metrics, range selectors (`1W`…`ALL`), and SVG charts powered by the stored daily closes.
+
+### Historical data
+- Daily close prices for tracked securities are persisted during every import. The dashboard and WebSocket APIs reuse this data to render charts without contacting external providers.
 
 ## Troubleshooting
 | Symptom | Suggested action |
 | --- | --- |
-| Config flow reports "file not found" or "parse failed" | Verify the Home Assistant host can read the `.portfolio` file path and that the export is up to date.【F:custom_components/pp_reader/config_flow.py†L62-L99】 |
-| Live prices stop updating | Check the integration options for the polling interval (minimum 300 s) and review the Home Assistant logs for Yahoo Finance warnings before lowering the interval further.【F:custom_components/pp_reader/config_flow.py†L159-L244】【F:CHANGELOG.md†L101-L104】 |
-| Dashboard shows stale totals | Ensure Home Assistant is running (background price task executes on schedule) and inspect logs for database errors from `fetch_live_portfolios`. The helper returns an empty list if SQLite queries fail and logs the exception for easier diagnosis.【F:custom_components/pp_reader/__init__.py†L93-L174】【F:custom_components/pp_reader/data/db_access.py†L428-L486】 |
+| Config flow reports "file not found" or "parse failed" | Confirm the Home Assistant host can access the path, the `.portfolio` export is recent, and Portfolio Performance is closed while Home Assistant reads the file. |
+| Live prices stop updating | Check the options flow for the polling interval (minimum 300 seconds) and inspect logs for Yahoo Finance warnings before lowering the interval. |
+| Dashboard totals or charts look stale | Ensure Home Assistant is running (price tasks trigger on schedule) and review the logs for database errors or WebSocket warnings. Restarting Home Assistant reschedules the price coordinator. |
+| Security detail tab shows empty charts | Verify that the integration has completed at least one import since updating to v0.12.0 and that the Portfolio Performance file includes securities with historical data. |
 
 ## Further documentation
-- [Architecture](ARCHITECTURE.md) – deep dive into modules and data flow.
-- [Testing guide](TESTING.md) – reproducible QA workflow.
-- [Developer guide](README-dev.md) – development setup, coding standards, and release process.
+- [Architecture](ARCHITECTURE.md) – module responsibilities and data flow diagrams.
+- [Testing guide](TESTING.md) – reproducible QA instructions.
+- [Developer guide](README-dev.md) – environment setup, coding standards, and release process for contributors.
+- [Changelog](CHANGELOG.md) – version-specific behaviour changes.
+
+For help or to report issues, open a ticket on the [project repository](https://github.com/Freakandi/ha-pp-reader/issues).
