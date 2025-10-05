@@ -291,8 +291,9 @@ async function navigateToPage(
   navigationInProgress = true;
   try {
     currentPage = clampPageIndex(nextIndex);
+    const renderedPage = currentPage;
     await renderTab(root, hass, panel);
-    notifyExternalRender(currentPage);
+    notifyExternalRender(renderedPage);
   } catch (error) {
     console.error('navigateToPage: Fehler beim Rendern des Tabs', error);
   } finally {
