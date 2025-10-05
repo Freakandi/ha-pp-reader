@@ -5,6 +5,8 @@ Format follows: Keep a Changelog
 Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
+
+## [0.12.0] - 2025-10-05
 ### Added
 - Persist daily Close prices for active securities during Portfolio Performance imports and provide helpers to query their time series for future dashboards.【F:custom_components/pp_reader/data/sync_from_pclient.py†L559-L676】【F:custom_components/pp_reader/data/db_access.py†L204-L289】
 - Delivered a security detail dashboard tab that opens from portfolio positions, renders snapshot metrics, and charts range-selectable history with lightweight SVG tooling and cache invalidation for live updates.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L1-L205】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js†L1-L210】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/content/charting.js†L1-L196】
@@ -14,6 +16,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - Migrated the dashboard frontend to a TypeScript build pipeline powered by Vite, emitting hashed bundles and declaration files while keeping the module loader in sync for cache busting without altering Home Assistant imports.【F:vite.config.mjs†L1-L34】【F:tsconfig.json†L1-L39】【F:scripts/update_dashboard_module.mjs†L1-L70】【F:src/dashboard.ts†L1-L105】
 - Removed the deprecated `pp_reader_history` feature flag so historical price access is part of the core experience without configuration toggles.【F:custom_components/pp_reader/feature_flags.py†L1-L67】【F:custom_components/pp_reader/data/websocket.py†L537-L755】
 - Refreshed the security detail header with snapshot-based day/total gain metrics, added an `ALL` range selector, and overlaid an average purchase price baseline on the chart for consistent comparisons.【F:src/tabs/security_detail.ts†L32-L611】【F:src/content/charting.ts†L1-L261】【F:custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css†L1-L221】
+
+### Internal
+- Added Node-based CI workflow, bundle integrity checks, and dashboard smoke tests to guard the new TypeScript dashboard pipeline.【F:.github/workflows/frontend.yml†L1-L40】【F:tests/frontend/test_build_artifacts.py†L1-L49】【F:tests/frontend/test_dashboard_smoke.py†L1-L36】
 
 ## [0.11.0] - 2025-09-27
 ### Added
