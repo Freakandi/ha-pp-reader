@@ -149,7 +149,13 @@ No additional decisions.
 
 ---
 
-## 11. Summary of Decisions
+## 11. Implementation Notes (Completed)
+- Backend snapshot enrichment now returns `purchase_value_eur`, `average_purchase_price_native`, and `last_close_native` with guarded conversions so downstream clients receive ready-to-use aggregates.
+- Frontend snapshot handling caches static metrics per security, ensuring the header presents last price, day change, total change, holdings, and market value independent of range selection.
+- Range selector includes the new `ALL` option, while chart rendering draws an average purchase price baseline that disappears automatically when insufficient purchase data exists.
+- Updated CSS refines the security header grid and baseline styling to highlight positive/negative gains without altering existing theme tokens.
+
+## 12. Summary of Decisions
 - Enrich `get_security_snapshot` with purchase and last-close aggregates to support the new header metrics.
 - Compute day/total change once per snapshot and decouple these values from the history range selector.
 - Extend chart utilities and CSS to visualise the average purchase price baseline alongside the expanded header layout.
