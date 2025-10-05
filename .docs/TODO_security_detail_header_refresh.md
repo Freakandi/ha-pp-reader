@@ -7,7 +7,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt: Neuer Helper z.B. `fetch_previous_close`
       - Ziel: Liefert den letzten Schlusskurs (`last_close_native`) für die Berechnung der Tagesänderung
-   c) [ ] Ergänze Snapshot-Serialisierung um neue Felder
+   c) [x] Ergänze Snapshot-Serialisierung um neue Felder
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt: Handler `ws_get_security_snapshot`
       - Ziel: Stellt sicher, dass die erweiterten Snapshot-Daten im WebSocket-Payload erscheinen
