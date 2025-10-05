@@ -11,14 +11,20 @@ import { promises as fs } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const HASHED_ENTRY_PATTERN = /^dashboard\.[\da-zA-Z]+\.js$/;
+const MODULE_FILENAME = 'dashboard.module.js';
+const HASHED_ENTRY_PATTERN = /^dashboard\.(?!module$)[\da-zA-Z]+\.js$/;
 const MODULE_EXPORT_PATTERN = /export \* from ['"](?<specifier>.+?)['"];?/;
 
 async function findLatestBundle(directory) {
   const entries = await fs.readdir(directory, { withFileTypes: true });
   const candidates = await Promise.all(
     entries
-      .filter((entry) => entry.isFile() && HASHED_ENTRY_PATTERN.test(entry.name))
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          HASHED_ENTRY_PATTERN.test(entry.name) &&
+          entry.name !== MODULE_FILENAME,
+      )
       .map(async (entry) => {
         const fullPath = resolve(directory, entry.name);
         const stats = await fs.stat(fullPath);
@@ -52,6 +58,53 @@ async function updateModule(modulePath, bundleSpecifier) {
   return true;
 }
 
+async function pruneStaleBundles(directory, bundleToKeep) {
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  const staleBundles = entries
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        HASHED_ENTRY_PATTERN.test(entry.name) &&
+        entry.name !== MODULE_FILENAME,
+    )
+    .map((entry) => entry.name)
+    .filter((name) => name !== bundleToKeep);
+
+  if (!staleBundles.length) {
+    return;
+  }
+
+  for (const filename of staleBundles) {
+    const bundlePath = resolve(directory, filename);
+    try {
+      await fs.unlink(bundlePath);
+      console.log(`update_dashboard_module: Entfernte veraltetes Bundle ${filename}.`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(
+          `update_dashboard_module: Konnte veraltetes Bundle ${filename} nicht entfernen:`,
+          error,
+        );
+      }
+    }
+
+    const mapPath = resolve(directory, `${filename}.map`);
+    try {
+      await fs.unlink(mapPath);
+      console.log(
+        `update_dashboard_module: Entfernte zugehörige Source Map ${filename}.map.`,
+      );
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(
+          `update_dashboard_module: Konnte Source Map ${filename}.map nicht entfernen:`,
+          error,
+        );
+      }
+    }
+  }
+}
+
 async function main() {
   const scriptDirectory = dirname(fileURLToPath(import.meta.url));
   const projectRoot = resolve(scriptDirectory, '..');
@@ -79,6 +132,8 @@ async function main() {
   } else {
     console.log('update_dashboard_module: Modul-Spezifier war bereits aktuell.');
   }
+
+  await pruneStaleBundles(bundleDirectory, latestBundle);
 }
 
 try {
