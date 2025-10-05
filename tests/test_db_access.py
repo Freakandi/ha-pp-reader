@@ -369,6 +369,100 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["last_price_native"] == pytest.approx(200.0, rel=0, abs=1e-4)
     assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
     assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
+    assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+    assert snapshot["average_purchase_price_native"] is None
+    assert snapshot["last_close_native"] is None
+    assert snapshot["last_close_eur"] is None
 
     with pytest.raises(LookupError):
         get_security_snapshot(seeded_snapshot_db, "missing")
+
+
+def test_get_security_snapshot_handles_null_purchase_value(
+    seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Snapshot should treat NULL purchase sums as zero without averages."""
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            del tz
+            return datetime(2024, 5, 1, 12, 0, 0)
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.data.db_access.datetime",
+        _FixedDatetime,
+    )
+
+    conn = sqlite3.connect(str(seeded_snapshot_db))
+    try:
+        conn.execute(
+            "UPDATE portfolio_securities SET purchase_value = NULL WHERE security_uuid = ?",
+            ("usd-sec",),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
+
+    assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+    assert snapshot["average_purchase_price_native"] is None
+
+
+def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
+    seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zero holdings should not trigger division errors and keep purchase sums."""
+
+    reference_date = datetime(2024, 5, 1, 12, 0, 0)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            del tz
+            return reference_date
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.data.db_access.datetime",
+        _FixedDatetime,
+    )
+
+    conn = sqlite3.connect(str(seeded_snapshot_db))
+    try:
+        conn.executemany(
+            """
+            UPDATE portfolio_securities
+            SET current_holdings = ?, purchase_value = ?
+            WHERE portfolio_uuid = ? AND security_uuid = ?
+            """,
+            [
+                (0.0, 12_345, "p-usd-a", "usd-sec"),
+                (0.0, 0, "p-usd-b", "usd-sec"),
+            ],
+        )
+        conn.execute(
+            """
+            INSERT INTO historical_prices (
+                security_uuid,
+                date,
+                close,
+                high,
+                low,
+                volume
+            ) VALUES (?, ?, ?, NULL, NULL, NULL)
+            """,
+            ("usd-sec", 20240430, int(175.5 * 10**8)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
+
+    assert snapshot["total_holdings"] == pytest.approx(0.0, rel=0, abs=1e-6)
+    assert snapshot["market_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+    assert snapshot["purchase_value_eur"] == pytest.approx(123.45, rel=0, abs=1e-4)
+    assert snapshot["average_purchase_price_native"] is None
+    assert snapshot["last_close_native"] == pytest.approx(175.5, rel=0, abs=1e-4)
+    assert snapshot["last_close_eur"] == pytest.approx(140.4, rel=0, abs=1e-4)
