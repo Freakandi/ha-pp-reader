@@ -21,7 +21,7 @@
       - Datei: `src/tabs/types.ts`
       - Abschnitt: Typen `SecuritySnapshotLike`, verwandte Interfaces
       - Ziel: Typisierte Felder für Kaufwerte, Durchschnittskurs und Schlusskurs bereitstellen
-   b) [ ] Cache erweiterten Snapshot und berechne statische Metriken
+   b) [x] Cache erweiterten Snapshot und berechne statische Metriken
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: `renderSecurityDetail` bzw. neue Helper (z.B. `ensureSnapshotMetrics`)
       - Ziel: Tages- und Gesamtänderungen (EUR/%), Durchschnittskurs und Währungswerte einmalig aus Snapshot ableiten

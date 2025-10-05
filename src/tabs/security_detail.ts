@@ -91,10 +91,29 @@ type HistoryCacheRegistry = Map<string, SecurityHistoryCache>;
 
 type RangeStateRegistry = Map<string, SecurityHistoryRangeState>;
 
+type SnapshotDetailRegistry = Map<string, SecuritySnapshotDetail>;
+
+interface SecuritySnapshotMetrics {
+  holdings: number | null;
+  fxRate: number | null;
+  purchaseValueEur: number | null;
+  currentValueEur: number | null;
+  averagePurchaseNative: number | null;
+  averagePurchaseEur: number | null;
+  dayChangeEur: number | null;
+  dayChangePct: number | null;
+  totalChangeEur: number | null;
+  totalChangePct: number | null;
+}
+
+type SnapshotMetricsRegistry = Map<string, SecuritySnapshotMetrics>;
+
 type LiveUpdateHandler = (event: Event) => void;
 
 const SECURITY_HISTORY_CACHE: HistoryCacheRegistry = new Map();
 const RANGE_STATE_REGISTRY: RangeStateRegistry = new Map();
+const SNAPSHOT_DETAIL_REGISTRY: SnapshotDetailRegistry = new Map();
+const SNAPSHOT_METRICS_REGISTRY: SnapshotMetricsRegistry = new Map();
 const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
 const LIVE_UPDATE_HANDLERS = new Map<string, LiveUpdateHandler>();
 
@@ -128,6 +147,22 @@ function buildCachedSnapshotNotice(params: {
   `;
 }
 
+function cacheSecuritySnapshotDetail(
+  securityUuid: string | null | undefined,
+  snapshot: SecuritySnapshotDetail | null,
+): void {
+  if (!securityUuid) {
+    return;
+  }
+
+  if (snapshot) {
+    SNAPSHOT_DETAIL_REGISTRY.set(securityUuid, snapshot);
+    return;
+  }
+
+  SNAPSHOT_DETAIL_REGISTRY.delete(securityUuid);
+}
+
 function getCachedSecuritySnapshot(
   securityUuid: string | null | undefined,
 ): SecuritySnapshotDetail | null {
@@ -135,12 +170,21 @@ function getCachedSecuritySnapshot(
     return null;
   }
 
+  if (SNAPSHOT_DETAIL_REGISTRY.has(securityUuid)) {
+    const cached = SNAPSHOT_DETAIL_REGISTRY.get(securityUuid) || null;
+    if (cached) {
+      return cached;
+    }
+  }
+
   try {
     const getter = window.__ppReaderGetSecuritySnapshotFromCache;
     if (typeof getter === 'function') {
       const snapshot = getter(securityUuid);
       if (snapshot && typeof snapshot === 'object') {
-        return snapshot as SecuritySnapshotDetail;
+        const detail = snapshot as SecuritySnapshotDetail;
+        cacheSecuritySnapshotDetail(securityUuid, detail);
+        return detail;
       }
     }
   } catch (error) {
@@ -237,6 +281,8 @@ function cleanupSecurityDetailState(securityUuid: string): void {
 
   removeLiveUpdateSubscription(securityUuid);
   invalidateHistoryCache(securityUuid);
+  SNAPSHOT_DETAIL_REGISTRY.delete(securityUuid);
+  SNAPSHOT_METRICS_REGISTRY.delete(securityUuid);
   // RANGE_STATE_REGISTRY intentionally left intact so the last chosen
   // range remains active when the user reopens the security detail.
 }
@@ -404,6 +450,164 @@ function roundCurrency(value: unknown): number | null {
 
   const rounded = Math.round(numeric * 100) / 100;
   return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function ensureSnapshotMetrics(
+  securityUuid: string | null | undefined,
+  snapshot: SecuritySnapshotDetail | null,
+): SecuritySnapshotMetrics | null {
+  if (!securityUuid) {
+    return null;
+  }
+
+  if (!snapshot) {
+    SNAPSHOT_METRICS_REGISTRY.delete(securityUuid);
+    return null;
+  }
+
+  const holdingsSource =
+    snapshot.total_holdings_precise ?? snapshot.total_holdings ?? null;
+  const holdings = toFiniteNumber(holdingsSource);
+  const purchaseValueEur = toFiniteNumber(snapshot.purchase_value_eur);
+  const currentValueEur =
+    toFiniteNumber(snapshot.market_value_eur) ??
+    toFiniteNumber(snapshot.current_value_eur);
+  const averagePurchaseNative = toFiniteNumber(
+    snapshot.average_purchase_price_native,
+  );
+  const averagePurchaseEur =
+    holdings != null && Number.isFinite(holdings) && holdings > 0 && purchaseValueEur != null
+      ? purchaseValueEur / holdings
+      : null;
+  const lastPriceNative =
+    toFiniteNumber(snapshot.last_price_native) ??
+    toFiniteNumber(snapshot.last_price?.native) ??
+    null;
+  const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
+  const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
+  const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
+
+  const fxRate = deriveFxRate(snapshot, lastPriceNative);
+  const safeFxRate =
+    fxRate != null && Number.isFinite(fxRate) && fxRate > 0 ? fxRate : null;
+  const safeHoldings =
+    holdings != null && Number.isFinite(holdings) ? holdings : null;
+
+  const roundPercentage = (value: number | null): number | null => {
+    if (value == null || Number.isNaN(value)) {
+      return null;
+    }
+    const rounded = Math.round(value * 100) / 100;
+    return Object.is(rounded, -0) ? 0 : rounded;
+  };
+
+  const convertNativeToEur = (nativeValue: number | null): number | null => {
+    if (nativeValue == null) {
+      return null;
+    }
+    if (safeFxRate != null) {
+      return nativeValue * safeFxRate;
+    }
+    return null;
+  };
+
+  let dayChangeEur: number | null = null;
+  if (safeHoldings != null) {
+    if (lastPriceNative != null && lastCloseNative != null) {
+      const diffNative = lastPriceNative - lastCloseNative;
+      const diffEur = convertNativeToEur(diffNative);
+      if (diffEur != null) {
+        dayChangeEur = roundCurrency(diffEur * safeHoldings);
+      }
+    }
+
+    if (dayChangeEur == null && lastPriceEur != null && lastCloseEur != null) {
+      const diffEur = lastPriceEur - lastCloseEur;
+      dayChangeEur = roundCurrency(diffEur * safeHoldings);
+    }
+  }
+
+  let dayChangePct: number | null = null;
+  if (lastCloseNative != null && lastCloseNative !== 0 && lastPriceNative != null) {
+    dayChangePct = roundPercentage(
+      ((lastPriceNative - lastCloseNative) / lastCloseNative) * 100,
+    );
+  } else if (
+    lastCloseEur != null &&
+    lastCloseEur !== 0 &&
+    lastPriceEur != null
+  ) {
+    dayChangePct = roundPercentage(
+      ((lastPriceEur - lastCloseEur) / lastCloseEur) * 100,
+    );
+  }
+
+  let totalChangeEur: number | null = null;
+  if (safeHoldings != null) {
+    if (lastPriceNative != null && averagePurchaseNative != null) {
+      const diffNative = lastPriceNative - averagePurchaseNative;
+      const diffEur = convertNativeToEur(diffNative);
+      if (diffEur != null) {
+        totalChangeEur = roundCurrency(diffEur * safeHoldings);
+      }
+    }
+
+    if (
+      totalChangeEur == null &&
+      lastPriceEur != null &&
+      averagePurchaseEur != null
+    ) {
+      const diffEur = lastPriceEur - averagePurchaseEur;
+      totalChangeEur = roundCurrency(diffEur * safeHoldings);
+    }
+  }
+
+  if (totalChangeEur == null && currentValueEur != null && purchaseValueEur != null) {
+    totalChangeEur = roundCurrency(currentValueEur - purchaseValueEur);
+  }
+
+  let totalChangePct: number | null = null;
+  if (
+    averagePurchaseNative != null &&
+    averagePurchaseNative !== 0 &&
+    lastPriceNative != null
+  ) {
+    totalChangePct = roundPercentage(
+      ((lastPriceNative - averagePurchaseNative) / averagePurchaseNative) * 100,
+    );
+  } else if (
+    averagePurchaseEur != null &&
+    averagePurchaseEur !== 0 &&
+    lastPriceEur != null
+  ) {
+    totalChangePct = roundPercentage(
+      ((lastPriceEur - averagePurchaseEur) / averagePurchaseEur) * 100,
+    );
+  } else if (
+    purchaseValueEur != null &&
+    purchaseValueEur !== 0 &&
+    currentValueEur != null
+  ) {
+    totalChangePct = roundPercentage(
+      ((currentValueEur - purchaseValueEur) / purchaseValueEur) * 100,
+    );
+  }
+
+  const metrics: SecuritySnapshotMetrics = {
+    holdings: safeHoldings,
+    fxRate: safeFxRate,
+    purchaseValueEur,
+    currentValueEur,
+    averagePurchaseNative,
+    averagePurchaseEur,
+    dayChangeEur,
+    dayChangePct,
+    totalChangeEur,
+    totalChangePct,
+  };
+
+  SNAPSHOT_METRICS_REGISTRY.set(securityUuid, metrics);
+  return metrics;
 }
 
 function computeGainValues(
@@ -910,6 +1114,10 @@ export async function renderSecurityDetail(
   const effectiveSnapshot = snapshot || cachedSnapshot;
   const fallbackUsed = Boolean(cachedSnapshot && !snapshot);
   const flaggedAsCache = (effectiveSnapshot?.source ?? '') === 'cache';
+  if (securityUuid) {
+    cacheSecuritySnapshotDetail(securityUuid, effectiveSnapshot ?? null);
+    ensureSnapshotMetrics(securityUuid, effectiveSnapshot ?? null);
+  }
   const staleNotice =
     effectiveSnapshot && (fallbackUsed || flaggedAsCache)
       ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
