@@ -65,7 +65,7 @@
       - Ziel: Dezente Darstellung der Durchschnittskurs-Linie sicherstellen
 
 6. Dokumentation & Kommunikation
-   a) [ ] Konzeptdokument mit Umsetzungshinweisen aktualisieren
+   a) [x] Konzeptdokument mit Umsetzungshinweisen aktualisieren
       - Datei: `.docs/security_detail_header_refresh.md`
       - Abschnitt: Ergänzung "Implementation" bzw. Hinweis auf Fertigstellung
       - Ziel: Status und Learnings dokumentieren
