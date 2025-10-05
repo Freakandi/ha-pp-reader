@@ -3,7 +3,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt: Funktion `get_security_snapshot`
       - Ziel: Liefert zusätzliche Felder `purchase_value_eur`, `average_purchase_price_native`, `last_close_native` (inkl. EUR-Konvertierung bei Bedarf)
-   b) [ ] Implementiere Hilfsabfrage für vorherigen Schlusskurs
+   b) [x] Implementiere Hilfsabfrage für vorherigen Schlusskurs
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt: Neuer Helper z.B. `fetch_previous_close`
       - Ziel: Liefert den letzten Schlusskurs (`last_close_native`) für die Berechnung der Tagesänderung

@@ -467,6 +467,69 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         conn.close()
 
 
+def fetch_previous_close(
+    db_path: Path,
+    security_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> tuple[int | None, float | None]:
+    """Fetch the most recent historical close price for a security."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn
+    if local_conn is None:
+        local_conn = sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                SELECT close
+                FROM historical_prices
+                WHERE security_uuid = ?
+                ORDER BY date DESC
+                LIMIT 1
+                """,
+                (security_uuid,),
+            )
+            row = cursor.fetchone()
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
+                security_uuid,
+            )
+            return None, None
+
+        if not row:
+            return None, None
+
+        raw_close = row[0]
+        if raw_close is None:
+            return None, None
+
+        close_native: float | None = None
+        try:
+            from custom_components.pp_reader.logic.portfolio import (  # local import
+                normalize_price,
+            )
+
+            close_native = round(normalize_price(int(raw_close)), 4)
+        except Exception:  # pragma: no cover - defensive
+            _LOGGER.exception(
+                "Fehler bei der Normalisierung des Schlusskurses (security_uuid=%s)",
+                security_uuid,
+            )
+            close_native = None
+
+        return int(raw_close), close_native
+    finally:
+        if conn is None:
+            with suppress(sqlite3.Error):
+                local_conn.close()
+
+
 def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str, Any]]:
     """
     Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Gewinn.
