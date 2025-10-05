@@ -35,7 +35,7 @@
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: Konstante `AVAILABLE_HISTORY_RANGES`, Funktion `resolveRangeOptions`, Button-Rendering
       - Ziel: Ermöglicht volle Historie ohne `start_date`-Filter
-   b) [ ] Sicherstellen, dass Headerwerte range-unabhängig bleiben
+   b) [x] Sicherstellen, dass Headerwerte range-unabhängig bleiben
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: `updateInfoBarContent` und State-Management
       - Ziel: Info-Bar reagiert auf Range; Header nutzt statische Snapshot-Metriken
