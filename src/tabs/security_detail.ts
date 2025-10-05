@@ -934,12 +934,16 @@ function normaliseHistoryError(error: unknown): string | null {
 function getHistoryChartOptions(
   host: HTMLElement,
   series: readonly NormalizedHistoryEntry[],
-  { currency }: { currency?: string | null | undefined } = {},
+  {
+    currency,
+    baseline,
+  }: { currency?: string | null | undefined; baseline?: number | null | undefined } = {},
 ): LineChartOptions {
   const measuredWidth = host.clientWidth || host.offsetWidth || 0;
   const width = measuredWidth > 0 ? measuredWidth : 640;
   const height = Math.min(Math.max(Math.floor(width * 0.55), 220), 420);
   const safeCurrency = (currency || '').toUpperCase() || 'EUR';
+  const baselineValue = isFiniteNumber(baseline) ? baseline : null;
 
   return {
     width,
@@ -951,6 +955,12 @@ function getHistoryChartOptions(
       <div class="chart-tooltip-date">${xFormatted}</div>
       <div class="chart-tooltip-value">${yFormatted}&nbsp;${safeCurrency}</div>
     `,
+    baseline:
+      baselineValue != null
+        ? {
+            value: baselineValue,
+          }
+        : null,
   };
 }
 
@@ -962,7 +972,10 @@ const HISTORY_CHART_INSTANCES = new WeakMap<
 function renderHistoryChart(
   host: HTMLElement,
   series: readonly NormalizedHistoryEntry[],
-  options: { currency?: string | null | undefined } = {},
+  options: {
+    currency?: string | null | undefined;
+    baseline?: number | null | undefined;
+  } = {},
 ): void {
   if (!host || !Array.isArray(series) || series.length === 0) {
     return;
@@ -1027,7 +1040,10 @@ function updateHistoryPlaceholder(
   rangeKey: SecurityHistoryRangeKey,
   state: HistoryPlaceholderState,
   historySeries: readonly NormalizedHistoryEntry[],
-  options: { currency?: string | null | undefined } = {},
+  options: {
+    currency?: string | null | undefined;
+    baseline?: number | null | undefined;
+  } = {},
 ): void {
   const placeholderContainer = root.querySelector('.security-detail-placeholder');
   if (!placeholderContainer) {
@@ -1105,7 +1121,10 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         initialRange,
         initialHistoryState,
         initialHistory,
-        { currency: snapshot?.currency_code },
+        {
+          currency: snapshot?.currency_code,
+          baseline: snapshotMetrics?.averagePurchaseNative ?? null,
+        },
       );
     }
 
@@ -1173,7 +1192,10 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         rangeKey,
         historyState,
         historySeries,
-        { currency: snapshot?.currency_code },
+        {
+          currency: snapshot?.currency_code,
+          baseline: snapshotMetrics?.averagePurchaseNative ?? null,
+        },
       );
     };
 
