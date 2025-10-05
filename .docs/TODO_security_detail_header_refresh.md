@@ -39,7 +39,7 @@
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: `updateInfoBarContent` und State-Management
       - Ziel: Info-Bar reagiert auf Range; Header nutzt statische Snapshot-Metriken
-   c) [ ] Header-Metadatenlayout auf neue Struktur umstellen
+   c) [x] Header-Metadatenlayout auf neue Struktur umstellen
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt: Funktion `buildHeaderMeta`
       - Ziel: Zeigt Letzten Preis, Tagesänderung, Gesamtänderung, Bestand, Marktwert mit passenden Styles

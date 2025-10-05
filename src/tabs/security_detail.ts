@@ -9,7 +9,12 @@
  * exposes a helper to register the descriptor factory with the
  * dashboard controller.
  */
-import { createHeaderCard, formatNumber, formatGain } from '../content/elements';
+import {
+  createHeaderCard,
+  formatNumber,
+  formatGain,
+  formatGainPct,
+} from '../content/elements';
 import { renderLineChart, updateLineChart } from '../content/charting';
 import type { LineChartOptions } from '../content/charting';
 import {
@@ -794,31 +799,113 @@ function buildHeaderMeta(
   const formattedLastPrice = formatPrice(lastPriceNative);
   const lastPriceDisplay =
     formattedLastPrice === '—'
-      ? '—'
+      ? null
       : `${formattedLastPrice}${currency ? `&nbsp;${currency}` : ''}`;
   const marketValueRaw =
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur) ??
-    0;
-  const marketValue = formatNumber(marketValueRaw);
+    null;
+
+  const wrapValue = (content: string, extraClass = ''): string => {
+    const classes = ['value'];
+    if (extraClass) {
+      classes.push(...extraClass.split(' ').filter(Boolean));
+    }
+    return `<span class="${classes.join(' ')}">${content}</span>`;
+  };
+
+  const wrapMissingValue = (extraClass = ''): string => {
+    const classes = ['value--missing'];
+    if (extraClass) {
+      classes.push(extraClass);
+    }
+    return wrapValue('—', classes.join(' '));
+  };
+
+  const renderGainValue = (
+    value: number | null | undefined,
+    extraClass = '',
+  ): string => {
+    if (!isFiniteNumber(value)) {
+      return wrapMissingValue(extraClass);
+    }
+
+    const classes = ['value--gain'];
+    if (extraClass) {
+      classes.push(extraClass);
+    }
+    return wrapValue(formatGain(value), classes.join(' '));
+  };
+
+  const renderGainPercentage = (
+    value: number | null | undefined,
+    extraClass = '',
+  ): string => {
+    if (!isFiniteNumber(value)) {
+      return wrapMissingValue(extraClass);
+    }
+
+    const classes = ['value--gain-percentage'];
+    if (extraClass) {
+      classes.push(extraClass);
+    }
+    return wrapValue(formatGainPct(value), classes.join(' '));
+  };
+
+  const lastPriceValue = lastPriceDisplay
+    ? wrapValue(lastPriceDisplay, 'value--price')
+    : wrapMissingValue('value--price');
+  const holdingsValue =
+    holdings === '—'
+      ? wrapMissingValue('value--holdings')
+      : wrapValue(holdings, 'value--holdings');
+  const marketValue = isFiniteNumber(marketValueRaw)
+    ? wrapValue(`${formatNumber(marketValueRaw)}&nbsp;€`, 'value--market-value')
+    : wrapMissingValue('value--market-value');
+  const dayChangeAbsolute = renderGainValue(
+    metrics?.dayChangeEur,
+    'value--absolute',
+  );
+  const dayChangePercentage = renderGainPercentage(
+    metrics?.dayChangePct,
+    'value--percentage',
+  );
+  const totalChangeAbsolute = renderGainValue(
+    metrics?.totalChangeEur,
+    'value--absolute',
+  );
+  const totalChangePercentage = renderGainPercentage(
+    metrics?.totalChangePct,
+    'value--percentage',
+  );
 
   return `
-    <div class="security-meta-grid">
-      <div class="security-meta-item">
-        <span class="label">Währung</span>
-        <span class="value">${currency}</span>
+    <div class="security-meta-grid security-meta-grid--expanded">
+      <div class="security-meta-item security-meta-item--price">
+        <span class="label">Letzter Preis</span>
+        <div class="value-group">${lastPriceValue}</div>
       </div>
-      <div class="security-meta-item">
+      <div class="security-meta-item security-meta-item--day-change">
+        <span class="label">Tagesänderung</span>
+        <div class="value-group">
+          ${dayChangeAbsolute}
+          ${dayChangePercentage}
+        </div>
+      </div>
+      <div class="security-meta-item security-meta-item--total-change">
+        <span class="label">Gesamtänderung</span>
+        <div class="value-group">
+          ${totalChangeAbsolute}
+          ${totalChangePercentage}
+        </div>
+      </div>
+      <div class="security-meta-item security-meta-item--holdings">
         <span class="label">Bestand</span>
-        <span class="value">${holdings}</span>
+        <div class="value-group">${holdingsValue}</div>
       </div>
-      <div class="security-meta-item">
-        <span class="label">Letzter Preis (${currency})</span>
-        <span class="value">${lastPriceDisplay}</span>
-      </div>
-      <div class="security-meta-item">
+      <div class="security-meta-item security-meta-item--market-value">
         <span class="label">Marktwert (EUR)</span>
-        <span class="value">${marketValue}&nbsp;€</span>
+        <div class="value-group">${marketValue}</div>
       </div>
     </div>
   `;
