@@ -6,8 +6,8 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
-- .docs/frontend_ts_migration.md
-- .docs/TODO_frontend_ts_migration.md
+- .docs/security_detail_header_refresh.md
+- .docs/TODO_security_detail_header_refresh.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -22,7 +22,7 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_frontend_ts_migration.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_security_detail_header_refresh.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
