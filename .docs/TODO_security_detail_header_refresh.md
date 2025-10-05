@@ -1,5 +1,5 @@
 1. Backend: Snapshot enrichment for purchase and close data
-   a) [ ] Extend `get_security_snapshot` to join purchase aggregates and last close values
+   a) [x] Extend `get_security_snapshot` to join purchase aggregates and last close values
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt: Funktion `get_security_snapshot`
       - Ziel: Liefert zusätzliche Felder `purchase_value_eur`, `average_purchase_price_native`, `last_close_native` (inkl. EUR-Konvertierung bei Bedarf)

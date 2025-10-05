@@ -428,18 +428,30 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
 
         holdings_cursor = conn.execute(
             """
-            SELECT COALESCE(SUM(current_holdings), 0)
+            SELECT
+                COALESCE(SUM(current_holdings), 0) AS total_holdings,
+                COALESCE(SUM(purchase_value), 0) AS purchase_value_cents
             FROM portfolio_securities
             WHERE security_uuid = ?
             """,
             (security_uuid,),
         )
         holdings_row = holdings_cursor.fetchone()
-        total_holdings = (
-            float(holdings_row[0])
-            if holdings_row and holdings_row[0] is not None
-            else 0.0
-        )
+        total_holdings = 0.0
+        purchase_value_cents = 0
+        if holdings_row is not None:
+            total_holdings_raw = holdings_row["total_holdings"]
+            purchase_value_raw = holdings_row["purchase_value_cents"]
+            if total_holdings_raw is not None:
+                try:
+                    total_holdings = float(total_holdings_raw)
+                except (TypeError, ValueError):
+                    total_holdings = 0.0
+            if purchase_value_raw is not None:
+                try:
+                    purchase_value_cents = int(round(float(purchase_value_raw)))
+                except (TypeError, ValueError):
+                    purchase_value_cents = 0
 
         raw_price = security_row["last_price"]
         currency_code: str = security_row["currency_code"] or "EUR"
@@ -454,6 +466,32 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             raw_price, currency_code, reference_date, db_path
         )
         market_value_eur = round(total_holdings * last_price_eur, 2)
+        purchase_value_eur = round(purchase_value_cents / 100, 2)
+        average_purchase_price_native = None
+        if total_holdings > 0 and purchase_value_cents > 0:
+            average_purchase_price_native = round(
+                (purchase_value_cents / 100) / total_holdings,
+                4,
+            )
+
+        raw_last_close, last_close_native = fetch_previous_close(
+            db_path,
+            security_uuid,
+            conn=conn,
+        )
+        last_close_eur = None
+        if raw_last_close is not None:
+            try:
+                last_close_eur = normalize_price_to_eur_sync(
+                    raw_last_close,
+                    currency_code,
+                    reference_date,
+                    db_path,
+                )
+                if last_close_eur is not None:
+                    last_close_eur = round(last_close_eur, 4)
+            except Exception:  # pragma: no cover - defensive
+                last_close_eur = None
 
         return {
             "name": security_row["name"],
@@ -462,6 +500,10 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "last_price_native": last_price_native,
             "last_price_eur": round(last_price_eur, 4),
             "market_value_eur": market_value_eur,
+            "purchase_value_eur": purchase_value_eur,
+            "average_purchase_price_native": average_purchase_price_native,
+            "last_close_native": last_close_native,
+            "last_close_eur": last_close_eur,
         }
     finally:
         conn.close()
