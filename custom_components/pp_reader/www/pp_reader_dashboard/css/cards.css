@@ -608,6 +608,8 @@ tbody tr:hover {
   width: 100%;
   min-height: 220px;
   display: block;
+  --pp-reader-chart-baseline: rgba(96, 125, 139, 0.6);
+  --pp-reader-chart-baseline-dash: 6 4;
 }
 
 .history-chart .line-chart-container {
@@ -672,6 +674,18 @@ tbody tr:hover {
 .line-chart-focus-circle {
   stroke: var(--pp-reader-chart-line, #3f51b5);
   fill: var(--card-background-color);
+}
+
+.line-chart-baseline {
+  stroke: var(
+    --pp-reader-chart-baseline,
+    rgba(96, 125, 139, 0.75)
+  );
+  stroke-width: 1.25px;
+  stroke-dasharray: var(--pp-reader-chart-baseline-dash, 6 4);
+  opacity: 0;
+  transition: opacity 0.25s ease-in-out;
+  pointer-events: none;
 }
 
 .chart-tooltip {
