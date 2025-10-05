@@ -11,6 +11,7 @@
     "dev": "vite dev",
     "typecheck": "tsc --noEmit",
     "build:types": "tsc -p tsconfig.json",
+    "lint": "npm run lint:ts",
     "lint:ts": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
