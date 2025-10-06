@@ -990,13 +990,14 @@ class _SyncRunner:
             "sync_from_pclient: Berechne und synchronisiere portfolio_securities..."
         )
         current_holdings = db_calculate_current_holdings(self.all_transactions)
-        purchase_values = db_calculate_sec_purchase_value(
+        purchase_metrics = db_calculate_sec_purchase_value(
             self.all_transactions, self.db_path
         )
 
         current_hold_pur: dict[tuple[str, str], dict[str, Any]] = {}
         for key, holdings in current_holdings.items():
-            purchase_value = purchase_values.get(key, 0.0)
+            metrics = purchase_metrics.get(key)
+            purchase_value = metrics.purchase_value if metrics else 0.0
             # Falls der Kaufwert wegen fehlender FX-Daten noch nicht
             # berechnet werden konnte, behalten wir die Position dennoch
             # für die Bewertung bei (purchase_value fällt dann auf 0.0).

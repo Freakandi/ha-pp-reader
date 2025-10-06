@@ -426,7 +426,7 @@ def _refresh_impacted_portfolio_securities(
             current_holdings = (
                 db_calculate_current_holdings(transactions) if transactions else {}
             )
-            purchase_values = (
+            purchase_metrics = (
                 db_calculate_sec_purchase_value(transactions, db_path)
                 if transactions
                 else {}
@@ -435,7 +435,8 @@ def _refresh_impacted_portfolio_securities(
             current_hold_pur: dict[tuple[str, str], dict[str, float]] = {}
             for key in impacted_pairs:
                 holdings = current_holdings.get(key)
-                purchase_value = purchase_values.get(key)
+                metrics = purchase_metrics.get(key)
+                purchase_value = metrics.purchase_value if metrics else None
 
                 if holdings is None and key in existing_entries:
                     holdings = existing_entries[key][0]
