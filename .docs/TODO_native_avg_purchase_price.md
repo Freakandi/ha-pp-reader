@@ -67,7 +67,7 @@
       - Datei: `ARCHITECTURE.md`
       - Abschnitt/Funktion: Datenmodell / Berechnungsmodell
       - Ziel: Beschreibt neues Feld, Sync-Pipeline und Frontend-Verbrauch.
-   b) [ ] Ergänze CHANGELOG-Eintrag
+   b) [x] Ergänze CHANGELOG-Eintrag
       - Datei: `CHANGELOG.md`
       - Abschnitt/Funktion: Unreleased / kommende Version
       - Ziel: Notiert Einführung nativer Durchschnittspreise und Migration.

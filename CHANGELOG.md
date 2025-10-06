@@ -6,6 +6,13 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+### Added
+- Persist native average purchase prices for each portfolio position, deliver them
+  through snapshot/websocket payloads, and have the dashboard consume the stored
+  values instead of reconstructing them from EUR totals. This includes schema
+  migrations, FIFO aggregation updates, sync persistence, backend serialization,
+  and frontend metric handling for the new `avg_price_native` field.【F:custom_components/pp_reader/data/db_schema.py†L94-L114】【F:custom_components/pp_reader/data/db_init.py†L76-L107】【F:custom_components/pp_reader/logic/securities.py†L232-L258】【F:custom_components/pp_reader/data/sync_from_pclient.py†L968-L1058】【F:custom_components/pp_reader/data/db_access.py†L624-L669】【F:custom_components/pp_reader/data/websocket.py†L160-L210】【F:src/tabs/security_detail.ts†L586-L660】
+
 ## [0.12.1] - 2025-10-06
 ### Fixed
 - Korrigierte die Kennzahlen im Security-Detail-Header: Tagesänderungen übernehmen jetzt native Preisbewegungen (oder einen EUR-Fallback) inklusive Währungskennzeichnung, und Gesamtgewinne fallen auf den Vergleich von Markt- zu Kaufwert zurück, wenn direkte Summen fehlen.【F:src/tabs/security_detail.ts†L560-L618】【F:src/tabs/security_detail.ts†L833-L938】
