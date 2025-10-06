@@ -1,5 +1,5 @@
 1. Schema & Models
-   a) [ ] Add native average column to portfolio securities schema
+   a) [x] Add native average column to portfolio securities schema
       - Datei: `custom_components/pp_reader/data/db_schema.py`
       - Abschnitt/Funktion: `PORTFOLIO_SECURITIES_SCHEMA`
       - Ziel: Ergänzt `avg_price_native` REAL (nullable) pro Position und hält Indizes konsistent.
