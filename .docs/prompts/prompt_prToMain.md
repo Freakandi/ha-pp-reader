@@ -1,10 +1,10 @@
 You are my coding assistant. I need you to prepare a pull request that merges the current `dev` branch into `main`.
 
 Before running any scripts, perform the following verification steps:
-1. Confirm that the integration manifest(s) (e.g., `custom_components/pp_reader/manifest.json`) have their `version` field set to the latest version number that appears in the top entry of `CHANGELOG.md`.
-2. If the manifest version and the latest changelog version do not match, report this mismatch, state explicitly that this is a blocking issue, and DO NOT execute any scripts.
+1. Confirm that the integration manifest(s) (e.g., `custom_components/pp_reader/manifest.json`) and hacs.json have their `version` field set to the latest version number that appears in the top entry of `CHANGELOG.md`.
+2. If the manifest version, hacs.json version and the latest changelog version do not match, report this mismatch, state explicitly that this is a blocking issue, and DO NOT execute any scripts.
 
-If the manifest version matches the latest changelog version, proceed with the release preparation workflow:
+If the manifest and hacs.json version match the latest changelog version, proceed with the release preparation workflow:
 1. Check out the `dev` branch (or confirm it is already checked out), prune the worktree if necessary, and ensure it is up to date.
 2. Create a fresh feature branch from this pruned `dev` worktree so that the subsequent changes can be committed in an isolated branch that will back the PR.
 3. Execute `scripts/prepare_main_pr.sh` so that only the intended content is promoted from `dev` to `main` within this feature branch.
