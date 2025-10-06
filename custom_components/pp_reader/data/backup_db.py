@@ -18,6 +18,8 @@ from pathlib import Path
 from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.helpers.event import async_track_time_interval
 
+from custom_components.pp_reader.util import async_run_executor_job
+
 _LOGGER = logging.getLogger(__name__)
 
 BACKUP_SUBDIR = "backups"
@@ -30,12 +32,12 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
     interval = timedelta(hours=6)
 
     async def _periodic_backup(_now: datetime) -> None:
-        await hass.async_add_executor_job(run_backup_cycle, db_path)
+        await async_run_executor_job(hass, run_backup_cycle, db_path)
 
     async_track_time_interval(hass, _periodic_backup, interval)
 
     async def async_trigger_debug_backup(_call: ServiceCall) -> None:
-        await hass.async_add_executor_job(run_backup_cycle, db_path)
+        await async_run_executor_job(hass, run_backup_cycle, db_path)
 
     async def register_backup_service(_event: Event) -> None:
         """
@@ -200,12 +202,25 @@ def cleanup_old_backups(backup_dir: Path) -> None:
     weekly = {}
 
     for b in backups:
+        stem_parts = b.stem.rsplit("_", 2)
+        if len(stem_parts) < 3:
+            _LOGGER.debug(
+                "⏭️ Überspringe Backup mit unerwartetem Dateinamen: %s", b.name
+            )
+            continue
+
+        dt_str = "_".join(stem_parts[-2:])  # 20250430_143000
+
         try:
-            dt_str = "_".join(b.stem.split("_")[-2:])  # 20250430_1430
             dt = datetime.strptime(dt_str, "%Y%m%d_%H%M%S")  # noqa: DTZ007
         except ValueError as exc:
-            # Replace ValueError with the specific exception expected
-            _LOGGER.warning("⚠️ Fehler beim Verarbeiten des Backups: %s", exc)
+            _LOGGER.debug(
+                "⏭️ Überspringe Backup %s wegen ungültigem Zeitstempel '%s': %s",
+                b.name,
+                dt_str,
+                exc,
+            )
+            continue
 
         key = dt.date()
         age = (now - dt).days  # Alter des Backups in Tagen berechnen

@@ -7,8 +7,10 @@ and related data in a SQLite database.
 
 import logging
 import sqlite3
+from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,7 @@ class Security:
     uuid: str
     name: str
     currency_code: str
+    type: str | None = None
     note: str | None = None
     isin: str | None = None
     wkn: str | None = None
@@ -128,7 +131,7 @@ def get_securities(db_path: Path) -> dict[str, Security]:
     try:
         cur = conn.execute(
             """
-            SELECT uuid, name, currency_code,
+            SELECT uuid, name, type, currency_code,
                    isin, wkn, ticker_symbol,
                    retired, updated_at,
                    last_price, last_price_date
@@ -140,15 +143,16 @@ def get_securities(db_path: Path) -> dict[str, Security]:
             row[0]: Security(
                 uuid=row[0],
                 name=row[1],
-                currency_code=row[2],
+                type=row[2],
+                currency_code=row[3],
                 note=None,  # keine Spalte in Schema → bewusst None
-                isin=row[3],
-                wkn=row[4],
-                ticker_symbol=row[5],
-                retired=bool(row[6]),
-                updated_at=row[7],
-                last_price=row[8],
-                last_price_date=row[9],
+                isin=row[4],
+                wkn=row[5],
+                ticker_symbol=row[6],
+                retired=bool(row[7]),
+                updated_at=row[8],
+                last_price=row[9],
+                last_price_date=row[10],
             )
             for row in cur.fetchall()
         }
@@ -198,6 +202,93 @@ def get_portfolio_by_uuid(db_path: Path, uuid: str) -> Portfolio | None:
         return Portfolio(*row) if row else None
     finally:
         conn.close()
+
+
+def iter_security_close_prices(
+    db_path: Path,
+    security_uuid: str,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> Iterator[tuple[int, int]]:
+    """Liefert tägliche Schlusskurse eines Wertpapiers in aufsteigender Reihenfolge."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    if start_date is not None and not isinstance(start_date, int):
+        message = "start_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if end_date is not None and not isinstance(end_date, int):
+        message = "end_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if start_date is not None and end_date is not None and end_date < start_date:
+        message = "end_date muss größer oder gleich start_date sein"
+        raise ValueError(message)
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Öffnen der Datenbank für historische Preise (db_path=%s)",
+            db_path,
+        )
+        return
+
+    try:
+        sql = [
+            "SELECT date, close",
+            "FROM historical_prices",
+            "WHERE security_uuid = ?",
+        ]
+        params: list[Any] = [security_uuid]
+
+        if start_date is not None:
+            sql.append("AND date >= ?")
+            params.append(start_date)
+        if end_date is not None:
+            sql.append("AND date <= ?")
+            params.append(end_date)
+
+        sql.append("ORDER BY date ASC")
+        statement = " ".join(sql)
+
+        try:
+            cursor = conn.execute(statement, params)
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Lesen historischer Preise (security_uuid=%s)",
+                security_uuid,
+            )
+            return
+
+        try:
+            for date_value, close_value in cursor:
+                yield int(date_value), int(close_value)
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Iterieren historischer Preise (security_uuid=%s)",
+                security_uuid,
+            )
+    finally:
+        with suppress(sqlite3.Error):
+            conn.close()
+
+
+def get_security_close_prices(
+    db_path: Path,
+    security_uuid: str,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> list[tuple[int, int]]:
+    """Gibt tägliche Schlusskurse eines Wertpapiers als Liste zurück."""
+    return list(
+        iter_security_close_prices(
+            db_path=db_path,
+            security_uuid=security_uuid,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    )
 
 
 def get_accounts(db_path: Path) -> list[Account]:
@@ -309,6 +400,178 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
         conn.close()
 
 
+def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
+    """Aggregate holdings and EUR-normalised pricing for a security."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        from custom_components.pp_reader.logic.portfolio import (  # local import
+            normalize_price,
+            normalize_price_to_eur_sync,
+        )
+
+        cursor = conn.execute(
+            """
+            SELECT name, currency_code, COALESCE(last_price, 0) AS last_price
+            FROM securities
+            WHERE uuid = ?
+            """,
+            (security_uuid,),
+        )
+        security_row = cursor.fetchone()
+        if security_row is None:
+            raise LookupError(f"Unbekannte security_uuid: {security_uuid}")
+
+        holdings_cursor = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(current_holdings), 0) AS total_holdings,
+                COALESCE(SUM(purchase_value), 0) AS purchase_value_cents
+            FROM portfolio_securities
+            WHERE security_uuid = ?
+            """,
+            (security_uuid,),
+        )
+        holdings_row = holdings_cursor.fetchone()
+        total_holdings = 0.0
+        purchase_value_cents = 0
+        if holdings_row is not None:
+            total_holdings_raw = holdings_row["total_holdings"]
+            purchase_value_raw = holdings_row["purchase_value_cents"]
+            if total_holdings_raw is not None:
+                try:
+                    total_holdings = float(total_holdings_raw)
+                except (TypeError, ValueError):
+                    total_holdings = 0.0
+            if purchase_value_raw is not None:
+                try:
+                    purchase_value_cents = int(round(float(purchase_value_raw)))
+                except (TypeError, ValueError):
+                    purchase_value_cents = 0
+
+        raw_price = security_row["last_price"]
+        currency_code: str = security_row["currency_code"] or "EUR"
+        reference_date = datetime.now()  # noqa: DTZ005
+        last_price_native = None
+        if raw_price:
+            try:
+                last_price_native = round(normalize_price(raw_price), 4)
+            except Exception:  # pragma: no cover - defensive
+                last_price_native = None
+        last_price_eur = normalize_price_to_eur_sync(
+            raw_price, currency_code, reference_date, db_path
+        )
+        market_value_eur = round(total_holdings * last_price_eur, 2)
+        purchase_value_eur = round(purchase_value_cents / 100, 2)
+        average_purchase_price_native = None
+        if total_holdings > 0 and purchase_value_cents > 0:
+            average_purchase_price_native = round(
+                (purchase_value_cents / 100) / total_holdings,
+                4,
+            )
+
+        raw_last_close, last_close_native = fetch_previous_close(
+            db_path,
+            security_uuid,
+            conn=conn,
+        )
+        last_close_eur = None
+        if raw_last_close is not None:
+            try:
+                last_close_eur = normalize_price_to_eur_sync(
+                    raw_last_close,
+                    currency_code,
+                    reference_date,
+                    db_path,
+                )
+                if last_close_eur is not None:
+                    last_close_eur = round(last_close_eur, 4)
+            except Exception:  # pragma: no cover - defensive
+                last_close_eur = None
+
+        return {
+            "name": security_row["name"],
+            "currency_code": currency_code,
+            "total_holdings": round(total_holdings, 6),
+            "last_price_native": last_price_native,
+            "last_price_eur": round(last_price_eur, 4),
+            "market_value_eur": market_value_eur,
+            "purchase_value_eur": purchase_value_eur,
+            "average_purchase_price_native": average_purchase_price_native,
+            "last_close_native": last_close_native,
+            "last_close_eur": last_close_eur,
+        }
+    finally:
+        conn.close()
+
+
+def fetch_previous_close(
+    db_path: Path,
+    security_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> tuple[int | None, float | None]:
+    """Fetch the most recent historical close price for a security."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn
+    if local_conn is None:
+        local_conn = sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                SELECT close
+                FROM historical_prices
+                WHERE security_uuid = ?
+                ORDER BY date DESC
+                LIMIT 1
+                """,
+                (security_uuid,),
+            )
+            row = cursor.fetchone()
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
+                security_uuid,
+            )
+            return None, None
+
+        if not row:
+            return None, None
+
+        raw_close = row[0]
+        if raw_close is None:
+            return None, None
+
+        close_native: float | None = None
+        try:
+            from custom_components.pp_reader.logic.portfolio import (  # local import
+                normalize_price,
+            )
+
+            close_native = round(normalize_price(int(raw_close)), 4)
+        except Exception:  # pragma: no cover - defensive
+            _LOGGER.exception(
+                "Fehler bei der Normalisierung des Schlusskurses (security_uuid=%s)",
+                security_uuid,
+            )
+            close_native = None
+
+        return int(raw_close), close_native
+    finally:
+        if conn is None:
+            with suppress(sqlite3.Error):
+                local_conn.close()
+
+
 def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str, Any]]:
     """
     Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Gewinn.
@@ -408,6 +671,14 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
 
     current_value = _cent_to_eur(row["current_value"])
     purchase_sum = _cent_to_eur(row["purchase_sum"])
+    missing_value_positions = 0
+    if "missing_value_positions" in row.keys():
+        try:
+            missing_value_positions = int(row["missing_value_positions"] or 0)
+        except (TypeError, ValueError):
+            missing_value_positions = 0
+
+    has_current_value = missing_value_positions == 0
 
     gain_abs = round(current_value - purchase_sum, 2)
     gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum > 0 else 0.0, 2)
@@ -422,6 +693,8 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
         "position_count": row["position_count"]
         if row["position_count"] is not None
         else 0,
+        "missing_value_positions": missing_value_positions,
+        "has_current_value": has_current_value,
     }
 
 
@@ -472,7 +745,13 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             p.name AS name,
             COALESCE(SUM(ps.current_value), 0) AS current_value,
             COALESCE(SUM(ps.purchase_value), 0) AS purchase_sum,
-            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count
+            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count,
+            SUM(
+                CASE
+                    WHEN ps.current_holdings > 0 AND ps.current_value IS NULL THEN 1
+                    ELSE 0
+                END
+            ) AS missing_value_positions
         FROM portfolios p
         LEFT JOIN portfolio_securities ps
           ON p.uuid = ps.portfolio_uuid

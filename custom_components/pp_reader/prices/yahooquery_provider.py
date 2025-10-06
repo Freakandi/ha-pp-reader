@@ -3,7 +3,7 @@ YahooQuery Provider für Live-Preise.
 
 Implementiert das PriceProvider-Protokoll mittels `yahooquery` (blocking API).
 Eigenschaften:
-- CHUNK_SIZE=50 (Orchestrator chunked Symbole vor Aufruf; doppelte Sicherheit).
+- CHUNK_SIZE=10 (Orchestrator chunked Symbole vor Aufruf; doppelte Sicherheit).
 - Lazy Import von `yahooquery` im Executor (ImportError wird geloggt und
   führt zu leerem Resultat).
 - Filter: Nur Quotes mit `regularMarketPrice > 0`.
@@ -37,7 +37,7 @@ from .provider_base import PriceProvider, Quote
 
 _LOGGER = logging.getLogger(__name__)
 
-CHUNK_SIZE = 50  # Sicherheitskonstante (primär durch Orchestrator genutzt)
+CHUNK_SIZE = 10  # Sicherheitskonstante (primär durch Orchestrator genutzt)
 _YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
 
 

@@ -19,7 +19,6 @@ import asyncio
 import logging
 import sqlite3
 import time
-from collections import defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -40,7 +39,15 @@ from custom_components.pp_reader.logic.securities import (
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
-from custom_components.pp_reader.prices.revaluation import revalue_after_price_updates
+from custom_components.pp_reader.prices import revaluation
+from custom_components.pp_reader.util import async_run_executor_job
+
+
+async def revalue_after_price_updates(*args, **kwargs):
+    """Proxy to the revaluation helper (patchable for tests)."""
+    return await revaluation.revalue_after_price_updates(*args, **kwargs)
+
+
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
     YahooQueryProvider,
@@ -74,6 +81,9 @@ def initialize_price_state(hass: HomeAssistant, entry_id: str) -> None:
     Legt keine Hintergrund-Tasks an (Scheduling erfolgt in __init__.py).
     Mehrfachaufruf (z.B. Reload) ist idempotent.
     """
+    if _LOGGER.level > logging.INFO:
+        _LOGGER.setLevel(logging.INFO)
+
     store = hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
     if "price_lock" not in store or not isinstance(
         store.get("price_lock"), asyncio.Lock
@@ -101,8 +111,8 @@ def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]
     (unique_symbols_sorted, mapping)
 
     """
-    symbols_map: dict[str, list[str]] = defaultdict(list)
-    unique_symbols: set[str] = set()
+    symbols_map: dict[str, list[str]] = {}
+    symbols_order: list[str] = []
     with sqlite3.connect(str(db_path)) as conn:
         cur = conn.execute(
             """
@@ -117,12 +127,12 @@ def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]
             ticker_norm = ticker.strip()
             if not ticker_norm:
                 continue
+            if ticker_norm not in symbols_map:
+                symbols_map[ticker_norm] = []
+                symbols_order.append(ticker_norm)
             symbols_map[ticker_norm].append(uuid)
-            unique_symbols.add(ticker_norm)
 
-    symbols = sorted(unique_symbols)
-    # Optional: Dedup (sollte bereits eindeutig sein)
-    return symbols, dict(symbols_map)
+    return list(symbols_order), symbols_map
 
 
 def load_and_map_symbols(
@@ -236,6 +246,14 @@ def _detect_price_changes(
     return updates, changed
 
 
+def _load_prices_and_currencies(
+    db_path: Path,
+) -> tuple[dict[str, int], dict[str, str | None]]:
+    """Synchronously load cached prices and security currencies from SQLite."""
+    with sqlite3.connect(str(db_path)) as conn:
+        return _load_old_prices(conn), _load_security_currencies(conn)
+
+
 def _apply_price_updates(
     db_path: Path,
     updates: dict[str, int],
@@ -325,7 +343,6 @@ def _refresh_impacted_portfolio_securities(
     db_path: Path, scaled_updates: dict[str, int]
 ) -> set[str]:
     """Recalculate portfolio/security aggregates for affected securities."""
-
     if not scaled_updates:
         return set()
 
@@ -358,7 +375,13 @@ def _refresh_impacted_portfolio_securities(
                 )
                 return set()
 
-            for portfolio_uuid, security_uuid, cur_hold, purch_val, cur_val in cur.fetchall():
+            for (
+                portfolio_uuid,
+                security_uuid,
+                cur_hold,
+                purch_val,
+                cur_val,
+            ) in cur.fetchall():
                 key = (portfolio_uuid, security_uuid)
                 impacted_pairs.add(key)
                 impacted_portfolios.add(portfolio_uuid)
@@ -663,8 +686,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     "skipped_running": True,
                 }
 
-            prev_error_counter = store.get("price_error_counter", 0)
-            store["price_error_counter"] = 0
+            error_counter = store.get("price_error_counter", 0)
+            prev_error_counter = error_counter
 
             # --- Batch Bildung mit Provider-Konstante ---
             batches = [
@@ -676,6 +699,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             all_quotes: list[Quote] = []
             skipped_running = False
             chunk_failure_count = 0
+            provider_import_error = False
 
             for idx, batch_symbols in enumerate(batches, start=1):
                 _LOGGER.debug(
@@ -730,45 +754,53 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 )
 
             if chunk_failure_count:
-                store["price_error_counter"] = (
-                    store.get("price_error_counter", 0) + chunk_failure_count
-                )
+                error_counter += chunk_failure_count
+                store["price_error_counter"] = error_counter
                 _LOGGER.debug(
                     "prices_cycle: chunk_failures=%s error_counter=%s",
                     chunk_failure_count,
-                    store["price_error_counter"],
+                    error_counter,
                 )
+            else:
+                store["price_error_counter"] = error_counter
+
+            provider_import_error = has_import_error()
 
             if len(all_quotes) == 0:
-                store["price_error_counter"] = store.get("price_error_counter", 0) + 1
-                now_ts = time.time()
-                last_warn = store.get("price_zero_quotes_warn_ts")
-                if (
-                    last_warn is None
-                    or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
-                ):
-                    warn_msg = (
-                        "prices_cycle: Keine Quotes erhalten (total=0) - "
-                        "Fehlerzähler=%s"
-                    )
-                    _LOGGER.warning(warn_msg, store["price_error_counter"])
-                    store["price_zero_quotes_warn_ts"] = now_ts
-                else:
-                    _LOGGER.debug(
-                        (
-                            "prices_cycle: zero-quotes detected (WARN gedrosselt) -> "
-                            "error_counter=%s"
-                        ),
-                        store["price_error_counter"],
-                    )
+                error_counter += 1
+                store["price_error_counter"] = error_counter
+                if not provider_import_error:
+                    now_ts = time.time()
+                    last_warn = store.get("price_zero_quotes_warn_ts")
+                    if (
+                        last_warn is None
+                        or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
+                    ):
+                        warn_msg = (
+                            "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
+                        )
+                        _LOGGER.warning(warn_msg, error_counter)
+                        store["price_zero_quotes_warn_ts"] = now_ts
+                    else:
+                        _LOGGER.debug(
+                            (
+                                "prices_cycle: zero-quotes detected (WARN gedrosselt) -> "
+                                "error_counter=%s"
+                            ),
+                            error_counter,
+                        )
+            else:
+                store["price_error_counter"] = error_counter
 
             # --- Load existing prices and currencies ---
             existing_prices: dict[str, int] = {}
             security_currencies: dict[str, str | None] = {}
             try:
-                with sqlite3.connect(str(db_path)) as conn:
-                    existing_prices = _load_old_prices(conn)
-                    security_currencies = _load_security_currencies(conn)
+                existing_prices, security_currencies = await async_run_executor_job(
+                    hass,
+                    _load_prices_and_currencies,
+                    db_path,
+                )
             except sqlite3.Error:
                 warn_msg = (
                     "prices_cycle: Unerwarteter Fehler beim Laden bestehender Preise / "
@@ -806,8 +838,13 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     changed_count = 0
                 else:
                     fetched_at = _utc_now_iso()
-                    updated_rows = _apply_price_updates(
-                        db_path, scaled_updates, fetched_at=fetched_at, source="yahoo"
+                    updated_rows = await async_run_executor_job(
+                        hass,
+                        _apply_price_updates,
+                        db_path,
+                        scaled_updates,
+                        fetched_at,
+                        "yahoo",
                     )
                     if updated_rows != detected_changes:
                         debug_msg = (
@@ -821,7 +858,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         )
                     if updated_rows > 0:
                         try:
-                            impacted_portfolios = await hass.async_add_executor_job(
+                            impacted_portfolios = await async_run_executor_job(
+                                hass,
                                 _refresh_impacted_portfolio_securities,
                                 db_path,
                                 scaled_updates,
@@ -878,12 +916,14 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             fallback = {}
                             for pid in affected_portfolios:
                                 try:
-                                    val, cnt = await hass.async_add_executor_job(
+                                    val, cnt = await async_run_executor_job(
+                                        hass,
                                         db_calculate_portfolio_value_and_count,
                                         pid,
                                         db_path,
                                     )
-                                    purch = await hass.async_add_executor_job(
+                                    purch = await async_run_executor_job(
+                                        hass,
                                         db_calculate_portfolio_purchase_sum,
                                         pid,
                                         db_path,
@@ -999,7 +1039,12 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                                 hass,
                                 entry_id,
                                 "portfolio_positions",
-                                {"portfolio_uuid": pid, "positions": positions},
+                                [
+                                    {
+                                        "portfolio_uuid": pid,
+                                        "positions": positions,
+                                    }
+                                ],
                             )
                     else:
                         _LOGGER.debug(
@@ -1011,10 +1056,23 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         "prices_cycle: Fehler beim Push portfolio_positions",
                         exc_info=True,
                     )
+            quotes_returned = len(all_quotes)
+            if quotes_returned > 0:
+                if chunk_failure_count == 0:
+                    if prev_error_counter > 0:
+                        _LOGGER.info(
+                            "prices_cycle: Fehlerzähler zurückgesetzt (previous=%s)",
+                            prev_error_counter,
+                        )
+                    error_counter = 0
+                store["price_error_counter"] = error_counter
+            else:
+                store["price_error_counter"] = error_counter
+
             meta = {
                 "symbols_total": len(symbols),
                 "batches": batches_count,
-                "quotes_returned": len(all_quotes),
+                "quotes_returned": quotes_returned,
                 "changed": changed_count,
                 "errors": store.get("price_error_counter", 0),
                 "duration_ms": int((time.time() - cycle_start_ts) * 1000),
@@ -1056,6 +1114,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 not skipped_running
                 and store.get("price_error_counter", 0) >= CONSECUTIVE_ERROR_THRESHOLD
                 and len(all_quotes) == 0
+                and not provider_import_error
             ):
                 _LOGGER.warning(
                     (
@@ -1066,7 +1125,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     CONSECUTIVE_ERROR_THRESHOLD,
                 )
 
-            if has_import_error() and not store.get("price_provider_disabled"):
+            if provider_import_error and not store.get("price_provider_disabled"):
                 store["price_provider_disabled"] = True
                 _LOGGER.error(
                     (
@@ -1076,11 +1135,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     entry_id,
                 )
 
-            if prev_error_counter > 0 and len(all_quotes) > 0:
-                _LOGGER.info(
-                    "prices_cycle: Fehlerzähler zurückgesetzt (previous=%s)",
-                    prev_error_counter,
-                )
         except Exception:
             # Increment error counter & return safe meta
             store["price_error_counter"] = store.get("price_error_counter", 0) + 1

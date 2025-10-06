@@ -41,6 +41,7 @@ SECURITY_SCHEMA = [
         wkn TEXT,
         ticker_symbol TEXT,
         feed TEXT,
+        type TEXT,
         currency_code TEXT,
         retired INTEGER,
         updated_at TEXT,
@@ -57,6 +58,9 @@ SECURITY_SCHEMA = [
         security_uuid TEXT NOT NULL,  -- UUID des Wertpapiers
         date INTEGER NOT NULL,        -- Unix-Timestamp (epoch day)
         close INTEGER NOT NULL,       -- Schlusskurs in 10^-8 Einheiten
+        -- Close-Werte aktiver Wertpapiere werden vollständig gehalten, um
+        -- Zeitreihen ohne Lücken bereitzustellen. Retentionsregeln für
+        -- archivierte Wertpapiere können in zukünftigen Migrationen folgen.
         high INTEGER,                 -- Höchstkurs in 10^-8 Einheiten
         low INTEGER,                  -- Tiefstkurs in 10^-8 Einheiten
         volume INTEGER,               -- Handelsvolumen

@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from custom_components.pp_reader.logic import accounting as _accounting_module
+from custom_components.pp_reader.util import async_run_executor_job
 
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
 
@@ -56,9 +57,7 @@ def _sync_data_to_db(
             "custom_components.pp_reader.data.sync_from_pclient"
         )
     except ModuleNotFoundError as err:  # pragma: no cover - optional dep for tests
-        msg = (
-            "protobuf runtime is required to synchronize Portfolio Performance data"
-        )
+        msg = "protobuf runtime is required to synchronize Portfolio Performance data"
         raise RuntimeError(msg) from err
 
     sync_from_pclient = sync_module.sync_from_pclient
@@ -219,18 +218,18 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
         try:
             last_update_truncated = self._get_last_file_update()
-            last_db_update = await self.hass.async_add_executor_job(
-                _get_last_db_update, self.db_path
+            last_db_update = await async_run_executor_job(
+                self.hass, _get_last_db_update, self.db_path
             )
 
             if self._should_sync(last_db_update, last_update_truncated):
                 await self._sync_portfolio_file(last_update_truncated)
 
-            accounts = await self.hass.async_add_executor_job(
-                get_accounts, self.db_path
+            accounts = await async_run_executor_job(
+                self.hass, get_accounts, self.db_path
             )
-            transactions = await self.hass.async_add_executor_job(
-                get_transactions, self.db_path
+            transactions = await async_run_executor_job(
+                self.hass, get_transactions, self.db_path
             )
 
             account_balances = self._calculate_account_balances(accounts, transactions)
@@ -280,8 +279,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         parse_data_portfolio = _reader_module.parse_data_portfolio
 
-        data = await self.hass.async_add_executor_job(
-            parse_data_portfolio, str(self.file_path)
+        data = await async_run_executor_job(
+            self.hass, parse_data_portfolio, str(self.file_path)
         )
         if not data:
             msg = "Portfolio-Daten konnten nicht geladen werden"
@@ -289,7 +288,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         try:
             _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
-            await self.hass.async_add_executor_job(
+            await async_run_executor_job(
+                self.hass,
                 _sync_data_to_db,
                 data,
                 self.hass,
@@ -318,8 +318,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
     async def _load_live_portfolios(self) -> list[Any]:
         """Fetch live portfolio aggregates while shielding coordinator errors."""
         try:
-            raw_portfolios = await self.hass.async_add_executor_job(
-                fetch_live_portfolios, self.db_path
+            raw_portfolios = await async_run_executor_job(
+                self.hass, fetch_live_portfolios, self.db_path
             )
         except Exception:
             _LOGGER.exception(

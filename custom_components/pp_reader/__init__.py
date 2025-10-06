@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components import websocket_api
+from homeassistant.components.frontend import (
+    async_remove_panel as frontend_async_remove_panel,
+)
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import (
     async_register_panel as panel_custom_async_register_panel,
@@ -18,7 +21,12 @@ from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
+from .const import (
+    CONF_DB_PATH,
+    CONF_FILE_PATH,
+    CONF_HISTORY_RETENTION_YEARS,
+    DOMAIN,
+)
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
@@ -76,6 +84,71 @@ def _get_entry_options(entry: ConfigEntry) -> Mapping[str, Any]:
     return {}
 
 
+def _extract_feature_flag_options(options: Mapping[str, Any]) -> dict[str, bool]:
+    """Return normalized feature flag overrides from the entry options."""
+    raw_flags = options.get("feature_flags")
+    if not isinstance(raw_flags, Mapping):
+        return {}
+
+    normalized: dict[str, bool] = {}
+    for raw_name, raw_value in raw_flags.items():
+        if not isinstance(raw_name, str):
+            continue
+        name = raw_name.strip().lower()
+        if not name:
+            continue
+        normalized[name] = bool(raw_value)
+
+    return normalized
+
+
+def _store_feature_flags(
+    store: dict[str, Any], overrides: Mapping[str, bool]
+) -> dict[str, bool]:
+    """Persist feature flag values in the entry store."""
+    flags = dict(overrides)
+    store["feature_flags"] = flags
+    return flags
+
+
+def _normalize_history_retention_years(options: Mapping[str, Any]) -> int | None:
+    """Return the configured retention horizon in years or ``None`` for unlimited."""
+    raw_value = options.get(CONF_HISTORY_RETENTION_YEARS)
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, str):
+        cleaned = raw_value.strip()
+        if not cleaned:
+            return None
+        if cleaned.lower() in {"none", "unlimited"}:
+            return None
+        raw_value = cleaned
+
+    try:
+        years = int(raw_value)
+    except (TypeError, ValueError):
+        _LOGGER.warning(
+            "Ungültige history_retention_years Option (%r) -> keine Begrenzung",
+            raw_value,
+        )
+        return None
+
+    if years <= 0:
+        return None
+
+    return years
+
+
+def _store_history_retention(
+    store: dict[str, Any], options: Mapping[str, Any]
+) -> int | None:
+    """Persist the retention configuration in the entry store and return it."""
+    retention_years = _normalize_history_retention_years(options)
+    store["history_retention_years"] = retention_years
+    return retention_years
+
+
 def _get_price_interval_seconds(options: Mapping[str, Any]) -> int:
     """Normalize the configured interval with sane defaults."""
     raw_interval = options.get(
@@ -119,15 +192,31 @@ def _schedule_price_interval(
 
 
 async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Register the custom panel if Home Assistant does not have it yet."""
-    if any(
-        panel.frontend_url_path == "ppreader"
-        for panel in hass.data.get("frontend_panels", {}).values()
-    ):
-        _LOGGER.warning(
-            "Das Panel 'ppreader' ist bereits registriert. Überspringe Registrierung."
-        )
-        return
+    """Ensure the custom panel exists and refresh it when already present."""
+    existing_panel = next(
+        (
+            panel
+            for panel in hass.data.get("frontend_panels", {}).values()
+            if panel.frontend_url_path == "ppreader"
+        ),
+        None,
+    )
+
+    if existing_panel is not None:
+        existing_entry_id = (existing_panel.config or {}).get("entry_id")
+        if existing_entry_id == entry.entry_id:
+            _LOGGER.debug(
+                "Aktualisiere bestehendes Panel 'ppreader' für entry_id=%s",
+                entry.entry_id,
+            )
+        else:
+            _LOGGER.info(
+                "Ersetze vorhandenes Panel 'ppreader' (alt=%s) durch entry_id=%s",
+                existing_entry_id,
+                entry.entry_id,
+            )
+
+        frontend_async_remove_panel(hass, "ppreader", warn_if_unknown=False)
 
     try:
         cache_bust = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -148,6 +237,43 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
         )
     except ValueError:
         _LOGGER.exception("❌ Fehler bei der Registrierung des Panels")
+    except AttributeError:
+        _LOGGER.exception(
+            "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+        )
+
+
+async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
+    """Register a lightweight placeholder panel so /ppreader never 404s."""
+
+    existing_panel = next(
+        (
+            panel
+            for panel in hass.data.get("frontend_panels", {}).values()
+            if panel.frontend_url_path == "ppreader"
+        ),
+        None,
+    )
+
+    if existing_panel is not None:
+        return
+
+    try:
+        await panel_custom_async_register_panel(
+            hass,
+            frontend_url_path="ppreader",
+            webcomponent_name="pp-reader-panel",
+            module_url="/pp_reader_dashboard/panel.js?v=bootstrap",
+            sidebar_title="Portfolio Dashboard",
+            sidebar_icon="mdi:chart-line",
+            require_admin=False,
+            config={"entry_id": None, "placeholder": True},
+        )
+        _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
+    except ValueError:
+        _LOGGER.exception(
+            "❌ Fehler bei der Registrierung des Panel-Platzhalters"
+        )
     except AttributeError:
         _LOGGER.exception(
             "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
@@ -181,12 +307,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                path=hass.config.path(str(dashboard_folder)),
+                path=str(dashboard_folder.resolve()),
                 url_path="/pp_reader_dashboard",
                 cache_headers=False,
             )
         ]
     )
+
+    await _ensure_placeholder_panel(hass)
 
     # Websocket-API registrieren
     try:
@@ -195,8 +323,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, websocket.ws_get_dashboard_data)
         websocket_api.async_register_command(hass, websocket.ws_get_accounts)
         websocket_api.async_register_command(hass, websocket.ws_get_last_file_update)
-        websocket_api.async_register_command(hass, websocket.ws_get_portfolio_data)
+        websocket_api.async_register_command(
+            hass, websocket.ws_get_portfolio_data_handler
+        )
         websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
+        websocket_api.async_register_command(hass, websocket.ws_get_security_snapshot)
+        websocket_api.async_register_command(hass, websocket.ws_get_security_history)
         # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
         _LOGGER.exception("❌ Fehler bei der Registrierung der Websocket-Befehle")
@@ -211,12 +343,12 @@ def _apply_price_debug_logging(entry: ConfigEntry) -> None:
 
     level = logging.DEBUG if enabled else logging.INFO
     effective_levels = {}
+    base_logger = logging.getLogger("custom_components.pp_reader")
+    base_logger.setLevel(logging.INFO)
     for name in PRICE_LOGGER_NAMES:
         logger = logging.getLogger(name)
-        logger.setLevel(
-            level if enabled else logger.level
-        )  # do not downgrade an already higher level explicitly
-        effective_levels[name] = logging.getLogger(name).getEffectiveLevel()
+        logger.setLevel(level)
+        effective_levels[name] = logger.getEffectiveLevel()
 
     if enabled:
         _LOGGER.info(
@@ -241,6 +373,11 @@ async def _async_reload_entry_on_update(
     if not store:
         return
 
+    options = _get_entry_options(entry)
+    flag_overrides = _extract_feature_flag_options(options)
+    _store_feature_flags(store, flag_overrides)
+    _store_history_retention(store, options)
+
     old_cancel = store.get("price_task_cancel")
     old_interval = store.get("price_interval_applied")
 
@@ -255,7 +392,6 @@ async def _async_reload_entry_on_update(
 
     price_service.initialize_price_state(hass, entry.entry_id)
 
-    options = _get_entry_options(entry)
     new_interval = _get_price_interval_seconds(options)
     _schedule_price_interval(hass, entry, store, new_interval)
 
@@ -283,6 +419,8 @@ async def _async_reload_entry_on_update(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
+    panel_registered = False
+
     try:
         setup_backup_system = backup_db_module.setup_backup_system
         coordinator_cls = coordinator_module.PPReaderCoordinator
@@ -307,7 +445,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }
         hass.data[DOMAIN][entry.entry_id] = store
 
+        flag_overrides = _extract_feature_flag_options(options)
+        _store_feature_flags(store, flag_overrides)
+        _store_history_retention(store, options)
+
         _apply_price_debug_logging(entry)
+
+        await _register_panel_if_absent(hass, entry)
+        panel_registered = True
 
         coordinator = coordinator_cls(
             hass,
@@ -329,12 +474,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems")
 
-        await _register_panel_if_absent(hass, entry)
-
         return True  # noqa: TRY300
 
     except Exception:
         _LOGGER.exception("Fehler beim Setup des Config Entries")
+        if panel_registered:
+            frontend_async_remove_panel(hass, "ppreader", warn_if_unknown=False)
         raise
 
 
