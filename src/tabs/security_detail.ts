@@ -39,6 +39,8 @@ import type {
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
 const PRICE_SCALE = 1e8;
+const HISTORY_SYNC_TOLERANCE_MS = 6 * 60 * 60 * 1000; // 6 hours leeway between history close and price fetch
+const MAX_PRICE_STALENESS_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance before treating last price as stale
 const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = '1Y';
 const AVAILABLE_HISTORY_RANGES: readonly SecurityHistoryRangeKey[] = [
   '1M',
@@ -112,6 +114,7 @@ interface SecuritySnapshotMetrics {
   dayChangePct: number | null;
   totalChangeEur: number | null;
   totalChangePct: number | null;
+  lastPriceFetchedAt: number | null;
 }
 
 type SnapshotMetricsRegistry = Map<string, SecuritySnapshotMetrics>;
@@ -399,6 +402,40 @@ function parseHistoryDate(raw: unknown): Date | null {
   return null;
 }
 
+function parseTimestamp(value: unknown): number | null {
+  if (!value && value !== 0) {
+    return null;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (value > 1e12) {
+      return value;
+    }
+
+    if (value > 1e9) {
+      return value * 1000;
+    }
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
   if (!Array.isArray(prices)) {
     return [];
@@ -574,6 +611,11 @@ function ensureSnapshotMetrics(
   const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
   const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
   const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
+  const lastPriceFetchedAt =
+    parseTimestamp((snapshot as { last_price_fetched_at?: unknown })?.last_price_fetched_at) ??
+    parseTimestamp(
+      (snapshot.last_price as { fetched_at?: unknown } | null | undefined)?.fetched_at,
+    );
 
   const fxRate = deriveFxRate(snapshot, lastPriceNative);
   const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
@@ -616,6 +658,7 @@ function ensureSnapshotMetrics(
     dayChangePct,
     totalChangeEur,
     totalChangePct,
+    lastPriceFetchedAt: lastPriceFetchedAt ?? null,
   };
 
   SNAPSHOT_METRICS_REGISTRY.set(securityUuid, metrics);
@@ -660,6 +703,148 @@ function computePriceChangeMetrics(
   const priceChangePct = computePercentageChange(effectiveLast, baseline);
 
   return { priceChange, priceChangePct };
+}
+
+function computeLatestHistoryDayChange(
+  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
+): { diff: number; pct: number | null } | null {
+  if (!Array.isArray(historySeries) || historySeries.length < 2) {
+    return null;
+  }
+
+  let latest: number | null = null;
+  let previous: number | null = null;
+
+  for (let index = historySeries.length - 1; index >= 0; index -= 1) {
+    const close = toFiniteNumber(historySeries[index]?.close);
+    if (!isFiniteNumber(close)) {
+      continue;
+    }
+
+    if (latest == null) {
+      latest = close;
+      continue;
+    }
+
+    previous = close;
+    break;
+  }
+
+  if (!isFiniteNumber(latest) || !isFiniteNumber(previous)) {
+    return null;
+  }
+
+  const rawDiff = latest - previous;
+  const diff = Object.is(rawDiff, -0) ? 0 : rawDiff;
+  const pct = computePercentageChange(latest, previous);
+
+  return { diff, pct };
+}
+
+function extractLatestHistoryTimestamp(
+  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
+): number | null {
+  if (!Array.isArray(historySeries) || historySeries.length === 0) {
+    return null;
+  }
+
+  for (let index = historySeries.length - 1; index >= 0; index -= 1) {
+    const entry = historySeries[index];
+    if (!entry) {
+      continue;
+    }
+
+    const parsedDate = parseHistoryDate(entry.date);
+    if (parsedDate) {
+      return parsedDate.getTime();
+    }
+  }
+
+  return null;
+}
+
+function isSnapshotPriceFresh(
+  metrics: SecuritySnapshotMetrics | null,
+  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
+): boolean {
+  if (!metrics) {
+    return false;
+  }
+
+  const fetchedAt = metrics.lastPriceFetchedAt;
+  if (!isFiniteNumber(fetchedAt)) {
+    return false;
+  }
+
+  const now = Date.now();
+  if (now - fetchedAt > MAX_PRICE_STALENESS_MS) {
+    return false;
+  }
+
+  const latestHistoryTimestamp = extractLatestHistoryTimestamp(historySeries);
+  if (
+    latestHistoryTimestamp != null &&
+    fetchedAt + HISTORY_SYNC_TOLERANCE_MS < latestHistoryTimestamp
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function shouldReplaceDayChange(value: number | null | undefined): boolean {
+  if (!isFiniteNumber(value)) {
+    return true;
+  }
+
+  return value === 0 || Object.is(value, -0);
+}
+
+function applyHistoryDayChangeFallback(
+  metrics: SecuritySnapshotMetrics | null,
+  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
+): boolean {
+  if (!metrics) {
+    return false;
+  }
+
+  const replaceNative = shouldReplaceDayChange(metrics.dayPriceChangeNative);
+  const replaceEur = shouldReplaceDayChange(metrics.dayPriceChangeEur) || replaceNative;
+  const replacePct = shouldReplaceDayChange(metrics.dayChangePct);
+
+  if (!replaceNative && !replaceEur && !replacePct) {
+    return false;
+  }
+
+  if (isSnapshotPriceFresh(metrics, historySeries)) {
+    return false;
+  }
+
+  const fallback = computeLatestHistoryDayChange(historySeries);
+  if (!fallback) {
+    return false;
+  }
+
+  const { diff, pct } = fallback;
+
+  if (replaceNative) {
+    metrics.dayPriceChangeNative = diff;
+  }
+
+  if (replaceEur) {
+    const converted = convertNativeDiffToEur(diff, metrics.fxRate);
+    if (isFiniteNumber(converted)) {
+      metrics.dayPriceChangeEur = converted;
+    } else if (replaceNative) {
+      metrics.dayPriceChangeEur = diff;
+    }
+  }
+
+  if (replacePct && pct != null) {
+    metrics.dayChangePct = pct;
+  }
+
+  return true;
 }
 
 function formatPriceChangeValue(
@@ -1302,12 +1487,12 @@ export async function renderSecurityDetail(
       ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
       : '';
   const headerTitle = effectiveSnapshot?.name || 'Wertpapierdetails';
-  const headerCard = createHeaderCard(
-    headerTitle,
-    buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
-  );
 
   if (error) {
+    const headerCard = createHeaderCard(
+      headerTitle,
+      buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
+    );
     return `
       ${headerCard.outerHTML}
       ${staleNotice}
@@ -1356,6 +1541,18 @@ export async function renderSecurityDetail(
       };
     }
   }
+
+  if (
+    applyHistoryDayChangeFallback(snapshotMetrics, historySeries) &&
+    snapshotMetrics
+  ) {
+    SNAPSHOT_METRICS_REGISTRY.set(securityUuid, snapshotMetrics);
+  }
+
+  const headerCard = createHeaderCard(
+    headerTitle,
+    buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
+  );
 
   const snapshotLastPriceNative =
     toFiniteNumber(effectiveSnapshot?.last_price_native) ??
