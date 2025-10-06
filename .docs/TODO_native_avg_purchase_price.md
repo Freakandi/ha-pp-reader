@@ -39,7 +39,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: `get_security_snapshot`
       - Ziel: Gibt `avg_price_native` unverändert zurück und entfernt EUR→Native Umrechnungen.
-   b) [ ] Aktualisiere WebSocket/REST Payloads
+   b) [x] Aktualisiere WebSocket/REST Payloads
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Serializer für `portfolio_security`/`security_snapshot`
       - Ziel: Überträgt `avg_price_native`, toleriert NULL, behält bestehende Felder.
