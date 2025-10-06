@@ -40,7 +40,7 @@ The dashboard is authored in TypeScript and built with Vite. Bundles live in `cu
 
 1. Install Node.js **18.18+** and npm **10+**, then run `npm install` once.
 2. Use `npm run dev` to launch Vite for hot module reloads while Home Assistant runs. Open <http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173> to stream assets directly from the dev server. Append `?pp_reader_dev_server=disable` to fall back to bundled assets.
-3. Run `npm run build` for production bundles; the script updates `dashboard.module.js` with the latest hashed filename.
+3. Run `npm run build` for production bundles; the script updates `dashboard.module.js` with the latest hashed filename and regenerates the published `panel.js`, so the runtime picks up changes such as the new stylesheet versioning logic.
 4. Auxiliary commands: `npm run typecheck` (strict `tsc --noEmit`) and `npm run lint:ts` (ESLint ruleset for `src/`).
 
 The security detail tab introduced in v0.12.0 consumes WebSocket commands `pp_reader/get_security_snapshot` and `pp_reader/get_security_history` to render snapshots and SVG charts using the imported daily close data. Keep these APIs backward compatible when evolving the dashboard.
