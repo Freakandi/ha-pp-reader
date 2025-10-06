@@ -128,6 +128,14 @@ const SNAPSHOT_METRICS_REGISTRY: SnapshotMetricsRegistry = new Map();
 const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
 const LIVE_UPDATE_HANDLERS = new Map<string, LiveUpdateHandler>();
 
+export const __TEST_ONLY__ = {
+  ensureSnapshotMetricsForTest: ensureSnapshotMetrics,
+  getHistoryChartOptionsForTest: getHistoryChartOptions,
+  clearSnapshotMetricsRegistryForTest: () => {
+    SNAPSHOT_METRICS_REGISTRY.clear();
+  },
+};
+
 function buildCachedSnapshotNotice(params: {
   fallbackUsed: boolean;
   flaggedAsCache: boolean;

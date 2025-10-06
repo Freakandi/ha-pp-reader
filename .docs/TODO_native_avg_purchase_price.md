@@ -57,7 +57,7 @@
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt/Funktion: Rendering der Detailmetrik & Chart-Baseline
       - Ziel: Verwendet native Werte für Achsen/Baselines; behält EUR Vergleichswerte.
-   c) [ ] Ergänze Frontend Tests/Typen
+   c) [x] Ergänze Frontend Tests/Typen
       - Datei: `tests/` oder `src/__tests__/` (TS Testdateien) & `src/types/`
       - Abschnitt/Funktion: Snapshot/Chart Tests & Typdefinitionen
       - Ziel: Erwartet `average_purchase_price_native` als optionales Feld und deckt Rendering ab.
