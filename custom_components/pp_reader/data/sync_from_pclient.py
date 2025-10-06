@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from functools import lru_cache
+from statistics import median
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -17,7 +18,6 @@ except ModuleNotFoundError as err:  # pragma: no cover - protobuf dependency mis
 else:
     _TIMESTAMP_IMPORT_ERROR = None
 from homeassistant.core import HomeAssistant
-
 from pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
     load_latest_rates_sync,
@@ -37,6 +37,66 @@ from .db_access import (
 from .event_push import _compact_event_data, _push_update  # noqa: F401
 
 
+SECONDS_PER_DAY = 86400
+UTC_ZONE = ZoneInfo("UTC")
+UNIX_EPOCH_DATE = date(1970, 1, 1)
+
+# Only warn about missing price segments if they are recent. Historical exports
+# often contain long gaps that cannot be resolved retroactively and needlessly
+# spam the Home Assistant log.
+MAX_PRICE_GAP_WARNING_AGE_DAYS = 365
+
+# Short gaps across banking holidays are common for many exchanges. Allow a
+# couple of missing business days before escalating to a warning to keep the
+# Home Assistant log noise-free.
+MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING = 3
+
+# Price series that are regularly sampled less often than once per week should not
+# raise missing data warnings. Analyse the spacing of recent data points to detect
+# such sparse series and keep the log noise-free.
+SPARSE_PRICE_RECENT_SAMPLE_SIZE = 24
+SPARSE_PRICE_MIN_INTERVALS = 4
+SPARSE_PRICE_MEDIAN_THRESHOLD_DAYS = 7
+
+
+@lru_cache(maxsize=4096)
+def _weekday_from_epoch_day(epoch_day: int) -> int:
+    """Return the weekday (0=Monday) for a Unix epoch day value."""
+
+    return datetime.fromtimestamp(epoch_day * SECONDS_PER_DAY, tz=UTC_ZONE).weekday()
+
+
+def _segment_is_weekend_only(start: int, end: int) -> bool:
+    """Check whether the missing date segment only covers weekend days."""
+
+    return all(_weekday_from_epoch_day(day) >= 5 for day in range(start, end + 1))
+
+
+def _count_business_days(start: int, end: int) -> int:
+    """Return how many days in the segment fall on weekdays."""
+
+    return sum(1 for day in range(start, end + 1) if _weekday_from_epoch_day(day) < 5)
+
+
+def _evaluate_price_series_spacing(price_dates: Iterable[int]) -> tuple[bool, float | None]:
+    """Analyse price date spacing to determine if warnings should be suppressed."""
+
+    sorted_dates = sorted(price_dates)
+    if len(sorted_dates) < 2:
+        return False, None
+
+    sample = sorted_dates[-(SPARSE_PRICE_RECENT_SAMPLE_SIZE + 1):]
+    if len(sample) < 2:
+        return False, None
+
+    intervals = [b - a for a, b in zip(sample, sample[1:]) if b > a]
+    if len(intervals) < SPARSE_PRICE_MIN_INTERVALS:
+        return False, None
+
+    median_interval = float(median(intervals))
+    return median_interval >= SPARSE_PRICE_MEDIAN_THRESHOLD_DAYS, median_interval
+
+
 @dataclass(slots=True)
 class SyncStats:
     """Aggregierte Statistiken über den Importlauf."""
@@ -44,6 +104,10 @@ class SyncStats:
     securities: int = 0
     transactions: int = 0
     fx_transactions: int = 0
+    historical_prices_written: int = 0
+    historical_prices_skipped: int = 0
+    historical_price_gap_warnings: int = 0
+    historical_price_gap_days: int = 0
 
 
 @dataclass(slots=True)
@@ -100,6 +164,7 @@ DELETE_TABLE_CONFIG = {
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def _require_timestamp_support() -> None:
     """Ensure the protobuf Timestamp dependency is available."""
     if _TIMESTAMP_IMPORT_ERROR is not None:  # pragma: no cover - defensive
@@ -125,6 +190,20 @@ def to_iso8601(ts: Timestamp) -> str:
     """
     _require_timestamp_support()
     return ts.ToDatetime().isoformat() if ts is not None and ts.seconds != 0 else None
+
+
+def _iso8601_to_epoch_day(value: str | None) -> int | None:
+    """Convert an ISO 8601 date string into a Unix epoch day."""
+
+    if not value:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    return (parsed.date() - UNIX_EPOCH_DATE).days
 
 
 def delete_missing_entries(
@@ -246,6 +325,7 @@ class _SyncRunner:
         self.accounts_currency_map: dict[str, str] = {}
         self.all_transactions: list[Any] = []
         self.tx_units: dict[str, dict[str, Any]] = {}
+        self.security_first_activity: dict[str, int] = {}
         self.cursor: Cursor | None = None
 
     def run(self) -> None:
@@ -339,6 +419,7 @@ class _SyncRunner:
         self.conn.commit()
         self.tx_units = self._rebuild_transaction_units()
         self.all_transactions = self._load_all_transactions()
+        self._index_security_activity()
 
     def _rebuild_transaction_units(self) -> dict[str, dict[str, Any]]:
         if self.cursor is None:
@@ -405,6 +486,23 @@ class _SyncRunner:
                 "(all_transactions leer)."
             )
             return []
+
+    def _index_security_activity(self) -> None:
+        """Map securities to the first transaction date (epoch day)."""
+
+        self.security_first_activity = {}
+        for transaction in self.all_transactions:
+            security_uuid = getattr(transaction, "security", None)
+            if not security_uuid:
+                continue
+
+            epoch_day = _iso8601_to_epoch_day(getattr(transaction, "date", None))
+            if epoch_day is None:
+                continue
+
+            previous = self.security_first_activity.get(security_uuid)
+            if previous is None or epoch_day < previous:
+                self.security_first_activity[security_uuid] = epoch_day
 
     def _sync_accounts(self) -> None:
         if self.cursor is None:
@@ -492,16 +590,27 @@ class _SyncRunner:
         security_ids = {security.uuid for security in self.client.securities}
         delete_missing_entries(self.conn, "securities", "uuid", security_ids)
 
+        today_epoch_day = int(datetime.now(tz=UTC_ZONE).timestamp() // SECONDS_PER_DAY)
+
         for security in self.client.securities:
             retired = 1 if getattr(security, "isRetired", False) else 0
             security_updated_at = maybe_field(security, "updatedAt")
             updated_at = to_iso8601(security_updated_at)
+
+            name = security.name
+            isin = maybe_field(security, "isin")
+            wkn = maybe_field(security, "wkn")
+            ticker_symbol = maybe_field(security, "tickerSymbol")
+            security_type = maybe_field(security, "type")
+            currency_code = security.currencyCode
+
             new_security_attrs = (
-                security.name,
-                maybe_field(security, "isin"),
-                maybe_field(security, "wkn"),
-                maybe_field(security, "tickerSymbol"),
-                security.currencyCode,
+                name,
+                isin,
+                wkn,
+                ticker_symbol,
+                currency_code,
+                security_type,
                 retired,
                 updated_at,
             )
@@ -509,7 +618,7 @@ class _SyncRunner:
             self.cursor.execute(
                 """
                 SELECT name, isin, wkn, ticker_symbol,
-                       currency_code, retired, updated_at
+                       currency_code, type, retired, updated_at
                 FROM securities
                 WHERE uuid = ?
                 """,
@@ -522,19 +631,20 @@ class _SyncRunner:
                     """
                     INSERT INTO securities (
                         uuid, name, isin, wkn, ticker_symbol, feed,
-                        currency_code, retired, updated_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?)
+                        type, currency_code, retired, updated_at
+                      ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         security.uuid,
-                        new_security_attrs[0],
-                        new_security_attrs[1],
-                        new_security_attrs[2],
-                        new_security_attrs[3],
+                        name,
+                        isin,
+                        wkn,
+                        ticker_symbol,
                         None,
-                        new_security_attrs[4],
-                        new_security_attrs[5],
-                        new_security_attrs[6],
+                        security_type,
+                        currency_code,
+                        retired,
+                        updated_at,
                     ),
                 )
                 self.changes.securities = True
@@ -544,7 +654,7 @@ class _SyncRunner:
                     """
                     UPDATE securities
                     SET name=?, isin=?, wkn=?, ticker_symbol=?,
-                        currency_code=?, retired=?, updated_at=?
+                        currency_code=?, type=?, retired=?, updated_at=?
                     WHERE uuid=?
                     """,
                     (*new_security_attrs, security.uuid),
@@ -553,30 +663,262 @@ class _SyncRunner:
                 self.updated_data["securities"].append(security.uuid)
 
             if security.prices:
-                for price in security.prices:
-                    descriptor = getattr(price, "DESCRIPTOR", None)
-                    fields = descriptor.fields_by_name if descriptor else {}
-                    high = getattr(price, "high", None) if "high" in fields else None
-                    low = getattr(price, "low", None) if "low" in fields else None
-                    volume = (
-                        getattr(price, "volume", None) if "volume" in fields else None
-                    )
+                if not retired:
+                    dedup_prices: dict[
+                        int, tuple[int, int | None, int | None, int | None]
+                    ] = {}
+                    skipped_future_dates: set[int] = set()
+                    skipped_invalid_dates: set[int] = set()
+                    for price in security.prices:
+                        descriptor = getattr(price, "DESCRIPTOR", None)
+                        fields = descriptor.fields_by_name if descriptor else {}
 
-                    self.cursor.execute(
-                        """
-                        INSERT OR REPLACE INTO historical_prices (
-                            security_uuid, date, close, high, low, volume
-                        ) VALUES (?,?,?,?,?,?)
-                        """,
-                        (
-                            security.uuid,
-                            price.date,
-                            price.close,
+                        date_value = getattr(price, "date", None)
+                        close_value = (
+                            getattr(price, "close", None)
+                            if (hasattr(price, "close") or "close" in fields)
+                            else None
+                        )
+                        if date_value is None:
+                            _LOGGER.warning(
+                                "sync_from_pclient: Überspringe historischen Preis ohne Datum für %s",
+                                security.uuid,
+                            )
+                            self.stats.historical_prices_skipped += 1
+                            continue
+                        if not isinstance(date_value, int):
+                            _LOGGER.warning(
+                                "sync_from_pclient: Überspringe historischen Preis mit ungültigem Datumstyp %s für %s",
+                                type(date_value).__name__,
+                                security.uuid,
+                            )
+                            self.stats.historical_prices_skipped += 1
+                            continue
+                        if date_value > today_epoch_day:
+                            if date_value not in skipped_future_dates:
+                                _LOGGER.warning(
+                                    "sync_from_pclient: Überspringe zukünftigen historischen Preis für %s am %s",
+                                    security.uuid,
+                                    date_value,
+                                )
+                                skipped_future_dates.add(date_value)
+                            self.stats.historical_prices_skipped += 1
+                            continue
+                        if date_value < 0:
+                            if date_value not in skipped_invalid_dates:
+                                _LOGGER.warning(
+                                    "sync_from_pclient: Überspringe historischen Preis mit negativem Datum für %s am %s",
+                                    security.uuid,
+                                    date_value,
+                                )
+                                skipped_invalid_dates.add(date_value)
+                            self.stats.historical_prices_skipped += 1
+                            continue
+                        if close_value is None:
+                            _LOGGER.warning(
+                                "sync_from_pclient: Überspringe historischen Preis ohne Close für %s am %s",
+                                security.uuid,
+                                date_value,
+                            )
+                            self.stats.historical_prices_skipped += 1
+                            continue
+
+                        high = (
+                            getattr(price, "high", None) if "high" in fields else None
+                        )
+                        low = getattr(price, "low", None) if "low" in fields else None
+                        volume = (
+                            getattr(price, "volume", None)
+                            if "volume" in fields
+                            else None
+                        )
+
+                        if date_value in dedup_prices:
+                            _LOGGER.debug(
+                                "sync_from_pclient: Duplikater Close für %s am %s überschrieben",
+                                security.uuid,
+                                date_value,
+                            )
+                            self.stats.historical_prices_skipped += 1
+                        dedup_prices[date_value] = (
+                            close_value,
                             high,
                             low,
                             volume,
-                        ),
+                        )
+
+                    sorted_price_items = sorted(dedup_prices.items())
+                    rows_to_persist = [
+                        (
+                            security.uuid,
+                            date_value,
+                            close_value,
+                            high,
+                            low,
+                            volume,
+                        )
+                        for date_value, (
+                            close_value,
+                            high,
+                            low,
+                            volume,
+                        ) in sorted_price_items
+                    ]
+                    price_dates = [date_value for date_value, _ in sorted_price_items]
+
+                    if sorted_price_items:
+                        missing_segments: list[tuple[int, int]] = []
+                        previous_date = sorted_price_items[0][0]
+                        for current_date, _ in sorted_price_items[1:]:
+                            gap_start = previous_date + 1
+                            gap_end = current_date - 1
+                            if gap_end >= gap_start:
+                                missing_segments.append((gap_start, gap_end))
+                            previous_date = current_date
+
+                        if missing_segments:
+                            calendar_value = maybe_field(security, "calendar")
+                            calendar_hint = (
+                                calendar_value.strip().lower()
+                                if isinstance(calendar_value, str)
+                                else ""
+                            )
+                            suppress_reason: str | None = None
+                            if calendar_hint and "month" in calendar_hint:
+                                suppress_reason = f"Kalender '{calendar_value}'"
+                            else:
+                                is_sparse_series, median_interval = (
+                                    _evaluate_price_series_spacing(price_dates)
+                                )
+                                if is_sparse_series:
+                                    suppress_reason = (
+                                        f"Medianintervall {median_interval:.1f} Tage"
+                                        if median_interval is not None
+                                        else "spärliche Preiszeitreihe"
+                                    )
+                            if suppress_reason:
+                                _LOGGER.debug(
+                                    "sync_from_pclient: Unterdrücke Warnungen zu historischen Preis-Lücken für %s (%s)",
+                                    security.uuid,
+                                    suppress_reason,
+                                )
+                            else:
+                                unexpected_segments: list[tuple[int, int]] = []
+                                ignored_weekend_segments = 0
+                                ignored_stale_segments = 0
+                                ignored_short_segments = 0
+                                ignored_pre_activity_segments = 0
+                                activity_start_day = self.security_first_activity.get(
+                                    security.uuid
+                                )
+                                for start, end in missing_segments:
+                                    if (
+                                        activity_start_day is not None
+                                        and end < activity_start_day
+                                    ):
+                                        ignored_pre_activity_segments += 1
+                                        continue
+                                    if _segment_is_weekend_only(start, end):
+                                        ignored_weekend_segments += 1
+                                        continue
+                                    if today_epoch_day - end > MAX_PRICE_GAP_WARNING_AGE_DAYS:
+                                        ignored_stale_segments += 1
+                                        continue
+                                    if (
+                                        _count_business_days(start, end)
+                                        <= MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING
+                                    ):
+                                        ignored_short_segments += 1
+                                        continue
+                                    unexpected_segments.append((start, end))
+
+                                if unexpected_segments:
+                                    total_missing_days = sum(
+                                        (end - start) + 1
+                                        for start, end in unexpected_segments
+                                    )
+                                    self.stats.historical_price_gap_warnings += len(
+                                        unexpected_segments
+                                    )
+                                    self.stats.historical_price_gap_days += total_missing_days
+
+                                    max_segments_to_log = 3
+                                    for start, end in unexpected_segments[:max_segments_to_log]:
+                                        if start == end:
+                                            _LOGGER.warning(
+                                                "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
+                                                security.uuid,
+                                                start,
+                                            )
+                                        else:
+                                            gap_days = (end - start) + 1
+                                            _LOGGER.warning(
+                                                "sync_from_pclient: Fehlende historische Close-Werte für %s zwischen %s und %s (%d Tage ohne Daten)",
+                                                security.uuid,
+                                                start,
+                                                end,
+                                                gap_days,
+                                            )
+
+                                    remaining_segments = len(unexpected_segments) - max_segments_to_log
+                                    if remaining_segments > 0:
+                                        _LOGGER.warning(
+                                            "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
+                                            remaining_segments,
+                                            security.uuid,
+                                        )
+
+                                if ignored_weekend_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden für %s",
+                                        ignored_weekend_segments,
+                                        security.uuid,
+                                    )
+                                if ignored_stale_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) für %s",
+                                        ignored_stale_segments,
+                                        MAX_PRICE_GAP_WARNING_AGE_DAYS,
+                                        security.uuid,
+                                    )
+                                if ignored_short_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) für %s",
+                                        ignored_short_segments,
+                                        MAX_BUSINESS_DAYS_GAP_WITHOUT_WARNING,
+                                        security.uuid,
+                                    )
+                                if ignored_pre_activity_segments:
+                                    _LOGGER.debug(
+                                        "sync_from_pclient: Ignoriere %d Lücken vor der ersten Transaktion für %s",
+                                        ignored_pre_activity_segments,
+                                        security.uuid,
+                                    )
+
+                    self.cursor.execute(
+                        "DELETE FROM historical_prices WHERE security_uuid = ? AND date > ?",
+                        (security.uuid, today_epoch_day),
                     )
+                    deleted_future_rows = self.cursor.rowcount
+                    if deleted_future_rows:
+                        _LOGGER.debug(
+                            "sync_from_pclient: Entfernte %d zukünftige historische Preise für %s",
+                            deleted_future_rows,
+                            security.uuid,
+                        )
+
+                    if rows_to_persist:
+                        self.cursor.executemany(
+                            """
+                            INSERT OR REPLACE INTO historical_prices (
+                                security_uuid, date, close, high, low, volume
+                            ) VALUES (?,?,?,?,?,?)
+                            """,
+                            rows_to_persist,
+                        )
+                    self.stats.historical_prices_written += len(rows_to_persist)
+                else:
+                    self.stats.historical_prices_skipped += len(security.prices)
 
                 latest_price = max(security.prices, key=lambda price: price.date)
                 _require_timestamp_support()
@@ -653,12 +995,15 @@ class _SyncRunner:
         )
 
         current_hold_pur: dict[tuple[str, str], dict[str, Any]] = {}
-        for key, purchase_value in purchase_values.items():
-            if key in current_holdings:
-                current_hold_pur[key] = {
-                    "current_holdings": current_holdings[key],
-                    "purchase_value": purchase_value,
-                }
+        for key, holdings in current_holdings.items():
+            purchase_value = purchase_values.get(key, 0.0)
+            # Falls der Kaufwert wegen fehlender FX-Daten noch nicht
+            # berechnet werden konnte, behalten wir die Position dennoch
+            # für die Bewertung bei (purchase_value fällt dann auf 0.0).
+            current_hold_pur[key] = {
+                "current_holdings": holdings,
+                "purchase_value": purchase_value,
+            }
 
         current_holdings_values = db_calculate_holdings_value(
             self.db_path, self.conn, current_hold_pur
@@ -668,7 +1013,11 @@ class _SyncRunner:
         for (portfolio_uuid, security_uuid), data in current_holdings_values.items():
             current_holdings_val = data.get("current_holdings", 0)
             purchase_value = data.get("purchase_value", 0)
-            current_value = data.get("current_value", 0)
+            current_value_raw = data.get("current_value", 0)
+            if current_value_raw is None:
+                current_value_cent: int | None = None
+            else:
+                current_value_cent = int(round(current_value_raw * 100))
 
             self.cursor.execute(
                 """
@@ -682,8 +1031,8 @@ class _SyncRunner:
 
             expected_values = (
                 current_holdings_val,
-                int(purchase_value * 100),
-                int(current_value * 100),
+                int(round(purchase_value * 100)),
+                current_value_cent,
             )
             if not existing_entry or existing_entry != expected_values:
                 self.changes.portfolio_securities = True
@@ -794,14 +1143,16 @@ class _SyncRunner:
         for account in db_accounts:
             currency = account["currency_code"]
             orig_balance = account["raw_balance"] / 100.0
+            fx_unavailable = False
             if currency != "EUR":
                 rate = fx_rates.get(currency)
                 if rate:
                     eur_balance = orig_balance / rate
                 else:
-                    eur_balance = 0.0
+                    eur_balance = None
+                    fx_unavailable = True
                     _LOGGER.warning(
-                        "FX: Kein Kurs für %s - setze EUR-Wert=0",
+                        "FX: Kein Kurs für %s – EUR-Wert nicht verfügbar",
                         currency,
                     )
             else:
@@ -812,7 +1163,8 @@ class _SyncRunner:
                     "name": account["name"],
                     "currency_code": currency,
                     "orig_balance": round(orig_balance, 2),
-                    "balance": round(eur_balance, 2),
+                    "balance": round(eur_balance, 2) if eur_balance is not None else None,
+                    "fx_unavailable": fx_unavailable,
                 }
             )
 
@@ -1005,10 +1357,15 @@ class _SyncRunner:
     def _log_summary(self) -> None:
         _LOGGER.info(
             "sync_from_pclient: Import abgeschlossen: %d Wertpapiere, "
-            "%d Transaktionen (%d mit Fremdwährung)",
+            "%d Transaktionen (%d mit Fremdwährung), %d historische Close-Werte "
+            "geschrieben, %d übersprungen, %d Close-Lücken gemeldet (%d Tage ohne Daten)",
             self.stats.securities,
             self.stats.transactions,
             self.stats.fx_transactions,
+            self.stats.historical_prices_written,
+            self.stats.historical_prices_skipped,
+            self.stats.historical_price_gap_warnings,
+            self.stats.historical_price_gap_days,
         )
 
     def _reset_change_flags(self) -> None:
@@ -1050,7 +1407,3 @@ def fetch_positions_for_portfolios(
     return result
 
 
-# (Sicherstellen, dass am Modulende kein ausführbarer Code steht - nur
-# Funktions- oder Konstantendefinitionen)
-# Entferne ggf. versehentlich hinzugefügte Debug- oder Testaufrufe wie:
-# sync_from_pclient(...), print(...), o.Ä.

@@ -1,20 +1,37 @@
-"""
-Provide functionality to parse .portfolio files.
+"""Helpers for parsing `.portfolio` exports into protocol buffer objects."""
 
-Include a function to extract and parse data from .portfolio files
-into PClient objects using Protocol Buffers.
-"""
+from __future__ import annotations
 
 import logging
 import zipfile
+from importlib import import_module
 from pathlib import Path
-
-import google.protobuf.message
-
-from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+from typing import TYPE_CHECKING, Any
 
 _LOGGER = logging.getLogger(__name__)
-_LOGGER.debug(dir(client_pb2))
+
+try:  # pragma: no cover - exercised indirectly via tests
+    _client_pb2 = import_module(
+        "custom_components.pp_reader.name.abuchen.portfolio.client_pb2"
+    )
+except ModuleNotFoundError as err:  # pragma: no cover - defensive branch
+    _CLIENT_PROTO_IMPORT_ERROR: ModuleNotFoundError | None = err
+    _client_pb2 = None  # type: ignore[assignment]
+else:
+    _CLIENT_PROTO_IMPORT_ERROR = None
+
+try:  # pragma: no cover - exercised indirectly via tests
+    from google.protobuf import message as _protobuf_message
+except ModuleNotFoundError as err:  # pragma: no cover - defensive branch
+    _PROTOBUF_IMPORT_ERROR: ModuleNotFoundError | None = err
+    _protobuf_message = None  # type: ignore[assignment]
+else:
+    _PROTOBUF_IMPORT_ERROR = None
+
+if TYPE_CHECKING:  # pragma: no cover - typing helpers only
+    from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+else:
+    client_pb2 = Any  # type: ignore[assignment]
 
 
 def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignore  # noqa: PGH003
@@ -26,6 +43,16 @@ def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignor
     """
     if not Path(path).exists():
         _LOGGER.error("❌ Datei existiert nicht: %s", path)
+        return None
+
+    if _client_pb2 is None or _protobuf_message is None:
+        missing = _CLIENT_PROTO_IMPORT_ERROR or _PROTOBUF_IMPORT_ERROR
+        error_msg = "google protobuf runtime fehlt" if missing else "Unbekannter Fehler"
+        _LOGGER.warning(
+            "❌ Portfolioparser deaktiviert (%s): %s",
+            error_msg,
+            missing,
+        )
         return None
 
     try:
@@ -45,14 +72,14 @@ def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignor
 
         # Direktes Parsen als PClient
         try:
-            client = client_pb2.PClient()  # type: ignore  # noqa: PGH003
+            client = _client_pb2.PClient()  # type: ignore[attr-defined]
             client.ParseFromString(raw_data)
             _LOGGER.info(
                 "✅ Parsen erfolgreich - Version %s mit %d Wertpapieren",
                 client.version,
                 len(client.securities),
             )
-        except google.protobuf.message.DecodeError:
+        except _protobuf_message.DecodeError:  # type: ignore[union-attr]
             _LOGGER.exception("❌ Fehler beim Parsen der Datei")
         else:
             return client

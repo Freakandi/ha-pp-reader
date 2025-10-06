@@ -7,21 +7,26 @@ account information, portfolio data, and file update timestamps.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from custom_components.pp_reader.util import async_run_executor_job
 
 from .db_access import (
     fetch_live_portfolios,  # NEU: On-Demand Aggregation
     get_accounts,
     get_last_file_update,
     get_portfolio_positions,
+    get_security_snapshot,
+    iter_security_close_prices,
 )
 
 
@@ -45,6 +50,68 @@ def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
     return active_currencies
 
 
+async def _load_accounts_payload(
+    hass: "HomeAssistant", db_path: Path
+) -> list[dict[str, Any]]:
+    """Return account details formatted for websocket responses."""
+
+    accounts = await async_run_executor_job(hass, get_accounts, db_path)
+
+    fx_rates: dict[str, float] = {}
+    try:
+        active_fx_currencies = _collect_active_fx_currencies(accounts)
+        if active_fx_currencies:
+            ensure_rates = ensure_exchange_rates_for_dates
+            load_rates = load_latest_rates
+            if ensure_rates is None or load_rates is None:
+                _LOGGER.warning(
+                    "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+                )
+            else:
+                today = datetime.now(timezone.utc)
+                await ensure_rates([today], active_fx_currencies, db_path)
+                fx_rates = await load_rates(today, db_path)
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+        )
+        fx_rates = {}
+
+    account_data: list[dict[str, Any]] = []
+    for account in accounts:
+        if getattr(account, "is_retired", False):
+            continue
+
+        currency = getattr(account, "currency_code", "EUR") or "EUR"
+        orig_balance = account.balance / 100.0
+        fx_unavailable = False
+        if currency != "EUR":
+            rate = fx_rates.get(currency)
+            if rate:
+                eur_balance = orig_balance / rate
+            else:
+                eur_balance = None
+                fx_unavailable = True
+                _LOGGER.warning(
+                    "FX: Kein Kurs für %s – EUR-Wert nicht verfügbar",
+                    currency,
+                )
+        else:
+            eur_balance = orig_balance
+
+        account_entry = {
+            "name": account.name,
+            "currency_code": currency,
+            "orig_balance": round(orig_balance, 2),
+            "balance": round(eur_balance, 2) if eur_balance is not None else None,
+        }
+        if fx_unavailable:
+            account_entry["fx_unavailable"] = True
+        account_data.append(account_entry)
+
+    return account_data
+
+
 try:
     from custom_components.pp_reader.currencies.fx import (
         ensure_exchange_rates_for_dates,
@@ -60,6 +127,152 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
+
+
+def _coerce_float(value: Any, *, default: float = 0.0) -> float:
+    """Return ``value`` as float with a graceful fallback."""
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if value is None:
+        return default
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_optional_float(value: Any) -> float | None:
+    """Return ``value`` as float or ``None`` when conversion fails."""
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Normalise snapshot payload for websocket transmission."""
+    if not snapshot:
+        return {
+            "name": "",
+            "currency_code": "EUR",
+            "total_holdings": 0.0,
+            "last_price_native": None,
+            "last_price_eur": None,
+            "market_value_eur": 0.0,
+            "purchase_value_eur": 0.0,
+            "average_purchase_price_native": None,
+            "last_close_native": None,
+            "last_close_eur": None,
+        }
+
+    data = dict(snapshot)
+
+    raw_name = snapshot.get("name")
+    data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
+
+    raw_currency = snapshot.get("currency_code")
+    if isinstance(raw_currency, str):
+        currency = raw_currency.strip().upper() or "EUR"
+    else:
+        currency = "EUR"
+    data["currency_code"] = currency
+
+    data["total_holdings"] = _coerce_float(snapshot.get("total_holdings"))
+    data["last_price_native"] = _coerce_optional_float(
+        snapshot.get("last_price_native")
+    )
+    data["last_price_eur"] = _coerce_optional_float(snapshot.get("last_price_eur"))
+    data["market_value_eur"] = _coerce_float(snapshot.get("market_value_eur"))
+    data["purchase_value_eur"] = _coerce_float(snapshot.get("purchase_value_eur"))
+    data["average_purchase_price_native"] = _coerce_optional_float(
+        snapshot.get("average_purchase_price_native")
+    )
+    data["last_close_native"] = _coerce_optional_float(
+        snapshot.get("last_close_native")
+    )
+    data["last_close_eur"] = _coerce_optional_float(snapshot.get("last_close_eur"))
+
+    last_price_raw = snapshot.get("last_price")
+    if isinstance(last_price_raw, Mapping):
+        data["last_price"] = {
+            "native": _coerce_optional_float(last_price_raw.get("native")),
+            "eur": _coerce_optional_float(last_price_raw.get("eur")),
+        }
+
+    return data
+
+
+def _wrap_with_loop_fallback(
+    handler: Callable[[Any, Any, dict[str, Any]], None],
+) -> Callable[[Any, Any, dict[str, Any]], None]:
+    """Ensure websocket handlers run in tests without a running event loop."""
+    original = getattr(handler, "__wrapped__", None)
+    if original is None:
+        return handler
+
+    def _resolve_loop(candidate: Any) -> asyncio.AbstractEventLoop | None:
+        if isinstance(candidate, asyncio.AbstractEventLoop):
+            return candidate
+        return None
+
+    def _drain_coroutine(
+        coro: Any,
+        loop: asyncio.AbstractEventLoop | None,
+    ) -> None:
+        if not asyncio.iscoroutine(coro):
+            return
+
+        if loop is not None:
+            task = loop.create_task(coro)
+            loop.run_until_complete(task)
+            return
+
+        temp_loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(temp_loop)
+            temp_loop.run_until_complete(coro)
+        finally:
+            asyncio.set_event_loop(None)
+            temp_loop.run_until_complete(temp_loop.shutdown_asyncgens())
+            temp_loop.close()
+
+    @wraps(handler)
+    def wrapper(hass, connection, msg):  # type: ignore[override]
+        loop = _resolve_loop(getattr(hass, "loop", None))
+
+        if loop is not None and not loop.is_running():
+            _drain_coroutine(original(hass, connection, msg), loop)
+            return None
+
+        try:
+            result = handler(hass, connection, msg)
+        except RuntimeError as err:  # pragma: no cover - compatibility path
+            if "no running event loop" not in str(err):
+                raise
+            loop = _resolve_loop(getattr(hass, "loop", None))
+            _drain_coroutine(original(hass, connection, msg), loop)
+            return None
+
+        if asyncio.iscoroutine(result):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                loop = _resolve_loop(getattr(hass, "loop", None))
+                _drain_coroutine(result, loop)
+                return None
+
+        return result
+
+    wrapper.__wrapped__ = original  # type: ignore[attr-defined]
+    return wrapper
 
 
 async def _live_portfolios_payload(
@@ -81,7 +294,9 @@ async def _live_portfolios_payload(
 
     result: list[dict[str, Any]] | None = None
     try:
-        portfolios = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+        portfolios = await async_run_executor_job(
+            hass, fetch_live_portfolios, db_path
+        )
     except Exception:  # noqa: BLE001 - broad catch keeps coordinator fallback intact
         context_suffix = f" ({log_context})" if log_context else ""
         _LOGGER.warning(
@@ -164,13 +379,20 @@ async def ws_get_dashboard_data(
     coordinator = entry_data.get("coordinator")
 
     # Accounts & Transactions weiter wie zuvor (Snapshot / bestehende Helper)
-    accounts = {}
+    accounts: list[dict[str, Any]] = []
     transactions = []
     last_file_update = None
     if coordinator:
-        accounts = coordinator.data.get("accounts", {})
         transactions = coordinator.data.get("transactions", [])
         last_file_update = coordinator.data.get("last_update")
+
+    db_path_raw = entry_data.get("db_path")
+    if db_path_raw:
+        try:
+            accounts = await _load_accounts_payload(hass, Path(db_path_raw))
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Fehler beim Laden der Kontodaten für das Dashboard")
+            accounts = []
 
     # NEU: Live Portfolios
     portfolios = await _live_portfolios_payload(
@@ -206,59 +428,10 @@ async def ws_get_accounts(
     try:
         entry_id = msg["entry_id"]
         db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        accounts = await hass.async_add_executor_job(get_accounts, db_path)
-
-        # FX laden
-        try:
-            active_fx_currencies = _collect_active_fx_currencies(accounts)
-            fx_rates = {}
-            if active_fx_currencies:
-                ensure_rates = ensure_exchange_rates_for_dates
-                load_rates = load_latest_rates
-                if ensure_rates is None or load_rates is None:
-                    message = (
-                        "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
-                        "setze Fremdwährungswerte=0 EUR."
-                    )
-                    _LOGGER.warning(message)
-                else:
-                    today = datetime.now(timezone.utc)  # noqa: UP017
-                    await ensure_rates([today], active_fx_currencies, db_path)
-                    fx_rates = await load_rates(today, db_path)
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze "
-                "Fremdwährungswerte=0 EUR."
-            )
-            fx_rates = {}
-
-        account_data = []
-        for a in accounts:
-            if a.is_retired:
-                continue
-            currency = getattr(a, "currency_code", "EUR") or "EUR"
-            orig_balance = a.balance / 100.0  # Originalbetrag (Konto-Währung)
-            if currency != "EUR":
-                rate = fx_rates.get(currency)
-                eur_balance = (orig_balance / rate) if rate else 0.0
-            else:
-                eur_balance = orig_balance
-            account_data.append(
-                {
-                    "name": a.name,
-                    "currency_code": currency,
-                    "orig_balance": round(orig_balance, 2),
-                    "balance": round(eur_balance, 2),  # EUR-Wert
-                }
-            )
-
-        connection.send_result(
-            msg["id"],
-            {
-                "accounts": account_data,
-            },
-        )
-
+        account_data = await _load_accounts_payload(hass, Path(db_path))
+        connection.send_result(msg["id"], {"accounts": account_data})
+    except KeyError:
+        connection.send_error(msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten")
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))
@@ -317,8 +490,8 @@ async def ws_get_last_file_update(
 
         db_path = Path(db_path_raw)
 
-        last_file_update_raw = await hass.async_add_executor_job(
-            get_last_file_update, db_path
+        last_file_update_raw = await async_run_executor_job(
+            hass, get_last_file_update, db_path
         )
 
         if last_file_update_raw:
@@ -391,6 +564,223 @@ async def ws_get_portfolio_data(
     )
 
 
+ws_get_portfolio_data_handler = _wrap_with_loop_fallback(ws_get_portfolio_data)
+
+
+async def ws_get_portfolio_data_async(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Async wrapper so tests can await the WebSocket handler directly."""
+    loop = asyncio.get_running_loop()
+    before = set(asyncio.all_tasks(loop))
+    result = ws_get_portfolio_data_handler(hass, connection, msg)
+    if asyncio.iscoroutine(result):  # pragma: no cover - defensive guard
+        await result
+    after = set(asyncio.all_tasks(loop))
+    pending = [task for task in after - before if not task.done()]
+    if pending:
+        await asyncio.gather(*pending)
+
+
+ws_get_portfolio_data = ws_get_portfolio_data_async
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_security_history",
+        vol.Required("entry_id"): str,
+        vol.Required("security_uuid"): str,
+        vol.Optional("start_date"): vol.Any(None, vol.Coerce(int)),
+        vol.Optional("end_date"): vol.Any(None, vol.Coerce(int)),
+    }
+)
+@websocket_api.async_response
+async def ws_get_security_history(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return historical close prices for a security."""
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+
+    if not entry_id:
+        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
+        return
+
+    domain_entries = hass.data.get(DOMAIN)
+    if not isinstance(domain_entries, dict):
+        connection.send_error(
+            msg_id,
+            "not_found",
+            "Keine pp_reader Config Entries registriert",
+        )
+        return
+
+    entry_data = domain_entries.get(entry_id)
+    if not isinstance(entry_data, dict):
+        connection.send_error(msg_id, "not_found", f"entry_id {entry_id} unknown")
+        return
+
+    db_path_raw = entry_data.get("db_path")
+    if db_path_raw is None:
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "db_path für den Config Entry fehlt",
+        )
+        return
+
+    security_uuid = msg.get("security_uuid")
+    start_date = msg.get("start_date")
+    end_date = msg.get("end_date")
+
+    def _collect_prices() -> list[tuple[int, int]]:
+        return list(
+            iter_security_close_prices(
+                db_path=Path(db_path_raw),
+                security_uuid=security_uuid,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+
+    try:
+        prices = await async_run_executor_job(hass, _collect_prices)
+    except (TypeError, ValueError) as err:
+        connection.send_error(msg_id, "invalid_format", str(err))
+        return
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Laden historischer Preise (security_uuid=%s)",
+            security_uuid,
+        )
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "Fehler beim Laden historischer Preise",
+        )
+        return
+
+    payload = [
+        {"date": date_value, "close": close_value} for date_value, close_value in prices
+    ]
+
+    response: dict[str, Any] = {
+        "security_uuid": security_uuid,
+        "prices": payload,
+    }
+    if start_date is not None:
+        response["start_date"] = start_date
+    if end_date is not None:
+        response["end_date"] = end_date
+
+    connection.send_result(msg_id, response)
+
+
+ws_get_security_history = _wrap_with_loop_fallback(ws_get_security_history)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_security_snapshot",
+        vol.Required("entry_id"): str,
+        vol.Required("security_uuid"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_security_snapshot(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return aggregated holdings and price snapshot for a security."""
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+    security_uuid = msg.get("security_uuid")
+
+    if not entry_id:
+        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
+        return
+
+    if not security_uuid:
+        connection.send_error(
+            msg_id,
+            "invalid_format",
+            "security_uuid erforderlich",
+        )
+        return
+
+    domain_entries = hass.data.get(DOMAIN)
+    if not isinstance(domain_entries, dict):
+        connection.send_error(
+            msg_id,
+            "not_found",
+            "Keine pp_reader Config Entries registriert",
+        )
+        return
+
+    entry_data = domain_entries.get(entry_id)
+    if not isinstance(entry_data, dict):
+        connection.send_error(msg_id, "not_found", f"entry_id {entry_id} unknown")
+        return
+
+    db_path_raw = entry_data.get("db_path")
+    if db_path_raw is None:
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "db_path für den Config Entry fehlt",
+        )
+        return
+
+    db_path = Path(db_path_raw)
+
+    try:
+        raw_snapshot = await async_run_executor_job(
+            hass,
+            get_security_snapshot,
+            db_path,
+            security_uuid,
+        )
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg_id, "invalid_format", str(err))
+        return
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Laden des Snapshots (security_uuid=%s)",
+            security_uuid,
+        )
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "Fehler beim Laden des Snapshots",
+        )
+        return
+
+    snapshot = (
+        _serialise_security_snapshot(raw_snapshot)
+        if isinstance(raw_snapshot, Mapping)
+        else _serialise_security_snapshot(None)
+    )
+
+    connection.send_result(
+        msg_id,
+        {
+            "security_uuid": security_uuid,
+            "snapshot": snapshot,
+        },
+    )
+
+
+ws_get_security_snapshot = _wrap_with_loop_fallback(ws_get_security_snapshot)
+
+
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen
 # oder analog zu anderen)
 @websocket_api.websocket_command(
@@ -437,7 +827,7 @@ async def ws_get_portfolio_positions(
         except Exception:  # noqa: BLE001
             return False
 
-    exists = await hass.async_add_executor_job(_portfolio_exists)
+    exists = await async_run_executor_job(hass, _portfolio_exists)
     if not exists:
         # Explizite Fehlerrückgabe statt leerer Liste
         connection.send_result(
@@ -451,8 +841,8 @@ async def ws_get_portfolio_positions(
         return
 
     try:
-        positions = await hass.async_add_executor_job(
-            get_portfolio_positions, db_path, portfolio_uuid
+        positions = await async_run_executor_job(
+            hass, get_portfolio_positions, db_path, portfolio_uuid
         )
     except Exception:
         _LOGGER.exception(
@@ -481,3 +871,5 @@ async def ws_get_portfolio_positions(
 def async_register_commands(hass: HomeAssistant) -> None:
     """Registriert alle WebSocket-Commands dieses Modules."""
     websocket_api.async_register_command(hass, ws_get_portfolio_positions)
+    websocket_api.async_register_command(hass, ws_get_security_history)
+    websocket_api.async_register_command(hass, ws_get_security_snapshot)

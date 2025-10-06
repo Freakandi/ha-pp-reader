@@ -37,6 +37,7 @@ from custom_components.pp_reader.logic.portfolio import (
     calculate_portfolio_value,
     calculate_purchase_sum,
 )
+from custom_components.pp_reader.util import async_run_executor_job
 
 # HINWEIS (Item portfolio_aggregation_reuse):
 # Die Revaluation nutzt primär fetch_live_portfolios als Single Source of Truth.
@@ -186,7 +187,9 @@ async def _load_live_entries(
 ) -> dict[str, dict[str, Any]]:
     live_entries: dict[str, dict[str, Any]] = {}
     try:
-        live_rows = await hass.async_add_executor_job(fetch_live_portfolios, db_path)
+        live_rows = await async_run_executor_job(
+            hass, fetch_live_portfolios, db_path
+        )
     except RuntimeError:
         _LOGGER.warning(
             (
@@ -283,8 +286,8 @@ async def _load_portfolio_positions(
         return None
 
     try:
-        raw_positions = await hass.async_add_executor_job(
-            fetch_positions_for_portfolios, db_path, affected
+        raw_positions = await async_run_executor_job(
+            hass, fetch_positions_for_portfolios, db_path, affected
         )
     except RuntimeError:
         _LOGGER.warning(
