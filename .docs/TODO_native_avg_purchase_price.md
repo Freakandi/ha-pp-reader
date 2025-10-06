@@ -43,7 +43,7 @@
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Abschnitt/Funktion: Serializer für `portfolio_security`/`security_snapshot`
       - Ziel: Überträgt `avg_price_native`, toleriert NULL, behält bestehende Felder.
-   c) [ ] Passe API Tests an
+   c) [x] Passe API Tests an
       - Datei: `tests/` (Websocket/API Tests)
       - Abschnitt/Funktion: Snapshot/Endpoint-Assertions
       - Ziel: Erwartet neue Feldwerte und prüft Nullverhalten.

@@ -272,13 +272,14 @@ def seeded_history_db(tmp_path: Path) -> Path:
                 security_uuid,
                 current_holdings,
                 purchase_value,
-                current_value
+                current_value,
+                avg_price_native
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                ("portfolio-1", "sec-1", 1.5, 0, 0),
-                ("portfolio-2", "sec-1", 2.0, 0, 0),
+                ("portfolio-1", "sec-1", 1.5, 0, 0, 12.34),
+                ("portfolio-2", "sec-1", 2.0, 0, 0, 16.78),
             ],
         )
         conn.commit()
@@ -436,7 +437,11 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "last_price_eur": 12.5,
         "market_value_eur": 43.75,
         "purchase_value_eur": 0.0,
-        "average_purchase_price_native": None,
+        "average_purchase_price_native": pytest.approx(
+            14.877143,
+            rel=0,
+            abs=1e-6,
+        ),
         "last_close_native": 0.0001,
         "last_close_eur": 0.0001,
     }
