@@ -72,6 +72,42 @@ def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
         )
 
 
+def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None:
+    """Ensure `avg_price_native` exists on portfolio securities tables."""
+
+    try:
+        cur = conn.execute("PRAGMA table_info(portfolio_securities)")
+        existing_cols = {row[1] for row in cur.fetchall()}
+    except sqlite3.Error:
+        _LOGGER.warning(
+            (
+                "Konnte PRAGMA table_info(portfolio_securities) nicht ausführen "
+                "- Migration für avg_price_native übersprungen"
+            ),
+            exc_info=True,
+        )
+        return
+
+    if "avg_price_native" in existing_cols:
+        _LOGGER.debug(
+            "Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun"
+        )
+        return
+
+    try:
+        conn.execute(
+            "ALTER TABLE portfolio_securities ADD COLUMN avg_price_native REAL"
+        )
+        _LOGGER.info(
+            "Runtime-Migration: Spalte 'avg_price_native' zu portfolio_securities hinzugefügt"
+        )
+    except sqlite3.Error:
+        _LOGGER.warning(
+            "Runtime-Migration: Konnte Spalte 'avg_price_native' nicht hinzufügen",
+            exc_info=True,
+        )
+
+
 def _ensure_historical_price_index(conn: sqlite3.Connection) -> None:
     """Create the historical price index if it does not yet exist."""
     try:
@@ -121,6 +157,7 @@ def initialize_database_schema(db_path: Path) -> None:
 
             # --- NEU: Best-effort Runtime-Migration für Preis-Spalten ---
             _ensure_runtime_price_columns(conn)
+            _ensure_portfolio_securities_native_column(conn)
             _ensure_historical_price_index(conn)
 
             conn.commit()
