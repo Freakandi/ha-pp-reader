@@ -604,7 +604,8 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "purchase_value": float,   # EUR
         "current_value": float,    # EUR
         "gain_abs": float,         # EUR
-        "gain_pct": float          # %
+        "gain_pct": float,         # %
+        "average_purchase_price_native": float | None
       },
       ...
     ]
@@ -619,7 +620,8 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 s.name,
                 ps.current_holdings,
                 ps.purchase_value,   -- Cent
-                ps.current_value     -- Cent
+                ps.current_value,    -- Cent
+                ps.avg_price_native
             FROM portfolio_securities ps
             JOIN securities s ON s.uuid = ps.security_uuid
             WHERE ps.portfolio_uuid = ?
@@ -637,21 +639,33 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             current_holdings,
             purchase_value_cents,
             current_value_cents,
+            avg_price_native_raw,
         ) in rows:
+            holdings = float(current_holdings or 0.0)
             purchase_value = (purchase_value_cents or 0) / 100.0
             current_value = (current_value_cents or 0) / 100.0
             gain_abs = current_value - purchase_value
             gain_pct = (gain_abs / purchase_value * 100) if purchase_value > 0 else 0.0
 
+            avg_price_native: float | None
+            if avg_price_native_raw is None:
+                avg_price_native = None
+            else:
+                try:
+                    avg_price_native = round(float(avg_price_native_raw), 6)
+                except (TypeError, ValueError):
+                    avg_price_native = None
+
             positions.append(
                 {
                     "security_uuid": security_uuid,
                     "name": name,
-                    "current_holdings": current_holdings,
+                    "current_holdings": holdings,
                     "purchase_value": round(purchase_value, 2),
                     "current_value": round(current_value, 2),
                     "gain_abs": round(gain_abs, 2),
                     "gain_pct": round(gain_pct, 2),
+                    "average_purchase_price_native": avg_price_native,
                 }
             )
 
