@@ -63,7 +63,7 @@
       - Ziel: Erwartet `average_purchase_price_native` als optionales Feld und deckt Rendering ab.
 
 5. Dokumentation & Migration Hinweise
-   a) [ ] Dokumentiere Schemaänderung & Datenfluss
+   a) [x] Dokumentiere Schemaänderung & Datenfluss
       - Datei: `ARCHITECTURE.md`
       - Abschnitt/Funktion: Datenmodell / Berechnungsmodell
       - Ziel: Beschreibt neues Feld, Sync-Pipeline und Frontend-Verbrauch.
