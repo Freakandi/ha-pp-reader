@@ -71,7 +71,7 @@
       - Datei: `CHANGELOG.md`
       - Abschnitt/Funktion: Unreleased / kommende Version
       - Ziel: Notiert Einführung nativer Durchschnittspreise und Migration.
-   c) [ ] Aktualisiere Entwickler-Doku bei Bedarf
+   c) [x] Aktualisiere Entwickler-Doku bei Bedarf
       - Datei: `README-dev.md` oder `README.md`
       - Abschnitt/Funktion: Setup/Feature Beschreibung
       - Ziel: Weist auf neue Felder und Testabdeckung hin.
