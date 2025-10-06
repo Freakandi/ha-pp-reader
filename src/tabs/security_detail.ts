@@ -700,8 +700,10 @@ function buildInfoBar(
     <div class="security-info-bar" data-range="${rangeLabel}">
       <div class="security-info-item">
         <span class="label">Preisänderung (${rangeLabel || 'Zeitraum'})</span>
-        ${formatPriceChangeValue(priceChange, currency)}
-        ${formatPercentageChangeValue(priceChangePct)}
+        <div class="value-row">
+          ${formatPriceChangeValue(priceChange, currency)}
+          ${formatPercentageChangeValue(priceChangePct)}
+        </div>
       </div>
     </div>
   `;
