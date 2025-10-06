@@ -53,7 +53,7 @@
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt/Funktion: `ensureSnapshotMetrics`
       - Ziel: Entfernt FX-Heuristiken, vertraut auf `average_purchase_price_native` und behandelt `null` korrekt.
-   b) [ ] Aktualisiere Visualisierungskomponenten
+   b) [x] Aktualisiere Visualisierungskomponenten
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt/Funktion: Rendering der Detailmetrik & Chart-Baseline
       - Ziel: Verwendet native Werte für Achsen/Baselines; behält EUR Vergleichswerte.
