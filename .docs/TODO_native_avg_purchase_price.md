@@ -21,7 +21,7 @@
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Abschnitt/Funktion: `db_calculate_sec_purchase_value` (oder neue Helper-Funktion)
       - Ziel: Liefert sowohl EUR-Gesamten als auch gewichteten nativen Durchschnitt pro Security.
-   b) [ ] Nutze native Kaufpreise während Portfolio-Sync
+   b) [x] Nutze native Kaufpreise während Portfolio-Sync
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_portfolio_securities`
       - Ziel: Persistiert `avg_price_native` zusammen mit bestehenden Feldern; setzt auf NULL bei null Beständen.
