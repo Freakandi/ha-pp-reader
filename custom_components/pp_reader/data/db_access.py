@@ -95,6 +95,7 @@ class PortfolioSecurity:
     current_holdings: float  # Aktueller Bestand des Wertpapiers im Depot
     purchase_value: int  # Gesamter Kaufpreis des Bestands in Cent
     avg_price: float | None = None  # Durchschnittlicher Kaufpreis in Cent
+    avg_price_native: float | None = None  # Durchschnittlicher Kaufpreis in nativer Währung
     current_value: float | None = None  # Aktueller Wert des Bestands in Cent
 
 
@@ -365,7 +366,7 @@ def get_portfolio_securities(
         cur = conn.execute(
             """
             SELECT portfolio_uuid, security_uuid, current_holdings,
-                   purchase_value, avg_price, current_value
+                   purchase_value, avg_price, avg_price_native, current_value
             FROM portfolio_securities
             WHERE portfolio_uuid = ?
         """,
@@ -387,7 +388,7 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
     try:
         cur = conn.execute("""
             SELECT portfolio_uuid, security_uuid, current_holdings,
-                   purchase_value, avg_price, current_value
+                   purchase_value, avg_price, avg_price_native, current_value
             FROM portfolio_securities
         """)
         return [PortfolioSecurity(*row) for row in cur.fetchall()]
