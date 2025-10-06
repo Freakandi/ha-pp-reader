@@ -632,64 +632,76 @@ function getSnapshotMetrics(
   return SNAPSHOT_METRICS_REGISTRY.get(securityUuid) ?? null;
 }
 
-function computeGainValues(
+function computePriceChangeMetrics(
   historySeries: readonly NormalizedHistoryEntry[],
-  holdings: unknown,
-  fxRate: number | null,
-): { periodGain: number | null; dailyGain: number | null } {
+  lastPriceNative: number | null,
+): { priceChange: number | null; priceChangePct: number | null } {
   if (!Array.isArray(historySeries) || historySeries.length === 0) {
-    return { periodGain: null, dailyGain: null };
+    return { priceChange: null, priceChangePct: null };
   }
 
-  const holdingsNumeric = toFiniteNumber(holdings);
-  const safeHoldings = holdingsNumeric ?? 0;
-  const safeFx = typeof fxRate === 'number' && Number.isFinite(fxRate) && fxRate > 0
-    ? fxRate
-    : null;
-
-  if (safeFx == null) {
-    return { periodGain: null, dailyGain: null };
+  const firstEntry = historySeries[0];
+  const baseline = toFiniteNumber(firstEntry?.close);
+  if (!isFiniteNumber(baseline) || baseline === 0) {
+    return { priceChange: null, priceChangePct: null };
   }
 
   const lastEntry = historySeries[historySeries.length - 1];
-  const firstEntry = historySeries[0];
-  const previousEntry =
-    historySeries.length >= 2 ? historySeries[historySeries.length - 2] : null;
+  const fallbackLast = toFiniteNumber(lastEntry?.close);
+  const effectiveLast =
+    toFiniteNumber(lastPriceNative) ?? fallbackLast;
 
-  const periodDiff = (lastEntry.close - firstEntry.close) * safeHoldings * safeFx;
-  const dailyDiff = previousEntry
-    ? (lastEntry.close - previousEntry.close) * safeHoldings * safeFx
-    : null;
+  if (!isFiniteNumber(effectiveLast)) {
+    return { priceChange: null, priceChangePct: null };
+  }
 
-  return {
-    periodGain: roundCurrency(periodDiff),
-    dailyGain: roundCurrency(dailyDiff),
-  };
+  const rawDelta = effectiveLast - baseline;
+  const priceChange = Object.is(rawDelta, -0) ? 0 : rawDelta;
+  const priceChangePct = computePercentageChange(effectiveLast, baseline);
+
+  return { priceChange, priceChangePct };
 }
 
-function formatGainValue(value: number | null): string {
-  if (value == null || Number.isNaN(value)) {
+function formatPriceChangeValue(
+  value: number | null,
+  currency: string | null | undefined,
+): string {
+  if (!isFiniteNumber(value)) {
     return '<span class="value neutral">—</span>';
   }
 
-  return `<span class="value">${formatGain(value)}</span>`;
+  const formatted = formatPrice(value);
+  if (formatted === '—') {
+    return '<span class="value neutral">—</span>';
+  }
+
+  const trendClass = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  const suffix = currency ? `&nbsp;${currency}` : '';
+  return `<span class="value ${trendClass}">${formatted}${suffix}</span>`;
+}
+
+function formatPercentageChangeValue(value: number | null): string {
+  if (!isFiniteNumber(value)) {
+    return '<span class="value neutral">—</span>';
+  }
+
+  const trendClass = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  return `<span class="value ${trendClass} value--percentage">${formatNumber(value)}&nbsp;%</span>`;
 }
 
 function buildInfoBar(
   rangeKey: SecurityHistoryRangeKey | string,
-  periodGain: number | null,
-  dailyGain: number | null,
+  priceChange: number | null,
+  priceChangePct: number | null,
+  currency: string | null | undefined,
 ): string {
   const rangeLabel = rangeKey ? rangeKey : '';
   return `
     <div class="security-info-bar" data-range="${rangeLabel}">
       <div class="security-info-item">
-        <span class="label">Gesamt (${rangeLabel || 'Zeitraum'})</span>
-        ${formatGainValue(periodGain)}
-      </div>
-      <div class="security-info-item">
-        <span class="label">Letzter Tag</span>
-        ${formatGainValue(dailyGain)}
+        <span class="label">Preisänderung (${rangeLabel || 'Zeitraum'})</span>
+        ${formatPriceChangeValue(priceChange, currency)}
+        ${formatPercentageChangeValue(priceChangePct)}
       </div>
     </div>
   `;
@@ -1043,8 +1055,9 @@ function updateRangeButtons(
 function updateInfoBarContent(
   root: HTMLElement,
   rangeKey: SecurityHistoryRangeKey,
-  periodGain: number | null,
-  dailyGain: number | null,
+  priceChange: number | null,
+  priceChangePct: number | null,
+  currency: string | null | undefined,
 ): void {
   const infoBar = root.querySelector('.security-info-bar');
   if (!infoBar || !infoBar.parentElement) {
@@ -1052,7 +1065,7 @@ function updateInfoBarContent(
   }
 
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = buildInfoBar(rangeKey, periodGain, dailyGain).trim();
+  wrapper.innerHTML = buildInfoBar(rangeKey, priceChange, priceChangePct, currency).trim();
   const fresh = wrapper.firstElementChild;
   if (!fresh) {
     return;
@@ -1096,7 +1109,6 @@ interface ScheduleRangeSetupOptions {
   panelConfig: PanelConfigLike | null | undefined;
   securityUuid: string;
   snapshot: SecuritySnapshotDetail | null;
-  holdings: unknown;
   metrics: SecuritySnapshotMetrics | null | undefined;
   initialRange: SecurityHistoryRangeKey;
   initialHistory: NormalizedHistoryEntry[];
@@ -1110,7 +1122,6 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     panelConfig,
     securityUuid,
     snapshot,
-    holdings,
     metrics,
     initialRange,
     initialHistory,
@@ -1129,7 +1140,6 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
 
     const cache = ensureHistoryCache(securityUuid);
     const snapshotMetrics = metrics ?? getSnapshotMetrics(securityUuid);
-    const holdingsForGains = snapshotMetrics?.holdings ?? holdings;
     const shouldCacheInitial =
       Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
     if (shouldCacheInitial) {
@@ -1199,19 +1209,24 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
           : { status: 'empty' };
       }
 
-      const lastClose = historySeries.length
-        ? historySeries[historySeries.length - 1].close
-        : snapshot?.last_price_native;
-      const activeFxRate = deriveFxRate(snapshot, lastClose);
-      const { periodGain, dailyGain } = computeGainValues(
+      const snapshotLastPriceNative =
+        toFiniteNumber(snapshot?.last_price_native) ??
+        toFiniteNumber(snapshot?.last_price?.native) ??
+        null;
+      const { priceChange, priceChangePct } = computePriceChangeMetrics(
         historySeries,
-        holdingsForGains,
-        activeFxRate,
+        snapshotLastPriceNative,
       );
 
       setActiveRange(securityUuid, rangeKey);
       updateRangeButtons(rangeSelector, rangeKey);
-      updateInfoBarContent(root, rangeKey, periodGain, dailyGain);
+      updateInfoBarContent(
+        root,
+        rangeKey,
+        priceChange,
+        priceChangePct,
+        snapshot?.currency_code,
+      );
       updateHistoryPlaceholder(
         root,
         rangeKey,
@@ -1340,19 +1355,20 @@ export async function renderSecurityDetail(
     }
   }
 
-  const latestNativePrice =
-    historySeries.length > 0
-      ? historySeries[historySeries.length - 1].close
-      : effectiveSnapshot?.last_price_native;
-  const fxRate = deriveFxRate(effectiveSnapshot, latestNativePrice);
-  const holdings =
-    snapshotMetrics?.holdings ?? effectiveSnapshot?.total_holdings ?? 0;
-  const { periodGain, dailyGain } = computeGainValues(
+  const snapshotLastPriceNative =
+    toFiniteNumber(effectiveSnapshot?.last_price_native) ??
+    toFiniteNumber(effectiveSnapshot?.last_price?.native) ??
+    null;
+  const { priceChange, priceChangePct } = computePriceChangeMetrics(
     historySeries,
-    holdings,
-    fxRate,
+    snapshotLastPriceNative,
   );
-  const infoBar = buildInfoBar(activeRange, periodGain, dailyGain);
+  const infoBar = buildInfoBar(
+    activeRange,
+    priceChange,
+    priceChangePct,
+    effectiveSnapshot?.currency_code,
+  );
 
   scheduleRangeSetup({
     root,
@@ -1360,7 +1376,6 @@ export async function renderSecurityDetail(
     panelConfig,
     securityUuid,
     snapshot: effectiveSnapshot,
-    holdings,
     metrics: snapshotMetrics,
     initialRange: activeRange,
     initialHistory: historySeries,
