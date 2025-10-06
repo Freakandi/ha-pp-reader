@@ -19,6 +19,7 @@ from custom_components.pp_reader.data.sync_from_pclient import (
     _SyncRunner,
     maybe_field,
 )
+from custom_components.pp_reader.logic import securities as logic_securities
 
 
 class _NoPresenceProto:
@@ -311,6 +312,121 @@ def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> No
     assert captured == []
 
     conn.close()
+
+
+def test_sync_portfolio_securities_persists_native_average(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Sync should persist avg_price_native alongside EUR purchase metrics."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([_DummyPortfolio("pf-1")]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    def _noop_ensure(
+        _dates: list[datetime], _currencies: set[str], _db_path: Path
+    ) -> None:
+        return None
+
+    monkeypatch.setattr(
+        logic_securities,
+        "ensure_exchange_rates_for_dates_sync",
+        _noop_ensure,
+    )
+    monkeypatch.setattr(
+        logic_securities,
+        "load_latest_rates_sync",
+        lambda _date, _db_path: {"USD": 1.25},
+    )
+
+    def _fake_holdings_value(
+        _db_path: Path,
+        _conn: sqlite3.Connection,
+        current_hold_pur: dict[tuple[str, str], dict[str, float]],
+    ) -> dict[tuple[str, str], dict[str, float]]:
+        result: dict[tuple[str, str], dict[str, float]] = {}
+        for key, payload in current_hold_pur.items():
+            result[key] = {**payload, "current_value": 0.0}
+        return result
+
+    monkeypatch.setattr(sync_module, "db_calculate_holdings_value", _fake_holdings_value)
+
+    runner.all_transactions = [
+        Transaction(
+            uuid="tx-buy-1",
+            type=0,
+            account="acct-1",
+            portfolio="pf-1",
+            other_account=None,
+            other_portfolio=None,
+            date="2024-01-10T00:00:00",
+            currency_code="USD",
+            amount=20000,
+            shares=200_000_000,
+            security="sec-1",
+        ),
+        Transaction(
+            uuid="tx-buy-2",
+            type=0,
+            account="acct-1",
+            portfolio="pf-1",
+            other_account=None,
+            other_portfolio=None,
+            date="2024-01-20T00:00:00",
+            currency_code="USD",
+            amount=12000,
+            shares=100_000_000,
+            security="sec-1",
+        ),
+        Transaction(
+            uuid="tx-sell-1",
+            type=1,
+            account="acct-1",
+            portfolio="pf-1",
+            other_account=None,
+            other_portfolio=None,
+            date="2024-02-10T00:00:00",
+            currency_code="USD",
+            amount=15_000,
+            shares=100_000_000,
+            security="sec-1",
+        ),
+    ]
+
+    runner.tx_units = {
+        "tx-buy-1": {"fx_amount": 20000, "fx_currency_code": "USD"},
+        "tx-buy-2": {"fx_amount": 12000, "fx_currency_code": "USD"},
+    }
+    runner.changes.transactions = True
+
+    try:
+        runner._sync_portfolio_securities()
+        cursor = conn.execute(
+            """
+            SELECT current_holdings, purchase_value, avg_price_native
+            FROM portfolio_securities
+            WHERE portfolio_uuid = ? AND security_uuid = ?
+            """,
+            ("pf-1", "sec-1"),
+        )
+        row = cursor.fetchone()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    assert row is not None
+    current_holdings, purchase_value_cents, avg_price_native = row
+    assert current_holdings == pytest.approx(2.0)
+    assert purchase_value_cents == 17_600
+    assert avg_price_native == pytest.approx(110.0, rel=0, abs=1e-6)
 
 
 def test_sync_securities_persists_deduplicated_historical_prices(

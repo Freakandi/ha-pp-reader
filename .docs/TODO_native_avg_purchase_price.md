@@ -29,7 +29,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: Transaktionsvorbereitung innerhalb `_sync_portfolio_securities`
       - Ziel: Verknüpft native Beträge/FX-Daten mit FIFO-Berechnung ohne zusätzliche RPCs.
-   d) [ ] Ergänze Tests für FIFO-Native-Aggregation
+   d) [x] Ergänze Tests für FIFO-Native-Aggregation
       - Datei: `tests/` (Logik & Sync Szenarien)
       - Abschnitt/Funktion: Unit- und Integrationstests zu `logic.securities` und Sync
       - Ziel: Deckt Käufe/Verkäufe in EUR und Fremdwährungen inklusive FX-Lücken ab.
