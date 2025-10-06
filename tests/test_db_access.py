@@ -260,8 +260,8 @@ def seeded_snapshot_db(tmp_path: Path) -> Path:
             """,
             [
                 ("p-eur", "eur-sec", 2.5, 0, None, 0),
-                ("p-usd-a", "usd-sec", 1.5, 0, None, 0),
-                ("p-usd-b", "usd-sec", 2.25, 0, None, 0),
+                ("p-usd-a", "usd-sec", 1.5, 0, 150.25, 0),
+                ("p-usd-b", "usd-sec", 2.25, 0, 199.75, 0),
             ],
         )
 
@@ -422,7 +422,11 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
     assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
     assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
-    assert snapshot["average_purchase_price_native"] is None
+    assert snapshot["average_purchase_price_native"] == pytest.approx(
+        179.95,
+        rel=0,
+        abs=1e-6,
+    )
     assert snapshot["last_close_native"] is None
     assert snapshot["last_close_eur"] is None
 
@@ -459,7 +463,11 @@ def test_get_security_snapshot_handles_null_purchase_value(
     snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
 
     assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
-    assert snapshot["average_purchase_price_native"] is None
+    assert snapshot["average_purchase_price_native"] == pytest.approx(
+        179.95,
+        rel=0,
+        abs=1e-6,
+    )
 
 
 def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(

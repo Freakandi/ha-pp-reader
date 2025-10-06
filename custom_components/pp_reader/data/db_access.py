@@ -402,7 +402,7 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
 
 
 def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
-    """Aggregate holdings and EUR-normalised pricing for a security."""
+    """Aggregate holdings and pricing information for a security."""
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
         raise ValueError(message)
@@ -429,30 +429,44 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
 
         holdings_cursor = conn.execute(
             """
-            SELECT
-                COALESCE(SUM(current_holdings), 0) AS total_holdings,
-                COALESCE(SUM(purchase_value), 0) AS purchase_value_cents
+            SELECT current_holdings, purchase_value, avg_price_native
             FROM portfolio_securities
             WHERE security_uuid = ?
             """,
             (security_uuid,),
         )
-        holdings_row = holdings_cursor.fetchone()
         total_holdings = 0.0
+        positive_holdings = 0.0
         purchase_value_cents = 0
-        if holdings_row is not None:
-            total_holdings_raw = holdings_row["total_holdings"]
-            purchase_value_raw = holdings_row["purchase_value_cents"]
-            if total_holdings_raw is not None:
+        native_weighted_sum = 0.0
+        native_covered_shares = 0.0
+        for row in holdings_cursor.fetchall():
+            holdings_raw = row["current_holdings"]
+            purchase_raw = row["purchase_value"]
+            avg_native_raw = row["avg_price_native"]
+
+            holdings = 0.0
+            if holdings_raw is not None:
                 try:
-                    total_holdings = float(total_holdings_raw)
+                    holdings = float(holdings_raw)
                 except (TypeError, ValueError):
-                    total_holdings = 0.0
-            if purchase_value_raw is not None:
+                    holdings = 0.0
+            total_holdings += holdings
+
+            if purchase_raw is not None:
                 try:
-                    purchase_value_cents = int(round(float(purchase_value_raw)))
+                    purchase_value_cents += int(round(float(purchase_raw)))
                 except (TypeError, ValueError):
-                    purchase_value_cents = 0
+                    continue
+
+            if holdings > 0:
+                positive_holdings += holdings
+                if avg_native_raw is not None:
+                    try:
+                        native_weighted_sum += holdings * float(avg_native_raw)
+                        native_covered_shares += holdings
+                    except (TypeError, ValueError):
+                        continue
 
         raw_price = security_row["last_price"]
         currency_code: str = security_row["currency_code"] or "EUR"
@@ -469,10 +483,14 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         market_value_eur = round(total_holdings * last_price_eur, 2)
         purchase_value_eur = round(purchase_value_cents / 100, 2)
         average_purchase_price_native = None
-        if total_holdings > 0 and purchase_value_cents > 0:
+        if (
+            positive_holdings > 0
+            and native_covered_shares > 0
+            and abs(native_covered_shares - positive_holdings) <= 1e-6
+        ):
             average_purchase_price_native = round(
-                (purchase_value_cents / 100) / total_holdings,
-                4,
+                native_weighted_sum / native_covered_shares,
+                6,
             )
 
         raw_last_close, last_close_native = fetch_previous_close(

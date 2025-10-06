@@ -35,7 +35,7 @@
       - Ziel: Deckt Käufe/Verkäufe in EUR und Fremdwährungen inklusive FX-Lücken ab.
 
 3. API Surface & Serialization
-   a) [ ] Liefere gespeicherten native average in Snapshot-Routinen
+   a) [x] Liefere gespeicherten native average in Snapshot-Routinen
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: `get_security_snapshot`
       - Ziel: Gibt `avg_price_native` unverändert zurück und entfernt EUR→Native Umrechnungen.
