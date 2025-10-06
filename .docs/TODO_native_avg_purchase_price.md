@@ -7,7 +7,7 @@
       - Datei: `custom_components/pp_reader/data/db_init.py`
       - Abschnitt/Funktion: Schema-Migrationsroutine (`_ensure_schema` / `ensure_portfolio_tables`)
       - Ziel: Fügt `avg_price_native` via `ALTER TABLE` hinzu und verhindert doppelte Ausführung.
-   c) [ ] Erweitere PortfolioSecurity-Datenmodell um native Durchschnittspreise
+   c) [x] Erweitere PortfolioSecurity-Datenmodell um native Durchschnittspreise
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: `PortfolioSecurity` Dataclass & Loader (`get_security_snapshot`, `iter_portfolio_securities`)
       - Ziel: Liest neue Spalte, initialisiert mit `None` und stellt Rückwärtskompatibilität sicher.
