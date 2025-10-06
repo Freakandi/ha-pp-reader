@@ -228,7 +228,7 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
 ## Data ingestion & persistence
 ### Portfolio parsing and synchronization
 - `data.reader.parse_data_portfolio` extracts `data.portfolio` from the `.portfolio` ZIP, removes the `PPPBV1` prefix, and parses it into `client_pb2.PClient` from the vendored schema package.
-- `data.sync_from_pclient.sync_from_pclient` takes the protobuf payload and applies inserts/updates/deletes across SQLite tables. The function updates metadata such as `last_file_update`, refreshes derived holdings via `logic.*`, ensures FX side effects run through the `pp_reader.currencies` alias, and triggers downstream event pushes when aggregates change.
+- `data.sync_from_pclient.sync_from_pclient` takes the protobuf payload and applies inserts/updates/deletes across SQLite tables. The function updates metadata such as `last_file_update`, refreshes derived holdings via `logic.*`, ensures FX side effects run through the `pp_reader.currencies` alias, and triggers downstream event pushes when aggregates change. Portfolio position sync combines EUR-normalised FIFO results with native-currency transaction units so each `(portfolio_uuid, security_uuid)` row stores both `avg_price` (EUR) and the weighted native average (`avg_price_native`). The FIFO helper in `logic.securities` returns a `PurchaseComputation` payload with EUR totals and six-decimal native averages so `_sync_portfolio_securities` can persist both dimensions in a single UPSERT.
 
 ### Coordinator (`data.coordinator.PPReaderCoordinator`)
 - Polls every minute (minute-truncated file timestamp).
@@ -240,7 +240,7 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
   - Stores a snapshot in `self.data` for sensors: `accounts`, `portfolios`, `transactions`, and `last_update` (ISO8601).
 
 ### SQLite schema & helpers
-- Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities (with `last_price_source` and `last_price_fetched_at`), portfolios, transactions, transaction units, historical prices, plans, watchlists, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`, which also performs a runtime migration to add missing price columns.
+- Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities (with `last_price_source` and `last_price_fetched_at`), portfolios, transactions, transaction units, historical prices, plans, watchlists, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`, which also performs runtime migrations such as adding `avg_price_native` to persist native per-share purchase prices alongside EUR aggregates.
 - `db_access.py` offers strongly typed dataclasses and helper queries (e.g., `get_portfolio_positions`, `fetch_live_portfolios`, `get_security_snapshot`, `iter_security_close_prices`, `get_last_file_update`, `get_all_portfolio_securities`). Monetary values are stored as integers (cents) or scaled integers (`last_price` × 1e8) to avoid floating-point drift.【F:custom_components/pp_reader/data/db_access.py†L189-L384】
 
 ### Historical close series storage
@@ -331,7 +331,7 @@ Key entities and their origin:
 | Account | SQLite `accounts` + transactions | `uuid`, `name`, `currency_code`, `balance` (cents) | Balances are recomputed per refresh, not stored. |
 | Security | SQLite `securities` | `uuid`, `name`, `ticker_symbol`, `currency_code`, `last_price` (scaled), `last_price_date` | `last_price_source`/`last_price_fetched_at` updated by price service; `historical_prices` captures daily Close series for active securities. |
 | Portfolio | SQLite `portfolios` | `uuid`, `name`, `reference_account`, `is_retired` | Aggregates are derived from `portfolio_securities`. |
-| PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price` | Generated `avg_price` column simplifies average cost lookup. |
+| PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price`, `avg_price_native` | `avg_price` stores the EUR per-share cost while `avg_price_native` persists the weighted native-currency purchase price to avoid runtime FX reconstruction. |
 | Transaction | SQLite `transactions` | `type`, `amount`, `currency_code`, `shares`, `security` | `transaction_units` store FX amounts for cross-currency transfers. |
 | FXRate | SQLite `fx_rates` | `date`, `currency`, `rate` | Populated on demand via `currencies.fx`. |
 | Metadata | SQLite `metadata` | `last_file_update` | Drives coordinator sync decisions.
