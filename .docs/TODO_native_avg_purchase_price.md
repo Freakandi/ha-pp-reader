@@ -25,7 +25,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: `_sync_portfolio_securities`
       - Ziel: Persistiert `avg_price_native` zusammen mit bestehenden Feldern; setzt auf NULL bei null Beständen.
-   c) [ ] Stelle Zugriff auf `transaction_units` FX-Metadaten sicher
+   c) [x] Stelle Zugriff auf `transaction_units` FX-Metadaten sicher
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Abschnitt/Funktion: Transaktionsvorbereitung innerhalb `_sync_portfolio_securities`
       - Ziel: Verknüpft native Beträge/FX-Daten mit FIFO-Berechnung ohne zusätzliche RPCs.

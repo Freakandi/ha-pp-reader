@@ -991,7 +991,9 @@ class _SyncRunner:
         )
         current_holdings = db_calculate_current_holdings(self.all_transactions)
         purchase_metrics = db_calculate_sec_purchase_value(
-            self.all_transactions, self.db_path
+            self.all_transactions,
+            self.db_path,
+            tx_units=self.tx_units,
         )
 
         current_hold_pur: dict[tuple[str, str], dict[str, Any]] = {}
