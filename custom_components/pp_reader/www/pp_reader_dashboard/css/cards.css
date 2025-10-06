@@ -66,11 +66,12 @@
   z-index: 200;
 }
 
-/* Neue Klasse für die Flexbox-Anordnung */
+/* Container für Titel und Navigationspfeile */
 .header-card .header-content {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  justify-items: center;
   gap: 0.75rem;
   width: 100%;
 }
@@ -81,15 +82,16 @@
   font-size: 1.65rem;
   font-weight: 600;
   transition: font-size 0.3s ease;
-  text-align: left;
-  flex-grow: 1;
+  text-align: center;
+  justify-self: center;
+  width: 100%;
 }
 
 .header-card.sticky .header-content h1,
 .header-card.sticky h1 {
   margin: 0;
   font-size: 1.1rem;
-  text-align: left;
+  text-align: center;
 }
 
 /* Meta-Informationen Container */
