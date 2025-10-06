@@ -1011,6 +1011,16 @@ function buildHeaderMeta(
   const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
   const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
   const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
+  const averagePurchaseNativeRaw =
+    metrics?.averagePurchaseNative ?? toFiniteNumber(snapshot.average_purchase_price_native);
+  const averagePurchaseEurRaw =
+    metrics?.averagePurchaseEur ??
+    computeAveragePurchaseEur(
+      toFiniteNumber(snapshot.purchase_value_eur),
+      toFiniteNumber(
+        metrics?.holdings ?? snapshot.total_holdings_precise ?? snapshot.total_holdings,
+      ),
+    );
   const dayPriceChangeNative =
     metrics?.dayPriceChangeNative ?? computeDelta(lastPriceNative, lastCloseNative);
   const dayPriceChangeEur =
@@ -1096,12 +1106,33 @@ function buildHeaderMeta(
     metrics?.totalChangePct,
     'value--percentage',
   );
+  const averagePurchaseNativeValue = isFiniteNumber(averagePurchaseNativeRaw)
+    ? wrapValue(
+        `${formatPrice(averagePurchaseNativeRaw)}${
+          currency ? `&nbsp;${currency}` : ''
+        }`,
+        'value--average value--average-native',
+      )
+    : wrapMissingValue('value--average value--average-native');
+  const averagePurchaseEurValue = isFiniteNumber(averagePurchaseEurRaw)
+    ? wrapValue(
+        `${formatPrice(averagePurchaseEurRaw)}&nbsp;€`,
+        'value--average value--average-eur',
+      )
+    : wrapMissingValue('value--average value--average-eur');
 
   return `
     <div class="security-meta-grid security-meta-grid--expanded">
       <div class="security-meta-item security-meta-item--price">
         <span class="label">Letzter Preis</span>
         <div class="value-group">${lastPriceValue}</div>
+      </div>
+      <div class="security-meta-item security-meta-item--average">
+        <span class="label">Durchschnittlicher Kaufpreis</span>
+        <div class="value-group">
+          ${averagePurchaseNativeValue}
+          ${averagePurchaseEurValue}
+        </div>
       </div>
       <div class="security-meta-item security-meta-item--day-change">
         <span class="label">Tagesänderung</span>
