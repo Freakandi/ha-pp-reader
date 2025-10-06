@@ -81,8 +81,10 @@ test('getHistoryChartOptionsForTest injects the native baseline into chart optio
   assert.ok(Array.isArray(options.series));
   assert.strictEqual(options.series?.length, 1);
 
-  const tooltipRenderer = options.tooltipRenderer;
-  assert.ok(tooltipRenderer, 'expected tooltip renderer to be defined');
+  const { tooltipRenderer } = options;
+  if (!tooltipRenderer) {
+    throw new Error('expected tooltip renderer to be defined');
+  }
 
   const tooltipContent = tooltipRenderer({
     point: {

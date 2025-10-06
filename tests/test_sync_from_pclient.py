@@ -275,6 +275,7 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             "current_value": 150.99,
             "gain_abs": 27.53,
             "gain_pct": 22.12,
+            "average_purchase_price_native": None,
         }
     ]
 

@@ -25,7 +25,9 @@
     "declaration": true,
     "declarationMap": true,
     "declarationDir": "types",
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
+    "types": ["node", "jsdom"],
+    "typeRoots": ["./node_modules/@types"]
   },
   "include": [
     "src/**/*.ts",
