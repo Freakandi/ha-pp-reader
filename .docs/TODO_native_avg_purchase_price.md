@@ -3,7 +3,7 @@
       - Datei: `custom_components/pp_reader/data/db_schema.py`
       - Abschnitt/Funktion: `PORTFOLIO_SECURITIES_SCHEMA`
       - Ziel: Ergänzt `avg_price_native` REAL (nullable) pro Position und hält Indizes konsistent.
-   b) [ ] Implement runtime migration for avg_price_native
+   b) [x] Implement runtime migration for avg_price_native
       - Datei: `custom_components/pp_reader/data/db_init.py`
       - Abschnitt/Funktion: Schema-Migrationsroutine (`_ensure_schema` / `ensure_portfolio_tables`)
       - Ziel: Fügt `avg_price_native` via `ALTER TABLE` hinzu und verhindert doppelte Ausführung.
