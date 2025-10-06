@@ -6,6 +6,7 @@ in a portfolio. Includes utilities for handling transactions,
 exchange rates, and database interactions.
 """
 
+from dataclasses import dataclass
 import logging
 import sqlite3
 from datetime import datetime
@@ -25,6 +26,25 @@ _LOGGER = logging.getLogger(__name__)
 
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
+
+
+@dataclass(slots=True)
+class PurchaseComputation:
+    """Aggregate purchase metrics for a portfolio security."""
+
+    purchase_value: float
+    avg_price_native: float | None
+
+
+@dataclass(slots=True)
+class _HoldingLot:
+    """Represent a FIFO lot tracked during purchase calculations."""
+
+    shares: float
+    price_eur: float
+    timestamp: datetime
+    native_price: float | None = None
+    native_currency: str | None = None
 
 
 def _is_relevant_transaction(transaction: Transaction) -> bool:
@@ -68,20 +88,29 @@ def _determine_exchange_rate(
 
 
 def _apply_sale_fifo(
-    existing_holdings: list[tuple[float, float, datetime]],
+    existing_holdings: list[_HoldingLot],
     shares_to_sell: float,
-) -> list[tuple[float, float, datetime]]:
+) -> list[_HoldingLot]:
     """Reduce holdings using FIFO when selling shares."""
     remaining_to_sell = shares_to_sell
-    updated_positions: list[tuple[float, float, datetime]] = []
+    updated_positions: list[_HoldingLot] = []
 
-    for qty, price, date in existing_holdings:
+    for lot in existing_holdings:
+        qty = lot.shares
         if remaining_to_sell <= 0:
-            updated_positions.append((qty, price, date))
+            updated_positions.append(lot)
             continue
 
         if qty > remaining_to_sell:
-            updated_positions.append((qty - remaining_to_sell, price, date))
+            updated_positions.append(
+                _HoldingLot(
+                    shares=qty - remaining_to_sell,
+                    price_eur=lot.price_eur,
+                    timestamp=lot.timestamp,
+                    native_price=lot.native_price,
+                    native_currency=lot.native_currency,
+                )
+            )
             remaining_to_sell = 0
         else:
             remaining_to_sell -= qty
@@ -129,12 +158,38 @@ def db_calculate_current_holdings(
     return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
 
 
+def _resolve_native_amount(
+    transaction: Transaction,
+    tx_units: dict[str, dict[str, int | str]] | None,
+) -> tuple[float | None, str | None]:
+    """Return the native amount for a transaction if FX metadata exists."""
+
+    if not tx_units:
+        return None, None
+
+    unit = tx_units.get(transaction.uuid)
+    if not unit:
+        return None, None
+
+    raw_amount = unit.get("fx_amount")
+    if raw_amount is None:
+        return None, None
+
+    currency = unit.get("fx_currency_code")
+    amount = raw_amount / 100.0
+    return amount, currency if isinstance(currency, str) else None
+
+
 def db_calculate_sec_purchase_value(
-    transactions: list[Transaction], db_path: Path
-) -> dict[tuple[str, str], float]:
-    """Berechne den gesamten Kaufpreis des aktuellen Bestands (FIFO)."""
-    portfolio_securities_purchase_values: dict[tuple[str, str], float] = {}
-    holdings: dict[tuple[str, str], list[tuple[float, float, datetime]]] = {}
+    transactions: list[Transaction],
+    db_path: Path,
+    *,
+    tx_units: dict[str, dict[str, int | str]] | None = None,
+) -> dict[tuple[str, str], PurchaseComputation]:
+    """Berechne den gesamten Kaufpreis und native Durchschnittspreise (FIFO)."""
+
+    portfolio_metrics: dict[tuple[str, str], PurchaseComputation] = {}
+    holdings: dict[tuple[str, str], list[_HoldingLot]] = {}
 
     fx_dates, fx_currencies = _collect_fx_requirements(transactions)
     if fx_currencies:
@@ -146,7 +201,7 @@ def db_calculate_sec_purchase_value(
 
         key = (tx.portfolio, tx.security)
         shares = normalize_shares(tx.shares) if tx.shares else 0
-        amount = tx.amount / 100  # Cent -> EUR
+        amount = tx.amount / 100  # Cent -> Währung der Transaktion
         tx_date = datetime.fromisoformat(tx.date)
         rate = _determine_exchange_rate(tx, tx_date, db_path)
 
@@ -154,17 +209,55 @@ def db_calculate_sec_purchase_value(
             continue
 
         if tx.type in PURCHASE_TYPES:
+            if shares <= 0:
+                continue
             price_per_share = amount / shares if shares != 0 else 0
             price_per_share_eur = price_per_share / rate
-            holdings.setdefault(key, []).append((shares, price_per_share_eur, tx_date))
+            native_amount, native_currency = _resolve_native_amount(tx, tx_units)
+            native_price = None
+            if native_amount is not None and shares > 0:
+                native_price = native_amount / shares
+
+            holdings.setdefault(key, []).append(
+                _HoldingLot(
+                    shares=shares,
+                    price_eur=price_per_share_eur,
+                    timestamp=tx_date,
+                    native_price=native_price,
+                    native_currency=native_currency,
+                )
+            )
         elif tx.type in SALE_TYPES:
-            holdings[key] = _apply_sale_fifo(holdings.get(key, []), shares)
+            shares_to_sell = abs(shares)
+            if shares_to_sell <= 0:
+                continue
+            holdings[key] = _apply_sale_fifo(holdings.get(key, []), shares_to_sell)
 
     for key, positions in holdings.items():
-        total_purchase = sum(qty * price for qty, price, _ in positions if qty > 0)
-        portfolio_securities_purchase_values[key] = round(total_purchase, 2)
+        total_purchase = sum(
+            lot.shares * lot.price_eur for lot in positions if lot.shares > 0
+        )
+        total_shares = sum(lot.shares for lot in positions if lot.shares > 0)
 
-    return portfolio_securities_purchase_values
+        avg_price_native: float | None = None
+        if total_shares > 0:
+            native_total = 0.0
+            native_shares = 0.0
+            for lot in positions:
+                if lot.shares <= 0 or lot.native_price is None:
+                    continue
+                native_total += lot.shares * lot.native_price
+                native_shares += lot.shares
+
+            if native_shares and abs(native_shares - total_shares) <= 1e-6:
+                avg_price_native = round(native_total / native_shares, 6)
+
+        portfolio_metrics[key] = PurchaseComputation(
+            purchase_value=round(total_purchase, 2),
+            avg_price_native=avg_price_native,
+        )
+
+    return portfolio_metrics
 
 
 def db_calculate_holdings_value(

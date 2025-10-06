@@ -17,7 +17,7 @@
       - Ziel: Deckung für neue Spalte herstellen und Nullwerte berücksichtigen.
 
 2. Calculation Pipeline
-   a) [ ] Erweitere FIFO-Hilfsfunktion zur Berechnung nativer Durchschnittspreise
+   a) [x] Erweitere FIFO-Hilfsfunktion zur Berechnung nativer Durchschnittspreise
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Abschnitt/Funktion: `db_calculate_sec_purchase_value` (oder neue Helper-Funktion)
       - Ziel: Liefert sowohl EUR-Gesamten als auch gewichteten nativen Durchschnitt pro Security.
