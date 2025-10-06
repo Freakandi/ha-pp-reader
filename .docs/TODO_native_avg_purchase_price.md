@@ -85,7 +85,7 @@
       - Datei: QA-Protokoll
       - Abschnitt/Funktion: Manual Testing Checklist
       - Ziel: Bestätigt, dass Chart-Baseline und Kennzahlen native Werte verwenden.
-   c) [ ] Automatisierte Testläufe ausführen
+   c) [x] Automatisierte Testläufe ausführen
       - Datei: N/A
       - Abschnitt/Funktion: `pytest`, `npm run test`, `npm run typecheck`
       - Ziel: Sicherstellen, dass Backend/Frontend Tests nach Änderungen bestehen.
