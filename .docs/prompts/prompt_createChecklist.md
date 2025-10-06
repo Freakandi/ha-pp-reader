@@ -1,15 +1,15 @@
-# Promptvorlage: ToDo-Checkliste aus security_detail_header_refresh.md ableiten
+# Promptvorlage: ToDo-Checkliste aus native_avg_purchase_price.md ableiten
 
 **Ziel:**
-Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Umsetzung/Implementierung der nächsten Entwicklungsziele, basierend auf den Festlegungen in [.docs/security_detail_header_refresh.md](.docs/security_detail_header_refresh.md).
+Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Umsetzung/Implementierung der nächsten Entwicklungsziele, basierend auf den Festlegungen in [.docs/native_avg_purchase_price.md](.docs/native_avg_purchase_price.md).
 
 **Vorgehen:**
-1. Scanne das gesamte Dokument [.docs/security_detail_header_refresh.md](.docs/security_detail_header_refresh.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
+1. Scanne das gesamte Dokument [.docs/native_avg_purchase_price.md](.docs/native_avg_purchase_price.md) und extrahiere alle expliziten und impliziten Anpassungspunkte (Backend, Frontend, Doku).
 2. Zerlege jeden Anpassungspunkt in einen klaren, atomaren ToDo-Item (eine Änderung pro Punkt).
 3. Formuliere jeden Punkt so, dass er ohne weitere Rückfragen direkt umgesetzt werden kann (inkl. Dateipfad, Funktion/Abschnitt, Ziel der Änderung).
 4. Markiere optionale oder nachgelagerte Optimierungen explizit als solche.
 5. Die Checkliste muss alle notwendigen Code-, Test- und Doku-Änderungen enthalten, um das Zielkonzept vollständig und konsistent umzusetzen.
-6. Die Checkliste soll als neue TODO_security_detail_header_refresh.md im Ordner .docs abgelegt werden.
+6. Die Checkliste soll als neue TODO_native_avg_purchase_price.md im Ordner .docs abgelegt werden.
 
 **Format:**
 - Nummerierte Hauptpunkte (1., 2., …)
@@ -62,4 +62,4 @@ Erzeuge eine detaillierte, umsetzungsfertige ToDo-Liste für die Umsetzung/Imple
 **Ende des Beispiels**
 
 **Hinweis:**
-Optionale Optimierungen (z.B. Micro-Caching für Positionsabrufe) als "Optional" kennzeichnen und ans Ende der Liste setzen.
+Optionale Optimierungen als "Optional" kennzeichnen und ans Ende der Liste setzen.
