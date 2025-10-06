@@ -166,6 +166,8 @@ setattr(pp_reader_pkg, "data", data_pkg)
 
 
 from custom_components.pp_reader.data.db_access import (
+    get_all_portfolio_securities,
+    get_portfolio_securities,
     get_security_close_prices,
     get_security_snapshot,
     iter_security_close_prices,
@@ -252,13 +254,14 @@ def seeded_snapshot_db(tmp_path: Path) -> Path:
                 security_uuid,
                 current_holdings,
                 purchase_value,
+                avg_price_native,
                 current_value
-            ) VALUES (?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                ("p-eur", "eur-sec", 2.5, 0, 0),
-                ("p-usd-a", "usd-sec", 1.5, 0, 0),
-                ("p-usd-b", "usd-sec", 2.25, 0, 0),
+                ("p-eur", "eur-sec", 2.5, 0, None, 0),
+                ("p-usd-a", "usd-sec", 1.5, 0, None, 0),
+                ("p-usd-b", "usd-sec", 2.25, 0, None, 0),
             ],
         )
 
@@ -273,6 +276,55 @@ def seeded_snapshot_db(tmp_path: Path) -> Path:
     return db_path
 
 
+def test_get_portfolio_securities_exposes_native_average(tmp_path: Path) -> None:
+    """Portfolio security loaders should surface stored native averages."""
+
+    db_path = tmp_path / "portfolio_native.db"
+    initialize_database_schema(db_path)
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "INSERT INTO portfolios (uuid, name) VALUES (?, ?)",
+            ("portfolio-native", "Native Coverage"),
+        )
+        conn.executemany(
+            "INSERT INTO securities (uuid, name) VALUES (?, ?)",
+            [("sec-native", "Native Equity"), ("sec-legacy", "Legacy Equity")],
+        )
+        conn.executemany(
+            """
+            INSERT INTO portfolio_securities (
+                portfolio_uuid,
+                security_uuid,
+                current_holdings,
+                purchase_value,
+                avg_price_native,
+                current_value
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("portfolio-native", "sec-native", 2.0, 100_000, 48.75, 125_000),
+                ("portfolio-native", "sec-legacy", 5.0, 0, None, 0),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    entries = get_portfolio_securities(db_path, "portfolio-native")
+    assert len(entries) == 2
+
+    by_security = {entry.security_uuid: entry for entry in entries}
+    assert by_security["sec-native"].avg_price_native == pytest.approx(48.75)
+    assert by_security["sec-native"].avg_price == pytest.approx(50_000.0)
+    assert by_security["sec-legacy"].avg_price_native is None
+
+    all_entries = get_all_portfolio_securities(db_path)
+    assert {(entry.portfolio_uuid, entry.security_uuid) for entry in all_entries} == {
+        ("portfolio-native", "sec-native"),
+        ("portfolio-native", "sec-legacy"),
+    }
 def test_iter_security_close_prices_orders_and_filters_range(
     seeded_history_db: Path,
 ) -> None:
