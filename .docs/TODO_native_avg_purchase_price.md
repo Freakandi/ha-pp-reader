@@ -49,7 +49,7 @@
       - Ziel: Erwartet neue Feldwerte und prüft Nullverhalten.
 
 4. Frontend Integration
-   a) [ ] Verwende gelieferten nativen Durchschnittspreis ohne Fallbacks
+   a) [x] Verwende gelieferten nativen Durchschnittspreis ohne Fallbacks
       - Datei: `src/tabs/security_detail.ts`
       - Abschnitt/Funktion: `ensureSnapshotMetrics`
       - Ziel: Entfernt FX-Heuristiken, vertraut auf `average_purchase_price_native` und behandelt `null` korrekt.

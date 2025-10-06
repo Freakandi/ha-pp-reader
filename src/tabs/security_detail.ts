@@ -539,7 +539,6 @@ function convertNativeDiffToEur(
 function computeHoldingsAdjustedEurChange(
   holdings: number | null,
   diffNative: number | null,
-  diffEur: number | null,
   fxRate: number | null,
 ): number | null {
   if (!isFiniteNumber(holdings)) {
@@ -547,15 +546,11 @@ function computeHoldingsAdjustedEurChange(
   }
 
   const nativeInEur = convertNativeDiffToEur(diffNative, fxRate);
-  if (nativeInEur != null) {
-    return roundCurrency(nativeInEur * holdings);
+  if (nativeInEur == null) {
+    return null;
   }
 
-  if (isFiniteNumber(diffEur)) {
-    return roundCurrency(diffEur * holdings);
-  }
-
-  return null;
+  return roundCurrency(nativeInEur * holdings);
 }
 
 function computeAveragePurchaseEur(
@@ -631,7 +626,6 @@ function ensureSnapshotMetrics(
   const totalChangeEurDirect = computeHoldingsAdjustedEurChange(
     safeHoldings,
     computeDelta(lastPriceNative, averagePurchaseNative),
-    computeDelta(lastPriceEur, averagePurchaseEur),
     safeFxRate,
   );
 
