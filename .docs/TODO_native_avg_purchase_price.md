@@ -11,7 +11,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Abschnitt/Funktion: `PortfolioSecurity` Dataclass & Loader (`get_security_snapshot`, `iter_portfolio_securities`)
       - Ziel: Liest neue Spalte, initialisiert mit `None` und stellt Rückwärtskompatibilität sicher.
-   d) [ ] Aktualisiere zugehörige Tests/Fixtures für erweitertes Datenmodell
+   d) [x] Aktualisiere zugehörige Tests/Fixtures für erweitertes Datenmodell
       - Datei: `tests/` (relevante Module für `db_access`)
       - Abschnitt/Funktion: Snapshot-/Dataclass-Tests
       - Ziel: Deckung für neue Spalte herstellen und Nullwerte berücksichtigen.
