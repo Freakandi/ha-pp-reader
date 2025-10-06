@@ -107,7 +107,8 @@ interface SecuritySnapshotMetrics {
   currentValueEur: number | null;
   averagePurchaseNative: number | null;
   averagePurchaseEur: number | null;
-  dayChangeEur: number | null;
+  dayPriceChangeNative: number | null;
+  dayPriceChangeEur: number | null;
   dayChangePct: number | null;
   totalChangeEur: number | null;
   totalChangePct: number | null;
@@ -578,12 +579,8 @@ function ensureSnapshotMetrics(
   const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
   const safeHoldings = isFiniteNumber(holdings) ? holdings : null;
 
-  const dayChangeEur = computeHoldingsAdjustedEurChange(
-    safeHoldings,
-    computeDelta(lastPriceNative, lastCloseNative),
-    computeDelta(lastPriceEur, lastCloseEur),
-    safeFxRate,
-  );
+  const dayPriceChangeNative = computeDelta(lastPriceNative, lastCloseNative);
+  const dayPriceChangeEur = computeDelta(lastPriceEur, lastCloseEur);
 
   const dayChangePct =
     computePercentageChange(lastPriceNative, lastCloseNative) ??
@@ -614,7 +611,8 @@ function ensureSnapshotMetrics(
     currentValueEur,
     averagePurchaseNative,
     averagePurchaseEur,
-    dayChangeEur,
+    dayPriceChangeNative,
+    dayPriceChangeEur,
     dayChangePct,
     totalChangeEur,
     totalChangePct,
@@ -783,6 +781,16 @@ function formatPrice(value: unknown): string {
   });
 }
 
+function formatPriceChangeWithCurrency(
+  value: number,
+  currency: string,
+): string {
+  const formatted = formatPrice(value);
+  const suffix = currency ? `&nbsp;${currency}` : '';
+  const className = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  return `<span class="${className}">${formatted}${suffix}</span>`;
+}
+
 function buildHeaderMeta(
   snapshot: SecuritySnapshotDetail | null,
   metrics: SecuritySnapshotMetrics | null = null,
@@ -795,9 +803,10 @@ function buildHeaderMeta(
   const holdingsSource =
     metrics?.holdings ?? snapshot.total_holdings_precise ?? snapshot.total_holdings;
   const holdings = formatHoldings(holdingsSource);
-  const lastPriceNative =
+  const lastPriceNativeRaw =
     snapshot.last_price_native ?? snapshot.last_price?.native ?? snapshot.last_price_eur;
-  const formattedLastPrice = formatPrice(lastPriceNative);
+  const lastPriceNative = toFiniteNumber(lastPriceNativeRaw);
+  const formattedLastPrice = formatPrice(lastPriceNativeRaw);
   const lastPriceDisplay =
     formattedLastPrice === '—'
       ? null
@@ -806,6 +815,19 @@ function buildHeaderMeta(
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur) ??
     null;
+  const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
+  const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
+  const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
+  const dayPriceChangeNative =
+    metrics?.dayPriceChangeNative ?? computeDelta(lastPriceNative, lastCloseNative);
+  const dayPriceChangeEur =
+    metrics?.dayPriceChangeEur ?? computeDelta(lastPriceEur, lastCloseEur);
+  const dayChangeValue = isFiniteNumber(dayPriceChangeNative)
+    ? dayPriceChangeNative
+    : dayPriceChangeEur;
+  const dayChangeCurrency = isFiniteNumber(dayPriceChangeNative)
+    ? currency
+    : 'EUR';
 
   const wrapValue = (content: string, extraClass = ''): string => {
     const classes = ['value'];
@@ -863,10 +885,12 @@ function buildHeaderMeta(
   const marketValue = isFiniteNumber(marketValueRaw)
     ? wrapValue(`${formatNumber(marketValueRaw)}&nbsp;€`, 'value--market-value')
     : wrapMissingValue('value--market-value');
-  const dayChangeAbsolute = renderGainValue(
-    metrics?.dayChangeEur,
-    'value--absolute',
-  );
+  const dayChangeAbsolute = isFiniteNumber(dayChangeValue)
+    ? wrapValue(
+        formatPriceChangeWithCurrency(dayChangeValue, dayChangeCurrency),
+        'value--gain value--absolute',
+      )
+    : wrapMissingValue('value--absolute');
   const dayChangePercentage = renderGainPercentage(
     metrics?.dayChangePct,
     'value--percentage',
