@@ -178,7 +178,9 @@ async function loadDashboardModule() {
 
 await loadDashboardModule();
 
-const ASSET_BASE_URL = new URL('./', import.meta.url);
+const PANEL_URL = new URL(import.meta.url);
+const ASSET_BASE_URL = new URL('./', PANEL_URL);
+const ASSET_VERSION = PANEL_URL.searchParams.get('v');
 
 class PPReaderPanel extends HTMLElement {
   constructor() {
@@ -255,7 +257,11 @@ class PPReaderPanel extends HTMLElement {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     try {
-      link.href = new URL(relativePath, ASSET_BASE_URL).href;
+      const url = new URL(relativePath, ASSET_BASE_URL);
+      if (ASSET_VERSION) {
+        url.searchParams.set('v', ASSET_VERSION);
+      }
+      link.href = url.href;
     } catch (error) {
       console.error('[pp_reader] Fehler beim Auflösen des CSS-Pfades', relativePath, error);
       return;

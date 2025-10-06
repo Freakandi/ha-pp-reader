@@ -6,6 +6,19 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.12.1] - 2025-10-06
+### Fixed
+- Korrigierte die Kennzahlen im Security-Detail-Header: Tagesänderungen übernehmen jetzt native Preisbewegungen (oder einen EUR-Fallback) inklusive Währungskennzeichnung, und Gesamtgewinne fallen auf den Vergleich von Markt- zu Kaufwert zurück, wenn direkte Summen fehlen.【F:src/tabs/security_detail.ts†L560-L618】【F:src/tabs/security_detail.ts†L833-L938】
+- Registriert das Dashboard-Verzeichnis bereits während der Einrichtung als statischen Pfad, sodass das Panel auch vor dem ersten Datenabgleich ohne 404 erreichbar ist.【F:custom_components/pp_reader/__init__.py†L302-L336】
+
+### Changed
+- Übernahm Versionsparameter und aufgelöste URLs beim Laden der Dashboard-Bundles, damit Cache-Busting und Legacy-Fallbacks zuverlässig funktionieren.【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L120-L179】
+- Ergänzte das Aktualisierungsskript für `dashboard.module.js` um das Bereinigen veralteter Hash-Bundles und Source-Maps nach einem Build.【F:scripts/update_dashboard_module.mjs†L1-L86】
+- Zentrierte die Überschriften innerhalb der Dashboard-Karten für ein konsistentes Layout, auch im Sticky-Zustand.【F:custom_components/pp_reader/www/pp_reader_dashboard/css/cards.css†L41-L96】
+
+### Internal
+- Erweiterte die Test-Fixtures, um registrierte statische Pfade zu erfassen, und ergänzte Prüfungen, die die Panel-Registrierung vor dem ersten Koordinatorlauf absichern.【F:tests/conftest.py†L5-L58】【F:tests/test_panel_registration.py†L1-L70】
+
 ## [0.12.0] - 2025-10-05
 ### Added
 - Persist daily Close prices for active securities during Portfolio Performance imports and provide helpers to query their time series for future dashboards.【F:custom_components/pp_reader/data/sync_from_pclient.py†L559-L676】【F:custom_components/pp_reader/data/db_access.py†L204-L289】
