@@ -77,7 +77,7 @@
       - Ziel: Weist auf neue Felder und Testabdeckung hin.
 
 6. Verifikation & Migration Tests
-   a) [ ] Führe Migration gegen Beispiel-DB aus
+   a) [x] Führe Migration gegen Beispiel-DB aus
       - Datei: `scripts/` (Migration Helper) / manuelle DB-Datei
       - Abschnitt/Funktion: QA-Schritte
       - Ziel: Prüft, dass `ALTER TABLE` sauber läuft (`PRAGMA table_info`).
