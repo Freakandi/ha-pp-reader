@@ -1123,20 +1123,33 @@ function buildHeaderMeta(
     metrics?.totalChangePct,
     'value--percentage',
   );
-  const averagePurchaseNativeValue = isFiniteNumber(averagePurchaseNativeRaw)
-    ? wrapValue(
+  const averagePurchaseValues: string[] = [];
+
+  if (isFiniteNumber(averagePurchaseNativeRaw)) {
+    averagePurchaseValues.push(
+      wrapValue(
         `${formatPrice(averagePurchaseNativeRaw)}${
           currency ? `&nbsp;${currency}` : ''
         }`,
         'value--average value--average-native',
-      )
-    : wrapMissingValue('value--average value--average-native');
-  const averagePurchaseEurValue = isFiniteNumber(averagePurchaseEurRaw)
-    ? wrapValue(
+      ),
+    );
+  }
+
+  if (isFiniteNumber(averagePurchaseEurRaw)) {
+    averagePurchaseValues.push(
+      wrapValue(
         `${formatPrice(averagePurchaseEurRaw)}&nbsp;€`,
         'value--average value--average-eur',
-      )
-    : wrapMissingValue('value--average value--average-eur');
+      ),
+    );
+  }
+
+  if (averagePurchaseValues.length === 0) {
+    averagePurchaseValues.push(
+      wrapMissingValue('value--average value--average-native'),
+    );
+  }
 
   return `
     <div class="security-meta-grid security-meta-grid--expanded">
@@ -1147,8 +1160,7 @@ function buildHeaderMeta(
       <div class="security-meta-item security-meta-item--average">
         <span class="label">Durchschnittlicher Kaufpreis</span>
         <div class="value-group">
-          ${averagePurchaseNativeValue}
-          ${averagePurchaseEurValue}
+          ${averagePurchaseValues.join('')}
         </div>
       </div>
       <div class="security-meta-item security-meta-item--day-change">
