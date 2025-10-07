@@ -138,6 +138,7 @@ export const __TEST_ONLY__ = {
     historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
     snapshot: SecuritySnapshotDetail | null | undefined,
   ): NormalizedHistoryEntry[] => buildHistorySeriesWithSnapshotPrice(historySeries, snapshot),
+  resolveAveragePurchaseBaselineForTest: resolveAveragePurchaseBaseline,
 };
 
 function buildCachedSnapshotNotice(params: {
@@ -1313,6 +1314,18 @@ function normaliseHistoryError(error: unknown): string | null {
   }
 }
 
+function resolveAveragePurchaseBaseline(
+  metrics: SecuritySnapshotMetrics | null | undefined,
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): number | null {
+  const metricsBaseline = metrics?.averagePurchaseNative;
+  if (typeof metricsBaseline === 'number' && Number.isFinite(metricsBaseline)) {
+    return metricsBaseline;
+  }
+
+  return toFiniteNumber(snapshot?.average_purchase_price_native);
+}
+
 function getHistoryChartOptions(
   host: HTMLElement,
   series: readonly NormalizedHistoryEntry[],
@@ -1485,6 +1498,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
 
     const cache = ensureHistoryCache(securityUuid);
     const snapshotMetrics = metrics ?? getSnapshotMetrics(securityUuid);
+    const initialBaseline = resolveAveragePurchaseBaseline(snapshotMetrics, snapshot);
     const shouldCacheInitial =
       Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
     if (shouldCacheInitial) {
@@ -1513,7 +1527,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         initialDisplayHistory,
         {
           currency: snapshot?.currency_code,
-          baseline: snapshotMetrics?.averagePurchaseNative ?? null,
+          baseline: initialBaseline,
         },
       );
     }
@@ -1588,6 +1602,9 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         priceChangePct,
         snapshot?.currency_code,
       );
+      const currentMetrics = getSnapshotMetrics(securityUuid) ?? snapshotMetrics;
+      const rangeBaseline = resolveAveragePurchaseBaseline(currentMetrics, snapshot);
+
       updateHistoryPlaceholder(
         root,
         rangeKey,
@@ -1595,7 +1612,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         displayHistorySeries,
         {
           currency: snapshot?.currency_code,
-          baseline: snapshotMetrics?.averagePurchaseNative ?? null,
+          baseline: rangeBaseline,
         },
       );
     };
