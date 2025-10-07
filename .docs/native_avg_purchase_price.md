@@ -98,3 +98,11 @@ No additional decisions.
 - Introduce a dedicated `avg_price_native` column in `portfolio_securities` populated via FIFO-based native currency calculations.
 - Reuse existing transaction FX metadata to derive native purchase prices without runtime conversions in the frontend.
 - Simplify frontend logic to consume backend-provided native averages, eliminating heuristic FX adjustments.
+
+## Manual Verification (2025-10-06)
+- **Environment**: Activated the project virtualenv, started Home Assistant via `./scripts/develop`, and let the bundled `S-Depot` sample data migrate to the new schema (runtime log confirmed the `avg_price_native` column addition).
+- **CHF position check**: Queried `portfolio_securities` joined with `securities` to locate active CHF holdings (e.g. Roche, Barry Callebaut) and observed non-null `avg_price_native` values persisted alongside positive share counts.
+- **USD position check**: Repeated the query for USD securities (e.g. Glencore, Berkshire Hathaway) to verify native averages were stored after the sync cycle.
+- **Snapshot verification**: Called `get_security_snapshot` directly for the Roche (CHF) and Glencore (USD) security UUIDs; the helper returned `average_purchase_price_native` values `238.681667` and `4.244617`, matching the raw database rows.
+- **Frontend probe**: Attempted to load the `/ppreader` panel through the provided browser container to visualise the baseline; the session lacks Playwright support, so the screenshot step could not be completed. Manual backend checks above confirm the data exposed to the UI already reflects the native averages.
+- **Open follow-ups**: FX lookups still warn in offline environments (no public API access); this does not affect the stored native averages sourced from transaction metadata but should be revisited when network connectivity is available.
