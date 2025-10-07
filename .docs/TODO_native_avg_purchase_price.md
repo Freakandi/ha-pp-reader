@@ -81,7 +81,7 @@
       - Datei: `scripts/` (Migration Helper) / manuelle DB-Datei
       - Abschnitt/Funktion: QA-Schritte
       - Ziel: Prüft, dass `ALTER TABLE` sauber läuft (`PRAGMA table_info`).
-   b) [ ] Manuelle Validierung von USD/CHF Positionen
+   b) [x] Manuelle Validierung von USD/CHF Positionen
       - Datei: QA-Protokoll
       - Abschnitt/Funktion: Manual Testing Checklist
       - Ziel: Bestätigt, dass Chart-Baseline und Kennzahlen native Werte verwenden.
