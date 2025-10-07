@@ -15,7 +15,12 @@ const {
   getHistoryChartOptionsForTest,
   clearSnapshotMetricsRegistryForTest,
   mergeHistoryWithSnapshotPriceForTest,
+  resolveAveragePurchaseBaselineForTest,
 } = __TEST_ONLY__;
+
+type SecuritySnapshotMetricsLike = NonNullable<
+  ReturnType<typeof ensureSnapshotMetricsForTest>
+>;
 
 test('ensureSnapshotMetricsForTest returns provided native averages verbatim', () => {
   clearSnapshotMetricsRegistryForTest();
@@ -103,6 +108,30 @@ test('getHistoryChartOptionsForTest injects the native baseline into chart optio
   });
 
   assert.match(tooltipContent, /USD/);
+});
+
+test('resolveAveragePurchaseBaselineForTest falls back to snapshot values when metrics lack averages', () => {
+  const snapshot = {
+    average_purchase_price_native: '45.67',
+  } as const;
+
+  assert.strictEqual(
+    resolveAveragePurchaseBaselineForTest(null, snapshot),
+    45.67,
+  );
+
+  assert.strictEqual(
+    resolveAveragePurchaseBaselineForTest(
+      { averagePurchaseNative: 12.34 } as unknown as SecuritySnapshotMetricsLike,
+      snapshot,
+    ),
+    12.34,
+  );
+
+  assert.strictEqual(
+    resolveAveragePurchaseBaselineForTest(null, null),
+    null,
+  );
 });
 
 test('mergeHistoryWithSnapshotPriceForTest appends the latest snapshot price for new days', () => {
