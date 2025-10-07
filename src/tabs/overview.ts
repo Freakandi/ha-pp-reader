@@ -116,6 +116,37 @@ function roundHoldings(value: unknown): number {
   return Math.round(finite * HOLDINGS_PRECISION) / HOLDINGS_PRECISION;
 }
 
+function toNullableNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeCurrencyValue(value: unknown): number | null {
+  const numeric = toNullableNumber(value);
+  if (numeric == null) {
+    return null;
+  }
+  return Math.round(numeric * 100) / 100;
+}
+
+function normalizePercentValue(value: unknown): number | null {
+  const numeric = toNullableNumber(value);
+  if (numeric == null) {
+    return null;
+  }
+  return Math.round(numeric * 100) / 100;
+}
+
 function collectSecurityPositions(securityUuid: string | null | undefined): PortfolioPositionLike[] {
   if (!securityUuid) {
     return [];
@@ -393,26 +424,25 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     if (!d || !d.uuid) return;
     const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
     const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
-    const hasValue = d.hasValue !== false;
-    const currentValue = hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value)
-      ? d.current_value
-      : null;
-    const gainAbs = hasValue && typeof d.gain_abs === 'number' && Number.isFinite(d.gain_abs)
+    const hasValue = d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value);
+    const currentValue = hasValue ? d.current_value! : null;
+    const gainAbs = typeof d.gain_abs === 'number' && Number.isFinite(d.gain_abs)
       ? d.gain_abs
-      : (hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value)
-        ? d.current_value - purchaseSum
+      : (hasValue && currentValue != null
+        ? currentValue - purchaseSum
         : null);
-    const gainPct = hasValue && typeof d.gain_pct === 'number' && Number.isFinite(d.gain_pct)
+    const gainPct = typeof d.gain_pct === 'number' && Number.isFinite(d.gain_pct)
       ? d.gain_pct
-      : (hasValue && purchaseSum > 0 && typeof currentValue === 'number'
-        ? ((currentValue - purchaseSum) / purchaseSum) * 100
+      : (hasValue && purchaseSum > 0 && gainAbs != null
+        ? ((gainAbs / purchaseSum) * 100)
         : null);
+    const partialValue = d.fx_unavailable && hasValue;
 
     const expanded = expandedPortfolios.has(d.uuid);
     const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
     const detailId = `portfolio-details-${d.uuid}`;
     const rowData = {
-      fx_unavailable: !hasValue,
+      fx_unavailable: d.fx_unavailable,
       current_value: currentValue,
       gain_abs: gainAbs,
       gain_pct: gainPct
@@ -437,6 +467,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     if (gainPctLabel) {
       gainAbsAttributes = ` data-gain-pct="${escapeAttribute(gainPctLabel)}" data-gain-sign="${escapeAttribute(gainPctSign)}"`;
     }
+    if (partialValue) {
+      gainAbsAttributes += ' data-partial="true"';
+    }
 
     html += `<tr class="portfolio-row"
                 data-portfolio="${d.uuid}"
@@ -445,7 +478,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
                 data-purchase-sum="${escapeAttribute(purchaseSum)}"
                 data-gain-abs="${escapeAttribute(datasetGainAbs)}"
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
-                data-has-value="${hasValue ? 'true' : 'false'}">`;
+                data-has-value="${hasValue ? 'true' : 'false'}"
+                data-fx-unavailable="${d.fx_unavailable ? 'true' : 'false'}">`;
     html += `<td>
         <button type="button"
                 class="${toggleClass}"
@@ -478,7 +512,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     </tr>`;
   });
 
-  const availableDepots = depots.filter(d => d && d.hasValue !== false);
+  const availableDepots = depots.filter(d => typeof d?.current_value === 'number' && Number.isFinite(d.current_value));
   const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d?.position_count) ? d.position_count : 0), 0);
   const sumCurrent = availableDepots.reduce((a, d) => {
     if (typeof d.current_value === 'number' && Number.isFinite(d.current_value)) {
@@ -497,11 +531,12 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     const purchase = typeof d.purchase_sum === 'number' && Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
     return a + (current - purchase);
   }, 0);
-  const sumHasValue = availableDepots.length === depots.length;
+  const sumHasValue = availableDepots.length > 0;
+  const sumIsPartial = availableDepots.length !== depots.length;
   const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
 
   const sumRowData = {
-    fx_unavailable: !sumHasValue,
+    fx_unavailable: sumIsPartial,
     current_value: sumHasValue ? sumCurrent : null,
     gain_abs: sumHasValue ? sumGainAbs : null,
     gain_pct: sumHasValue ? sumGainPct : null
@@ -517,6 +552,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     const sumGainPctSign = sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral';
     sumGainAbsAttributes = ` data-gain-pct="${escapeAttribute(sumGainPctLabel)}" data-gain-sign="${escapeAttribute(sumGainPctSign)}"`;
   }
+  if (sumIsPartial) {
+    sumGainAbsAttributes += ' data-partial="true"';
+  }
 
   html += `<tr class="footer-row"
     data-position-count="${sumPositions}"
@@ -524,7 +562,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     data-purchase-sum="${escapeAttribute(sumHasValue ? sumPurchase : '')}"
     data-gain-abs="${escapeAttribute(sumHasValue ? sumGainAbs : '')}"
     data-gain-pct="${escapeAttribute(sumHasValue && typeof sumGainPct === 'number' && Number.isFinite(sumGainPct) ? sumGainPct : '')}"
-    data-has-value="${sumHasValue ? 'true' : 'false'}">
+    data-has-value="${sumHasValue ? 'true' : 'false'}"
+    data-fx-unavailable="${sumIsPartial ? 'true' : 'false'}">
     <td>Summe</td>
     <td class="align-right">${Math.round(sumPositions).toLocaleString('de-DE')}</td>
     <td class="align-right">${sumCurrentCell}</td>
@@ -1118,28 +1157,45 @@ export async function renderDashboard(
       const missingPositions = typeof (p as Record<string, unknown>).missing_value_positions === 'number'
         ? (p as Record<string, unknown>).missing_value_positions as number
         : 0;
-      const hasCurrentValue = p.has_current_value != null
-        ? Boolean(p.has_current_value)
-        : missingPositions === 0;
-      const baseCurrentValue = typeof p.current_value === 'number' ? p.current_value : 0;
-      const purchaseSum = typeof p.purchase_sum === 'number' ? p.purchase_sum : 0;
-      const currentValue = hasCurrentValue ? baseCurrentValue : null;
-      const gainAbs = hasCurrentValue ? baseCurrentValue - purchaseSum : null;
-      const gainPct = hasCurrentValue && purchaseSum > 0 && gainAbs != null
-        ? (gainAbs / purchaseSum) * 100
-        : null;
+      const rawCurrentValue = normalizeCurrencyValue((p as Record<string, unknown>).current_value);
+      const purchaseSum = normalizeCurrencyValue((p as Record<string, unknown>).purchase_sum) ?? 0;
+      const rawGainAbs = normalizeCurrencyValue((p as Record<string, unknown>).gain_abs);
+      const rawGainPct = normalizePercentValue((p as Record<string, unknown>).gain_pct);
+
+      const hasNumericCurrentValue = rawCurrentValue != null;
+      let gainAbs: number | null;
+      if (rawGainAbs != null) {
+        gainAbs = rawGainAbs;
+      } else if (hasNumericCurrentValue) {
+        gainAbs = normalizeCurrencyValue(rawCurrentValue! - purchaseSum);
+      } else {
+        gainAbs = null;
+      }
+
+      let gainPct: number | null;
+      if (rawGainPct != null) {
+        gainPct = rawGainPct;
+      } else if (hasNumericCurrentValue && purchaseSum > 0 && gainAbs != null) {
+        gainPct = normalizePercentValue((gainAbs / purchaseSum) * 100);
+      } else {
+        gainPct = null;
+      }
+
+      const partialValue = missingPositions > 0;
+      const hasValue = hasNumericCurrentValue;
+      const fxUnavailable = partialValue || !hasValue;
 
       return {
         uuid,
         name: p.name ?? 'Unbenanntes Depot',
         position_count: typeof p.position_count === 'number' ? p.position_count : 0,
-        current_value: currentValue,
+        current_value: hasNumericCurrentValue ? rawCurrentValue : null,
         purchase_sum: purchaseSum,
         gain_abs: gainAbs,
         gain_pct: gainPct,
-        hasValue: hasCurrentValue,
+        hasValue,
         missing_value_positions: missingPositions,
-        fx_unavailable: !hasCurrentValue,
+        fx_unavailable: fxUnavailable,
       };
     })
     .filter((depot): depot is PortfolioOverviewDepot => depot !== null);
@@ -1154,10 +1210,11 @@ export async function renderDashboard(
 
   // 4. Gesamtvermögen berechnen (nur Anzeige)
   const totalAccounts = normalizedAccounts.reduce(
-    (sum, account) => sum + (account.balance ?? 0),
+    (sum, account) => sum + (typeof account.balance === 'number' && Number.isFinite(account.balance) ? account.balance : 0),
     0,
   );
-  const anyPortfolioMissing = depots.some(depot => depot.hasValue === false);
+  const anyPortfolioMissing = depots.some(depot => depot.fx_unavailable);
+  const anyAccountMissing = normalizedAccounts.some(account => account.fx_unavailable && (account.balance == null || !Number.isFinite(account.balance)));
   const totalDepots = depots.reduce((sum, depot) => {
     if (depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value)) {
       return sum + depot.current_value;
@@ -1166,10 +1223,12 @@ export async function renderDashboard(
   }, 0);
   const totalWealth = totalAccounts + totalDepots;
   const missingWealthReason = 'Teilweise fehlende Wechselkurse – Gesamtvermögen unbekannt';
-  const wealthValueMarkup = anyPortfolioMissing
-    ? `<span class="missing-value" role="note" aria-label="${missingWealthReason}" title="${missingWealthReason}">—</span>`
-    : `${formatNumber(totalWealth)}&nbsp;€`;
-  const wealthNote = anyPortfolioMissing
+  const wealthValueAvailable = depots.some(depot => depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value))
+    || normalizedAccounts.some(account => typeof account.balance === 'number' && Number.isFinite(account.balance));
+  const wealthValueMarkup = wealthValueAvailable
+    ? `${formatNumber(totalWealth)}&nbsp;€`
+    : `<span class="missing-value" role="note" aria-label="${missingWealthReason}" title="${missingWealthReason}">—</span>`;
+  const wealthNote = (anyPortfolioMissing || anyAccountMissing)
     ? `<span class="total-wealth-note">${missingWealthReason}</span>`
     : '';
 
