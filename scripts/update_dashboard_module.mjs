@@ -12,7 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MODULE_FILENAME = 'dashboard.module.js';
-const HASHED_ENTRY_PATTERN = /^dashboard\.(?!module$)[\da-zA-Z]+\.js$/;
+const HASHED_ENTRY_PATTERN = /^dashboard\.(?!module$)[\da-zA-Z_-]+\.js$/;
 const MODULE_EXPORT_PATTERN = /export \* from ['"](?<specifier>.+?)['"];?/;
 
 async function findLatestBundle(directory) {
