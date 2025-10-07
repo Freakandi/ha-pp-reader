@@ -497,9 +497,9 @@ function updateTooltipPosition(
   const anchorY = Number.isFinite(pointerY)
     ? clamp(pointerY ?? 0, margin.top, baselineY)
     : point.y;
-  let vertical = anchorY + padding;
-  if (vertical > maxVertical) {
-    vertical = anchorY - tooltipHeight - padding;
+  let vertical = anchorY - tooltipHeight - padding;
+  if (vertical < margin.top) {
+    vertical = anchorY + padding;
   }
   vertical = clamp(vertical, 0, maxVertical);
   tooltip.style.transform = `translate(${Math.round(horizontal)}px, ${Math.round(vertical)}px)`;
@@ -894,9 +894,21 @@ function updateAxes(state: LineChartInternalState): void {
       tick.className = 'line-chart-axis-tick line-chart-axis-tick-x';
       tick.style.position = 'absolute';
       tick.style.bottom = '0';
-      tick.style.transform = 'translateX(-50%)';
       const ratio = clamp(positionRatio, 0, 1);
       tick.style.left = `${ratio * effectiveWidth}px`;
+      let translateX = '-50%';
+      let textAlign: CSSStyleDeclaration['textAlign'] = 'center';
+      if (ratio <= 0.001) {
+        translateX = '0';
+        textAlign = 'left';
+        tick.style.marginLeft = '2px';
+      } else if (ratio >= 0.999) {
+        translateX = '-100%';
+        textAlign = 'right';
+        tick.style.marginRight = '2px';
+      }
+      tick.style.transform = `translateX(${translateX})`;
+      tick.style.textAlign = textAlign;
       tick.textContent = label;
       xAxis.appendChild(tick);
     });
