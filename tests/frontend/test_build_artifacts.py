@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 MODULE_EXPORT_PATTERN = re.compile(
-    r"export \* from ['\"]\./(?P<bundle>dashboard\.[0-9A-Za-z]+\.js)['\"];?"
+    r"export \* from ['\"]\./(?P<bundle>dashboard\.[0-9A-Za-z_-]+\.js)['\"];?"
 )
 
 
