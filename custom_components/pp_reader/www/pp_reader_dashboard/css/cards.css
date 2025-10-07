@@ -115,9 +115,22 @@
 }
 
 .header-meta-row .total-wealth-note {
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--warning-on-color, var(--primary-text-color));
+  background-color: var(--warning-background-color, rgba(240, 173, 78, 0.18));
+  border: 1px solid rgba(240, 173, 78, 0.4);
+}
+
+.header-meta-row .total-wealth-note::before {
+  content: '⚠';
   color: var(--warning-color, #f0ad4e);
-  font-weight: 500;
+  font-size: 0.85em;
 }
 
 .header-card.sticky .meta {
