@@ -347,7 +347,7 @@ function updateBaselineLine(state: LineChartInternalState): void {
 
 function computePoints(
   series: readonly LineChartInputDatum[],
-  dimensions: ChartDimensions,
+  dimensions: ChartDimensions & { baseline?: LineChartBaselineOptions | null },
   accessors: { xAccessor: LineChartAccessor; yAccessor: LineChartAccessor },
 ): { points: LineChartComputedPoint[]; range: LineChartRange | null } {
   const { width, height, margin } = dimensions;
@@ -391,6 +391,16 @@ function computePoints(
   const safeMaxX = Number.isFinite(maxX) ? maxX : safeMinX + 1;
   const safeMinY = Number.isFinite(minY) ? minY : 0;
   const safeMaxY = Number.isFinite(maxY) ? maxY : safeMinY + 1;
+  const baselineValue = toNumber(dimensions.baseline?.value, null);
+
+  const minDomainCandidate =
+    baselineValue != null && Number.isFinite(baselineValue)
+      ? Math.min(safeMinY, baselineValue)
+      : safeMinY;
+  const maxDomainCandidate =
+    baselineValue != null && Number.isFinite(baselineValue)
+      ? Math.max(safeMaxY, baselineValue)
+      : safeMaxY;
 
   const desiredYTicks = Math.max(
     2,
@@ -402,8 +412,8 @@ function computePoints(
     ),
   );
   const { niceMin: domainMinY, niceMax: domainMaxY } = computeNiceDomain(
-    safeMinY,
-    safeMaxY,
+    minDomainCandidate,
+    maxDomainCandidate,
     desiredYTicks,
   );
 
