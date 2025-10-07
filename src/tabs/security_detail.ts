@@ -134,6 +134,10 @@ export const __TEST_ONLY__ = {
   clearSnapshotMetricsRegistryForTest: () => {
     SNAPSHOT_METRICS_REGISTRY.clear();
   },
+  mergeHistoryWithSnapshotPriceForTest: (
+    historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
+    snapshot: SecuritySnapshotDetail | null | undefined,
+  ): NormalizedHistoryEntry[] => buildHistorySeriesWithSnapshotPrice(historySeries, snapshot),
 };
 
 function buildCachedSnapshotNotice(params: {
@@ -473,6 +477,106 @@ function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
       };
     })
     .filter((entry): entry is NormalizedHistoryEntry => Boolean(entry));
+}
+
+function extractSnapshotLastPriceNative(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): number | null {
+  const native =
+    toFiniteNumber(snapshot?.last_price_native) ??
+    toFiniteNumber(snapshot?.last_price?.native) ??
+    null;
+
+  if (isFiniteNumber(native)) {
+    return native;
+  }
+
+  const currency = String(snapshot?.currency_code || '').toUpperCase();
+  if (currency === 'EUR') {
+    const lastPriceEur = toFiniteNumber(snapshot?.last_price_eur);
+    if (isFiniteNumber(lastPriceEur)) {
+      return lastPriceEur;
+    }
+  }
+
+  return null;
+}
+
+function extractSnapshotLastPriceTimestamp(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): number | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  return (
+    parseTimestamp((snapshot as { last_price_fetched_at?: unknown })?.last_price_fetched_at) ??
+    parseTimestamp(
+      (snapshot.last_price as { fetched_at?: unknown } | null | undefined)?.fetched_at,
+    ) ??
+    null
+  );
+}
+
+function buildHistorySeriesWithSnapshotPrice(
+  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): NormalizedHistoryEntry[] {
+  const baseSeries = Array.isArray(historySeries) ? historySeries : [];
+  const seriesWithSnapshot = baseSeries.slice();
+
+  const lastPriceNative = extractSnapshotLastPriceNative(snapshot);
+  if (!isFiniteNumber(lastPriceNative)) {
+    return seriesWithSnapshot;
+  }
+
+  const lastPriceTimestamp = extractSnapshotLastPriceTimestamp(snapshot) ?? Date.now();
+  const candidateDate = new Date(lastPriceTimestamp);
+  if (Number.isNaN(candidateDate.getTime())) {
+    return seriesWithSnapshot;
+  }
+
+  const targetDay = toEpochDay(normaliseDate(candidateDate));
+  let latestSeriesDay: number | null = null;
+
+  for (let index = seriesWithSnapshot.length - 1; index >= 0; index -= 1) {
+    const entry = seriesWithSnapshot[index];
+    if (!entry) {
+      continue;
+    }
+
+    const parsedDate = parseHistoryDate(entry.date);
+    if (!parsedDate) {
+      continue;
+    }
+
+    const entryDay = toEpochDay(normaliseDate(parsedDate));
+    if (latestSeriesDay == null) {
+      latestSeriesDay = entryDay;
+    }
+
+    if (entryDay === targetDay) {
+      if (entry.close !== lastPriceNative) {
+        seriesWithSnapshot[index] = { ...entry, close: lastPriceNative };
+      }
+      return seriesWithSnapshot;
+    }
+
+    if (entryDay < targetDay) {
+      break;
+    }
+  }
+
+  if (latestSeriesDay != null && latestSeriesDay > targetDay) {
+    return seriesWithSnapshot;
+  }
+
+  seriesWithSnapshot.push({
+    date: candidateDate,
+    close: lastPriceNative,
+  });
+
+  return seriesWithSnapshot;
 }
 
 function deriveFxRate(
@@ -1392,11 +1496,21 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     setActiveRange(securityUuid, initialRange);
     updateRangeButtons(rangeSelector, initialRange);
     if (initialHistoryState) {
+      const initialDisplayHistory = buildHistorySeriesWithSnapshotPrice(
+        initialHistory,
+        snapshot,
+      );
+      let effectiveInitialState: HistoryPlaceholderState = initialHistoryState;
+      if (effectiveInitialState.status !== 'error') {
+        effectiveInitialState = initialDisplayHistory.length
+          ? { status: 'loaded' }
+          : { status: 'empty' };
+      }
       updateHistoryPlaceholder(
         root,
         initialRange,
-        initialHistoryState,
-        initialHistory,
+        effectiveInitialState,
+        initialDisplayHistory,
         {
           currency: snapshot?.currency_code,
           baseline: snapshotMetrics?.averagePurchaseNative ?? null,
@@ -1419,6 +1533,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
 
       let historySeries = cache.get(rangeKey) || null;
       let historyState: HistoryPlaceholderState | null = null;
+      let displayHistorySeries: NormalizedHistoryEntry[] = [];
       if (!historySeries) {
         try {
           const rangeOptions = resolveRangeOptions(rangeKey);
@@ -1450,12 +1565,17 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
           : { status: 'empty' };
       }
 
+      displayHistorySeries = buildHistorySeriesWithSnapshotPrice(historySeries, snapshot);
+      if (historyState?.status !== 'error') {
+        historyState = displayHistorySeries.length
+          ? { status: 'loaded' }
+          : { status: 'empty' };
+      }
+
       const snapshotLastPriceNative =
-        toFiniteNumber(snapshot?.last_price_native) ??
-        toFiniteNumber(snapshot?.last_price?.native) ??
-        null;
+        extractSnapshotLastPriceNative(snapshot);
       const { priceChange, priceChangePct } = computePriceChangeMetrics(
-        historySeries,
+        displayHistorySeries,
         snapshotLastPriceNative,
       );
 
@@ -1472,7 +1592,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         root,
         rangeKey,
         historyState,
-        historySeries,
+        displayHistorySeries,
         {
           currency: snapshot?.currency_code,
           baseline: snapshotMetrics?.averagePurchaseNative ?? null,
@@ -1603,17 +1723,24 @@ export async function renderSecurityDetail(
     SNAPSHOT_METRICS_REGISTRY.set(securityUuid, snapshotMetrics);
   }
 
+  const displayHistorySeries = buildHistorySeriesWithSnapshotPrice(
+    historySeries,
+    effectiveSnapshot,
+  );
+  if (historyState?.status !== 'error') {
+    historyState = displayHistorySeries.length
+      ? { status: 'loaded' }
+      : { status: 'empty' };
+  }
+
   const headerCard = createHeaderCard(
     headerTitle,
     buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
   );
 
-  const snapshotLastPriceNative =
-    toFiniteNumber(effectiveSnapshot?.last_price_native) ??
-    toFiniteNumber(effectiveSnapshot?.last_price?.native) ??
-    null;
+  const snapshotLastPriceNative = extractSnapshotLastPriceNative(effectiveSnapshot);
   const { priceChange, priceChangePct } = computePriceChangeMetrics(
-    historySeries,
+    displayHistorySeries,
     snapshotLastPriceNative,
   );
   const infoBar = buildInfoBar(
