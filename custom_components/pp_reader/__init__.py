@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import sys
@@ -347,17 +348,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
     # Dashboard-Dateien registrieren
     this_dir = Path(__file__).parent
     dashboard_folder = this_dir / "www" / "pp_reader_dashboard"
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                path=str(dashboard_folder.resolve()),
-                url_path="/pp_reader_dashboard",
-                cache_headers=False,
-            )
-        ]
-    )
 
-    await _ensure_placeholder_panel(hass)
+    await asyncio.gather(
+        _ensure_placeholder_panel(hass),
+        hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    path=str(dashboard_folder.resolve()),
+                    url_path="/pp_reader_dashboard",
+                    cache_headers=False,
+                )
+            ]
+        ),
+    )
 
     # Websocket-API registrieren
     try:
@@ -465,6 +468,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     panel_registered = False
 
     try:
+        await _ensure_placeholder_panel(hass)
+
         setup_backup_system = backup_db_module.setup_backup_system
         coordinator_cls = coordinator_module.PPReaderCoordinator
         initialize_database_schema = db_init_module.initialize_database_schema
