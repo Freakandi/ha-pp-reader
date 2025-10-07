@@ -236,6 +236,15 @@ function invalidateHistoryCache(securityUuid: string | null | undefined): void {
   }
 }
 
+function invalidateSnapshotCaches(securityUuid: string | null | undefined): void {
+  if (!securityUuid) {
+    return;
+  }
+
+  SNAPSHOT_DETAIL_REGISTRY.delete(securityUuid);
+  SNAPSHOT_METRICS_REGISTRY.delete(securityUuid);
+}
+
 function handleLiveUpdateForSecurity(
   securityUuid: string,
   detail: PortfolioPositionsUpdatedEventDetail,
@@ -249,6 +258,7 @@ function handleLiveUpdateForSecurity(
 
   if (candidates.includes(securityUuid)) {
     invalidateHistoryCache(securityUuid);
+    invalidateSnapshotCaches(securityUuid);
   }
 }
 
@@ -300,8 +310,7 @@ function cleanupSecurityDetailState(securityUuid: string): void {
 
   removeLiveUpdateSubscription(securityUuid);
   invalidateHistoryCache(securityUuid);
-  SNAPSHOT_DETAIL_REGISTRY.delete(securityUuid);
-  SNAPSHOT_METRICS_REGISTRY.delete(securityUuid);
+  invalidateSnapshotCaches(securityUuid);
   // RANGE_STATE_REGISTRY intentionally left intact so the last chosen
   // range remains active when the user reopens the security detail.
 }
