@@ -74,7 +74,7 @@ async def test_placeholder_panel_registered_during_setup(
 
     captured_configs: list[dict[str, Any]] = []
 
-    async def fake_register_panel(*args, **kwargs):  # noqa: ANN002, ANN003
+    def fake_register_panel(*args, **kwargs):  # noqa: ANN002, ANN003
         captured_configs.append(kwargs.get("config", {}))
 
     monkeypatch.setattr(

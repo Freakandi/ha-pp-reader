@@ -6,9 +6,9 @@ in a portfolio. Includes utilities for handling transactions,
 exchange rates, and database interactions.
 """
 
-from dataclasses import dataclass
 import logging
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -68,7 +68,11 @@ def _collect_fx_requirements(
 
 
 def _determine_exchange_rate(
-    transaction: Transaction, tx_date: datetime, db_path: Path
+    transaction: Transaction,
+    tx_date: datetime,
+    db_path: Path,
+    *,
+    missing_logged: set[tuple[str, datetime]] | None = None,
 ) -> float | None:
     """Load the exchange rate for a transaction."""
     fx_rates = load_latest_rates_sync(tx_date, db_path)
@@ -78,11 +82,17 @@ def _determine_exchange_rate(
 
     rate = fx_rates.get(transaction.currency_code)
     if not rate:
-        _LOGGER.warning(
-            "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
-            tx_date.strftime("%Y-%m-%d"),
-            transaction.currency_code,
-        )
+        if missing_logged is None:
+            missing_logged = set()
+
+        key = (transaction.currency_code, tx_date)
+        if key not in missing_logged:
+            missing_logged.add(key)
+            _LOGGER.warning(
+                "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
+                tx_date.strftime("%Y-%m-%d"),
+                transaction.currency_code,
+            )
 
     return rate
 
@@ -163,7 +173,6 @@ def _resolve_native_amount(
     tx_units: dict[str, dict[str, int | str]] | None,
 ) -> tuple[float | None, str | None]:
     """Return the native amount for a transaction if FX metadata exists."""
-
     if not tx_units:
         return None, None
 
@@ -187,13 +196,14 @@ def db_calculate_sec_purchase_value(
     tx_units: dict[str, dict[str, int | str]] | None = None,
 ) -> dict[tuple[str, str], PurchaseComputation]:
     """Berechne den gesamten Kaufpreis und native Durchschnittspreise (FIFO)."""
-
     portfolio_metrics: dict[tuple[str, str], PurchaseComputation] = {}
     holdings: dict[tuple[str, str], list[_HoldingLot]] = {}
 
     fx_dates, fx_currencies = _collect_fx_requirements(transactions)
     if fx_currencies:
         ensure_exchange_rates_for_dates_sync(list(fx_dates), fx_currencies, db_path)
+
+    missing_rates_logged: set[tuple[str, datetime]] = set()
 
     for tx in transactions:
         if not _is_relevant_transaction(tx):
@@ -203,7 +213,12 @@ def db_calculate_sec_purchase_value(
         shares = normalize_shares(tx.shares) if tx.shares else 0
         amount = tx.amount / 100  # Cent -> Währung der Transaktion
         tx_date = datetime.fromisoformat(tx.date)
-        rate = _determine_exchange_rate(tx, tx_date, db_path)
+        rate = _determine_exchange_rate(
+            tx,
+            tx_date,
+            db_path,
+            missing_logged=missing_rates_logged,
+        )
 
         if not rate:
             continue
