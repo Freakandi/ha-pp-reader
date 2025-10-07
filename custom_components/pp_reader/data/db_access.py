@@ -480,7 +480,14 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         last_price_eur = normalize_price_to_eur_sync(
             raw_price, currency_code, reference_date, db_path
         )
-        market_value_eur = round(total_holdings * last_price_eur, 2)
+        last_price_eur_value = (
+            round(last_price_eur, 4) if last_price_eur is not None else None
+        )
+        market_value_eur = (
+            round(total_holdings * last_price_eur, 2)
+            if last_price_eur is not None
+            else None
+        )
         purchase_value_eur = round(purchase_value_cents / 100, 2)
         average_purchase_price_native = None
         if (
@@ -517,7 +524,7 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "currency_code": currency_code,
             "total_holdings": round(total_holdings, 6),
             "last_price_native": last_price_native,
-            "last_price_eur": round(last_price_eur, 4),
+            "last_price_eur": last_price_eur_value,
             "market_value_eur": market_value_eur,
             "purchase_value_eur": purchase_value_eur,
             "average_purchase_price_native": average_purchase_price_native,

@@ -37,10 +37,10 @@ def normalize_shares(raw_shares: int) -> float:
 
 def normalize_price_to_eur_sync(
     raw_price: int | None, currency_code: str, reference_date: datetime, db_path: Path
-) -> float:
+) -> float | None:
     """Normalize a raw security price to EUR using stored FX rates."""
     if not raw_price:
-        return 0.0
+        return None
 
     price = normalize_price(raw_price)
     if currency_code == "EUR":
@@ -51,7 +51,7 @@ def normalize_price_to_eur_sync(
         fx_rates = load_latest_rates_sync(reference_date, db_path)
     except Exception:  # pragma: no cover - defensive
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
-        return 0.0
+        return None
     rate = fx_rates.get(currency_code)
     if rate:
         return price / rate
@@ -61,7 +61,7 @@ def normalize_price_to_eur_sync(
         currency_code,
         reference_date.strftime("%Y-%m-%d"),
     )
-    return 0.0
+    return None
 
 
 def calculate_holdings(transactions: list[Transaction]) -> dict[str, float]:
