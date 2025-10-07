@@ -6,12 +6,25 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.12.2] - 2025-10-07
 ### Added
-- Persist native average purchase prices for each portfolio position, deliver them
-  through snapshot/websocket payloads, and have the dashboard consume the stored
-  values instead of reconstructing them from EUR totals. This includes schema
-  migrations, FIFO aggregation updates, sync persistence, backend serialization,
-  and frontend metric handling for the new `avg_price_native` field.【F:custom_components/pp_reader/data/db_schema.py†L94-L114】【F:custom_components/pp_reader/data/db_init.py†L76-L107】【F:custom_components/pp_reader/logic/securities.py†L232-L258】【F:custom_components/pp_reader/data/sync_from_pclient.py†L968-L1058】【F:custom_components/pp_reader/data/db_access.py†L624-L669】【F:custom_components/pp_reader/data/websocket.py†L160-L210】【F:src/tabs/security_detail.ts†L586-L660】
+- Persistiert den nativen Durchschnittskaufpreis jeder Depotposition, migriert
+  bestehende Datenbanken und liefert das Feld über Sync-, Preis- und Websocket-
+  Pfade sowie Event-Payloads.【F:custom_components/pp_reader/data/db_schema.py†L94-L114】【F:custom_components/pp_reader/data/db_init.py†L75-L160】【F:custom_components/pp_reader/logic/securities.py†L31-L274】【F:custom_components/pp_reader/data/sync_from_pclient.py†L983-L1056】【F:custom_components/pp_reader/prices/price_service.py†L360-L578】【F:custom_components/pp_reader/data/event_push.py†L52-L140】【F:custom_components/pp_reader/data/websocket.py†L160-L212】
+
+### Changed
+- Das Security-Detail stellt native Durchschnittskaufpreise neben EUR-Werten
+  dar, mischt den jüngsten Snapshot-Kurs in die Historie und rendert eine
+  Baseline im Chart, sodass Tooltips und Skalen am Referenzwert ausgerichtet
+  bleiben.【F:src/tabs/security_detail.ts†L700-L1392】【F:src/content/charting.ts†L303-L346】【F:src/content/charting.ts†L470-L505】
+
+### Fixed
+- Portfolio- und Positionsaktualisierungen markieren fehlende Bewertungen und
+  behalten Gewinne konsistent, wodurch Gesamtwerte und Events bei
+  unvollständigen Kursen nicht länger divergieren.【F:custom_components/pp_reader/data/db_access.py†L721-L803】【F:src/tabs/overview.ts†L1122-L1200】【F:custom_components/pp_reader/data/event_push.py†L52-L140】
+- Mehrfache Warnungen zu fehlenden Wechselkursen werden unterdrückt und die
+  Oberfläche zeigt bei fehlenden FX-Daten neutrale Platzhalter, sodass Kaufpreis-
+  und Tagesänderungen keine ungesicherten Werte mehr anzeigen.【F:custom_components/pp_reader/logic/securities.py†L206-L269】【F:src/tabs/security_detail.ts†L1157-L1270】
 
 ## [0.12.1] - 2025-10-06
 ### Fixed
