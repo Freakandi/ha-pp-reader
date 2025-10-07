@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,6 @@ def _make_transaction(
     shares_raw: int,
 ) -> Transaction:
     """Build a transaction instance with the required fields."""
-
     return Transaction(
         uuid=uuid,
         type=tx_type,
@@ -40,7 +40,6 @@ def _make_transaction(
 
 def _patch_fx(monkeypatch: pytest.MonkeyPatch, rate: float) -> None:
     """Stub FX helpers used during purchase aggregation."""
-
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
@@ -53,10 +52,25 @@ def _patch_fx(monkeypatch: pytest.MonkeyPatch, rate: float) -> None:
     )
 
 
-@pytest.mark.parametrize("rate", [1.25, 1.1])
-def test_purchase_value_and_native_average(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rate: float) -> None:
-    """FIFO aggregation should compute EUR totals and native averages."""
+def _patch_fx_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub FX helpers so no rates are returned."""
+    monkeypatch.setattr(
+        securities,
+        "ensure_exchange_rates_for_dates_sync",
+        lambda dates, currencies, db_path: None,
+    )
+    monkeypatch.setattr(
+        securities,
+        "load_latest_rates_sync",
+        lambda reference_date, db_path: {},
+    )
 
+
+@pytest.mark.parametrize("rate", [1.25, 1.1])
+def test_purchase_value_and_native_average(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rate: float
+) -> None:
+    """FIFO aggregation should compute EUR totals and native averages."""
     _patch_fx(monkeypatch, rate)
 
     db_path = tmp_path / "fx.sqlite"
@@ -110,13 +124,16 @@ def test_purchase_value_and_native_average(monkeypatch: pytest.MonkeyPatch, tmp_
 
     # Native lot prices: [100, 120] after a 1-share sale → holdings=2
     expected_purchase_value = round((100 / rate) + (120 / rate), 2)
-    assert computation.purchase_value == pytest.approx(expected_purchase_value, rel=0, abs=0.01)
+    assert computation.purchase_value == pytest.approx(
+        expected_purchase_value, rel=0, abs=0.01
+    )
     assert computation.avg_price_native == pytest.approx(110.0, rel=0, abs=1e-6)
 
 
-def test_missing_native_data_yields_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_missing_native_data_yields_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """When native metadata is incomplete, the native average should stay ``None``."""
-
     _patch_fx(monkeypatch, 1.2)
 
     db_path = tmp_path / "fx.sqlite"
@@ -158,4 +175,50 @@ def test_missing_native_data_yields_none(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert computation.avg_price_native is None
     # Purchase value still computed using EUR conversion
     expected_purchase_value = round((150 / 1.2) + (180 / 1.2), 2)
-    assert computation.purchase_value == pytest.approx(expected_purchase_value, rel=0, abs=0.01)
+    assert computation.purchase_value == pytest.approx(
+        expected_purchase_value, rel=0, abs=0.01
+    )
+
+
+def test_missing_fx_logged_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A missing exchange rate should trigger a single warning per currency/date pair."""
+    _patch_fx_missing(monkeypatch)
+
+    db_path = tmp_path / "fx.sqlite"
+    transactions = [
+        _make_transaction(
+            uuid="tx-1",
+            tx_type=0,
+            portfolio="pf-1",
+            security="sec-1",
+            date="2024-05-10T00:00:00",
+            currency="USD",
+            amount_cents=10_000,
+            shares_raw=100_000_000,
+        ),
+        _make_transaction(
+            uuid="tx-2",
+            tx_type=0,
+            portfolio="pf-1",
+            security="sec-2",
+            date="2024-05-10T00:00:00",
+            currency="USD",
+            amount_cents=20_000,
+            shares_raw=200_000_000,
+        ),
+    ]
+
+    caplog.set_level(
+        logging.WARNING, logger="custom_components.pp_reader.logic.securities"
+    )
+
+    securities.db_calculate_sec_purchase_value(transactions, db_path)
+
+    warnings = [
+        rec.getMessage()
+        for rec in caplog.records
+        if "Kein Wechselkurs" in rec.getMessage()
+    ]
+    assert len(warnings) == 1
