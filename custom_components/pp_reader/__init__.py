@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import sys
 from collections.abc import Callable, Mapping
@@ -254,7 +255,7 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
             entry_id=entry.entry_id,
             placeholder=False,
         )
-        async_register_built_in_panel(
+        register_result = async_register_built_in_panel(
             hass,
             component_name="custom",
             sidebar_title=PANEL_SIDEBAR_TITLE,
@@ -264,6 +265,8 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
             require_admin=False,
             update=update_existing,
         )
+        if inspect.isawaitable(register_result):
+            await register_result
         _LOGGER.info(
             "✅ Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
             cache_bust,
@@ -298,7 +301,7 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
             entry_id=None,
             placeholder=True,
         )
-        async_register_built_in_panel(
+        register_result = async_register_built_in_panel(
             hass,
             component_name="custom",
             sidebar_title=PANEL_SIDEBAR_TITLE,
@@ -307,6 +310,8 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
             config=panel_config,
             require_admin=False,
         )
+        if inspect.isawaitable(register_result):
+            await register_result
         _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
     except ValueError:
         _LOGGER.exception(
