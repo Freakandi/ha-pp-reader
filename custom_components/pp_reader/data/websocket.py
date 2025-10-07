@@ -166,7 +166,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "total_holdings": 0.0,
             "last_price_native": None,
             "last_price_eur": None,
-            "market_value_eur": 0.0,
+            "market_value_eur": None,
             "purchase_value_eur": 0.0,
             "average_purchase_price_native": None,
             "last_close_native": None,
@@ -190,7 +190,9 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         snapshot.get("last_price_native")
     )
     data["last_price_eur"] = _coerce_optional_float(snapshot.get("last_price_eur"))
-    data["market_value_eur"] = _coerce_float(snapshot.get("market_value_eur"))
+    data["market_value_eur"] = _coerce_optional_float(
+        snapshot.get("market_value_eur")
+    )
     data["purchase_value_eur"] = _coerce_float(snapshot.get("purchase_value_eur"))
     data["average_purchase_price_native"] = _coerce_optional_float(
         snapshot.get("average_purchase_price_native")

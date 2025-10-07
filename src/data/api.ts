@@ -69,7 +69,7 @@ export interface SecuritySnapshotResponse {
     current_value_eur?: number;
     last_price_native?: number | null;
     last_price_eur?: number;
-    market_value_eur?: number;
+    market_value_eur?: number | null;
     average_purchase_price_native?: number | string | null;
     last_close_native?: number | null;
     last_close_eur?: number | null;
