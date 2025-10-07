@@ -1222,7 +1222,7 @@ export async function renderDashboard(
     return sum;
   }, 0);
   const totalWealth = totalAccounts + totalDepots;
-  const missingWealthReason = 'Teilweise fehlende Wechselkurse – Gesamtvermögen unbekannt';
+  const missingWealthReason = 'Teilw. fehlende FX-Kurse – Gesamtvermögen abweichend';
   const wealthValueAvailable = depots.some(depot => depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value))
     || normalizedAccounts.some(account => typeof account.balance === 'number' && Number.isFinite(account.balance));
   const wealthValueMarkup = wealthValueAvailable
