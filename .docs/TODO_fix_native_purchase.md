@@ -7,7 +7,7 @@
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Funktion: `_resolve_native_amount`
       - Ziel: Neben `fx_amount` auch den Rohbetrag (`amount / 100`) für `type = 0` zurückgeben, um Sicherheitswährungsbeträge verfügbar zu machen.
-   c) [ ] FX-Fallback für Transaktionen ohne `transaction_units`
+   c) [x] FX-Fallback für Transaktionen ohne `transaction_units`
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Funktion: `_determine_exchange_rate`
       - Ziel: Ergänzt Rückgabe des verwendeten FX-Kurses, damit `net_trade_account / fx_rate` als Ersatz für fehlende `fx_amount` genutzt werden kann.

@@ -145,12 +145,12 @@ def _determine_exchange_rate(
     db_path: Path,
     *,
     missing_logged: set[tuple[str, datetime]] | None = None,
-) -> float | None:
-    """Load the exchange rate for a transaction."""
+) -> tuple[float | None, float | None]:
+    """Load the exchange rate for a transaction and expose the raw value."""
     fx_rates = load_latest_rates_sync(tx_date, db_path)
 
     if transaction.currency_code == "EUR":
-        return 1.0
+        return 1.0, 1.0
 
     rate = fx_rates.get(transaction.currency_code)
     if not rate:
@@ -165,8 +165,9 @@ def _determine_exchange_rate(
                 tx_date.strftime("%Y-%m-%d"),
                 transaction.currency_code,
             )
+        return None, None
 
-    return rate
+    return rate, rate
 
 
 def _apply_sale_fifo(
@@ -334,7 +335,7 @@ def db_calculate_sec_purchase_value(
         shares = normalize_shares(tx.shares) if tx.shares else 0
         amount = tx.amount / 100  # Cent -> Währung der Transaktion
         tx_date = datetime.fromisoformat(tx.date)
-        rate = _determine_exchange_rate(
+        rate, _ = _determine_exchange_rate(
             tx,
             tx_date,
             db_path,
