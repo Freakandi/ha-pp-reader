@@ -45,7 +45,7 @@
       - Ziel: Stellt sicher, dass Push-Events die erweiterten Kaufdaten enthalten.
 
 4. Backend: Datenmodell & Migration
-   a) [ ] Datenbankschema für neue Spalten anpassen
+   a) [x] Datenbankschema für neue Spalten anpassen
       - Datei: `custom_components/pp_reader/data/db_schema.py`
       - Abschnitt: Definition `portfolio_securities`
       - Ziel: Spalten für Sicherheitswährungssumme und Durchschnittspreise ergänzen, inklusive Default-Werte.
