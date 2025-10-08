@@ -63,7 +63,7 @@
       - Datei: `src/data/api.ts`
       - Interface: `SecuritySnapshotResponse`, `PortfolioPosition`
       - Ziel: Neue Felder für Kaufwerte und Durchschnittspreise deklarieren.
-   b) [ ] Panel-Typen synchronisieren
+   b) [x] Panel-Typen synchronisieren
       - Datei: `src/tabs/types.ts`
       - Typen: `SecuritySnapshotDetail`, `PortfolioPosition`
       - Ziel: Stellt Frontend-Typen auf die erweiterten Backend-Felder ein.
