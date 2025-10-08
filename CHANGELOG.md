@@ -6,6 +6,26 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.12.2] - 2025-10-07
+### Added
+- Persistiert den nativen Durchschnittskaufpreis jeder Depotposition, migriert
+  bestehende Datenbanken und liefert das Feld über Sync-, Preis- und Websocket-
+  Pfade sowie Event-Payloads.【F:custom_components/pp_reader/data/db_schema.py†L94-L114】【F:custom_components/pp_reader/data/db_init.py†L75-L160】【F:custom_components/pp_reader/logic/securities.py†L31-L274】【F:custom_components/pp_reader/data/sync_from_pclient.py†L983-L1056】【F:custom_components/pp_reader/prices/price_service.py†L360-L578】【F:custom_components/pp_reader/data/event_push.py†L52-L140】【F:custom_components/pp_reader/data/websocket.py†L160-L212】
+
+### Changed
+- Das Security-Detail stellt native Durchschnittskaufpreise neben EUR-Werten
+  dar, mischt den jüngsten Snapshot-Kurs in die Historie und rendert eine
+  Baseline im Chart, sodass Tooltips und Skalen am Referenzwert ausgerichtet
+  bleiben.【F:src/tabs/security_detail.ts†L700-L1392】【F:src/content/charting.ts†L303-L346】【F:src/content/charting.ts†L470-L505】
+
+### Fixed
+- Portfolio- und Positionsaktualisierungen markieren fehlende Bewertungen und
+  behalten Gewinne konsistent, wodurch Gesamtwerte und Events bei
+  unvollständigen Kursen nicht länger divergieren.【F:custom_components/pp_reader/data/db_access.py†L721-L803】【F:src/tabs/overview.ts†L1122-L1200】【F:custom_components/pp_reader/data/event_push.py†L52-L140】
+- Mehrfache Warnungen zu fehlenden Wechselkursen werden unterdrückt und die
+  Oberfläche zeigt bei fehlenden FX-Daten neutrale Platzhalter, sodass Kaufpreis-
+  und Tagesänderungen keine ungesicherten Werte mehr anzeigen.【F:custom_components/pp_reader/logic/securities.py†L206-L269】【F:src/tabs/security_detail.ts†L1157-L1270】
+
 ## [0.12.1] - 2025-10-06
 ### Fixed
 - Korrigierte die Kennzahlen im Security-Detail-Header: Tagesänderungen übernehmen jetzt native Preisbewegungen (oder einen EUR-Fallback) inklusive Währungskennzeichnung, und Gesamtgewinne fallen auf den Vergleich von Markt- zu Kaufwert zurück, wenn direkte Summen fehlen.【F:src/tabs/security_detail.ts†L560-L618】【F:src/tabs/security_detail.ts†L833-L938】

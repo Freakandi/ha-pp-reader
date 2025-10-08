@@ -70,6 +70,7 @@ ZERO_QUOTES_WARN_INTERVAL = 1_800
 # Yahoo Finance benötigt teils >10s für große Chunks -
 # 20s verhindern False-Timeouts.
 PRICE_FETCH_TIMEOUT = 20
+TRANSACTION_UNIT_CHUNK_SIZE = 500
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -354,7 +355,9 @@ def _refresh_impacted_portfolio_securities(
 
     try:
         with sqlite3.connect(str(db_path)) as conn:
-            existing_entries: dict[tuple[str, str], tuple[float, int, int]] = {}
+            existing_entries: dict[
+                tuple[str, str], tuple[float, int, float | None, int]
+            ] = {}
             impacted_pairs: set[tuple[str, str]] = set()
 
             placeholders = ",".join("?" for _ in security_ids)
@@ -362,7 +365,7 @@ def _refresh_impacted_portfolio_securities(
                 cur = conn.execute(
                     f"""
                         SELECT portfolio_uuid, security_uuid, current_holdings,
-                               purchase_value, current_value
+                               purchase_value, avg_price_native, current_value
                         FROM portfolio_securities
                         WHERE security_uuid IN ({placeholders})
                     """,
@@ -380,6 +383,7 @@ def _refresh_impacted_portfolio_securities(
                 security_uuid,
                 cur_hold,
                 purch_val,
+                avg_native,
                 cur_val,
             ) in cur.fetchall():
                 key = (portfolio_uuid, security_uuid)
@@ -388,6 +392,7 @@ def _refresh_impacted_portfolio_securities(
                 existing_entries[key] = (
                     float(cur_hold or 0.0),
                     int(purch_val or 0),
+                    float(avg_native) if avg_native is not None else None,
                     int(cur_val or 0),
                 )
 
@@ -414,6 +419,39 @@ def _refresh_impacted_portfolio_securities(
                 DbTransaction(*row) for row in transaction_rows
             ]
 
+            tx_units: dict[str, dict[str, Any]] = {}
+            if transactions:
+                tx_ids = [tx.uuid for tx in transactions if tx.uuid]
+                if tx_ids:
+                    for start in range(0, len(tx_ids), TRANSACTION_UNIT_CHUNK_SIZE):
+                        chunk = tx_ids[start : start + TRANSACTION_UNIT_CHUNK_SIZE]
+                        placeholders_units = ",".join("?" for _ in chunk)
+                        try:
+                            unit_cur = conn.execute(
+                                f"""
+                                    SELECT transaction_uuid, fx_amount, fx_currency_code
+                                    FROM transaction_units
+                                    WHERE transaction_uuid IN ({placeholders_units})
+                                      AND fx_amount IS NOT NULL
+                                """,
+                                tuple(chunk),
+                            )
+                        except sqlite3.Error:
+                            _LOGGER.debug(
+                                "prices_cycle: transaction_units Lookup fehlgeschlagen (Refresh übersprungen)",
+                                exc_info=True,
+                            )
+                            tx_units = {}
+                            break
+
+                        for tx_uuid, fx_amount, fx_currency in unit_cur.fetchall():
+                            if fx_amount is None or not fx_currency:
+                                continue
+                            tx_units[tx_uuid] = {
+                                "fx_amount": fx_amount,
+                                "fx_currency_code": fx_currency,
+                            }
+
             for tx in transactions:
                 if tx.portfolio and tx.security:
                     key = (tx.portfolio, tx.security)
@@ -426,21 +464,27 @@ def _refresh_impacted_portfolio_securities(
             current_holdings = (
                 db_calculate_current_holdings(transactions) if transactions else {}
             )
-            purchase_values = (
-                db_calculate_sec_purchase_value(transactions, db_path)
+            purchase_metrics = (
+                db_calculate_sec_purchase_value(
+                    transactions, db_path, tx_units=tx_units
+                )
                 if transactions
                 else {}
             )
 
-            current_hold_pur: dict[tuple[str, str], dict[str, float]] = {}
+            current_hold_pur: dict[tuple[str, str], dict[str, float | None]] = {}
             for key in impacted_pairs:
                 holdings = current_holdings.get(key)
-                purchase_value = purchase_values.get(key)
+                metrics = purchase_metrics.get(key)
+                purchase_value = metrics.purchase_value if metrics else None
+                avg_price_native = metrics.avg_price_native if metrics else None
 
                 if holdings is None and key in existing_entries:
                     holdings = existing_entries[key][0]
                 if purchase_value is None and key in existing_entries:
                     purchase_value = round(existing_entries[key][1] / 100, 2)
+                if avg_price_native is None and key in existing_entries:
+                    avg_price_native = existing_entries[key][2]
 
                 if holdings is None:
                     continue
@@ -448,6 +492,7 @@ def _refresh_impacted_portfolio_securities(
                 current_hold_pur[key] = {
                     "current_holdings": holdings,
                     "purchase_value": purchase_value or 0.0,
+                    "avg_price_native": avg_price_native,
                 }
 
             if not current_hold_pur:
@@ -459,16 +504,22 @@ def _refresh_impacted_portfolio_securities(
             if not holdings_values:
                 return impacted_portfolios
 
-            upserts: list[tuple[str, str, float, int, int]] = []
+            upserts: list[tuple[str, str, float, int, float | None, int]] = []
             for key, data in holdings_values.items():
                 portfolio_uuid, security_uuid = key
                 current_holdings_val = float(data.get("current_holdings", 0.0) or 0.0)
                 purchase_value_eur = float(data.get("purchase_value", 0.0) or 0.0)
                 current_value_eur = float(data.get("current_value", 0.0) or 0.0)
+                avg_price_native = data.get("avg_price_native")
+                if isinstance(avg_price_native, (int, float)):
+                    avg_price_native_val: float | None = float(avg_price_native)
+                else:
+                    avg_price_native_val = None
 
                 expected_values = (
                     current_holdings_val,
                     int(round(purchase_value_eur * 100)),
+                    avg_price_native_val,
                     int(round(current_value_eur * 100)),
                 )
 
@@ -476,7 +527,15 @@ def _refresh_impacted_portfolio_securities(
                 if existing_entry and (
                     abs(existing_entry[0] - expected_values[0]) < 1e-9
                     and existing_entry[1] == expected_values[1]
-                    and existing_entry[2] == expected_values[2]
+                    and (
+                        (existing_entry[2] is None and expected_values[2] is None)
+                        or (
+                            existing_entry[2] is not None
+                            and expected_values[2] is not None
+                            and abs(existing_entry[2] - expected_values[2]) < 1e-6
+                        )
+                    )
+                    and existing_entry[3] == expected_values[3]
                 ):
                     continue
 
@@ -487,6 +546,7 @@ def _refresh_impacted_portfolio_securities(
                         current_holdings_val,
                         expected_values[1],
                         expected_values[2],
+                        expected_values[3],
                     )
                 )
 
@@ -502,8 +562,9 @@ def _refresh_impacted_portfolio_securities(
                             security_uuid,
                             current_holdings,
                             purchase_value,
+                            avg_price_native,
                             current_value
-                        ) VALUES (?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     upserts,
                 )
