@@ -338,6 +338,7 @@ def db_calculate_sec_purchase_value(
         ensure_exchange_rates_for_dates_sync(list(fx_dates), fx_currencies, db_path)
 
     missing_rates_logged: set[tuple[str, datetime]] = set()
+    missing_native_logs: set[tuple[str, str]] = set()
 
     for tx in transactions:
         if not _is_relevant_transaction(tx):
@@ -347,6 +348,14 @@ def db_calculate_sec_purchase_value(
         normalized = _normalize_transaction_amounts(tx, tx_units)
         shares = normalized.shares
         tx_date = datetime.fromisoformat(tx.date)
+        native_amount: float | None = None
+        native_currency: str | None = None
+        native_account_amount: float | None = None
+        if tx.type in PURCHASE_TYPES:
+            native_amount, native_currency, native_account_amount = _resolve_native_amount(
+                tx,
+                tx_units,
+            )
         rate, _ = _determine_exchange_rate(
             tx,
             tx_date,
@@ -355,15 +364,29 @@ def db_calculate_sec_purchase_value(
         )
 
         if not rate:
+            if (
+                tx.type in PURCHASE_TYPES
+                and native_amount is None
+                and tx.portfolio
+                and tx.security
+            ):
+                warn_key = (tx.portfolio, tx.security)
+                if warn_key not in missing_native_logs:
+                    missing_native_logs.add(warn_key)
+                    _LOGGER.warning(
+                        (
+                            "⚠️ Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
+                            "(Transaktion %s). Bitte manuell prüfen."
+                        ),
+                        tx.portfolio,
+                        tx.security,
+                        tx.uuid,
+                    )
             continue
 
         if tx.type in PURCHASE_TYPES:
             if shares <= 0:
                 continue
-            native_amount, native_currency, native_account_amount = _resolve_native_amount(
-                tx,
-                tx_units,
-            )
             account_total = (
                 native_account_amount
                 if native_account_amount is not None

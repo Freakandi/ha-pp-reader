@@ -21,7 +21,7 @@
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Funktion: `db_calculate_sec_purchase_value`
       - Ziel: Nutzt `_normalize_transaction_amounts` und `transaction_units`, akkumuliert Sicherheits- und Kontowährungssummen je Los und berechnet durchschnittliche Kaufpreise pro Aktie in beiden Währungen.
-   c) [ ] Resilienz-Logging bei fehlender FX-Information
+   c) [x] Resilienz-Logging bei fehlender FX-Information
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Funktion: `db_calculate_sec_purchase_value`
       - Ziel: Loggt warnend, wenn weder `type = 0` noch ein FX-Kurs verfügbar ist, und markiert die Position für manuelle Prüfung.
