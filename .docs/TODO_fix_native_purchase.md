@@ -17,7 +17,7 @@
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Dataklasse: `PurchaseComputation`
       - Ziel: Zusätzliche Attribute `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account` vorhalten.
-   b) [ ] FIFO-Berechnung aktualisieren
+   b) [x] FIFO-Berechnung aktualisieren
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Funktion: `db_calculate_sec_purchase_value`
       - Ziel: Nutzt `_normalize_transaction_amounts` und `transaction_units`, akkumuliert Sicherheits- und Kontowährungssummen je Los und berechnet durchschnittliche Kaufpreise pro Aktie in beiden Währungen.
