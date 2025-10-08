@@ -13,7 +13,7 @@
       - Ziel: Ergänzt Rückgabe des verwendeten FX-Kurses, damit `net_trade_account / fx_rate` als Ersatz für fehlende `fx_amount` genutzt werden kann.
 
 2. Backend: Sicherheitswährungs-Kaufsummen berechnen
-   a) [ ] Kaufmetriken um Sicherheitswährungsfelder erweitern
+   a) [x] Kaufmetriken um Sicherheitswährungsfelder erweitern
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Dataklasse: `PurchaseComputation`
       - Ziel: Zusätzliche Attribute `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account` vorhalten.
