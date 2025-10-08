@@ -73,7 +73,7 @@
       - Datei: `src/tabs/security_detail.ts`
       - Bereiche: `ensureSnapshotMetrics`, `renderOverviewCard`
       - Ziel: Nutzt `avg_price_security` als Hauptwert, zeigt Kontowährungsreferenz sekundär an.
-   b) [ ] Depotübersicht um Sicherheitswährung erweitern
+   b) [x] Depotübersicht um Sicherheitswährung erweitern
       - Datei: `src/tabs/overview.ts`
       - Abschnitt: Rendering der Positionsliste
       - Ziel: Zeigt Kaufpreis pro Aktie in Sicherheitswährung an und nutzt Kontowährung nur ergänzend.
