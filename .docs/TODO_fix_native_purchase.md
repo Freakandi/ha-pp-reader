@@ -3,7 +3,7 @@
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Abschnitte: neuer Helper unterhalb `PURCHASE_TYPES` / `SALE_TYPES`
       - Ziel: Zerlegt eine `Transaction` in reale Stückzahl (`shares / 1e8`), Bruttobetrag (`amount / 100`), Gebühren (`transaction_units.type = 2`), Steuern (`transaction_units.type = 1`) und berechnet `net_trade_account = gross - fees - taxes`.
-   b) [ ] Verarbeitung der `transaction_units` erweitern
+   b) [x] Verarbeitung der `transaction_units` erweitern
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Funktion: `_resolve_native_amount`
       - Ziel: Neben `fx_amount` auch den Rohbetrag (`amount / 100`) für `type = 0` zurückgeben, um Sicherheitswährungsbeträge verfügbar zu machen.
