@@ -53,7 +53,7 @@
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Funktionen: `_rebuild_transaction_units`, `_load_all_transactions`
       - Ziel: Stellt sicher, dass neue `transaction_units`-Informationen (inkl. Steuern) geladen werden und dass der Refresh nach Schemaänderung funktioniert.
-   c) [ ] Migration bestehender Daten durchführen
+   c) [x] Migration bestehender Daten durchführen
       - Datei: `custom_components/pp_reader/data/db_schema.py`
       - Abschnitt: Migrationslogik
       - Ziel: Bestehende `portfolio_securities`-Einträge initial mit 0 bzw. `NULL` für die neuen Spalten befüllen.

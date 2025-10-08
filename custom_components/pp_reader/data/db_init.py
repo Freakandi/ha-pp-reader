@@ -173,20 +173,85 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
                 "nichts zu tun"
             )
         )
-        return
+    else:
+        for col, ddl in migrations:
+            try:
+                conn.execute(ddl)
+                _LOGGER.info(
+                    "Runtime-Migration: Spalte '%s' zu portfolio_securities hinzugefügt",
+                    col,
+                )
+            except sqlite3.Error:
+                _LOGGER.warning(
+                    "Runtime-Migration: Konnte Spalte '%s' nicht hinzufügen",
+                    col,
+                    exc_info=True,
+                )
 
-    for col, ddl in migrations:
+    _backfill_portfolio_purchase_extension_defaults(conn)
+
+
+def _backfill_portfolio_purchase_extension_defaults(
+    conn: sqlite3.Connection,
+) -> None:
+    """Populate default values for purchase extension columns."""
+
+    updates: list[tuple[str, str]] = [
+        (
+            "security_currency_total",
+            (
+                "UPDATE portfolio_securities "
+                "SET security_currency_total = 0.0 "
+                "WHERE security_currency_total IS NULL"
+            ),
+        ),
+        (
+            "account_currency_total",
+            (
+                "UPDATE portfolio_securities "
+                "SET account_currency_total = 0.0 "
+                "WHERE account_currency_total IS NULL"
+            ),
+        ),
+        (
+            "avg_price_security",
+            (
+                "UPDATE portfolio_securities "
+                "SET avg_price_security = NULL "
+                "WHERE avg_price_security = 0"
+            ),
+        ),
+        (
+            "avg_price_account",
+            (
+                "UPDATE portfolio_securities "
+                "SET avg_price_account = NULL "
+                "WHERE avg_price_account = 0"
+            ),
+        ),
+    ]
+
+    for column, statement in updates:
         try:
-            conn.execute(ddl)
-            _LOGGER.info(
-                "Runtime-Migration: Spalte '%s' zu portfolio_securities hinzugefügt",
-                col,
-            )
+            cursor = conn.execute(statement)
         except sqlite3.Error:
             _LOGGER.warning(
-                "Runtime-Migration: Konnte Spalte '%s' nicht hinzufügen",
-                col,
+                "Runtime-Migration: Konnte Standardwerte für '%s' nicht setzen",
+                column,
                 exc_info=True,
+            )
+            continue
+
+        if cursor.rowcount > 0:
+            _LOGGER.info(
+                "Runtime-Migration: Standardwerte für '%s' in %d Datensätzen gesetzt",
+                column,
+                cursor.rowcount,
+            )
+        else:
+            _LOGGER.debug(
+                "Runtime-Migration: Keine Aktualisierung für '%s' erforderlich",
+                column,
             )
 
 
