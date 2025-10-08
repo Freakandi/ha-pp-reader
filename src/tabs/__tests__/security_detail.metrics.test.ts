@@ -95,7 +95,11 @@ test('ensureSnapshotMetricsForTest keeps native average null when missing', () =
 
   assert.ok(metrics, 'metrics should still be generated with partial data');
   assert.strictEqual(metrics?.averagePurchaseNative, null);
-  assert.strictEqual(metrics?.averagePurchaseAccount, null);
+  assertApproximately(
+    metrics?.averagePurchaseAccount,
+    100,
+    'account average should fall back to EUR average when totals are missing',
+  );
 
   const cleared = ensureSnapshotMetricsForTest('security-null', null);
   assert.strictEqual(cleared, null, 'metrics must be cleared when snapshot is removed');
