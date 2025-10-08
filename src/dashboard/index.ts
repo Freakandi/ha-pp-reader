@@ -8,6 +8,28 @@ export * from '../dashboard';
 export * from '../tabs/overview';
 export * from '../tabs/security_detail';
 export * from '../tabs/types';
-export * from '../data/api';
+export {
+  getEntryId,
+  fetchDashboardDataWS,
+  fetchAccountsWS,
+  fetchLastFileUpdateWS,
+  fetchPortfoliosWS,
+  fetchPortfolioPositionsWS,
+  fetchSecuritySnapshotWS,
+  fetchSecurityHistoryWS,
+} from '../data/api';
+export type {
+  AccountSummary,
+  PortfolioSummary,
+  DashboardDataResponse,
+  AccountsResponse,
+  PortfoliosResponse,
+  PortfolioPositionsResponse,
+  SecuritySnapshotResponse,
+  SecurityHistoryPoint,
+  SecurityHistoryResponse,
+  LastFileUpdateResponse,
+  SecurityHistoryOptions,
+} from '../data/api';
 export * from '../data/updateConfigsWS';
 export { addSwipeEvents, goToTab } from '../interaction/tab_control';

@@ -60,12 +60,32 @@ export interface SecuritySnapshotLike {
   current_value_eur: number;
   gain_abs_eur: number;
   gain_pct: number;
+  purchase_total_security?: number;
+  purchase_total_account?: number;
+  avg_price_security?: number | null;
+  avg_price_account?: number | null;
   last_price_native?: number | null;
   last_price_eur: number | null;
   last_close_native?: number | null;
   last_close_eur?: number | null;
   average_purchase_price_native?: number | string | null;
   source?: string;
+  [key: string]: unknown;
+}
+
+export interface PortfolioPosition {
+  security_uuid: string;
+  name: string;
+  current_holdings: number;
+  purchase_value: number;
+  current_value: number;
+  gain_abs: number;
+  gain_pct: number;
+  average_purchase_price_native?: number | null;
+  purchase_total_security: number;
+  purchase_total_account: number;
+  avg_price_security: number | null;
+  avg_price_account: number | null;
   [key: string]: unknown;
 }
 
