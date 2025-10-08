@@ -82,10 +82,10 @@ export interface PortfolioPosition {
   gain_abs: number;
   gain_pct: number;
   average_purchase_price_native?: number | null;
-  purchase_total_security?: number;
-  purchase_total_account?: number;
-  avg_price_security?: number | null;
-  avg_price_account?: number | null;
+  purchase_total_security: number;
+  purchase_total_account: number;
+  avg_price_security: number | null;
+  avg_price_account: number | null;
   [key: string]: unknown;
 }
 
