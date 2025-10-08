@@ -1445,6 +1445,11 @@ function resolveAveragePurchaseBaseline(
     return metricsBaseline;
   }
 
+  const snapshotSecurityAverage = toFiniteNumber(snapshot?.avg_price_security);
+  if (typeof snapshotSecurityAverage === 'number' && Number.isFinite(snapshotSecurityAverage)) {
+    return snapshotSecurityAverage;
+  }
+
   return toFiniteNumber(snapshot?.average_purchase_price_native);
 }
 

@@ -77,7 +77,7 @@
       - Datei: `src/tabs/overview.ts`
       - Abschnitt: Rendering der Positionsliste
       - Ziel: Zeigt Kaufpreis pro Aktie in Sicherheitswährung an und nutzt Kontowährung nur ergänzend.
-   c) [ ] UI-Tests anpassen
+   c) [x] UI-Tests anpassen
       - Datei: `src/tabs/__tests__/security_detail.metrics.test.ts`
       - Ziel: Prüft neue Kennzahlen inklusive FX-Fallback.
 

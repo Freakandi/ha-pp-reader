@@ -22,24 +22,64 @@ type SecuritySnapshotMetricsLike = NonNullable<
   ReturnType<typeof ensureSnapshotMetricsForTest>
 >;
 
-test('ensureSnapshotMetricsForTest returns provided native averages verbatim', () => {
+function assertApproximately(
+  actual: number | null | undefined,
+  expected: number,
+  message: string,
+  tolerance = 1e-9,
+): void {
+  assert.ok(
+    typeof actual === 'number' && Number.isFinite(actual),
+    `${message}: expected a finite number but received ${actual}`,
+  );
+
+  const delta = Math.abs(actual - expected);
+  assert.ok(
+    delta <= tolerance,
+    `${message}: expected ${expected} within ±${tolerance}, got ${actual}`,
+  );
+}
+
+test('ensureSnapshotMetricsForTest prioritises security currency averages and totals', () => {
   clearSnapshotMetricsRegistryForTest();
 
   const metrics = ensureSnapshotMetricsForTest('security-avg', {
     security_uuid: 'security-avg',
-    total_holdings: '4',
-    purchase_value_eur: '200',
-    current_value_eur: '260',
-    average_purchase_price_native: '123.45',
-    last_price_native: '130.1',
-    last_close_native: '125.3',
-    last_price_eur: '65.5',
-    last_close_eur: '60.5',
+    total_holdings_precise: '100.00000000',
+    purchase_value_eur: '654.32',
+    current_value_eur: '812.5',
+    purchase_total_security: '724.89',
+    purchase_total_account: '494.2',
+    avg_price_security: '7.2489',
+    avg_price_account: '4.942',
+    average_purchase_price_native: '1.23',
+    last_price_native: '8.12',
+    last_close_native: '7.85',
+    last_price_eur: '5.49',
+    last_close_eur: '5.27',
   });
 
   assert.ok(metrics, 'expected metrics to be materialised');
-  assert.strictEqual(metrics?.averagePurchaseNative, 123.45);
-  assert.strictEqual(metrics?.averagePurchaseEur, 50);
+  assertApproximately(
+    metrics?.averagePurchaseNative,
+    7.2489,
+    'security average should match backend-provided value',
+  );
+  assertApproximately(
+    metrics?.averagePurchaseAccount,
+    4.942,
+    'account average should reflect account currency input',
+  );
+  assertApproximately(
+    metrics?.averagePurchaseEur,
+    6.5432,
+    'EUR average should be derived from purchase_value_eur',
+  );
+  assertApproximately(
+    metrics?.holdings,
+    100,
+    'holdings should normalise precise totals',
+  );
 });
 
 test('ensureSnapshotMetricsForTest keeps native average null when missing', () => {
@@ -55,9 +95,44 @@ test('ensureSnapshotMetricsForTest keeps native average null when missing', () =
 
   assert.ok(metrics, 'metrics should still be generated with partial data');
   assert.strictEqual(metrics?.averagePurchaseNative, null);
+  assertApproximately(
+    metrics?.averagePurchaseAccount,
+    100,
+    'account average should fall back to EUR average when totals are missing',
+  );
 
   const cleared = ensureSnapshotMetricsForTest('security-null', null);
   assert.strictEqual(cleared, null, 'metrics must be cleared when snapshot is removed');
+});
+
+test('ensureSnapshotMetricsForTest derives averages from security and account totals', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('security-fallback', {
+    security_uuid: 'security-fallback',
+    total_holdings: '100',
+    purchase_value_eur: '494.2',
+    purchase_total_security: '724.89',
+    purchase_total_account: '494.2',
+    last_price_native: '8.12',
+  });
+
+  assert.ok(metrics, 'expected metrics to be created with derived totals');
+  assertApproximately(
+    metrics?.averagePurchaseNative,
+    7.2489,
+    'security average should be derived from purchase_total_security',
+  );
+  assertApproximately(
+    metrics?.averagePurchaseAccount,
+    4.942,
+    'account average should fall back to purchase_total_account',
+  );
+  assertApproximately(
+    metrics?.averagePurchaseEur,
+    4.942,
+    'EUR average should align with purchase_value_eur / holdings',
+  );
 });
 
 test('getHistoryChartOptionsForTest injects the native baseline into chart options', () => {
@@ -110,22 +185,32 @@ test('getHistoryChartOptionsForTest injects the native baseline into chart optio
   assert.match(tooltipContent, /USD/);
 });
 
-test('resolveAveragePurchaseBaselineForTest falls back to snapshot values when metrics lack averages', () => {
-  const snapshot = {
-    average_purchase_price_native: '45.67',
+test('resolveAveragePurchaseBaselineForTest falls back to snapshot security averages', () => {
+  const snapshotWithSecurityAverage = {
+    avg_price_security: '7.2489',
+    average_purchase_price_native: '4.94',
   } as const;
-
-  assert.strictEqual(
-    resolveAveragePurchaseBaselineForTest(null, snapshot),
-    45.67,
-  );
 
   assert.strictEqual(
     resolveAveragePurchaseBaselineForTest(
       { averagePurchaseNative: 12.34 } as unknown as SecuritySnapshotMetricsLike,
-      snapshot,
+      snapshotWithSecurityAverage,
     ),
     12.34,
+  );
+
+  assert.strictEqual(
+    resolveAveragePurchaseBaselineForTest(null, snapshotWithSecurityAverage),
+    7.2489,
+  );
+
+  const snapshotWithLegacyAverage = {
+    average_purchase_price_native: '45.67',
+  } as const;
+
+  assert.strictEqual(
+    resolveAveragePurchaseBaselineForTest(null, snapshotWithLegacyAverage),
+    45.67,
   );
 
   assert.strictEqual(
