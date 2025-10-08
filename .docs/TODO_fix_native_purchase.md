@@ -59,7 +59,7 @@
       - Ziel: Bestehende `portfolio_securities`-Einträge initial mit 0 bzw. `NULL` für die neuen Spalten befüllen.
 
 5. Frontend: API- und Typdefinitionen aktualisieren
-   a) [ ] Websocket-Response-Typen erweitern
+   a) [x] Websocket-Response-Typen erweitern
       - Datei: `src/data/api.ts`
       - Interface: `SecuritySnapshotResponse`, `PortfolioPosition`
       - Ziel: Neue Felder für Kaufwerte und Durchschnittspreise deklarieren.
