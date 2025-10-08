@@ -69,7 +69,7 @@
       - Ziel: Stellt Frontend-Typen auf die erweiterten Backend-Felder ein.
 
 6. Frontend: Darstellung der Kaufpreise anpassen
-   a) [ ] Sicherheitsdetailansicht priorisiert Sicherheitswährung
+   a) [x] Sicherheitsdetailansicht priorisiert Sicherheitswährung
       - Datei: `src/tabs/security_detail.ts`
       - Bereiche: `ensureSnapshotMetrics`, `renderOverviewCard`
       - Ziel: Nutzt `avg_price_security` als Hauptwert, zeigt Kontowährungsreferenz sekundär an.

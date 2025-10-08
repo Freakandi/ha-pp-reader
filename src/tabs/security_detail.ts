@@ -109,6 +109,7 @@ interface SecuritySnapshotMetrics {
   currentValueEur: number | null;
   averagePurchaseNative: number | null;
   averagePurchaseEur: number | null;
+  averagePurchaseAccount: number | null;
   dayPriceChangeNative: number | null;
   dayPriceChangeEur: number | null;
   dayChangePct: number | null;
@@ -627,6 +628,24 @@ function isPositiveFinite(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+function areNumbersClose(
+  first: number | null | undefined,
+  second: number | null | undefined,
+  tolerance?: number,
+): boolean {
+  if (!isFiniteNumber(first) || !isFiniteNumber(second)) {
+    return false;
+  }
+
+  const absoluteDiff = Math.abs(first - second);
+  if (tolerance != null) {
+    return absoluteDiff <= tolerance;
+  }
+
+  const scale = Math.max(Math.abs(first), Math.abs(second), 1);
+  return absoluteDiff <= scale * 1e-4;
+}
+
 function roundPercentage(value: number | null): number | null {
   if (value == null || Number.isNaN(value)) {
     return null;
@@ -675,6 +694,17 @@ function computeHoldingsAdjustedEurChange(
   return roundCurrency(nativeInEur * holdings);
 }
 
+function computeAveragePurchaseFromTotal(
+  total: number | null,
+  holdings: number | null,
+): number | null {
+  if (!isPositiveFinite(holdings) || !isFiniteNumber(total)) {
+    return null;
+  }
+
+  return total / holdings;
+}
+
 function computeAveragePurchaseEur(
   purchaseValueEur: number | null,
   holdings: number | null,
@@ -717,9 +747,15 @@ function ensureSnapshotMetrics(
   const currentValueEur =
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur);
-  const averagePurchaseNative = toFiniteNumber(
-    snapshot.average_purchase_price_native,
-  );
+  const purchaseTotalSecurity = toFiniteNumber(snapshot.purchase_total_security);
+  const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
+  const averagePurchaseNative =
+    toFiniteNumber(snapshot.avg_price_security) ??
+    toFiniteNumber(snapshot.average_purchase_price_native) ??
+    computeAveragePurchaseFromTotal(purchaseTotalSecurity, holdings);
+  const averagePurchaseAccount =
+    toFiniteNumber(snapshot.avg_price_account) ??
+    computeAveragePurchaseFromTotal(purchaseTotalAccount, holdings);
   const averagePurchaseEur = computeAveragePurchaseEur(purchaseValueEur, holdings);
   const lastPriceNative =
     toFiniteNumber(snapshot.last_price_native) ??
@@ -769,6 +805,7 @@ function ensureSnapshotMetrics(
     currentValueEur,
     averagePurchaseNative,
     averagePurchaseEur,
+    averagePurchaseAccount: averagePurchaseAccount ?? averagePurchaseEur,
     dayPriceChangeNative,
     dayPriceChangeEur,
     dayChangePct,
@@ -1106,6 +1143,61 @@ function formatPriceChangeWithCurrency(
   return `<span class="${className}">${formatted}${suffix}</span>`;
 }
 
+function resolveAccountCurrencyCode(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+  metrics: SecuritySnapshotMetrics | null | undefined,
+  accountAverage: number | null | undefined,
+  securityAverage: number | null | undefined,
+): string | null {
+  if (!isFiniteNumber(accountAverage)) {
+    return null;
+  }
+
+  const rawExplicit =
+    (snapshot as { account_currency_code?: unknown } | null | undefined)?.account_currency_code ??
+    (snapshot as { account_currency?: unknown } | null | undefined)?.account_currency;
+  if (typeof rawExplicit === 'string' && rawExplicit.trim()) {
+    return rawExplicit.trim().toUpperCase();
+  }
+
+  const securityCurrency = String(snapshot?.currency_code || '').trim().toUpperCase();
+  if (
+    securityCurrency &&
+    isFiniteNumber(securityAverage) &&
+    areNumbersClose(accountAverage, securityAverage)
+  ) {
+    return securityCurrency;
+  }
+
+  const securityTotal = toFiniteNumber(snapshot?.purchase_total_security);
+  const accountTotal = toFiniteNumber(snapshot?.purchase_total_account);
+  let ratio: number | null = null;
+  if (isFiniteNumber(securityTotal) && securityTotal !== 0 && isFiniteNumber(accountTotal)) {
+    ratio = accountTotal / securityTotal;
+  }
+
+  const fxRate = metrics?.fxRate ?? null;
+  if (ratio != null) {
+    if (areNumbersClose(ratio, 1)) {
+      return securityCurrency || null;
+    }
+    if (isPositiveFinite(fxRate) && areNumbersClose(ratio, fxRate)) {
+      return 'EUR';
+    }
+  }
+
+  if (securityCurrency === 'EUR') {
+    return 'EUR';
+  }
+
+  const purchaseValueEur = toFiniteNumber(snapshot?.purchase_value_eur);
+  if (isFiniteNumber(purchaseValueEur)) {
+    return 'EUR';
+  }
+
+  return securityCurrency || 'EUR';
+}
+
 function buildHeaderMeta(
   snapshot: SecuritySnapshotDetail | null,
   metrics: SecuritySnapshotMetrics | null = null,
@@ -1133,16 +1225,32 @@ function buildHeaderMeta(
   const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
   const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
   const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
+  const holdingsForAverage =
+    metrics?.holdings ??
+    toFiniteNumber(snapshot.total_holdings_precise) ??
+    toFiniteNumber(snapshot.total_holdings);
   const averagePurchaseNativeRaw =
-    metrics?.averagePurchaseNative ?? toFiniteNumber(snapshot.average_purchase_price_native);
+    metrics?.averagePurchaseNative ??
+    toFiniteNumber(snapshot.avg_price_security) ??
+    toFiniteNumber(snapshot.average_purchase_price_native) ??
+    computeAveragePurchaseFromTotal(
+      toFiniteNumber(snapshot.purchase_total_security),
+      holdingsForAverage,
+    );
   const averagePurchaseEurRaw =
     metrics?.averagePurchaseEur ??
     computeAveragePurchaseEur(
       toFiniteNumber(snapshot.purchase_value_eur),
-      toFiniteNumber(
-        metrics?.holdings ?? snapshot.total_holdings_precise ?? snapshot.total_holdings,
-      ),
+      holdingsForAverage,
     );
+  const averagePurchaseAccountRaw =
+    metrics?.averagePurchaseAccount ??
+    toFiniteNumber(snapshot.avg_price_account) ??
+    computeAveragePurchaseFromTotal(
+      toFiniteNumber(snapshot.purchase_total_account),
+      holdingsForAverage,
+    ) ??
+    averagePurchaseEurRaw;
   const dayPriceChangeNative =
     metrics?.dayPriceChangeNative ?? computeDelta(lastPriceNative, lastCloseNative);
   const dayPriceChangeEur =
@@ -1239,20 +1347,34 @@ function buildHeaderMeta(
         'value--average value--average-native',
       ),
     );
-  }
-
-  if (isFiniteNumber(averagePurchaseEurRaw)) {
+  } else {
     averagePurchaseValues.push(
-      wrapValue(
-        `${formatPrice(averagePurchaseEurRaw)}&nbsp;€`,
-        'value--average value--average-eur',
-      ),
+      wrapMissingValue('value--average value--average-native'),
     );
   }
 
-  if (averagePurchaseValues.length === 0) {
+  const accountCurrency = resolveAccountCurrencyCode(
+    snapshot,
+    metrics,
+    averagePurchaseAccountRaw,
+    averagePurchaseNativeRaw,
+  );
+  const shouldRenderAccountValue =
+    isFiniteNumber(averagePurchaseAccountRaw) &&
+    (!isFiniteNumber(averagePurchaseNativeRaw) ||
+      !accountCurrency ||
+      !currency ||
+      accountCurrency !== currency ||
+      !areNumbersClose(averagePurchaseAccountRaw, averagePurchaseNativeRaw));
+
+  if (shouldRenderAccountValue && isFiniteNumber(averagePurchaseAccountRaw)) {
     averagePurchaseValues.push(
-      wrapMissingValue('value--average value--average-native'),
+      wrapValue(
+        `${formatPrice(averagePurchaseAccountRaw)}${
+          accountCurrency ? `&nbsp;${accountCurrency}` : ''
+        }`,
+        'value--average value--average-eur',
+      ),
     );
   }
 
