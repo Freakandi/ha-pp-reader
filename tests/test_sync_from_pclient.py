@@ -89,6 +89,57 @@ class _DummyClient:
         self.portfolios = portfolios
 
 
+class _DummyFxRate:
+    """Minimal representation of Portfolio Performance PDecimalValue."""
+
+    def __init__(self, rate: float, scale: int = 6) -> None:
+        self.scale = scale
+        scaled = int(round(rate * (10**scale)))
+        self.value = scaled.to_bytes(16, byteorder="little", signed=True)
+
+
+class _DummyTransactionUnit:
+    """Simplified transaction unit carrying optional FX metadata."""
+
+    def __init__(
+        self,
+        *,
+        unit_type: int,
+        amount: int | None,
+        currency: str | None,
+        fx_amount: int | None = None,
+        fx_currency: str | None = None,
+        fx_rate: float | None = None,
+    ) -> None:
+        self.type = unit_type
+        self.amount = amount
+        self.currencyCode = currency
+        self.fxAmount = fx_amount
+        self.fxCurrencyCode = fx_currency
+        self._fx_rate = _DummyFxRate(fx_rate) if fx_rate is not None else None
+
+    def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
+        if name == "fxRateToBase":
+            return self._fx_rate is not None
+        if name == "fxAmount":
+            return self.fxAmount is not None
+        return getattr(self, name, None) is not None
+
+    @property
+    def fxRateToBase(self) -> _DummyFxRate:  # noqa: N802 - proto compatibility
+        if self._fx_rate is None:
+            raise AttributeError("fxRateToBase not set")
+        return self._fx_rate
+
+
+class _DummyTransaction:
+    """Minimal transaction stub exposing UUID and transaction units."""
+
+    def __init__(self, uuid: str, units: list[_DummyTransactionUnit]) -> None:
+        self.uuid = uuid
+        self.units = units
+
+
 class _DummyPrice:
     """Simple price stub emulating Portfolio Performance historical prices."""
 
@@ -151,6 +202,7 @@ def _prepare_portfolio_db(path: Path) -> sqlite3.Connection:
         *db_schema.SECURITY_SCHEMA,
         *db_schema.PORTFOLIO_SCHEMA,
         *db_schema.PORTFOLIO_SECURITIES_SCHEMA,
+        *db_schema.TRANSACTION_SCHEMA,
     )
     for statement in schema_statements:
         conn.executescript(statement)
@@ -182,6 +234,67 @@ def test_sync_portfolios_commits_changes(tmp_path: Path) -> None:
         sync_module._TIMESTAMP_IMPORT_ERROR = original_error
         runner.cursor.close()
         conn.close()
+
+
+def test_rebuild_transaction_units_collects_tax_and_fee(tmp_path: Path) -> None:
+    """Transaction units rebuild should expose fee/tax metadata for consumers."""
+
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    runner = _SyncRunner(
+        client=_DummyClient([]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+
+    transaction = _DummyTransaction(
+        "tx-1",
+        [
+            _DummyTransactionUnit(
+                unit_type=0,
+                amount=49_420,
+                currency="EUR",
+                fx_amount=72_489,
+                fx_currency="CAD",
+                fx_rate=1.46789,
+            ),
+            _DummyTransactionUnit(
+                unit_type=2,
+                amount=100,
+                currency="EUR",
+            ),
+            _DummyTransactionUnit(
+                unit_type=1,
+                amount=50,
+                currency="EUR",
+            ),
+        ],
+    )
+    runner.client.transactions = [transaction]
+
+    try:
+        tx_units = runner._rebuild_transaction_units()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    assert "tx-1" in tx_units
+    aggregate = tx_units["tx-1"]
+    assert aggregate["fx_amount"] == 72_489
+    assert aggregate["fx_currency_code"] == "CAD"
+
+    entries = aggregate.get("entries")
+    assert isinstance(entries, list)
+
+    fee_entry = next(entry for entry in entries if entry["type"] == 2)
+    tax_entry = next(entry for entry in entries if entry["type"] == 1)
+
+    assert fee_entry["amount"] == 100
+    assert tax_entry["amount"] == 50
 
 
 def test_compact_event_data_trims_portfolio_values_list() -> None:

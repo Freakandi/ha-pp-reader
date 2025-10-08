@@ -58,7 +58,11 @@ def _normalize_transaction_amounts(
         if isinstance(units, list):
             entries = [entry for entry in units if isinstance(entry, dict)]
         elif isinstance(units, dict):
-            entries = [units]
+            nested = units.get("entries") if "entries" in units else None
+            if isinstance(nested, list):
+                entries = [entry for entry in nested if isinstance(entry, dict)]
+            else:
+                entries = [units]
         else:
             entries = []
 
