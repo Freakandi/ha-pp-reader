@@ -27,7 +27,7 @@
       - Ziel: Loggt warnend, wenn weder `type = 0` noch ein FX-Kurs verfügbar ist, und markiert die Position für manuelle Prüfung.
 
 3. Backend: Persistierte Portfolio-Daten anreichern
-   a) [ ] `portfolio_securities`-Upsert erweitern
+   a) [x] `portfolio_securities`-Upsert erweitern
       - Datei: `custom_components/pp_reader/prices/price_service.py`
       - Funktion: `_refresh_portfolio_securities`
       - Ziel: Schreibt neue Werte (`security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`) in zusätzliche Spalten des Upserts.
