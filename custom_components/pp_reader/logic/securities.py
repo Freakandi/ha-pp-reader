@@ -242,30 +242,79 @@ def db_calculate_current_holdings(
 
 def _resolve_native_amount(
     transaction: Transaction,
-    tx_units: dict[str, dict[str, int | str]] | None,
-) -> tuple[float | None, str | None]:
-    """Return the native amount for a transaction if FX metadata exists."""
+    tx_units: dict[str, Any] | None,
+) -> tuple[float | None, str | None, float | None]:
+    """Return native and account amounts for ``transaction_units`` metadata."""
     if not tx_units:
-        return None, None
+        return None, None, None
 
-    unit = tx_units.get(transaction.uuid)
-    if not unit:
-        return None, None
+    units = tx_units.get(transaction.uuid)
+    if not units:
+        return None, None, None
 
-    raw_amount = unit.get("fx_amount")
-    if raw_amount is None:
-        return None, None
+    entries: list[dict[str, Any]]
+    if isinstance(units, list):
+        entries = [entry for entry in units if isinstance(entry, dict)]
+    elif isinstance(units, dict):
+        entries = [units]
+    else:
+        return None, None, None
 
-    currency = unit.get("fx_currency_code")
-    amount = raw_amount / 100.0
-    return amount, currency if isinstance(currency, str) else None
+    native_amount: float | None = None
+    native_currency: str | None = None
+    account_amount: float | None = None
+
+    for entry in entries:
+        unit_type_raw = entry.get("type")
+
+        if unit_type_raw is None and (
+            "fx_amount" in entry or "fx_currency_code" in entry or "amount" in entry
+        ):
+            unit_type = 0
+        else:
+            try:
+                unit_type = int(unit_type_raw)
+            except (TypeError, ValueError):
+                continue
+
+        if unit_type != 0:
+            continue
+
+        raw_amount = entry.get("amount")
+        if raw_amount is not None:
+            if isinstance(raw_amount, (int, float)):
+                account_amount = float(raw_amount) / 100.0
+            else:
+                try:
+                    account_amount = float(int(raw_amount)) / 100.0
+                except (TypeError, ValueError):
+                    account_amount = None
+
+        fx_amount = entry.get("fx_amount")
+        if fx_amount is not None:
+            if isinstance(fx_amount, (int, float)):
+                native_amount = float(fx_amount) / 100.0
+            else:
+                try:
+                    native_amount = float(int(fx_amount)) / 100.0
+                except (TypeError, ValueError):
+                    native_amount = None
+
+        currency = entry.get("fx_currency_code")
+        if isinstance(currency, str):
+            native_currency = currency
+
+        if native_amount is not None and account_amount is not None:
+            break
+
+    return native_amount, native_currency, account_amount
 
 
 def db_calculate_sec_purchase_value(
     transactions: list[Transaction],
     db_path: Path,
     *,
-    tx_units: dict[str, dict[str, int | str]] | None = None,
+    tx_units: dict[str, Any] | None = None,
 ) -> dict[tuple[str, str], PurchaseComputation]:
     """Berechne den gesamten Kaufpreis und native Durchschnittspreise (FIFO)."""
     portfolio_metrics: dict[tuple[str, str], PurchaseComputation] = {}
@@ -300,7 +349,10 @@ def db_calculate_sec_purchase_value(
                 continue
             price_per_share = amount / shares if shares != 0 else 0
             price_per_share_eur = price_per_share / rate
-            native_amount, native_currency = _resolve_native_amount(tx, tx_units)
+            native_amount, native_currency, _native_account_amount = _resolve_native_amount(
+                tx,
+                tx_units,
+            )
             native_price = None
             if native_amount is not None and shares > 0:
                 native_price = native_amount / shares
