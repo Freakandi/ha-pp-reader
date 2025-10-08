@@ -49,6 +49,11 @@ export interface PortfolioPosition {
   current_value: number;
   gain_abs: number;
   gain_pct: number;
+  average_purchase_price_native?: number | null;
+  purchase_total_security: number;
+  purchase_total_account: number;
+  avg_price_security: number | null;
+  avg_price_account: number | null;
   [key: string]: unknown;
 }
 
@@ -71,6 +76,10 @@ export interface SecuritySnapshotResponse {
     last_price_eur?: number;
     market_value_eur?: number | null;
     average_purchase_price_native?: number | string | null;
+    purchase_total_security?: number;
+    purchase_total_account?: number;
+    avg_price_security?: number | null;
+    avg_price_account?: number | null;
     last_close_native?: number | null;
     last_close_eur?: number | null;
     [key: string]: unknown;
