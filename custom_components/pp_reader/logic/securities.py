@@ -11,6 +11,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
@@ -26,6 +27,77 @@ _LOGGER = logging.getLogger(__name__)
 
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
+
+
+@dataclass(slots=True)
+class _NormalizedTransactionAmounts:
+    """Represent normalized monetary figures for a transaction."""
+
+    shares: float
+    gross: float
+    fees: float
+    taxes: float
+    net_trade_account: float
+
+
+def _normalize_transaction_amounts(
+    transaction: Transaction,
+    tx_units: dict[str, Any] | None,
+) -> _NormalizedTransactionAmounts:
+    """Convert raw transaction figures into floats with fee/tax breakdown."""
+
+    shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
+    gross = (transaction.amount or 0) / 100.0
+    fees = 0.0
+    taxes = 0.0
+
+    if tx_units:
+        units = tx_units.get(transaction.uuid)
+
+        entries: list[dict[str, Any]]
+        if isinstance(units, list):
+            entries = [entry for entry in units if isinstance(entry, dict)]
+        elif isinstance(units, dict):
+            entries = [units]
+        else:
+            entries = []
+
+        for entry in entries:
+            unit_type_raw = entry.get("type")
+            amount_raw = entry.get("amount")
+
+            try:
+                unit_type = int(unit_type_raw)
+            except (TypeError, ValueError):
+                continue
+
+            if amount_raw is None:
+                continue
+
+            if isinstance(amount_raw, (int, float)):
+                unit_amount = float(amount_raw)
+            else:
+                try:
+                    unit_amount = float(int(amount_raw))
+                except (TypeError, ValueError):
+                    continue
+
+            unit_amount /= 100.0
+
+            if unit_type == 2:
+                fees += unit_amount
+            elif unit_type == 1:
+                taxes += unit_amount
+
+    net_trade_account = gross - fees - taxes
+
+    return _NormalizedTransactionAmounts(
+        shares=shares,
+        gross=gross,
+        fees=fees,
+        taxes=taxes,
+        net_trade_account=net_trade_account,
+    )
 
 
 @dataclass(slots=True)
