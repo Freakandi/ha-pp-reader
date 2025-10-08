@@ -39,7 +39,7 @@
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Funktionen: `_normalize_security_snapshot`, `_normalize_portfolio_positions`
       - Ziel: Serialisiert neue Felder (`purchase_total_security`, `purchase_total_account`, `avg_price_security`, `avg_price_account`).
-   d) [ ] Event-Push angleichen
+   d) [x] Event-Push angleichen
       - Datei: `custom_components/pp_reader/data/event_push.py`
       - Funktion: `_build_security_payload`
       - Ziel: Stellt sicher, dass Push-Events die erweiterten Kaufdaten enthalten.

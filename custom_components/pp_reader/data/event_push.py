@@ -129,6 +129,15 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         except (TypeError, ValueError):
             avg_native = None
 
+    def _optional_price(value_key: str) -> float | None:
+        raw_value = item.get(value_key)
+        if raw_value is None:
+            return None
+        try:
+            return round(float(raw_value), 6)
+        except (TypeError, ValueError):
+            return None
+
     normalized: dict[str, Any] = {
         "security_uuid": security_uuid,
         "name": item.get("name"),
@@ -138,6 +147,10 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         "gain_abs": _float("gain_abs"),
         "gain_pct": _float("gain_pct"),
         "average_purchase_price_native": avg_native,
+        "purchase_total_security": _float("purchase_total_security"),
+        "purchase_total_account": _float("purchase_total_account"),
+        "avg_price_security": _optional_price("avg_price_security"),
+        "avg_price_account": _optional_price("avg_price_account"),
     }
 
     return normalized
