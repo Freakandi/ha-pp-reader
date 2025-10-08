@@ -106,6 +106,10 @@ class PurchaseComputation:
 
     purchase_value: float
     avg_price_native: float | None
+    security_currency_total: float = 0.0
+    account_currency_total: float = 0.0
+    avg_price_security: float | None = None
+    avg_price_account: float | None = None
 
 
 @dataclass(slots=True)
