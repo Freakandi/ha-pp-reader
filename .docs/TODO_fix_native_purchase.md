@@ -82,7 +82,7 @@
       - Ziel: Prüft neue Kennzahlen inklusive FX-Fallback.
 
 7. Tests & Validierung
-   a) [ ] Backend-Testfall für SSR Mining hinzufügen
+   a) [x] Backend-Testfall für SSR Mining hinzufügen
       - Datei: `tests/test_logic_securities.py` (neu)
       - Ziel: Verifiziert 7,2489 CAD pro Aktie und korrekte EUR-Kaufsumme.
    b) [ ] Backend-Testfall für Harmonic Drive ergänzen
