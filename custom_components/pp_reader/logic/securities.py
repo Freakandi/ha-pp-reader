@@ -269,11 +269,17 @@ def _resolve_native_amount(
     if not units:
         return None, None, None
 
+    aggregate: dict[str, Any] | None = None
     entries: list[dict[str, Any]]
     if isinstance(units, list):
         entries = [entry for entry in units if isinstance(entry, dict)]
     elif isinstance(units, dict):
-        entries = [units]
+        aggregate = units
+        nested = units.get("entries") if "entries" in units else None
+        if isinstance(nested, list):
+            entries = [entry for entry in nested if isinstance(entry, dict)]
+        else:
+            entries = [units]
     else:
         return None, None, None
 
@@ -323,6 +329,22 @@ def _resolve_native_amount(
 
         if native_amount is not None and account_amount is not None:
             break
+
+    if aggregate:
+        if native_amount is None:
+            fx_amount = aggregate.get("fx_amount")
+            if isinstance(fx_amount, (int, float)):
+                native_amount = float(fx_amount) / 100.0
+            elif fx_amount is not None:
+                try:
+                    native_amount = float(int(fx_amount)) / 100.0
+                except (TypeError, ValueError):
+                    native_amount = None
+
+        if native_currency is None:
+            currency = aggregate.get("fx_currency_code")
+            if isinstance(currency, str):
+                native_currency = currency
 
     return native_amount, native_currency, account_amount
 
