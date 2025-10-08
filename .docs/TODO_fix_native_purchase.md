@@ -31,7 +31,7 @@
       - Datei: `custom_components/pp_reader/prices/price_service.py`
       - Funktion: `_refresh_portfolio_securities`
       - Ziel: Schreibt neue Werte (`security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`) in zusätzliche Spalten des Upserts.
-   b) [ ] Datenzugriffsschicht aktualisieren
+   b) [x] Datenzugriffsschicht aktualisieren
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Funktionen: `get_portfolio_positions`, `get_security_snapshot`
       - Ziel: Liefert Sicherheitswährungs-Kaufsummen und Durchschnittspreise samt Kontowährungsreferenz in den Rückgabe-JSONs.
