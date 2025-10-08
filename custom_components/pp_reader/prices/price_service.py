@@ -356,7 +356,7 @@ def _refresh_impacted_portfolio_securities(
     try:
         with sqlite3.connect(str(db_path)) as conn:
             existing_entries: dict[
-                tuple[str, str], tuple[float, int, float | None, int]
+                tuple[str, str], dict[str, float | int | None]
             ] = {}
             impacted_pairs: set[tuple[str, str]] = set()
 
@@ -364,8 +364,16 @@ def _refresh_impacted_portfolio_securities(
             try:
                 cur = conn.execute(
                     f"""
-                        SELECT portfolio_uuid, security_uuid, current_holdings,
-                               purchase_value, avg_price_native, current_value
+                        SELECT portfolio_uuid,
+                               security_uuid,
+                               current_holdings,
+                               purchase_value,
+                               avg_price_native,
+                               current_value,
+                               security_currency_total,
+                               account_currency_total,
+                               avg_price_security,
+                               avg_price_account
                         FROM portfolio_securities
                         WHERE security_uuid IN ({placeholders})
                     """,
@@ -385,16 +393,38 @@ def _refresh_impacted_portfolio_securities(
                 purch_val,
                 avg_native,
                 cur_val,
+                sec_total,
+                acc_total,
+                avg_price_sec,
+                avg_price_acc,
             ) in cur.fetchall():
                 key = (portfolio_uuid, security_uuid)
                 impacted_pairs.add(key)
                 impacted_portfolios.add(portfolio_uuid)
-                existing_entries[key] = (
-                    float(cur_hold or 0.0),
-                    int(purch_val or 0),
-                    float(avg_native) if avg_native is not None else None,
-                    int(cur_val or 0),
-                )
+                existing_entries[key] = {
+                    "current_holdings": float(cur_hold or 0.0),
+                    "purchase_value": int(purch_val or 0),
+                    "avg_price_native": (
+                        float(avg_native) if avg_native is not None else None
+                    ),
+                    "current_value": int(cur_val or 0),
+                    "security_currency_total": (
+                        float(sec_total) if sec_total is not None else 0.0
+                    ),
+                    "account_currency_total": (
+                        float(acc_total) if acc_total is not None else 0.0
+                    ),
+                    "avg_price_security": (
+                        float(avg_price_sec)
+                        if avg_price_sec is not None
+                        else None
+                    ),
+                    "avg_price_account": (
+                        float(avg_price_acc)
+                        if avg_price_acc is not None
+                        else None
+                    ),
+                }
 
             transaction_rows: list[tuple] = []
             try:
@@ -478,13 +508,36 @@ def _refresh_impacted_portfolio_securities(
                 metrics = purchase_metrics.get(key)
                 purchase_value = metrics.purchase_value if metrics else None
                 avg_price_native = metrics.avg_price_native if metrics else None
+                security_total = (
+                    metrics.security_currency_total if metrics else None
+                )
+                account_total = (
+                    metrics.account_currency_total if metrics else None
+                )
+                avg_price_security = (
+                    metrics.avg_price_security if metrics else None
+                )
+                avg_price_account = (
+                    metrics.avg_price_account if metrics else None
+                )
 
-                if holdings is None and key in existing_entries:
-                    holdings = existing_entries[key][0]
-                if purchase_value is None and key in existing_entries:
-                    purchase_value = round(existing_entries[key][1] / 100, 2)
-                if avg_price_native is None and key in existing_entries:
-                    avg_price_native = existing_entries[key][2]
+                existing_entry = existing_entries.get(key)
+                if holdings is None and existing_entry:
+                    holdings = float(existing_entry.get("current_holdings", 0.0))
+                if purchase_value is None and existing_entry:
+                    purchase_value = round(
+                        float(existing_entry.get("purchase_value", 0)) / 100, 2
+                    )
+                if avg_price_native is None and existing_entry:
+                    avg_price_native = existing_entry.get("avg_price_native")
+                if security_total is None and existing_entry:
+                    security_total = existing_entry.get("security_currency_total", 0.0)
+                if account_total is None and existing_entry:
+                    account_total = existing_entry.get("account_currency_total", 0.0)
+                if avg_price_security is None and existing_entry:
+                    avg_price_security = existing_entry.get("avg_price_security")
+                if avg_price_account is None and existing_entry:
+                    avg_price_account = existing_entry.get("avg_price_account")
 
                 if holdings is None:
                     continue
@@ -493,6 +546,10 @@ def _refresh_impacted_portfolio_securities(
                     "current_holdings": holdings,
                     "purchase_value": purchase_value or 0.0,
                     "avg_price_native": avg_price_native,
+                    "security_currency_total": security_total or 0.0,
+                    "account_currency_total": account_total or 0.0,
+                    "avg_price_security": avg_price_security,
+                    "avg_price_account": avg_price_account,
                 }
 
             if not current_hold_pur:
@@ -504,7 +561,7 @@ def _refresh_impacted_portfolio_securities(
             if not holdings_values:
                 return impacted_portfolios
 
-            upserts: list[tuple[str, str, float, int, float | None, int]] = []
+            upserts: list[tuple] = []
             for key, data in holdings_values.items():
                 portfolio_uuid, security_uuid = key
                 current_holdings_val = float(data.get("current_holdings", 0.0) or 0.0)
@@ -516,26 +573,98 @@ def _refresh_impacted_portfolio_securities(
                 else:
                     avg_price_native_val = None
 
-                expected_values = (
-                    current_holdings_val,
-                    int(round(purchase_value_eur * 100)),
-                    avg_price_native_val,
-                    int(round(current_value_eur * 100)),
+                security_total_raw = data.get("security_currency_total")
+                account_total_raw = data.get("account_currency_total")
+                avg_price_security = data.get("avg_price_security")
+                avg_price_account = data.get("avg_price_account")
+
+                security_total_val = (
+                    float(security_total_raw)
+                    if isinstance(security_total_raw, (int, float))
+                    else 0.0
                 )
+                account_total_val = (
+                    float(account_total_raw)
+                    if isinstance(account_total_raw, (int, float))
+                    else 0.0
+                )
+                avg_price_security_val: float | None
+                if isinstance(avg_price_security, (int, float)):
+                    avg_price_security_val = float(avg_price_security)
+                else:
+                    avg_price_security_val = None
+                avg_price_account_val: float | None
+                if isinstance(avg_price_account, (int, float)):
+                    avg_price_account_val = float(avg_price_account)
+                else:
+                    avg_price_account_val = None
+
+                purchase_value_cents = int(round(purchase_value_eur * 100))
+                current_value_cents = int(round(current_value_eur * 100))
+                security_total_rounded = round(security_total_val, 2)
+                account_total_rounded = round(account_total_val, 2)
 
                 existing_entry = existing_entries.get(key)
                 if existing_entry and (
-                    abs(existing_entry[0] - expected_values[0]) < 1e-9
-                    and existing_entry[1] == expected_values[1]
+                    abs(existing_entry.get("current_holdings", 0.0) - current_holdings_val)
+                    < 1e-9
+                    and int(existing_entry.get("purchase_value", 0)) == purchase_value_cents
                     and (
-                        (existing_entry[2] is None and expected_values[2] is None)
+                        (
+                            existing_entry.get("avg_price_native") is None
+                            and avg_price_native_val is None
+                        )
                         or (
-                            existing_entry[2] is not None
-                            and expected_values[2] is not None
-                            and abs(existing_entry[2] - expected_values[2]) < 1e-6
+                            existing_entry.get("avg_price_native") is not None
+                            and avg_price_native_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_native", 0.0))
+                                - avg_price_native_val
+                            )
+                            < 1e-6
                         )
                     )
-                    and existing_entry[3] == expected_values[3]
+                    and int(existing_entry.get("current_value", 0)) == current_value_cents
+                    and abs(
+                        float(existing_entry.get("security_currency_total", 0.0))
+                        - security_total_rounded
+                    )
+                    < 1e-6
+                    and abs(
+                        float(existing_entry.get("account_currency_total", 0.0))
+                        - account_total_rounded
+                    )
+                    < 1e-6
+                    and (
+                        (
+                            existing_entry.get("avg_price_security") is None
+                            and avg_price_security_val is None
+                        )
+                        or (
+                            existing_entry.get("avg_price_security") is not None
+                            and avg_price_security_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_security", 0.0))
+                                - avg_price_security_val
+                            )
+                            < 1e-6
+                        )
+                    )
+                    and (
+                        (
+                            existing_entry.get("avg_price_account") is None
+                            and avg_price_account_val is None
+                        )
+                        or (
+                            existing_entry.get("avg_price_account") is not None
+                            and avg_price_account_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_account", 0.0))
+                                - avg_price_account_val
+                            )
+                            < 1e-6
+                        )
+                    )
                 ):
                     continue
 
@@ -544,9 +673,13 @@ def _refresh_impacted_portfolio_securities(
                         portfolio_uuid,
                         security_uuid,
                         current_holdings_val,
-                        expected_values[1],
-                        expected_values[2],
-                        expected_values[3],
+                        purchase_value_cents,
+                        avg_price_native_val,
+                        security_total_rounded,
+                        account_total_rounded,
+                        avg_price_security_val,
+                        avg_price_account_val,
+                        current_value_cents,
                     )
                 )
 
@@ -563,8 +696,12 @@ def _refresh_impacted_portfolio_securities(
                             current_holdings,
                             purchase_value,
                             avg_price_native,
+                            security_currency_total,
+                            account_currency_total,
+                            avg_price_security,
+                            avg_price_account,
                             current_value
-                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     upserts,
                 )
