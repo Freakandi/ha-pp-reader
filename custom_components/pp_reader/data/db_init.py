@@ -108,6 +108,88 @@ def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None
         )
 
 
+def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
+    """Ensure purchase summary columns on portfolio securities exist."""
+
+    try:
+        cur = conn.execute("PRAGMA table_info(portfolio_securities)")
+        existing_cols = {row[1] for row in cur.fetchall()}
+    except sqlite3.Error:
+        _LOGGER.warning(
+            (
+                "Konnte PRAGMA table_info(portfolio_securities) nicht ausführen "
+                "- Migration für Kaufpreis-Erweiterung übersprungen"
+            ),
+            exc_info=True,
+        )
+        return
+
+    migrations: list[tuple[str, str]] = []
+    if "security_currency_total" not in existing_cols:
+        migrations.append(
+            (
+                "security_currency_total",
+                (
+                    "ALTER TABLE portfolio_securities "
+                    "ADD COLUMN security_currency_total REAL DEFAULT 0"
+                ),
+            )
+        )
+    if "account_currency_total" not in existing_cols:
+        migrations.append(
+            (
+                "account_currency_total",
+                (
+                    "ALTER TABLE portfolio_securities "
+                    "ADD COLUMN account_currency_total REAL DEFAULT 0"
+                ),
+            )
+        )
+    if "avg_price_security" not in existing_cols:
+        migrations.append(
+            (
+                "avg_price_security",
+                (
+                    "ALTER TABLE portfolio_securities "
+                    "ADD COLUMN avg_price_security REAL"
+                ),
+            )
+        )
+    if "avg_price_account" not in existing_cols:
+        migrations.append(
+            (
+                "avg_price_account",
+                (
+                    "ALTER TABLE portfolio_securities "
+                    "ADD COLUMN avg_price_account REAL"
+                ),
+            )
+        )
+
+    if not migrations:
+        _LOGGER.debug(
+            (
+                "Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - "
+                "nichts zu tun"
+            )
+        )
+        return
+
+    for col, ddl in migrations:
+        try:
+            conn.execute(ddl)
+            _LOGGER.info(
+                "Runtime-Migration: Spalte '%s' zu portfolio_securities hinzugefügt",
+                col,
+            )
+        except sqlite3.Error:
+            _LOGGER.warning(
+                "Runtime-Migration: Konnte Spalte '%s' nicht hinzufügen",
+                col,
+                exc_info=True,
+            )
+
+
 def _ensure_historical_price_index(conn: sqlite3.Connection) -> None:
     """Create the historical price index if it does not yet exist."""
     try:
@@ -158,6 +240,7 @@ def initialize_database_schema(db_path: Path) -> None:
             # --- NEU: Best-effort Runtime-Migration für Preis-Spalten ---
             _ensure_runtime_price_columns(conn)
             _ensure_portfolio_securities_native_column(conn)
+            _ensure_portfolio_purchase_extensions(conn)
             _ensure_historical_price_index(conn)
 
             conn.commit()
