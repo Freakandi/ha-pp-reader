@@ -121,6 +121,10 @@ class _HoldingLot:
     timestamp: datetime
     native_price: float | None = None
     native_currency: str | None = None
+    security_price: float | None = None
+    security_currency: str | None = None
+    account_price: float | None = None
+    account_currency: str | None = None
 
 
 def _is_relevant_transaction(transaction: Transaction) -> bool:
@@ -196,6 +200,10 @@ def _apply_sale_fifo(
                     timestamp=lot.timestamp,
                     native_price=lot.native_price,
                     native_currency=lot.native_currency,
+                    security_price=lot.security_price,
+                    security_currency=lot.security_currency,
+                    account_price=lot.account_price,
+                    account_currency=lot.account_currency,
                 )
             )
             remaining_to_sell = 0
@@ -336,8 +344,8 @@ def db_calculate_sec_purchase_value(
             continue
 
         key = (tx.portfolio, tx.security)
-        shares = normalize_shares(tx.shares) if tx.shares else 0
-        amount = tx.amount / 100  # Cent -> Währung der Transaktion
+        normalized = _normalize_transaction_amounts(tx, tx_units)
+        shares = normalized.shares
         tx_date = datetime.fromisoformat(tx.date)
         rate, _ = _determine_exchange_rate(
             tx,
@@ -352,11 +360,26 @@ def db_calculate_sec_purchase_value(
         if tx.type in PURCHASE_TYPES:
             if shares <= 0:
                 continue
-            price_per_share = amount / shares if shares != 0 else 0
-            price_per_share_eur = price_per_share / rate
-            native_amount, native_currency, _native_account_amount = _resolve_native_amount(
+            native_amount, native_currency, native_account_amount = _resolve_native_amount(
                 tx,
                 tx_units,
+            )
+            account_total = (
+                native_account_amount
+                if native_account_amount is not None
+                else normalized.net_trade_account
+            )
+            account_price = account_total / shares if shares > 0 else None
+            price_per_share_eur = (
+                account_price / rate if account_price is not None else 0.0
+            )
+            security_total = native_amount
+            security_currency = native_currency
+            if security_total is None:
+                security_total = account_total
+                security_currency = security_currency or tx.currency_code
+            security_price = (
+                security_total / shares if security_total is not None and shares > 0 else None
             )
             native_price = None
             if native_amount is not None and shares > 0:
@@ -369,6 +392,10 @@ def db_calculate_sec_purchase_value(
                     timestamp=tx_date,
                     native_price=native_price,
                     native_currency=native_currency,
+                    security_price=security_price,
+                    security_currency=security_currency,
+                    account_price=account_price,
+                    account_currency=tx.currency_code,
                 )
             )
         elif tx.type in SALE_TYPES:
@@ -384,21 +411,44 @@ def db_calculate_sec_purchase_value(
         total_shares = sum(lot.shares for lot in positions if lot.shares > 0)
 
         avg_price_native: float | None = None
-        if total_shares > 0:
-            native_total = 0.0
-            native_shares = 0.0
-            for lot in positions:
-                if lot.shares <= 0 or lot.native_price is None:
-                    continue
+        native_total = 0.0
+        native_shares = 0.0
+        security_total = 0.0
+        security_shares = 0.0
+        account_total = 0.0
+        account_shares = 0.0
+        for lot in positions:
+            if lot.shares <= 0:
+                continue
+            if lot.native_price is not None:
                 native_total += lot.shares * lot.native_price
                 native_shares += lot.shares
+            if lot.security_price is not None:
+                security_total += lot.shares * lot.security_price
+                security_shares += lot.shares
+            if lot.account_price is not None:
+                account_total += lot.shares * lot.account_price
+                account_shares += lot.shares
 
+        if total_shares > 0:
             if native_shares and abs(native_shares - total_shares) <= 1e-6:
                 avg_price_native = round(native_total / native_shares, 6)
+
+        avg_price_security: float | None = None
+        if security_shares and abs(security_shares - total_shares) <= 1e-6:
+            avg_price_security = round(security_total / security_shares, 6)
+
+        avg_price_account: float | None = None
+        if account_shares and abs(account_shares - total_shares) <= 1e-6:
+            avg_price_account = round(account_total / account_shares, 6)
 
         portfolio_metrics[key] = PurchaseComputation(
             purchase_value=round(total_purchase, 2),
             avg_price_native=avg_price_native,
+            security_currency_total=round(security_total, 2) if security_shares else 0.0,
+            account_currency_total=round(account_total, 2) if account_shares else 0.0,
+            avg_price_security=avg_price_security,
+            avg_price_account=avg_price_account,
         )
 
     return portfolio_metrics
