@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 import sys
 from collections.abc import Callable, Mapping
@@ -11,11 +13,13 @@ from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import (
+    async_register_built_in_panel,
     async_remove_panel as frontend_async_remove_panel,
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import (
-    async_register_panel as panel_custom_async_register_panel,
+    DEFAULT_EMBED_IFRAME,
+    DEFAULT_TRUST_EXTERNAL,
 )
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
@@ -34,6 +38,10 @@ from .data import websocket as websocket_module
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+PANEL_SIDEBAR_TITLE: Final = "Portfolio Dashboard"
+PANEL_SIDEBAR_ICON: Final = "mdi:chart-line"
+PANEL_WEB_COMPONENT: Final = "pp-reader-panel"
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -69,6 +77,27 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
     return price_service_module
+
+
+def _build_panel_config(
+    module_url: str,
+    *,
+    entry_id: str | None,
+    placeholder: bool,
+) -> dict[str, Any]:
+    """Return the panel registration payload used for placeholder and live panels."""
+
+    config: dict[str, Any] = {"entry_id": entry_id}
+    if placeholder:
+        config["placeholder"] = True
+
+    config["_panel_custom"] = {
+        "name": PANEL_WEB_COMPONENT,
+        "module_url": module_url,
+        "embed_iframe": DEFAULT_EMBED_IFRAME,
+        "trust_external": DEFAULT_TRUST_EXTERNAL,
+    }
+    return config
 
 
 def _get_websocket_module() -> ModuleType:
@@ -215,21 +244,30 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
                 existing_entry_id,
                 entry.entry_id,
             )
-
-        frontend_async_remove_panel(hass, "ppreader", warn_if_unknown=False)
+        update_existing = True
+    else:
+        update_existing = False
 
     try:
         cache_bust = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-        await panel_custom_async_register_panel(
-            hass,
-            frontend_url_path="ppreader",
-            webcomponent_name="pp-reader-panel",
-            module_url=f"/pp_reader_dashboard/panel.js?v={cache_bust}",
-            sidebar_title="Portfolio Dashboard",
-            sidebar_icon="mdi:chart-line",
-            require_admin=False,
-            config={"entry_id": entry.entry_id},
+        module_url = f"/pp_reader_dashboard/panel.js?v={cache_bust}"
+        panel_config = _build_panel_config(
+            module_url,
+            entry_id=entry.entry_id,
+            placeholder=False,
         )
+        register_result = async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title=PANEL_SIDEBAR_TITLE,
+            sidebar_icon=PANEL_SIDEBAR_ICON,
+            frontend_url_path="ppreader",
+            config=panel_config,
+            require_admin=False,
+            update=update_existing,
+        )
+        if inspect.isawaitable(register_result):
+            await register_result
         _LOGGER.info(
             "✅ Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
             cache_bust,
@@ -259,16 +297,22 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
         return
 
     try:
-        await panel_custom_async_register_panel(
-            hass,
-            frontend_url_path="ppreader",
-            webcomponent_name="pp-reader-panel",
-            module_url="/pp_reader_dashboard/panel.js?v=bootstrap",
-            sidebar_title="Portfolio Dashboard",
-            sidebar_icon="mdi:chart-line",
-            require_admin=False,
-            config={"entry_id": None, "placeholder": True},
+        panel_config = _build_panel_config(
+            "/pp_reader_dashboard/panel.js?v=bootstrap",
+            entry_id=None,
+            placeholder=True,
         )
+        register_result = async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title=PANEL_SIDEBAR_TITLE,
+            sidebar_icon=PANEL_SIDEBAR_ICON,
+            frontend_url_path="ppreader",
+            config=panel_config,
+            require_admin=False,
+        )
+        if inspect.isawaitable(register_result):
+            await register_result
         _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
     except ValueError:
         _LOGGER.exception(
@@ -304,17 +348,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
     # Dashboard-Dateien registrieren
     this_dir = Path(__file__).parent
     dashboard_folder = this_dir / "www" / "pp_reader_dashboard"
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                path=str(dashboard_folder.resolve()),
-                url_path="/pp_reader_dashboard",
-                cache_headers=False,
-            )
-        ]
-    )
 
-    await _ensure_placeholder_panel(hass)
+    await asyncio.gather(
+        _ensure_placeholder_panel(hass),
+        hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    path=str(dashboard_folder.resolve()),
+                    url_path="/pp_reader_dashboard",
+                    cache_headers=False,
+                )
+            ]
+        ),
+    )
 
     # Websocket-API registrieren
     try:
@@ -422,6 +468,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     panel_registered = False
 
     try:
+        await _ensure_placeholder_panel(hass)
+
         setup_backup_system = backup_db_module.setup_backup_system
         coordinator_cls = coordinator_module.PPReaderCoordinator
         initialize_database_schema = db_init_module.initialize_database_schema

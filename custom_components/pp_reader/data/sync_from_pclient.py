@@ -990,19 +990,24 @@ class _SyncRunner:
             "sync_from_pclient: Berechne und synchronisiere portfolio_securities..."
         )
         current_holdings = db_calculate_current_holdings(self.all_transactions)
-        purchase_values = db_calculate_sec_purchase_value(
-            self.all_transactions, self.db_path
+        purchase_metrics = db_calculate_sec_purchase_value(
+            self.all_transactions,
+            self.db_path,
+            tx_units=self.tx_units,
         )
 
         current_hold_pur: dict[tuple[str, str], dict[str, Any]] = {}
         for key, holdings in current_holdings.items():
-            purchase_value = purchase_values.get(key, 0.0)
+            metrics = purchase_metrics.get(key)
+            purchase_value = metrics.purchase_value if metrics else 0.0
+            avg_price_native = metrics.avg_price_native if metrics else None
             # Falls der Kaufwert wegen fehlender FX-Daten noch nicht
             # berechnet werden konnte, behalten wir die Position dennoch
             # für die Bewertung bei (purchase_value fällt dann auf 0.0).
             current_hold_pur[key] = {
                 "current_holdings": holdings,
                 "purchase_value": purchase_value,
+                "avg_price_native": avg_price_native,
             }
 
         current_holdings_values = db_calculate_holdings_value(
@@ -1021,7 +1026,7 @@ class _SyncRunner:
 
             self.cursor.execute(
                 """
-                SELECT current_holdings, purchase_value, current_value
+                SELECT current_holdings, purchase_value, avg_price_native, current_value
                 FROM portfolio_securities
                 WHERE portfolio_uuid = ? AND security_uuid = ?
                 """,
@@ -1032,6 +1037,7 @@ class _SyncRunner:
             expected_values = (
                 current_holdings_val,
                 int(round(purchase_value * 100)),
+                data.get("avg_price_native"),
                 current_value_cent,
             )
             if not existing_entry or existing_entry != expected_values:
@@ -1043,8 +1049,9 @@ class _SyncRunner:
                         security_uuid,
                         current_holdings,
                         purchase_value,
+                        avg_price_native,
                         current_value
-                    ) VALUES (?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         portfolio_uuid,
@@ -1052,6 +1059,7 @@ class _SyncRunner:
                         current_holdings_val,
                         expected_values[1],
                         expected_values[2],
+                        expected_values[3],
                     ),
                 )
                 portfolio_sec_processed += 1
