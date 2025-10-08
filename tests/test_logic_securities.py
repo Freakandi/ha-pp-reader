@@ -10,8 +10,12 @@ from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic import securities
 
 
-def _patch_fx(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stub FX helpers so EUR transactions use unit rates."""
+def _patch_fx(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    rates: dict[str, float] | None = None,
+) -> None:
+    """Stub FX helpers so transactions use deterministic rates."""
 
     monkeypatch.setattr(
         securities,
@@ -21,7 +25,7 @@ def _patch_fx(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         securities,
         "load_latest_rates_sync",
-        lambda reference_date, db_path: {"EUR": 1.0},
+        lambda reference_date, db_path: (rates or {"EUR": 1.0}),
     )
 
 
@@ -88,3 +92,57 @@ def test_ssr_mining_purchase_metrics(
     assert computation.avg_price_native == pytest.approx(7.2489, rel=0, abs=1e-6)
     assert computation.avg_price_security == pytest.approx(7.2489, rel=0, abs=1e-6)
     assert computation.avg_price_account == pytest.approx(4.942, rel=0, abs=1e-6)
+
+
+def test_harmonic_drive_purchase_without_fx_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """JPY purchases without native FX rows should fall back to account totals."""
+
+    _patch_fx(monkeypatch, rates={"JPY": 1.0})
+
+    db_path = tmp_path / "fx.sqlite"
+    transactions = [
+        Transaction(
+            uuid="ce0a9c37-937d-4678-8900-b07b12f4474c",
+            type=0,
+            account="7b539b3c-32db-41db-8a2a-b500d1c03d71",
+            portfolio="f9996e0d-743d-417f-b0f2-150dd68df646",
+            other_account=None,
+            other_portfolio=None,
+            date="2025-09-09T00:00:00",
+            currency_code="JPY",
+            amount=24_899_900,
+            shares=10_000_000_000,
+            security="df1d3f53-85a0-4685-a660-b5a6b0055a24",
+        )
+    ]
+    tx_units = {
+        "ce0a9c37-937d-4678-8900-b07b12f4474c": [
+            {"type": 2, "amount": 19_900, "currency_code": "JPY"}
+        ]
+    }
+
+    metrics = securities.db_calculate_sec_purchase_value(
+        transactions,
+        db_path,
+        tx_units=tx_units,
+    )
+
+    key = (
+        "f9996e0d-743d-417f-b0f2-150dd68df646",
+        "df1d3f53-85a0-4685-a660-b5a6b0055a24",
+    )
+    assert key in metrics
+    computation = metrics[key]
+
+    assert computation.purchase_value == pytest.approx(248_800.0, rel=0, abs=1e-6)
+    assert computation.security_currency_total == pytest.approx(
+        248_800.0, rel=0, abs=1e-6
+    )
+    assert computation.account_currency_total == pytest.approx(
+        248_800.0, rel=0, abs=1e-6
+    )
+    assert computation.avg_price_native is None
+    assert computation.avg_price_security == pytest.approx(2_488.0, rel=0, abs=1e-6)
+    assert computation.avg_price_account == pytest.approx(2_488.0, rel=0, abs=1e-6)

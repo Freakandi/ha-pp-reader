@@ -85,7 +85,7 @@
    a) [x] Backend-Testfall für SSR Mining hinzufügen
       - Datei: `tests/test_logic_securities.py` (neu)
       - Ziel: Verifiziert 7,2489 CAD pro Aktie und korrekte EUR-Kaufsumme.
-   b) [ ] Backend-Testfall für Harmonic Drive ergänzen
+   b) [x] Backend-Testfall für Harmonic Drive ergänzen
       - Datei: `tests/test_logic_securities.py`
       - Ziel: Prüft 2.488,00 JPY pro Aktie ohne FX-Row.
    c) [ ] Integrationstest für Websocket-Daten
