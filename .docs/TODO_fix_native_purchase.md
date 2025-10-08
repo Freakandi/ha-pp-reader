@@ -49,7 +49,7 @@
       - Datei: `custom_components/pp_reader/data/db_schema.py`
       - Abschnitt: Definition `portfolio_securities`
       - Ziel: Spalten für Sicherheitswährungssumme und Durchschnittspreise ergänzen, inklusive Default-Werte.
-   b) [ ] Datensynchronisation erweitern
+   b) [x] Datensynchronisation erweitern
       - Datei: `custom_components/pp_reader/data/sync_from_pclient.py`
       - Funktionen: `_rebuild_transaction_units`, `_load_all_transactions`
       - Ziel: Stellt sicher, dass neue `transaction_units`-Informationen (inkl. Steuern) geladen werden und dass der Refresh nach Schemaänderung funktioniert.
