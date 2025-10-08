@@ -12,7 +12,7 @@ All Python tooling must run inside the project virtual environment created from 
 - Install Node.js dependencies once after cloning: `npm install`.
 
 ## Day-to-day workflow
-- Start the development Home Assistant instance with `./scripts/develop` from inside the virtual environment. The script seeds `config/` when needed, maintains the `/config` symlink, and extends `PYTHONPATH` so Home Assistant discovers `custom_components/`.
+- Always start the development Home Assistant instance with `./scripts/develop` in a separate terminal session from inside the virtual environment. The script seeds `config/` when needed, maintains the `/config` symlink, and extends `PYTHONPATH` so Home Assistant discovers `custom_components/`.
 - Format and lint Python code with `./scripts/lint` (runs `ruff format .` followed by `ruff check . --fix`).
 - Run the Python test suite with `pytest`. For coverage reporting use `pytest --cov=custom_components/pp_reader --cov-report=term-missing`.
 - Optional validation: run Home Assistant's integration validator with `python -m script.hassfest`.
