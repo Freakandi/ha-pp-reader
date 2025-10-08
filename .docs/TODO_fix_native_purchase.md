@@ -1,5 +1,5 @@
 1. Backend: Roh-Transaktionsdaten normalisieren
-   a) [ ] Hilfsfunktion `_normalize_transaction_amounts` ergänzen
+   a) [x] Hilfsfunktion `_normalize_transaction_amounts` ergänzen
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Abschnitte: neuer Helper unterhalb `PURCHASE_TYPES` / `SALE_TYPES`
       - Ziel: Zerlegt eine `Transaction` in reale Stückzahl (`shares / 1e8`), Bruttobetrag (`amount / 100`), Gebühren (`transaction_units.type = 2`), Steuern (`transaction_units.type = 1`) und berechnet `net_trade_account = gross - fees - taxes`.
