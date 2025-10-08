@@ -35,7 +35,7 @@
       - Datei: `custom_components/pp_reader/data/db_access.py`
       - Funktionen: `get_portfolio_positions`, `get_security_snapshot`
       - Ziel: Liefert Sicherheitswährungs-Kaufsummen und Durchschnittspreise samt Kontowährungsreferenz in den Rückgabe-JSONs.
-   c) [ ] WebSocket-Payload ergänzen
+   c) [x] WebSocket-Payload ergänzen
       - Datei: `custom_components/pp_reader/data/websocket.py`
       - Funktionen: `_normalize_security_snapshot`, `_normalize_portfolio_positions`
       - Ziel: Serialisiert neue Felder (`purchase_total_security`, `purchase_total_account`, `avg_price_security`, `avg_price_account`).
