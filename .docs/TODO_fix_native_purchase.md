@@ -106,7 +106,7 @@
    a) [x] Architektur-Abschnitt "Kaufpreisberechnung" aktualisieren
       - Datei: `ARCHITECTURE.md`
       - Ziel: Datenfluss (transaktionelle Normalisierung, Sicherheitswährung als Primäranzeige) beschreiben.
-   b) [ ] Entwickler-Doku ergänzen
+   b) [x] Entwickler-Doku ergänzen
       - Datei: `README-dev.md`
       - Ziel: Hinweise zur neuen Datenbankmigration und Testdaten aufnehmen.
    c) [ ] Changelog-Eintrag verfassen
