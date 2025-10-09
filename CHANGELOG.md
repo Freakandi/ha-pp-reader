@@ -6,19 +6,45 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+- Noch keine Änderungen.
+
+## [0.13.0] - 2025-10-09
+
+### Added
+- Dashboard-Websocket-Kommandos aggregieren Portfolio-Werte jetzt direkt aus
+  der SQLite-Datenbank und fallen bei Fehlern kontrolliert auf den
+  Koordinator-Snapshot zurück, damit Start- und Live-Ansichten stets aktuelle
+  Summen liefern.【F:custom_components/pp_reader/data/db_access.py†L856-L918】【F:custom_components/pp_reader/data/websocket.py†L363-L498】
+- Websocket- und Event-Payloads transportieren Kaufwertsummen sowie
+  Durchschnittspreise in Wertpapier- und Kontowährung, wodurch Frontend und
+  API nativen Kaufpreis, FX-Kennzeichnung und Summen vollständig anzeigen
+  können.【F:custom_components/pp_reader/data/websocket.py†L160-L232】【F:custom_components/pp_reader/data/event_push.py†L24-L120】【F:src/tabs/overview.ts†L206-L317】【F:src/tabs/security_detail.ts†L748-L833】
+
+### Changed
+- Die Depotübersicht priorisiert Kaufpreise in der Wertpapierwährung, ergänzt
+  Konto- bzw. EUR-Werte nur bei Bedarf und verbessert damit die Darstellung
+  mehrwährungsfähiger Positionen in Tabelle und Screenreader-Texten.【F:src/tabs/overview.ts†L206-L317】
+- Die Wertpapierdetailansicht ordnet Kaufmetriken neu, berechnet Kennzahlen für
+  alle Währungen und blendet einen FX-Tooltip mit Kurs- und Datumsangabe ein, um
+  Abweichungen zwischen nativen und Konto-Werten transparenter zu machen.【F:src/tabs/security_detail.ts†L748-L833】【F:src/tabs/security_detail.ts†L1340-L1394】
+
 ### Fixed
 - Korrigierte die Kaufpreisberechnung für native Wertpapiere: FIFO-Lose nutzen
   nun die aufbereiteten Transaktionsbeträge (`security_currency_total`,
   `account_currency_total`) und liefern Durchschnittspreise pro Aktie in der
   Sicherheits- und Kontowährung bis in Websocket-, Event- und
-  Dashboard-Payloads.【F:custom_components/pp_reader/logic/securities.py†L358-L503】【F:custom_components/pp_reader/data/websocket.py†L160-L212】【F:src/tabs/overview.ts†L1118-L1199】
+  Dashboard-Payloads.【F:custom_components/pp_reader/logic/securities.py†L410-L562】【F:custom_components/pp_reader/data/websocket.py†L160-L232】【F:src/tabs/overview.ts†L206-L317】
 
 ### Breaking Changes
 - Die Laufzeit-Migration erweitert `portfolio_securities` um native
   Kaufspaltensummen (`security_currency_total`, `account_currency_total`,
   `avg_price_security`, `avg_price_account`). Nach einem Upgrade auf diese
   Version lassen sich ältere Releases ohne manuelles Zurücksetzen der Datenbank
-  nicht mehr starten.【F:custom_components/pp_reader/data/db_schema.py†L94-L114】【F:custom_components/pp_reader/data/db_init.py†L75-L142】
+  nicht mehr starten.【F:custom_components/pp_reader/data/db_schema.py†L92-L123】【F:custom_components/pp_reader/data/db_init.py†L111-L191】
+
+### Internal
+- Ergänzte Diagnosezähler für fehlende FX-Kurse und native Kaufdaten, um Tests
+  und Fehlersuche bei mehrwährungsfähigen Transaktionen zu erleichtern.【F:custom_components/pp_reader/logic/securities.py†L32-L87】
 
 ## [0.12.2] - 2025-10-07
 ### Added
