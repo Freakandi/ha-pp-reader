@@ -6,6 +6,20 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+### Fixed
+- Korrigierte die Kaufpreisberechnung für native Wertpapiere: FIFO-Lose nutzen
+  nun die aufbereiteten Transaktionsbeträge (`security_currency_total`,
+  `account_currency_total`) und liefern Durchschnittspreise pro Aktie in der
+  Sicherheits- und Kontowährung bis in Websocket-, Event- und
+  Dashboard-Payloads.【F:custom_components/pp_reader/logic/securities.py†L358-L503】【F:custom_components/pp_reader/data/websocket.py†L160-L212】【F:src/tabs/overview.ts†L1118-L1199】
+
+### Breaking Changes
+- Die Laufzeit-Migration erweitert `portfolio_securities` um native
+  Kaufspaltensummen (`security_currency_total`, `account_currency_total`,
+  `avg_price_security`, `avg_price_account`). Nach einem Upgrade auf diese
+  Version lassen sich ältere Releases ohne manuelles Zurücksetzen der Datenbank
+  nicht mehr starten.【F:custom_components/pp_reader/data/db_schema.py†L94-L114】【F:custom_components/pp_reader/data/db_init.py†L75-L142】
+
 ## [0.12.2] - 2025-10-07
 ### Added
 - Persistiert den nativen Durchschnittskaufpreis jeder Depotposition, migriert
