@@ -34,7 +34,8 @@ Additional setup variations (Windows, devcontainers) are covered in [TESTING.md 
 - The integration bootstraps state under `hass.data[DOMAIN][entry_id]` and relies on `fetch_live_portfolios` to aggregate data for WebSocket commands and events. Schema changes must keep this helper in sync.
 - Live pricing uses `yahooquery` with a minimum polling interval of 300 seconds. Respect the coordinator locks and logging expectations when adjusting the price service or revaluation logic.
 - The SQLite layer persists portfolio mirrors as well as daily close history for securities. Imports run diff-based updates, and automatic backups create snapshots every six hours; manual backups are exposed through `pp_reader.trigger_backup_debug`.
-- `portfolio_securities` stores both EUR-denominated purchase totals (`purchase_value`, `avg_price`) and the native weighted average per share (`avg_price_native`). Keep `_sync_portfolio_securities` and `db_calculate_sec_purchase_value` in sync so the FIFO helper continues to emit both values.
+- `portfolio_securities` stores EUR-denominated purchase totals (`purchase_value`, `avg_price`) alongside native totals and per-share averages (`avg_price_native`, `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`). Runtime migrations in `data.db_init.initialize_database_schema` add the columns for existing databases and backfill default values, so run `./scripts/develop` once after pulling schema changes to ensure the migration executes locally.
+- Canonical purchase samples (SSR Mining CAD vs. EUR and Harmonic Drive JPY) are documented in `.docs/fix_native_purchase.md`. The dataset mirrors the fixtures used in the FIFO regression tests and is safe to reference when validating new currency scenarios.
 
 ## Frontend workflow
 The dashboard is authored in TypeScript and built with Vite. Bundles live in `custom_components/pp_reader/www/pp_reader_dashboard/js/` and are referenced by `dashboard.module.js`.
@@ -59,7 +60,7 @@ python -m script.hassfest  # optional
 - Pytest relies on fixtures from `pytest-homeassistant-custom-component`; ensure the virtualenv is active and `requirements-dev.txt` is installed.
 - Frontend smoke tests live under `tests/frontend/` and execute Node scripts (powered by `jsdom`) to validate dashboard bundles.
 - For verbose logging during async tests, invoke `pytest -vv -o log_cli=true --log-cli-level=INFO`.
-- FIFO coverage for the native average purchase price lives in `tests/logic/test_securities_fifo.py`; extend these cases when changing purchase calculations or currency handling.
+- FIFO coverage for the native average purchase price lives in `tests/test_logic_securities_native_avg.py`, and targeted regression tests for the SSR Mining and Harmonic Drive samples reside in `tests/test_logic_securities.py`. Update both when adjusting purchase calculations or currency handling so the documented reference transactions remain accurate.
 
 More background on the available fixtures and test structure is available in [TESTING.md](TESTING.md).
 
