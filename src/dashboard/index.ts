@@ -5,8 +5,28 @@
  * mirroring the public API provided by the historical JavaScript modules.
  */
 export * from '../dashboard';
-export * from '../tabs/overview';
-export * from '../tabs/security_detail';
+
+// Re-export the dashboard tab utilities explicitly to avoid leaking
+// test-only helpers (`__TEST_ONLY__`) multiple times which causes
+// conflicts under TypeScript's star-export rules.
+export {
+  renderDashboard,
+  attachPortfolioToggleHandler,
+  getSecurityPositionsFromCache,
+  getSecuritySnapshotFromCache,
+  renderPortfolioPositions,
+  attachSecurityDetailListener,
+  updatePortfolioFooterFromDom,
+  getExpandedPortfolios,
+  setExpandedPortfolios,
+  attachPortfolioPositionsSorting,
+  ensurePortfolioRowFallbackListener,
+} from '../tabs/overview';
+
+export {
+  renderSecurityDetail,
+  registerSecurityDetailTab,
+} from '../tabs/security_detail';
 export * from '../tabs/types';
 export {
   getEntryId,

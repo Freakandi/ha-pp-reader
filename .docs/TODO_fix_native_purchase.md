@@ -91,7 +91,7 @@
    c) [x] Integrationstest für Websocket-Daten
       - Datei: `tests/test_ws_security_history.py`
       - Ziel: Erwartet neue Felder in Snapshot-Payloads.
-   d) [ ] Frontend-Snaphot-/Unit-Tests aktualisieren
+   d) [x] Frontend-Snaphot-/Unit-Tests aktualisieren
       - Dateien: `src/tabs/__tests__/security_detail.metrics.test.ts`, `src/tabs/__tests__/overview.render.test.ts`
       - Ziel: Spiegelt neue Formatierung der Kaufwerte wider.
    e) [ ] Manuelle Validierung dokumentieren

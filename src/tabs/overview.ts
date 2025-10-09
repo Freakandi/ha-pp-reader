@@ -317,6 +317,10 @@ function buildPurchasePriceDisplay(
   return { markup, sortValue, ariaLabel };
 }
 
+export const __TEST_ONLY__ = {
+  buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
+};
+
 function collectSecurityPositions(securityUuid: string | null | undefined): PortfolioPositionLike[] {
   if (!securityUuid) {
     return [];
