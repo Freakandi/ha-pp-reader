@@ -17,7 +17,7 @@ type BuildPurchasePriceDisplayForTest = (position: Record<string, unknown>) => {
 let cachedHelper: BuildPurchasePriceDisplayForTest | null = null;
 
 const globalRef = globalThis as typeof globalThis & {
-  window?: Window;
+  window?: Window & typeof globalThis;
   document?: Document;
   HTMLElement?: typeof HTMLElement;
   HTMLTableElement?: typeof HTMLTableElement;
@@ -37,7 +37,7 @@ async function withOverviewModule<T>(
 
   const dom = new JSDOM('<!doctype html><div id="root"></div>');
 
-  globalRef.window = dom.window as unknown as Window;
+  globalRef.window = dom.window as unknown as Window & typeof globalThis;
   globalRef.document = dom.window.document;
   globalRef.HTMLElement = dom.window.HTMLElement;
   globalRef.HTMLTableElement = dom.window.HTMLTableElement;
