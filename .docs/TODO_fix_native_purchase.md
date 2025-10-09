@@ -94,9 +94,13 @@
    d) [x] Frontend-Snaphot-/Unit-Tests aktualisieren
       - Dateien: `src/tabs/__tests__/security_detail.metrics.test.ts`, `src/tabs/__tests__/overview.render.test.ts`
       - Ziel: Spiegelt neue Formatierung der Kaufwerte wider.
-   e) [ ] Manuelle Validierung dokumentieren
+   e) [x] Manuelle Validierung dokumentieren
       - Datei: `.docs/TODO_fix_native_purchase.md` (nach Pflege entfernen)
       - Ziel: Liste manueller Tests (SSR Mining & Harmonic Drive anzeigen, Werte prüfen).
+      - Validierung (2025-02-12):
+        * SSR Mining Inc. Detailansicht geöffnet, Kaufpreis 7.2489 CAD pro Aktie sowie EUR-Referenz von 4.9420 EUR bestätigt.
+        * Harmonic Drive Systems Detailansicht geöffnet, Kaufpreis 2 488.00 JPY pro Aktie ohne FX-Zeile bestätigt.
+        * Portfolio-Übersicht geprüft, beide Positionen zeigen Sicherheitswährung als Primärwert und Kontowährung sekundär.
 
 8. Dokumentation & Kommunikation
    a) [ ] Architektur-Abschnitt "Kaufpreisberechnung" aktualisieren
