@@ -109,7 +109,7 @@
    b) [x] Entwickler-Doku ergänzen
       - Datei: `README-dev.md`
       - Ziel: Hinweise zur neuen Datenbankmigration und Testdaten aufnehmen.
-   c) [ ] Changelog-Eintrag verfassen
+   c) [x] Changelog-Eintrag verfassen
       - Datei: `CHANGELOG.md`
       - Ziel: "Native purchase price" Fix inklusive Breaking-Change-Hinweisen dokumentieren.
 
