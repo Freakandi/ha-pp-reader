@@ -114,7 +114,7 @@
       - Ziel: "Native purchase price" Fix inklusive Breaking-Change-Hinweisen dokumentieren.
 
 Optional
-   a) [ ] Optionale Logging-Metrik für fehlende FX-Daten
+   a) [x] Optionale Logging-Metrik für fehlende FX-Daten
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Ziel: Prometheus/Diagnostics-Hook vorbereiten, um manuelle Nacharbeiten zu erleichtern.
    b) [ ] Optionale UI-Tooltips mit FX-Details

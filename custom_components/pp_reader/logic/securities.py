@@ -8,6 +8,7 @@ exchange rates, and database interactions.
 
 import logging
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,62 @@ _LOGGER = logging.getLogger(__name__)
 
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
+
+_FX_RATE_FAILURES: Counter[tuple[str, str]] = Counter()
+_MISSING_NATIVE_POSITIONS: Counter[tuple[str, str]] = Counter()
+
+
+def get_missing_fx_diagnostics() -> dict[str, Any]:
+    """Return a snapshot of accumulated missing FX diagnostics."""
+
+    rate_failures = [
+        {
+            "currency": currency,
+            "date": date,
+            "occurrences": count,
+        }
+        for (currency, date), count in _FX_RATE_FAILURES.items()
+    ]
+    native_missing = [
+        {
+            "portfolio_uuid": portfolio,
+            "security_uuid": security,
+            "occurrences": count,
+        }
+        for (portfolio, security), count in _MISSING_NATIVE_POSITIONS.items()
+    ]
+
+    return {
+        "rate_lookup_failures": rate_failures,
+        "native_amount_missing": native_missing,
+    }
+
+
+def reset_missing_fx_diagnostics() -> None:
+    """Clear accumulated FX diagnostics (for tests or fresh runs)."""
+
+    _FX_RATE_FAILURES.clear()
+    _MISSING_NATIVE_POSITIONS.clear()
+
+
+def _record_rate_failure(currency: str | None, tx_date: datetime | None) -> None:
+    """Track missing FX rate lookups grouped by currency and trade date."""
+
+    if not currency or tx_date is None:
+        return
+
+    _FX_RATE_FAILURES[(currency, tx_date.strftime("%Y-%m-%d"))] += 1
+
+
+def _record_missing_native_position(
+    portfolio_uuid: str | None, security_uuid: str | None
+) -> None:
+    """Track purchases lacking native currency totals by portfolio/security."""
+
+    if not portfolio_uuid or not security_uuid:
+        return
+
+    _MISSING_NATIVE_POSITIONS[(portfolio_uuid, security_uuid)] += 1
 
 
 @dataclass(slots=True)
@@ -172,6 +229,7 @@ def _determine_exchange_rate(
         key = (transaction.currency_code, tx_date)
         if key not in missing_logged:
             missing_logged.add(key)
+            _record_rate_failure(transaction.currency_code, tx_date)
             _LOGGER.warning(
                 "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
                 tx_date.strftime("%Y-%m-%d"),
@@ -399,6 +457,7 @@ def db_calculate_sec_purchase_value(
                 warn_key = (tx.portfolio, tx.security)
                 if warn_key not in missing_native_logs:
                     missing_native_logs.add(warn_key)
+                    _record_missing_native_position(tx.portfolio, tx.security)
                     _LOGGER.warning(
                         (
                             "⚠️ Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
