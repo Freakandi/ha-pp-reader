@@ -140,6 +140,24 @@ export const __TEST_ONLY__ = {
     snapshot: SecuritySnapshotDetail | null | undefined,
   ): NormalizedHistoryEntry[] => buildHistorySeriesWithSnapshotPrice(historySeries, snapshot),
   resolveAveragePurchaseBaselineForTest: resolveAveragePurchaseBaseline,
+  resolvePurchaseFxTooltipForTest: (
+    snapshot: SecuritySnapshotDetail | null | undefined,
+    metrics: SecuritySnapshotMetrics | null | undefined,
+    accountCurrency: string | null | undefined,
+    averagePurchaseNative: number | null | undefined,
+    averagePurchaseAccount: number | null | undefined,
+    purchaseTotalSecurity: number | null | undefined,
+    purchaseTotalAccount: number | null | undefined,
+  ): string | null =>
+    resolvePurchaseFxTooltip(
+      snapshot,
+      metrics,
+      accountCurrency,
+      averagePurchaseNative,
+      averagePurchaseAccount,
+      purchaseTotalSecurity,
+      purchaseTotalAccount,
+    ),
 };
 
 function buildCachedSnapshotNotice(params: {
@@ -1143,6 +1161,18 @@ function formatPriceChangeWithCurrency(
   return `<span class="${className}">${formatted}${suffix}</span>`;
 }
 
+function escapeAttribute(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function resolveAccountCurrencyCode(
   snapshot: SecuritySnapshotDetail | null | undefined,
   metrics: SecuritySnapshotMetrics | null | undefined,
@@ -1198,6 +1228,171 @@ function resolveAccountCurrencyCode(
   return securityCurrency || 'EUR';
 }
 
+function formatFxRate(value: number | null | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return value.toLocaleString('de-DE', {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  });
+}
+
+function resolvePurchaseFxTimestamp(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+  metrics: SecuritySnapshotMetrics | null | undefined,
+): number | null {
+  const snapshotRecord = snapshot as Record<string, unknown> | null | undefined;
+  const candidateKeys = [
+    'purchase_fx_date',
+    'purchase_fx_timestamp',
+    'purchase_fx_rate_date',
+    'purchase_fx_rate_timestamp',
+    'avg_price_updated_at',
+    'avg_price_timestamp',
+    'purchase_updated_at',
+    'purchase_updated',
+    'purchase_value_updated_at',
+    'purchase_value_updated',
+    'last_purchase_date',
+    'last_purchase_timestamp',
+    'last_transaction_date',
+    'last_transaction_at',
+  ] as const;
+
+  for (const key of candidateKeys) {
+    const value = snapshotRecord?.[key];
+    const parsed = parseTimestamp(value);
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+
+  if (metrics?.lastPriceFetchedAt != null && Number.isFinite(metrics.lastPriceFetchedAt)) {
+    return metrics.lastPriceFetchedAt;
+  }
+
+  const fallbackCandidates: unknown[] = [];
+  if (snapshotRecord && 'last_price_fetched_at' in snapshotRecord) {
+    fallbackCandidates.push(snapshotRecord.last_price_fetched_at);
+  }
+  const lastPrice = (snapshot as { last_price?: { fetched_at?: unknown } | null } | null)?.last_price;
+  if (lastPrice && typeof lastPrice === 'object') {
+    fallbackCandidates.push(lastPrice.fetched_at);
+  }
+  if (snapshotRecord && 'last_price_date' in snapshotRecord) {
+    fallbackCandidates.push(snapshotRecord.last_price_date);
+  }
+
+  for (const candidate of fallbackCandidates) {
+    const parsed = parseTimestamp(candidate);
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function formatFxDateLabel(timestamp: number | null): string | null {
+  if (timestamp == null || !Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleDateString('de-DE');
+}
+
+function resolvePurchaseFxTooltip(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+  metrics: SecuritySnapshotMetrics | null | undefined,
+  accountCurrency: string | null | undefined,
+  averagePurchaseNative: number | null | undefined,
+  averagePurchaseAccount: number | null | undefined,
+  purchaseTotalSecurity: number | null | undefined,
+  purchaseTotalAccount: number | null | undefined,
+): string | null {
+  const securityCurrency = String(snapshot?.currency_code || '').trim().toUpperCase();
+  const accountCurrencySafe = String(accountCurrency || '').trim().toUpperCase();
+
+  if (!securityCurrency || !accountCurrencySafe) {
+    return null;
+  }
+
+  if (securityCurrency === accountCurrencySafe) {
+    return null;
+  }
+
+  const computeRate = (
+    accountValue: number | null | undefined,
+    securityValue: number | null | undefined,
+  ): number | null => {
+    if (
+      typeof accountValue !== 'number' ||
+      !Number.isFinite(accountValue) ||
+      accountValue <= 0
+    ) {
+      return null;
+    }
+    if (
+      typeof securityValue !== 'number' ||
+      !Number.isFinite(securityValue) ||
+      securityValue <= 0
+    ) {
+      return null;
+    }
+
+    const rate = accountValue / securityValue;
+    return rate > 0 && Number.isFinite(rate) ? rate : null;
+  };
+
+  const rateCandidates = [
+    computeRate(purchaseTotalAccount, purchaseTotalSecurity),
+    computeRate(averagePurchaseAccount, averagePurchaseNative),
+  ];
+
+  let fxRate: number | null = null;
+  for (const candidate of rateCandidates) {
+    if (candidate != null) {
+      fxRate = candidate;
+      break;
+    }
+  }
+
+  if (fxRate == null) {
+    return null;
+  }
+
+  const formattedRate = formatFxRate(fxRate);
+  if (!formattedRate) {
+    return null;
+  }
+
+  let inverseRateLabel: string | null = null;
+  if (fxRate > 0) {
+    const inverse = 1 / fxRate;
+    if (Number.isFinite(inverse)) {
+      inverseRateLabel = formatFxRate(inverse);
+    }
+  }
+
+  const timestamp = resolvePurchaseFxTimestamp(snapshot, metrics);
+  const dateLabel = formatFxDateLabel(timestamp);
+
+  const parts = [`FX-Kurs (Kauf): 1 ${securityCurrency} = ${formattedRate} ${accountCurrencySafe}`];
+  if (inverseRateLabel) {
+    parts.push(`1 ${accountCurrencySafe} = ${inverseRateLabel} ${securityCurrency}`);
+  }
+
+  const datePart = dateLabel ?? 'Datum unbekannt';
+  return `${parts.join(' · ')} (Stand: ${datePart})`;
+}
+
 function buildHeaderMeta(
   snapshot: SecuritySnapshotDetail | null,
   metrics: SecuritySnapshotMetrics | null = null,
@@ -1222,6 +1417,8 @@ function buildHeaderMeta(
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur) ??
     null;
+  const purchaseTotalSecurity = toFiniteNumber(snapshot.purchase_total_security);
+  const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
   const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
   const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
   const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
@@ -1234,7 +1431,7 @@ function buildHeaderMeta(
     toFiniteNumber(snapshot.avg_price_security) ??
     toFiniteNumber(snapshot.average_purchase_price_native) ??
     computeAveragePurchaseFromTotal(
-      toFiniteNumber(snapshot.purchase_total_security),
+      purchaseTotalSecurity,
       holdingsForAverage,
     );
   const averagePurchaseEurRaw =
@@ -1247,7 +1444,7 @@ function buildHeaderMeta(
     metrics?.averagePurchaseAccount ??
     toFiniteNumber(snapshot.avg_price_account) ??
     computeAveragePurchaseFromTotal(
-      toFiniteNumber(snapshot.purchase_total_account),
+      purchaseTotalAccount,
       holdingsForAverage,
     ) ??
     averagePurchaseEurRaw;
@@ -1336,6 +1533,24 @@ function buildHeaderMeta(
     metrics?.totalChangePct,
     'value--percentage',
   );
+  const accountCurrency = resolveAccountCurrencyCode(
+    snapshot,
+    metrics,
+    averagePurchaseAccountRaw,
+    averagePurchaseNativeRaw,
+  );
+  const averagePurchaseTooltip = resolvePurchaseFxTooltip(
+    snapshot,
+    metrics,
+    accountCurrency,
+    averagePurchaseNativeRaw,
+    averagePurchaseAccountRaw,
+    purchaseTotalSecurity,
+    purchaseTotalAccount,
+  );
+  const averageValueGroupAttributes = averagePurchaseTooltip
+    ? ` title="${escapeAttribute(averagePurchaseTooltip)}"`
+    : '';
   const averagePurchaseValues: string[] = [];
 
   if (isFiniteNumber(averagePurchaseNativeRaw)) {
@@ -1353,12 +1568,6 @@ function buildHeaderMeta(
     );
   }
 
-  const accountCurrency = resolveAccountCurrencyCode(
-    snapshot,
-    metrics,
-    averagePurchaseAccountRaw,
-    averagePurchaseNativeRaw,
-  );
   const shouldRenderAccountValue =
     isFiniteNumber(averagePurchaseAccountRaw) &&
     (!isFiniteNumber(averagePurchaseNativeRaw) ||
@@ -1386,7 +1595,7 @@ function buildHeaderMeta(
       </div>
       <div class="security-meta-item security-meta-item--average">
         <span class="label">Durchschnittlicher Kaufpreis</span>
-        <div class="value-group">
+        <div class="value-group"${averageValueGroupAttributes}>
           ${averagePurchaseValues.join('')}
         </div>
       </div>

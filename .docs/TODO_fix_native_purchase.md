@@ -117,6 +117,6 @@ Optional
    a) [x] Optionale Logging-Metrik für fehlende FX-Daten
       - Datei: `custom_components/pp_reader/logic/securities.py`
       - Ziel: Prometheus/Diagnostics-Hook vorbereiten, um manuelle Nacharbeiten zu erleichtern.
-   b) [ ] Optionale UI-Tooltips mit FX-Details
+   b) [x] Optionale UI-Tooltips mit FX-Details
       - Datei: `src/tabs/security_detail.ts`
       - Ziel: Zeigt verwendeten FX-Kurs inklusive Datum als Tooltip an.
