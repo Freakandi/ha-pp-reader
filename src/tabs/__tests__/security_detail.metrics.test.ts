@@ -16,6 +16,7 @@ const {
   clearSnapshotMetricsRegistryForTest,
   mergeHistoryWithSnapshotPriceForTest,
   resolveAveragePurchaseBaselineForTest,
+  resolvePurchaseFxTooltipForTest,
 } = __TEST_ONLY__;
 
 type SecuritySnapshotMetricsLike = NonNullable<
@@ -217,6 +218,62 @@ test('resolveAveragePurchaseBaselineForTest falls back to snapshot security aver
     resolveAveragePurchaseBaselineForTest(null, null),
     null,
   );
+});
+
+test('resolvePurchaseFxTooltipForTest formats FX rate and date when available', () => {
+  const tooltip = resolvePurchaseFxTooltipForTest(
+    {
+      currency_code: 'CAD',
+      purchase_total_security: 724.89,
+      purchase_total_account: 494.2,
+      purchase_fx_date: '2024-04-16T00:00:00Z',
+    } as const,
+    null,
+    'EUR',
+    7.2489,
+    4.942,
+    724.89,
+    494.2,
+  );
+
+  assert.ok(tooltip, 'expected tooltip to be generated');
+  assert.match(tooltip ?? '', /1 CAD = 0,6819 EUR/);
+  assert.match(tooltip ?? '', /Stand: 16\.04\.2024/);
+});
+
+test('resolvePurchaseFxTooltipForTest handles missing metadata gracefully', () => {
+  const withoutDate = resolvePurchaseFxTooltipForTest(
+    {
+      currency_code: 'USD',
+      purchase_total_security: 500,
+      purchase_total_account: 450,
+    } as const,
+    null,
+    'EUR',
+    5,
+    4.5,
+    500,
+    450,
+  );
+
+  assert.ok(withoutDate, 'tooltip should exist even when date is unknown');
+  assert.match(withoutDate ?? '', /Datum unbekannt/);
+
+  const sameCurrency = resolvePurchaseFxTooltipForTest(
+    {
+      currency_code: 'EUR',
+      purchase_total_security: 100,
+      purchase_total_account: 100,
+    } as const,
+    null,
+    'EUR',
+    1,
+    1,
+    100,
+    100,
+  );
+
+  assert.strictEqual(sameCurrency, null);
 });
 
 test('mergeHistoryWithSnapshotPriceForTest appends the latest snapshot price for new days', () => {
