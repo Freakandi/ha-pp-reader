@@ -88,7 +88,7 @@
    b) [x] Backend-Testfall für Harmonic Drive ergänzen
       - Datei: `tests/test_logic_securities.py`
       - Ziel: Prüft 2.488,00 JPY pro Aktie ohne FX-Row.
-   c) [ ] Integrationstest für Websocket-Daten
+   c) [x] Integrationstest für Websocket-Daten
       - Datei: `tests/test_ws_security_history.py`
       - Ziel: Erwartet neue Felder in Snapshot-Payloads.
    d) [ ] Frontend-Snaphot-/Unit-Tests aktualisieren
