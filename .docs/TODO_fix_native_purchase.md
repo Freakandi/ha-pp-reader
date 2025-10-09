@@ -103,7 +103,7 @@
         * Portfolio-Übersicht geprüft, beide Positionen zeigen Sicherheitswährung als Primärwert und Kontowährung sekundär.
 
 8. Dokumentation & Kommunikation
-   a) [ ] Architektur-Abschnitt "Kaufpreisberechnung" aktualisieren
+   a) [x] Architektur-Abschnitt "Kaufpreisberechnung" aktualisieren
       - Datei: `ARCHITECTURE.md`
       - Ziel: Datenfluss (transaktionelle Normalisierung, Sicherheitswährung als Primäranzeige) beschreiben.
    b) [ ] Entwickler-Doku ergänzen
