@@ -152,6 +152,12 @@
   gap: 1rem 1.75rem;
 }
 
+@media (min-width: 1024px) {
+  .security-meta-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .security-meta-item {
   display: flex;
   flex-direction: column;
