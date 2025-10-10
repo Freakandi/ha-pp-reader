@@ -58,7 +58,12 @@ def _get_value(row: Mapping[str, Any] | Any, key: str) -> Any:
 
     if isinstance(row, Mapping):
         return row.get(key)
-    return getattr(row, key, None)
+    if hasattr(row, key):
+        return getattr(row, key, None)
+    try:
+        return row[key]  # type: ignore[index]
+    except (KeyError, TypeError, IndexError):
+        return None
 
 
 def compute_holdings_aggregation(
