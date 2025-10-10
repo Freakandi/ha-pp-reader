@@ -39,7 +39,6 @@ import { roundCurrency, toFiniteCurrency } from '../utils/currency';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
-const PRICE_SCALE = 1e8;
 const HISTORY_SYNC_TOLERANCE_MS = 6 * 60 * 60 * 1000; // 6 hours leeway between history close and price fetch
 const MAX_PRICE_STALENESS_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance before treating last price as stale
 const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = '1Y';
@@ -82,6 +81,7 @@ type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'
 interface RawHistoryEntry {
   date?: unknown;
   close?: unknown;
+  close_raw?: unknown;
   [key: string]: unknown;
 }
 
@@ -474,8 +474,16 @@ function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
 
   return (prices as RawHistoryEntry[])
     .map((entry) => {
-      const numericClose = toFiniteNumber(entry?.close);
-      if (numericClose == null) {
+      const normalizedClose = toFiniteNumber(entry?.close);
+      let close = normalizedClose;
+      if (close == null) {
+        const rawClose = toFiniteNumber(entry?.close_raw);
+        if (rawClose != null) {
+          close = rawClose / 1e8;
+        }
+      }
+
+      if (close == null) {
         return null;
       }
 
@@ -483,7 +491,7 @@ function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
 
       return {
         date: dateValue ?? (entry?.date as Date | string | number),
-        close: numericClose / PRICE_SCALE,
+        close,
       };
     })
     .filter((entry): entry is NormalizedHistoryEntry => Boolean(entry));
@@ -772,10 +780,22 @@ function ensureSnapshotMetrics(
   const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
   const safeHoldings = isFiniteNumber(holdings) ? holdings : null;
 
-  const dayPriceChangeNative = computeDelta(lastPriceNative, lastCloseNative);
-  const dayPriceChangeEur = computeDelta(lastPriceEur, lastCloseEur);
+  const backendDayChangeNative = toFiniteNumber(snapshot.day_price_change_native);
+  const backendDayChangeEur = toFiniteNumber(snapshot.day_price_change_eur);
+  const backendDayChangePct = toFiniteNumber(snapshot.day_change_pct);
+
+  const fallbackDayChangeNative = computeDelta(lastPriceNative, lastCloseNative);
+  const fallbackDayChangeEur = computeDelta(lastPriceEur, lastCloseEur);
+
+  const dayPriceChangeNative = backendDayChangeNative ?? fallbackDayChangeNative;
+
+  let dayPriceChangeEur = backendDayChangeEur ?? fallbackDayChangeEur;
+  if (dayPriceChangeEur == null && isFiniteNumber(dayPriceChangeNative)) {
+    dayPriceChangeEur = convertNativeDiffToEur(dayPriceChangeNative, safeFxRate);
+  }
 
   const dayChangePct =
+    (backendDayChangePct != null ? roundPercentage(backendDayChangePct) : null) ??
     computePercentageChange(lastPriceNative, lastCloseNative) ??
     computePercentageChange(lastPriceEur, lastCloseEur);
 

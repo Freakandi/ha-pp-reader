@@ -178,6 +178,9 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "avg_price_account": None,
             "last_close_native": None,
             "last_close_eur": None,
+            "day_price_change_native": None,
+            "day_price_change_eur": None,
+            "day_change_pct": None,
         }
 
     data = dict(snapshot)
@@ -224,6 +227,13 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         snapshot.get("last_close_native")
     )
     data["last_close_eur"] = _coerce_optional_float(snapshot.get("last_close_eur"))
+    data["day_price_change_native"] = _coerce_optional_float(
+        snapshot.get("day_price_change_native")
+    )
+    data["day_price_change_eur"] = _coerce_optional_float(
+        snapshot.get("day_price_change_eur")
+    )
+    data["day_change_pct"] = _coerce_optional_float(snapshot.get("day_change_pct"))
 
     last_price_raw = snapshot.get("last_price")
     if isinstance(last_price_raw, Mapping):

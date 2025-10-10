@@ -68,6 +68,9 @@ export interface SecuritySnapshotLike {
   last_price_eur: number | null;
   last_close_native?: number | null;
   last_close_eur?: number | null;
+  day_price_change_native?: number | null;
+  day_price_change_eur?: number | null;
+  day_change_pct?: number | null;
   average_purchase_price_native?: number | string | null;
   source?: string;
   [key: string]: unknown;
