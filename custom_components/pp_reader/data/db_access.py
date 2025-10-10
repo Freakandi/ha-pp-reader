@@ -218,8 +218,8 @@ def iter_security_close_prices(
     security_uuid: str,
     start_date: int | None = None,
     end_date: int | None = None,
-) -> Iterator[tuple[int, int]]:
-    """Liefert tägliche Schlusskurse eines Wertpapiers in aufsteigender Reihenfolge."""
+) -> Iterator[tuple[int, float | None, int | None]]:
+    """Yield ordered close prices with native floats and raw values."""
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
         raise ValueError(message)
@@ -272,7 +272,13 @@ def iter_security_close_prices(
 
         try:
             for date_value, close_value in cursor:
-                yield int(date_value), int(close_value)
+                try:
+                    close_raw = int(close_value) if close_value is not None else None
+                except (TypeError, ValueError):
+                    close_raw = None
+
+                normalized_close = normalize_raw_price(close_raw)
+                yield int(date_value), normalized_close, close_raw
         except sqlite3.Error:
             _LOGGER.exception(
                 "Fehler beim Iterieren historischer Preise (security_uuid=%s)",
@@ -288,8 +294,8 @@ def get_security_close_prices(
     security_uuid: str,
     start_date: int | None = None,
     end_date: int | None = None,
-) -> list[tuple[int, int]]:
-    """Gibt tägliche Schlusskurse eines Wertpapiers als Liste zurück."""
+) -> list[tuple[int, float | None, int | None]]:
+    """Return a concrete list of close prices with normalized and raw values."""
     return list(
         iter_security_close_prices(
             db_path=db_path,

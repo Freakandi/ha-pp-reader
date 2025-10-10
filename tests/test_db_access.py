@@ -182,10 +182,10 @@ def seeded_history_db(tmp_path: Path) -> Path:
     initialize_database_schema(db_path)
 
     rows = [
-        ("sec-1", 20240101, 1000, None, None, None),
-        ("sec-1", 20240103, 1200, None, None, None),
-        ("sec-1", 20240102, 1100, None, None, None),
-        ("sec-2", 20240101, 500, None, None, None),
+        ("sec-1", 20240101, int(10.0 * 1e8), None, None, None),
+        ("sec-1", 20240103, int(12.0 * 1e8), None, None, None),
+        ("sec-1", 20240102, int(11.0 * 1e8), None, None, None),
+        ("sec-2", 20240101, int(5.0 * 1e8), None, None, None),
     ]
 
     conn = sqlite3.connect(str(db_path))
@@ -331,9 +331,9 @@ def test_iter_security_close_prices_orders_and_filters_range(
     """Iterator should return ordered rows and respect the provided bounds."""
     all_rows = list(iter_security_close_prices(seeded_history_db, "sec-1"))
     assert all_rows == [
-        (20240101, 1000),
-        (20240102, 1100),
-        (20240103, 1200),
+        (20240101, 10.0, 1_000_000_000),
+        (20240102, 11.0, 1_100_000_000),
+        (20240103, 12.0, 1_200_000_000),
     ]
 
     bounded_rows = list(
@@ -345,8 +345,8 @@ def test_iter_security_close_prices_orders_and_filters_range(
         )
     )
     assert bounded_rows == [
-        (20240102, 1100),
-        (20240103, 1200),
+        (20240102, 11.0, 1_100_000_000),
+        (20240103, 12.0, 1_200_000_000),
     ]
 
     trailing_rows = list(
@@ -356,7 +356,7 @@ def test_iter_security_close_prices_orders_and_filters_range(
             start_date=20240103,
         )
     )
-    assert trailing_rows == [(20240103, 1200)]
+    assert trailing_rows == [(20240103, 12.0, 1_200_000_000)]
 
 
 def test_iter_security_close_prices_rejects_invalid_range(
@@ -380,9 +380,9 @@ def test_get_security_close_prices_materialises_iterator(
     """Helper should return a concrete list mirroring the iterator output."""
     result = get_security_close_prices(seeded_history_db, "sec-1")
     assert result == [
-        (20240101, 1000),
-        (20240102, 1100),
-        (20240103, 1200),
+        (20240101, 10.0, 1_000_000_000),
+        (20240102, 11.0, 1_100_000_000),
+        (20240103, 12.0, 1_200_000_000),
     ]
 
     assert get_security_close_prices(seeded_history_db, "missing") == []
@@ -393,7 +393,7 @@ def test_get_security_close_prices_materialises_iterator(
         start_date=20240102,
         end_date=20240102,
     )
-    assert filtered == [(20240102, 1100)]
+    assert filtered == [(20240102, 11.0, 1_100_000_000)]
 
 
 def test_get_security_snapshot_multicurrency(

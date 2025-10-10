@@ -752,9 +752,14 @@ async def ws_get_security_history(
         )
         return
 
-    payload = [
-        {"date": date_value, "close": close_value} for date_value, close_value in prices
-    ]
+    payload: list[dict[str, Any]] = []
+    for date_value, close_value, close_raw in prices:
+        entry: dict[str, Any] = {"date": date_value}
+        if close_value is not None:
+            entry["close"] = close_value
+        if close_raw is not None:
+            entry["close_raw"] = close_raw
+        payload.append(entry)
 
     response: dict[str, Any] = {
         "security_uuid": security_uuid,
