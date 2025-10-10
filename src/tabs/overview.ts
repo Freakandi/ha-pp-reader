@@ -21,6 +21,12 @@ import type { PortfolioPositionsResponse } from '../data/api';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
 import type { HomeAssistant } from '../types/home-assistant';
 import type { PanelConfigLike, SecuritySnapshotLike } from './types';
+import {
+  normalizeCurrencyValue,
+  normalizePercentValue,
+  roundCurrency,
+  toFiniteCurrency,
+} from '../utils/currency';
 
 interface PortfolioPositionLike {
   security_uuid?: unknown;
@@ -103,13 +109,7 @@ const HOLDINGS_PRECISION = 1e6;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 6 } as const;
 
 function toFiniteNumber(value: unknown): number {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-function roundCurrency(value: unknown): number {
-  const finite = toFiniteNumber(value);
-  return Math.round(finite * 100) / 100;
+  return toFiniteCurrency(value) ?? 0;
 }
 
 function roundHoldings(value: unknown): number {
@@ -118,34 +118,7 @@ function roundHoldings(value: unknown): number {
 }
 
 function toNullableNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed === '') {
-      return null;
-    }
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function normalizeCurrencyValue(value: unknown): number | null {
-  const numeric = toNullableNumber(value);
-  if (numeric == null) {
-    return null;
-  }
-  return Math.round(numeric * 100) / 100;
-}
-
-function normalizePercentValue(value: unknown): number | null {
-  const numeric = toNullableNumber(value);
-  if (numeric == null) {
-    return null;
-  }
-  return Math.round(numeric * 100) / 100;
+  return toFiniteCurrency(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -380,9 +353,9 @@ export function getSecuritySnapshotFromCache(securityUuid: string | null | undef
     security_uuid: securityUuid,
     name,
     total_holdings: roundHoldings(totalHoldings),
-    purchase_value_eur: roundCurrency(totalPurchaseValue),
-    current_value_eur: roundCurrency(totalCurrentValue),
-    gain_abs_eur: roundCurrency(gainAbs),
+    purchase_value_eur: roundCurrency(totalPurchaseValue, { fallback: 0 }) ?? 0,
+    current_value_eur: roundCurrency(totalCurrentValue, { fallback: 0 }) ?? 0,
+    gain_abs_eur: roundCurrency(gainAbs, { fallback: 0 }) ?? 0,
     gain_pct: Math.round(gainPct * 100) / 100,
     last_price_eur: lastPriceEur != null ? roundCurrency(lastPriceEur) : null,
     source: 'cache',

@@ -41,6 +41,7 @@ from custom_components.pp_reader.logic.securities import (
 )
 from custom_components.pp_reader.prices import revaluation
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util.currency import cent_to_eur
 
 
 async def revalue_after_price_updates(*args, **kwargs):
@@ -525,8 +526,8 @@ def _refresh_impacted_portfolio_securities(
                 if holdings is None and existing_entry:
                     holdings = float(existing_entry.get("current_holdings", 0.0))
                 if purchase_value is None and existing_entry:
-                    purchase_value = round(
-                        float(existing_entry.get("purchase_value", 0)) / 100, 2
+                    purchase_value = cent_to_eur(
+                        existing_entry.get("purchase_value"), default=0.0
                     )
                 if avg_price_native is None and existing_entry:
                     avg_price_native = existing_entry.get("avg_price_native")
