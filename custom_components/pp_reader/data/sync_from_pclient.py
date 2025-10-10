@@ -426,6 +426,7 @@ class _SyncRunner:
             return {}
 
         self.cursor.execute("DELETE FROM transaction_units")
+        tx_units: dict[str, dict[str, Any]] = {}
         for transaction in self.client.transactions:
             for unit in transaction.units:
                 fx_rate = None
@@ -435,6 +436,10 @@ class _SyncRunner:
                         unit.fxRateToBase.value, byteorder="little", signed=True
                     )
                     fx_rate = abs(value / (10**scale))
+
+                amount = maybe_field(unit, "amount")
+                fx_amount = maybe_field(unit, "fxAmount")
+                fx_currency_code = maybe_field(unit, "fxCurrencyCode")
 
                 self.cursor.execute(
                     """
@@ -446,33 +451,35 @@ class _SyncRunner:
                     (
                         transaction.uuid,
                         unit.type,
-                        unit.amount,
+                        amount,
                         unit.currencyCode,
-                        maybe_field(unit, "fxAmount"),
-                        maybe_field(unit, "fxCurrencyCode"),
+                        fx_amount,
+                        fx_currency_code,
                         fx_rate,
                     ),
                 )
+
+                entry = {
+                    "type": int(unit.type),
+                    "amount": amount,
+                    "currency_code": unit.currencyCode,
+                    "fx_amount": fx_amount,
+                    "fx_currency_code": fx_currency_code,
+                    "fx_rate_to_base": fx_rate,
+                }
+
+                aggregate = tx_units.setdefault(transaction.uuid, {})
+                entries = aggregate.setdefault("entries", [])
+                entries.append(entry)
+
+                if fx_amount is not None and fx_currency_code:
+                    aggregate["fx_amount"] = fx_amount
+                    aggregate["fx_currency_code"] = fx_currency_code
+                if fx_rate is not None:
+                    aggregate["fx_rate_to_base"] = fx_rate
+
                 if unit.HasField("fxAmount"):
                     self.stats.fx_transactions += 1
-
-        self.cursor.execute(
-            """
-            SELECT transaction_uuid, fx_amount, fx_currency_code
-            FROM transaction_units
-            WHERE fx_amount IS NOT NULL
-            """
-        )
-        tx_units: dict[str, dict[str, Any]] = {}
-        for tx_uuid, fx_amount, fx_ccy in self.cursor.fetchall():
-            if fx_amount is not None and fx_ccy:
-                tx_units.setdefault(
-                    tx_uuid,
-                    {
-                        "fx_amount": fx_amount,
-                        "fx_currency_code": fx_ccy,
-                    },
-                )
 
         self.conn.commit()
         return tx_units

@@ -429,7 +429,14 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
 
         holdings_cursor = conn.execute(
             """
-            SELECT current_holdings, purchase_value, avg_price_native
+            SELECT
+                current_holdings,
+                purchase_value,
+                avg_price_native,
+                security_currency_total,
+                account_currency_total,
+                avg_price_security,
+                avg_price_account
             FROM portfolio_securities
             WHERE security_uuid = ?
             """,
@@ -440,10 +447,20 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         purchase_value_cents = 0
         native_weighted_sum = 0.0
         native_covered_shares = 0.0
+        security_currency_total_sum = 0.0
+        account_currency_total_sum = 0.0
+        security_weighted_sum = 0.0
+        security_covered_shares = 0.0
+        account_weighted_sum = 0.0
+        account_covered_shares = 0.0
         for row in holdings_cursor.fetchall():
             holdings_raw = row["current_holdings"]
             purchase_raw = row["purchase_value"]
             avg_native_raw = row["avg_price_native"]
+            security_total_raw = row["security_currency_total"]
+            account_total_raw = row["account_currency_total"]
+            avg_security_raw = row["avg_price_security"]
+            avg_account_raw = row["avg_price_account"]
 
             holdings = 0.0
             if holdings_raw is not None:
@@ -459,6 +476,18 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                 except (TypeError, ValueError):
                     continue
 
+            if security_total_raw is not None:
+                try:
+                    security_currency_total_sum += float(security_total_raw)
+                except (TypeError, ValueError):
+                    pass
+
+            if account_total_raw is not None:
+                try:
+                    account_currency_total_sum += float(account_total_raw)
+                except (TypeError, ValueError):
+                    pass
+
             if holdings > 0:
                 positive_holdings += holdings
                 if avg_native_raw is not None:
@@ -467,6 +496,18 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                         native_covered_shares += holdings
                     except (TypeError, ValueError):
                         continue
+                if avg_security_raw is not None:
+                    try:
+                        security_weighted_sum += holdings * float(avg_security_raw)
+                        security_covered_shares += holdings
+                    except (TypeError, ValueError):
+                        pass
+                if avg_account_raw is not None:
+                    try:
+                        account_weighted_sum += holdings * float(avg_account_raw)
+                        account_covered_shares += holdings
+                    except (TypeError, ValueError):
+                        pass
 
         raw_price = security_row["last_price"]
         currency_code: str = security_row["currency_code"] or "EUR"
@@ -500,6 +541,28 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                 6,
             )
 
+        avg_price_security_value: float | None = None
+        if (
+            security_covered_shares > 0
+            and positive_holdings > 0
+            and abs(security_covered_shares - positive_holdings) <= 1e-6
+        ):
+            avg_price_security_value = round(
+                security_weighted_sum / security_covered_shares,
+                6,
+            )
+
+        avg_price_account_value: float | None = None
+        if (
+            account_covered_shares > 0
+            and positive_holdings > 0
+            and abs(account_covered_shares - positive_holdings) <= 1e-6
+        ):
+            avg_price_account_value = round(
+                account_weighted_sum / account_covered_shares,
+                6,
+            )
+
         raw_last_close, last_close_native = fetch_previous_close(
             db_path,
             security_uuid,
@@ -528,6 +591,10 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "market_value_eur": market_value_eur,
             "purchase_value_eur": purchase_value_eur,
             "average_purchase_price_native": average_purchase_price_native,
+            "purchase_total_security": round(security_currency_total_sum, 2),
+            "purchase_total_account": round(account_currency_total_sum, 2),
+            "avg_price_security": avg_price_security_value,
+            "avg_price_account": avg_price_account_value,
             "last_close_native": last_close_native,
             "last_close_eur": last_close_eur,
         }
@@ -608,11 +675,15 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "security_uuid": str,
         "name": str,
         "current_holdings": float,
-        "purchase_value": float,   # EUR
-        "current_value": float,    # EUR
-        "gain_abs": float,         # EUR
-        "gain_pct": float,         # %
-        "average_purchase_price_native": float | None
+        "purchase_value": float,          # EUR
+        "current_value": float,           # EUR
+        "gain_abs": float,                # EUR
+        "gain_pct": float,                # %
+        "average_purchase_price_native": float | None,
+        "purchase_total_security": float,
+        "purchase_total_account": float,
+        "avg_price_security": float | None,
+        "avg_price_account": float | None,
       },
       ...
     ]
@@ -626,9 +697,13 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 ps.security_uuid,
                 s.name,
                 ps.current_holdings,
-                ps.purchase_value,   -- Cent
-                ps.current_value,    -- Cent
-                ps.avg_price_native
+                ps.purchase_value,        -- Cent
+                ps.current_value,         -- Cent
+                ps.avg_price_native,
+                ps.security_currency_total,
+                ps.account_currency_total,
+                ps.avg_price_security,
+                ps.avg_price_account
             FROM portfolio_securities ps
             JOIN securities s ON s.uuid = ps.security_uuid
             WHERE ps.portfolio_uuid = ?
@@ -647,6 +722,10 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             purchase_value_cents,
             current_value_cents,
             avg_price_native_raw,
+            security_total_raw,
+            account_total_raw,
+            avg_price_security_raw,
+            avg_price_account_raw,
         ) in rows:
             holdings = float(current_holdings or 0.0)
             purchase_value = (purchase_value_cents or 0) / 100.0
@@ -663,6 +742,38 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 except (TypeError, ValueError):
                     avg_price_native = None
 
+            security_total = 0.0
+            if isinstance(security_total_raw, (int, float)):
+                security_total = float(security_total_raw)
+            elif security_total_raw is not None:
+                try:
+                    security_total = float(security_total_raw)
+                except (TypeError, ValueError):
+                    security_total = 0.0
+
+            account_total = 0.0
+            if isinstance(account_total_raw, (int, float)):
+                account_total = float(account_total_raw)
+            elif account_total_raw is not None:
+                try:
+                    account_total = float(account_total_raw)
+                except (TypeError, ValueError):
+                    account_total = 0.0
+
+            avg_price_security = None
+            if avg_price_security_raw is not None:
+                try:
+                    avg_price_security = round(float(avg_price_security_raw), 6)
+                except (TypeError, ValueError):
+                    avg_price_security = None
+
+            avg_price_account = None
+            if avg_price_account_raw is not None:
+                try:
+                    avg_price_account = round(float(avg_price_account_raw), 6)
+                except (TypeError, ValueError):
+                    avg_price_account = None
+
             positions.append(
                 {
                     "security_uuid": security_uuid,
@@ -673,6 +784,10 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                     "gain_abs": round(gain_abs, 2),
                     "gain_pct": round(gain_pct, 2),
                     "average_purchase_price_native": avg_price_native,
+                    "purchase_total_security": round(security_total, 2),
+                    "purchase_total_account": round(account_total, 2),
+                    "avg_price_security": avg_price_security,
+                    "avg_price_account": avg_price_account,
                 }
             )
 
