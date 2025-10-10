@@ -12,7 +12,7 @@ To keep planning actionable without fragmenting coordination, maintain **one pri
 - **Optional sub-notes** only when necessary prevents over-managing trivial fixes yet leaves room for detailed exploration of complex refactors (for example, backend/frontend contract changes).
 
 ## Redundancy Clusters and Recommended Approach
-Each cluster captures variables that share inputs, transformation patterns, or usage paths. The table notes the affected variables (from `portfolio_variables.yaml`), the main consolidation strategy, expected complexity, and immediate TODO pointers.
+Each cluster captures variables that share inputs, transformation patterns, or usage paths. The table notes the affected variables (from `.docs/portfolio_variables.yaml`), the main consolidation strategy, expected complexity, and immediate TODO pointers.
 
 | Cluster | Variables | Strategy | Complexity | Initial TODOs |
 | --- | --- | --- | --- | --- |
