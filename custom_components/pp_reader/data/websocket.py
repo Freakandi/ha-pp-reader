@@ -169,6 +169,10 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "market_value_eur": None,
             "purchase_value_eur": 0.0,
             "average_purchase_price_native": None,
+            "purchase_total_security": 0.0,
+            "purchase_total_account": 0.0,
+            "avg_price_security": None,
+            "avg_price_account": None,
             "last_close_native": None,
             "last_close_eur": None,
         }
@@ -197,6 +201,22 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["average_purchase_price_native"] = _coerce_optional_float(
         snapshot.get("average_purchase_price_native")
     )
+    data["purchase_total_security"] = round(
+        _coerce_float(snapshot.get("purchase_total_security")), 2
+    )
+    data["purchase_total_account"] = round(
+        _coerce_float(snapshot.get("purchase_total_account")), 2
+    )
+    avg_price_security = _coerce_optional_float(
+        snapshot.get("avg_price_security")
+    )
+    data["avg_price_security"] = (
+        round(avg_price_security, 6) if avg_price_security is not None else None
+    )
+    avg_price_account = _coerce_optional_float(snapshot.get("avg_price_account"))
+    data["avg_price_account"] = (
+        round(avg_price_account, 6) if avg_price_account is not None else None
+    )
     data["last_close_native"] = _coerce_optional_float(
         snapshot.get("last_close_native")
     )
@@ -210,6 +230,69 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         }
 
     return data
+
+
+def _normalize_portfolio_positions(
+    positions: Iterable[Mapping[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Return portfolio position payload including purchase metrics."""
+
+    if not positions:
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in positions:
+        if not isinstance(item, Mapping):
+            continue
+
+        security_uuid = item.get("security_uuid")
+        if security_uuid is not None:
+            security_uuid = str(security_uuid)
+
+        avg_price_native = _coerce_optional_float(
+            item.get("average_purchase_price_native")
+        )
+        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
+        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
+
+        normalized.append(
+            {
+                "security_uuid": security_uuid,
+                "name": item.get("name"),
+                "current_holdings": round(
+                    _coerce_float(item.get("current_holdings")), 6
+                ),
+                "purchase_value": round(
+                    _coerce_float(item.get("purchase_value")), 2
+                ),
+                "current_value": round(_coerce_float(item.get("current_value")), 2),
+                "gain_abs": round(_coerce_float(item.get("gain_abs")), 2),
+                "gain_pct": round(_coerce_float(item.get("gain_pct")), 2),
+                "average_purchase_price_native": (
+                    round(avg_price_native, 6)
+                    if avg_price_native is not None
+                    else None
+                ),
+                "purchase_total_security": round(
+                    _coerce_float(item.get("purchase_total_security")), 2
+                ),
+                "purchase_total_account": round(
+                    _coerce_float(item.get("purchase_total_account")), 2
+                ),
+                "avg_price_security": (
+                    round(avg_price_security, 6)
+                    if avg_price_security is not None
+                    else None
+                ),
+                "avg_price_account": (
+                    round(avg_price_account, 6)
+                    if avg_price_account is not None
+                    else None
+                ),
+            }
+        )
+
+    return normalized
 
 
 def _wrap_with_loop_fallback(
@@ -865,7 +948,7 @@ async def ws_get_portfolio_positions(
         msg["id"],
         {
             "portfolio_uuid": portfolio_uuid,
-            "positions": positions,
+            "positions": _normalize_portfolio_positions(positions),
         },
     )
 

@@ -105,6 +105,10 @@ PORTFOLIO_SECURITIES_SCHEMA = [
             END
         ) STORED,                          -- Durchschnittlicher Kaufpreis in Cent
         avg_price_native REAL,             -- Durchschnittlicher Kaufpreis in nativer Währungseinheit
+        security_currency_total REAL DEFAULT 0.0, -- Kaufwert in Wertpapierwährung
+        account_currency_total REAL DEFAULT 0.0,  -- Kaufwert in Kontowährung
+        avg_price_security REAL,           -- Durchschnittspreis pro Aktie in Wertpapierwährung
+        avg_price_account REAL,            -- Durchschnittspreis pro Aktie in Kontowährung
         current_value REAL DEFAULT 0.0,    -- Aktueller Wert des Bestands in Cent
         PRIMARY KEY (portfolio_uuid, security_uuid),
         FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid),
