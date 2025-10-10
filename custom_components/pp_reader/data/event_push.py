@@ -11,6 +11,7 @@ from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
 
 from ..const import DOMAIN
+from ..util.currency import cent_to_eur, round_currency, round_price
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,20 +35,29 @@ def _estimate_event_size(payload: dict[str, Any]) -> int:
     return len(encoded.encode("utf-8"))
 
 
+def _normalize_currency_amount(value: Any, *, default: float = 0.0) -> float:
+    """Return a consistently rounded EUR amount from raw or cent values."""
+
+    if isinstance(value, bool):
+        return default
+
+    if isinstance(value, int):
+        normalized = cent_to_eur(value, default=None)
+        if normalized is not None:
+            return normalized
+
+    rounded = round_currency(value, default=None)
+    if rounded is not None:
+        return rounded
+
+    return default
+
+
 def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     """Compact a raw portfolio aggregation entry for event transport."""
     uuid = item.get("uuid") or item.get("portfolio_uuid")
     if not uuid:
         return None
-
-    def _float(value_key: str, fallback_key: str | None = None) -> float:
-        raw = item.get(value_key)
-        if raw is None and fallback_key is not None:
-            raw = item.get(fallback_key)
-        try:
-            return round(float(raw or 0.0), 2)
-        except (TypeError, ValueError):
-            return 0.0
 
     def _int(value_key: str, fallback_key: str | None = None) -> int:
         raw = item.get(value_key)
@@ -58,10 +68,19 @@ def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] 
         except (TypeError, ValueError):
             return 0
 
-    current_value = _float("current_value", "value")
-    purchase_sum = _float("purchase_sum")
-    gain_abs = round(current_value - purchase_sum, 2)
-    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum else 0.0, 2)
+    raw_current_value = item.get("current_value")
+    if raw_current_value is None:
+        raw_current_value = item.get("value")
+    current_value = _normalize_currency_amount(raw_current_value)
+
+    purchase_sum = _normalize_currency_amount(item.get("purchase_sum"))
+
+    gain_abs_unrounded = current_value - purchase_sum
+    gain_abs = round_currency(gain_abs_unrounded, default=0.0) or 0.0
+    gain_pct = round_currency(
+        (gain_abs_unrounded / purchase_sum * 100) if purchase_sum else 0.0,
+        default=0.0,
+    ) or 0.0
 
     return {
         "uuid": str(uuid),
@@ -112,45 +131,34 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     if security_uuid:
         security_uuid = str(security_uuid)
 
-    def _float(value_key: str) -> float:
-        raw = item.get(value_key)
-        try:
-            return round(float(raw or 0.0), 2)
-        except (TypeError, ValueError):
-            return 0.0
-
     avg_native_raw = item.get("average_purchase_price_native")
     avg_native: float | None
     if avg_native_raw is None:
         avg_native = None
     else:
-        try:
-            avg_native = round(float(avg_native_raw), 6)
-        except (TypeError, ValueError):
-            avg_native = None
-
-    def _optional_price(value_key: str) -> float | None:
-        raw_value = item.get(value_key)
-        if raw_value is None:
-            return None
-        try:
-            return round(float(raw_value), 6)
-        except (TypeError, ValueError):
-            return None
+        avg_native = round_price(avg_native_raw, decimals=6, default=None)
 
     normalized: dict[str, Any] = {
         "security_uuid": security_uuid,
         "name": item.get("name"),
         "current_holdings": item.get("current_holdings", 0),
-        "purchase_value": _float("purchase_value"),
-        "current_value": _float("current_value"),
-        "gain_abs": _float("gain_abs"),
-        "gain_pct": _float("gain_pct"),
+        "purchase_value": _normalize_currency_amount(item.get("purchase_value")),
+        "current_value": _normalize_currency_amount(item.get("current_value")),
+        "gain_abs": _normalize_currency_amount(item.get("gain_abs")),
+        "gain_pct": round_currency(item.get("gain_pct"), default=0.0) or 0.0,
         "average_purchase_price_native": avg_native,
-        "purchase_total_security": _float("purchase_total_security"),
-        "purchase_total_account": _float("purchase_total_account"),
-        "avg_price_security": _optional_price("avg_price_security"),
-        "avg_price_account": _optional_price("avg_price_account"),
+        "purchase_total_security": _normalize_currency_amount(
+            item.get("purchase_total_security")
+        ),
+        "purchase_total_account": _normalize_currency_amount(
+            item.get("purchase_total_account")
+        ),
+        "avg_price_security": round_price(
+            item.get("avg_price_security"), decimals=6, default=None
+        ),
+        "avg_price_account": round_price(
+            item.get("avg_price_account"), decimals=6, default=None
+        ),
     }
 
     return normalized
