@@ -1018,6 +1018,22 @@ function applyHistoryDayChangeFallback(
   return true;
 }
 
+function resolveRoundedTrendClass(
+  value: number | null | undefined,
+  decimals: number,
+): 'positive' | 'negative' | 'neutral' {
+  if (!isFiniteNumber(value) || value === 0) {
+    return 'neutral';
+  }
+
+  const threshold = 0.5 / Math.pow(10, decimals);
+  if (Math.abs(value) < threshold) {
+    return 'neutral';
+  }
+
+  return value > 0 ? 'positive' : 'negative';
+}
+
 function formatPriceChangeValue(
   value: number | null,
   currency: string | null | undefined,
@@ -1031,7 +1047,7 @@ function formatPriceChangeValue(
     return '<span class="value neutral">—</span>';
   }
 
-  const trendClass = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  const trendClass = resolveRoundedTrendClass(value, PRICE_FRACTION_DIGITS.max);
   const suffix = currency ? `&nbsp;${currency}` : '';
   return `<span class="value ${trendClass}">${formatted}${suffix}</span>`;
 }
@@ -1041,7 +1057,7 @@ function formatPercentageChangeValue(value: number | null): string {
     return '<span class="value neutral">—</span>';
   }
 
-  const trendClass = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  const trendClass = resolveRoundedTrendClass(value, 2);
   return `<span class="value ${trendClass} value--percentage">${formatNumber(value)}&nbsp;%</span>`;
 }
 
@@ -1157,7 +1173,7 @@ function formatPriceChangeWithCurrency(
 ): string {
   const formatted = formatPrice(value);
   const suffix = currency ? `&nbsp;${currency}` : '';
-  const className = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  const className = resolveRoundedTrendClass(value, PRICE_FRACTION_DIGITS.max);
   return `<span class="${className}">${formatted}${suffix}</span>`;
 }
 

@@ -26,6 +26,22 @@ export interface TableOptions {
 
 export type TableRow = Record<string, unknown>;
 
+const resolveRoundedTrend = (
+  numericValue: number,
+  decimals: number,
+): 'positive' | 'negative' | 'neutral' => {
+  if (!Number.isFinite(numericValue) || numericValue === 0) {
+    return 'neutral';
+  }
+
+  const threshold = 0.5 / Math.pow(10, decimals);
+  if (Math.abs(numericValue) < threshold) {
+    return 'neutral';
+  }
+
+  return numericValue > 0 ? 'positive' : 'negative';
+};
+
 export function formatValue(
   key: string,
   value: unknown,
@@ -80,12 +96,7 @@ export function formatValue(
     }
     const symbol = key === 'gain_pct' ? '%' : '€';
     formatted = safeNumber(numeric) + `&nbsp;${symbol}`;
-    let cls = 'neutral';
-    if (numeric > 0) {
-      cls = 'positive';
-    } else if (numeric < 0) {
-      cls = 'negative';
-    }
+    const cls = resolveRoundedTrend(numeric, 2);
     return `<span class="${cls}">${formatted}</span>`;
   } else if (key === 'position_count') {
     const numeric = typeof value === 'number' ? value : toNumber(value);
@@ -317,23 +328,13 @@ export function formatNumber(value: number, minFrac = 2, maxFrac = 2): string {
 
 export function formatGain(value: number): string {
   const num = Number.isNaN(value) ? 0 : value;
-  let cls = 'neutral';
-  if (num > 0) {
-    cls = 'positive';
-  } else if (num < 0) {
-    cls = 'negative';
-  }
+  const cls = resolveRoundedTrend(num, 2);
   return `<span class="${cls}">${formatNumber(num)}&nbsp;€</span>`;
 }
 
 export function formatGainPct(value: number): string {
   const num = Number.isNaN(value) ? 0 : value;
-  let cls = 'neutral';
-  if (num > 0) {
-    cls = 'positive';
-  } else if (num < 0) {
-    cls = 'negative';
-  }
+  const cls = resolveRoundedTrend(num, 2);
   return `<span class="${cls}">${formatNumber(num)}&nbsp;%</span>`;
 }
 
