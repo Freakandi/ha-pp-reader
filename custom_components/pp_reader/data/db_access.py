@@ -14,6 +14,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    normalize_price_to_eur_sync,
+    normalize_raw_price,
+    round_currency,
+    round_price,
+)
+
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
 
@@ -410,11 +418,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
-        from custom_components.pp_reader.logic.portfolio import (  # local import
-            normalize_price,
-            normalize_price_to_eur_sync,
-        )
-
         cursor = conn.execute(
             """
             SELECT name, currency_code, COALESCE(last_price, 0) AS last_price
@@ -515,21 +518,23 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         last_price_native = None
         if raw_price:
             try:
-                last_price_native = round(normalize_price(raw_price), 4)
+                last_price_native = normalize_raw_price(raw_price, decimals=4)
             except Exception:  # pragma: no cover - defensive
                 last_price_native = None
         last_price_eur = normalize_price_to_eur_sync(
             raw_price, currency_code, reference_date, db_path
         )
         last_price_eur_value = (
-            round(last_price_eur, 4) if last_price_eur is not None else None
-        )
-        market_value_eur = (
-            round(total_holdings * last_price_eur, 2)
+            round_price(last_price_eur, decimals=4)
             if last_price_eur is not None
             else None
         )
-        purchase_value_eur = round(purchase_value_cents / 100, 2)
+        market_value_eur = (
+            round_currency(total_holdings * last_price_eur)
+            if last_price_eur is not None
+            else None
+        )
+        purchase_value_eur = cent_to_eur(purchase_value_cents, default=0.0) or 0.0
         average_purchase_price_native = None
         if (
             positive_holdings > 0
@@ -578,9 +583,21 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                     db_path,
                 )
                 if last_close_eur is not None:
-                    last_close_eur = round(last_close_eur, 4)
+                    last_close_eur = round_price(last_close_eur, decimals=4)
             except Exception:  # pragma: no cover - defensive
                 last_close_eur = None
+
+        purchase_total_security_value = round_currency(
+            security_currency_total_sum, default=0.0
+        )
+        if purchase_total_security_value is None:
+            purchase_total_security_value = 0.0
+
+        purchase_total_account_value = round_currency(
+            account_currency_total_sum, default=0.0
+        )
+        if purchase_total_account_value is None:
+            purchase_total_account_value = 0.0
 
         return {
             "name": security_row["name"],
@@ -591,8 +608,8 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "market_value_eur": market_value_eur,
             "purchase_value_eur": purchase_value_eur,
             "average_purchase_price_native": average_purchase_price_native,
-            "purchase_total_security": round(security_currency_total_sum, 2),
-            "purchase_total_account": round(account_currency_total_sum, 2),
+            "purchase_total_security": purchase_total_security_value,
+            "purchase_total_account": purchase_total_account_value,
             "avg_price_security": avg_price_security_value,
             "avg_price_account": avg_price_account_value,
             "last_close_native": last_close_native,
@@ -646,11 +663,9 @@ def fetch_previous_close(
 
         close_native: float | None = None
         try:
-            from custom_components.pp_reader.logic.portfolio import (  # local import
-                normalize_price,
-            )
-
-            close_native = round(normalize_price(int(raw_close)), 4)
+            normalized_close = normalize_raw_price(int(raw_close), decimals=4)
+            if normalized_close is not None:
+                close_native = round(normalized_close, 4)
         except Exception:  # pragma: no cover - defensive
             _LOGGER.exception(
                 "Fehler bei der Normalisierung des Schlusskurses (security_uuid=%s)",
@@ -728,10 +743,20 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             avg_price_account_raw,
         ) in rows:
             holdings = float(current_holdings or 0.0)
-            purchase_value = (purchase_value_cents or 0) / 100.0
-            current_value = (current_value_cents or 0) / 100.0
-            gain_abs = current_value - purchase_value
-            gain_pct = (gain_abs / purchase_value * 100) if purchase_value > 0 else 0.0
+            purchase_value = cent_to_eur(purchase_value_cents, default=0.0) or 0.0
+            current_value = cent_to_eur(current_value_cents, default=0.0) or 0.0
+            gain_abs_unrounded = current_value - purchase_value
+            gain_abs = round_currency(gain_abs_unrounded, default=0.0)
+            if gain_abs is None:
+                gain_abs = 0.0
+            gain_pct = round_currency(
+                (gain_abs_unrounded / purchase_value * 100)
+                if purchase_value > 0
+                else 0.0,
+                default=0.0,
+            )
+            if gain_pct is None:
+                gain_pct = 0.0
 
             avg_price_native: float | None
             if avg_price_native_raw is None:
@@ -774,18 +799,30 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 except (TypeError, ValueError):
                     avg_price_account = None
 
+            purchase_total_security_value = round_currency(
+                security_total, default=0.0
+            )
+            if purchase_total_security_value is None:
+                purchase_total_security_value = 0.0
+
+            purchase_total_account_value = round_currency(
+                account_total, default=0.0
+            )
+            if purchase_total_account_value is None:
+                purchase_total_account_value = 0.0
+
             positions.append(
                 {
                     "security_uuid": security_uuid,
                     "name": name,
                     "current_holdings": holdings,
-                    "purchase_value": round(purchase_value, 2),
-                    "current_value": round(current_value, 2),
-                    "gain_abs": round(gain_abs, 2),
-                    "gain_pct": round(gain_pct, 2),
+                    "purchase_value": purchase_value,
+                    "current_value": current_value,
+                    "gain_abs": gain_abs,
+                    "gain_pct": gain_pct,
                     "average_purchase_price_native": avg_price_native,
-                    "purchase_total_security": round(security_total, 2),
-                    "purchase_total_account": round(account_total, 2),
+                    "purchase_total_security": purchase_total_security_value,
+                    "purchase_total_account": purchase_total_account_value,
                     "avg_price_security": avg_price_security,
                     "avg_price_account": avg_price_account,
                 }
@@ -816,16 +853,8 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
       - position_count
     """
 
-    def _cent_to_eur(value: Any) -> float:
-        if value is None:
-            return 0.0
-        try:
-            return round(float(value) / 100.0, 2)
-        except (TypeError, ValueError):
-            return 0.0
-
-    current_value = _cent_to_eur(row["current_value"])
-    purchase_sum = _cent_to_eur(row["purchase_sum"])
+    current_value = cent_to_eur(row["current_value"], default=0.0) or 0.0
+    purchase_sum = cent_to_eur(row["purchase_sum"], default=0.0) or 0.0
     missing_value_positions = 0
     if "missing_value_positions" in row.keys():
         try:
@@ -835,8 +864,15 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
 
     has_current_value = missing_value_positions == 0
 
-    gain_abs = round(current_value - purchase_sum, 2)
-    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum > 0 else 0.0, 2)
+    gain_abs = round_currency(current_value - purchase_sum, default=0.0)
+    if gain_abs is None:
+        gain_abs = 0.0
+    gain_pct = round_currency(
+        (gain_abs / purchase_sum * 100) if purchase_sum > 0 else 0.0,
+        default=0.0,
+    )
+    if gain_pct is None:
+        gain_pct = 0.0
 
     return {
         "uuid": row["uuid"],
