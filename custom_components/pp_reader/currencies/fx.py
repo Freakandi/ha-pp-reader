@@ -12,6 +12,7 @@ Includes:
 import asyncio
 import logging
 import sqlite3
+import ssl
 import threading
 from collections import defaultdict
 from collections.abc import Callable
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
+from homeassistant.util import ssl as hass_ssl
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -125,9 +127,17 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     symbols = ",".join(currencies)
     url = f"{API_URL}/{date}?from=EUR&to={symbols}"
     timeout = aiohttp.ClientTimeout(total=10)
+    ssl_context = hass_ssl.client_context()
+    if hasattr(ssl_context, "verify_flags"):
+        ssl_context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
 
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=timeout,
+            trust_env=True,
+            connector=connector,
+        ) as session:
             async with session.get(url) as response:
                 if response.status != 200:  # noqa: PLR2004
                     if _should_log_warning(date, currencies):
