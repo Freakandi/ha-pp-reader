@@ -18,7 +18,6 @@ from custom_components.pp_reader.data.db_access import (
 )
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
-    normalize_price_to_eur_sync as _normalize_price_to_eur_sync,
     normalize_raw_price,
     round_currency,
     round_price,
@@ -28,10 +27,6 @@ _LOGGER = logging.getLogger(__name__)
 
 PURCHASE_TYPES = (0, 2)
 SALE_TYPES = (1, 3)
-
-
-normalize_price = normalize_raw_price
-normalize_price_to_eur_sync = _normalize_price_to_eur_sync
 
 
 def normalize_shares(raw_shares: int) -> float:

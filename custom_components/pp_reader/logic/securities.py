@@ -19,10 +19,8 @@ from custom_components.pp_reader.currencies.fx import (
     load_latest_rates_sync,
 )
 from custom_components.pp_reader.data.db_access import Transaction
-from custom_components.pp_reader.logic.portfolio import (
-    normalize_price,
-    normalize_shares,
-)
+from custom_components.pp_reader.logic.portfolio import normalize_shares
+from custom_components.pp_reader.util.currency import normalize_raw_price
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -605,7 +603,7 @@ def db_calculate_holdings_value(
         holdings = data.get("current_holdings", 0)
 
         # Hole den aktuellen Preis
-        latest_price = normalize_price(latest_prices.get(security_uuid, 0.0))
+        latest_price = normalize_raw_price(latest_prices.get(security_uuid, 0.0))
 
         # Hole die Währung
         currency_code = securities.get(security_uuid, "EUR")

@@ -53,12 +53,29 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 3. Aufräumen & Regressionen vermeiden
 
-3. a) [ ] Entfernte Helper sicher löschen
+3. a) [x] Entfernte Helper sicher löschen
        - Dateien: `custom_components/pp_reader/logic/portfolio.py`, `custom_components/pp_reader/data/db_access.py`, `src/tabs/overview.ts`, `src/tabs/security_detail.ts`
        - Ziel: Nach der Migration keine ungenutzten Funktionen (`normalize_price`, `_cent_to_eur`, doppelte `roundCurrency`) mehr im Code lassen; Static-Analyser meldet keine toten Helfer.
        - Validierung: `ruff` und TypeScript-Linter erkennen keine unbenutzten Symbole, und alle referenzierten Konvertierungen zeigen auf die neuen Utility-Module.
 
-3. b) [ ] Regressionstests für Currency-Flüsse ergänzen
+3. b) [x] Regressionstests für Currency-Flüsse ergänzen
        - Tests: `tests/test_websocket_positions.py` (oder neues Testmodul), Frontend-Snapshots sofern erforderlich
        - Ziel: Abdeckung der Helper-Pfade mit realen Beispielwerten (Cent→EUR, FX-Konversion) sicherstellen, um spätere Refactors abzusichern.
        - Validierung: Neue oder angepasste Tests schlagen fehl, falls Rundung oder FX-Normalisierung von den festgelegten Regeln abweicht.
+
+## 4. Native Price Scaling
+
+4. a) [ ] Historische Close-Preise über gemeinsamen Helper normalisieren
+       - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/websocket.py`, `custom_components/pp_reader/util/currency.py`
+       - Ziel: `iter_security_close_prices` und `ws_get_security_history` nutzen `normalize_raw_price` (inkl. `PRICE_SCALE`), um native Close-Werte einmalig auf Float (4 Nachkommastellen) zu skalieren; Rohwerte werden optional unter `close_raw` weitergegeben, sodass Frontend und Tests ohne doppelte Division auskommen.
+       - Validierung: WebSocket `pp_reader/get_security_history` liefert normalisierte Close-Werte; `tests/test_ws_security_history.py` prüft sowohl Roh- als auch Normalisierungsfelder.
+
+4. b) [ ] Tagesdeltas im Security-Snapshot backend-seitig berechnen
+       - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/websocket.py`
+       - Ziel: `get_security_snapshot` ermittelt auf Basis der normalisierten Preise die Felder `day_price_change_native`, `day_price_change_eur` und `day_change_pct` und `_serialise_security_snapshot` reicht sie unverändert durch; dadurch entfallen Frontend-Berechnungen auf `last_price_native`/`last_close_native`.
+       - Validierung: WebSocket `pp_reader/get_security_snapshot` enthält die neuen Tagesdeltas; Regressionstests in `tests/test_db_access.py` und `tests/test_ws_security_history.py` decken die berechneten Werte ab.
+
+4. c) [ ] Dashboard auf native Float-Werte und Backend-Deltas umstellen
+       - Dateien: `src/data/api.ts`, `src/tabs/types.ts`, `src/tabs/security_detail.ts`, `src/utils/currency.ts`, Tests unter `src/tabs/__tests__/`
+       - Ziel: Das Dashboard verarbeitet die bereits normalisierten History-Werte und Snapshot-Deltas, entfernt die lokale `PRICE_SCALE`-Konstante sowie Hilfsfunktionen wie `normaliseHistorySeries`-Division und `computeDelta`; Rundungen erfolgen weiterhin über die gemeinsamen Currency-Utilities.
+       - Validierung: Jest-Tests (`security_detail.metrics.test.ts`, `overview.render.test.ts`) spiegeln die neuen Felder wider und die UI zeigt unveränderte numerische Werte.
