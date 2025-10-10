@@ -474,6 +474,9 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "avg_price_account": pytest.approx(9.914286, rel=0, abs=1e-6),
         "last_close_native": 10.75,
         "last_close_eur": 10.75,
+        "day_price_change_native": pytest.approx(1.75, rel=0, abs=1e-4),
+        "day_price_change_eur": pytest.approx(1.75, rel=0, abs=1e-4),
+        "day_change_pct": pytest.approx(16.28, rel=0, abs=1e-2),
     }
 
 

@@ -82,6 +82,9 @@ export interface SecuritySnapshotResponse {
     avg_price_account?: number | null;
     last_close_native?: number | null;
     last_close_eur?: number | null;
+    day_price_change_native?: number | null;
+    day_price_change_eur?: number | null;
+    day_change_pct?: number | null;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -90,6 +93,7 @@ export interface SecuritySnapshotResponse {
 export interface SecurityHistoryPoint {
   date: number;
   close: number;
+  close_raw?: number;
   [key: string]: unknown;
 }
 

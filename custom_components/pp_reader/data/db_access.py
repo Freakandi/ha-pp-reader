@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -593,6 +594,62 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             except Exception:  # pragma: no cover - defensive
                 last_close_eur = None
 
+        day_price_change_native = None
+        day_price_change_eur = None
+        native_diff: float | None = None
+        if (
+            last_price_native is not None
+            and last_close_native is not None
+        ):
+            native_diff = last_price_native - last_close_native
+            day_price_change_native = round_price(
+                native_diff,
+                decimals=4,
+            )
+
+        if (
+            last_price_eur_value is not None
+            and last_close_eur is not None
+        ):
+            day_price_change_eur = round_price(
+                last_price_eur_value - last_close_eur,
+                decimals=4,
+            )
+
+        def _round_percentage(value: float | None) -> float | None:
+            if value is None:
+                return None
+            try:
+                return float(
+                    Decimal(value).quantize(
+                        Decimal("0.01"),
+                        rounding=ROUND_HALF_UP,
+                    )
+                )
+            except (InvalidOperation, ValueError, TypeError):
+                return None
+
+        day_change_pct = None
+        if (
+            native_diff is not None
+            and last_close_native not in (None, 0)
+        ):
+            day_change_pct = _round_percentage(
+                (native_diff / float(last_close_native)) * 100
+            )
+        elif (
+            day_price_change_eur is not None
+            and last_close_eur not in (None, 0)
+            and last_close_eur is not None
+        ):
+            day_change_pct = _round_percentage(
+                (
+                    (last_price_eur_value - last_close_eur)
+                    / float(last_close_eur)
+                )
+                * 100
+            )
+
         purchase_total_security_value = round_currency(
             security_currency_total_sum, default=0.0
         )
@@ -620,6 +677,9 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "avg_price_account": avg_price_account_value,
             "last_close_native": last_close_native,
             "last_close_eur": last_close_eur,
+            "day_price_change_native": day_price_change_native,
+            "day_price_change_eur": day_price_change_eur,
+            "day_change_pct": day_change_pct,
         }
     finally:
         conn.close()

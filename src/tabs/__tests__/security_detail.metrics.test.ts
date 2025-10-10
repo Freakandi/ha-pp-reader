@@ -58,6 +58,9 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
     last_close_native: '7.85',
     last_price_eur: '5.49',
     last_close_eur: '5.27',
+    day_price_change_native: '0.27',
+    day_price_change_eur: '0.22',
+    day_change_pct: '2.5',
   });
 
   assert.ok(metrics, 'expected metrics to be materialised');
@@ -80,6 +83,21 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
     metrics?.holdings,
     100,
     'holdings should normalise precise totals',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeNative,
+    0.27,
+    'day change native should prefer backend-provided value',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeEur,
+    0.22,
+    'day change EUR should rely on backend-provided value',
+  );
+  assertApproximately(
+    metrics?.dayChangePct,
+    2.5,
+    'day change percentage should reuse backend rounding',
   );
 });
 

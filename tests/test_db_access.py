@@ -429,6 +429,9 @@ def test_get_security_snapshot_multicurrency(
     )
     assert snapshot["last_close_native"] is None
     assert snapshot["last_close_eur"] is None
+    assert snapshot["day_price_change_native"] is None
+    assert snapshot["day_price_change_eur"] is None
+    assert snapshot["day_change_pct"] is None
 
     with pytest.raises(LookupError):
         get_security_snapshot(seeded_snapshot_db, "missing")
@@ -526,3 +529,14 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     assert snapshot["average_purchase_price_native"] is None
     assert snapshot["last_close_native"] == pytest.approx(175.5, rel=0, abs=1e-4)
     assert snapshot["last_close_eur"] == pytest.approx(140.4, rel=0, abs=1e-4)
+    assert snapshot["day_price_change_native"] == pytest.approx(
+        24.5,
+        rel=0,
+        abs=1e-4,
+    )
+    assert snapshot["day_price_change_eur"] == pytest.approx(
+        19.6,
+        rel=0,
+        abs=1e-4,
+    )
+    assert snapshot["day_change_pct"] == pytest.approx(13.96, rel=0, abs=1e-2)
