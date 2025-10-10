@@ -1,0 +1,136 @@
+variables:
+  - variable: current_holdings
+    meaning: Current share quantity tracked for a security within a portfolio row.
+    calculation: Loaded from portfolio_securities.current_holdings and converted with float(current_holdings or 0.0) while building each position record.
+    used_in: Sent inside portfolio_positions push events and pp_reader/get_portfolio_positions WebSocket responses, then rendered in the expandable positions table.
+    redundancy_notes: Acts as the base quantity for most downstream metrics; avoid recomputing share counts elsewhere and ensure other totals reference this cached value.
+  - variable: purchase_value
+    meaning: Total historical purchase cost of the position in EUR.
+    calculation: Converts the stored cent value with (purchase_value_cents or 0) / 100.0, rounding to two decimals before emission.
+    used_in: Included in position push/WebSocket payloads and shown in the portfolio positions table.
+    redundancy_notes: Serves as the cost basis for gain_abs and gain_pct; consider exposing helpers so both gain metrics reuse the same formatted EUR value instead of recalculating conversions inline.
+  - variable: current_value
+    meaning: Latest EUR valuation of the held shares.
+    calculation: Converts current_value_cents from cents to EUR and rounds to two decimals per position.
+    used_in: Distributed through position updates and rendered in the positions table.
+    redundancy_notes: Shares the same cent-to-EUR normalisation as purchase_value; a shared currency conversion utility could reduce duplicate rounding logic.
+  - variable: gain_abs
+    meaning: Unrealised profit or loss in EUR for the position.
+    calculation: Calculated as current_value - purchase_value, rounded to two decimals.
+    used_in: Propagated via position events/WebSocket responses and shown in the positions grid.
+    redundancy_notes: Mirrors totalChangeEur for single portfolios; caching this delta once per refresh allows reuse for both portfolio rows and detail views.
+  - variable: gain_pct
+    meaning: Unrealised percentage gain for the position.
+    calculation: Uses (gain_abs / purchase_value * 100) when purchase value is positive; otherwise 0.0.
+    used_in: Delivered with position payloads and displayed beside the absolute gain.
+    redundancy_notes: Depends only on gain_abs and purchase_value; compute alongside gain_abs to reuse the already derived delta and avoid repeat division checks.
+  - variable: average_purchase_price_native
+    meaning: Average purchase price per share in the security’s native currency.
+    calculation: Converts avg_price_native to a float and rounds to six decimals if available.
+    used_in: Sent for live position updates, WebSocket responses, and reused when deriving detailed averages.
+    redundancy_notes: Overlaps with avg_price_security fallbacks; centralising native average selection would prevent reconciling two similar averages in multiple places.
+  - variable: purchase_total_security
+    meaning: Aggregate purchase amount expressed in the security’s native currency.
+    calculation: Sums security_currency_total across holdings, converts to float, and rounds to two decimals.
+    used_in: Present in position updates, WebSocket responses, and drives average cost displays and FX tooltips on the detail page.
+    redundancy_notes: Feeding both average_purchase_price_native and averagePurchaseNative; expose a shared aggregate object to prevent repeated per-holding summations.
+  - variable: purchase_total_account
+    meaning: Aggregate purchase amount in the portfolio account currency.
+    calculation: Accumulates account_currency_total, casting to float and rounding to two decimals.
+    used_in: Included in position payloads and reused to calculate or display account-currency averages in the detail view.
+    redundancy_notes: Parallel to purchase_total_security; compute both totals within the same iteration to minimise traversal overhead.
+  - variable: avg_price_security
+    meaning: Weighted average native-currency price per share (may differ from FIFO average).
+    calculation: Computes (security_weighted_sum / security_covered_shares) when coverage matches holdings, rounded to six decimals.
+    used_in: Published with positions, normalised for WebSocket responses, and used to seed detail-page averages.
+    redundancy_notes: Provides the preferred input for averagePurchaseNative; ensure downstream consumers reference this variable directly before recomputing native averages.
+  - variable: avg_price_account
+    meaning: Weighted average per-share price expressed in the account currency.
+    calculation: Mirrors avg_price_security, using account-currency totals and rounding to six decimals.
+    used_in: Distributed via position events/WebSocket payloads and displayed (with FX tooltip) on the detail page.
+    redundancy_notes: Pair this with avg_price_security in a shared average struct so UI code can switch currencies without recomputation.
+  - variable: total_holdings
+    meaning: Aggregated share count across all portfolios holding the security.
+    calculation: Sums per-portfolio holdings when assembling the security snapshot, rounding to six decimals.
+    used_in: Normalised for pp_reader/get_security_snapshot responses and referenced when computing snapshot metrics.
+    redundancy_notes: Can be reused for market_value_eur and average price denominators; cache per security snapshot to avoid repeated aggregation for each metric.
+  - variable: last_price_native
+    meaning: Latest price in the security’s native currency.
+    calculation: Normalises securities.last_price (scaled by 1e8) into a float, rounding to four decimals.
+    used_in: Returned in snapshot payloads and drives last-price and day-change displays.
+    redundancy_notes: Share normalisation with other price fields (close, history points) via a dedicated scaling helper to reduce scattered scaling constants.
+  - variable: last_price_eur
+    meaning: Latest price converted to EUR using stored FX rates.
+    calculation: Calls normalize_price_to_eur_sync and rounds to four decimals if an FX rate exists.
+    used_in: Serialised in snapshot responses and used for EUR price displays and day-change comparisons.
+    redundancy_notes: Reuse the same FX conversion output for market_value_eur and dayPriceChangeEur to prevent repeated conversions per response.
+  - variable: market_value_eur
+    meaning: EUR valuation of all holdings using the latest price.
+    calculation: Multiplies total_holdings by the EUR-converted last price and rounds to cents.
+    used_in: Shared in snapshots and rendered in the security meta grid.
+    redundancy_notes: Could derive from current_value when snapshot represents the active portfolio; centralising valuation logic would avoid parallel calculations.
+  - variable: purchase_value_eur
+    meaning: Total historic cost basis in EUR across portfolios.
+    calculation: Converts summed purchase_value_cents to EUR and rounds to cents.
+    used_in: Included in snapshots and feeds average cost and gain calculations in the detail view.
+    redundancy_notes: Duplicates purchase_value semantics at the aggregated level; share the cent-to-EUR conversion helper with purchase_value to reduce duplicated rounding code.
+  - variable: last_close_native
+    meaning: Most recent historical closing price in native currency.
+    calculation: Obtained via fetch_previous_close, normalised to float, and returned with the snapshot.
+    used_in: Present in snapshot payloads and used to compute or display daily price deltas.
+    redundancy_notes: Shares the same scaling as last_price_native; align retrieval and conversion via a unified price history utility.
+  - variable: last_close_eur
+    meaning: Most recent historical close converted to EUR.
+    calculation: Converts the raw close through normalize_price_to_eur_sync, rounding to four decimals.
+    used_in: Shared in snapshot payloads and influences day-change metrics and display.
+    redundancy_notes: Should reuse the conversion result feeding dayPriceChangeEur; cache alongside last_price_eur to avoid duplicate FX lookups.
+  - variable: averagePurchaseNative
+    meaning: Detail-view metric representing the preferred native average cost baseline.
+    calculation: Picks avg_price_security, falling back to average_purchase_price_native or computing from purchase_total_security / holdings.
+    used_in: Rendered in the security detail “Durchschnittlicher Kaufpreis” section (native price).
+    redundancy_notes: Logic duplicates selection done server-side; consider consolidating in a shared helper that both backend and frontend consume.
+  - variable: averagePurchaseAccount
+    meaning: Detail metric for account-currency average cost.
+    calculation: Uses avg_price_account when present, else derives from purchase_total_account / holdings and falls back to the EUR average when needed.
+    used_in: Displayed alongside native averages with an optional FX tooltip.
+    redundancy_notes: Shares fallbacks with averagePurchaseNative; a unified average-selection routine could choose the correct currency path once.
+  - variable: averagePurchaseEur
+    meaning: Detail metric for EUR-denominated average cost.
+    calculation: Computes purchase_value_eur / holdings when both values are finite.
+    used_in: Provided in the average price panel or as a fallback for account currency.
+    redundancy_notes: Derivable from purchase_value and current FX rate; reuse existing aggregated EUR totals instead of recalculating when opening detail views.
+  - variable: dayPriceChangeNative
+    meaning: Intraday price change expressed in native currency.
+    calculation: Difference between last_price_native and last_close_native.
+    used_in: Displayed as part of the “Tagesänderung” absolute value with native currency when available.
+    redundancy_notes: Shares inputs with dayChangePct; compute both metrics within the same function to avoid repeating delta calculations.
+  - variable: dayPriceChangeEur
+    meaning: Intraday price change in EUR.
+    calculation: Difference between last_price_eur and last_close_eur.
+    used_in: Provides the fallback absolute day change display when native values are unavailable.
+    redundancy_notes: Reuse the FX-converted prices calculated for dayChangePct and market_value_eur to avoid redundant conversions per update.
+  - variable: dayChangePct
+    meaning: Percentage change over the last trading day.
+    calculation: Computes computePercentageChange across prices and averages, preferring native values then EUR.
+    used_in: Rendered next to the absolute day change in the detail header.
+    redundancy_notes: Relies on the same price pairs as dayPriceChangeNative/Eur; cache both absolute deltas and reuse them when emitting percentages.
+  - variable: totalChangeEur
+    meaning: Total unrealised gain or loss in EUR for the position.
+    calculation: Uses either holdings-adjusted price delta (native FX-adjusted) or direct current_value_eur - purchase_value_eur.
+    used_in: Displayed in the “Gesamtänderung” section of the detail page.
+    redundancy_notes: Align with gain_abs to prevent separate EUR delta computations; expose a shared gain object keyed by scope (position vs snapshot).
+  - variable: totalChangePct
+    meaning: Total percentage performance versus cost basis.
+    calculation: Chooses the best available percentage delta across EUR and native comparisons.
+    used_in: Shown alongside totalChangeEur in the security meta grid.
+    redundancy_notes: Shares inputs with gain_pct and totalChangeEur; compute once per scope and distribute the cached percentage to both UI layers.
+  - variable: close
+    meaning: Daily closing price used for history charts (native scale).
+    calculation: Raw integers streamed from pp_reader/get_security_history, converted to floats by dividing by PRICE_SCALE.
+    used_in: Normalised series feed the chart rendering and range-change UI, which also updates info bars and metrics.
+    redundancy_notes: Scaling mirrors last_price_native; consolidate chart data conversion with snapshot price normalisers to avoid diverging constants.
+  - variable: gain_abs_eur
+    meaning: Fallback unrealised gain used when only cached positions are available.
+    calculation: Summed current value minus purchase value when building client-side snapshots from cached positions.
+    used_in: Supplies immediate values for detail tabs opened before fresh data arrives.
+    redundancy_notes: Represents the cached equivalent of gain_abs/totalChangeEur; use the same helper that emits live values so caches stay consistent without duplicate math.
