@@ -4,7 +4,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 1. Backend: Gemeinsame Currency-Utilities
 
-1. a) [ ] Zentrale Helper für Cent- und Preis-Normalisierung anlegen
+1. a) [x] Zentrale Helper für Cent- und Preis-Normalisierung anlegen
        - Datei: `custom_components/pp_reader/util/currency.py` (neu)
        - Ziel: Funktionen für `cent_to_eur`, optionale Rückgaben (`None` bei fehlenden Werten), konsistente Rundung (2 bzw. 4 Nachkommastellen) sowie `normalize_raw_price` und `normalize_price_to_eur_sync` aus `logic/portfolio` zusammenführen.
        - Abnahmekriterien: Bestehende Aufrufer (`logic/portfolio`, `data/db_access`, `prices/price_service`) können ohne Verhaltensänderung umgestellt werden; Modul stellt keine Home-Assistant-Abhängigkeiten voraus.
