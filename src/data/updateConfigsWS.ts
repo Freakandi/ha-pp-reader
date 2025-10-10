@@ -6,6 +6,7 @@ import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import type { SortDirection } from '../content/elements';
 import type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
+import { roundCurrency } from '../utils/currency';
 import type { AccountSummary, PortfolioSummary } from './api';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
@@ -368,7 +369,8 @@ export function handlePortfolioUpdate(
         // fallback below
       }
     }
-    return (Math.round(val * 100) / 100).toFixed(2).replace('.', ',');
+    const rounded = roundCurrency(val, { fallback: 0 }) ?? 0;
+    return rounded.toFixed(2).replace('.', ',');
   };
 
   // Map: uuid -> Row
@@ -819,7 +821,8 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
 }
 
 function formatNumber(v: number): string {
-  return (Number.isNaN(v) ? 0 : v).toLocaleString('de-DE', {
+  const rounded = roundCurrency(v, { fallback: 0 }) ?? 0;
+  return rounded.toLocaleString('de-DE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });

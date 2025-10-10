@@ -35,6 +35,7 @@ import type {
   SecurityHistoryRangeState,
   SecuritySnapshotLike,
 } from './types';
+import { roundCurrency, toFiniteCurrency } from '../utils/currency';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
@@ -372,18 +373,7 @@ function normaliseDate(date: Date): Date {
 }
 
 function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number.parseFloat(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
+  return toFiniteCurrency(value);
 }
 
 function resolveRangeOptions(rangeKey: SecurityHistoryRangeKey): SecurityHistoryOptions {
@@ -626,16 +616,6 @@ function deriveFxRate(
   }
 
   return null;
-}
-
-function roundCurrency(value: unknown): number | null {
-  const numeric = toFiniteNumber(value);
-  if (numeric == null) {
-    return null;
-  }
-
-  const rounded = Math.round(numeric * 100) / 100;
-  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 function isFiniteNumber(value: number | null | undefined): value is number {

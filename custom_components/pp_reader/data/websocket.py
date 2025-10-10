@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 from .db_access import (
     fetch_live_portfolios,  # NEU: On-Demand Aggregation
@@ -83,7 +84,7 @@ async def _load_accounts_payload(
             continue
 
         currency = getattr(account, "currency_code", "EUR") or "EUR"
-        orig_balance = account.balance / 100.0
+        orig_balance = cent_to_eur(getattr(account, "balance", None), default=0.0) or 0.0
         fx_unavailable = False
         if currency != "EUR":
             rate = fx_rates.get(currency)
@@ -102,8 +103,10 @@ async def _load_accounts_payload(
         account_entry = {
             "name": account.name,
             "currency_code": currency,
-            "orig_balance": round(orig_balance, 2),
-            "balance": round(eur_balance, 2) if eur_balance is not None else None,
+            "orig_balance": round_currency(orig_balance) or 0.0,
+            "balance": (
+                round_currency(eur_balance) if eur_balance is not None else None
+            ),
         }
         if fx_unavailable:
             account_entry["fx_unavailable"] = True
