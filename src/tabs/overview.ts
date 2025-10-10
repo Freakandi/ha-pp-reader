@@ -18,6 +18,7 @@ import {
   fetchPortfolioPositionsWS,
 } from '../data/api';
 import type { PortfolioPositionsResponse } from '../data/api';
+import { buildAveragePurchaseDisplay, toNullableNumber } from '../data/averagePurchaseDisplay';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
 import type { HomeAssistant } from '../types/home-assistant';
 import type { PanelConfigLike, SecuritySnapshotLike } from './types';
@@ -100,7 +101,6 @@ const portfolioPositionsCache: PortfolioPositionsCache = new Map();      // port
 
 // --- Security-Aggregation für Detail-Ansicht ---
 const HOLDINGS_PRECISION = 1e6;
-const PRICE_FRACTION_DIGITS = { min: 2, max: 6 } as const;
 
 function toFiniteNumber(value: unknown): number {
   const num = Number(value);
@@ -115,21 +115,6 @@ function roundCurrency(value: unknown): number {
 function roundHoldings(value: unknown): number {
   const finite = toFiniteNumber(value);
   return Math.round(finite * HOLDINGS_PRECISION) / HOLDINGS_PRECISION;
-}
-
-function toNullableNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed === '') {
-      return null;
-    }
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 function normalizeCurrencyValue(value: unknown): number | null {
@@ -148,171 +133,12 @@ function normalizePercentValue(value: unknown): number | null {
   return Math.round(numeric * 100) / 100;
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function normalizeCurrencyCode(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const upper = trimmed.toUpperCase();
-  if (/^[A-Z]{3}$/.test(upper)) {
-    return upper;
-  }
-  if (upper === '€') {
-    return 'EUR';
-  }
-  return null;
-}
-
-function resolveCurrencyFromPosition(
-  position: PortfolioPositionLike,
-  keys: readonly string[],
-  fallback: string | null = null,
-): string | null {
-  const record = position as Record<string, unknown>;
-  for (const key of keys) {
-    const candidate = normalizeCurrencyCode(record[key]);
-    if (candidate) {
-      return candidate;
-    }
-  }
-  return fallback;
-}
-
-function computeAveragePrice(
-  explicitValue: unknown,
-  totalValue: unknown,
-  holdings: number | null,
-): number | null {
-  const explicit = toNullableNumber(explicitValue);
-  if (explicit != null) {
-    return explicit;
-  }
-
-  const total = toNullableNumber(totalValue);
-  if (total != null && isFiniteNumber(holdings) && holdings > 0) {
-    return total / holdings;
-  }
-
-  return null;
-}
-
-function formatPriceWithCurrency(
-  value: number | null,
-  currency: string | null,
-): string | null {
-  if (!isFiniteNumber(value)) {
-    return null;
-  }
-
-  const formatted = value.toLocaleString('de-DE', {
-    minimumFractionDigits: PRICE_FRACTION_DIGITS.min,
-    maximumFractionDigits: PRICE_FRACTION_DIGITS.max,
-  });
-  return `${formatted}${currency ? `\u00A0${currency}` : ''}`;
-}
-
 function buildPurchasePriceDisplay(
   position: PortfolioPositionLike,
 ): { markup: string; sortValue: number; ariaLabel: string } {
-  const holdings = toNullableNumber(position.current_holdings);
   const record = position as Record<string, unknown>;
 
-  const securityCurrency = resolveCurrencyFromPosition(position, [
-    'security_currency_code',
-    'security_currency',
-    'native_currency_code',
-    'native_currency',
-  ]);
-
-  const accountCurrency =
-    resolveCurrencyFromPosition(position, [
-      'account_currency_code',
-      'account_currency',
-      'purchase_currency_code',
-      'currency_code',
-    ]) ?? (securityCurrency === 'EUR' ? 'EUR' : null) ?? 'EUR';
-
-  const avgSecurity = computeAveragePrice(
-    record['avg_price_security'],
-    record['purchase_total_security'],
-    holdings,
-  );
-  const avgNativeFallback = computeAveragePrice(
-    record['average_purchase_price_native'],
-    record['purchase_total_security'],
-    holdings,
-  );
-  const effectiveSecurity = avgSecurity ?? avgNativeFallback;
-
-  const avgAccount = computeAveragePrice(
-    record['avg_price_account'],
-    record['purchase_total_account'],
-    holdings,
-  );
-  const accountFallback = computeAveragePrice(
-    undefined,
-    record['purchase_value'],
-    holdings,
-  );
-  const effectiveAccount = avgAccount ?? accountFallback;
-
-  let primaryValue = effectiveSecurity;
-  let primaryCurrency = securityCurrency;
-  let primaryText = formatPriceWithCurrency(effectiveSecurity, securityCurrency);
-
-  if (!primaryText) {
-    primaryValue = effectiveAccount;
-    primaryCurrency = accountCurrency;
-    primaryText = formatPriceWithCurrency(effectiveAccount, accountCurrency);
-  }
-
-  const formattedAccount = formatPriceWithCurrency(
-    effectiveAccount,
-    accountCurrency,
-  );
-
-  const shouldRenderAccount =
-    formattedAccount !== null &&
-    (primaryText == null ||
-      !primaryCurrency ||
-      !accountCurrency ||
-      accountCurrency !== primaryCurrency ||
-      (isFiniteNumber(effectiveAccount) &&
-        isFiniteNumber(primaryValue) &&
-        Math.abs(effectiveAccount - primaryValue) > 1e-6));
-
-  const parts: string[] = [];
-  const ariaParts: string[] = [];
-
-  if (primaryText) {
-    parts.push(
-      `<span class="purchase-price purchase-price--primary">${primaryText}</span>`,
-    );
-    ariaParts.push(primaryText.replace(/\u00A0/g, ' '));
-  } else {
-    const missing =
-      '<span class="missing-value" role="note" aria-label="Kein Kaufpreis verfügbar" title="Kein Kaufpreis verfügbar">—</span>';
-    parts.push(missing);
-    ariaParts.push('Kein Kaufpreis verfügbar');
-  }
-
-  if (shouldRenderAccount && formattedAccount && formattedAccount !== primaryText) {
-    parts.push(
-      `<span class="purchase-price purchase-price--secondary">${formattedAccount}</span>`,
-    );
-    ariaParts.push(formattedAccount.replace(/\u00A0/g, ' '));
-  }
-
-  const markup = parts.join('<br>');
-  const sortValue = toNullableNumber(record['purchase_value']) ?? 0;
-  const ariaLabel = ariaParts.join(', ');
+  const { markup, sortValue, ariaLabel } = buildAveragePurchaseDisplay(record);
 
   return { markup, sortValue, ariaLabel };
 }

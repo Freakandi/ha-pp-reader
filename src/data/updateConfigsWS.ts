@@ -7,6 +7,7 @@ import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-
 import type { SortDirection } from '../content/elements';
 import type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 import type { AccountSummary, PortfolioSummary } from './api';
+import { buildAveragePurchaseDisplay } from './averagePurchaseDisplay';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 
@@ -20,6 +21,19 @@ interface PortfolioPositionData {
   current_value?: number | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
+  average_purchase_price_native?: number | string | null;
+  purchase_total_security?: number | string | null;
+  purchase_total_account?: number | string | null;
+  avg_price_security?: number | string | null;
+  avg_price_account?: number | string | null;
+  security_currency_code?: string | null;
+  security_currency?: string | null;
+  native_currency_code?: string | null;
+  native_currency?: string | null;
+  account_currency_code?: string | null;
+  account_currency?: string | null;
+  purchase_currency_code?: string | null;
+  currency_code?: string | null;
   [key: string]: unknown;
 }
 
@@ -661,7 +675,7 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
     [
       { key: 'name', label: 'Wertpapier' },
       { key: 'current_holdings', label: 'Bestand', align: 'right' },
-      { key: 'purchase_value', label: 'Kaufwert', align: 'right' },
+      { key: 'purchase_value', label: 'Ø Kaufpreis', align: 'right' },
       { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
       { key: 'gain_abs', label: '+/-', align: 'right' },
       { key: 'gain_pct', label: '%', align: 'right' }
@@ -694,6 +708,20 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
           tr.dataset.security = pos.security_uuid;
         }
         tr.classList.add('position-row');
+
+        const purchaseCell = tr.cells?.[2] ?? null;
+        if (purchaseCell && pos) {
+          const { markup, sortValue, ariaLabel } = buildAveragePurchaseDisplay(
+            pos as Record<string, unknown>,
+          );
+          purchaseCell.innerHTML = markup;
+          purchaseCell.dataset.sortValue = String(sortValue);
+          if (ariaLabel) {
+            purchaseCell.setAttribute('aria-label', ariaLabel);
+          } else {
+            purchaseCell.removeAttribute('aria-label');
+          }
+        }
       });
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
@@ -727,6 +755,10 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
   }
   return raw;
 }
+
+export const __TEST_ONLY__ = {
+  renderPositionsTableInlineForTest: renderPositionsTableInline,
+};
 
 if (!window.__ppReaderFlushPendingPositions) {
   window.__ppReaderFlushPendingPositions = (root, portfolioUuid) =>
