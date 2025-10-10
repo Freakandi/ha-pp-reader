@@ -1484,14 +1484,22 @@ export async function renderDashboard(
         <h2>Fremdwährungen</h2>
         <div class="scroll-container fx-account-table">
           ${makeTable(
-    fxAccounts.map(account => ({
-      name: account.name,
-      fx_display: `${(account.orig_balance ?? 0).toLocaleString('de-DE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}&nbsp;${account.currency_code ?? ''}`,
-      balance: account.balance ?? null,
-    })),
+    fxAccounts.map(account => {
+      const origBalance = account.orig_balance;
+      const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
+      const fxDisplay = hasOrigBalance
+        ? `${origBalance.toLocaleString('de-DE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}&nbsp;${account.currency_code ?? ''}`
+        : '';
+
+      return {
+        name: account.name,
+        fx_display: fxDisplay,
+        balance: account.balance ?? null,
+      };
+    }),
     [
       { key: 'name', label: 'Name' },
       { key: 'fx_display', label: 'Betrag (FX)' },

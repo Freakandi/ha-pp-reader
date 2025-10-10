@@ -278,13 +278,21 @@ function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
 
   if (fxContainer) {
     fxContainer.innerHTML = makeTable(
-      fxAccounts.map(account => ({
-        ...account,
-        fx_display: `${(account.orig_balance ?? 0).toLocaleString('de-DE', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}\u00A0${account.currency_code}`,
-      })),
+      fxAccounts.map(account => {
+        const origBalance = account.orig_balance;
+        const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
+        const fxDisplay = hasOrigBalance
+          ? `${origBalance.toLocaleString('de-DE', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}\u00A0${account.currency_code}`
+          : '';
+
+        return {
+          ...account,
+          fx_display: fxDisplay,
+        };
+      }),
       [
         { key: 'name', label: 'Name' },
         { key: 'fx_display', label: 'Betrag (FX)' },
