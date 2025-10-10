@@ -79,3 +79,20 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Dateien: `src/data/api.ts`, `src/tabs/types.ts`, `src/tabs/security_detail.ts`, `src/utils/currency.ts`, Tests unter `src/tabs/__tests__/`
        - Ziel: Das Dashboard verarbeitet die bereits normalisierten History-Werte und Snapshot-Deltas, entfernt die lokale `PRICE_SCALE`-Konstante sowie Hilfsfunktionen wie `normaliseHistorySeries`-Division und `computeDelta`; Rundungen erfolgen weiterhin über die gemeinsamen Currency-Utilities.
        - Validierung: Jest-Tests (`security_detail.metrics.test.ts`, `overview.render.test.ts`) spiegeln die neuen Felder wider und die UI zeigt unveränderte numerische Werte.
+
+## 5. Holdings & Aggregations
+
+5. a) [ ] Gemeinsamen Aggregations-Helper für Wertpapierbestände extrahieren
+       - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/aggregations.py` (neu)
+       - Ziel: Die Summen- und Gewichtungslogik innerhalb `get_security_snapshot` sowie der Positionsabfrage über `portfolio_securities` zu einer wiederverwendbaren Funktion bündeln. Der Helper soll `total_holdings`, `purchase_value_eur`, `purchase_total_security`, `purchase_total_account`, `positive_holdings` und die gewichteten Durchschnittsanteile normalisiert zurückgeben, sodass beide Aufrufer keine eigenen For-Schleifen und Rundungszweige mehr besitzen.
+       - Validierung: `get_security_snapshot` und `get_portfolio_positions` importieren den Helper und enthalten keine manuell gepflegten Summierungsblöcke mehr; bestehende Tests in `tests/test_db_access.py` (z. B. `test_get_security_snapshot_multicurrency`, `test_get_security_snapshot_zero_holdings_preserves_purchase_sum`) werden angepasst, um den neuen Rückgabewert des Helpers abzudecken.
+
+5. b) [ ] Aggregationskontext über WebSocket & Events ausliefern
+       - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/websocket.py`, `custom_components/pp_reader/data/event_push.py`
+       - Ziel: Der Aggregations-Helper liefert neben den einzelnen Positionen ein strukturiertes Aggregationsobjekt pro `security_uuid`, das `get_portfolio_positions` serialisiert (z. B. als `aggregations` oder `summary`). `_normalize_portfolio_positions` und `_normalize_position_entry` lesen diese vorbereiteten Zahlen und entfernen ihre eigenen `round(...)`- und Summierungsabschnitte für `purchase_total_security`/`purchase_total_account`. Damit stehen konsistente `total_holdings`, `purchase_value_eur`, `market_value_eur` und verwandte Kennzahlen sowohl für On-Demand-WebSocket-Aufrufe als auch Event-Pushes bereit; verwaiste Utility-Zweige entfallen.
+       - Validierung: WebSocket `pp_reader/get_portfolio_positions` (Tests: `tests/test_ws_portfolio_positions.py`) und Event-Kompaktierung (`tests/test_sync_from_pclient.py::test_compact_event_data_trims_portfolio_positions`) decken das Aggregationsobjekt ab und bestätigen, dass redundante Rundungen entfallen sind.
+
+5. c) [ ] Dashboard & Cache auf Backend-Aggregationen umstellen
+       - Dateien: `src/data/api.ts`, `src/data/updateConfigsWS.ts`, `src/tabs/overview.ts`, `src/tabs/security_detail.ts`, `src/tabs/types.ts`
+       - Ziel: Die im WebSocket gelieferten Aggregationsdaten werden im `PortfolioPositionsCache` gespeichert, wodurch Funktionen wie `getSecuritySnapshotFromCache`, `collectSecurityPositions`, `roundHoldings` und die daraus abgeleiteten Summen-/Durchschnittsberechnungen entfallen. Detail-Tab und Snapshot-Metriken lesen `total_holdings`, `purchase_total_security`, `purchase_total_account` und `purchase_value_eur` direkt aus dem Aggregationsblock und entfernen lokale Reskalierung (`HOLDINGS_PRECISION`) sowie Fallback-Berechnungen, die nach der Backend-Umstellung nicht mehr benötigt werden.
+       - Validierung: Jest-Regressionen (`src/tabs/__tests__/security_detail.metrics.test.ts`, `tests/frontend/test_portfolio_update_gain_abs.py`) decken die neue Datenquelle ab und bestätigen, dass keine Client-seitigen Re-Summierungen mehr erfolgen.
