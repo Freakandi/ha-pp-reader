@@ -234,10 +234,10 @@ def seeded_history_db(tmp_path: Path) -> Path:
     initialize_database_schema(db_path)
 
     price_rows = [
-        ("sec-1", 20240101, 10_000, None, None, None),
-        ("sec-1", 20240102, 10_500, None, None, None),
-        ("sec-1", 20240103, 10_750, None, None, None),
-        ("sec-2", 20240103, 99_999, None, None, None),
+        ("sec-1", 20240101, int(10.0 * 1e8), None, None, None),
+        ("sec-1", 20240102, int(10.5 * 1e8), None, None, None),
+        ("sec-1", 20240103, int(10.75 * 1e8), None, None, None),
+        ("sec-2", 20240103, int(99.999 * 1e8), None, None, None),
     ]
 
     conn = sqlite3.connect(str(db_path))
@@ -344,8 +344,8 @@ def test_ws_get_security_history_returns_filtered_prices(
     assert payload["start_date"] == 20240102
     assert payload["end_date"] == 20240103
     assert payload["prices"] == [
-        {"date": 20240102, "close": 10_500},
-        {"date": 20240103, "close": 10_750},
+        {"date": 20240102, "close": 10.5, "close_raw": int(10.5 * 1e8)},
+        {"date": 20240103, "close": 10.75, "close_raw": int(10.75 * 1e8)},
     ]
 
 
@@ -428,9 +428,9 @@ def test_ws_get_security_history_supports_predefined_ranges(
     assert payload.get("start_date") == start_date
     assert payload.get("end_date") == end_date
     assert payload["prices"] == [
-        {"date": 20240101, "close": 10_000},
-        {"date": 20240102, "close": 10_500},
-        {"date": 20240103, "close": 10_750},
+        {"date": 20240101, "close": 10.0, "close_raw": int(10.0 * 1e8)},
+        {"date": 20240102, "close": 10.5, "close_raw": int(10.5 * 1e8)},
+        {"date": 20240103, "close": 10.75, "close_raw": int(10.75 * 1e8)},
     ]
 
 
@@ -472,8 +472,8 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "purchase_total_account": 34.7,
         "avg_price_security": pytest.approx(8.114286, rel=0, abs=1e-6),
         "avg_price_account": pytest.approx(9.914286, rel=0, abs=1e-6),
-        "last_close_native": 0.0001,
-        "last_close_eur": 0.0001,
+        "last_close_native": 10.75,
+        "last_close_eur": 10.75,
     }
 
 

@@ -65,7 +65,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 4. Native Price Scaling
 
-4. a) [ ] Historische Close-Preise über gemeinsamen Helper normalisieren
+4. a) [x] Historische Close-Preise über gemeinsamen Helper normalisieren
        - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/websocket.py`, `custom_components/pp_reader/util/currency.py`
        - Ziel: `iter_security_close_prices` und `ws_get_security_history` nutzen `normalize_raw_price` (inkl. `PRICE_SCALE`), um native Close-Werte einmalig auf Float (4 Nachkommastellen) zu skalieren; Rohwerte werden optional unter `close_raw` weitergegeben, sodass Frontend und Tests ohne doppelte Division auskommen.
        - Validierung: WebSocket `pp_reader/get_security_history` liefert normalisierte Close-Werte; `tests/test_ws_security_history.py` prüft sowohl Roh- als auch Normalisierungsfelder.
