@@ -6,9 +6,7 @@ from pathlib import Path
 
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates,
-    ensure_exchange_rates_for_dates_sync,
     load_latest_rates,
-    load_latest_rates_sync,
 )
 from custom_components.pp_reader.data.db_access import (
     Security,
@@ -18,6 +16,13 @@ from custom_components.pp_reader.data.db_access import (
     get_securities_by_id,
     get_transactions,
 )
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    normalize_price_to_eur_sync as _normalize_price_to_eur_sync,
+    normalize_raw_price,
+    round_currency,
+    round_price,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,43 +30,13 @@ PURCHASE_TYPES = (0, 2)
 SALE_TYPES = (1, 3)
 
 
-def normalize_price(raw_price: int) -> float:
-    """Convert a raw price with 8 decimal places to a float."""
-    return raw_price / 10**8
+normalize_price = normalize_raw_price
+normalize_price_to_eur_sync = _normalize_price_to_eur_sync
 
 
 def normalize_shares(raw_shares: int) -> float:
     """Convert raw shares with 8 decimal places to a float."""
     return raw_shares / 10**8
-
-
-def normalize_price_to_eur_sync(
-    raw_price: int | None, currency_code: str, reference_date: datetime, db_path: Path
-) -> float | None:
-    """Normalize a raw security price to EUR using stored FX rates."""
-    if not raw_price:
-        return None
-
-    price = normalize_price(raw_price)
-    if currency_code == "EUR":
-        return price
-
-    try:
-        ensure_exchange_rates_for_dates_sync([reference_date], {currency_code}, db_path)
-        fx_rates = load_latest_rates_sync(reference_date, db_path)
-    except Exception:  # pragma: no cover - defensive
-        _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
-        return None
-    rate = fx_rates.get(currency_code)
-    if rate:
-        return price / rate
-
-    _LOGGER.warning(
-        "⚠️ Kein Wechselkurs für %s (%s)",
-        currency_code,
-        reference_date.strftime("%Y-%m-%d"),
-    )
-    return None
 
 
 def calculate_holdings(transactions: list[Transaction]) -> dict[str, float]:
@@ -119,20 +94,33 @@ async def calculate_portfolio_value(
         if not sec or not sec.last_price:
             continue
 
-        kurs = normalize_price(sec.last_price)
+        kurs = normalize_raw_price(sec.last_price)
+        if kurs is None:
+            continue
+
         if sec.currency_code != "EUR":
             rate = fx_rates.get(sec.currency_code)
-            if rate:
-                kurs = kurs / rate
-            else:
+            if rate is None:
                 _LOGGER.warning(
                     "⚠️ Kein Wechselkurs für %s (%s)", sec.name, sec.currency_code
+                )
+                continue
+            try:
+                kurs = round_price(kurs / float(rate)) or 0.0
+            except (TypeError, ValueError, ZeroDivisionError):
+                _LOGGER.warning(
+                    "⚠️ Ungültiger Wechselkurs für %s (%s)",
+                    sec.name,
+                    sec.currency_code,
                 )
                 continue
 
         total_value += qty * kurs
 
-    return round(total_value, 2), len(active_securities)
+    return (
+        round_currency(total_value, default=0.0) or 0.0,
+        len(active_securities),
+    )
 
 
 async def calculate_purchase_sum(portfolio_uuid: str, db_path: Path) -> float:
@@ -210,7 +198,9 @@ async def _build_fifo_holdings(
         tx_date = datetime.fromisoformat(tx.date)
 
         if tx.type in PURCHASE_TYPES:
-            amount = tx.amount / 100  # Cent -> EUR
+            amount = cent_to_eur(tx.amount)
+            if amount is None:
+                continue
             rate = await _resolve_fx_rate(sec.currency_code, tx_date, db_path)
             if rate is None:
                 _LOGGER.warning(
@@ -294,7 +284,7 @@ def _calculate_purchase_total(
         for qty, price, _ in positions
         if qty > 0
     )
-    return round(total_purchase, 2)
+    return round_currency(total_purchase, default=0.0) or 0.0
 
 
 def calculate_unrealized_gain(current_value: float, purchase_sum: float) -> float:
@@ -330,11 +320,15 @@ def db_calculate_portfolio_value_and_count(
     active_securities_count = 0
 
     for ps in portfolio_securities:
-        if ps.current_value and ps.current_value > 0:
-            total_value += ps.current_value / 100  # Cent -> EUR
+        current_value = cent_to_eur(ps.current_value)
+        if current_value and current_value > 0:
+            total_value += current_value
             active_securities_count += 1
 
-    return round(total_value, 2), active_securities_count
+    return (
+        round_currency(total_value, default=0.0) or 0.0,
+        active_securities_count,
+    )
 
 
 def db_calculate_portfolio_value_only(portfolio_uuid: str, db_path: Path) -> float:
@@ -388,7 +382,8 @@ def db_calculate_portfolio_purchase_sum(portfolio_uuid: str, db_path: Path) -> f
 
     total_purchase_sum = 0.0
     for ps in portfolio_securities:
-        if ps.purchase_value and ps.purchase_value > 0:
-            total_purchase_sum += ps.purchase_value / 100  # Cent -> EUR
+        purchase_value = cent_to_eur(ps.purchase_value)
+        if purchase_value and purchase_value > 0:
+            total_purchase_sum += purchase_value
 
-    return round(total_purchase_sum, 2)
+    return round_currency(total_purchase_sum, default=0.0) or 0.0
