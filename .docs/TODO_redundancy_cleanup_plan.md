@@ -136,3 +136,60 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Dateien: `src/tabs/overview.ts`, `src/tabs/security_detail.ts`
        - Ziel: `getSecuritySnapshotFromCache`, `collectSecurityPositions`, `roundHoldings` sowie die daraus resultierenden Summenberechnungen werden entfernt. Beide Tabs lesen `total_holdings`, `purchase_total_security`, `purchase_total_account`, `purchase_value_eur` und Durchschnittswerte direkt aus dem `aggregation`-Feld. Snapshot-Berechnung nutzt zusätzlich die bereits gelieferten Tagesdeltas aus Schritt 4.
        - Validierung: Jest-Regressionen (`src/tabs/__tests__/security_detail.metrics.test.ts`, `src/tabs/__tests__/overview.render.test.ts`) prüfen, dass keine clientseitigen Summierungen mehr stattfinden und die angezeigten Zahlen unverändert bleiben.
+
+## 6. Average Cost Selection
+
+6. a) [ ] Average-Cost-Auswahlhelper definieren
+       - Dateien: `custom_components/pp_reader/data/aggregations.py`
+       - Ziel: Ergänzung eines `AverageCostSelection`-Dataclasses inkl. Funktion `select_average_cost(aggregation, *, holdings=None, purchase_value_eur=None, security_currency_total=None, account_currency_total=None)`, die die bestehende `HoldingsAggregation`-Ausgabe nutzt, um konsistent gerundete Durchschnittspreise für Native-, Wertpapier- und Konto-Währung sowie den EUR-Kaufpreis abzuleiten. Fallback-Reihenfolge: explizite Aggregationswerte → Division aus Totals/positiven Beständen → EUR-Betrag auf Gesamtbestände. Das Objekt liefert zusätzlich Metadaten (`source`, `coverage_ratio` o. ä.) zur Nachvollziehbarkeit.
+       - Validierung: Ruff-konforme Implementierung mit Docstring; MyPy/pyright-kompatible Typannotationen.
+
+6. b) [ ] Unit-Tests für Average-Cost-Auswahl ergänzen
+       - Dateien: `tests/test_aggregations.py`
+       - Ziel: Szenarien mit vollständigen Aggregationswerten, partiellen Kaufpreisfeldern (z. B. fehlender `avg_price_security`) und reinem EUR-Kaufwert abdecken. Sicherstellen, dass `select_average_cost` die erwartete Fallback-Reihenfolge einhält und Quellenkennungen korrekt setzt.
+       - Validierung: Tests schlagen fehl, wenn einer der Rückgabewerte (`security`, `account`, `native`, `eur`, `source`) nicht den spezifizierten Regeln folgt.
+
+6. c) [ ] Backend-Payloads um Average-Cost-Kontext erweitern
+       - Dateien: `custom_components/pp_reader/data/db_access.py`
+       - Ziel: `get_portfolio_positions` und `get_security_snapshot` rufen `select_average_cost` auf, hängen das Ergebnis als neues Feld `average_cost` an und setzen die bestehenden Felder (`average_purchase_price_native`, `avg_price_security`, `avg_price_account`, `purchase_value_eur`, `purchase_total_security`, `purchase_total_account`) ausschließlich über das Selektionsobjekt. Redundante direkte Zuweisungen aus `HoldingsAggregation` entfallen.
+       - Validierung: Rückgabestrukturen behalten dieselben Keys; neue `average_cost`-Struktur enthält alle Auswahlwerte und Metadaten. Regressionstests für DB-Zugriffe passen die Sollwerte entsprechend an.
+
+6. d) [ ] WebSocket-Serializer auf Average-Cost-Kontext umstellen
+       - Dateien: `custom_components/pp_reader/data/websocket.py`
+       - Ziel: `_normalize_portfolio_positions` und `_serialise_security_snapshot` übernehmen das neue `average_cost`-Objekt (inkl. Metadaten) unverändert in die Payloads und entfernen die derzeitigen Fallback-Berechnungen (`_from_aggregation`, lokale `round(...)`-Aufrufe für Kaufpreise).
+       - Validierung: `tests/test_ws_portfolio_positions.py` und `tests/test_ws_security_history.py` prüfen, dass keine lokalen Divisionen mehr stattfinden und alle Durchschnittswerte aus `average_cost` stammen.
+
+6. e) [ ] Event-Push-Normalisierung vereinheitlichen
+       - Dateien: `custom_components/pp_reader/data/event_push.py`
+       - Ziel: `_normalize_position_entry` liest Average-Cost-Daten ausschließlich aus `item["average_cost"]` bzw. den bereits durch `select_average_cost` gesetzten Feldern und entfernt verbleibende Fallbacks auf `_normalize_currency_amount` oder manuelle `round_price`-Aufrufe für Durchschnittspreise.
+       - Validierung: `tests/test_sync_from_pclient.py` deckt ab, dass Event-Payloads unverändert bleiben und keine Legacy-Berechnungen aktiv sind.
+
+6. f) [ ] Backend-Regressionstests für Average-Cost-Kontext erweitern
+       - Dateien: `tests/test_db_access.py`, `tests/test_ws_portfolio_positions.py`, `tests/test_ws_security_history.py`
+       - Ziel: Neue Assertions für `average_cost` (Feldstruktur, Werte, Quellen-Metadaten) ergänzen und bestätigen, dass die bestehenden Felder (`average_purchase_price_native`, `avg_price_security`, …) mit dem Selektionsobjekt übereinstimmen. Sicherstellen, dass fehlende Aggregationsdaten die Fallback-Reihenfolge triggern.
+       - Validierung: Tests schlagen fehl, wenn `average_cost` fehlt oder Werte nicht synchron sind.
+
+6. g) [ ] Frontend-Typen & API auf Average-Cost-Kontext anheben
+       - Dateien: `src/data/api.ts`, `src/tabs/types.ts`, `src/types/global.d.ts`
+       - Ziel: Einführung eines gemeinsamen Interfaces (z. B. `AverageCostPayload`), Ergänzung der API-/Dashboard-Typen um `average_cost` sowie Dokumentation der neuen Metadaten. Bestehende Felder bleiben erhalten, werden aber als Derivate des neuen Objekts markiert.
+       - Validierung: `npx tsc --noEmit` schlägt fehl, falls Komponenten den neuen Typ nicht berücksichtigen.
+
+6. h) [ ] Websocket-Update-Handler vereinfachen
+       - Dateien: `src/data/updateConfigsWS.ts`
+       - Ziel: `deriveAggregation` und `normalizePosition` nutzen den Backend-`average_cost`-Kontext anstelle der manuellen Rekonstruktion. Entfernen der Hilfsfunktionen `coerceNumber`, `toNullableNumber` (sofern nur noch für Kaufpreiszwecke genutzt) sowie der Divisionen zur Durchschnittsberechnung.
+       - Validierung: DOM-Aktualisierungen behalten identische Werte; Jest-/Playwright-Regressionen für Live-Updates werden bei Abweichungen rot.
+
+6. i) [ ] Overview-Tab auf Average-Cost-Kontext umstellen
+       - Dateien: `src/tabs/overview.ts`
+       - Ziel: `buildPurchasePriceDisplay` verwendet `position.average_cost` (oder das Aggregationsfeld) zur Wahl des Primär-/Sekundärpreises und entfernt lokale Helper wie `computeAveragePrice`. Markup- und Sortierlogik bleiben unverändert, beziehen ihre Werte jedoch aus der neuen Struktur.
+       - Validierung: `src/tabs/__tests__/overview.render.test.ts` deckt die Anzeige ab und schlägt fehl, falls lokale Berechnungen verbleiben.
+
+6. j) [ ] Security-Detail-Tab harmonisieren
+       - Dateien: `src/tabs/security_detail.ts`
+       - Ziel: Snapshot-Metriken und Cache-Fallbacks greifen auf `average_cost` bzw. die durch Backend bereitgestellten Durchschnittswerte zu, sodass Hilfsfunktionen wie `computeAveragePurchaseFromTotal` und `computeAveragePurchaseEur` entfallen. FX-Tooltips werden anhand der Metadaten aktualisiert.
+       - Validierung: Jest-Tests in `src/tabs/__tests__/security_detail.metrics.test.ts` prüfen, dass keine lokalen Durchschnittsberechnungen übrig bleiben und Tooltips weiterhin korrekt sind.
+
+6. k) [ ] Frontend-Regressionssuite aktualisieren
+       - Dateien: `src/tabs/__tests__/overview.render.test.ts`, `src/tabs/__tests__/security_detail.metrics.test.ts`, ggf. weitere Snapshot-Tests
+       - Ziel: Testdatensätze um `average_cost` ergänzen, Assertions auf die neuen Felder erweitern und sicherstellen, dass entfernte Helper nicht mehr importiert werden.
+       - Validierung: Tests schlagen fehl, falls Komponenten weiterhin alte Helper referenzieren oder `average_cost` ignorieren.
