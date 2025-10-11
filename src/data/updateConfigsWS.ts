@@ -9,6 +9,7 @@ import type {
   AverageCostPayload,
   AverageCostSource,
   HoldingsAggregationPayload,
+  PerformanceMetricsPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
 import { roundCurrency } from '../utils/currency';
@@ -32,6 +33,7 @@ interface PortfolioPositionData {
   avg_price_security?: number | null;
   avg_price_account?: number | null;
   average_cost?: AverageCostPayload | null;
+  performance?: PerformanceMetricsPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }

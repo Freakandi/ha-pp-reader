@@ -231,7 +231,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Assertions auf das neue `performance`-Objekt (Felder, Quellenangaben, Synchronität mit Legacy-Spiegelwerten) ergänzen und bisherige Erwartungswerte für `gain_abs`/`gain_pct` gegen den Helper verifizieren.
        - Validierung: Tests schlagen fehl, wenn Backend oder WebSocket Payloads wieder lokale Fallbacks einführen oder Werte divergieren.
 
-7. h) [ ] Frontend-Typen & API um Performance-Kontext erweitern
+7. h) [x] Frontend-Typen & API um Performance-Kontext erweitern
        - Dateien: `src/data/api.ts`, `src/data/updateConfigsWS.ts`, `src/tabs/types.ts`, `src/types/global.d.ts`
        - Ziel: Neues Interface `PerformanceMetricsPayload` (inkl. optionalem `dayChange`-Block) definieren, API-/WS-Verträge um `performance` erweitern und Legacy-Felder (`gain_abs`, `gain_pct`, `day_price_change_*`) als Derivate kennzeichnen.
        - Validierung: `npx tsc --noEmit` schlägt fehl, wenn Komponenten das Objekt nicht berücksichtigen.
