@@ -365,10 +365,18 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
                 "security_uuid": "sec-1",
                 "name": "Security A",
                 "current_holdings": 5,
-                "purchase_value": 123.456,
+                "purchase_value": 999.999,  # ignored in favour of aggregation
                 "current_value": 150.987,
                 "gain_abs": 27.531,
                 "gain_pct": 22.1234,
+                "aggregation": {
+                    "purchase_value_eur": 123.45,
+                    "purchase_total_security": 321.09,
+                    "purchase_total_account": 322.1,
+                    "average_purchase_price_native": 24.123456,
+                    "avg_price_security": 25.654321,
+                    "avg_price_account": 25.987654,
+                },
                 "debug": "ignore",
             },
             "not-a-mapping",
@@ -384,11 +392,15 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             "security_uuid": "sec-1",
             "name": "Security A",
             "current_holdings": 5,
-            "purchase_value": 123.46,
+            "purchase_value": 123.45,
             "current_value": 150.99,
             "gain_abs": 27.53,
             "gain_pct": 22.12,
-            "average_purchase_price_native": None,
+            "average_purchase_price_native": 24.123456,
+            "purchase_total_security": 321.09,
+            "purchase_total_account": 322.1,
+            "avg_price_security": 25.654321,
+            "avg_price_account": 25.987654,
         }
     ]
 
