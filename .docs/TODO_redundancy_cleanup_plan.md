@@ -216,7 +216,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `get_security_snapshot` delegiert die Berechnung von `day_price_change_native`, `day_price_change_eur`, `day_change_pct`, `total_change_eur` und `total_change_pct` an den Performance-Helper, speichert die Ergebnisse unter `performance` und entfernt lokale `computeDelta`/`_round_percentage`-Logik. `_serialise_security_snapshot` übernimmt das Objekt unverändert.
        - Validierung: `tests/test_ws_security_history.py` und Snapshot-Tests prüfen, dass Backend- und WebSocket-Payloads dieselben Werte liefern und keine zusätzlichen Fallbacks mehr besitzen.
 
-7. e) [ ] Event- und Revaluation-Pfade auf Helper ausrichten
+7. e) [x] Event- und Revaluation-Pfade auf Helper ausrichten
        - Dateien: `custom_components/pp_reader/data/event_push.py`, `custom_components/pp_reader/data/coordinator.py`, `custom_components/pp_reader/prices/price_service.py`
        - Ziel: `_normalize_portfolio_value_entry`, `_normalize_position_entry`, `_portfolio_contract_entry` sowie `_build_portfolio_values_payload` beziehen `gain_abs`/`gain_pct` ausschließlich aus dem Performance-Helper; dadurch entfallen doppelte Divisionen und Rundungen. Event-Payloads tragen optional das neue `performance`-Objekt mit.
        - Validierung: Event- und Sensor-Tests (`tests/test_sync_from_pclient.py`, `tests/test_ws_portfolio_positions.py`) bestätigen unveränderte Payloads und dokumentieren das neue Objekt.

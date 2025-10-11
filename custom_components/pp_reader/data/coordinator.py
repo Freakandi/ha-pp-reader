@@ -11,6 +11,7 @@ It includes functionality to:
 
 import logging
 import sqlite3
+from dataclasses import asdict
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from importlib import import_module
@@ -24,6 +25,7 @@ from custom_components.pp_reader.logic import accounting as _accounting_module
 from custom_components.pp_reader.util import async_run_executor_job
 
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
+from .performance import select_performance_metrics
 
 try:
     from . import reader as _reader_module
@@ -123,8 +125,20 @@ def _portfolio_contract_entry(
     current_value = round(_normalize_amount(current_value_raw), 2)
     purchase_sum = round(_normalize_amount(purchase_sum_raw), 2)
 
-    gain_abs = round(current_value - purchase_sum, 2)
-    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum else 0.0, 2)
+    performance_mapping = entry.get("performance")
+    performance_payload: dict[str, Any]
+    if isinstance(performance_mapping, Mapping):
+        performance_payload = dict(performance_mapping)
+    else:
+        performance_metrics, day_change_metrics = select_performance_metrics(
+            current_value=current_value_raw,
+            purchase_value=purchase_sum_raw,
+        )
+        performance_payload = asdict(performance_metrics)
+        performance_payload["day_change"] = asdict(day_change_metrics)
+
+    gain_abs = round(performance_payload.get("gain_abs", 0.0), 2)
+    gain_pct = round(performance_payload.get("gain_pct", 0.0), 2)
 
     return portfolio_uuid, {
         "name": entry.get("name"),
@@ -133,6 +147,7 @@ def _portfolio_contract_entry(
         "purchase_sum": purchase_sum,
         "gain_abs": gain_abs,
         "gain_pct": gain_pct,
+        "performance": performance_payload,
     }
 
 

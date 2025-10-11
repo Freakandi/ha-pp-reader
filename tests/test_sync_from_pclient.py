@@ -321,6 +321,21 @@ def test_compact_event_data_trims_portfolio_values_list() -> None:
             "purchase_sum": 1100.0,
             "gain_abs": 134.57,
             "gain_pct": 12.23,
+            "performance": {
+                "gain_abs": 134.57,
+                "gain_pct": 12.23,
+                "total_change_eur": 134.57,
+                "total_change_pct": 12.23,
+                "source": "calculated",
+                "coverage_ratio": 0.6667,
+                "day_change": {
+                    "price_change_native": None,
+                    "price_change_eur": None,
+                    "change_pct": None,
+                    "source": "unavailable",
+                    "coverage_ratio": 0.0,
+                },
+            },
         }
     ]
 
@@ -352,6 +367,21 @@ def test_compact_event_data_trims_portfolio_values_mapping() -> None:
             "purchase_sum": 199.0,
             "gain_abs": 1.99,
             "gain_pct": pytest.approx(1.0, rel=0, abs=0.01),
+            "performance": {
+                "gain_abs": 1.99,
+                "gain_pct": pytest.approx(1.0, rel=0, abs=0.01),
+                "total_change_eur": 1.99,
+                "total_change_pct": pytest.approx(1.0, rel=0, abs=0.01),
+                "source": "calculated",
+                "coverage_ratio": 0.6667,
+                "day_change": {
+                    "price_change_native": None,
+                    "price_change_eur": None,
+                    "change_pct": None,
+                    "source": "unavailable",
+                    "coverage_ratio": 0.0,
+                },
+            },
         }
     ]
 
@@ -408,13 +438,28 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             "current_holdings": 5,
             "purchase_value": 123.45,
             "current_value": 150.99,
-            "gain_abs": 27.53,
-            "gain_pct": 22.12,
+            "gain_abs": 27.54,
+            "gain_pct": 22.31,
             "average_purchase_price_native": 24.123456,
             "purchase_total_security": 321.09,
             "purchase_total_account": 322.1,
             "avg_price_security": 25.654321,
             "avg_price_account": 25.987654,
+            "performance": {
+                "gain_abs": 27.54,
+                "gain_pct": 22.31,
+                "total_change_eur": 27.54,
+                "total_change_pct": 22.31,
+                "source": "calculated",
+                "coverage_ratio": 1.0,
+                "day_change": {
+                    "price_change_native": None,
+                    "price_change_eur": None,
+                    "change_pct": None,
+                    "source": "unavailable",
+                    "coverage_ratio": 0.0,
+                },
+            },
         }
     ]
 
