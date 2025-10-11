@@ -201,7 +201,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Dataclasses `PerformanceMetrics` (für `gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`) und `DayChangeMetrics` (für `day_price_change_native`, `day_price_change_eur`, `day_change_pct`) samt Funktion `select_performance_metrics(...)` bereitstellen, die zentrale Eingaben (`current_value`, `purchase_value`, `holdings`, `last_price_native`, `last_close_native`, `fx_rate`) akzeptiert, ruff-konform rundet (`round_currency`, `round_price`) und Herkunfts-Metadaten (`source`, `coverage_ratio`) mitliefert.
        - Validierung: Helper deckt fehlende Werte (`None`), Null-Käufe und fehlende FX-Kurse ab, ohne Home-Assistant-Abhängigkeiten; Modul besitzt Docstring.
 
-7. b) [ ] Unit-Tests für Performance-Helper ergänzen
+7. b) [x] Unit-Tests für Performance-Helper ergänzen
        - Datei: `tests/test_performance.py` (neu)
        - Ziel: Fälle mit vollständigen Daten, reinem EUR-Fallback, fehlenden Holdings sowie FX-basierten Tagesdeltas abdecken; sicherstellen, dass `select_performance_metrics` und `DayChangeMetrics`-Ableitung identische Ergebnisse zu den bisherigen Einzelberechnungen in `db_access`, `event_push` und `websocket` liefern.
        - Validierung: Tests schlagen fehl, wenn Rundung, Quellen-Metadaten oder Fallback-Reihenfolge von den Erwartungen abweichen.
