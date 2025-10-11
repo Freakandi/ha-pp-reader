@@ -169,7 +169,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Neue Assertions für `average_cost` (Feldstruktur, Werte, Quellen-Metadaten) ergänzen und bestätigen, dass die bestehenden Felder (`average_purchase_price_native`, `avg_price_security`, …) mit dem Selektionsobjekt übereinstimmen. Sicherstellen, dass fehlende Aggregationsdaten die Fallback-Reihenfolge triggern.
        - Validierung: Tests schlagen fehl, wenn `average_cost` fehlt oder Werte nicht synchron sind.
 
-6. g) [ ] Frontend-Typen & API auf Average-Cost-Kontext anheben
+6. g) [x] Frontend-Typen & API auf Average-Cost-Kontext anheben
        - Dateien: `src/data/api.ts`, `src/tabs/types.ts`, `src/types/global.d.ts`
        - Ziel: Einführung eines gemeinsamen Interfaces (z. B. `AverageCostPayload`), Ergänzung der API-/Dashboard-Typen um `average_cost` sowie Dokumentation der neuen Metadaten. Bestehende Felder bleiben erhalten, werden aber als Derivate des neuen Objekts markiert.
        - Validierung: `npx tsc --noEmit` schlägt fehl, falls Komponenten den neuen Typ nicht berücksichtigen.

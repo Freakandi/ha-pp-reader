@@ -6,6 +6,7 @@ import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import type { SortDirection } from '../content/elements';
 import type {
+  AverageCostPayload,
   HoldingsAggregationPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
@@ -29,6 +30,7 @@ interface PortfolioPositionData {
   purchase_total_account?: number | null;
   avg_price_security?: number | null;
   avg_price_account?: number | null;
+  average_cost?: AverageCostPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }

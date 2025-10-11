@@ -3,6 +3,7 @@
  */
 
 import type {
+  AverageCostPayload,
   HoldingsAggregationPayload,
   PanelConfigLike,
 } from "../tabs/types";
@@ -52,11 +53,14 @@ export interface PortfolioPosition {
   current_value: number;
   gain_abs: number;
   gain_pct: number;
+  /** Mirrors `average_cost.native` for backwards compatibility. */
   average_purchase_price_native?: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
   avg_price_security: number | null;
   avg_price_account: number | null;
+  /** Structured selection of average purchase prices with provenance metadata. */
+  average_cost?: AverageCostPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
@@ -79,6 +83,7 @@ export interface SecuritySnapshotResponse {
     last_price_native?: number | null;
     last_price_eur?: number;
     market_value_eur?: number | null;
+    /** Mirrors `average_cost.native` for backwards compatibility. */
     average_purchase_price_native?: number | string | null;
     purchase_total_security?: number;
     purchase_total_account?: number;
@@ -89,6 +94,10 @@ export interface SecuritySnapshotResponse {
     day_price_change_native?: number | null;
     day_price_change_eur?: number | null;
     day_change_pct?: number | null;
+    /** Structured selection of average purchase prices with provenance metadata. */
+    average_cost?: AverageCostPayload | null;
+    /** Raw snapshot provenance flag (e.g. cache vs. live). */
+    source?: string | null;
     [key: string]: unknown;
   };
   [key: string]: unknown;
