@@ -112,7 +112,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Bestehende Portfolio-Positions-Tests erweitern, um `aggregation`-Felder (`total_holdings`, `purchase_total_security`, `purchase_total_account`, Durchschnittspreise) gegen erwartete Werte zu verifizieren und sicherzustellen, dass keine lokalen Summierungen mehr benötigt werden.
        - Validierung: Tests schlagen fehl, wenn ein Feld fehlt oder noch aus individueller Rundungslogik stammt.
 
-5. g) [ ] WebSocket-Serializer auf Aggregationswerte umstellen
+5. g) [x] WebSocket-Serializer auf Aggregationswerte umstellen
        - Dateien: `custom_components/pp_reader/data/websocket.py`
        - Ziel: `_normalize_portfolio_positions` liest das neue `aggregation`-Objekt je Position und übernimmt daraus `purchase_total_security`, `purchase_total_account`, `avg_price_security`, `avg_price_account` ohne zusätzliche `round(...)`-Aufrufe. Gleichzeitig entfallen lokale `round(_coerce_float(...))`-Konstrukte für diese Felder.
        - Validierung: `tests/test_ws_portfolio_positions.py` (oder ergänzte Regression) bestätigt, dass WebSocket-Payloads die Aggregationswerte 1:1 spiegeln.

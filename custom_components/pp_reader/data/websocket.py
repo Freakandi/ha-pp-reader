@@ -258,15 +258,62 @@ def _normalize_portfolio_positions(
         if not isinstance(item, Mapping):
             continue
 
+        aggregation = item.get("aggregation")
+
+        def _from_aggregation(key: str) -> Any:
+            if isinstance(aggregation, Mapping):
+                return aggregation.get(key)
+            if aggregation is None:
+                return None
+            return getattr(aggregation, key, None)
+
         security_uuid = item.get("security_uuid")
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _coerce_optional_float(
-            item.get("average_purchase_price_native")
-        )
-        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
-        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
+        avg_price_native = _from_aggregation("average_purchase_price_native")
+        if avg_price_native is None:
+            fallback_avg_native = _coerce_optional_float(
+                item.get("average_purchase_price_native")
+            )
+            if fallback_avg_native is not None:
+                avg_price_native = round(fallback_avg_native, 6)
+
+        avg_price_security = _from_aggregation("avg_price_security")
+        if avg_price_security is None:
+            fallback_avg_security = _coerce_optional_float(item.get("avg_price_security"))
+            if fallback_avg_security is not None:
+                avg_price_security = round(fallback_avg_security, 6)
+
+        avg_price_account = _from_aggregation("avg_price_account")
+        if avg_price_account is None:
+            fallback_avg_account = _coerce_optional_float(item.get("avg_price_account"))
+            if fallback_avg_account is not None:
+                avg_price_account = round(fallback_avg_account, 6)
+
+        purchase_total_security = _from_aggregation("purchase_total_security")
+        if purchase_total_security is None:
+            fallback_total_security = _coerce_optional_float(
+                item.get("purchase_total_security")
+            )
+            if fallback_total_security is not None:
+                purchase_total_security = round(fallback_total_security, 2)
+            else:
+                purchase_total_security = 0.0
+
+        purchase_total_account = _from_aggregation("purchase_total_account")
+        if purchase_total_account is None:
+            fallback_total_account = _coerce_optional_float(
+                item.get("purchase_total_account")
+            )
+            if fallback_total_account is not None:
+                purchase_total_account = round(fallback_total_account, 2)
+            else:
+                purchase_total_account = 0.0
+
+        purchase_value = _from_aggregation("purchase_value_eur")
+        if purchase_value is None:
+            purchase_value = round(_coerce_float(item.get("purchase_value")), 2)
 
         normalized.append(
             {
@@ -275,33 +322,15 @@ def _normalize_portfolio_positions(
                 "current_holdings": round(
                     _coerce_float(item.get("current_holdings")), 6
                 ),
-                "purchase_value": round(
-                    _coerce_float(item.get("purchase_value")), 2
-                ),
+                "purchase_value": purchase_value,
                 "current_value": round(_coerce_float(item.get("current_value")), 2),
                 "gain_abs": round(_coerce_float(item.get("gain_abs")), 2),
                 "gain_pct": round(_coerce_float(item.get("gain_pct")), 2),
-                "average_purchase_price_native": (
-                    round(avg_price_native, 6)
-                    if avg_price_native is not None
-                    else None
-                ),
-                "purchase_total_security": round(
-                    _coerce_float(item.get("purchase_total_security")), 2
-                ),
-                "purchase_total_account": round(
-                    _coerce_float(item.get("purchase_total_account")), 2
-                ),
-                "avg_price_security": (
-                    round(avg_price_security, 6)
-                    if avg_price_security is not None
-                    else None
-                ),
-                "avg_price_account": (
-                    round(avg_price_account, 6)
-                    if avg_price_account is not None
-                    else None
-                ),
+                "average_purchase_price_native": avg_price_native,
+                "purchase_total_security": purchase_total_security,
+                "purchase_total_account": purchase_total_account,
+                "avg_price_security": avg_price_security,
+                "avg_price_account": avg_price_account,
             }
         )
 
