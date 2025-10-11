@@ -158,11 +158,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         except (TypeError, ValueError):
             return None
 
-    def _average_cost_value(key: str) -> float | None:
-        if average_cost is None:
-            return None
-        return _coerce_float(average_cost.get(key))
-
     def _mapping_value(mapping: Mapping[str, Any] | None, key: str) -> float | None:
         if mapping is None:
             return None
@@ -175,13 +170,14 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
                 return value
         return None
 
+    def _average_cost_value(key: str) -> float | None:
+        if average_cost is None:
+            return None
+        return _coerce_float(average_cost.get(key))
+
     avg_native = _average_cost_value("native")
     if avg_native is None:
         avg_native = _item_value("average_purchase_price_native")
-    if avg_native is None:
-        avg_native = _mapping_value(
-            aggregation, "average_purchase_price_native"
-        )
 
     purchase_value = _item_value("purchase_value_eur", "purchase_value")
     if purchase_value is None:
@@ -216,14 +212,10 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     avg_price_security = _average_cost_value("security")
     if avg_price_security is None:
         avg_price_security = _item_value("avg_price_security")
-    if avg_price_security is None:
-        avg_price_security = _mapping_value(aggregation, "avg_price_security")
 
     avg_price_account = _average_cost_value("account")
     if avg_price_account is None:
         avg_price_account = _item_value("avg_price_account")
-    if avg_price_account is None:
-        avg_price_account = _mapping_value(aggregation, "avg_price_account")
 
     normalized: dict[str, Any] = {
         "security_uuid": security_uuid,
