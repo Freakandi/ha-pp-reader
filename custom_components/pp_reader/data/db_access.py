@@ -21,6 +21,7 @@ from custom_components.pp_reader.data.aggregations import (
     compute_holdings_aggregation,
     select_average_cost,
 )
+from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     normalize_price_to_eur_sync,
@@ -790,6 +791,7 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "purchase_total_account": float,
         "avg_price_security": float | None,
         "avg_price_account": float | None,
+        "performance": dict[str, Any],
         "aggregation": dict[str, Any],
       },
       ...
@@ -917,18 +919,15 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
 
             holdings = aggregation_dict["total_holdings"]
             current_value = cent_to_eur(current_value_cents, default=0.0) or 0.0
-            gain_abs_unrounded = current_value - purchase_value
-            gain_abs = round_currency(gain_abs_unrounded, default=0.0)
-            if gain_abs is None:
-                gain_abs = 0.0
-            gain_pct = round_currency(
-                (gain_abs_unrounded / purchase_value * 100)
-                if purchase_value > 0
-                else 0.0,
-                default=0.0,
+
+            performance_metrics, _ = select_performance_metrics(
+                current_value=current_value,
+                purchase_value=purchase_value,
+                holdings=holdings,
             )
-            if gain_pct is None:
-                gain_pct = 0.0
+            performance_payload = asdict(performance_metrics)
+            gain_abs = performance_payload["gain_abs"]
+            gain_pct = performance_payload["gain_pct"]
 
             positions.append(
                 {
@@ -951,6 +950,7 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                     "avg_price_security": aggregation_dict["avg_price_security"],
                     "avg_price_account": aggregation_dict["avg_price_account"],
                     "average_cost": average_cost_payload,
+                    "performance": performance_payload,
                     "aggregation": aggregation_dict,
                 }
             )
@@ -991,15 +991,14 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
 
     has_current_value = missing_value_positions == 0
 
-    gain_abs = round_currency(current_value - purchase_sum, default=0.0)
-    if gain_abs is None:
-        gain_abs = 0.0
-    gain_pct = round_currency(
-        (gain_abs / purchase_sum * 100) if purchase_sum > 0 else 0.0,
-        default=0.0,
+    performance_metrics, _ = select_performance_metrics(
+        current_value=current_value,
+        purchase_value=purchase_sum,
+        holdings=row["position_count"],
     )
-    if gain_pct is None:
-        gain_pct = 0.0
+    performance_payload = asdict(performance_metrics)
+    gain_abs = performance_payload["gain_abs"]
+    gain_pct = performance_payload["gain_pct"]
 
     return {
         "uuid": row["uuid"],
@@ -1008,6 +1007,7 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
         "purchase_sum": purchase_sum,
         "gain_abs": gain_abs,
         "gain_pct": gain_pct,
+        "performance": performance_payload,
         "position_count": row["position_count"]
         if row["position_count"] is not None
         else 0,
@@ -1029,6 +1029,7 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             "purchase_sum": <float>,     # EUR (2 Nachkommastellen)
             "gain_abs": <float>,         # EUR (2 Nachkommastellen)
             "gain_pct": <float>,         # % (2 Nachkommastellen)
+            "performance": <dict>,       # Gain & change metrics metadata
             "position_count": <int>
           },
           ...

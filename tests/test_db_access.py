@@ -456,6 +456,35 @@ def test_get_portfolio_positions_populates_aggregation_fields(
             "coverage_ratio",
         }
 
+        performance = position["performance"]
+        assert set(performance) == {
+            "gain_abs",
+            "gain_pct",
+            "total_change_eur",
+            "total_change_pct",
+            "source",
+            "coverage_ratio",
+        }
+
+        expected_gain_abs = position["current_value"] - position["purchase_value"]
+        assert position["gain_abs"] == pytest.approx(expected_gain_abs, rel=0, abs=1e-2)
+        if position["purchase_value"] > 0:
+            expected_gain_pct = (expected_gain_abs / position["purchase_value"]) * 100
+        else:
+            expected_gain_pct = 0.0
+
+        assert position["gain_pct"] == pytest.approx(expected_gain_pct, rel=0, abs=1e-2)
+        assert performance["gain_abs"] == pytest.approx(position["gain_abs"], rel=0, abs=1e-6)
+        assert performance["gain_pct"] == pytest.approx(position["gain_pct"], rel=0, abs=1e-6)
+        assert performance["total_change_eur"] == pytest.approx(
+            position["gain_abs"], rel=0, abs=1e-6
+        )
+        assert performance["total_change_pct"] == pytest.approx(
+            position["gain_pct"], rel=0, abs=1e-6
+        )
+        assert performance["coverage_ratio"] == pytest.approx(1.0)
+        assert performance["source"] == "calculated"
+
         if position["average_purchase_price_native"] is None:
             assert average_cost["native"] is None
         else:

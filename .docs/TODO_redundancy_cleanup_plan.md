@@ -206,7 +206,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Fälle mit vollständigen Daten, reinem EUR-Fallback, fehlenden Holdings sowie FX-basierten Tagesdeltas abdecken; sicherstellen, dass `select_performance_metrics` und `DayChangeMetrics`-Ableitung identische Ergebnisse zu den bisherigen Einzelberechnungen in `db_access`, `event_push` und `websocket` liefern.
        - Validierung: Tests schlagen fehl, wenn Rundung, Quellen-Metadaten oder Fallback-Reihenfolge von den Erwartungen abweichen.
 
-7. c) [ ] Portfolio-Aggregationen auf Performance-Helper umstellen
+7. c) [x] Portfolio-Aggregationen auf Performance-Helper umstellen
        - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/aggregations.py`
        - Ziel: `get_portfolio_positions`, `_normalize_portfolio_row` und `fetch_live_portfolios` nutzen den neuen Helper zur Ableitung von `gain_abs`/`gain_pct` sowie (neu) `performance`-Payloads; vorhandene Inline-Berechnungen und lokale `_round_percentage`-Hilfen entfallen. `HoldingsAggregation` stellt benötigte Inputs (Totals, Holdings) für den Helper bereit.
        - Validierung: Rückgaben behalten bestehende Felder, enthalten zusätzlich ein strukturiertes `performance`-Objekt und liefern identische Werte in `tests/test_db_access.py` & `tests/test_sync_from_pclient.py`.
