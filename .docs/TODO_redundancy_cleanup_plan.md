@@ -154,7 +154,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `get_portfolio_positions` und `get_security_snapshot` rufen `select_average_cost` auf, hängen das Ergebnis als neues Feld `average_cost` an und setzen die bestehenden Felder (`average_purchase_price_native`, `avg_price_security`, `avg_price_account`, `purchase_value_eur`, `purchase_total_security`, `purchase_total_account`) ausschließlich über das Selektionsobjekt. Redundante direkte Zuweisungen aus `HoldingsAggregation` entfallen.
        - Validierung: Rückgabestrukturen behalten dieselben Keys; neue `average_cost`-Struktur enthält alle Auswahlwerte und Metadaten. Regressionstests für DB-Zugriffe passen die Sollwerte entsprechend an.
 
-6. d) [ ] WebSocket-Serializer auf Average-Cost-Kontext umstellen
+6. d) [x] WebSocket-Serializer auf Average-Cost-Kontext umstellen
        - Dateien: `custom_components/pp_reader/data/websocket.py`
        - Ziel: `_normalize_portfolio_positions` und `_serialise_security_snapshot` übernehmen das neue `average_cost`-Objekt (inkl. Metadaten) unverändert in die Payloads und entfernen die derzeitigen Fallback-Berechnungen (`_from_aggregation`, lokale `round(...)`-Aufrufe für Kaufpreise).
        - Validierung: `tests/test_ws_portfolio_positions.py` und `tests/test_ws_security_history.py` prüfen, dass keine lokalen Divisionen mehr stattfinden und alle Durchschnittswerte aus `average_cost` stammen.
