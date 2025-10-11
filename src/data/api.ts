@@ -2,7 +2,10 @@
  * Home Assistant websocket API helpers carried over for TypeScript migration.
  */
 
-import type { PanelConfigLike } from "../tabs/types";
+import type {
+  HoldingsAggregationPayload,
+  PanelConfigLike,
+} from "../tabs/types";
 import type { HomeAssistant } from "../types/home-assistant";
 
 export interface AccountSummary {
@@ -54,6 +57,7 @@ export interface PortfolioPosition {
   purchase_total_account: number;
   avg_price_security: number | null;
   avg_price_account: number | null;
+  aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
 

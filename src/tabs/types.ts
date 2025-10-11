@@ -76,6 +76,21 @@ export interface SecuritySnapshotLike {
   [key: string]: unknown;
 }
 
+export interface HoldingsAggregationPayload {
+  total_holdings: number;
+  positive_holdings: number;
+  purchase_value_cents: number;
+  purchase_value_eur: number;
+  security_currency_total: number;
+  account_currency_total: number;
+  average_purchase_price_native: number | null;
+  avg_price_security: number | null;
+  avg_price_account: number | null;
+  purchase_total_security: number;
+  purchase_total_account: number;
+  [key: string]: unknown;
+}
+
 export interface PortfolioPosition {
   security_uuid: string;
   name: string;
@@ -89,6 +104,7 @@ export interface PortfolioPosition {
   purchase_total_account: number;
   avg_price_security: number | null;
   avg_price_account: number | null;
+  aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
 

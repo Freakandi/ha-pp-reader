@@ -122,7 +122,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `_normalize_position_entry` übernimmt Aggregationsbeträge aus `item["aggregation"]`, entfernt die Fallback-Aufrufe von `_normalize_currency_amount` für Kauf- und Durchschnittswerte und streicht dadurch ungenutzte Normalisierungszweige.
        - Validierung: `tests/test_sync_from_pclient.py::test_compact_event_data_trims_portfolio_positions` (ggf. erweitert) prüft, dass Event-Payloads weiterhin alle benötigten Felder enthalten, jedoch ohne doppelte Rundungen.
 
-5. i) [ ] API- und Typdefinitionen erweitern
+5. i) [x] API- und Typdefinitionen erweitern
        - Dateien: `src/data/api.ts`, `src/tabs/types.ts`
        - Ziel: `PortfolioPosition` (und abgeleitete Event-/Cache-Typen) um ein optionales Feld `aggregation` erweitern, das die vom Backend gelieferten Werte (`total_holdings`, `purchase_total_security`, `purchase_total_account`, `average_purchase_price_native`, `avg_price_security`, `avg_price_account`) typisiert.
        - Validierung: TypeScript-Build (`npm run typecheck`) schlägt fehl, wenn das Aggregationsobjekt nicht berücksichtigt wird.
