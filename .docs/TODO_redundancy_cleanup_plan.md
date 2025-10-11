@@ -241,7 +241,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: WebSocket-Caches, DOM-Patcher und Tabellenrenderer lesen `gain`-/`change`-Werte aus `performance`, entfernen lokale Rekonstruktion (`formatGain`, `formatGainPct`, `computeTableTotals`) und halten Dataset-Attribute (`data-gain-pct`, `data-gain-sign`) synchron.
        - Validierung: Live-Update-Regressionen (bestehend) zeigen unveränderte Werte; Linter meldet keine ungenutzten Helper.
 
-7. j) [ ] Security-Detail-Tab auf Performance-Kontext umstellen
+7. j) [x] Security-Detail-Tab auf Performance-Kontext umstellen
        - Dateien: `src/tabs/security_detail.ts`, `src/utils/currency.ts`
        - Ziel: Metrikberechnungen (`computeDelta`, `computePercentageChange`, `computeHoldingsAdjustedEurChange`) werden ersetzt, indem `normalizeSecurityMetrics` o. ä. aus dem neuen `performance`-Payload gespeist wird; überflüssige Helper und Summenberechnungen werden entfernt, ohne Fallback-Funktionen für fehlende Backend-Daten zu verlieren.
        - Validierung: Jest-Tests (`src/tabs/__tests__/security_detail.metrics.test.ts`) decken Backend- und Cache-Fallbacks ab und schlagen fehl, wenn lokale Rechenpfade übrig bleiben.

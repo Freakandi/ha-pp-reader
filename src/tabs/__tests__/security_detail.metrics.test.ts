@@ -18,6 +18,7 @@ const {
   normalizeAverageCostForTest,
   resolveAveragePurchaseBaselineForTest,
   resolvePurchaseFxTooltipForTest,
+  applyHistoryDayChangeFallbackForTest,
 } = __TEST_ONLY__;
 
 type SecuritySnapshotMetricsLike = NonNullable<
@@ -110,6 +111,90 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
   );
 });
 
+test('ensureSnapshotMetricsForTest prefers backend performance payload', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('performance-backend', {
+    security_uuid: 'performance-backend',
+    total_holdings_precise: '10',
+    purchase_value_eur: '1250',
+    current_value_eur: '1500',
+    performance: {
+      gain_abs: 250,
+      gain_pct: 20,
+      total_change_eur: 250,
+      total_change_pct: 20,
+      source: 'snapshot',
+      coverage_ratio: 0.95,
+      day_change: {
+        price_change_native: 0.45,
+        price_change_eur: 0.4,
+        change_pct: 0.3,
+        source: 'native',
+        coverage_ratio: 0.5,
+      },
+    },
+  });
+
+  assert.ok(metrics?.performance, 'expected performance payload to be preserved');
+  assert.strictEqual(metrics?.performance?.source, 'snapshot');
+  assertApproximately(
+    metrics?.performance?.gain_abs,
+    250,
+    'gain absolute value should originate from backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.gain_pct,
+    20,
+    'gain percentage should mirror backend rounding',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_eur,
+    250,
+    'total change EUR should mirror backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_pct,
+    20,
+    'total change percentage should reuse backend value',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_native,
+    0.45,
+    'native day change should match backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_eur,
+    0.4,
+    'EUR day change should match backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.change_pct,
+    0.3,
+    'day change percentage should be sourced from the backend payload',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeNative,
+    0.45,
+    'metrics cache should stay aligned with backend native change',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeEur,
+    0.4,
+    'metrics cache should stay aligned with backend EUR change',
+  );
+  assertApproximately(
+    metrics?.totalChangeEur,
+    250,
+    'metrics cache should expose backend total change EUR',
+  );
+  assertApproximately(
+    metrics?.totalChangePct,
+    20,
+    'metrics cache should expose backend total change percentage',
+  );
+});
+
 test('normalizeAverageCostForTest normalises backend payload structure', () => {
   const normalized = normalizeAverageCostForTest({
     average_cost: {
@@ -152,6 +237,117 @@ test('normalizeAverageCostForTest normalises backend payload structure', () => {
     normalized?.coverageRatio,
     0.85,
     'coverage ratio should be converted to a decimal fraction',
+  );
+});
+
+test('ensureSnapshotMetricsForTest builds performance fallback from legacy fields', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('performance-legacy', {
+    security_uuid: 'performance-legacy',
+    total_holdings_precise: '5',
+    purchase_value_eur: '500',
+    current_value_eur: '650',
+    gain_abs_eur: '150',
+    gain_pct: '30',
+    day_price_change_native: '0.25',
+    day_price_change_eur: '0.2',
+    day_change_pct: '0.45',
+    last_price_native: '26.5',
+    last_close_native: '26.25',
+    last_price_eur: '32.5',
+    last_close_eur: '32.3',
+    currency_code: 'USD',
+  });
+
+  assert.ok(metrics?.performance, 'expected fallback performance payload to be generated');
+  assertApproximately(
+    metrics?.performance?.gain_abs,
+    150,
+    'gain absolute should derive from legacy EUR field',
+  );
+  assertApproximately(
+    metrics?.performance?.gain_pct,
+    30,
+    'gain percentage should normalise the legacy field',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_eur,
+    150,
+    'total change EUR should mirror the legacy field',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_pct,
+    30,
+    'total change percentage should reuse the legacy value',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_native,
+    0.25,
+    'native day change should default to legacy snapshot fields',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_eur,
+    0.2,
+    'EUR day change should prefer legacy snapshot fields',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.change_pct,
+    0.45,
+    'day change percentage should reuse the legacy field rounding',
+  );
+});
+
+test('ensureSnapshotMetricsForTest derives performance when legacy fields absent', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('performance-derived', {
+    security_uuid: 'performance-derived',
+    total_holdings_precise: '2',
+    purchase_value_eur: '100',
+    current_value_eur: '112',
+    last_price_native: '56',
+    last_close_native: '50',
+    last_price_eur: '112',
+    last_close_eur: '100',
+    currency_code: 'USD',
+  });
+
+  assert.ok(metrics?.performance, 'expected derived performance payload');
+  assertApproximately(
+    metrics?.performance?.gain_abs,
+    12,
+    'gain absolute should be derived from EUR totals',
+  );
+  assertApproximately(
+    metrics?.performance?.gain_pct,
+    12,
+    'gain percentage should be calculated from EUR totals',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_eur,
+    12,
+    'total change EUR should mirror derived gains',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_pct,
+    12,
+    'total change percentage should mirror derived gains',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_native,
+    6,
+    'native day change should be derived from latest snapshot prices',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_eur,
+    12,
+    'EUR day change should be derived from snapshot EUR prices',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.change_pct,
+    12,
+    'day change percentage should be derived from native snapshot prices',
   );
 });
 
@@ -298,6 +494,70 @@ test('resolvePurchaseFxTooltipForTest annotates metadata from average cost paylo
   assert.ok(tooltip, 'tooltip should be generated when averages are available');
   assert.match(tooltip ?? '', /Quelle: Kauf/);
   assert.match(tooltip ?? '', /Abdeckung: 75/);
+});
+
+test('applyHistoryDayChangeFallbackForTest updates performance day change metrics', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('history-fallback', {
+    security_uuid: 'history-fallback',
+    total_holdings_precise: '10',
+    purchase_value_eur: '1000',
+    current_value_eur: '1100',
+    gain_abs_eur: '100',
+    gain_pct: '10',
+    day_price_change_native: 0,
+    day_price_change_eur: 0,
+    day_change_pct: 0,
+    last_price_native: '55',
+    last_close_native: '55',
+    last_price_eur: '110',
+    last_close_eur: '110',
+    currency_code: 'USD',
+    last_price_fetched_at: '2024-01-01T00:00:00Z',
+  });
+
+  assert.ok(metrics, 'expected metrics to be initialised');
+
+  const applied = applyHistoryDayChangeFallbackForTest(metrics, [
+    { date: new Date('2024-05-13T00:00:00Z'), close: 54 },
+    { date: new Date('2024-05-14T00:00:00Z'), close: 55 },
+    { date: new Date('2024-05-15T00:00:00Z'), close: 58 },
+  ]);
+
+  assert.ok(applied, 'expected history fallback to update metrics');
+  assertApproximately(
+    metrics?.dayPriceChangeNative,
+    3,
+    'native day change should reflect history-derived diff',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeEur,
+    6,
+    'EUR day change should convert history diff using FX rate',
+  );
+  assertApproximately(
+    metrics?.dayChangePct,
+    5.45,
+    'day change percentage should be derived from history series',
+    1e-2,
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_native,
+    3,
+    'performance payload should mirror fallback native change',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_eur,
+    6,
+    'performance payload should mirror fallback EUR change',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.change_pct,
+    5.45,
+    'performance payload should mirror fallback percentage change',
+    1e-2,
+  );
 });
 
 test('getHistoryChartOptionsForTest injects the native baseline into chart options', () => {
