@@ -189,7 +189,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Snapshot-Metriken und Cache-Fallbacks greifen auf `average_cost` bzw. die durch Backend bereitgestellten Durchschnittswerte zu, sodass Hilfsfunktionen wie `computeAveragePurchaseFromTotal` und `computeAveragePurchaseEur` entfallen. FX-Tooltips werden anhand der Metadaten aktualisiert.
        - Validierung: Jest-Tests in `src/tabs/__tests__/security_detail.metrics.test.ts` prüfen, dass keine lokalen Durchschnittsberechnungen übrig bleiben und Tooltips weiterhin korrekt sind.
 
-6. k) [ ] Frontend-Regressionssuite aktualisieren
+6. k) [x] Frontend-Regressionssuite aktualisieren
        - Dateien: `src/tabs/__tests__/overview.render.test.ts`, `src/tabs/__tests__/security_detail.metrics.test.ts`, ggf. weitere Snapshot-Tests
        - Ziel: Testdatensätze um `average_cost` ergänzen, Assertions auf die neuen Felder erweitern und sicherstellen, dass entfernte Helper nicht mehr importiert werden.
        - Validierung: Tests schlagen fehl, falls Komponenten weiterhin alte Helper referenzieren oder `average_cost` ignorieren.

@@ -15,6 +15,7 @@ const {
   getHistoryChartOptionsForTest,
   clearSnapshotMetricsRegistryForTest,
   mergeHistoryWithSnapshotPriceForTest,
+  normalizeAverageCostForTest,
   resolveAveragePurchaseBaselineForTest,
   resolvePurchaseFxTooltipForTest,
 } = __TEST_ONLY__;
@@ -107,6 +108,97 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
     2.5,
     'day change percentage should reuse backend rounding',
   );
+});
+
+test('normalizeAverageCostForTest normalises backend payload structure', () => {
+  const normalized = normalizeAverageCostForTest({
+    average_cost: {
+      native: '12.3456',
+      security: 7.2489,
+      account: '4.942',
+      eur: 6.5432,
+      source: 'totals',
+      coverage_ratio: '0.85',
+    },
+    average_purchase_price_native: '1.11',
+    avg_price_security: '2.22',
+    avg_price_account: '3.33',
+    purchase_value_eur: '4.44',
+  });
+
+  assert.ok(normalized, 'expected average cost payload to be normalised');
+  assertApproximately(
+    normalized?.native,
+    12.3456,
+    'native average should be parsed as a float',
+  );
+  assertApproximately(
+    normalized?.security,
+    7.2489,
+    'security average should remain unchanged',
+  );
+  assertApproximately(
+    normalized?.account,
+    4.942,
+    'account average should normalise string inputs',
+  );
+  assertApproximately(
+    normalized?.eur,
+    6.5432,
+    'EUR average should mirror provided payload',
+  );
+  assert.strictEqual(normalized?.source, 'totals');
+  assertApproximately(
+    normalized?.coverageRatio,
+    0.85,
+    'coverage ratio should be converted to a decimal fraction',
+  );
+});
+
+test('normalizeAverageCostForTest falls back to legacy snapshot fields', () => {
+  const normalized = normalizeAverageCostForTest({
+    average_cost: null,
+    average_purchase_price_native: null,
+    avg_price_security: '7.2489',
+    avg_price_account: 4.942,
+    purchase_value_eur: '4.942',
+  });
+
+  assert.ok(normalized, 'expected fallback payload to be derived from legacy fields');
+  assertApproximately(
+    normalized?.native,
+    7.2489,
+    'native average should default to security average',
+  );
+  assertApproximately(
+    normalized?.security,
+    7.2489,
+    'security average should originate from snapshot avg_price_security',
+  );
+  assertApproximately(
+    normalized?.account,
+    4.942,
+    'account average should stem from snapshot avg_price_account',
+  );
+  assertApproximately(
+    normalized?.eur,
+    4.942,
+    'EUR average should fall back to purchase_value_eur',
+  );
+  assert.strictEqual(normalized?.source, 'aggregation');
+  assert.strictEqual(normalized?.coverageRatio, null);
+});
+
+test('normalizeAverageCostForTest returns null when no averages available', () => {
+  const normalized = normalizeAverageCostForTest({
+    average_cost: null,
+    average_purchase_price_native: null,
+    avg_price_security: null,
+    avg_price_account: undefined,
+    purchase_value_eur: undefined,
+  });
+
+  assert.strictEqual(normalized, null);
 });
 
 test('ensureSnapshotMetricsForTest keeps native average null when missing', () => {
