@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 
 from custom_components.pp_reader.util.currency import round_currency, round_price
 
@@ -12,6 +12,7 @@ __all__ = [
     "PerformanceMetrics",
     "DayChangeMetrics",
     "select_performance_metrics",
+    "compose_performance_payload",
 ]
 
 _PERCENTAGE_DECIMALS = Decimal("0.01")
@@ -151,3 +152,44 @@ def select_performance_metrics(
     )
 
     return performance, day_change
+
+
+def compose_performance_payload(
+    raw: Mapping[str, Any] | None,
+    *,
+    metrics: PerformanceMetrics,
+    day_change: DayChangeMetrics,
+) -> dict[str, Any]:
+    """Merge raw payload overrides with calculated performance metrics."""
+
+    payload: dict[str, Any] = asdict(metrics)
+    payload["day_change"] = asdict(day_change)
+
+    if raw is None:
+        merged = dict(payload)
+    else:
+        merged = dict(payload)
+        for key, value in raw.items():
+            if key == "day_change":
+                if isinstance(value, Mapping):
+                    base_day_change = merged.get("day_change")
+                    base_mapping = base_day_change if isinstance(base_day_change, dict) else {}
+                    merged["day_change"] = {**base_mapping, **dict(value)}
+                else:
+                    merged["day_change"] = value
+                continue
+
+            merged[key] = value
+
+    day_change_payload = merged.get("day_change")
+    if isinstance(day_change_payload, dict):
+        has_metrics = any(
+            day_change_payload.get(field) not in (None, "")
+            for field in ("price_change_native", "price_change_eur", "change_pct")
+        )
+        if not has_metrics:
+            merged.pop("day_change", None)
+    elif day_change_payload is None:
+        merged.pop("day_change", None)
+
+    return merged

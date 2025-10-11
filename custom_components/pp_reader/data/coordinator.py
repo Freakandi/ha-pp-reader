@@ -11,7 +11,6 @@ It includes functionality to:
 
 import logging
 import sqlite3
-from dataclasses import asdict
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from importlib import import_module
@@ -25,7 +24,7 @@ from custom_components.pp_reader.logic import accounting as _accounting_module
 from custom_components.pp_reader.util import async_run_executor_job
 
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
-from .performance import select_performance_metrics
+from .performance import compose_performance_payload, select_performance_metrics
 
 try:
     from . import reader as _reader_module
@@ -125,31 +124,35 @@ def _portfolio_contract_entry(
     current_value = round(_normalize_amount(current_value_raw), 2)
     purchase_sum = round(_normalize_amount(purchase_sum_raw), 2)
 
+    performance_metrics, day_change_metrics = select_performance_metrics(
+        current_value=current_value_raw,
+        purchase_value=purchase_sum_raw,
+        holdings=position_count,
+    )
+
     performance_mapping = entry.get("performance")
-    performance_payload: dict[str, Any]
     if isinstance(performance_mapping, Mapping):
-        performance_payload = dict(performance_mapping)
-    else:
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=current_value_raw,
-            purchase_value=purchase_sum_raw,
+        performance_payload = compose_performance_payload(
+            performance_mapping,
+            metrics=performance_metrics,
+            day_change=day_change_metrics,
         )
-        performance_payload = asdict(performance_metrics)
-        performance_payload["day_change"] = asdict(day_change_metrics)
-
-    raw_gain_abs = performance_payload.get("gain_abs")
-    if isinstance(raw_gain_abs, (int, float)):
-        gain_abs = round(float(raw_gain_abs), 2)
     else:
-        gain_abs = round(current_value - purchase_sum, 2)
+        performance_payload = compose_performance_payload(
+            None,
+            metrics=performance_metrics,
+            day_change=day_change_metrics,
+        )
 
-    raw_gain_pct = performance_payload.get("gain_pct")
-    if isinstance(raw_gain_pct, (int, float)):
-        gain_pct = round(float(raw_gain_pct), 2)
-    elif purchase_sum:
-        gain_pct = round(((current_value - purchase_sum) / purchase_sum) * 100, 2)
-    else:
-        gain_pct = 0.0
+    try:
+        gain_abs = round(float(performance_payload.get("gain_abs")), 2)
+    except (TypeError, ValueError):
+        gain_abs = round(performance_metrics.gain_abs, 2)
+
+    try:
+        gain_pct = round(float(performance_payload.get("gain_pct")), 2)
+    except (TypeError, ValueError):
+        gain_pct = round(performance_metrics.gain_pct, 2)
 
     return portfolio_uuid, {
         "name": entry.get("name"),

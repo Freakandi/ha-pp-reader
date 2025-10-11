@@ -29,6 +29,7 @@ from .db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
+from .performance import compose_performance_payload, select_performance_metrics
 
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
@@ -303,7 +304,8 @@ def _normalize_portfolio_positions(
         if purchase_total_account is None:
             purchase_total_account = 0.0
 
-        purchase_value = round(_coerce_float(item.get("purchase_value")), 2)
+        purchase_value_raw = item.get("purchase_value")
+        purchase_value = round(_coerce_float(purchase_value_raw), 2)
 
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
@@ -311,33 +313,27 @@ def _normalize_portfolio_positions(
             average_cost = dict(raw_average_cost)
 
         raw_performance = item.get("performance")
-        performance_payload: dict[str, Any] | None = None
+        performance_mapping: Mapping[str, Any] | None = None
         if isinstance(raw_performance, Mapping):
-            performance_payload = dict(raw_performance)
+            performance_mapping = raw_performance
 
-        gain_abs_value: float
-        if (
-            performance_payload is not None
-            and "gain_abs" in performance_payload
-            and performance_payload["gain_abs"] is not None
-        ):
-            gain_abs_value = round(
-                _coerce_float(performance_payload.get("gain_abs")), 2
-            )
-        else:
-            gain_abs_value = round(_coerce_float(item.get("gain_abs")), 2)
+        performance_metrics, day_change_metrics = select_performance_metrics(
+            current_value=item.get("current_value"),
+            purchase_value=purchase_value_raw,
+            holdings=item.get("current_holdings"),
+        )
+        performance_payload = compose_performance_payload(
+            performance_mapping,
+            metrics=performance_metrics,
+            day_change=day_change_metrics,
+        )
 
-        gain_pct_value: float
-        if (
-            performance_payload is not None
-            and "gain_pct" in performance_payload
-            and performance_payload["gain_pct"] is not None
-        ):
-            gain_pct_value = round(
-                _coerce_float(performance_payload.get("gain_pct")), 2
-            )
-        else:
-            gain_pct_value = round(_coerce_float(item.get("gain_pct")), 2)
+        gain_abs_value = round(
+            _coerce_float(performance_payload.get("gain_abs")), 2
+        )
+        gain_pct_value = round(
+            _coerce_float(performance_payload.get("gain_pct")), 2
+        )
 
         normalized.append(
             {
