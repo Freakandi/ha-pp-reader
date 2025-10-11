@@ -102,7 +102,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Zusätzliche Assertions einziehen, die nach der Umstellung sicherstellen, dass `get_security_snapshot` keine Summenschleifen mehr enthält (z. B. indirekt über `HoldingsAggregation`-Felder) und identische numerische Ergebnisse für Multi-Depot-Szenarien liefert.
        - Validierung: Tests schlagen fehl, falls `compute_holdings_aggregation` nicht verwendet wird oder Werte abweichen.
 
-5. e) [ ] Positionsabfrage `get_portfolio_positions` aggregationsfähig machen
+5. e) [x] Positionsabfrage `get_portfolio_positions` aggregationsfähig machen
        - Dateien: `custom_components/pp_reader/data/db_access.py`
        - Ziel: Pro `security_uuid` den Aggregations-Helfer aufrufen, das Ergebnis als neues Feld `aggregation` (mit identischem Schema wie `HoldingsAggregation`) an den Positions-Dict anhängen und bestehende Rundungszweige für `purchase_total_security`, `purchase_total_account`, `avg_price_security`, `avg_price_account` entfernen.
        - Validierung: Rückgabe jeder Positionsliste enthält das zusätzliche Feld, und bestehende Tests (`tests/test_db_access.py::test_get_portfolio_positions_basic`) prüfen das Aggregationsobjekt.

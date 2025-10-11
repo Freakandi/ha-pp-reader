@@ -667,6 +667,7 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "purchase_total_account": float,
         "avg_price_security": float | None,
         "avg_price_account": float | None,
+        "aggregation": dict[str, Any],
       },
       ...
     ]
@@ -710,8 +711,36 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             avg_price_security_raw,
             avg_price_account_raw,
         ) in rows:
-            holdings = float(current_holdings or 0.0)
-            purchase_value = cent_to_eur(purchase_value_cents, default=0.0) or 0.0
+            aggregation = compute_holdings_aggregation(
+                [
+                    {
+                        "current_holdings": current_holdings,
+                        "purchase_value": purchase_value_cents,
+                        "avg_price_native": avg_price_native_raw,
+                        "security_currency_total": security_total_raw,
+                        "account_currency_total": account_total_raw,
+                        "avg_price_security": avg_price_security_raw,
+                        "avg_price_account": avg_price_account_raw,
+                    }
+                ]
+            )
+
+            aggregation_dict = {
+                "total_holdings": aggregation.total_holdings,
+                "positive_holdings": aggregation.positive_holdings,
+                "purchase_value_cents": aggregation.purchase_value_cents,
+                "purchase_value_eur": aggregation.purchase_value_eur,
+                "security_currency_total": aggregation.security_currency_total,
+                "account_currency_total": aggregation.account_currency_total,
+                "average_purchase_price_native": aggregation.average_purchase_price_native,
+                "avg_price_security": aggregation.avg_price_security,
+                "avg_price_account": aggregation.avg_price_account,
+                "purchase_total_security": aggregation.purchase_total_security,
+                "purchase_total_account": aggregation.purchase_total_account,
+            }
+
+            holdings = aggregation_dict["total_holdings"]
+            purchase_value = aggregation_dict["purchase_value_eur"]
             current_value = cent_to_eur(current_value_cents, default=0.0) or 0.0
             gain_abs_unrounded = current_value - purchase_value
             gain_abs = round_currency(gain_abs_unrounded, default=0.0)
@@ -726,59 +755,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             if gain_pct is None:
                 gain_pct = 0.0
 
-            avg_price_native: float | None
-            if avg_price_native_raw is None:
-                avg_price_native = None
-            else:
-                try:
-                    avg_price_native = round(float(avg_price_native_raw), 6)
-                except (TypeError, ValueError):
-                    avg_price_native = None
-
-            security_total = 0.0
-            if isinstance(security_total_raw, (int, float)):
-                security_total = float(security_total_raw)
-            elif security_total_raw is not None:
-                try:
-                    security_total = float(security_total_raw)
-                except (TypeError, ValueError):
-                    security_total = 0.0
-
-            account_total = 0.0
-            if isinstance(account_total_raw, (int, float)):
-                account_total = float(account_total_raw)
-            elif account_total_raw is not None:
-                try:
-                    account_total = float(account_total_raw)
-                except (TypeError, ValueError):
-                    account_total = 0.0
-
-            avg_price_security = None
-            if avg_price_security_raw is not None:
-                try:
-                    avg_price_security = round(float(avg_price_security_raw), 6)
-                except (TypeError, ValueError):
-                    avg_price_security = None
-
-            avg_price_account = None
-            if avg_price_account_raw is not None:
-                try:
-                    avg_price_account = round(float(avg_price_account_raw), 6)
-                except (TypeError, ValueError):
-                    avg_price_account = None
-
-            purchase_total_security_value = round_currency(
-                security_total, default=0.0
-            )
-            if purchase_total_security_value is None:
-                purchase_total_security_value = 0.0
-
-            purchase_total_account_value = round_currency(
-                account_total, default=0.0
-            )
-            if purchase_total_account_value is None:
-                purchase_total_account_value = 0.0
-
             positions.append(
                 {
                     "security_uuid": security_uuid,
@@ -788,11 +764,18 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                     "current_value": current_value,
                     "gain_abs": gain_abs,
                     "gain_pct": gain_pct,
-                    "average_purchase_price_native": avg_price_native,
-                    "purchase_total_security": purchase_total_security_value,
-                    "purchase_total_account": purchase_total_account_value,
-                    "avg_price_security": avg_price_security,
-                    "avg_price_account": avg_price_account,
+                    "average_purchase_price_native": aggregation_dict[
+                        "average_purchase_price_native"
+                    ],
+                    "purchase_total_security": aggregation_dict[
+                        "purchase_total_security"
+                    ],
+                    "purchase_total_account": aggregation_dict[
+                        "purchase_total_account"
+                    ],
+                    "avg_price_security": aggregation_dict["avg_price_security"],
+                    "avg_price_account": aggregation_dict["avg_price_account"],
+                    "aggregation": aggregation_dict,
                 }
             )
 

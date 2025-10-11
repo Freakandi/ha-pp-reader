@@ -167,6 +167,7 @@ setattr(pp_reader_pkg, "data", data_pkg)
 
 from custom_components.pp_reader.data.db_access import (
     get_all_portfolio_securities,
+    get_portfolio_positions,
     get_portfolio_securities,
     get_security_close_prices,
     get_security_snapshot,
@@ -355,6 +356,47 @@ def test_get_portfolio_securities_exposes_native_average(tmp_path: Path) -> None
         ("portfolio-native", "sec-native"),
         ("portfolio-native", "sec-legacy"),
     }
+
+
+def test_get_portfolio_positions_adds_aggregation(seeded_snapshot_db: Path) -> None:
+    """Portfolio positions should include aggregated purchase metrics."""
+
+    positions = get_portfolio_positions(seeded_snapshot_db, "p-usd-a")
+
+    assert len(positions) == 1
+    position = positions[0]
+
+    aggregation = position.get("aggregation")
+    assert aggregation is not None
+
+    assert aggregation["total_holdings"] == pytest.approx(1.5)
+    assert aggregation["purchase_value_eur"] == pytest.approx(123.45)
+    assert aggregation["purchase_total_security"] == pytest.approx(180.19)
+    assert aggregation["purchase_total_account"] == pytest.approx(173.98)
+    assert aggregation["average_purchase_price_native"] == pytest.approx(150.25)
+    assert aggregation["avg_price_security"] == pytest.approx(120.123456, rel=0, abs=1e-6)
+    assert aggregation["avg_price_account"] == pytest.approx(115.987654, rel=0, abs=1e-6)
+
+    # Existing position payload should mirror aggregation totals.
+    assert position["current_holdings"] == pytest.approx(aggregation["total_holdings"])
+    assert position["purchase_value"] == pytest.approx(aggregation["purchase_value_eur"])
+    assert position["purchase_total_security"] == pytest.approx(
+        aggregation["purchase_total_security"]
+    )
+    assert position["purchase_total_account"] == pytest.approx(
+        aggregation["purchase_total_account"]
+    )
+    assert position["average_purchase_price_native"] == pytest.approx(
+        aggregation["average_purchase_price_native"], rel=0, abs=1e-6
+    )
+    assert position["avg_price_security"] == pytest.approx(
+        aggregation["avg_price_security"], rel=0, abs=1e-6
+    )
+    assert position["avg_price_account"] == pytest.approx(
+        aggregation["avg_price_account"], rel=0, abs=1e-6
+    )
+
+
 def test_iter_security_close_prices_orders_and_filters_range(
     seeded_history_db: Path,
 ) -> None:
