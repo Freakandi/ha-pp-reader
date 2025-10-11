@@ -54,6 +54,14 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
     avg_price_security: '7.2489',
     avg_price_account: '4.942',
     average_purchase_price_native: '1.23',
+    average_cost: {
+      native: '7.2489',
+      security: '7.2489',
+      account: '4.942',
+      eur: '6.5432',
+      source: 'aggregation',
+      coverage_ratio: '1',
+    },
     last_price_native: '8.12',
     last_close_native: '7.85',
     last_price_eur: '5.49',
@@ -110,6 +118,14 @@ test('ensureSnapshotMetricsForTest keeps native average null when missing', () =
     purchase_value_eur: 500,
     last_price_native: 120,
     last_close_native: 118,
+    average_cost: {
+      native: null,
+      security: null,
+      account: null,
+      eur: '100',
+      source: 'totals',
+      coverage_ratio: 0.5,
+    },
   });
 
   assert.ok(metrics, 'metrics should still be generated with partial data');
@@ -134,6 +150,14 @@ test('ensureSnapshotMetricsForTest derives averages from security and account to
     purchase_total_security: '724.89',
     purchase_total_account: '494.2',
     last_price_native: '8.12',
+    average_cost: {
+      native: null,
+      security: '7.2489',
+      account: '4.942',
+      eur: '4.942',
+      source: 'totals',
+      coverage_ratio: '0.6',
+    },
   });
 
   assert.ok(metrics, 'expected metrics to be created with derived totals');
@@ -152,6 +176,36 @@ test('ensureSnapshotMetricsForTest derives averages from security and account to
     4.942,
     'EUR average should align with purchase_value_eur / holdings',
   );
+});
+
+test('resolvePurchaseFxTooltipForTest annotates metadata from average cost payload', () => {
+  const snapshot = {
+    security_uuid: 'tooltip-metadata',
+    currency_code: 'USD',
+    purchase_total_security: '724.89',
+    purchase_total_account: '494.2',
+    average_cost: {
+      security: '7.2489',
+      account: '4.942',
+      eur: '4.942',
+      source: 'totals',
+      coverage_ratio: 0.75,
+    },
+  } as const;
+
+  const tooltip = resolvePurchaseFxTooltipForTest(
+    snapshot,
+    null,
+    'eur',
+    null,
+    null,
+    Number(snapshot.purchase_total_security),
+    Number(snapshot.purchase_total_account),
+  );
+
+  assert.ok(tooltip, 'tooltip should be generated when averages are available');
+  assert.match(tooltip ?? '', /Quelle: Kauf/);
+  assert.match(tooltip ?? '', /Abdeckung: 75/);
 });
 
 test('getHistoryChartOptionsForTest injects the native baseline into chart options', () => {

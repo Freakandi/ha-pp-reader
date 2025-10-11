@@ -184,7 +184,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `buildPurchasePriceDisplay` verwendet `position.average_cost` (oder das Aggregationsfeld) zur Wahl des Primär-/Sekundärpreises und entfernt lokale Helper wie `computeAveragePrice`. Markup- und Sortierlogik bleiben unverändert, beziehen ihre Werte jedoch aus der neuen Struktur.
        - Validierung: `src/tabs/__tests__/overview.render.test.ts` deckt die Anzeige ab und schlägt fehl, falls lokale Berechnungen verbleiben.
 
-6. j) [ ] Security-Detail-Tab harmonisieren
+6. j) [x] Security-Detail-Tab harmonisieren
        - Dateien: `src/tabs/security_detail.ts`
        - Ziel: Snapshot-Metriken und Cache-Fallbacks greifen auf `average_cost` bzw. die durch Backend bereitgestellten Durchschnittswerte zu, sodass Hilfsfunktionen wie `computeAveragePurchaseFromTotal` und `computeAveragePurchaseEur` entfallen. FX-Tooltips werden anhand der Metadaten aktualisiert.
        - Validierung: Jest-Tests in `src/tabs/__tests__/security_detail.metrics.test.ts` prüfen, dass keine lokalen Durchschnittsberechnungen übrig bleiben und Tooltips weiterhin korrekt sind.
