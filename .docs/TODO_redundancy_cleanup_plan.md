@@ -179,7 +179,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `deriveAggregation` und `normalizePosition` nutzen den Backend-`average_cost`-Kontext anstelle der manuellen Rekonstruktion. Entfernen der Hilfsfunktionen `coerceNumber`, `toNullableNumber` (sofern nur noch für Kaufpreiszwecke genutzt) sowie der Divisionen zur Durchschnittsberechnung.
        - Validierung: DOM-Aktualisierungen behalten identische Werte; Jest-/Playwright-Regressionen für Live-Updates werden bei Abweichungen rot.
 
-6. i) [ ] Overview-Tab auf Average-Cost-Kontext umstellen
+6. i) [x] Overview-Tab auf Average-Cost-Kontext umstellen
        - Dateien: `src/tabs/overview.ts`
        - Ziel: `buildPurchasePriceDisplay` verwendet `position.average_cost` (oder das Aggregationsfeld) zur Wahl des Primär-/Sekundärpreises und entfernt lokale Helper wie `computeAveragePrice`. Markup- und Sortierlogik bleiben unverändert, beziehen ihre Werte jedoch aus der neuen Struktur.
        - Validierung: `src/tabs/__tests__/overview.render.test.ts` deckt die Anzeige ab und schlägt fehl, falls lokale Berechnungen verbleiben.

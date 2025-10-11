@@ -20,7 +20,11 @@ import {
 import type { PortfolioPositionsResponse } from '../data/api';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
 import type { HomeAssistant } from '../types/home-assistant';
-import type { HoldingsAggregationPayload, PanelConfigLike } from './types';
+import type {
+  AverageCostPayload,
+  HoldingsAggregationPayload,
+  PanelConfigLike,
+} from './types';
 import {
   normalizeCurrencyValue,
   normalizePercentValue,
@@ -146,24 +150,6 @@ function resolveCurrencyFromPosition(
   return fallback;
 }
 
-function computeAveragePrice(
-  explicitValue: unknown,
-  totalValue: unknown,
-  holdings: number | null,
-): number | null {
-  const explicit = toNullableNumber(explicitValue);
-  if (explicit != null) {
-    return explicit;
-  }
-
-  const total = toNullableNumber(totalValue);
-  if (total != null && isFiniteNumber(holdings) && holdings > 0) {
-    return total / holdings;
-  }
-
-  return null;
-}
-
 function resolveAggregation(
   record: Record<string, unknown>,
 ): HoldingsAggregationPayload | null {
@@ -189,6 +175,77 @@ function resolveAggregation(
   return aggregation as HoldingsAggregationPayload;
 }
 
+function resolveAverageCost(
+  record: Record<string, unknown>,
+  aggregation: HoldingsAggregationPayload | null,
+): AverageCostPayload | null {
+  const raw = record['average_cost'];
+  if (raw && typeof raw === 'object') {
+    const payload = raw as Partial<AverageCostPayload>;
+
+    const source = payload.source;
+    const normalizedSource:
+      | AverageCostPayload['source']
+      | undefined = source === 'totals' || source === 'eur_total'
+      ? source
+      : source === 'aggregation'
+        ? source
+        : undefined;
+
+    return {
+      native: toNullableNumber(payload.native),
+      security: toNullableNumber(payload.security),
+      account: toNullableNumber(payload.account),
+      eur: toNullableNumber(payload.eur),
+      source: normalizedSource ?? 'aggregation',
+      coverage_ratio: toNullableNumber(payload.coverage_ratio),
+    };
+  }
+
+  if (!aggregation) {
+    return null;
+  }
+
+  const native =
+    toNullableNumber(aggregation.average_purchase_price_native) ??
+    toNullableNumber(record['average_purchase_price_native']);
+  const security =
+    toNullableNumber(aggregation.avg_price_security) ??
+    toNullableNumber(record['avg_price_security']);
+  const account =
+    toNullableNumber(aggregation.avg_price_account) ??
+    toNullableNumber(record['avg_price_account']);
+
+  const preferredHoldings =
+    toNullableNumber(aggregation.positive_holdings) ??
+    toNullableNumber(aggregation.total_holdings) ??
+    toNullableNumber(record['current_holdings']);
+
+  const purchaseValueTotal =
+    toNullableNumber(aggregation.purchase_value_eur) ??
+    toNullableNumber(record['purchase_value']);
+
+  const eur =
+    purchaseValueTotal != null &&
+    isFiniteNumber(preferredHoldings) &&
+    preferredHoldings > 0
+      ? purchaseValueTotal / preferredHoldings
+      : null;
+
+  if (native == null && security == null && account == null && eur == null) {
+    return null;
+  }
+
+  return {
+    native,
+    security,
+    account,
+    eur,
+    source: 'aggregation',
+    coverage_ratio: null,
+  };
+}
+
 function formatPriceWithCurrency(
   value: number | null,
   currency: string | null,
@@ -209,10 +266,7 @@ function buildPurchasePriceDisplay(
 ): { markup: string; sortValue: number; ariaLabel: string } {
   const record = position as Record<string, unknown>;
   const aggregation = resolveAggregation(record);
-
-  const holdings = toNullableNumber(
-    aggregation?.total_holdings ?? position.current_holdings,
-  );
+  const averageCost = resolveAverageCost(record, aggregation);
 
   const securityCurrency = resolveCurrencyFromPosition(position, [
     'security_currency_code',
@@ -229,30 +283,13 @@ function buildPurchasePriceDisplay(
       'currency_code',
     ]) ?? (securityCurrency === 'EUR' ? 'EUR' : null) ?? 'EUR';
 
-  const avgSecurity = computeAveragePrice(
-    aggregation?.avg_price_security ?? record['avg_price_security'],
-    aggregation?.purchase_total_security ?? record['purchase_total_security'],
-    holdings,
-  );
-  const avgNativeFallback = computeAveragePrice(
-    aggregation?.average_purchase_price_native ??
-      record['average_purchase_price_native'],
-    aggregation?.purchase_total_security ?? record['purchase_total_security'],
-    holdings,
-  );
-  const effectiveSecurity = avgSecurity ?? avgNativeFallback;
+  const averageNative = toNullableNumber(averageCost?.native);
+  const averageSecurity = toNullableNumber(averageCost?.security);
+  const averageAccount = toNullableNumber(averageCost?.account);
+  const averageEur = toNullableNumber(averageCost?.eur);
 
-  const avgAccount = computeAveragePrice(
-    aggregation?.avg_price_account ?? record['avg_price_account'],
-    aggregation?.purchase_total_account ?? record['purchase_total_account'],
-    holdings,
-  );
-  const accountFallback = computeAveragePrice(
-    undefined,
-    aggregation?.purchase_value_eur ?? record['purchase_value'],
-    holdings,
-  );
-  const effectiveAccount = avgAccount ?? accountFallback;
+  const effectiveSecurity = averageSecurity ?? averageNative;
+  const effectiveAccount = averageAccount ?? averageEur;
 
   let primaryValue = effectiveSecurity;
   let primaryCurrency = securityCurrency;
