@@ -159,7 +159,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `_normalize_portfolio_positions` und `_serialise_security_snapshot` übernehmen das neue `average_cost`-Objekt (inkl. Metadaten) unverändert in die Payloads und entfernen die derzeitigen Fallback-Berechnungen (`_from_aggregation`, lokale `round(...)`-Aufrufe für Kaufpreise).
        - Validierung: `tests/test_ws_portfolio_positions.py` und `tests/test_ws_security_history.py` prüfen, dass keine lokalen Divisionen mehr stattfinden und alle Durchschnittswerte aus `average_cost` stammen.
 
-6. e) [ ] Event-Push-Normalisierung vereinheitlichen
+6. e) [x] Event-Push-Normalisierung vereinheitlichen
        - Dateien: `custom_components/pp_reader/data/event_push.py`
        - Ziel: `_normalize_position_entry` liest Average-Cost-Daten ausschließlich aus `item["average_cost"]` bzw. den bereits durch `select_average_cost` gesetzten Feldern und entfernt verbleibende Fallbacks auf `_normalize_currency_amount` oder manuelle `round_price`-Aufrufe für Durchschnittspreise.
        - Validierung: `tests/test_sync_from_pclient.py` deckt ab, dass Event-Payloads unverändert bleiben und keine Legacy-Berechnungen aktiv sind.
