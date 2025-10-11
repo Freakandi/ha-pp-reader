@@ -8,13 +8,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
+type OverviewModule = typeof import('../overview');
+
 type BuildPurchasePriceDisplayForTest = (position: Record<string, unknown>) => {
   markup: string;
   sortValue: number;
   ariaLabel: string;
 };
 
-let cachedHelper: BuildPurchasePriceDisplayForTest | null = null;
+let cachedModule: OverviewModule | null = null;
 
 const globalRef = globalThis as typeof globalThis & {
   window?: Window & typeof globalThis;
@@ -26,7 +28,7 @@ const globalRef = globalThis as typeof globalThis & {
 };
 
 async function withOverviewModule<T>(
-  callback: (helper: BuildPurchasePriceDisplayForTest) => T | Promise<T>,
+  callback: (module: OverviewModule) => T | Promise<T>,
 ): Promise<T> {
   const previousWindow = globalRef.window;
   const previousDocument = globalRef.document;
@@ -45,18 +47,16 @@ async function withOverviewModule<T>(
   globalRef.Node = dom.window.Node;
 
   try {
-    if (!cachedHelper) {
-      const overviewModule = await import('../overview');
-      cachedHelper = overviewModule.__TEST_ONLY__
-        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+    if (!cachedModule) {
+      cachedModule = await import('../overview');
     }
 
-    const helper = cachedHelper;
-    if (!helper) {
+    const module = cachedModule;
+    if (!module?.__TEST_ONLY__?.buildPurchasePriceDisplayForTest) {
       throw new Error('Failed to load overview helper for tests');
     }
 
-    return await callback(helper);
+    return await callback(module);
   } finally {
     globalRef.window = previousWindow;
     globalRef.document = previousDocument;
@@ -70,7 +70,9 @@ async function withOverviewModule<T>(
 void test(
   'buildPurchasePriceDisplayForTest renders security currency as primary and account secondary',
   async () =>
-    withOverviewModule(helper => {
+    withOverviewModule(module => {
+      const helper = module.__TEST_ONLY__
+        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
       const { markup, ariaLabel } = helper({
         security_uuid: 'security-avg',
         name: 'SSR Mining',
@@ -82,6 +84,15 @@ void test(
         purchase_total_security: '724.89',
         purchase_total_account: '494.2',
         purchase_value: '494.2',
+        performance: {
+          gain_abs: 0,
+          gain_pct: 0,
+          total_change_eur: 0,
+          total_change_pct: 0,
+          source: 'snapshot',
+          coverage_ratio: 1,
+          day_change: null,
+        },
       });
 
       assert.match(markup, /purchase-price--primary">7,2489\u00A0CAD/);
@@ -94,7 +105,9 @@ void test(
 void test(
   'buildPurchasePriceDisplayForTest falls back to account currency when security averages missing',
   async () =>
-    withOverviewModule(helper => {
+    withOverviewModule(module => {
+      const helper = module.__TEST_ONLY__
+        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
       const { markup, ariaLabel } = helper({
         security_uuid: 'security-fallback',
         name: 'Fallback Security',
@@ -102,6 +115,15 @@ void test(
         account_currency_code: 'USD',
         purchase_total_account: '640',
         purchase_value: '640',
+        performance: {
+          gain_abs: 0,
+          gain_pct: 0,
+          total_change_eur: 0,
+          total_change_pct: 0,
+          source: 'snapshot',
+          coverage_ratio: 1,
+          day_change: null,
+        },
       });
 
       assert.match(markup, /purchase-price--primary">8,00\u00A0USD/);
@@ -113,7 +135,9 @@ void test(
 void test(
   'buildPurchasePriceDisplayForTest prefers provided average_cost payload',
   async () =>
-    withOverviewModule(helper => {
+    withOverviewModule(module => {
+      const helper = module.__TEST_ONLY__
+        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
       const { markup, ariaLabel } = helper({
         security_uuid: 'security-average-cost',
         name: 'Average Cost Security',
@@ -129,11 +153,77 @@ void test(
           source: 'totals',
           coverage_ratio: 1,
         },
+        performance: {
+          gain_abs: 0,
+          gain_pct: 0,
+          total_change_eur: 0,
+          total_change_pct: 0,
+          source: 'snapshot',
+          coverage_ratio: 1,
+          day_change: null,
+        },
       });
 
       assert.match(markup, /purchase-price--primary">3,14159\u00A0USD/);
       assert.match(markup, /purchase-price--secondary">2,50\u00A0CHF/);
       assert.match(ariaLabel, /3,14159 USD/);
       assert.match(ariaLabel, /2,50 CHF/);
+    }),
+);
+
+void test(
+  'renderPortfolioPositions prefers performance payload for gain cells',
+  async () =>
+    withOverviewModule(module => {
+      const html = module.renderPortfolioPositions([
+        {
+          security_uuid: 'performance-security',
+          name: 'Performance Equity',
+          current_holdings: 10,
+          purchase_value: 500,
+          current_value: 710,
+          gain_abs: 5,
+          gain_pct: 1,
+          performance: {
+            gain_abs: 210,
+            gain_pct: 42,
+            total_change_eur: 210,
+            total_change_pct: 42,
+            source: 'snapshot',
+            coverage_ratio: 0.75,
+            day_change: {
+              price_change_native: 0.5,
+              price_change_eur: 0.45,
+              change_pct: 0.3,
+              source: 'native',
+              coverage_ratio: 0.6,
+            },
+          },
+        },
+      ]);
+
+      const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+      const row = dom.window.document.querySelector<HTMLTableRowElement>('tbody tr.position-row');
+      assert.ok(row, 'expected a rendered position row');
+
+      const gainAbsCell = row?.querySelector<HTMLTableCellElement>('td.align-right[data-gain-pct]');
+      assert.ok(gainAbsCell, 'expected gain absolute cell with metadata');
+      const gainAbsText = gainAbsCell?.textContent?.replace(/\s+/g, ' ').trim();
+      assert.ok(
+        gainAbsText?.includes('210,00'),
+        `gain absolute cell should reflect performance payload, got ${gainAbsText}`,
+      );
+      assert.strictEqual(gainAbsCell?.dataset.gainPct, '42,00 %');
+      assert.strictEqual(gainAbsCell?.dataset.gainSign, 'positive');
+
+      const gainPctCell = row?.querySelector<HTMLTableCellElement>('td.gain-pct-cell');
+      assert.ok(gainPctCell, 'expected gain percentage cell');
+      const gainPctText = gainPctCell?.textContent?.replace(/\s+/g, ' ').trim();
+      assert.ok(
+        gainPctText?.includes('42,00'),
+        `gain percentage cell should reflect performance payload, got ${gainPctText}`,
+      );
+      const trendSpan = gainPctCell?.querySelector('span.positive');
+      assert.ok(trendSpan, 'gain percentage cell should display positive trend styling');
     }),
 );

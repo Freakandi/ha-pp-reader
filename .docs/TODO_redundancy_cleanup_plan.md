@@ -246,7 +246,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Metrikberechnungen (`computeDelta`, `computePercentageChange`, `computeHoldingsAdjustedEurChange`) werden ersetzt, indem `normalizeSecurityMetrics` o. ä. aus dem neuen `performance`-Payload gespeist wird; überflüssige Helper und Summenberechnungen werden entfernt, ohne Fallback-Funktionen für fehlende Backend-Daten zu verlieren.
        - Validierung: Jest-Tests (`src/tabs/__tests__/security_detail.metrics.test.ts`) decken Backend- und Cache-Fallbacks ab und schlagen fehl, wenn lokale Rechenpfade übrig bleiben.
 
-7. k) [ ] Frontend-Regressionssuite aktualisieren
+7. k) [x] Frontend-Regressionssuite aktualisieren
        - Dateien: `src/tabs/__tests__/overview.render.test.ts`, `src/tabs/__tests__/security_detail.metrics.test.ts`, ggf. weitere Snapshot-Tests
        - Ziel: Testfixtures um `performance` erweitern, Assertions auf neue Felder (`totalChangeEur`, `dayChangePct`, `gain_pct`) ergänzen und sicherstellen, dass entfernte Helper nicht mehr importiert werden.
        - Validierung: Tests schlagen fehl, falls Komponenten weiterhin alte Helper referenzieren oder `performance` ignorieren.
