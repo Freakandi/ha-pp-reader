@@ -85,7 +85,7 @@ class PortfolioGainAbsSensor(CoordinatorEntity, SensorEntity):
                 float(current_value),
                 float(purchase_value),
             )
-            return round(gain, 2)
+            return gain
         except (TypeError, ValueError) as err:
             message = (
                 "❌ Fehler beim Berechnen des Kursgewinns für "
@@ -132,7 +132,7 @@ class PortfolioGainPctSensor(CoordinatorEntity, SensorEntity):
                 float(current_value),
                 float(purchase_value),
             )
-            return round(gain, 2)
+            return gain
         except (TypeError, ValueError) as err:
             message = (
                 "❌ Fehler beim Berechnen des Kursgewinns (%) für "

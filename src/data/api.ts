@@ -6,6 +6,7 @@ import type {
   AverageCostPayload,
   HoldingsAggregationPayload,
   PanelConfigLike,
+  PerformanceMetricsPayload,
 } from "../tabs/types";
 import type { HomeAssistant } from "../types/home-assistant";
 
@@ -61,6 +62,8 @@ export interface PortfolioPosition {
   avg_price_account: number | null;
   /** Structured selection of average purchase prices with provenance metadata. */
   average_cost?: AverageCostPayload | null;
+  /** Structured gain metrics that mirror the legacy flat fields. */
+  performance?: PerformanceMetricsPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
@@ -96,6 +99,8 @@ export interface SecuritySnapshotResponse {
     day_change_pct?: number | null;
     /** Structured selection of average purchase prices with provenance metadata. */
     average_cost?: AverageCostPayload | null;
+    /** Structured gain and day-change metrics shared across payloads. */
+    performance?: PerformanceMetricsPayload | null;
     /** Raw snapshot provenance flag (e.g. cache vs. live). */
     source?: string | null;
     [key: string]: unknown;

@@ -16,6 +16,7 @@ from custom_components.pp_reader.data.db_access import (
     get_securities_by_id,
     get_transactions,
 )
+from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     normalize_raw_price,
@@ -284,14 +285,22 @@ def _calculate_purchase_total(
 
 def calculate_unrealized_gain(current_value: float, purchase_sum: float) -> float:
     """Return the unrealized gain based on current value and purchase sum."""
-    return round(current_value - purchase_sum, 2)
+
+    performance, _ = select_performance_metrics(
+        current_value=current_value,
+        purchase_value=purchase_sum,
+    )
+    return performance.gain_abs
 
 
 def calculate_unrealized_gain_pct(current_value: float, purchase_sum: float) -> float:
     """Return the unrealized gain in percent based on the purchase sum."""
-    if purchase_sum == 0:
-        return 0.0
-    return round(((current_value - purchase_sum) / purchase_sum) * 100, 2)
+
+    performance, _ = select_performance_metrics(
+        current_value=current_value,
+        purchase_value=purchase_sum,
+    )
+    return performance.gain_pct
 
 
 def db_calculate_portfolio_value_and_count(

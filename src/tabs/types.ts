@@ -30,6 +30,36 @@ export interface AverageCostPayload {
   [key: string]: unknown;
 }
 
+/**
+ * Optional day-change metrics accompanying a performance payload.
+ */
+export interface PerformanceDayChangePayload {
+  price_change_native: number | null;
+  price_change_eur: number | null;
+  change_pct: number | null;
+  source: string;
+  coverage_ratio: number | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Normalised gain and change metrics shared between backend payloads.
+ *
+ * Legacy flat fields such as `gain_abs`, `gain_pct` or `day_price_change_*`
+ * remain on the individual payloads for compatibility, but mirror the values
+ * exposed by this object.
+ */
+export interface PerformanceMetricsPayload {
+  gain_abs: number;
+  gain_pct: number;
+  total_change_eur: number;
+  total_change_pct: number;
+  source: string;
+  coverage_ratio: number | null;
+  day_change?: PerformanceDayChangePayload | null;
+  [key: string]: unknown;
+}
+
 export interface PanelConfigLike {
   entry_id?: string | null;
   config?: {
@@ -99,6 +129,8 @@ export interface SecuritySnapshotLike {
    * Structured selection of average purchase prices with provenance metadata.
    */
   average_cost?: AverageCostPayload | null;
+  /** Structured gain and day-change metrics shared across payloads. */
+  performance?: PerformanceMetricsPayload | null;
   /** Raw snapshot provenance flag (e.g. cache vs. live). */
   source?: string | null;
   [key: string]: unknown;
@@ -137,6 +169,8 @@ export interface PortfolioPosition {
    * Structured selection of average purchase prices with provenance metadata.
    */
   average_cost?: AverageCostPayload | null;
+  /** Structured gain metrics that mirror the legacy flat fields. */
+  performance?: PerformanceMetricsPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }

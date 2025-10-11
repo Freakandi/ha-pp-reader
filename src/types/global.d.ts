@@ -9,6 +9,7 @@ import type {
 } from '../data/updateConfigsWS';
 import type {
   AverageCostPayload,
+  PerformanceMetricsPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
 import type {
@@ -35,6 +36,7 @@ interface PendingPortfolioPosition {
   gain_abs?: number | null;
   gain_pct?: number | null;
   average_cost?: AverageCostPayload | null;
+  performance?: PerformanceMetricsPayload | null;
   [key: string]: unknown;
 }
 

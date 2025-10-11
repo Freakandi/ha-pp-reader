@@ -303,6 +303,7 @@ async def test_error_counter_increment_and_reset(monkeypatch, tmp_path, caplog):
 
     # Drei aufeinanderfolgende Fehl-Läufe (leer)
     caplog.clear()
+    caplog.set_level(logging.INFO, logger=price_service.__name__)
     monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", empty_fetch)
     await price_service._run_price_cycle(hass, entry_id)
     await price_service._run_price_cycle(hass, entry_id)
@@ -681,6 +682,12 @@ async def test_price_update_refreshes_portfolio_gains(monkeypatch, tmp_path):
     assert refresh_entry["purchase_sum"] == pytest.approx(1000.0)
     assert refresh_entry["gain_abs"] == pytest.approx(200.0)
     assert refresh_entry["gain_pct"] == pytest.approx(20.0)
+    performance = refresh_entry.get("performance")
+    assert performance is not None
+    assert performance["gain_abs"] == pytest.approx(200.0)
+    assert performance["gain_pct"] == pytest.approx(20.0)
+    assert performance["total_change_eur"] == pytest.approx(200.0)
+    assert performance["total_change_pct"] == pytest.approx(20.0)
 
 
 @pytest.mark.asyncio

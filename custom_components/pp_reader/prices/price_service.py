@@ -19,14 +19,16 @@ import asyncio
 import logging
 import sqlite3
 import time
+from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.event_push import _push_update
+from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.data.sync_from_pclient import (
     fetch_positions_for_portfolios,
 )
@@ -41,7 +43,7 @@ from custom_components.pp_reader.logic.securities import (
 )
 from custom_components.pp_reader.prices import revaluation
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 
 async def revalue_after_price_updates(*args, **kwargs):
@@ -793,13 +795,29 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
         try:
             raw_value = data.get("value", data.get("current_value", 0.0))
             raw_purchase = data.get("purchase_sum", data.get("purchaseSum", 0.0))
-            current_value = round(raw_value or 0.0, 2)
-            purchase_sum = round(raw_purchase or 0.0, 2)
-            gain_abs = round(current_value - purchase_sum, 2)
-            gain_pct = round(
-                (gain_abs / purchase_sum * 100) if purchase_sum else 0.0,
-                2,
-            )
+
+            current_value = round_currency(raw_value, default=0.0) or 0.0
+            purchase_sum = round_currency(raw_purchase, default=0.0) or 0.0
+
+            performance_mapping = data.get("performance")
+            performance_payload: dict[str, Any]
+            if isinstance(performance_mapping, Mapping):
+                performance_payload = dict(performance_mapping)
+            else:
+                performance_metrics, day_change_metrics = select_performance_metrics(
+                    current_value=raw_value,
+                    purchase_value=raw_purchase,
+                )
+                performance_payload = asdict(performance_metrics)
+                performance_payload["day_change"] = asdict(day_change_metrics)
+
+            gain_abs = round_currency(
+                performance_payload.get("gain_abs"), default=0.0
+            ) or 0.0
+            gain_pct = round_currency(
+                performance_payload.get("gain_pct"), default=0.0
+            ) or 0.0
+
             payload.append(
                 {
                     "uuid": pid,
@@ -809,6 +827,7 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
                     "purchase_sum": purchase_sum,
                     "gain_abs": gain_abs,
                     "gain_pct": gain_pct,
+                    "performance": performance_payload,
                 }
             )
         except (TypeError, ValueError):

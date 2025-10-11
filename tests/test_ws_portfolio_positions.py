@@ -188,6 +188,22 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
         position["purchase_value"] / position["current_holdings"]
     )
 
+    performance = position["performance"]
+    assert set(performance) == {
+        "gain_abs",
+        "gain_pct",
+        "total_change_eur",
+        "total_change_pct",
+        "source",
+        "coverage_ratio",
+    }  # noqa: S101
+    assert performance["gain_abs"] == pytest.approx(position["gain_abs"])  # noqa: S101
+    assert performance["gain_pct"] == pytest.approx(position["gain_pct"])  # noqa: S101
+    assert performance["total_change_eur"] == pytest.approx(position["gain_abs"])  # noqa: S101
+    assert performance["total_change_pct"] == pytest.approx(position["gain_pct"])  # noqa: S101
+    assert performance["source"] == "calculated"  # noqa: S101
+    assert performance["coverage_ratio"] == pytest.approx(1.0)  # noqa: S101
+
 
 def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
     """Average-cost metrics should be forwarded from the payload without recomputing."""
@@ -214,6 +230,14 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                     "eur": 50.0,
                     "source": "totals",
                     "coverage_ratio": 1.0,
+                },
+                "performance": {
+                    "gain_abs": 1357.0,
+                    "gain_pct": 12.0,
+                    "total_change_eur": 1357.0,
+                    "total_change_pct": 12.0,
+                    "source": "calculated",
+                    "coverage_ratio": 0.75,
                 },
                 "aggregation": {
                     "purchase_total_security": 999.99,
@@ -248,6 +272,14 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "eur": pytest.approx(50.0),
                 "source": "totals",
                 "coverage_ratio": pytest.approx(1.0),
+            },
+            "performance": {
+                "gain_abs": pytest.approx(1357.0),
+                "gain_pct": pytest.approx(12.0),
+                "total_change_eur": pytest.approx(1357.0),
+                "total_change_pct": pytest.approx(12.0),
+                "source": "calculated",
+                "coverage_ratio": pytest.approx(0.75),
             },
         }
     ]
