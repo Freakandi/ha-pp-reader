@@ -236,7 +236,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Neues Interface `PerformanceMetricsPayload` (inkl. optionalem `dayChange`-Block) definieren, API-/WS-Verträge um `performance` erweitern und Legacy-Felder (`gain_abs`, `gain_pct`, `day_price_change_*`) als Derivate kennzeichnen.
        - Validierung: `npx tsc --noEmit` schlägt fehl, wenn Komponenten das Objekt nicht berücksichtigen.
 
-7. i) [ ] Frontend-State und DOM-Updates harmonisieren
+7. i) [x] Frontend-State und DOM-Updates harmonisieren
        - Dateien: `src/data/updateConfigsWS.ts`, `src/content/elements.ts`, `src/tabs/overview.ts`
        - Ziel: WebSocket-Caches, DOM-Patcher und Tabellenrenderer lesen `gain`-/`change`-Werte aus `performance`, entfernen lokale Rekonstruktion (`formatGain`, `formatGainPct`, `computeTableTotals`) und halten Dataset-Attribute (`data-gain-pct`, `data-gain-sign`) synchron.
        - Validierung: Live-Update-Regressionen (bestehend) zeigen unveränderte Werte; Linter meldet keine ungenutzten Helper.
