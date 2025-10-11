@@ -221,7 +221,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `_normalize_portfolio_value_entry`, `_normalize_position_entry`, `_portfolio_contract_entry` sowie `_build_portfolio_values_payload` beziehen `gain_abs`/`gain_pct` ausschließlich aus dem Performance-Helper; dadurch entfallen doppelte Divisionen und Rundungen. Event-Payloads tragen optional das neue `performance`-Objekt mit.
        - Validierung: Event- und Sensor-Tests (`tests/test_sync_from_pclient.py`, `tests/test_ws_portfolio_positions.py`) bestätigen unveränderte Payloads und dokumentieren das neue Objekt.
 
-7. f) [ ] Sensor- und Logikmodule bereinigen
+7. f) [x] Sensor- und Logikmodule bereinigen
        - Dateien: `custom_components/pp_reader/logic/portfolio.py`, `custom_components/pp_reader/sensors/gain_sensors.py`
        - Ziel: Sensorberechnungen für unrealized gains verwenden den Performance-Helper (z. B. `select_performance_metrics`), sodass die Funktionen `calculate_unrealized_gain(_pct)` entfallen oder zu dünnen Wrappern degradiert werden; doppelte Rundungen werden entfernt.
        - Validierung: Einheitstests der Sensoren (bestehend) schlagen fehl, falls Werte von bisherigen Ergebnissen abweichen.
