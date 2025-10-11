@@ -181,6 +181,12 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert average_cost["eur"] == pytest.approx(99.999368)  # noqa: S101
     assert average_cost["source"] == "totals"  # noqa: S101
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)  # noqa: S101
+    assert average_cost["native"] == position["average_purchase_price_native"]  # noqa: S101
+    assert average_cost["security"] == position["avg_price_security"]  # noqa: S101
+    assert average_cost["account"] == position["avg_price_account"]  # noqa: S101
+    assert average_cost["eur"] == pytest.approx(  # noqa: S101
+        position["purchase_value"] / position["current_holdings"]
+    )
 
 
 def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:

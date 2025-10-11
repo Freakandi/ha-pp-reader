@@ -164,7 +164,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `_normalize_position_entry` liest Average-Cost-Daten ausschließlich aus `item["average_cost"]` bzw. den bereits durch `select_average_cost` gesetzten Feldern und entfernt verbleibende Fallbacks auf `_normalize_currency_amount` oder manuelle `round_price`-Aufrufe für Durchschnittspreise.
        - Validierung: `tests/test_sync_from_pclient.py` deckt ab, dass Event-Payloads unverändert bleiben und keine Legacy-Berechnungen aktiv sind.
 
-6. f) [ ] Backend-Regressionstests für Average-Cost-Kontext erweitern
+6. f) [x] Backend-Regressionstests für Average-Cost-Kontext erweitern
        - Dateien: `tests/test_db_access.py`, `tests/test_ws_portfolio_positions.py`, `tests/test_ws_security_history.py`
        - Ziel: Neue Assertions für `average_cost` (Feldstruktur, Werte, Quellen-Metadaten) ergänzen und bestätigen, dass die bestehenden Felder (`average_purchase_price_native`, `avg_price_security`, …) mit dem Selektionsobjekt übereinstimmen. Sicherstellen, dass fehlende Aggregationsdaten die Fallback-Reihenfolge triggern.
        - Validierung: Tests schlagen fehl, wenn `average_cost` fehlt oder Werte nicht synchron sind.

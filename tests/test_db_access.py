@@ -405,6 +405,8 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         },
     }
 
+    sources: set[str] = set()
+
     for portfolio_uuid, expected in expected_by_portfolio.items():
         positions = get_portfolio_positions(seeded_snapshot_db, portfolio_uuid)
 
@@ -443,6 +445,48 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                 assert position[average_key] is None
             else:
                 assert position[average_key] == expected_average
+
+        average_cost = position["average_cost"]
+        assert set(average_cost) == {
+            "native",
+            "security",
+            "account",
+            "eur",
+            "source",
+            "coverage_ratio",
+        }
+
+        if position["average_purchase_price_native"] is None:
+            assert average_cost["native"] is None
+        else:
+            assert (
+                average_cost["native"]
+                == position["average_purchase_price_native"]
+            )
+
+        for field in ("security", "account"):
+            if position[f"avg_price_{field}"] is None:
+                assert average_cost[field] is None
+            else:
+                assert average_cost[field] == position[f"avg_price_{field}"]
+
+        holdings = position["current_holdings"]
+        purchase_value = position["purchase_value"]
+        if holdings and abs(holdings) > 1e-9:
+            expected_eur = purchase_value / holdings
+            assert average_cost["eur"] == pytest.approx(expected_eur)
+            assert average_cost["source"] == "totals"
+            assert average_cost["coverage_ratio"] == pytest.approx(1.0)
+        else:
+            assert (
+                average_cost["eur"] is None
+                or average_cost["eur"] == pytest.approx(0.0)
+            )
+            assert average_cost["coverage_ratio"] is None
+
+        sources.add(average_cost["source"])
+
+    assert "totals" in sources
 
 
 
@@ -568,6 +612,15 @@ def test_get_security_snapshot_multicurrency(
         rel=0,
         abs=1e-6,
     )
+    average_cost = snapshot["average_cost"]
+    assert average_cost["native"] == snapshot["average_purchase_price_native"]
+    assert average_cost["security"] == snapshot["avg_price_security"]
+    assert average_cost["account"] == snapshot["avg_price_account"]
+    assert average_cost["eur"] == pytest.approx(
+        snapshot["purchase_value_eur"] / snapshot["total_holdings"]
+    )
+    assert average_cost["source"] == "totals"
+    assert average_cost["coverage_ratio"] == pytest.approx(1.0)
     assert snapshot["last_close_native"] is None
     assert snapshot["last_close_eur"] is None
     assert snapshot["day_price_change_native"] is None
@@ -632,6 +685,13 @@ def test_get_security_snapshot_handles_null_purchase_value(
         rel=0,
         abs=1e-6,
     )
+    average_cost = snapshot["average_cost"]
+    assert average_cost["native"] == snapshot["average_purchase_price_native"]
+    assert average_cost["security"] == snapshot["avg_price_security"]
+    assert average_cost["account"] == snapshot["avg_price_account"]
+    assert average_cost["eur"] == pytest.approx(0.0, rel=0, abs=1e-6)
+    assert average_cost["source"] == "totals"
+    assert average_cost["coverage_ratio"] == pytest.approx(1.0)
 
 
 def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
@@ -700,6 +760,13 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     )
     assert snapshot["avg_price_security"] is None
     assert snapshot["avg_price_account"] is None
+    average_cost = snapshot["average_cost"]
+    assert average_cost["native"] is None
+    assert average_cost["security"] is None
+    assert average_cost["account"] is None
+    assert average_cost["eur"] is None
+    assert average_cost["source"] == "aggregation"
+    assert average_cost["coverage_ratio"] is None
     assert snapshot["last_close_native"] == pytest.approx(175.5, rel=0, abs=1e-4)
     assert snapshot["last_close_eur"] == pytest.approx(140.4, rel=0, abs=1e-4)
     assert snapshot["day_price_change_native"] == pytest.approx(
