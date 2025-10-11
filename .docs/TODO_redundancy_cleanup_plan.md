@@ -174,7 +174,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Einführung eines gemeinsamen Interfaces (z. B. `AverageCostPayload`), Ergänzung der API-/Dashboard-Typen um `average_cost` sowie Dokumentation der neuen Metadaten. Bestehende Felder bleiben erhalten, werden aber als Derivate des neuen Objekts markiert.
        - Validierung: `npx tsc --noEmit` schlägt fehl, falls Komponenten den neuen Typ nicht berücksichtigen.
 
-6. h) [ ] Websocket-Update-Handler vereinfachen
+6. h) [x] Websocket-Update-Handler vereinfachen
        - Dateien: `src/data/updateConfigsWS.ts`
        - Ziel: `deriveAggregation` und `normalizePosition` nutzen den Backend-`average_cost`-Kontext anstelle der manuellen Rekonstruktion. Entfernen der Hilfsfunktionen `coerceNumber`, `toNullableNumber` (sofern nur noch für Kaufpreiszwecke genutzt) sowie der Divisionen zur Durchschnittsberechnung.
        - Validierung: DOM-Aktualisierungen behalten identische Werte; Jest-/Playwright-Regressionen für Live-Updates werden bei Abweichungen rot.
