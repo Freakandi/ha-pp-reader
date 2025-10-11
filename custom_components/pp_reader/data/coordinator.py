@@ -137,8 +137,19 @@ def _portfolio_contract_entry(
         performance_payload = asdict(performance_metrics)
         performance_payload["day_change"] = asdict(day_change_metrics)
 
-    gain_abs = round(performance_payload.get("gain_abs", 0.0), 2)
-    gain_pct = round(performance_payload.get("gain_pct", 0.0), 2)
+    raw_gain_abs = performance_payload.get("gain_abs")
+    if isinstance(raw_gain_abs, (int, float)):
+        gain_abs = round(float(raw_gain_abs), 2)
+    else:
+        gain_abs = round(current_value - purchase_sum, 2)
+
+    raw_gain_pct = performance_payload.get("gain_pct")
+    if isinstance(raw_gain_pct, (int, float)):
+        gain_pct = round(float(raw_gain_pct), 2)
+    elif purchase_sum:
+        gain_pct = round(((current_value - purchase_sum) / purchase_sum) * 100, 2)
+    else:
+        gain_pct = 0.0
 
     return portfolio_uuid, {
         "name": entry.get("name"),

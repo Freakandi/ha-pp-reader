@@ -315,6 +315,30 @@ def _normalize_portfolio_positions(
         if isinstance(raw_performance, Mapping):
             performance_payload = dict(raw_performance)
 
+        gain_abs_value: float
+        if (
+            performance_payload is not None
+            and "gain_abs" in performance_payload
+            and performance_payload["gain_abs"] is not None
+        ):
+            gain_abs_value = round(
+                _coerce_float(performance_payload.get("gain_abs")), 2
+            )
+        else:
+            gain_abs_value = round(_coerce_float(item.get("gain_abs")), 2)
+
+        gain_pct_value: float
+        if (
+            performance_payload is not None
+            and "gain_pct" in performance_payload
+            and performance_payload["gain_pct"] is not None
+        ):
+            gain_pct_value = round(
+                _coerce_float(performance_payload.get("gain_pct")), 2
+            )
+        else:
+            gain_pct_value = round(_coerce_float(item.get("gain_pct")), 2)
+
         normalized.append(
             {
                 "security_uuid": security_uuid,
@@ -324,8 +348,8 @@ def _normalize_portfolio_positions(
                 ),
                 "purchase_value": purchase_value,
                 "current_value": round(_coerce_float(item.get("current_value")), 2),
-                "gain_abs": round(_coerce_float(item.get("gain_abs")), 2),
-                "gain_pct": round(_coerce_float(item.get("gain_pct")), 2),
+                "gain_abs": gain_abs_value,
+                "gain_pct": gain_pct_value,
                 "average_purchase_price_native": avg_price_native,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
