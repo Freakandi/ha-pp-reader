@@ -6,6 +6,8 @@ import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import type { SortDirection } from '../content/elements';
 import type {
+  AverageCostPayload,
+  AverageCostSource,
   HoldingsAggregationPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
@@ -29,6 +31,7 @@ interface PortfolioPositionData {
   purchase_total_account?: number | null;
   avg_price_security?: number | null;
   avg_price_account?: number | null;
+  average_cost?: AverageCostPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
@@ -56,75 +59,63 @@ interface ApplyPositionsResult {
   reason?: 'invalid' | 'missing' | 'hidden';
 }
 
-function coerceNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-    const normalized = Number(trimmed.replace(',', '.'));
-    return Number.isFinite(normalized) ? normalized : null;
-  }
-  return null;
-}
-
-function toNullableNumber(value: unknown): number | null {
-  const numeric = coerceNumber(value);
-  return numeric === null ? null : numeric;
-}
-
 function deriveAggregation(position: PortfolioPositionData): HoldingsAggregationPayload {
   const rawAggregation =
     position.aggregation && typeof position.aggregation === 'object'
       ? position.aggregation
       : null;
 
+  const asFiniteNumber = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+  const asNullableNumber = (value: unknown): number | null => {
+    const numeric = asFiniteNumber(value);
+    return numeric === null ? null : numeric;
+  };
+
   const holdings =
-    coerceNumber(rawAggregation?.total_holdings) ??
-    coerceNumber(position.current_holdings) ??
+    asFiniteNumber(rawAggregation?.total_holdings) ??
+    asFiniteNumber(position.current_holdings) ??
     0;
   const positiveHoldings =
-    coerceNumber(rawAggregation?.positive_holdings) ??
+    asFiniteNumber(rawAggregation?.positive_holdings) ??
     (holdings > 0 ? holdings : 0);
   const purchaseValueEur =
-    coerceNumber(rawAggregation?.purchase_value_eur) ??
-    coerceNumber(position.purchase_value) ??
+    asFiniteNumber(rawAggregation?.purchase_value_eur) ??
+    asFiniteNumber(position.purchase_value) ??
     0;
 
-  const purchaseValueCentsRaw = coerceNumber(rawAggregation?.purchase_value_cents);
+  const purchaseValueCentsRaw = asFiniteNumber(rawAggregation?.purchase_value_cents);
   const purchaseValueCents =
     purchaseValueCentsRaw !== null
       ? Math.round(purchaseValueCentsRaw)
       : Math.round(purchaseValueEur * 100);
 
   const securityTotal =
-    coerceNumber(rawAggregation?.security_currency_total) ??
-    coerceNumber(rawAggregation?.purchase_total_security) ??
-    coerceNumber(position.purchase_total_security) ??
+    asFiniteNumber(rawAggregation?.security_currency_total) ??
+    asFiniteNumber(rawAggregation?.purchase_total_security) ??
+    asFiniteNumber(position.purchase_total_security) ??
     0;
   const accountTotal =
-    coerceNumber(rawAggregation?.account_currency_total) ??
-    coerceNumber(rawAggregation?.purchase_total_account) ??
-    coerceNumber(position.purchase_total_account) ??
+    asFiniteNumber(rawAggregation?.account_currency_total) ??
+    asFiniteNumber(rawAggregation?.purchase_total_account) ??
+    asFiniteNumber(position.purchase_total_account) ??
     0;
 
   const averagePurchaseNative =
-    toNullableNumber(rawAggregation?.average_purchase_price_native ?? position.average_purchase_price_native);
+    asNullableNumber(rawAggregation?.average_purchase_price_native ?? position.average_purchase_price_native);
   const avgPriceSecurity =
-    toNullableNumber(rawAggregation?.avg_price_security ?? position.avg_price_security);
+    asNullableNumber(rawAggregation?.avg_price_security ?? position.avg_price_security);
   const avgPriceAccount =
-    toNullableNumber(rawAggregation?.avg_price_account ?? position.avg_price_account);
+    asNullableNumber(rawAggregation?.avg_price_account ?? position.avg_price_account);
 
   const purchaseTotalSecurity =
-    coerceNumber(rawAggregation?.purchase_total_security) ??
-    coerceNumber(position.purchase_total_security) ??
+    asFiniteNumber(rawAggregation?.purchase_total_security) ??
+    asFiniteNumber(position.purchase_total_security) ??
     securityTotal;
   const purchaseTotalAccount =
-    coerceNumber(rawAggregation?.purchase_total_account) ??
-    coerceNumber(position.purchase_total_account) ??
+    asFiniteNumber(rawAggregation?.purchase_total_account) ??
+    asFiniteNumber(position.purchase_total_account) ??
     accountTotal;
 
   return {
@@ -142,8 +133,65 @@ function deriveAggregation(position: PortfolioPositionData): HoldingsAggregation
   };
 }
 
+function normalizeAverageCost(
+  position: PortfolioPositionData,
+  aggregation: HoldingsAggregationPayload,
+): AverageCostPayload | null {
+  const rawAverageCost =
+    position.average_cost && typeof position.average_cost === 'object'
+      ? position.average_cost
+      : null;
+
+  const asFiniteNumber = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+  const asNullableNumber = (value: unknown): number | null => {
+    const numeric = asFiniteNumber(value);
+    return numeric === null ? null : numeric;
+  };
+
+  const normalizeSource = (value: unknown): AverageCostSource => {
+    if (value === 'totals' || value === 'eur_total' || value === 'aggregation') {
+      return value;
+    }
+    return 'aggregation';
+  };
+
+  if (rawAverageCost) {
+    return {
+      native: asNullableNumber(rawAverageCost.native),
+      security: asNullableNumber(rawAverageCost.security),
+      account: asNullableNumber(rawAverageCost.account),
+      eur: asNullableNumber(rawAverageCost.eur),
+      source: normalizeSource(rawAverageCost.source),
+      coverage_ratio: asNullableNumber(rawAverageCost.coverage_ratio),
+    };
+  }
+
+  const native = asNullableNumber(
+    position.average_purchase_price_native ?? aggregation.average_purchase_price_native,
+  );
+  const security = asNullableNumber(position.avg_price_security ?? aggregation.avg_price_security);
+  const account = asNullableNumber(position.avg_price_account ?? aggregation.avg_price_account);
+  const eur = asNullableNumber(position.purchase_value ?? aggregation.purchase_value_eur);
+
+  if (native === null && security === null && account === null && eur === null) {
+    return null;
+  }
+
+  return {
+    native,
+    security,
+    account,
+    eur,
+    source: 'aggregation',
+    coverage_ratio: null,
+  };
+}
+
 function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
   const aggregation = deriveAggregation(position);
+  const averageCost = normalizeAverageCost(position, aggregation);
 
   return {
     ...position,
@@ -151,9 +199,10 @@ function normalizePosition(position: PortfolioPositionData): PortfolioPositionDa
     purchase_value: aggregation.purchase_value_eur,
     purchase_total_security: aggregation.purchase_total_security,
     purchase_total_account: aggregation.purchase_total_account,
-    average_purchase_price_native: aggregation.average_purchase_price_native,
-    avg_price_security: aggregation.avg_price_security,
-    avg_price_account: aggregation.avg_price_account,
+    average_purchase_price_native: averageCost?.native ?? null,
+    avg_price_security: averageCost?.security ?? null,
+    avg_price_account: averageCost?.account ?? null,
+    average_cost: averageCost,
     aggregation,
   };
 }

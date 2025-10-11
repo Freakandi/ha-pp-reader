@@ -109,3 +109,31 @@ void test(
       assert.strictEqual(ariaLabel, '8,00 USD');
     }),
 );
+
+void test(
+  'buildPurchasePriceDisplayForTest prefers provided average_cost payload',
+  async () =>
+    withOverviewModule(helper => {
+      const { markup, ariaLabel } = helper({
+        security_uuid: 'security-average-cost',
+        name: 'Average Cost Security',
+        current_holdings: '42',
+        security_currency_code: 'USD',
+        account_currency_code: 'CHF',
+        avg_price_security: '99.99',
+        average_cost: {
+          native: 1.2345,
+          security: 3.14159,
+          account: 2.5,
+          eur: 2.5,
+          source: 'totals',
+          coverage_ratio: 1,
+        },
+      });
+
+      assert.match(markup, /purchase-price--primary">3,14159\u00A0USD/);
+      assert.match(markup, /purchase-price--secondary">2,50\u00A0CHF/);
+      assert.match(ariaLabel, /3,14159 USD/);
+      assert.match(ariaLabel, /2,50 CHF/);
+    }),
+);

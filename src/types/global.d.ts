@@ -7,7 +7,10 @@ import type {
   flushPendingPositions,
   reapplyPositionsSort,
 } from '../data/updateConfigsWS';
-import type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
+import type {
+  AverageCostPayload,
+  PortfolioPositionsUpdatedEventDetail,
+} from '../tabs/types';
 import type {
   attachPortfolioPositionsSorting,
   attachSecurityDetailListener,
@@ -31,6 +34,7 @@ interface PendingPortfolioPosition {
   current_value?: number | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
+  average_cost?: AverageCostPayload | null;
   [key: string]: unknown;
 }
 

@@ -176,6 +176,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "purchase_total_account": 0.0,
             "avg_price_security": None,
             "avg_price_account": None,
+            "average_cost": None,
             "last_close_native": None,
             "last_close_eur": None,
             "day_price_change_native": None,
@@ -207,22 +208,33 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["average_purchase_price_native"] = _coerce_optional_float(
         snapshot.get("average_purchase_price_native")
     )
-    data["purchase_total_security"] = round(
-        _coerce_float(snapshot.get("purchase_total_security")), 2
+
+    purchase_total_security = _coerce_optional_float(
+        snapshot.get("purchase_total_security")
     )
-    data["purchase_total_account"] = round(
-        _coerce_float(snapshot.get("purchase_total_account")), 2
+    data["purchase_total_security"] = (
+        purchase_total_security if purchase_total_security is not None else 0.0
     )
-    avg_price_security = _coerce_optional_float(
+
+    purchase_total_account = _coerce_optional_float(
+        snapshot.get("purchase_total_account")
+    )
+    data["purchase_total_account"] = (
+        purchase_total_account if purchase_total_account is not None else 0.0
+    )
+
+    data["avg_price_security"] = _coerce_optional_float(
         snapshot.get("avg_price_security")
     )
-    data["avg_price_security"] = (
-        round(avg_price_security, 6) if avg_price_security is not None else None
+    data["avg_price_account"] = _coerce_optional_float(
+        snapshot.get("avg_price_account")
     )
-    avg_price_account = _coerce_optional_float(snapshot.get("avg_price_account"))
-    data["avg_price_account"] = (
-        round(avg_price_account, 6) if avg_price_account is not None else None
-    )
+
+    raw_average_cost = snapshot.get("average_cost")
+    if isinstance(raw_average_cost, Mapping):
+        data["average_cost"] = dict(raw_average_cost)
+    else:
+        data["average_cost"] = None
     data["last_close_native"] = _coerce_optional_float(
         snapshot.get("last_close_native")
     )
@@ -258,62 +270,34 @@ def _normalize_portfolio_positions(
         if not isinstance(item, Mapping):
             continue
 
-        aggregation = item.get("aggregation")
-
-        def _from_aggregation(key: str) -> Any:
-            if isinstance(aggregation, Mapping):
-                return aggregation.get(key)
-            if aggregation is None:
-                return None
-            return getattr(aggregation, key, None)
-
         security_uuid = item.get("security_uuid")
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _from_aggregation("average_purchase_price_native")
-        if avg_price_native is None:
-            fallback_avg_native = _coerce_optional_float(
-                item.get("average_purchase_price_native")
-            )
-            if fallback_avg_native is not None:
-                avg_price_native = round(fallback_avg_native, 6)
+        avg_price_native = _coerce_optional_float(
+            item.get("average_purchase_price_native")
+        )
+        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
+        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
 
-        avg_price_security = _from_aggregation("avg_price_security")
-        if avg_price_security is None:
-            fallback_avg_security = _coerce_optional_float(item.get("avg_price_security"))
-            if fallback_avg_security is not None:
-                avg_price_security = round(fallback_avg_security, 6)
-
-        avg_price_account = _from_aggregation("avg_price_account")
-        if avg_price_account is None:
-            fallback_avg_account = _coerce_optional_float(item.get("avg_price_account"))
-            if fallback_avg_account is not None:
-                avg_price_account = round(fallback_avg_account, 6)
-
-        purchase_total_security = _from_aggregation("purchase_total_security")
+        purchase_total_security = _coerce_optional_float(
+            item.get("purchase_total_security")
+        )
         if purchase_total_security is None:
-            fallback_total_security = _coerce_optional_float(
-                item.get("purchase_total_security")
-            )
-            if fallback_total_security is not None:
-                purchase_total_security = round(fallback_total_security, 2)
-            else:
-                purchase_total_security = 0.0
+            purchase_total_security = 0.0
 
-        purchase_total_account = _from_aggregation("purchase_total_account")
+        purchase_total_account = _coerce_optional_float(
+            item.get("purchase_total_account")
+        )
         if purchase_total_account is None:
-            fallback_total_account = _coerce_optional_float(
-                item.get("purchase_total_account")
-            )
-            if fallback_total_account is not None:
-                purchase_total_account = round(fallback_total_account, 2)
-            else:
-                purchase_total_account = 0.0
+            purchase_total_account = 0.0
 
-        purchase_value = _from_aggregation("purchase_value_eur")
-        if purchase_value is None:
-            purchase_value = round(_coerce_float(item.get("purchase_value")), 2)
+        purchase_value = round(_coerce_float(item.get("purchase_value")), 2)
+
+        raw_average_cost = item.get("average_cost")
+        average_cost: dict[str, Any] | None = None
+        if isinstance(raw_average_cost, Mapping):
+            average_cost = dict(raw_average_cost)
 
         normalized.append(
             {
@@ -331,6 +315,7 @@ def _normalize_portfolio_positions(
                 "purchase_total_account": purchase_total_account,
                 "avg_price_security": avg_price_security,
                 "avg_price_account": avg_price_account,
+                "average_cost": average_cost,
             }
         )
 

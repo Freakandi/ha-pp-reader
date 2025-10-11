@@ -11,7 +11,7 @@ from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
 
 from ..const import DOMAIN
-from ..util.currency import cent_to_eur, round_currency, round_price
+from ..util.currency import cent_to_eur, round_currency
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,48 +139,83 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     else:
         aggregation = None
 
-    def _aggregation_value(key: str) -> Any:
-        if aggregation is None:
+    average_cost_raw = item.get("average_cost")
+    average_cost: Mapping[str, Any] | None
+    if isinstance(average_cost_raw, Mapping):
+        average_cost = average_cost_raw
+    else:
+        average_cost = None
+
+    def _coerce_float(value: Any) -> float | None:
+        if isinstance(value, bool):
             return None
-        return aggregation.get(key)
+        if value in (None, ""):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
-    avg_native = _aggregation_value("average_purchase_price_native")
+    def _mapping_value(mapping: Mapping[str, Any] | None, key: str) -> float | None:
+        if mapping is None:
+            return None
+        return _coerce_float(mapping.get(key))
+
+    def _item_value(*keys: str) -> float | None:
+        for key in keys:
+            value = _coerce_float(item.get(key))
+            if value is not None:
+                return value
+        return None
+
+    def _average_cost_value(key: str) -> float | None:
+        if average_cost is None:
+            return None
+        return _coerce_float(average_cost.get(key))
+
+    avg_native = _average_cost_value("native")
     if avg_native is None:
-        avg_native = round_price(
-            item.get("average_purchase_price_native"), decimals=6, default=None
-        )
+        avg_native = _item_value("average_purchase_price_native")
 
-    purchase_value = _aggregation_value("purchase_value_eur")
+    purchase_value = _item_value("purchase_value_eur", "purchase_value")
     if purchase_value is None:
-        purchase_value = _normalize_currency_amount(item.get("purchase_value"))
+        purchase_value = _mapping_value(aggregation, "purchase_value_eur")
+    if purchase_value is None:
+        purchase_value = 0.0
 
-    purchase_total_security = _aggregation_value("purchase_total_security")
+    purchase_total_security = _item_value("purchase_total_security")
     if purchase_total_security is None:
-        purchase_total_security = _aggregation_value("security_currency_total")
+        purchase_total_security = _mapping_value(
+            aggregation, "purchase_total_security"
+        )
     if purchase_total_security is None:
-        purchase_total_security = _normalize_currency_amount(
-            item.get("purchase_total_security")
+        purchase_total_security = _mapping_value(
+            aggregation, "security_currency_total"
         )
+    if purchase_total_security is None:
+        purchase_total_security = 0.0
 
-    purchase_total_account = _aggregation_value("purchase_total_account")
+    purchase_total_account = _item_value("purchase_total_account")
     if purchase_total_account is None:
-        purchase_total_account = _aggregation_value("account_currency_total")
-    if purchase_total_account is None:
-        purchase_total_account = _normalize_currency_amount(
-            item.get("purchase_total_account")
+        purchase_total_account = _mapping_value(
+            aggregation, "purchase_total_account"
         )
+    if purchase_total_account is None:
+        purchase_total_account = _mapping_value(
+            aggregation, "account_currency_total"
+        )
+    if purchase_total_account is None:
+        purchase_total_account = 0.0
 
-    avg_price_security = _aggregation_value("avg_price_security")
+    avg_price_security = _average_cost_value("security")
     if avg_price_security is None:
-        avg_price_security = round_price(
-            item.get("avg_price_security"), decimals=6, default=None
-        )
+        avg_price_security = _item_value("avg_price_security")
 
-    avg_price_account = _aggregation_value("avg_price_account")
+    avg_price_account = _average_cost_value("account")
     if avg_price_account is None:
-        avg_price_account = round_price(
-            item.get("avg_price_account"), decimals=6, default=None
-        )
+        avg_price_account = _item_value("avg_price_account")
 
     normalized: dict[str, Any] = {
         "security_uuid": security_uuid,

@@ -472,12 +472,35 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "purchase_total_account": 34.7,
         "avg_price_security": pytest.approx(8.114286, rel=0, abs=1e-6),
         "avg_price_account": pytest.approx(9.914286, rel=0, abs=1e-6),
+        "average_cost": {
+            "native": pytest.approx(14.877143, rel=0, abs=1e-6),
+            "security": pytest.approx(8.114286, rel=0, abs=1e-6),
+            "account": pytest.approx(9.914286, rel=0, abs=1e-6),
+            "eur": pytest.approx(0.0, rel=0, abs=1e-6),
+            "source": "totals",
+            "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+        },
         "last_close_native": 10.75,
         "last_close_eur": 10.75,
         "day_price_change_native": pytest.approx(1.75, rel=0, abs=1e-4),
         "day_price_change_eur": pytest.approx(1.75, rel=0, abs=1e-4),
         "day_change_pct": pytest.approx(16.28, rel=0, abs=1e-2),
     }
+    snapshot_payload = payload["snapshot"]
+    average_cost = snapshot_payload["average_cost"]
+    assert (
+        average_cost["native"]
+        == snapshot_payload["average_purchase_price_native"]
+    )
+    assert average_cost["security"] == snapshot_payload["avg_price_security"]
+    assert average_cost["account"] == snapshot_payload["avg_price_account"]
+    assert average_cost["eur"] == pytest.approx(
+        snapshot_payload["purchase_value_eur"] / snapshot_payload["total_holdings"]
+        if snapshot_payload["total_holdings"]
+        else 0.0
+    )
+    assert average_cost["source"] == "totals"
+    assert average_cost["coverage_ratio"] == pytest.approx(1.0)
 
 
 def test_ws_get_security_snapshot_missing_security(

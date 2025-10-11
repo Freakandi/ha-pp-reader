@@ -8,6 +8,28 @@
 
 import type { HomeAssistant } from "../types/home-assistant";
 
+/**
+ * Supported provenance markers for helper-provided average cost payloads.
+ */
+export type AverageCostSource = "aggregation" | "totals" | "eur_total";
+
+/**
+ * Normalised average purchase prices shared between backend payloads.
+ *
+ * The legacy fields `average_purchase_price_native`, `avg_price_security`,
+ * `avg_price_account` and `purchase_value_eur` remain on the individual
+ * payloads for compatibility, but their values mirror this object.
+ */
+export interface AverageCostPayload {
+  native: number | null;
+  security: number | null;
+  account: number | null;
+  eur: number | null;
+  source: AverageCostSource;
+  coverage_ratio: number | null;
+  [key: string]: unknown;
+}
+
 export interface PanelConfigLike {
   entry_id?: string | null;
   config?: {
@@ -71,8 +93,14 @@ export interface SecuritySnapshotLike {
   day_price_change_native?: number | null;
   day_price_change_eur?: number | null;
   day_change_pct?: number | null;
+  /** Mirrors `average_cost.native` for backwards compatibility. */
   average_purchase_price_native?: number | string | null;
-  source?: string;
+  /**
+   * Structured selection of average purchase prices with provenance metadata.
+   */
+  average_cost?: AverageCostPayload | null;
+  /** Raw snapshot provenance flag (e.g. cache vs. live). */
+  source?: string | null;
   [key: string]: unknown;
 }
 
@@ -99,11 +127,16 @@ export interface PortfolioPosition {
   current_value: number;
   gain_abs: number;
   gain_pct: number;
+  /** Mirrors `average_cost.native` for backwards compatibility. */
   average_purchase_price_native?: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
   avg_price_security: number | null;
   avg_price_account: number | null;
+  /**
+   * Structured selection of average purchase prices with provenance metadata.
+   */
+  average_cost?: AverageCostPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }

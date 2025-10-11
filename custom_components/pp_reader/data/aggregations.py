@@ -12,7 +12,12 @@ from custom_components.pp_reader.util.currency import (
     round_price,
 )
 
-__all__ = ["HoldingsAggregation", "compute_holdings_aggregation"]
+__all__ = [
+    "HoldingsAggregation",
+    "AverageCostSelection",
+    "compute_holdings_aggregation",
+    "select_average_cost",
+]
 
 
 @dataclass(slots=True, frozen=True)
@@ -40,6 +45,18 @@ class HoldingsAggregation:
         """Return the aggregated account currency total."""
 
         return self.account_currency_total
+
+
+@dataclass(slots=True, frozen=True)
+class AverageCostSelection:
+    """Selected average cost information derived from holdings."""
+
+    native: float | None
+    security: float | None
+    account: float | None
+    eur: float | None
+    source: str
+    coverage_ratio: float | None
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -186,4 +203,128 @@ def compute_holdings_aggregation(
         average_purchase_price_native=average_purchase_price_native,
         avg_price_security=avg_price_security,
         avg_price_account=avg_price_account,
+    )
+
+
+def select_average_cost(
+    aggregation: HoldingsAggregation,
+    *,
+    holdings: float | None = None,
+    purchase_value_eur: float | None = None,
+    security_currency_total: float | None = None,
+    account_currency_total: float | None = None,
+) -> AverageCostSelection:
+    """Derive consistent average cost values based on a holdings aggregation."""
+
+    native = aggregation.average_purchase_price_native
+    security = aggregation.avg_price_security
+    account = aggregation.avg_price_account
+    eur = None
+
+    total_holdings = aggregation.total_holdings
+    positive_holdings = aggregation.positive_holdings
+
+    preferred_holdings = holdings
+    if preferred_holdings is None:
+        preferred_holdings = positive_holdings if positive_holdings > 0 else None
+
+    fallback_holdings = None
+    if total_holdings > 0:
+        fallback_holdings = total_holdings
+
+    effective_purchase_value_eur = (
+        purchase_value_eur
+        if purchase_value_eur is not None
+        else aggregation.purchase_value_eur
+    )
+    effective_security_total = (
+        security_currency_total
+        if security_currency_total is not None
+        else aggregation.security_currency_total
+    )
+    effective_account_total = (
+        account_currency_total
+        if account_currency_total is not None
+        else aggregation.account_currency_total
+    )
+
+    source = "aggregation"
+
+    def _derive_average(total: float | None, share_count: float | None) -> float | None:
+        if total in (None, "") or share_count in (None, 0):
+            return None
+        try:
+            return round_price(float(total) / float(share_count), decimals=6)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+    if security is None and preferred_holdings is not None:
+        derived_security = _derive_average(
+            effective_security_total,
+            preferred_holdings,
+        )
+        if derived_security is not None:
+            security = derived_security
+            source = "totals"
+
+    if account is None and preferred_holdings is not None:
+        derived_account = _derive_average(
+            effective_account_total,
+            preferred_holdings,
+        )
+        if derived_account is not None:
+            account = derived_account
+            source = "totals"
+
+    if eur is None and preferred_holdings is not None:
+        derived_eur = _derive_average(
+            effective_purchase_value_eur,
+            preferred_holdings,
+        )
+        if derived_eur is not None:
+            eur = derived_eur
+            source = "totals"
+
+    if eur is None and fallback_holdings is not None:
+        derived_eur = _derive_average(
+            effective_purchase_value_eur,
+            fallback_holdings,
+        )
+        if derived_eur is not None:
+            eur = derived_eur
+            source = "eur_total"
+
+    base_reference = None
+    if holdings is not None and holdings > 0:
+        base_reference = holdings
+    elif fallback_holdings is not None and fallback_holdings > 0:
+        base_reference = fallback_holdings
+
+    covered_shares = None
+    if source == "aggregation" and positive_holdings > 0:
+        covered_shares = positive_holdings
+    elif source == "totals" and preferred_holdings is not None:
+        covered_shares = preferred_holdings
+    elif source == "eur_total" and fallback_holdings is not None:
+        covered_shares = fallback_holdings
+
+    coverage_ratio = None
+    if (
+        covered_shares is not None
+        and base_reference not in (None, 0)
+        and base_reference is not None
+    ):
+        try:
+            ratio = min(float(covered_shares) / float(base_reference), 1.0)
+            coverage_ratio = round(ratio, 6)
+        except (TypeError, ValueError, ZeroDivisionError):
+            coverage_ratio = None
+
+    return AverageCostSelection(
+        native=native,
+        security=security,
+        account=account,
+        eur=eur,
+        source=source,
+        coverage_ratio=coverage_ratio,
     )
