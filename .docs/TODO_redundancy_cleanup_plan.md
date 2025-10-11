@@ -139,7 +139,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 6. Average Cost Selection
 
-6. a) [ ] Average-Cost-Auswahlhelper definieren
+6. a) [x] Average-Cost-Auswahlhelper definieren
        - Dateien: `custom_components/pp_reader/data/aggregations.py`
        - Ziel: Ergänzung eines `AverageCostSelection`-Dataclasses inkl. Funktion `select_average_cost(aggregation, *, holdings=None, purchase_value_eur=None, security_currency_total=None, account_currency_total=None)`, die die bestehende `HoldingsAggregation`-Ausgabe nutzt, um konsistent gerundete Durchschnittspreise für Native-, Wertpapier- und Konto-Währung sowie den EUR-Kaufpreis abzuleiten. Fallback-Reihenfolge: explizite Aggregationswerte → Division aus Totals/positiven Beständen → EUR-Betrag auf Gesamtbestände. Das Objekt liefert zusätzlich Metadaten (`source`, `coverage_ratio` o. ä.) zur Nachvollziehbarkeit.
        - Validierung: Ruff-konforme Implementierung mit Docstring; MyPy/pyright-kompatible Typannotationen.
