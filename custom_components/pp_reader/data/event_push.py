@@ -127,38 +127,74 @@ def _compact_portfolio_values_payload(data: Any) -> Any:
 
 def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     """Keep only the fields required for position updates."""
+
     security_uuid = item.get("security_uuid")
     if security_uuid:
         security_uuid = str(security_uuid)
 
-    avg_native_raw = item.get("average_purchase_price_native")
-    avg_native: float | None
-    if avg_native_raw is None:
-        avg_native = None
+    aggregation_raw = item.get("aggregation")
+    aggregation: Mapping[str, Any] | None
+    if isinstance(aggregation_raw, Mapping):
+        aggregation = aggregation_raw
     else:
-        avg_native = round_price(avg_native_raw, decimals=6, default=None)
+        aggregation = None
+
+    def _aggregation_value(key: str) -> Any:
+        if aggregation is None:
+            return None
+        return aggregation.get(key)
+
+    avg_native = _aggregation_value("average_purchase_price_native")
+    if avg_native is None:
+        avg_native = round_price(
+            item.get("average_purchase_price_native"), decimals=6, default=None
+        )
+
+    purchase_value = _aggregation_value("purchase_value_eur")
+    if purchase_value is None:
+        purchase_value = _normalize_currency_amount(item.get("purchase_value"))
+
+    purchase_total_security = _aggregation_value("purchase_total_security")
+    if purchase_total_security is None:
+        purchase_total_security = _aggregation_value("security_currency_total")
+    if purchase_total_security is None:
+        purchase_total_security = _normalize_currency_amount(
+            item.get("purchase_total_security")
+        )
+
+    purchase_total_account = _aggregation_value("purchase_total_account")
+    if purchase_total_account is None:
+        purchase_total_account = _aggregation_value("account_currency_total")
+    if purchase_total_account is None:
+        purchase_total_account = _normalize_currency_amount(
+            item.get("purchase_total_account")
+        )
+
+    avg_price_security = _aggregation_value("avg_price_security")
+    if avg_price_security is None:
+        avg_price_security = round_price(
+            item.get("avg_price_security"), decimals=6, default=None
+        )
+
+    avg_price_account = _aggregation_value("avg_price_account")
+    if avg_price_account is None:
+        avg_price_account = round_price(
+            item.get("avg_price_account"), decimals=6, default=None
+        )
 
     normalized: dict[str, Any] = {
         "security_uuid": security_uuid,
         "name": item.get("name"),
         "current_holdings": item.get("current_holdings", 0),
-        "purchase_value": _normalize_currency_amount(item.get("purchase_value")),
+        "purchase_value": purchase_value,
         "current_value": _normalize_currency_amount(item.get("current_value")),
         "gain_abs": _normalize_currency_amount(item.get("gain_abs")),
         "gain_pct": round_currency(item.get("gain_pct"), default=0.0) or 0.0,
         "average_purchase_price_native": avg_native,
-        "purchase_total_security": _normalize_currency_amount(
-            item.get("purchase_total_security")
-        ),
-        "purchase_total_account": _normalize_currency_amount(
-            item.get("purchase_total_account")
-        ),
-        "avg_price_security": round_price(
-            item.get("avg_price_security"), decimals=6, default=None
-        ),
-        "avg_price_account": round_price(
-            item.get("avg_price_account"), decimals=6, default=None
-        ),
+        "purchase_total_security": purchase_total_security,
+        "purchase_total_account": purchase_total_account,
+        "avg_price_security": avg_price_security,
+        "avg_price_account": avg_price_account,
     }
 
     return normalized

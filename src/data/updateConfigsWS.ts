@@ -5,7 +5,10 @@
 import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import type { SortDirection } from '../content/elements';
-import type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
+import type {
+  HoldingsAggregationPayload,
+  PortfolioPositionsUpdatedEventDetail,
+} from '../tabs/types';
 import { roundCurrency } from '../utils/currency';
 import type { AccountSummary, PortfolioSummary } from './api';
 
@@ -21,6 +24,12 @@ interface PortfolioPositionData {
   current_value?: number | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
+  average_purchase_price_native?: number | null;
+  purchase_total_security?: number | null;
+  purchase_total_account?: number | null;
+  avg_price_security?: number | null;
+  avg_price_account?: number | null;
+  aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
 
@@ -45,6 +54,112 @@ interface PendingRetryMeta {
 interface ApplyPositionsResult {
   applied: boolean;
   reason?: 'invalid' | 'missing' | 'hidden';
+}
+
+function coerceNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const normalized = Number(trimmed.replace(',', '.'));
+    return Number.isFinite(normalized) ? normalized : null;
+  }
+  return null;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  const numeric = coerceNumber(value);
+  return numeric === null ? null : numeric;
+}
+
+function deriveAggregation(position: PortfolioPositionData): HoldingsAggregationPayload {
+  const rawAggregation =
+    position.aggregation && typeof position.aggregation === 'object'
+      ? position.aggregation
+      : null;
+
+  const holdings =
+    coerceNumber(rawAggregation?.total_holdings) ??
+    coerceNumber(position.current_holdings) ??
+    0;
+  const positiveHoldings =
+    coerceNumber(rawAggregation?.positive_holdings) ??
+    (holdings > 0 ? holdings : 0);
+  const purchaseValueEur =
+    coerceNumber(rawAggregation?.purchase_value_eur) ??
+    coerceNumber(position.purchase_value) ??
+    0;
+
+  const purchaseValueCentsRaw = coerceNumber(rawAggregation?.purchase_value_cents);
+  const purchaseValueCents =
+    purchaseValueCentsRaw !== null
+      ? Math.round(purchaseValueCentsRaw)
+      : Math.round(purchaseValueEur * 100);
+
+  const securityTotal =
+    coerceNumber(rawAggregation?.security_currency_total) ??
+    coerceNumber(rawAggregation?.purchase_total_security) ??
+    coerceNumber(position.purchase_total_security) ??
+    0;
+  const accountTotal =
+    coerceNumber(rawAggregation?.account_currency_total) ??
+    coerceNumber(rawAggregation?.purchase_total_account) ??
+    coerceNumber(position.purchase_total_account) ??
+    0;
+
+  const averagePurchaseNative =
+    toNullableNumber(rawAggregation?.average_purchase_price_native ?? position.average_purchase_price_native);
+  const avgPriceSecurity =
+    toNullableNumber(rawAggregation?.avg_price_security ?? position.avg_price_security);
+  const avgPriceAccount =
+    toNullableNumber(rawAggregation?.avg_price_account ?? position.avg_price_account);
+
+  const purchaseTotalSecurity =
+    coerceNumber(rawAggregation?.purchase_total_security) ??
+    coerceNumber(position.purchase_total_security) ??
+    securityTotal;
+  const purchaseTotalAccount =
+    coerceNumber(rawAggregation?.purchase_total_account) ??
+    coerceNumber(position.purchase_total_account) ??
+    accountTotal;
+
+  return {
+    total_holdings: holdings,
+    positive_holdings: positiveHoldings > 0 ? positiveHoldings : 0,
+    purchase_value_cents: purchaseValueCents,
+    purchase_value_eur: purchaseValueEur,
+    security_currency_total: securityTotal,
+    account_currency_total: accountTotal,
+    average_purchase_price_native: averagePurchaseNative,
+    avg_price_security: avgPriceSecurity,
+    avg_price_account: avgPriceAccount,
+    purchase_total_security: purchaseTotalSecurity,
+    purchase_total_account: purchaseTotalAccount,
+  };
+}
+
+function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
+  const aggregation = deriveAggregation(position);
+
+  return {
+    ...position,
+    current_holdings: aggregation.total_holdings,
+    purchase_value: aggregation.purchase_value_eur,
+    purchase_total_security: aggregation.purchase_total_security,
+    purchase_total_account: aggregation.purchase_total_account,
+    average_purchase_price_native: aggregation.average_purchase_price_native,
+    avg_price_security: aggregation.avg_price_security,
+    avg_price_account: aggregation.avg_price_account,
+    aggregation,
+  };
+}
+
+function normalizePositions(positions: PortfolioPositionData[]): PortfolioPositionData[] {
+  return positions.map(normalizePosition);
 }
 
 interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
@@ -558,33 +673,34 @@ function processPortfolioPositionsUpdate(
   const positions = Array.isArray(update?.positions)
     ? update.positions.filter((pos): pos is PortfolioPositionData => Boolean(pos))
     : [];
+  const normalizedPositions = normalizePositions(positions);
 
   // Positions-Cache aktualisieren (Lazy-Load bleibt bestehen)
   try {
     const cache = window.__ppReaderPortfolioPositionsCache;
     if (cache && typeof cache.set === 'function' && !error) {
-      cache.set(portfolioUuid, positions);
+      cache.set(portfolioUuid, normalizedPositions);
     }
   } catch (e) {
     console.warn("handlePortfolioPositionsUpdate: Positions-Cache konnte nicht aktualisiert werden:", e);
   }
 
-  const result = applyPortfolioPositionsToDom(root, portfolioUuid, positions, error);
+  const result = applyPortfolioPositionsToDom(root, portfolioUuid, normalizedPositions, error);
   const pendingMap = ensurePendingMap();
 
   if (result.applied) {
     pendingMap.delete(portfolioUuid);
   } else {
-    pendingMap.set(portfolioUuid, { positions, error });
+    pendingMap.set(portfolioUuid, { positions: normalizedPositions, error });
     if (result.reason !== 'hidden') {
       schedulePendingRetry(root, portfolioUuid);
     }
   }
 
-  if (!error && positions.length > 0) {
+  if (!error && normalizedPositions.length > 0) {
     const securityUuids = Array.from(
       new Set(
-        positions
+        normalizedPositions
           .map(pos => pos?.security_uuid)
           .filter((uuid): uuid is string => typeof uuid === 'string' && uuid.length > 0),
       ),

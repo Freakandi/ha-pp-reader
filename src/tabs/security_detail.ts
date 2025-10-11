@@ -31,9 +31,11 @@ import type {
   DashboardTabRenderFn,
   PanelConfigLike,
   PortfolioPositionsUpdatedEventDetail,
+  PortfolioPosition,
   SecurityHistoryRangeKey,
   SecurityHistoryRangeState,
   SecuritySnapshotLike,
+  HoldingsAggregationPayload,
 } from './types';
 import { roundCurrency, toFiniteCurrency } from '../utils/currency';
 
@@ -221,21 +223,212 @@ function getCachedSecuritySnapshot(
     }
   }
 
-  try {
-    const getter = window.__ppReaderGetSecuritySnapshotFromCache;
-    if (typeof getter === 'function') {
-      const snapshot = getter(securityUuid);
-      if (snapshot && typeof snapshot === 'object') {
-        const detail = snapshot as SecuritySnapshotDetail;
-        cacheSecuritySnapshotDetail(securityUuid, detail);
-        return detail;
-      }
-    }
-  } catch (error) {
-    console.warn('getCachedSecuritySnapshot: Zugriff auf Cache fehlgeschlagen', error);
+  const fallback = buildSnapshotFromPortfolioCache(securityUuid);
+  if (fallback) {
+    cacheSecuritySnapshotDetail(securityUuid, fallback);
+    return fallback;
   }
 
   return null;
+}
+
+type PortfolioPositionsCacheLike = Map<string, PortfolioPositionLike[]>;
+
+interface PortfolioPositionLike extends Partial<PortfolioPosition> {
+  [key: string]: unknown;
+}
+
+function resolvePortfolioPositionsCache(): PortfolioPositionsCacheLike | null {
+  try {
+    const cache = window.__ppReaderPortfolioPositionsCache;
+    if (cache && typeof cache.values === 'function') {
+      return cache as PortfolioPositionsCacheLike;
+    }
+  } catch (error) {
+    console.warn('resolvePortfolioPositionsCache: Zugriff fehlgeschlagen', error);
+  }
+  return null;
+}
+
+function extractAggregation(
+  position: PortfolioPositionLike | null | undefined,
+): HoldingsAggregationPayload | null {
+  if (!position || typeof position !== 'object') {
+    return null;
+  }
+  const candidate = position.aggregation as HoldingsAggregationPayload | null | undefined;
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+  return candidate;
+}
+
+function buildSnapshotFromPortfolioCache(
+  securityUuid: string,
+): SecuritySnapshotDetail | null {
+  const cache = resolvePortfolioPositionsCache();
+  if (!cache) {
+    return null;
+  }
+
+  const matches: PortfolioPositionLike[] = [];
+  for (const positions of cache.values()) {
+    if (!Array.isArray(positions) || positions.length === 0) {
+      continue;
+    }
+    for (const position of positions) {
+      const posUuid = position?.security_uuid;
+      if (typeof posUuid === 'string' && posUuid === securityUuid) {
+        matches.push(position);
+      }
+    }
+  }
+
+  if (!matches.length) {
+    return null;
+  }
+
+  let name = '';
+  let totalHoldings = 0;
+  let purchaseValueEur = 0;
+  let currentValueEur = 0;
+  let purchaseTotalSecurity = 0;
+  let purchaseTotalAccount = 0;
+  let nativeWeightedSum = 0;
+  let nativeWeight = 0;
+  let securityWeightedSum = 0;
+  let securityWeight = 0;
+  let accountWeightedSum = 0;
+  let accountWeight = 0;
+
+  for (const position of matches) {
+    if (!name && typeof position?.name === 'string') {
+      name = position.name;
+    }
+
+    const aggregation = extractAggregation(position);
+
+    const holdings =
+      toFiniteNumber(aggregation?.total_holdings) ??
+      toFiniteNumber(position?.current_holdings);
+    if (holdings != null) {
+      totalHoldings += holdings;
+    }
+
+    const purchaseValue =
+      toFiniteNumber(aggregation?.purchase_value_eur) ??
+      toFiniteNumber(position?.purchase_value);
+    if (purchaseValue != null) {
+      purchaseValueEur += purchaseValue;
+    }
+
+    const currentValue = toFiniteNumber(position?.current_value);
+    if (currentValue != null) {
+      currentValueEur += currentValue;
+    }
+
+    const securityTotal =
+      toFiniteNumber(aggregation?.purchase_total_security) ??
+      toFiniteNumber(position?.purchase_total_security);
+    if (securityTotal != null) {
+      purchaseTotalSecurity += securityTotal;
+    }
+
+    const accountTotal =
+      toFiniteNumber(aggregation?.purchase_total_account) ??
+      toFiniteNumber(position?.purchase_total_account);
+    if (accountTotal != null) {
+      purchaseTotalAccount += accountTotal;
+    }
+
+    if (holdings != null && holdings > 0) {
+      const avgNative =
+        toFiniteNumber(aggregation?.average_purchase_price_native) ??
+        toFiniteNumber(position?.average_purchase_price_native);
+      if (avgNative != null) {
+        nativeWeightedSum += holdings * avgNative;
+        nativeWeight += holdings;
+      }
+
+      const avgSecurity =
+        toFiniteNumber(aggregation?.avg_price_security) ??
+        toFiniteNumber(position?.avg_price_security);
+      if (avgSecurity != null) {
+        securityWeightedSum += holdings * avgSecurity;
+        securityWeight += holdings;
+      }
+
+      const avgAccount =
+        toFiniteNumber(aggregation?.avg_price_account) ??
+        toFiniteNumber(position?.avg_price_account);
+      if (avgAccount != null) {
+        accountWeightedSum += holdings * avgAccount;
+        accountWeight += holdings;
+      }
+    }
+  }
+
+  const roundedHoldings =
+    roundCurrency(totalHoldings, { decimals: 6, fallback: 0 }) ?? 0;
+  const roundedPurchaseValue =
+    roundCurrency(purchaseValueEur, { fallback: 0 }) ?? 0;
+  const roundedCurrentValue =
+    roundCurrency(currentValueEur, { fallback: 0 }) ?? 0;
+  const gainAbsUnrounded = roundedCurrentValue - roundedPurchaseValue;
+  const gainAbs = roundCurrency(gainAbsUnrounded, { fallback: 0 }) ?? 0;
+  const gainPct =
+    roundCurrency(
+      purchaseValueEur > 0 ? (gainAbsUnrounded / purchaseValueEur) * 100 : 0,
+      { fallback: 0 },
+    ) ?? 0;
+  const lastPriceEur =
+    roundedHoldings > 0
+      ? roundCurrency(roundedCurrentValue / roundedHoldings, { fallback: null })
+      : null;
+
+  const purchaseTotalSecurityRounded =
+    roundCurrency(purchaseTotalSecurity, { fallback: 0 }) ?? 0;
+  const purchaseTotalAccountRounded =
+    roundCurrency(purchaseTotalAccount, { fallback: 0 }) ?? 0;
+
+  const averageNative =
+    nativeWeight > 0
+      ? roundCurrency(nativeWeightedSum / nativeWeight, {
+          decimals: 6,
+          fallback: null,
+        })
+      : null;
+  const averageSecurity =
+    securityWeight > 0
+      ? roundCurrency(securityWeightedSum / securityWeight, {
+          decimals: 6,
+          fallback: null,
+        })
+      : null;
+  const averageAccount =
+    accountWeight > 0
+      ? roundCurrency(accountWeightedSum / accountWeight, {
+          decimals: 6,
+          fallback: null,
+        })
+      : null;
+
+  return {
+    security_uuid: securityUuid,
+    name,
+    total_holdings: roundedHoldings,
+    purchase_value_eur: roundedPurchaseValue,
+    current_value_eur: roundedCurrentValue,
+    gain_abs_eur: gainAbs,
+    gain_pct: gainPct,
+    last_price_eur: lastPriceEur,
+    purchase_total_security: purchaseTotalSecurityRounded,
+    purchase_total_account: purchaseTotalAccountRounded,
+    avg_price_security: averageSecurity,
+    avg_price_account: averageAccount,
+    average_purchase_price_native: averageNative,
+    source: 'cache',
+  };
 }
 
 function ensureHistoryCache(securityUuid: string): SecurityHistoryCache {

@@ -13,7 +13,6 @@ export {
   renderDashboard,
   attachPortfolioToggleHandler,
   getSecurityPositionsFromCache,
-  getSecuritySnapshotFromCache,
   renderPortfolioPositions,
   attachSecurityDetailListener,
   updatePortfolioFooterFromDom,

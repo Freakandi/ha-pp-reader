@@ -12,11 +12,13 @@ pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for websocket module"
 )
 
+from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.data.websocket import ws_get_portfolio_positions
 
 WS_GET_PORTFOLIO_POSITIONS = getattr(
-    ws_get_portfolio_positions, "__wrapped__", ws_get_portfolio_positions
+    websocket_module.ws_get_portfolio_positions,
+    "__wrapped__",
+    websocket_module.ws_get_portfolio_positions,
 )
 
 
@@ -171,3 +173,51 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert position["purchase_total_account"] == pytest.approx(3456.79)  # noqa: S101
     assert position["avg_price_security"] == pytest.approx(12.345678)  # noqa: S101
     assert position["avg_price_account"] == pytest.approx(23.456789)  # noqa: S101
+
+
+def test_normalize_portfolio_positions_prefers_aggregation_values() -> None:
+    """Ensure websocket normalisation reads purchase data from aggregation payload."""
+
+    normalized = websocket_module._normalize_portfolio_positions(  # noqa: SLF001
+        [
+            {
+                "security_uuid": "sec-agg",
+                "name": "Aggregated",
+                "current_holdings": 5.0,
+                "purchase_value": 4321.0,
+                "current_value": 5678.0,
+                "gain_abs": 1357.0,
+                "gain_pct": 12.0,
+                "average_purchase_price_native": 10.0,
+                "purchase_total_security": 999.0,
+                "purchase_total_account": 888.0,
+                "avg_price_security": 8.888888,
+                "avg_price_account": 9.999999,
+                "aggregation": {
+                    "purchase_total_security": 123.45,
+                    "purchase_total_account": 234.56,
+                    "avg_price_security": 1.234567,
+                    "avg_price_account": 2.345678,
+                    "average_purchase_price_native": 3.456789,
+                    "purchase_value_eur": 101.01,
+                },
+            }
+        ]
+    )
+
+    assert normalized == [
+        {
+            "security_uuid": "sec-agg",
+            "name": "Aggregated",
+            "current_holdings": pytest.approx(5.0),
+            "purchase_value": pytest.approx(101.01),
+            "current_value": pytest.approx(5678.0),
+            "gain_abs": pytest.approx(1357.0),
+            "gain_pct": pytest.approx(12.0),
+            "average_purchase_price_native": pytest.approx(3.456789),
+            "purchase_total_security": pytest.approx(123.45),
+            "purchase_total_account": pytest.approx(234.56),
+            "avg_price_security": pytest.approx(1.234567),
+            "avg_price_account": pytest.approx(2.345678),
+        }
+    ]
