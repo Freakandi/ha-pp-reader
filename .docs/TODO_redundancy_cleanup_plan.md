@@ -226,7 +226,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Sensorberechnungen für unrealized gains verwenden den Performance-Helper (z. B. `select_performance_metrics`), sodass die Funktionen `calculate_unrealized_gain(_pct)` entfallen oder zu dünnen Wrappern degradiert werden; doppelte Rundungen werden entfernt.
        - Validierung: Einheitstests der Sensoren (bestehend) schlagen fehl, falls Werte von bisherigen Ergebnissen abweichen.
 
-7. g) [ ] Backend-Regressionssuite erweitern
+7. g) [x] Backend-Regressionssuite erweitern
        - Dateien: `tests/test_db_access.py`, `tests/test_ws_portfolio_positions.py`, `tests/test_ws_security_history.py`, `tests/test_sync_from_pclient.py`
        - Ziel: Assertions auf das neue `performance`-Objekt (Felder, Quellenangaben, Synchronität mit Legacy-Spiegelwerten) ergänzen und bisherige Erwartungswerte für `gain_abs`/`gain_pct` gegen den Helper verifizieren.
        - Validierung: Tests schlagen fehl, wenn Backend oder WebSocket Payloads wieder lokale Fallbacks einführen oder Werte divergieren.

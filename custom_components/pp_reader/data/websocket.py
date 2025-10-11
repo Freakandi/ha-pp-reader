@@ -310,6 +310,11 @@ def _normalize_portfolio_positions(
         if isinstance(raw_average_cost, Mapping):
             average_cost = dict(raw_average_cost)
 
+        raw_performance = item.get("performance")
+        performance_payload: dict[str, Any] | None = None
+        if isinstance(raw_performance, Mapping):
+            performance_payload = dict(raw_performance)
+
         normalized.append(
             {
                 "security_uuid": security_uuid,
@@ -327,6 +332,7 @@ def _normalize_portfolio_positions(
                 "avg_price_security": avg_price_security,
                 "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
+                "performance": performance_payload,
             }
         )
 

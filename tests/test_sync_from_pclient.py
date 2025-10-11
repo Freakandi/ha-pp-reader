@@ -339,6 +339,13 @@ def test_compact_event_data_trims_portfolio_values_list() -> None:
         }
     ]
 
+    entry = compacted[0]
+    performance = entry["performance"]
+    assert performance["gain_abs"] == entry["gain_abs"]
+    assert performance["gain_pct"] == entry["gain_pct"]
+    assert performance["total_change_eur"] == entry["gain_abs"]
+    assert performance["total_change_pct"] == entry["gain_pct"]
+
 
 def test_compact_event_data_trims_portfolio_values_mapping() -> None:
     """Mapping payloads should be normalised and drop auxiliary keys."""
@@ -384,6 +391,13 @@ def test_compact_event_data_trims_portfolio_values_mapping() -> None:
             },
         }
     ]
+
+    portfolio_entry = compacted["portfolios"][0]
+    portfolio_performance = portfolio_entry["performance"]
+    assert portfolio_performance["gain_abs"] == portfolio_entry["gain_abs"]
+    assert portfolio_performance["gain_pct"] == portfolio_entry["gain_pct"]
+    assert portfolio_performance["total_change_eur"] == portfolio_entry["gain_abs"]
+    assert portfolio_performance["total_change_pct"] == portfolio_entry["gain_pct"]
 
 
 def test_compact_event_data_trims_portfolio_positions() -> None:
@@ -462,6 +476,13 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             },
         }
     ]
+
+    position_entry = compacted["positions"][0]
+    position_performance = position_entry["performance"]
+    assert position_performance["gain_abs"] == position_entry["gain_abs"]
+    assert position_performance["gain_pct"] == position_entry["gain_pct"]
+    assert position_performance["total_change_eur"] == position_entry["gain_abs"]
+    assert position_performance["total_change_pct"] == position_entry["gain_pct"]
 
 
 def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> None:
