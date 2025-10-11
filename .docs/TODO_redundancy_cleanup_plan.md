@@ -149,7 +149,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Szenarien mit vollständigen Aggregationswerten, partiellen Kaufpreisfeldern (z. B. fehlender `avg_price_security`) und reinem EUR-Kaufwert abdecken. Sicherstellen, dass `select_average_cost` die erwartete Fallback-Reihenfolge einhält und Quellenkennungen korrekt setzt.
        - Validierung: Tests schlagen fehl, wenn einer der Rückgabewerte (`security`, `account`, `native`, `eur`, `source`) nicht den spezifizierten Regeln folgt.
 
-6. c) [ ] Backend-Payloads um Average-Cost-Kontext erweitern
+6. c) [x] Backend-Payloads um Average-Cost-Kontext erweitern
        - Dateien: `custom_components/pp_reader/data/db_access.py`
        - Ziel: `get_portfolio_positions` und `get_security_snapshot` rufen `select_average_cost` auf, hängen das Ergebnis als neues Feld `average_cost` an und setzen die bestehenden Felder (`average_purchase_price_native`, `avg_price_security`, `avg_price_account`, `purchase_value_eur`, `purchase_total_security`, `purchase_total_account`) ausschließlich über das Selektionsobjekt. Redundante direkte Zuweisungen aus `HoldingsAggregation` entfallen.
        - Validierung: Rückgabestrukturen behalten dieselben Keys; neue `average_cost`-Struktur enthält alle Auswahlwerte und Metadaten. Regressionstests für DB-Zugriffe passen die Sollwerte entsprechend an.
