@@ -196,7 +196,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 7. Gain & Change Metrics
 
-7. a) [ ] Performance-Metrics-Helper definieren
+7. a) [x] Performance-Metrics-Helper definieren
        - Datei: `custom_components/pp_reader/data/performance.py` (neu)
        - Ziel: Dataclasses `PerformanceMetrics` (für `gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`) und `DayChangeMetrics` (für `day_price_change_native`, `day_price_change_eur`, `day_change_pct`) samt Funktion `select_performance_metrics(...)` bereitstellen, die zentrale Eingaben (`current_value`, `purchase_value`, `holdings`, `last_price_native`, `last_close_native`, `fx_rate`) akzeptiert, ruff-konform rundet (`round_currency`, `round_price`) und Herkunfts-Metadaten (`source`, `coverage_ratio`) mitliefert.
        - Validierung: Helper deckt fehlende Werte (`None`), Null-Käufe und fehlende FX-Kurse ab, ohne Home-Assistant-Abhängigkeiten; Modul besitzt Docstring.
