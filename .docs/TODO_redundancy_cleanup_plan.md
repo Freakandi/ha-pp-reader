@@ -193,3 +193,60 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Dateien: `src/tabs/__tests__/overview.render.test.ts`, `src/tabs/__tests__/security_detail.metrics.test.ts`, ggf. weitere Snapshot-Tests
        - Ziel: Testdatensätze um `average_cost` ergänzen, Assertions auf die neuen Felder erweitern und sicherstellen, dass entfernte Helper nicht mehr importiert werden.
        - Validierung: Tests schlagen fehl, falls Komponenten weiterhin alte Helper referenzieren oder `average_cost` ignorieren.
+
+## 7. Gain & Change Metrics
+
+7. a) [ ] Performance-Metrics-Helper definieren
+       - Datei: `custom_components/pp_reader/data/performance.py` (neu)
+       - Ziel: Dataclasses `PerformanceMetrics` (für `gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`) und `DayChangeMetrics` (für `day_price_change_native`, `day_price_change_eur`, `day_change_pct`) samt Funktion `select_performance_metrics(...)` bereitstellen, die zentrale Eingaben (`current_value`, `purchase_value`, `holdings`, `last_price_native`, `last_close_native`, `fx_rate`) akzeptiert, ruff-konform rundet (`round_currency`, `round_price`) und Herkunfts-Metadaten (`source`, `coverage_ratio`) mitliefert.
+       - Validierung: Helper deckt fehlende Werte (`None`), Null-Käufe und fehlende FX-Kurse ab, ohne Home-Assistant-Abhängigkeiten; Modul besitzt Docstring.
+
+7. b) [ ] Unit-Tests für Performance-Helper ergänzen
+       - Datei: `tests/test_performance.py` (neu)
+       - Ziel: Fälle mit vollständigen Daten, reinem EUR-Fallback, fehlenden Holdings sowie FX-basierten Tagesdeltas abdecken; sicherstellen, dass `select_performance_metrics` und `DayChangeMetrics`-Ableitung identische Ergebnisse zu den bisherigen Einzelberechnungen in `db_access`, `event_push` und `websocket` liefern.
+       - Validierung: Tests schlagen fehl, wenn Rundung, Quellen-Metadaten oder Fallback-Reihenfolge von den Erwartungen abweichen.
+
+7. c) [ ] Portfolio-Aggregationen auf Performance-Helper umstellen
+       - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/aggregations.py`
+       - Ziel: `get_portfolio_positions`, `_normalize_portfolio_row` und `fetch_live_portfolios` nutzen den neuen Helper zur Ableitung von `gain_abs`/`gain_pct` sowie (neu) `performance`-Payloads; vorhandene Inline-Berechnungen und lokale `_round_percentage`-Hilfen entfallen. `HoldingsAggregation` stellt benötigte Inputs (Totals, Holdings) für den Helper bereit.
+       - Validierung: Rückgaben behalten bestehende Felder, enthalten zusätzlich ein strukturiertes `performance`-Objekt und liefern identische Werte in `tests/test_db_access.py` & `tests/test_sync_from_pclient.py`.
+
+7. d) [ ] Security-Snapshot-Tagesdeltas zentralisieren
+       - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/websocket.py`
+       - Ziel: `get_security_snapshot` delegiert die Berechnung von `day_price_change_native`, `day_price_change_eur`, `day_change_pct`, `total_change_eur` und `total_change_pct` an den Performance-Helper, speichert die Ergebnisse unter `performance` und entfernt lokale `computeDelta`/`_round_percentage`-Logik. `_serialise_security_snapshot` übernimmt das Objekt unverändert.
+       - Validierung: `tests/test_ws_security_history.py` und Snapshot-Tests prüfen, dass Backend- und WebSocket-Payloads dieselben Werte liefern und keine zusätzlichen Fallbacks mehr besitzen.
+
+7. e) [ ] Event- und Revaluation-Pfade auf Helper ausrichten
+       - Dateien: `custom_components/pp_reader/data/event_push.py`, `custom_components/pp_reader/data/coordinator.py`, `custom_components/pp_reader/prices/price_service.py`
+       - Ziel: `_normalize_portfolio_value_entry`, `_normalize_position_entry`, `_portfolio_contract_entry` sowie `_build_portfolio_values_payload` beziehen `gain_abs`/`gain_pct` ausschließlich aus dem Performance-Helper; dadurch entfallen doppelte Divisionen und Rundungen. Event-Payloads tragen optional das neue `performance`-Objekt mit.
+       - Validierung: Event- und Sensor-Tests (`tests/test_sync_from_pclient.py`, `tests/test_ws_portfolio_positions.py`) bestätigen unveränderte Payloads und dokumentieren das neue Objekt.
+
+7. f) [ ] Sensor- und Logikmodule bereinigen
+       - Dateien: `custom_components/pp_reader/logic/portfolio.py`, `custom_components/pp_reader/sensors/gain_sensors.py`
+       - Ziel: Sensorberechnungen für unrealized gains verwenden den Performance-Helper (z. B. `select_performance_metrics`), sodass die Funktionen `calculate_unrealized_gain(_pct)` entfallen oder zu dünnen Wrappern degradiert werden; doppelte Rundungen werden entfernt.
+       - Validierung: Einheitstests der Sensoren (bestehend) schlagen fehl, falls Werte von bisherigen Ergebnissen abweichen.
+
+7. g) [ ] Backend-Regressionssuite erweitern
+       - Dateien: `tests/test_db_access.py`, `tests/test_ws_portfolio_positions.py`, `tests/test_ws_security_history.py`, `tests/test_sync_from_pclient.py`
+       - Ziel: Assertions auf das neue `performance`-Objekt (Felder, Quellenangaben, Synchronität mit Legacy-Spiegelwerten) ergänzen und bisherige Erwartungswerte für `gain_abs`/`gain_pct` gegen den Helper verifizieren.
+       - Validierung: Tests schlagen fehl, wenn Backend oder WebSocket Payloads wieder lokale Fallbacks einführen oder Werte divergieren.
+
+7. h) [ ] Frontend-Typen & API um Performance-Kontext erweitern
+       - Dateien: `src/data/api.ts`, `src/data/updateConfigsWS.ts`, `src/tabs/types.ts`, `src/types/global.d.ts`
+       - Ziel: Neues Interface `PerformanceMetricsPayload` (inkl. optionalem `dayChange`-Block) definieren, API-/WS-Verträge um `performance` erweitern und Legacy-Felder (`gain_abs`, `gain_pct`, `day_price_change_*`) als Derivate kennzeichnen.
+       - Validierung: `npx tsc --noEmit` schlägt fehl, wenn Komponenten das Objekt nicht berücksichtigen.
+
+7. i) [ ] Frontend-State und DOM-Updates harmonisieren
+       - Dateien: `src/data/updateConfigsWS.ts`, `src/content/elements.ts`, `src/tabs/overview.ts`
+       - Ziel: WebSocket-Caches, DOM-Patcher und Tabellenrenderer lesen `gain`-/`change`-Werte aus `performance`, entfernen lokale Rekonstruktion (`formatGain`, `formatGainPct`, `computeTableTotals`) und halten Dataset-Attribute (`data-gain-pct`, `data-gain-sign`) synchron.
+       - Validierung: Live-Update-Regressionen (bestehend) zeigen unveränderte Werte; Linter meldet keine ungenutzten Helper.
+
+7. j) [ ] Security-Detail-Tab auf Performance-Kontext umstellen
+       - Dateien: `src/tabs/security_detail.ts`, `src/utils/currency.ts`
+       - Ziel: Metrikberechnungen (`computeDelta`, `computePercentageChange`, `computeHoldingsAdjustedEurChange`) werden ersetzt, indem `normalizeSecurityMetrics` o. ä. aus dem neuen `performance`-Payload gespeist wird; überflüssige Helper und Summenberechnungen werden entfernt, ohne Fallback-Funktionen für fehlende Backend-Daten zu verlieren.
+       - Validierung: Jest-Tests (`src/tabs/__tests__/security_detail.metrics.test.ts`) decken Backend- und Cache-Fallbacks ab und schlagen fehl, wenn lokale Rechenpfade übrig bleiben.
+
+7. k) [ ] Frontend-Regressionssuite aktualisieren
+       - Dateien: `src/tabs/__tests__/overview.render.test.ts`, `src/tabs/__tests__/security_detail.metrics.test.ts`, ggf. weitere Snapshot-Tests
+       - Ziel: Testfixtures um `performance` erweitern, Assertions auf neue Felder (`totalChangeEur`, `dayChangePct`, `gain_pct`) ergänzen und sicherstellen, dass entfernte Helper nicht mehr importiert werden.
+       - Validierung: Tests schlagen fehl, falls Komponenten weiterhin alte Helper referenzieren oder `performance` ignorieren.
