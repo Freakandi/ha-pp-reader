@@ -144,7 +144,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: Ergänzung eines `AverageCostSelection`-Dataclasses inkl. Funktion `select_average_cost(aggregation, *, holdings=None, purchase_value_eur=None, security_currency_total=None, account_currency_total=None)`, die die bestehende `HoldingsAggregation`-Ausgabe nutzt, um konsistent gerundete Durchschnittspreise für Native-, Wertpapier- und Konto-Währung sowie den EUR-Kaufpreis abzuleiten. Fallback-Reihenfolge: explizite Aggregationswerte → Division aus Totals/positiven Beständen → EUR-Betrag auf Gesamtbestände. Das Objekt liefert zusätzlich Metadaten (`source`, `coverage_ratio` o. ä.) zur Nachvollziehbarkeit.
        - Validierung: Ruff-konforme Implementierung mit Docstring; MyPy/pyright-kompatible Typannotationen.
 
-6. b) [ ] Unit-Tests für Average-Cost-Auswahl ergänzen
+6. b) [x] Unit-Tests für Average-Cost-Auswahl ergänzen
        - Dateien: `tests/test_aggregations.py`
        - Ziel: Szenarien mit vollständigen Aggregationswerten, partiellen Kaufpreisfeldern (z. B. fehlender `avg_price_security`) und reinem EUR-Kaufwert abdecken. Sicherstellen, dass `select_average_cost` die erwartete Fallback-Reihenfolge einhält und Quellenkennungen korrekt setzt.
        - Validierung: Tests schlagen fehl, wenn einer der Rückgabewerte (`security`, `account`, `native`, `eur`, `source`) nicht den spezifizierten Regeln folgt.

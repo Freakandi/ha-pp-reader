@@ -9,6 +9,7 @@ import pytest
 from custom_components.pp_reader.data.aggregations import (
     HoldingsAggregation,
     compute_holdings_aggregation,
+    select_average_cost,
 )
 
 
@@ -97,3 +98,103 @@ def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> No
     assert result.average_purchase_price_native is None
     assert result.avg_price_security is None
     assert result.avg_price_account is None
+
+
+def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
+    """Average cost selection should prefer aggregation values and fall back to totals."""
+
+    rows = [
+        {
+            "current_holdings": 5,
+            "purchase_value": 1000,
+            "security_currency_total": 200.456,
+            "account_currency_total": 201.789,
+            "avg_price_native": 20.3333333,
+            "avg_price_security": 40.9876543,
+            "avg_price_account": 41.1234567,
+        },
+        {
+            "current_holdings": "3",
+            "purchase_value": "2000.4",
+            "security_currency_total": "120.12",
+            "account_currency_total": None,
+            "avg_price_native": "30.123456",
+            "avg_price_security": None,
+            "avg_price_account": "35.987654",
+        },
+        {
+            "current_holdings": -2,
+            "purchase_value": 500,
+            "security_currency_total": None,
+            "account_currency_total": "50.555",
+            "avg_price_native": 25,
+            "avg_price_security": 45,
+            "avg_price_account": 46,
+        },
+    ]
+
+    aggregation = compute_holdings_aggregation(rows)
+    selection = select_average_cost(aggregation, holdings=8.0)
+
+    assert selection.native == pytest.approx(aggregation.average_purchase_price_native)
+    assert selection.account == pytest.approx(aggregation.avg_price_account)
+    assert selection.security == pytest.approx(40.0725)
+    assert selection.eur == pytest.approx(4.375)
+    assert selection.source == "totals"
+    assert selection.coverage_ratio == pytest.approx(1.0)
+
+
+def test_select_average_cost_handles_missing_positive_holdings() -> None:
+    """Totals fallback should use overall holdings when positive positions are absent."""
+
+    aggregation = HoldingsAggregation(
+        total_holdings=10.0,
+        positive_holdings=0.0,
+        purchase_value_cents=0,
+        purchase_value_eur=50.0,
+        security_currency_total=100.0,
+        account_currency_total=90.0,
+        average_purchase_price_native=None,
+        avg_price_security=None,
+        avg_price_account=None,
+    )
+
+    selection = select_average_cost(aggregation)
+
+    assert selection.native is None
+    assert selection.security is None
+    assert selection.account is None
+    assert selection.eur == pytest.approx(5.0)
+    assert selection.source == "eur_total"
+    assert selection.coverage_ratio == pytest.approx(1.0)
+
+
+def test_select_average_cost_prefers_explicit_totals_over_aggregation_defaults() -> None:
+    """Explicit totals should drive the fallback calculations when provided."""
+
+    aggregation = HoldingsAggregation(
+        total_holdings=4.0,
+        positive_holdings=4.0,
+        purchase_value_cents=0,
+        purchase_value_eur=12.34,
+        security_currency_total=80.0,
+        account_currency_total=60.0,
+        average_purchase_price_native=2.5,
+        avg_price_security=None,
+        avg_price_account=None,
+    )
+
+    selection = select_average_cost(
+        aggregation,
+        holdings=4.0,
+        purchase_value_eur=180.0,
+        security_currency_total=100.0,
+        account_currency_total=72.0,
+    )
+
+    assert selection.native == pytest.approx(2.5)
+    assert selection.security == pytest.approx(25.0)
+    assert selection.account == pytest.approx(18.0)
+    assert selection.eur == pytest.approx(45.0)
+    assert selection.source == "totals"
+    assert selection.coverage_ratio == pytest.approx(1.0)
