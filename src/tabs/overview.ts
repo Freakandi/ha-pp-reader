@@ -24,7 +24,6 @@ import type { HoldingsAggregationPayload, PanelConfigLike } from './types';
 import {
   normalizeCurrencyValue,
   normalizePercentValue,
-  roundCurrency,
   toFiniteCurrency,
 } from '../utils/currency';
 
