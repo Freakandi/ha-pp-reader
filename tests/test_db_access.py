@@ -260,8 +260,38 @@ def seeded_snapshot_db(tmp_path: Path) -> Path:
             """,
             [
                 ("p-eur", "eur-sec", 2.5, 0, None, 0),
-                ("p-usd-a", "usd-sec", 1.5, 0, 150.25, 0),
-                ("p-usd-b", "usd-sec", 2.25, 0, 199.75, 0),
+                ("p-usd-a", "usd-sec", 1.5, 12_345, 150.25, 0),
+                ("p-usd-b", "usd-sec", 2.25, 67_890, 199.75, 0),
+            ],
+        )
+
+        conn.executemany(
+            """
+            UPDATE portfolio_securities
+            SET
+                security_currency_total = ?,
+                account_currency_total = ?,
+                avg_price_security = ?,
+                avg_price_account = ?
+            WHERE portfolio_uuid = ? AND security_uuid = ?
+            """,
+            [
+                (
+                    180.185184,
+                    173.981481,
+                    120.123456,
+                    115.987654,
+                    "p-usd-a",
+                    "usd-sec",
+                ),
+                (
+                    294.9727225,
+                    272.527776,
+                    130.654321,
+                    121.123456,
+                    "p-usd-b",
+                    "usd-sec",
+                ),
             ],
         )
 
@@ -421,9 +451,29 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["last_price_native"] == pytest.approx(200.0, rel=0, abs=1e-4)
     assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
     assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
-    assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+    assert snapshot["purchase_value_eur"] == pytest.approx(802.35, rel=0, abs=1e-2)
     assert snapshot["average_purchase_price_native"] == pytest.approx(
         179.95,
+        rel=0,
+        abs=1e-6,
+    )
+    assert snapshot["purchase_total_security"] == pytest.approx(
+        475.16,
+        rel=0,
+        abs=1e-2,
+    )
+    assert snapshot["purchase_total_account"] == pytest.approx(
+        446.51,
+        rel=0,
+        abs=1e-2,
+    )
+    assert snapshot["avg_price_security"] == pytest.approx(
+        126.441975,
+        rel=0,
+        abs=1e-6,
+    )
+    assert snapshot["avg_price_account"] == pytest.approx(
+        119.069135,
         rel=0,
         abs=1e-6,
     )
@@ -468,6 +518,26 @@ def test_get_security_snapshot_handles_null_purchase_value(
     assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
     assert snapshot["average_purchase_price_native"] == pytest.approx(
         179.95,
+        rel=0,
+        abs=1e-6,
+    )
+    assert snapshot["purchase_total_security"] == pytest.approx(
+        475.16,
+        rel=0,
+        abs=1e-2,
+    )
+    assert snapshot["purchase_total_account"] == pytest.approx(
+        446.51,
+        rel=0,
+        abs=1e-2,
+    )
+    assert snapshot["avg_price_security"] == pytest.approx(
+        126.441975,
+        rel=0,
+        abs=1e-6,
+    )
+    assert snapshot["avg_price_account"] == pytest.approx(
+        119.069135,
         rel=0,
         abs=1e-6,
     )
@@ -527,6 +597,18 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     assert snapshot["market_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
     assert snapshot["purchase_value_eur"] == pytest.approx(123.45, rel=0, abs=1e-4)
     assert snapshot["average_purchase_price_native"] is None
+    assert snapshot["purchase_total_security"] == pytest.approx(
+        475.16,
+        rel=0,
+        abs=1e-2,
+    )
+    assert snapshot["purchase_total_account"] == pytest.approx(
+        446.51,
+        rel=0,
+        abs=1e-2,
+    )
+    assert snapshot["avg_price_security"] is None
+    assert snapshot["avg_price_account"] is None
     assert snapshot["last_close_native"] == pytest.approx(175.5, rel=0, abs=1e-4)
     assert snapshot["last_close_eur"] == pytest.approx(140.4, rel=0, abs=1e-4)
     assert snapshot["day_price_change_native"] == pytest.approx(
