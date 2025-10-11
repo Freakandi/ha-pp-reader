@@ -11,7 +11,6 @@ from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -631,61 +630,29 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             except Exception:  # pragma: no cover - defensive
                 last_close_eur = None
 
-        day_price_change_native = None
-        day_price_change_eur = None
-        native_diff: float | None = None
+        fx_rate = None
         if (
-            last_price_native is not None
-            and last_close_native is not None
+            last_price_native not in (None, 0)
+            and last_price_eur_value not in (None, 0)
         ):
-            native_diff = last_price_native - last_close_native
-            day_price_change_native = round_price(
-                native_diff,
-                decimals=4,
-            )
-
-        if (
-            last_price_eur_value is not None
-            and last_close_eur is not None
-        ):
-            day_price_change_eur = round_price(
-                last_price_eur_value - last_close_eur,
-                decimals=4,
-            )
-
-        def _round_percentage(value: float | None) -> float | None:
-            if value is None:
-                return None
-            try:
-                return float(
-                    Decimal(value).quantize(
-                        Decimal("0.01"),
-                        rounding=ROUND_HALF_UP,
-                    )
-                )
-            except (InvalidOperation, ValueError, TypeError):
-                return None
-
-        day_change_pct = None
-        if (
-            native_diff is not None
-            and last_close_native not in (None, 0)
-        ):
-            day_change_pct = _round_percentage(
-                (native_diff / float(last_close_native)) * 100
-            )
+            fx_rate = last_price_native / last_price_eur_value
         elif (
-            day_price_change_eur is not None
+            last_close_native not in (None, 0)
             and last_close_eur not in (None, 0)
-            and last_close_eur is not None
         ):
-            day_change_pct = _round_percentage(
-                (
-                    (last_price_eur_value - last_close_eur)
-                    / float(last_close_eur)
-                )
-                * 100
-            )
+            fx_rate = last_close_native / last_close_eur
+
+        performance_metrics, day_change_metrics = select_performance_metrics(
+            current_value=market_value_eur,
+            purchase_value=purchase_value_eur,
+            holdings=total_holdings,
+            last_price_native=last_price_native,
+            last_close_native=last_close_native,
+            fx_rate=fx_rate,
+        )
+        performance_payload = asdict(performance_metrics)
+        day_change_payload = asdict(day_change_metrics)
+        performance_payload["day_change"] = day_change_payload
 
         return {
             "name": security_row["name"],
@@ -703,9 +670,10 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "average_cost": average_cost_payload,
             "last_close_native": last_close_native,
             "last_close_eur": last_close_eur,
-            "day_price_change_native": day_price_change_native,
-            "day_price_change_eur": day_price_change_eur,
-            "day_change_pct": day_change_pct,
+            "day_price_change_native": day_change_payload["price_change_native"],
+            "day_price_change_eur": day_change_payload["price_change_eur"],
+            "day_change_pct": day_change_payload["change_pct"],
+            "performance": performance_payload,
         }
     finally:
         conn.close()

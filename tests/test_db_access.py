@@ -655,6 +655,19 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["day_price_change_native"] is None
     assert snapshot["day_price_change_eur"] is None
     assert snapshot["day_change_pct"] is None
+    performance = snapshot["performance"]
+    assert performance["gain_abs"] == pytest.approx(-202.35, rel=0, abs=1e-2)
+    assert performance["gain_pct"] == pytest.approx(-25.22, rel=0, abs=1e-2)
+    assert performance["total_change_eur"] == pytest.approx(-202.35, rel=0, abs=1e-2)
+    assert performance["total_change_pct"] == pytest.approx(-25.22, rel=0, abs=1e-2)
+    assert performance["source"] == "calculated"
+    assert performance["coverage_ratio"] == pytest.approx(1.0, rel=0, abs=1e-6)
+    day_change = performance["day_change"]
+    assert day_change["price_change_native"] is None
+    assert day_change["price_change_eur"] is None
+    assert day_change["change_pct"] is None
+    assert day_change["source"] == "unavailable"
+    assert day_change["coverage_ratio"] == pytest.approx(0.5, rel=0, abs=1e-6)
 
     with pytest.raises(LookupError):
         get_security_snapshot(seeded_snapshot_db, "missing")
@@ -721,6 +734,17 @@ def test_get_security_snapshot_handles_null_purchase_value(
     assert average_cost["eur"] == pytest.approx(0.0, rel=0, abs=1e-6)
     assert average_cost["source"] == "totals"
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)
+    performance = snapshot["performance"]
+    assert performance["gain_abs"] == pytest.approx(600.0, rel=0, abs=1e-2)
+    assert performance["gain_pct"] == pytest.approx(0.0, rel=0, abs=1e-2)
+    assert performance["total_change_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
+    assert performance["total_change_pct"] == pytest.approx(0.0, rel=0, abs=1e-2)
+    assert performance["coverage_ratio"] == pytest.approx(1.0)
+    day_change = performance["day_change"]
+    assert day_change["price_change_native"] is None
+    assert day_change["price_change_eur"] is None
+    assert day_change["change_pct"] is None
+    assert day_change["coverage_ratio"] == pytest.approx(0.5, rel=0, abs=1e-6)
 
 
 def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
@@ -809,3 +833,27 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
         abs=1e-4,
     )
     assert snapshot["day_change_pct"] == pytest.approx(13.96, rel=0, abs=1e-2)
+    performance = snapshot["performance"]
+    assert performance["gain_abs"] == pytest.approx(-123.45, rel=0, abs=1e-2)
+    assert performance["gain_pct"] == pytest.approx(-100.0, rel=0, abs=1e-2)
+    assert performance["total_change_eur"] == pytest.approx(-123.45, rel=0, abs=1e-2)
+    assert performance["total_change_pct"] == pytest.approx(-100.0, rel=0, abs=1e-2)
+    assert performance["coverage_ratio"] == pytest.approx(1.0)
+    day_change = performance["day_change"]
+    assert day_change["price_change_native"] == pytest.approx(
+        snapshot["day_price_change_native"],
+        rel=0,
+        abs=1e-6,
+    )
+    assert day_change["price_change_eur"] == pytest.approx(
+        snapshot["day_price_change_eur"],
+        rel=0,
+        abs=1e-6,
+    )
+    assert day_change["change_pct"] == pytest.approx(
+        snapshot["day_change_pct"],
+        rel=0,
+        abs=1e-6,
+    )
+    assert day_change["source"] == "native"
+    assert day_change["coverage_ratio"] == pytest.approx(1.0)

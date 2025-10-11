@@ -182,6 +182,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "day_price_change_native": None,
             "day_price_change_eur": None,
             "day_change_pct": None,
+            "performance": None,
         }
 
     data = dict(snapshot)
@@ -246,6 +247,16 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         snapshot.get("day_price_change_eur")
     )
     data["day_change_pct"] = _coerce_optional_float(snapshot.get("day_change_pct"))
+
+    raw_performance = snapshot.get("performance")
+    if isinstance(raw_performance, Mapping):
+        performance_payload = dict(raw_performance)
+        day_change_raw = performance_payload.get("day_change")
+        if isinstance(day_change_raw, Mapping):
+            performance_payload["day_change"] = dict(day_change_raw)
+        data["performance"] = performance_payload
+    else:
+        data["performance"] = None
 
     last_price_raw = snapshot.get("last_price")
     if isinstance(last_price_raw, Mapping):

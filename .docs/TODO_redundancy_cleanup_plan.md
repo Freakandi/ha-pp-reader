@@ -211,7 +211,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `get_portfolio_positions`, `_normalize_portfolio_row` und `fetch_live_portfolios` nutzen den neuen Helper zur Ableitung von `gain_abs`/`gain_pct` sowie (neu) `performance`-Payloads; vorhandene Inline-Berechnungen und lokale `_round_percentage`-Hilfen entfallen. `HoldingsAggregation` stellt benötigte Inputs (Totals, Holdings) für den Helper bereit.
        - Validierung: Rückgaben behalten bestehende Felder, enthalten zusätzlich ein strukturiertes `performance`-Objekt und liefern identische Werte in `tests/test_db_access.py` & `tests/test_sync_from_pclient.py`.
 
-7. d) [ ] Security-Snapshot-Tagesdeltas zentralisieren
+7. d) [x] Security-Snapshot-Tagesdeltas zentralisieren
        - Dateien: `custom_components/pp_reader/data/db_access.py`, `custom_components/pp_reader/data/websocket.py`
        - Ziel: `get_security_snapshot` delegiert die Berechnung von `day_price_change_native`, `day_price_change_eur`, `day_change_pct`, `total_change_eur` und `total_change_pct` an den Performance-Helper, speichert die Ergebnisse unter `performance` und entfernt lokale `computeDelta`/`_round_percentage`-Logik. `_serialise_security_snapshot` übernimmt das Objekt unverändert.
        - Validierung: `tests/test_ws_security_history.py` und Snapshot-Tests prüfen, dass Backend- und WebSocket-Payloads dieselben Werte liefern und keine zusätzlichen Fallbacks mehr besitzen.
