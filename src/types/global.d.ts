@@ -7,12 +7,11 @@ import type {
   flushPendingPositions,
   reapplyPositionsSort,
 } from '../data/updateConfigsWS';
-import type { SecuritySnapshotLike, PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
+import type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 import type {
   attachPortfolioPositionsSorting,
   attachSecurityDetailListener,
   getSecurityPositionsFromCache,
-  getSecuritySnapshotFromCache,
   updatePortfolioFooterFromDom,
 } from '../tabs/overview';
 
@@ -46,9 +45,6 @@ type PendingRetryMeta = {
 };
 
 interface PortfolioPositionsCache extends Map<string, DashboardPortfolioPosition[]> {
-  getSecuritySnapshot?: (
-    securityUuid: string | null | undefined,
-  ) => SecuritySnapshotLike | null;
   getSecurityPositions?: (
     securityUuid: string | null | undefined,
   ) => DashboardPortfolioPosition[];
@@ -59,7 +55,6 @@ declare global {
     __ppReaderDashboardElements?: Set<HTMLElement>;
     __ppReaderPanelHosts?: Set<HTMLElement>;
     __ppReaderPortfolioPositionsCache?: PortfolioPositionsCache;
-    __ppReaderGetSecuritySnapshotFromCache?: typeof getSecuritySnapshotFromCache;
     __ppReaderGetSecurityPositionsFromCache?: typeof getSecurityPositionsFromCache;
     __ppReaderApplyGainPctMetadata?: GainPctMetadataApplier;
     __ppReaderRenderPositionsTable?: RenderPositionsTable;

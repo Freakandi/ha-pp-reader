@@ -132,7 +132,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Ziel: `PortfolioPositionsCache` speichert pro Position das `aggregation`-Objekt. Funktionen wie `applyPortfolioPositionsToDom` und `renderPositionsTableInline` entfernen eigene Summierungen, nutzen die vorbereiteten Beträge und räumen Hilfsfunktionen wie `roundCurrency`-Fallbacks für Kauf-/Bestandswerte aus.
        - Validierung: Frontend-Tests (z. B. `tests/frontend/test_portfolio_update_gain_abs.py`) bestätigen, dass Live-Updates weiterhin korrekte Werte anzeigen, obwohl lokale Aggregationen entfallen.
 
-5. k) [ ] Dashboard-Tabs auf Backend-Aggregationen umstellen
+5. k) [x] Dashboard-Tabs auf Backend-Aggregationen umstellen
        - Dateien: `src/tabs/overview.ts`, `src/tabs/security_detail.ts`
        - Ziel: `getSecuritySnapshotFromCache`, `collectSecurityPositions`, `roundHoldings` sowie die daraus resultierenden Summenberechnungen werden entfernt. Beide Tabs lesen `total_holdings`, `purchase_total_security`, `purchase_total_account`, `purchase_value_eur` und Durchschnittswerte direkt aus dem `aggregation`-Feld. Snapshot-Berechnung nutzt zusätzlich die bereits gelieferten Tagesdeltas aus Schritt 4.
        - Validierung: Jest-Regressionen (`src/tabs/__tests__/security_detail.metrics.test.ts`, `src/tabs/__tests__/overview.render.test.ts`) prüfen, dass keine clientseitigen Summierungen mehr stattfinden und die angezeigten Zahlen unverändert bleiben.

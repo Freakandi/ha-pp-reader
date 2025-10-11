@@ -20,7 +20,7 @@ import {
 import type { PortfolioPositionsResponse } from '../data/api';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
 import type { HomeAssistant } from '../types/home-assistant';
-import type { PanelConfigLike, SecuritySnapshotLike } from './types';
+import type { HoldingsAggregationPayload, PanelConfigLike } from './types';
 import {
   normalizeCurrencyValue,
   normalizePercentValue,
@@ -40,7 +40,6 @@ interface PortfolioPositionLike {
 }
 
 interface PortfolioPositionsCache extends Map<string, PortfolioPositionLike[]> {
-  getSecuritySnapshot?: (securityUuid: string | null | undefined) => SecuritySnapshotLike | null;
   getSecurityPositions?: (securityUuid: string | null | undefined) => PortfolioPositionLike[];
 }
 
@@ -105,17 +104,7 @@ let _panelConfigRef: PanelConfigLike | null = null;
 const portfolioPositionsCache: PortfolioPositionsCache = new Map();      // portfolio_uuid -> positions[]
 
 // --- Security-Aggregation für Detail-Ansicht ---
-const HOLDINGS_PRECISION = 1e6;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 6 } as const;
-
-function toFiniteNumber(value: unknown): number {
-  return toFiniteCurrency(value) ?? 0;
-}
-
-function roundHoldings(value: unknown): number {
-  const finite = toFiniteNumber(value);
-  return Math.round(finite * HOLDINGS_PRECISION) / HOLDINGS_PRECISION;
-}
 
 function toNullableNumber(value: unknown): number | null {
   return toFiniteCurrency(value);
@@ -176,6 +165,31 @@ function computeAveragePrice(
   return null;
 }
 
+function resolveAggregation(
+  record: Record<string, unknown>,
+): HoldingsAggregationPayload | null {
+  const candidate = record['aggregation'];
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+
+  const aggregation = candidate as Partial<HoldingsAggregationPayload>;
+  const requiredKeys: (keyof HoldingsAggregationPayload)[] = [
+    'total_holdings',
+    'purchase_value_eur',
+    'purchase_total_security',
+    'purchase_total_account',
+  ];
+
+  for (const key of requiredKeys) {
+    if (typeof aggregation[key] !== 'number') {
+      return null;
+    }
+  }
+
+  return aggregation as HoldingsAggregationPayload;
+}
+
 function formatPriceWithCurrency(
   value: number | null,
   currency: string | null,
@@ -194,8 +208,12 @@ function formatPriceWithCurrency(
 function buildPurchasePriceDisplay(
   position: PortfolioPositionLike,
 ): { markup: string; sortValue: number; ariaLabel: string } {
-  const holdings = toNullableNumber(position.current_holdings);
   const record = position as Record<string, unknown>;
+  const aggregation = resolveAggregation(record);
+
+  const holdings = toNullableNumber(
+    aggregation?.total_holdings ?? position.current_holdings,
+  );
 
   const securityCurrency = resolveCurrencyFromPosition(position, [
     'security_currency_code',
@@ -213,25 +231,26 @@ function buildPurchasePriceDisplay(
     ]) ?? (securityCurrency === 'EUR' ? 'EUR' : null) ?? 'EUR';
 
   const avgSecurity = computeAveragePrice(
-    record['avg_price_security'],
-    record['purchase_total_security'],
+    aggregation?.avg_price_security ?? record['avg_price_security'],
+    aggregation?.purchase_total_security ?? record['purchase_total_security'],
     holdings,
   );
   const avgNativeFallback = computeAveragePrice(
-    record['average_purchase_price_native'],
-    record['purchase_total_security'],
+    aggregation?.average_purchase_price_native ??
+      record['average_purchase_price_native'],
+    aggregation?.purchase_total_security ?? record['purchase_total_security'],
     holdings,
   );
   const effectiveSecurity = avgSecurity ?? avgNativeFallback;
 
   const avgAccount = computeAveragePrice(
-    record['avg_price_account'],
-    record['purchase_total_account'],
+    aggregation?.avg_price_account ?? record['avg_price_account'],
+    aggregation?.purchase_total_account ?? record['purchase_total_account'],
     holdings,
   );
   const accountFallback = computeAveragePrice(
     undefined,
-    record['purchase_value'],
+    aggregation?.purchase_value_eur ?? record['purchase_value'],
     holdings,
   );
   const effectiveAccount = avgAccount ?? accountFallback;
@@ -284,7 +303,8 @@ function buildPurchasePriceDisplay(
   }
 
   const markup = parts.join('<br>');
-  const sortValue = toNullableNumber(record['purchase_value']) ?? 0;
+  const sortValue =
+    toNullableNumber(aggregation?.purchase_value_eur ?? record['purchase_value']) ?? 0;
   const ariaLabel = ariaParts.join(', ');
 
   return { markup, sortValue, ariaLabel };
@@ -294,11 +314,10 @@ export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
 };
 
-function collectSecurityPositions(securityUuid: string | null | undefined): PortfolioPositionLike[] {
+export function getSecurityPositionsFromCache(securityUuid: string | null | undefined): PortfolioPositionLike[] {
   if (!securityUuid) {
     return [];
   }
-
   const matches: PortfolioPositionLike[] = [];
   for (const positions of portfolioPositionsCache.values()) {
     if (!Array.isArray(positions) || positions.length === 0) {
@@ -311,65 +330,18 @@ function collectSecurityPositions(securityUuid: string | null | undefined): Port
       }
     }
   }
-  return matches;
-}
 
-export function getSecurityPositionsFromCache(securityUuid: string | null | undefined): PortfolioPositionLike[] {
-  const positions = collectSecurityPositions(securityUuid);
-  if (!positions.length) {
+  if (!matches.length) {
     return [];
   }
-  return positions.map((pos) => ({ ...pos }));
-}
 
-export function getSecuritySnapshotFromCache(securityUuid: string | null | undefined): SecuritySnapshotLike | null {
-  const positions = collectSecurityPositions(securityUuid);
-  if (!positions.length || !securityUuid) {
-    return null;
-  }
-
-  let name = '';
-  let totalHoldings = 0;
-  let totalPurchaseValue = 0;
-  let totalCurrentValue = 0;
-
-  for (const pos of positions) {
-    const posName = pos?.name;
-    if (!name && typeof posName === 'string') {
-      name = posName;
-    }
-    totalHoldings += toFiniteNumber(pos?.current_holdings);
-    totalPurchaseValue += toFiniteNumber(pos?.purchase_value);
-    totalCurrentValue += toFiniteNumber(pos?.current_value);
-  }
-
-  const gainAbs = totalCurrentValue - totalPurchaseValue;
-  const gainPct = totalPurchaseValue > 0
-    ? (gainAbs / totalPurchaseValue) * 100
-    : 0;
-  const lastPriceEur = totalHoldings > 0 ? totalCurrentValue / totalHoldings : null;
-
-  return {
-    security_uuid: securityUuid,
-    name,
-    total_holdings: roundHoldings(totalHoldings),
-    purchase_value_eur: roundCurrency(totalPurchaseValue, { fallback: 0 }) ?? 0,
-    current_value_eur: roundCurrency(totalCurrentValue, { fallback: 0 }) ?? 0,
-    gain_abs_eur: roundCurrency(gainAbs, { fallback: 0 }) ?? 0,
-    gain_pct: Math.round(gainPct * 100) / 100,
-    last_price_eur: lastPriceEur != null ? roundCurrency(lastPriceEur) : null,
-    source: 'cache',
-  };
+  return matches.map((pos) => ({ ...pos }));
 }
 
 // Global für Push-Handler (Events); hält ausschließlich Positionsdaten für Lazy-Loads
-portfolioPositionsCache.getSecuritySnapshot = getSecuritySnapshotFromCache;
 portfolioPositionsCache.getSecurityPositions = getSecurityPositionsFromCache;
 
 window.__ppReaderPortfolioPositionsCache = portfolioPositionsCache;
-if (!window.__ppReaderGetSecuritySnapshotFromCache) {
-  window.__ppReaderGetSecuritySnapshotFromCache = getSecuritySnapshotFromCache;
-}
 if (!window.__ppReaderGetSecurityPositionsFromCache) {
   window.__ppReaderGetSecurityPositionsFromCache = getSecurityPositionsFromCache;
 }
