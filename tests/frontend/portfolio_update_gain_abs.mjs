@@ -357,7 +357,7 @@ global.document = document;
 global.navigator = window.navigator;
 global.CustomEvent = window.CustomEvent;
 
-const positionsCache = new Map();
+let positionsCache = new Map();
 window.__ppReaderPortfolioPositionsCache = positionsCache;
 
 class HTMLElementStub {}
@@ -410,6 +410,7 @@ async function importDashboardBundle() {
 }
 
 const moduleApi = await importDashboardBundle();
+positionsCache = window.__ppReaderPortfolioPositionsCache ?? positionsCache;
 
 let handlePortfolioPositionsUpdate = moduleApi.handlePortfolioPositionsUpdate;
 

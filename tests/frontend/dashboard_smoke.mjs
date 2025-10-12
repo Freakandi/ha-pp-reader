@@ -438,7 +438,7 @@ windowObj.window = windowObj;
 global.document = document;
 global.navigator = windowObj.navigator;
 
-const positionsCache = new Map();
+let positionsCache = new Map();
 windowObj.__ppReaderPortfolioPositionsCache = positionsCache;
 
 class CustomEventImpl {
@@ -501,6 +501,7 @@ async function importDashboardBundle() {
   return import(bundleUrl.href);
 }
 const moduleApi = await importDashboardBundle();
+positionsCache = windowObj.__ppReaderPortfolioPositionsCache ?? positionsCache;
 let handlePortfolioPositionsUpdate = moduleApi.handlePortfolioPositionsUpdate;
 
 if (typeof handlePortfolioPositionsUpdate !== 'function') {
