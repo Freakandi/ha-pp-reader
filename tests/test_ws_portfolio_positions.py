@@ -164,10 +164,18 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     position = positions[0]
     assert position["security_uuid"] == "security-1"  # noqa: S101
     assert position["name"] == "ACME Corp"  # noqa: S101
-    assert position["current_holdings"] == pytest.approx(12.345678)  # noqa: S101
 
-    expected_purchase_value = cent_to_eur(123_456, default=0.0) or 0.0
-    expected_current_value = cent_to_eur(789_012, default=0.0) or 0.0
+    expected_holdings = round_currency(12.345678, decimals=6, default=0.0) or 0.0
+    assert position["current_holdings"] == pytest.approx(expected_holdings)  # noqa: S101
+
+    expected_purchase_value = round_currency(
+        cent_to_eur(123_456, default=0.0),
+        default=0.0,
+    ) or 0.0
+    expected_current_value = round_currency(
+        cent_to_eur(789_012, default=0.0),
+        default=0.0,
+    ) or 0.0
     expected_gain_abs = (
         round_currency(expected_current_value - expected_purchase_value, default=0.0)
         or 0.0
@@ -184,8 +192,19 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert position["gain_abs"] == pytest.approx(expected_gain_abs)  # noqa: S101
     assert position["gain_pct"] == pytest.approx(expected_gain_pct)  # noqa: S101
     assert position["average_purchase_price_native"] == pytest.approx(45.678901)  # noqa: S101
-    assert position["purchase_total_security"] == pytest.approx(2345.68)  # noqa: S101
-    assert position["purchase_total_account"] == pytest.approx(3456.79)  # noqa: S101
+    expected_purchase_total_security = (
+        round_currency(2345.6789, default=0.0) or 0.0
+    )
+    expected_purchase_total_account = (
+        round_currency(3456.7891, default=0.0) or 0.0
+    )
+
+    assert position["purchase_total_security"] == pytest.approx(
+        expected_purchase_total_security
+    )  # noqa: S101
+    assert position["purchase_total_account"] == pytest.approx(
+        expected_purchase_total_account
+    )  # noqa: S101
     assert position["avg_price_security"] == pytest.approx(12.345678)  # noqa: S101
     assert position["avg_price_account"] == pytest.approx(23.456789)  # noqa: S101
 

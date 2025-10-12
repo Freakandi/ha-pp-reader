@@ -305,7 +305,10 @@ def _normalize_portfolio_positions(
             purchase_total_account = 0.0
 
         purchase_value_raw = item.get("purchase_value")
-        purchase_value = round(_coerce_float(purchase_value_raw), 2)
+        purchase_value = round_currency(
+            purchase_value_raw,
+            default=0.0,
+        )
 
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
@@ -328,22 +331,29 @@ def _normalize_portfolio_positions(
             day_change=day_change_metrics,
         )
 
-        gain_abs_value = round(
-            _coerce_float(performance_payload.get("gain_abs")), 2
+        gain_abs_value = round_currency(
+            performance_payload.get("gain_abs"),
+            default=0.0,
         )
-        gain_pct_value = round(
-            _coerce_float(performance_payload.get("gain_pct")), 2
+        gain_pct_value = round_currency(
+            performance_payload.get("gain_pct"),
+            default=0.0,
         )
 
         normalized.append(
             {
                 "security_uuid": security_uuid,
                 "name": item.get("name"),
-                "current_holdings": round(
-                    _coerce_float(item.get("current_holdings")), 6
+                "current_holdings": round_currency(
+                    item.get("current_holdings"),
+                    decimals=6,
+                    default=0.0,
                 ),
                 "purchase_value": purchase_value,
-                "current_value": round(_coerce_float(item.get("current_value")), 2),
+                "current_value": round_currency(
+                    item.get("current_value"),
+                    default=0.0,
+                ),
                 "gain_abs": gain_abs_value,
                 "gain_pct": gain_pct_value,
                 "average_purchase_price_native": avg_price_native,
