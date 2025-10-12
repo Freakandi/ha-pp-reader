@@ -15,17 +15,51 @@ export function toFiniteCurrency(value: unknown): number | null {
   }
 
   if (typeof value === 'string') {
-    const trimmed = value.trim();
+    const trimmed = value.trim().replace(/\u00a0/g, '');
     if (!trimmed) {
       return null;
     }
 
-    const parsed = Number(trimmed);
-    if (Number.isFinite(parsed)) {
-      return parsed;
+    const direct = Number(trimmed);
+    if (Number.isFinite(direct)) {
+      return direct;
     }
 
-    const relaxed = Number.parseFloat(trimmed);
+    const stripped = trimmed.replace(/[^0-9.,+-]/g, '');
+    if (!stripped) {
+      return null;
+    }
+
+    const lastComma = stripped.lastIndexOf(',');
+    const lastDot = stripped.lastIndexOf('.');
+    let normalized = stripped;
+
+    const hasComma = lastComma !== -1;
+    const hasDot = lastDot !== -1;
+
+    if (hasComma && (!hasDot || lastComma > lastDot)) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else if (hasDot && hasComma && lastDot > lastComma) {
+      normalized = normalized.replace(/,/g, '');
+    } else if (hasComma && !hasDot) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else if (hasDot) {
+      const decimals = normalized.length - lastDot - 1;
+      if (decimals === 3 && /\d{4,}/.test(normalized.replace(/\./g, ''))) {
+        normalized = normalized.replace(/\./g, '');
+      }
+    }
+
+    if (normalized === '-' || normalized === '+') {
+      return null;
+    }
+
+    const localized = Number.parseFloat(normalized);
+    if (Number.isFinite(localized)) {
+      return localized;
+    }
+
+    const relaxed = Number.parseFloat(stripped.replace(',', '.'));
     if (Number.isFinite(relaxed)) {
       return relaxed;
     }
