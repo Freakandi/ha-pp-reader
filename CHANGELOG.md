@@ -6,7 +6,15 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
-- Noch keine Änderungen.
+### Added
+- Centralised performance metric helpers, including `select_performance_metrics` and
+  `compose_performance_payload`, to compute rounded gain and day-change data with
+  coverage metadata plus dedicated unit tests covering edge cases.【F:custom_components/pp_reader/data/performance.py†L1-L195】【F:tests/test_performance.py†L1-L116】
+
+### Changed
+- Portfolio snapshots, WebSocket responses, coordinator events, sensors, and price-cycle
+  payloads reuse the shared performance payload so gain/day-change fields stay aligned
+  and embed optional overrides when provided.【F:custom_components/pp_reader/data/db_access.py†L645-L677】【F:custom_components/pp_reader/data/websocket.py†L315-L356】【F:custom_components/pp_reader/data/event_push.py†L83-L110】【F:custom_components/pp_reader/prices/price_service.py†L787-L833】【F:custom_components/pp_reader/sensors/gain_sensors.py†L91-L145】
 
 ## [0.13.0] - 2025-10-09
 
