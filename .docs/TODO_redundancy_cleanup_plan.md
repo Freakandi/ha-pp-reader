@@ -255,5 +255,5 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 - [x] README.md – Änderungen an Performance-Metriken und neuen Payloads beschreiben.
 - [x] README-dev.md – Entwicklungsnotizen zu zentralisierten Performance-Helpern aktualisieren.
-- [ ] ARCHITECTURE.md – Datenflüsse für Performance- und Day-Change-Payloads ergänzen.
+- [x] ARCHITECTURE.md – Datenflüsse für Performance- und Day-Change-Payloads ergänzen.
 - [ ] CHANGELOG.md – Neuerungen aus Abschnitt 7 dokumentieren.
