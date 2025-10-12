@@ -149,15 +149,15 @@
       - Ziel/Ergebnis: Tests prüfen nur noch Struktur und nicht berechnete Werte.
 
 12. Frontend: Übersichtstab nutzt neue Average-Cost-Struktur
-   a) [ ] Greife in `resolveAverageCost` ausschließlich auf `record.average_cost` und `aggregation` zu.\
+   a) [x] Greife in `resolveAverageCost` ausschließlich auf `record.average_cost` und `aggregation` zu.\
       - Dateipfad(e): `src/tabs/overview.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): `resolveAverageCost`\
       - Ziel/Ergebnis: Keine Rückgriffe auf `avg_price_*` oder Legacy-Durchschnittswerte mehr.
-   b) [ ] Entferne Fallback-Berechnungen für Kaufwerte und halte nur Validierungen/Reformatierungen vor.\
+   b) [x] Entferne Fallback-Berechnungen für Kaufwerte und halte nur Validierungen/Reformatierungen vor.\
       - Dateipfad(e): `src/tabs/overview.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Hilfsfunktionen zur Durchschnittsableitung\
       - Ziel/Ergebnis: Übersicht listet exakt die Backend-Werte.
-   c) [ ] Passe Komponententests auf die neue Datenquelle an.\
+   c) [x] Passe Komponententests auf die neue Datenquelle an.\
       - Dateipfad(e): `src/tabs/__tests__/overview.render.test.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete gerenderte Average-Cost-Anzeigen\
       - Ziel/Ergebnis: Tests referenzieren `average_cost` aus dem Payload.

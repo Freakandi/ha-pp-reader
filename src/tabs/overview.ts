@@ -115,17 +115,6 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function pickFirstFinite(
-  ...values: Array<number | null | undefined>
-): number | null {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return null;
-}
-
 function normalizeCurrencyCode(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -211,64 +200,15 @@ function resolveAverageCost(
     };
   }
 
-  const holdingsCandidates: Array<number | null> = [
-    toNullableNumber(record['current_holdings']),
-  ];
-
-  if (aggregation) {
-    holdingsCandidates.unshift(
-      toNullableNumber(aggregation.positive_holdings),
-      toNullableNumber(aggregation.total_holdings),
-    );
+  if (!aggregation) {
+    return null;
   }
 
-  const holdings = pickFirstFinite(...holdingsCandidates);
-
-  const purchaseTotalSecurity = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.purchase_total_security) : null,
-    toNullableNumber(record['purchase_total_security']),
-  );
-  const purchaseTotalAccount = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.purchase_total_account) : null,
-    toNullableNumber(record['purchase_total_account']),
-  );
-  const purchaseTotalEur = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.purchase_value_eur) : null,
-    toNullableNumber(record['purchase_value']),
-  );
-
-  const deriveAverage = (
-    total: number | null,
-    quantity: number | null,
-  ): number | null =>
-    total != null && typeof total === 'number' && isFiniteNumber(quantity) && quantity > 0
-      ? total / quantity
-      : null;
-
-  const native = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.average_purchase_price_native) : null,
-    toNullableNumber(record['average_purchase_price_native']),
-    toNullableNumber(record['avg_price_security']),
-    deriveAverage(purchaseTotalSecurity, holdings),
-  );
-
-  const security = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.avg_price_security) : null,
-    toNullableNumber(record['avg_price_security']),
-    native,
-    deriveAverage(purchaseTotalSecurity, holdings),
-  );
-
-  const account = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.avg_price_account) : null,
-    toNullableNumber(record['avg_price_account']),
-    deriveAverage(purchaseTotalAccount, holdings),
-    deriveAverage(purchaseTotalEur, holdings),
-  );
-
-  const eur = pickFirstFinite(
-    deriveAverage(purchaseTotalEur, holdings),
-    account,
+  const native = toNullableNumber(aggregation.average_purchase_price_native);
+  const security = toNullableNumber(aggregation.avg_price_security);
+  const account = toNullableNumber(aggregation.avg_price_account);
+  const eur = toNullableNumber(
+    (aggregation as { avg_price_eur?: unknown })?.avg_price_eur,
   );
 
   if (native == null && security == null && account == null && eur == null) {
@@ -281,9 +221,9 @@ function resolveAverageCost(
     account,
     eur,
     source: 'aggregation',
-    coverage_ratio: aggregation
-      ? toNullableNumber((aggregation as { coverage_ratio?: unknown })?.coverage_ratio)
-      : null,
+    coverage_ratio: toNullableNumber(
+      (aggregation as { coverage_ratio?: unknown })?.coverage_ratio,
+    ),
   };
 }
 
@@ -401,8 +341,7 @@ function buildPurchasePriceDisplay(
   }
 
   const markup = parts.join('<br>');
-  const sortValue =
-    toNullableNumber(aggregation?.purchase_value_eur ?? record['purchase_value']) ?? 0;
+  const sortValue = toNullableNumber(aggregation?.purchase_value_eur) ?? 0;
   const ariaLabel = ariaParts.join(', ');
 
   return { markup, sortValue, ariaLabel };
