@@ -34,6 +34,29 @@ data:
       current_value: 2475.10
       gain_abs: 959.88
       gain_pct: 63.4
+      aggregation:
+        total_holdings: 7
+        positive_holdings: 7
+        purchase_value_cents: 151522
+        purchase_value_eur: 1515.22
+        purchase_total_security: 1680.75
+        purchase_total_account: 1692.10
+        avg_price_security: 240.107143
+        avg_price_account: 241.728571
+      average_cost:
+        native: null
+        security: 240.107143
+        account: 241.728571
+        eur: 216.46
+        source: totals
+        coverage_ratio: 1.0
+      performance:
+        gain_abs: 959.88
+        gain_pct: 63.4
+        day_change:
+          price_change_native: 12.0
+          price_change_eur: 12.0
+          change_pct: 0.5
     - security_uuid: 07053eeb-596b-41b1-91a0-e86586dc8229
       name: ALPHABET INC. REG. SHS CL. A DL-,001
       current_holdings: 16
@@ -41,6 +64,29 @@ data:
       current_value: 3290.00
       gain_abs: 1249.87
       gain_pct: 61.3
+      aggregation:
+        total_holdings: 16
+        positive_holdings: 16
+        purchase_value_cents: 204013
+        purchase_value_eur: 2040.13
+        purchase_total_security: 2281.44
+        purchase_total_account: 2275.20
+        avg_price_security: 142.59
+        avg_price_account: 142.2
+      average_cost:
+        native: null
+        security: 142.59
+        account: 142.2
+        eur: 127.51
+        source: totals
+        coverage_ratio: 1.0
+      performance:
+        gain_abs: 1249.87
+        gain_pct: 61.3
+        day_change:
+          price_change_native: 10.0
+          price_change_eur: 10.0
+          change_pct: 0.42
 
 # --- accounts ---
 domain: pp_reader
