@@ -7,8 +7,30 @@ import type {
   PerformanceMetricsPayload,
 } from "../tabs/types";
 
-const toFiniteNumber = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+
+    const relaxed = Number.parseFloat(trimmed);
+    if (Number.isFinite(relaxed)) {
+      return relaxed;
+    }
+  }
+
+  return null;
+};
 
 const toOptionalString = (value: unknown): string | null => {
   if (typeof value !== "string") {
