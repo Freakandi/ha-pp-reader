@@ -6,8 +6,6 @@ import {
   createHeaderCard,
   makeTable,
   formatNumber,
-  formatGain,
-  formatGainPct,
   formatValue,
 } from '../content/elements';
 import { openSecurityDetail } from '../dashboard';
@@ -24,12 +22,10 @@ import type {
   AverageCostPayload,
   HoldingsAggregationPayload,
   PanelConfigLike,
+  PerformanceMetricsPayload,
 } from './types';
-import {
-  normalizeCurrencyValue,
-  normalizePercentValue,
-  toFiniteCurrency,
-} from '../utils/currency';
+import { normalizeCurrencyValue, toFiniteCurrency } from '../utils/currency';
+import { normalizePerformancePayload } from '../utils/performance';
 
 interface PortfolioPositionLike {
   security_uuid?: unknown;
@@ -39,6 +35,7 @@ interface PortfolioPositionLike {
   current_value?: unknown;
   gain_abs?: unknown;
   gain_pct?: unknown;
+  performance?: PerformanceMetricsPayload | null;
   [key: string]: unknown;
 }
 
@@ -57,6 +54,7 @@ interface PortfolioOverviewDepot {
   hasValue: boolean;
   fx_unavailable: boolean;
   missing_value_positions: number;
+  performance: PerformanceMetricsPayload | null;
 }
 
 interface NormalizedAccountRow {
@@ -246,6 +244,27 @@ function resolveAverageCost(
   };
 }
 
+function normalizePerformanceRecord(record: Record<string, unknown>): PerformanceMetricsPayload | null {
+  return normalizePerformancePayload(record['performance']);
+}
+
+function normalizePositionLike(position: PortfolioPositionLike): PortfolioPositionLike {
+  const record = position as Record<string, unknown>;
+  const performance = normalizePerformanceRecord(record);
+  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+
+  return {
+    ...position,
+    current_holdings: toNullableNumber(record['current_holdings']),
+    purchase_value: normalizeCurrencyValue(record['purchase_value']),
+    current_value: normalizeCurrencyValue(record['current_value']),
+    gain_abs: gainAbs,
+    gain_pct: gainPct,
+    performance,
+  };
+}
+
 function formatPriceWithCurrency(
   value: number | null,
   currency: string | null,
@@ -398,6 +417,9 @@ function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): voi
     if (!gainAbsCell || !gainPctCell) {
       return;
     }
+    if (gainAbsCell.dataset.gainPct && gainAbsCell.dataset.gainSign) {
+      return;
+    }
     const pctText = (gainPctCell.textContent || '').trim() || '—';
     let pctSign: 'positive' | 'negative' | 'neutral' = 'neutral';
     if (gainPctCell.querySelector('.positive')) {
@@ -418,6 +440,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
   if (!positions || positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
+  const normalizedPositions = positions.map(normalizePositionLike);
   // Mapping für makeTable
   const cols = [
     { key: 'name', label: 'Wertpapier' },
@@ -427,24 +450,29 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
     { key: 'gain_abs', label: '+/-', align: 'right' as const },
     { key: 'gain_pct', label: '%', align: 'right' as const }
   ];
-  const rows = positions.map(p => ({
-    name: typeof p.name === 'string' ? p.name : p.name != null ? String(p.name) : '',
-    current_holdings: typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
-      ? p.current_holdings
-      : null,
-    purchase_value: typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
-      ? p.purchase_value
-      : null,
-    current_value: typeof p.current_value === 'number' || typeof p.current_value === 'string'
-      ? p.current_value
-      : null,
-    gain_abs: typeof p.gain_abs === 'number' || typeof p.gain_abs === 'string'
-      ? p.gain_abs
-      : null,
-    gain_pct: typeof p.gain_pct === 'number' || typeof p.gain_pct === 'string'
-      ? p.gain_pct
-      : null,
-  }));
+  const rows = normalizedPositions.map(p => {
+    const performance = normalizePerformancePayload((p as Record<string, unknown>)['performance']);
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+
+    return {
+      name: typeof p.name === 'string' ? p.name : p.name != null ? String(p.name) : '',
+      current_holdings:
+        typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
+          ? p.current_holdings
+          : null,
+      purchase_value:
+        typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
+          ? p.purchase_value
+          : null,
+      current_value:
+        typeof p.current_value === 'number' || typeof p.current_value === 'string'
+          ? p.current_value
+          : null,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
+    };
+  });
 
   // Basis-HTML über makeTable erzeugen
   const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'gain_abs']);
@@ -469,7 +497,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
         if (tr.classList.contains('footer-row')) {
           return;
         }
-        const pos = positions[idx];
+        const pos = normalizedPositions[idx];
         if (!pos) {
           return;
         }
@@ -488,6 +516,31 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
           } else {
             purchaseCell.removeAttribute('aria-label');
           }
+        }
+        const gainCell = tr.cells?.[4] ?? null;
+        if (gainCell) {
+          const performance = normalizePerformancePayload((pos as Record<string, unknown>)['performance']);
+          const gainPctValue =
+            typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
+              ? performance.gain_pct
+              : null;
+          const pctLabel =
+            gainPctValue != null
+              ? `${gainPctValue.toLocaleString('de-DE', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} %`
+              : '—';
+          const pctSign =
+            gainPctValue == null
+              ? 'neutral'
+              : gainPctValue > 0
+                ? 'positive'
+                : gainPctValue < 0
+                  ? 'negative'
+                  : 'neutral';
+          gainCell.dataset.gainPct = pctLabel;
+          gainCell.dataset.gainSign = pctSign;
         }
       });
       // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
@@ -592,16 +645,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
     const hasValue = d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value);
     const currentValue = hasValue ? d.current_value! : null;
-    const gainAbs = typeof d.gain_abs === 'number' && Number.isFinite(d.gain_abs)
-      ? d.gain_abs
-      : (hasValue && currentValue != null
-        ? currentValue - purchaseSum
-        : null);
-    const gainPct = typeof d.gain_pct === 'number' && Number.isFinite(d.gain_pct)
-      ? d.gain_pct
-      : (hasValue && purchaseSum > 0 && gainAbs != null
-        ? ((gainAbs / purchaseSum) * 100)
-        : null);
+    const performance = d.performance;
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
     const partialValue = d.fx_unavailable && hasValue;
 
     const expanded = expandedPortfolios.has(d.uuid);
@@ -693,6 +739,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     return a;
   }, 0);
   const sumGainAbs = availableDepots.reduce((a, d) => {
+    if (typeof d.performance?.gain_abs === 'number' && Number.isFinite(d.performance.gain_abs)) {
+      return a + d.performance.gain_abs;
+    }
     const current = typeof d.current_value === 'number' && Number.isFinite(d.current_value) ? d.current_value : 0;
     const purchase = typeof d.purchase_sum === 'number' && Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
     return a + (current - purchase);
@@ -849,19 +898,17 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
 
   const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
 
-  const renderMissingValue = (reason = 'Wert nicht verfügbar') =>
-    `<span class="missing-value" role="note" aria-label="${reason}" title="${reason}">—</span>`;
-  const missingReason = 'Teilweise fehlende Wechselkurse – Wert unbekannt';
+  const footerRowData = {
+    fx_unavailable: !sumHasValue,
+    current_value: sumHasValue ? sumCurrent : null,
+    gain_abs: sumHasValue ? sumGainAbs : null,
+    gain_pct: sumHasValue ? sumGainPct : null,
+  };
+  const footerContext = { hasValue: sumHasValue };
 
-  const currentValueHtml = sumHasValue
-    ? `${formatNumber(sumCurrent)}&nbsp;€`
-    : renderMissingValue(missingReason);
-  const gainAbsHtml = sumHasValue
-    ? formatGain(sumGainAbs)
-    : renderMissingValue(missingReason);
-  const gainPctHtml = sumHasValue && sumGainPct != null
-    ? formatGainPct(sumGainPct)
-    : renderMissingValue(missingReason);
+  const currentValueHtml = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
+  const gainAbsHtml = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
+  const gainPctHtml = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
 
   footer.innerHTML = `
     <td>Summe</td>
@@ -870,6 +917,15 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     <td class="align-right">${gainAbsHtml}</td>
     <td class="align-right">${gainPctHtml}</td>
   `;
+  const footerGainAbsCell = footer.cells?.[3];
+  if (footerGainAbsCell) {
+    footerGainAbsCell.dataset.gainPct = sumHasValue && typeof sumGainPct === 'number'
+      ? `${formatNumber(sumGainPct)} %`
+      : '—';
+    footerGainAbsCell.dataset.gainSign = sumHasValue && typeof sumGainPct === 'number'
+      ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
+      : 'neutral';
+  }
   footer.dataset.positionCount = String(Math.round(sumPositions));
   footer.dataset.currentValue = sumHasValue ? String(sumCurrent) : '';
   footer.dataset.purchaseSum = sumHasValue ? String(sumPurchase) : '';
@@ -1084,8 +1140,9 @@ async function reloadPortfolioPositions(
       return;
     }
     const positions = resp.positions ?? [];
-    portfolioPositionsCache.set(portfolioUuid, positions);
-    targetContainer.innerHTML = renderPositionsTable(positions);
+    const normalized = positions.map(normalizePositionLike);
+    portfolioPositionsCache.set(portfolioUuid, normalized);
+    targetContainer.innerHTML = renderPositionsTable(normalized);
     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
     try {
       attachPortfolioPositionsSorting(root, portfolioUuid);
@@ -1226,9 +1283,10 @@ export function attachPortfolioToggleHandler(root: HTMLElement): void {
                   return;
                 }
                 const positions = resp.positions ?? [];
-                portfolioPositionsCache.set(portfolioUuid, positions);
+                const normalized = positions.map(normalizePositionLike);
+                portfolioPositionsCache.set(portfolioUuid, normalized);
                 if (containerEl) {
-                  containerEl.innerHTML = renderPositionsTable(positions);
+                  containerEl.innerHTML = renderPositionsTable(normalized);
                   // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
                   try {
                     attachPortfolioPositionsSorting(root, portfolioUuid);
@@ -1334,6 +1392,7 @@ export async function renderDashboard(
   const portfoliosResp = await fetchPortfoliosWS(hass, panelConfig);
   const depots: PortfolioOverviewDepot[] = (portfoliosResp.portfolios ?? [])
     .map((p): PortfolioOverviewDepot | null => {
+      const record = p as Record<string, unknown>;
       const uuid = typeof p.uuid === 'string' && p.uuid ? p.uuid : null;
       if (!uuid) {
         return null;
@@ -1341,29 +1400,13 @@ export async function renderDashboard(
       const missingPositions = typeof (p as Record<string, unknown>).missing_value_positions === 'number'
         ? (p as Record<string, unknown>).missing_value_positions as number
         : 0;
-      const rawCurrentValue = normalizeCurrencyValue((p as Record<string, unknown>).current_value);
-      const purchaseSum = normalizeCurrencyValue((p as Record<string, unknown>).purchase_sum) ?? 0;
-      const rawGainAbs = normalizeCurrencyValue((p as Record<string, unknown>).gain_abs);
-      const rawGainPct = normalizePercentValue((p as Record<string, unknown>).gain_pct);
+      const rawCurrentValue = normalizeCurrencyValue(record.current_value);
+      const purchaseSum = normalizeCurrencyValue(record.purchase_sum) ?? 0;
+      const performance = normalizePerformanceRecord(record);
 
       const hasNumericCurrentValue = rawCurrentValue != null;
-      let gainAbs: number | null;
-      if (rawGainAbs != null) {
-        gainAbs = rawGainAbs;
-      } else if (hasNumericCurrentValue) {
-        gainAbs = normalizeCurrencyValue(rawCurrentValue! - purchaseSum);
-      } else {
-        gainAbs = null;
-      }
-
-      let gainPct: number | null;
-      if (rawGainPct != null) {
-        gainPct = rawGainPct;
-      } else if (hasNumericCurrentValue && purchaseSum > 0 && gainAbs != null) {
-        gainPct = normalizePercentValue((gainAbs / purchaseSum) * 100);
-      } else {
-        gainPct = null;
-      }
+      const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+      const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
       const partialValue = missingPositions > 0;
       const hasValue = hasNumericCurrentValue;
@@ -1380,6 +1423,7 @@ export async function renderDashboard(
         hasValue,
         missing_value_positions: missingPositions,
         fx_unavailable: fxUnavailable,
+        performance: performance,
       };
     })
     .filter((depot): depot is PortfolioOverviewDepot => depot !== null);

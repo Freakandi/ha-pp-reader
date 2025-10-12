@@ -282,18 +282,6 @@ def _calculate_purchase_total(
     return round_currency(total_purchase, default=0.0) or 0.0
 
 
-def calculate_unrealized_gain(current_value: float, purchase_sum: float) -> float:
-    """Return the unrealized gain based on current value and purchase sum."""
-    return round(current_value - purchase_sum, 2)
-
-
-def calculate_unrealized_gain_pct(current_value: float, purchase_sum: float) -> float:
-    """Return the unrealized gain in percent based on the purchase sum."""
-    if purchase_sum == 0:
-        return 0.0
-    return round(((current_value - purchase_sum) / purchase_sum) * 100, 2)
-
-
 def db_calculate_portfolio_value_and_count(
     portfolio_uuid: str, db_path: Path
 ) -> tuple[float, int]:

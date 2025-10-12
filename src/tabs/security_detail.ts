@@ -37,13 +37,13 @@ import type {
   SecuritySnapshotLike,
   HoldingsAggregationPayload,
   AverageCostSource,
+  PerformanceMetricsPayload,
 } from './types';
-import { roundCurrency, toFiniteCurrency } from '../utils/currency';
+import { roundCurrency, toFiniteCurrency, normalizePercentValue } from '../utils/currency';
+import { normalizePerformancePayload } from '../utils/performance';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
-const HISTORY_SYNC_TOLERANCE_MS = 6 * 60 * 60 * 1000; // 6 hours leeway between history close and price fetch
-const MAX_PRICE_STALENESS_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance before treating last price as stale
 const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = '1Y';
 const AVAILABLE_HISTORY_RANGES: readonly SecurityHistoryRangeKey[] = [
   '1M',
@@ -119,6 +119,7 @@ interface SecuritySnapshotMetrics {
   dayChangePct: number | null;
   totalChangeEur: number | null;
   totalChangePct: number | null;
+  performance: PerformanceMetricsPayload | null;
   lastPriceFetchedAt: number | null;
 }
 
@@ -382,6 +383,8 @@ function buildSnapshotFromPortfolioCache(
   let securityWeight = 0;
   let accountWeightedSum = 0;
   let accountWeight = 0;
+  let gainAbsSum = 0;
+  let gainAbsContributors = 0;
 
   for (const position of matches) {
     if (!name && typeof position?.name === 'string') {
@@ -448,6 +451,12 @@ function buildSnapshotFromPortfolioCache(
         accountWeight += holdings;
       }
     }
+
+    const performance = normalizePerformancePayload((position as Record<string, unknown>)['performance']);
+    if (performance && typeof performance.gain_abs === 'number') {
+      gainAbsSum += performance.gain_abs;
+      gainAbsContributors += 1;
+    }
   }
 
   const roundedHoldings =
@@ -456,13 +465,14 @@ function buildSnapshotFromPortfolioCache(
     roundCurrency(purchaseValueEur, { fallback: 0 }) ?? 0;
   const roundedCurrentValue =
     roundCurrency(currentValueEur, { fallback: 0 }) ?? 0;
-  const gainAbsUnrounded = roundedCurrentValue - roundedPurchaseValue;
-  const gainAbs = roundCurrency(gainAbsUnrounded, { fallback: 0 }) ?? 0;
-  const gainPct =
-    roundCurrency(
-      purchaseValueEur > 0 ? (gainAbsUnrounded / purchaseValueEur) * 100 : 0,
-      { fallback: 0 },
-    ) ?? 0;
+  const aggregatedGainAbs =
+    gainAbsContributors > 0
+      ? roundCurrency(gainAbsSum, { fallback: null })
+      : null;
+  const aggregatedGainPct =
+    gainAbsContributors > 0 && purchaseValueEur > 0
+      ? roundCurrency((gainAbsSum / purchaseValueEur) * 100, { fallback: null })
+      : null;
   const lastPriceEur =
     roundedHoldings > 0
       ? roundCurrency(roundedCurrentValue / roundedHoldings, { fallback: null })
@@ -495,14 +505,27 @@ function buildSnapshotFromPortfolioCache(
         })
       : null;
 
+  const performancePayload =
+    aggregatedGainAbs != null && aggregatedGainPct != null
+      ? {
+          gain_abs: aggregatedGainAbs,
+          gain_pct: aggregatedGainPct,
+          total_change_eur: aggregatedGainAbs,
+          total_change_pct: aggregatedGainPct,
+          source: 'cache',
+          coverage_ratio: null,
+          day_change: null,
+        }
+      : null;
+
   return {
     security_uuid: securityUuid,
     name,
     total_holdings: roundedHoldings,
     purchase_value_eur: roundedPurchaseValue,
     current_value_eur: roundedCurrentValue,
-    gain_abs_eur: gainAbs,
-    gain_pct: gainPct,
+    gain_abs_eur: aggregatedGainAbs,
+    gain_pct: aggregatedGainPct,
     last_price_eur: lastPriceEur,
     purchase_total_security: purchaseTotalSecurityRounded,
     purchase_total_account: purchaseTotalAccountRounded,
@@ -510,6 +533,7 @@ function buildSnapshotFromPortfolioCache(
     avg_price_account: averageAccount,
     average_purchase_price_native: averageNative,
     source: 'cache',
+    performance: performancePayload,
   };
 }
 
@@ -927,54 +951,6 @@ function areNumbersClose(
   return absoluteDiff <= scale * 1e-4;
 }
 
-function roundPercentage(value: number | null): number | null {
-  if (value == null || Number.isNaN(value)) {
-    return null;
-  }
-
-  const rounded = Math.round(value * 100) / 100;
-  return Object.is(rounded, -0) ? 0 : rounded;
-}
-
-function computeDelta(
-  current: number | null | undefined,
-  reference: number | null | undefined,
-): number | null {
-  if (!isFiniteNumber(current) || !isFiniteNumber(reference)) {
-    return null;
-  }
-
-  return current - reference;
-}
-
-function convertNativeDiffToEur(
-  diffNative: number | null,
-  fxRate: number | null,
-): number | null {
-  if (!isFiniteNumber(diffNative) || !isPositiveFinite(fxRate)) {
-    return null;
-  }
-
-  return diffNative * fxRate;
-}
-
-function computeHoldingsAdjustedEurChange(
-  holdings: number | null,
-  diffNative: number | null,
-  fxRate: number | null,
-): number | null {
-  if (!isFiniteNumber(holdings)) {
-    return null;
-  }
-
-  const nativeInEur = convertNativeDiffToEur(diffNative, fxRate);
-  if (nativeInEur == null) {
-    return null;
-  }
-
-  return roundCurrency(nativeInEur * holdings);
-}
-
 function computePercentageChange(
   current: number | null,
   reference: number | null,
@@ -983,7 +959,7 @@ function computePercentageChange(
     return null;
   }
 
-  return roundPercentage(((current - reference) / reference) * 100);
+  return normalizePercentValue(((current - reference) / reference) * 100);
 }
 
 function ensureSnapshotMetrics(
@@ -1020,9 +996,6 @@ function ensureSnapshotMetrics(
     toFiniteNumber(snapshot.last_price_native) ??
     toFiniteNumber(snapshot.last_price?.native) ??
     null;
-  const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
-  const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
-  const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
   const lastPriceFetchedAt =
     parseTimestamp((snapshot as { last_price_fetched_at?: unknown })?.last_price_fetched_at) ??
     parseTimestamp(
@@ -1033,41 +1006,15 @@ function ensureSnapshotMetrics(
   const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
   const safeHoldings = isFiniteNumber(holdings) ? holdings : null;
 
-  const backendDayChangeNative = toFiniteNumber(snapshot.day_price_change_native);
-  const backendDayChangeEur = toFiniteNumber(snapshot.day_price_change_eur);
-  const backendDayChangePct = toFiniteNumber(snapshot.day_change_pct);
+  const performance = normalizePerformancePayload(snapshot.performance);
+  const dayChange = performance?.day_change ?? null;
 
-  const fallbackDayChangeNative = computeDelta(lastPriceNative, lastCloseNative);
-  const fallbackDayChangeEur = computeDelta(lastPriceEur, lastCloseEur);
+  const dayPriceChangeNative = dayChange?.price_change_native ?? null;
+  const dayPriceChangeEur = dayChange?.price_change_eur ?? null;
+  const dayChangePct = dayChange?.change_pct ?? null;
 
-  const dayPriceChangeNative = backendDayChangeNative ?? fallbackDayChangeNative;
-
-  let dayPriceChangeEur = backendDayChangeEur ?? fallbackDayChangeEur;
-  if (dayPriceChangeEur == null && isFiniteNumber(dayPriceChangeNative)) {
-    dayPriceChangeEur = convertNativeDiffToEur(dayPriceChangeNative, safeFxRate);
-  }
-
-  const dayChangePct =
-    (backendDayChangePct != null ? roundPercentage(backendDayChangePct) : null) ??
-    computePercentageChange(lastPriceNative, lastCloseNative) ??
-    computePercentageChange(lastPriceEur, lastCloseEur);
-
-  const totalChangeEurDirect = computeHoldingsAdjustedEurChange(
-    safeHoldings,
-    computeDelta(lastPriceNative, averagePurchaseNative),
-    safeFxRate,
-  );
-
-  const totalChangeFallbackDiff = computeDelta(currentValueEur, purchaseValueEur);
-  const totalChangeEur =
-    totalChangeFallbackDiff != null
-      ? roundCurrency(totalChangeFallbackDiff)
-      : totalChangeEurDirect;
-
-  const totalChangePct =
-    computePercentageChange(currentValueEur, purchaseValueEur) ??
-    computePercentageChange(lastPriceNative, averagePurchaseNative) ??
-    computePercentageChange(lastPriceEur, averagePurchaseEur);
+  const totalChangeEur = performance?.total_change_eur ?? null;
+  const totalChangePct = performance?.total_change_pct ?? null;
 
   const metrics: SecuritySnapshotMetrics = {
     holdings: safeHoldings,
@@ -1082,6 +1029,7 @@ function ensureSnapshotMetrics(
     dayChangePct,
     totalChangeEur,
     totalChangePct,
+    performance: performance ?? null,
     lastPriceFetchedAt: lastPriceFetchedAt ?? null,
   };
 
@@ -1127,148 +1075,6 @@ function computePriceChangeMetrics(
   const priceChangePct = computePercentageChange(effectiveLast, baseline);
 
   return { priceChange, priceChangePct };
-}
-
-function computeLatestHistoryDayChange(
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): { diff: number; pct: number | null } | null {
-  if (!Array.isArray(historySeries) || historySeries.length < 2) {
-    return null;
-  }
-
-  let latest: number | null = null;
-  let previous: number | null = null;
-
-  for (let index = historySeries.length - 1; index >= 0; index -= 1) {
-    const close = toFiniteNumber(historySeries[index]?.close);
-    if (!isFiniteNumber(close)) {
-      continue;
-    }
-
-    if (latest == null) {
-      latest = close;
-      continue;
-    }
-
-    previous = close;
-    break;
-  }
-
-  if (!isFiniteNumber(latest) || !isFiniteNumber(previous)) {
-    return null;
-  }
-
-  const rawDiff = latest - previous;
-  const diff = Object.is(rawDiff, -0) ? 0 : rawDiff;
-  const pct = computePercentageChange(latest, previous);
-
-  return { diff, pct };
-}
-
-function extractLatestHistoryTimestamp(
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): number | null {
-  if (!Array.isArray(historySeries) || historySeries.length === 0) {
-    return null;
-  }
-
-  for (let index = historySeries.length - 1; index >= 0; index -= 1) {
-    const entry = historySeries[index];
-    if (!entry) {
-      continue;
-    }
-
-    const parsedDate = parseHistoryDate(entry.date);
-    if (parsedDate) {
-      return parsedDate.getTime();
-    }
-  }
-
-  return null;
-}
-
-function isSnapshotPriceFresh(
-  metrics: SecuritySnapshotMetrics | null,
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): boolean {
-  if (!metrics) {
-    return false;
-  }
-
-  const fetchedAt = metrics.lastPriceFetchedAt;
-  if (!isFiniteNumber(fetchedAt)) {
-    return false;
-  }
-
-  const now = Date.now();
-  if (now - fetchedAt > MAX_PRICE_STALENESS_MS) {
-    return false;
-  }
-
-  const latestHistoryTimestamp = extractLatestHistoryTimestamp(historySeries);
-  if (
-    latestHistoryTimestamp != null &&
-    fetchedAt + HISTORY_SYNC_TOLERANCE_MS < latestHistoryTimestamp
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function shouldReplaceDayChange(value: number | null | undefined): boolean {
-  if (!isFiniteNumber(value)) {
-    return true;
-  }
-
-  return value === 0 || Object.is(value, -0);
-}
-
-function applyHistoryDayChangeFallback(
-  metrics: SecuritySnapshotMetrics | null,
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): boolean {
-  if (!metrics) {
-    return false;
-  }
-
-  const replaceNative = shouldReplaceDayChange(metrics.dayPriceChangeNative);
-  const replaceEur = shouldReplaceDayChange(metrics.dayPriceChangeEur) || replaceNative;
-  const replacePct = shouldReplaceDayChange(metrics.dayChangePct);
-
-  if (!replaceNative && !replaceEur && !replacePct) {
-    return false;
-  }
-
-  if (isSnapshotPriceFresh(metrics, historySeries)) {
-    return false;
-  }
-
-  const fallback = computeLatestHistoryDayChange(historySeries);
-  if (!fallback) {
-    return false;
-  }
-
-  const { diff, pct } = fallback;
-
-  if (replaceNative) {
-    metrics.dayPriceChangeNative = diff;
-  }
-
-  if (replaceEur) {
-    const converted = convertNativeDiffToEur(diff, metrics.fxRate);
-    if (isFiniteNumber(converted)) {
-      metrics.dayPriceChangeEur = converted;
-    } else if (replaceNative) {
-      metrics.dayPriceChangeEur = diff;
-    }
-  }
-
-  if (replacePct && pct != null) {
-    metrics.dayChangePct = pct;
-  }
-
-  return true;
 }
 
 function resolveRoundedTrendClass(
@@ -1724,7 +1530,6 @@ function buildHeaderMeta(
   const holdings = formatHoldings(holdingsSource);
   const lastPriceNativeRaw =
     snapshot.last_price_native ?? snapshot.last_price?.native ?? snapshot.last_price_eur;
-  const lastPriceNative = toFiniteNumber(lastPriceNativeRaw);
   const formattedLastPrice = formatPrice(lastPriceNativeRaw);
   const lastPriceDisplay =
     formattedLastPrice === '—'
@@ -1736,9 +1541,6 @@ function buildHeaderMeta(
     null;
   const purchaseTotalSecurity = toFiniteNumber(snapshot.purchase_total_security);
   const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
-  const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
-  const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
-  const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
   const averageCost = normalizeAverageCost(snapshot);
   const averagePurchaseNativeRaw =
     metrics?.averagePurchaseNative ??
@@ -1755,10 +1557,10 @@ function buildHeaderMeta(
     averageCost?.account ??
     null;
   const resolvedAccountAverage = averagePurchaseAccountRaw ?? averagePurchaseEurRaw;
-  const dayPriceChangeNative =
-    metrics?.dayPriceChangeNative ?? computeDelta(lastPriceNative, lastCloseNative);
-  const dayPriceChangeEur =
-    metrics?.dayPriceChangeEur ?? computeDelta(lastPriceEur, lastCloseEur);
+  const performancePayload = metrics?.performance ?? null;
+  const dayChangePayload = performancePayload?.day_change ?? null;
+  const dayPriceChangeNative = dayChangePayload?.price_change_native ?? null;
+  const dayPriceChangeEur = dayChangePayload?.price_change_eur ?? null;
   const dayChangeValue = isFiniteNumber(dayPriceChangeNative)
     ? dayPriceChangeNative
     : dayPriceChangeEur;
@@ -1829,15 +1631,15 @@ function buildHeaderMeta(
       )
     : wrapMissingValue('value--absolute');
   const dayChangePercentage = renderGainPercentage(
-    metrics?.dayChangePct,
+    dayChangePayload?.change_pct,
     'value--percentage',
   );
   const totalChangeAbsolute = renderGainValue(
-    metrics?.totalChangeEur,
+    performancePayload?.total_change_eur,
     'value--absolute',
   );
   const totalChangePercentage = renderGainPercentage(
-    metrics?.totalChangePct,
+    performancePayload?.total_change_pct,
     'value--percentage',
   );
   const accountCurrency = resolveAccountCurrencyCode(
@@ -2382,13 +2184,6 @@ export async function renderSecurityDetail(
           'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
       };
     }
-  }
-
-  if (
-    applyHistoryDayChangeFallback(snapshotMetrics, historySeries) &&
-    snapshotMetrics
-  ) {
-    SNAPSHOT_METRICS_REGISTRY.set(securityUuid, snapshotMetrics);
   }
 
   const displayHistorySeries = buildHistorySeriesWithSnapshotPrice(

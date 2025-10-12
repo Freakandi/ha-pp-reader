@@ -110,6 +110,90 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
   );
 });
 
+test('ensureSnapshotMetricsForTest prefers backend performance payload', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('performance-backend', {
+    security_uuid: 'performance-backend',
+    total_holdings_precise: '10',
+    purchase_value_eur: '1250',
+    current_value_eur: '1500',
+    performance: {
+      gain_abs: 250,
+      gain_pct: 20,
+      total_change_eur: 250,
+      total_change_pct: 20,
+      source: 'snapshot',
+      coverage_ratio: 0.95,
+      day_change: {
+        price_change_native: 0.45,
+        price_change_eur: 0.4,
+        change_pct: 0.3,
+        source: 'native',
+        coverage_ratio: 0.5,
+      },
+    },
+  });
+
+  assert.ok(metrics?.performance, 'expected performance payload to be preserved');
+  assert.strictEqual(metrics?.performance?.source, 'snapshot');
+  assertApproximately(
+    metrics?.performance?.gain_abs,
+    250,
+    'gain absolute value should originate from backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.gain_pct,
+    20,
+    'gain percentage should mirror backend rounding',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_eur,
+    250,
+    'total change EUR should mirror backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_pct,
+    20,
+    'total change percentage should reuse backend value',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_native,
+    0.45,
+    'native day change should match backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_eur,
+    0.4,
+    'EUR day change should match backend payload',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.change_pct,
+    0.3,
+    'day change percentage should be sourced from the backend payload',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeNative,
+    0.45,
+    'metrics cache should stay aligned with backend native change',
+  );
+  assertApproximately(
+    metrics?.dayPriceChangeEur,
+    0.4,
+    'metrics cache should stay aligned with backend EUR change',
+  );
+  assertApproximately(
+    metrics?.totalChangeEur,
+    250,
+    'metrics cache should expose backend total change EUR',
+  );
+  assertApproximately(
+    metrics?.totalChangePct,
+    20,
+    'metrics cache should expose backend total change percentage',
+  );
+});
+
 test('normalizeAverageCostForTest normalises backend payload structure', () => {
   const normalized = normalizeAverageCostForTest({
     average_cost: {
@@ -153,6 +237,88 @@ test('normalizeAverageCostForTest normalises backend payload structure', () => {
     0.85,
     'coverage ratio should be converted to a decimal fraction',
   );
+});
+
+test('ensureSnapshotMetricsForTest uses provided performance payload without legacy fallback', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('performance-legacy', {
+    security_uuid: 'performance-legacy',
+    total_holdings_precise: '5',
+    purchase_value_eur: '500',
+    current_value_eur: '650',
+    last_price_native: '26.5',
+    last_close_native: '26.25',
+    last_price_eur: '32.5',
+    last_close_eur: '32.3',
+    currency_code: 'USD',
+    performance: {
+      gain_abs: 150,
+      gain_pct: 30,
+      total_change_eur: 150,
+      total_change_pct: 30,
+      source: 'snapshot',
+      coverage_ratio: 1,
+      day_change: {
+        price_change_native: 0.25,
+        price_change_eur: 0.2,
+        change_pct: 0.45,
+        source: 'native',
+        coverage_ratio: 1,
+      },
+    },
+  });
+
+  assert.ok(metrics?.performance, 'expected fallback performance payload to be generated');
+  assertApproximately(
+    metrics?.performance?.gain_abs,
+    150,
+    'gain absolute should derive from legacy EUR field',
+  );
+  assertApproximately(
+    metrics?.performance?.gain_pct,
+    30,
+    'gain percentage should normalise the legacy field',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_eur,
+    150,
+    'total change EUR should mirror the legacy field',
+  );
+  assertApproximately(
+    metrics?.performance?.total_change_pct,
+    30,
+    'total change percentage should reuse the legacy value',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_native ?? 0,
+    0.25,
+    'native day change should reflect provided performance payload',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.price_change_eur ?? 0,
+    0.2,
+    'EUR day change should reflect provided performance payload',
+  );
+  assertApproximately(
+    metrics?.performance?.day_change?.change_pct ?? 0,
+    0.45,
+    'day change percentage should reflect provided performance payload',
+  );
+});
+
+test('ensureSnapshotMetricsForTest leaves performance null when no payload provided', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('performance-derived', {
+    security_uuid: 'performance-derived',
+    total_holdings_precise: '2',
+    purchase_value_eur: '100',
+    current_value_eur: '112',
+    currency_code: 'USD',
+  });
+
+  assert.strictEqual(metrics?.performance, null, 'expected performance to remain null without payload');
 });
 
 test('normalizeAverageCostForTest falls back to legacy snapshot fields', () => {
@@ -298,6 +464,43 @@ test('resolvePurchaseFxTooltipForTest annotates metadata from average cost paylo
   assert.ok(tooltip, 'tooltip should be generated when averages are available');
   assert.match(tooltip ?? '', /Quelle: Kauf/);
   assert.match(tooltip ?? '', /Abdeckung: 75/);
+});
+
+test('ensureSnapshotMetricsForTest leaves day change empty without performance payload', () => {
+  clearSnapshotMetricsRegistryForTest();
+
+  const metrics = ensureSnapshotMetricsForTest('day-change-absent', {
+    security_uuid: 'day-change-absent',
+    total_holdings_precise: '5',
+    purchase_value_eur: '500',
+    current_value_eur: '600',
+    last_price_native: '12.5',
+    last_close_native: '12.1',
+    last_price_eur: '25',
+    last_close_eur: '24',
+  });
+
+  assert.ok(metrics, 'expected metrics to be initialised');
+  assert.strictEqual(
+    metrics?.dayPriceChangeNative,
+    null,
+    'native day change should remain unset without performance payload',
+  );
+  assert.strictEqual(
+    metrics?.dayPriceChangeEur,
+    null,
+    'EUR day change should remain unset without performance payload',
+  );
+  assert.strictEqual(
+    metrics?.dayChangePct,
+    null,
+    'day change percentage should remain unset without performance payload',
+  );
+  assert.strictEqual(
+    metrics?.performance?.day_change,
+    null,
+    'performance payload should not synthesise day change data',
+  );
 });
 
 test('getHistoryChartOptionsForTest injects the native baseline into chart options', () => {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import asdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -12,6 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from ..const import DOMAIN
 from ..util.currency import cent_to_eur, round_currency
+from .performance import select_performance_metrics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,16 +75,27 @@ def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] 
         raw_current_value = item.get("value")
     current_value = _normalize_currency_amount(raw_current_value)
 
-    purchase_sum = _normalize_currency_amount(item.get("purchase_sum"))
+    raw_purchase_sum = item.get("purchase_sum")
+    if raw_purchase_sum is None:
+        raw_purchase_sum = item.get("purchaseSum")
+    purchase_sum = _normalize_currency_amount(raw_purchase_sum)
 
-    gain_abs_unrounded = current_value - purchase_sum
-    gain_abs = round_currency(gain_abs_unrounded, default=0.0) or 0.0
-    gain_pct = round_currency(
-        (gain_abs_unrounded / purchase_sum * 100) if purchase_sum else 0.0,
-        default=0.0,
-    ) or 0.0
+    performance_mapping = item.get("performance")
+    performance_payload: dict[str, Any]
+    if isinstance(performance_mapping, Mapping):
+        performance_payload = dict(performance_mapping)
+    else:
+        performance_metrics, day_change_metrics = select_performance_metrics(
+            current_value=raw_current_value,
+            purchase_value=raw_purchase_sum,
+        )
+        performance_payload = asdict(performance_metrics)
+        performance_payload["day_change"] = asdict(day_change_metrics)
 
-    return {
+    gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
+    gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
+
+    normalized = {
         "uuid": str(uuid),
         "position_count": _int("position_count", "count"),
         "current_value": current_value,
@@ -90,6 +103,11 @@ def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] 
         "gain_abs": gain_abs,
         "gain_pct": gain_pct,
     }
+
+    if performance_payload:
+        normalized["performance"] = performance_payload
+
+    return normalized
 
 
 def _compact_portfolio_values_payload(data: Any) -> Any:
@@ -182,6 +200,7 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     purchase_value = _item_value("purchase_value_eur", "purchase_value")
     if purchase_value is None:
         purchase_value = _mapping_value(aggregation, "purchase_value_eur")
+    purchase_value_raw = purchase_value
     if purchase_value is None:
         purchase_value = 0.0
 
@@ -217,20 +236,42 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     if avg_price_account is None:
         avg_price_account = _item_value("avg_price_account")
 
+    current_value_raw = item.get("current_value")
+    current_value = _normalize_currency_amount(current_value_raw)
+
+    performance_mapping = item.get("performance")
+    performance_payload: dict[str, Any]
+    if isinstance(performance_mapping, Mapping):
+        performance_payload = dict(performance_mapping)
+    else:
+        performance_metrics, day_change_metrics = select_performance_metrics(
+            current_value=current_value_raw,
+            purchase_value=purchase_value_raw,
+            holdings=_coerce_float(item.get("current_holdings")),
+        )
+        performance_payload = asdict(performance_metrics)
+        performance_payload["day_change"] = asdict(day_change_metrics)
+
+    gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
+    gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
+
     normalized: dict[str, Any] = {
         "security_uuid": security_uuid,
         "name": item.get("name"),
         "current_holdings": item.get("current_holdings", 0),
         "purchase_value": purchase_value,
-        "current_value": _normalize_currency_amount(item.get("current_value")),
-        "gain_abs": _normalize_currency_amount(item.get("gain_abs")),
-        "gain_pct": round_currency(item.get("gain_pct"), default=0.0) or 0.0,
+        "current_value": current_value,
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
         "average_purchase_price_native": avg_native,
         "purchase_total_security": purchase_total_security,
         "purchase_total_account": purchase_total_account,
         "avg_price_security": avg_price_security,
         "avg_price_account": avg_price_account,
     }
+
+    if performance_payload:
+        normalized["performance"] = performance_payload
 
     return normalized
 

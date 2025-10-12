@@ -4,14 +4,17 @@
 
 import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
+import { formatValue } from '../content/elements';
 import type { SortDirection } from '../content/elements';
 import type {
   AverageCostPayload,
   AverageCostSource,
   HoldingsAggregationPayload,
+  PerformanceMetricsPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
 import { roundCurrency } from '../utils/currency';
+import { normalizePerformancePayload } from '../utils/performance';
 import type { AccountSummary, PortfolioSummary } from './api';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
@@ -32,6 +35,7 @@ interface PortfolioPositionData {
   avg_price_security?: number | null;
   avg_price_account?: number | null;
   average_cost?: AverageCostPayload | null;
+  performance?: PerformanceMetricsPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
   [key: string]: unknown;
 }
@@ -57,6 +61,12 @@ interface PendingRetryMeta {
 interface ApplyPositionsResult {
   applied: boolean;
   reason?: 'invalid' | 'missing' | 'hidden';
+}
+
+function normalizePerformanceMetrics(
+  position: PortfolioPositionData,
+): PerformanceMetricsPayload | null {
+  return normalizePerformancePayload(position.performance);
 }
 
 function deriveAggregation(position: PortfolioPositionData): HoldingsAggregationPayload {
@@ -192,6 +202,9 @@ function normalizeAverageCost(
 function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
   const aggregation = deriveAggregation(position);
   const averageCost = normalizeAverageCost(position, aggregation);
+  const performance = normalizePerformanceMetrics(position);
+  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
   return {
     ...position,
@@ -203,6 +216,9 @@ function normalizePosition(position: PortfolioPositionData): PortfolioPositionDa
     avg_price_security: averageCost?.security ?? null,
     avg_price_account: averageCost?.account ?? null,
     average_cost: averageCost,
+    gain_abs: gainAbs,
+    gain_pct: gainPct,
+    performance,
     aggregation,
   };
 }
@@ -581,10 +597,14 @@ export function handlePortfolioUpdate(
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
     const posCount = Number(entry.position_count ?? entry.count ?? 0);
     const curVal = Number(entry.current_value ?? entry.value ?? 0);
-    const purchase = Number(entry.purchase_sum ?? entry.purchaseSum ?? 0);
-
-    const gainAbs = curVal - purchase;
-    const gainPct = purchase > 0 ? (gainAbs / purchase) * 100 : 0;
+    const entryRecord = entry as Record<string, unknown>;
+    const performance = normalizePerformancePayload(entryRecord['performance']);
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    const purchaseRaw = entry.purchase_sum ?? entry.purchaseSum ?? null;
+    const purchase = typeof purchaseRaw === 'number' && Number.isFinite(purchaseRaw)
+      ? purchaseRaw
+      : null;
 
     const oldCur = parseNumLoose(curValCell.textContent);
     const oldCnt = parseNumLoose(posCountCell.textContent);
@@ -592,33 +612,45 @@ export function handlePortfolioUpdate(
     if (oldCnt !== posCount) {
       posCountCell.textContent = formatPositionCount(posCount);
     }
-    if (Math.abs(oldCur - curVal) >= 0.005) {
-      curValCell.textContent = `${formatNumberLocal(curVal)} €`;
+    const hasValue = Number.isFinite(curVal);
+    const rowData = {
+      fx_unavailable: Boolean(entryRecord['fx_unavailable']),
+      current_value: hasValue ? curVal : null,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
+    };
+    const rowContext = { hasValue };
+    const currentMarkup = formatValue('current_value', rowData.current_value, rowData, rowContext);
+    if (Math.abs(oldCur - curVal) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
+      curValCell.innerHTML = currentMarkup;
       row.classList.add('flash-update');
       setTimeout(() => row.classList.remove('flash-update'), 800);
     }
     if (gainAbsCell) {
-      gainAbsCell.innerHTML = formatGain(gainAbs);
-      gainAbsCell.dataset.gainPct = Number.isFinite(gainPct)
-        ? `${formatNumberLocal(gainPct)} %`
+      const gainMarkup = formatValue('gain_abs', rowData.gain_abs, rowData, rowContext);
+      gainAbsCell.innerHTML = gainMarkup;
+      const hasGainPct = typeof gainPct === 'number' && Number.isFinite(gainPct);
+      const pctValue = hasGainPct ? gainPct : null;
+      gainAbsCell.dataset.gainPct = pctValue != null
+        ? `${formatNumberLocal(pctValue)} %`
         : '—';
-      gainAbsCell.dataset.gainSign = Number.isFinite(gainPct)
-        ? gainPct > 0
+      gainAbsCell.dataset.gainSign = pctValue != null
+        ? pctValue > 0
           ? 'positive'
-          : gainPct < 0
+          : pctValue < 0
             ? 'negative'
             : 'neutral'
         : 'neutral';
     }
     if (gainPctCell) {
-      gainPctCell.innerHTML = formatGainPct(gainPct);
+      gainPctCell.innerHTML = formatValue('gain_pct', rowData.gain_pct, rowData, rowContext);
     }
 
     row.dataset.positionCount = String(posCount);
-    row.dataset.currentValue = String(curVal);
-    row.dataset.purchaseSum = String(purchase);
-    row.dataset.gainAbs = String(gainAbs);
-    row.dataset.gainPct = String(gainPct);
+    row.dataset.currentValue = hasValue ? String(curVal) : '';
+    row.dataset.purchaseSum = purchase != null ? String(purchase) : '';
+    row.dataset.gainAbs = gainAbs != null ? String(gainAbs) : '';
+    row.dataset.gainPct = gainPct != null ? String(gainPct) : '';
 
     patched += 1;
   }
@@ -813,14 +845,22 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
   if (!positions || !positions.length) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
-  const rows = positions.map(position => ({
-    name: position.name,
-    current_holdings: position.current_holdings,
-    purchase_value: position.purchase_value,
-    current_value: position.current_value,
-    gain_abs: position.gain_abs,
-    gain_pct: position.gain_pct,
-  }));
+  const rows = positions.map(position => {
+    const performance = normalizePerformanceMetrics(position);
+    const gainAbs =
+      typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct =
+      typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+
+    return {
+      name: position.name,
+      current_holdings: position.current_holdings,
+      purchase_value: position.purchase_value,
+      current_value: position.current_value,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
+    };
+  });
 
   // Basis HTML
   const raw = makeTable(
@@ -872,18 +912,37 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
         }
       } else {
         const rows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
-        rows.forEach(row => {
-          const gainCell = row.cells?.[4];
-          const pctCell = row.cells?.[5];
-          if (!gainCell || !pctCell) return;
-          const pctText = (pctCell.textContent || '').trim() || '—';
-          let pctSign = 'neutral';
-          if (pctCell.querySelector('.positive')) {
-            pctSign = 'positive';
-          } else if (pctCell.querySelector('.negative')) {
-            pctSign = 'negative';
+        rows.forEach((row, idx) => {
+          if (row.classList.contains('footer-row')) {
+            return;
           }
-          gainCell.dataset.gainPct = pctText;
+          const gainCell = row.cells?.[4];
+          if (!gainCell) {
+            return;
+          }
+          const position = positions[idx];
+          const performance = normalizePerformanceMetrics(position);
+          const gainPctValue =
+            typeof performance?.gain_pct === 'number' &&
+            Number.isFinite(performance.gain_pct)
+              ? performance.gain_pct
+              : null;
+          const pctLabel =
+            gainPctValue != null
+              ? `${gainPctValue.toLocaleString('de-DE', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} %`
+              : '—';
+          const pctSign =
+            gainPctValue == null
+              ? 'neutral'
+              : gainPctValue > 0
+                ? 'positive'
+                : gainPctValue < 0
+                  ? 'negative'
+                  : 'neutral';
+          gainCell.dataset.gainPct = pctLabel;
           gainCell.dataset.gainSign = pctSign;
         });
       }
@@ -961,20 +1020,34 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     table.querySelector('tbody')?.appendChild(footer);
   }
   const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
+  const hasAnyValue = rows.some(row => row.dataset?.hasValue === 'true');
+  const sumIsPartial = rows.some(row => row.dataset?.fxUnavailable === 'true');
+
+  const footerRowData = {
+    fx_unavailable: sumIsPartial,
+    current_value: hasAnyValue ? sumCurrent : null,
+    gain_abs: hasAnyValue ? sumGainAbs : null,
+    gain_pct: hasAnyValue ? sumGainPct : null,
+  };
+  const footerContext = { hasValue: hasAnyValue };
+
+  const currentValueCell = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
+  const gainAbsCellMarkup = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
+  const gainPctCellMarkup = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
 
   footer.innerHTML = `
     <td>Summe</td>
     <td class="align-right">${sumPositionsDisplay}</td>
-    <td class="align-right">${formatNumber(sumCurrent)}&nbsp;€</td>
-    <td class="align-right">${formatGain(sumGainAbs)}</td>
-    <td class="align-right">${formatGainPct(sumGainPct)}</td>
+    <td class="align-right">${currentValueCell}</td>
+    <td class="align-right">${gainAbsCellMarkup}</td>
+    <td class="align-right">${gainPctCellMarkup}</td>
   `;
   const footerGainAbsCell = footer.cells?.[3];
   if (footerGainAbsCell) {
-    footerGainAbsCell.dataset.gainPct = Number.isFinite(sumGainPct)
+    footerGainAbsCell.dataset.gainPct = hasAnyValue && Number.isFinite(sumGainPct)
       ? `${formatNumber(sumGainPct)} %`
       : '—';
-    footerGainAbsCell.dataset.gainSign = Number.isFinite(sumGainPct)
+    footerGainAbsCell.dataset.gainSign = hasAnyValue && Number.isFinite(sumGainPct)
       ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
       : 'neutral';
   }
@@ -983,6 +1056,7 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   footer.dataset.purchaseSum = String(sumPurchase);
   footer.dataset.gainAbs = String(sumGainAbs);
   footer.dataset.gainPct = String(sumGainPct);
+  footer.dataset.hasValue = hasAnyValue ? 'true' : 'false';
 }
 
 function formatNumber(v: number): string {
@@ -991,14 +1065,6 @@ function formatNumber(v: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
-}
-function formatGain(v: number): string {
-  const cls = v >= 0 ? 'positive' : 'negative';
-  return `<span class="${cls}">${formatNumber(v)}&nbsp;€</span>`;
-}
-function formatGainPct(v: number): string {
-  const cls = v >= 0 ? 'positive' : 'negative';
-  return `<span class="${cls}">${formatNumber(v)}&nbsp;%</span>`;
 }
 
 function updateTotalWealth(

@@ -29,6 +29,7 @@ from .db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
+from .performance import compose_performance_payload, select_performance_metrics
 
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
@@ -182,6 +183,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "day_price_change_native": None,
             "day_price_change_eur": None,
             "day_change_pct": None,
+            "performance": None,
         }
 
     data = dict(snapshot)
@@ -247,6 +249,16 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     )
     data["day_change_pct"] = _coerce_optional_float(snapshot.get("day_change_pct"))
 
+    raw_performance = snapshot.get("performance")
+    if isinstance(raw_performance, Mapping):
+        performance_payload = dict(raw_performance)
+        day_change_raw = performance_payload.get("day_change")
+        if isinstance(day_change_raw, Mapping):
+            performance_payload["day_change"] = dict(day_change_raw)
+        data["performance"] = performance_payload
+    else:
+        data["performance"] = None
+
     last_price_raw = snapshot.get("last_price")
     if isinstance(last_price_raw, Mapping):
         data["last_price"] = {
@@ -292,12 +304,36 @@ def _normalize_portfolio_positions(
         if purchase_total_account is None:
             purchase_total_account = 0.0
 
-        purchase_value = round(_coerce_float(item.get("purchase_value")), 2)
+        purchase_value_raw = item.get("purchase_value")
+        purchase_value = round(_coerce_float(purchase_value_raw), 2)
 
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
         if isinstance(raw_average_cost, Mapping):
             average_cost = dict(raw_average_cost)
+
+        raw_performance = item.get("performance")
+        performance_mapping: Mapping[str, Any] | None = None
+        if isinstance(raw_performance, Mapping):
+            performance_mapping = raw_performance
+
+        performance_metrics, day_change_metrics = select_performance_metrics(
+            current_value=item.get("current_value"),
+            purchase_value=purchase_value_raw,
+            holdings=item.get("current_holdings"),
+        )
+        performance_payload = compose_performance_payload(
+            performance_mapping,
+            metrics=performance_metrics,
+            day_change=day_change_metrics,
+        )
+
+        gain_abs_value = round(
+            _coerce_float(performance_payload.get("gain_abs")), 2
+        )
+        gain_pct_value = round(
+            _coerce_float(performance_payload.get("gain_pct")), 2
+        )
 
         normalized.append(
             {
@@ -308,14 +344,15 @@ def _normalize_portfolio_positions(
                 ),
                 "purchase_value": purchase_value,
                 "current_value": round(_coerce_float(item.get("current_value")), 2),
-                "gain_abs": round(_coerce_float(item.get("gain_abs")), 2),
-                "gain_pct": round(_coerce_float(item.get("gain_pct")), 2),
+                "gain_abs": gain_abs_value,
+                "gain_pct": gain_pct_value,
                 "average_purchase_price_native": avg_price_native,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
                 "avg_price_security": avg_price_security,
                 "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
+                "performance": performance_payload,
             }
         )
 

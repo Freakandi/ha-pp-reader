@@ -70,3 +70,38 @@ def test_fetch_live_portfolios_basic(initialized_db: Path) -> None:
     assert by_uuid["p3"]["current_value"] == 0.0
     assert by_uuid["p3"]["purchase_sum"] == 0.0
     assert by_uuid["p3"]["position_count"] == 0
+
+    expected_performance = {
+        "p1": {"gain_abs": 250_000.0, "gain_pct": 16.67},
+        "p2": {"gain_abs": 1_200_000.0, "gain_pct": 24.0},
+        "p3": {"gain_abs": 0.0, "gain_pct": 0.0},
+    }
+
+    for uuid, expectations in expected_performance.items():
+        entry = by_uuid[uuid]
+        assert entry["gain_abs"] == pytest.approx(
+            expectations["gain_abs"], rel=0, abs=1e-2
+        )
+        assert entry["gain_pct"] == pytest.approx(
+            expectations["gain_pct"], rel=0, abs=1e-2
+        )
+
+        performance = entry["performance"]
+        assert set(performance) == {
+            "gain_abs",
+            "gain_pct",
+            "total_change_eur",
+            "total_change_pct",
+            "source",
+            "coverage_ratio",
+        }
+        assert performance["gain_abs"] == pytest.approx(entry["gain_abs"], rel=0, abs=1e-6)
+        assert performance["gain_pct"] == pytest.approx(entry["gain_pct"], rel=0, abs=1e-6)
+        assert performance["total_change_eur"] == pytest.approx(
+            entry["gain_abs"], rel=0, abs=1e-6
+        )
+        assert performance["total_change_pct"] == pytest.approx(
+            entry["gain_pct"], rel=0, abs=1e-6
+        )
+        assert performance["coverage_ratio"] == pytest.approx(1.0)
+        assert performance["source"] == "calculated"
