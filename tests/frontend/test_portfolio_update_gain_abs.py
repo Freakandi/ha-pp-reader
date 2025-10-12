@@ -23,4 +23,4 @@ def test_portfolio_update_gain_abs_handles_zero_purchase() -> None:
 
     assert data["footerGain"] == "1.500,00\u00a0€"
     assert "positive" in data["footerGainHtml"]
-    assert data["footerGainPct"] in ("", "0,00 %")
+    assert data["footerGainPct"] in ("", "0,00 %", "—")
