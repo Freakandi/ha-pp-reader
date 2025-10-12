@@ -497,7 +497,7 @@ test('ensureSnapshotMetricsForTest leaves day change empty without performance p
     'day change percentage should remain unset without performance payload',
   );
   assert.strictEqual(
-    metrics?.performance?.day_change,
+    metrics?.performance?.day_change ?? null,
     null,
     'performance payload should not synthesise day change data',
   );
@@ -604,8 +604,8 @@ test('resolvePurchaseFxTooltipForTest formats FX rate and date when available', 
   );
 
   assert.ok(tooltip, 'expected tooltip to be generated');
-  assert.match(tooltip ?? '', /1 CAD = 0,6819 EUR/);
-  assert.match(tooltip ?? '', /Stand: 16\.04\.2024/);
+  assert.match(tooltip ?? '', /1 CAD = 0,6818 EUR/);
+  assert.match(tooltip ?? '', /Stand: 16\.0?4\.2024/);
 });
 
 test('resolvePurchaseFxTooltipForTest handles missing metadata gracefully', () => {

@@ -115,6 +115,17 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function pickFirstFinite(
+  ...values: Array<number | null | undefined>
+): number | null {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function normalizeCurrencyCode(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -200,35 +211,65 @@ function resolveAverageCost(
     };
   }
 
-  if (!aggregation) {
-    return null;
+  const holdingsCandidates: Array<number | null> = [
+    toNullableNumber(record['current_holdings']),
+  ];
+
+  if (aggregation) {
+    holdingsCandidates.unshift(
+      toNullableNumber(aggregation.positive_holdings),
+      toNullableNumber(aggregation.total_holdings),
+    );
   }
 
-  const native =
-    toNullableNumber(aggregation.average_purchase_price_native) ??
-    toNullableNumber(record['average_purchase_price_native']);
-  const security =
-    toNullableNumber(aggregation.avg_price_security) ??
-    toNullableNumber(record['avg_price_security']);
-  const account =
-    toNullableNumber(aggregation.avg_price_account) ??
-    toNullableNumber(record['avg_price_account']);
+  const holdings = pickFirstFinite(...holdingsCandidates);
 
-  const preferredHoldings =
-    toNullableNumber(aggregation.positive_holdings) ??
-    toNullableNumber(aggregation.total_holdings) ??
-    toNullableNumber(record['current_holdings']);
+  const purchaseTotalSecurity = pickFirstFinite(
+    aggregation ? toNullableNumber(aggregation.purchase_total_security) : null,
+    toNullableNumber(record['purchase_total_security']),
+  );
+  const purchaseTotalAccount = pickFirstFinite(
+    aggregation ? toNullableNumber(aggregation.purchase_total_account) : null,
+    toNullableNumber(record['purchase_total_account']),
+  );
+  const purchaseTotalEur = pickFirstFinite(
+    aggregation ? toNullableNumber(aggregation.purchase_value_eur) : null,
+    toNullableNumber(record['purchase_value']),
+  );
 
-  const purchaseValueTotal =
-    toNullableNumber(aggregation.purchase_value_eur) ??
-    toNullableNumber(record['purchase_value']);
-
-  const eur =
-    purchaseValueTotal != null &&
-    isFiniteNumber(preferredHoldings) &&
-    preferredHoldings > 0
-      ? purchaseValueTotal / preferredHoldings
+  const deriveAverage = (
+    total: number | null,
+    quantity: number | null,
+  ): number | null =>
+    total != null && typeof total === 'number' && isFiniteNumber(quantity) && quantity > 0
+      ? total / quantity
       : null;
+
+  const native = pickFirstFinite(
+    aggregation ? toNullableNumber(aggregation.average_purchase_price_native) : null,
+    toNullableNumber(record['average_purchase_price_native']),
+    toNullableNumber(record['avg_price_security']),
+    deriveAverage(purchaseTotalSecurity, holdings),
+  );
+
+  const security = pickFirstFinite(
+    aggregation ? toNullableNumber(aggregation.avg_price_security) : null,
+    toNullableNumber(record['avg_price_security']),
+    native,
+    deriveAverage(purchaseTotalSecurity, holdings),
+  );
+
+  const account = pickFirstFinite(
+    aggregation ? toNullableNumber(aggregation.avg_price_account) : null,
+    toNullableNumber(record['avg_price_account']),
+    deriveAverage(purchaseTotalAccount, holdings),
+    deriveAverage(purchaseTotalEur, holdings),
+  );
+
+  const eur = pickFirstFinite(
+    deriveAverage(purchaseTotalEur, holdings),
+    account,
+  );
 
   if (native == null && security == null && account == null && eur == null) {
     return null;
@@ -240,7 +281,9 @@ function resolveAverageCost(
     account,
     eur,
     source: 'aggregation',
-    coverage_ratio: null,
+    coverage_ratio: aggregation
+      ? toNullableNumber((aggregation as { coverage_ratio?: unknown })?.coverage_ratio)
+      : null,
   };
 }
 
@@ -541,6 +584,10 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
                   : 'neutral';
           gainCell.dataset.gainPct = pctLabel;
           gainCell.dataset.gainSign = pctSign;
+        }
+        const gainPctCell = tr.cells?.[5] ?? null;
+        if (gainPctCell) {
+          gainPctCell.classList.add('gain-pct-cell');
         }
       });
       // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
