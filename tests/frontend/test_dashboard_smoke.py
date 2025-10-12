@@ -35,3 +35,25 @@ def test_dashboard_bundle_smoke() -> None:
     assert payload["pendingSizeBefore"] == 1
     assert payload["pendingSizeAfter"] == 0
     assert payload["detailsFound"] is True
+
+    normalized_positions = payload["normalizedPositions"]
+    assert isinstance(normalized_positions, list)
+    assert len(normalized_positions) >= 2
+
+    first_normalized = normalized_positions[0]
+    assert first_normalized["aggregation"]["total_holdings"] == 0
+    assert first_normalized["aggregation"]["purchase_value_eur"] == 3400
+    assert first_normalized["aggregation"]["purchase_total_security"] == 3500.25
+    assert first_normalized["aggregation"]["avg_price_security"] is None
+    assert first_normalized["aggregation"]["avg_price_account"] == 13.37
+    assert first_normalized["average_cost"]["native"] is None
+    assert first_normalized["average_cost"]["security"] == 45.67
+    assert first_normalized["average_cost"]["eur"] is None
+    assert first_normalized["average_cost"]["source"] == "aggregation"
+    assert first_normalized["average_cost"]["coverage_ratio"] is None
+    assert first_normalized["performance"] is None
+
+    second_normalized = normalized_positions[1]
+    assert second_normalized["aggregation"] is None
+    assert second_normalized["average_cost"] is None
+    assert second_normalized["performance"] is None

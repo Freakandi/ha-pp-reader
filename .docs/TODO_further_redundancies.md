@@ -139,11 +139,11 @@
       - Ziel/Ergebnis: Tests erwarten direkte Backend-Werte.
 
 11. Frontend: `normalizePosition` auf Strukturvalidierung reduzieren
-   a) [ ] Lasse `normalizePosition` nur noch Formvalidierung durchführen und entferne Aggregations-/Performance-Rekombinationen.\
+   a) [x] Lasse `normalizePosition` nur noch Formvalidierung durchführen und entferne Aggregations-/Performance-Rekombinationen.\
       - Dateipfad(e): `src/data/updateConfigsWS.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): `normalizePosition`\
       - Ziel/Ergebnis: Funktion führt keine inhaltliche Neuberechnung mehr aus.
-   b) [ ] Aktualisiere Websocket-Cache-Tests auf das reduzierte Normalisierungsverhalten.\
+   b) [x] Aktualisiere Websocket-Cache-Tests auf das reduzierte Normalisierungsverhalten.\
       - Dateipfad(e): `tests/frontend/test_dashboard_smoke.py`, `tests/frontend/portfolio_update_gain_abs.mjs`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Positionsobjekte\
       - Ziel/Ergebnis: Tests prüfen nur noch Struktur und nicht berechnete Werte.
