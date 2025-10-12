@@ -24,3 +24,10 @@ def test_portfolio_update_gain_abs_handles_zero_purchase() -> None:
     assert data["footerGain"] == "15,00\u00a0€"
     assert "positive" in data["footerGainHtml"]
     assert data["footerGainPct"] in ("", "0,00 %", "—")
+
+    normalized_positions = data["normalizedPositions"]
+    assert isinstance(normalized_positions, list)
+    assert len(normalized_positions) == 1
+    assert normalized_positions[0]["aggregation"] is None
+    assert normalized_positions[0]["average_cost"] is None
+    assert normalized_positions[0]["performance"] is None

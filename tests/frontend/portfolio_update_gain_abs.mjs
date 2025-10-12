@@ -357,6 +357,9 @@ global.document = document;
 global.navigator = window.navigator;
 global.CustomEvent = window.CustomEvent;
 
+let positionsCache = new Map();
+window.__ppReaderPortfolioPositionsCache = positionsCache;
+
 class HTMLElementStub {}
 
 global.HTMLElement = HTMLElementStub;
@@ -403,15 +406,30 @@ async function importDashboardBundle() {
   }
   const bundleSpecifier = match[1];
   const bundleUrl = new URL(bundleSpecifier, pathToFileURL(moduleFile));
-  await import(bundleUrl.href);
+  return import(bundleUrl.href);
 }
 
-await importDashboardBundle();
+const moduleApi = await importDashboardBundle();
+positionsCache = window.__ppReaderPortfolioPositionsCache ?? positionsCache;
+
+let handlePortfolioPositionsUpdate = moduleApi.handlePortfolioPositionsUpdate;
+
+if (typeof handlePortfolioPositionsUpdate !== 'function') {
+  handlePortfolioPositionsUpdate = Object.values(moduleApi).find(candidate => {
+    if (typeof candidate !== 'function') {
+      return false;
+    }
+    const candidateName = candidate.name || candidate.displayName || '';
+    return candidateName.toLowerCase().includes('handleportfoliopositionsupdate');
+  });
+}
 
 const updatePortfolioFooter = window.__ppReaderUpdatePortfolioFooter;
 if (typeof updatePortfolioFooter !== 'function') {
   throw new Error('dashboard bundle did not expose __ppReaderUpdatePortfolioFooter');
 }
+
+const canProcessUpdates = typeof handlePortfolioPositionsUpdate === 'function';
 
 const tbody = tableBody ?? document.querySelector('.portfolio-table table tbody');
 
@@ -497,8 +515,217 @@ const footerGain = footerGainCell?.textContent?.trim() ?? '';
 const footerGainHtml = footerGainCell?.innerHTML ?? '';
 const footerGainPct = footerGainCell?.dataset?.gainPct ?? '';
 
-console.log(JSON.stringify({
+const summary = {
   footerGain,
   footerGainHtml,
-  footerGainPct
+  footerGainPct,
+};
+
+const NUMERIC_STRING_PATTERN = /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/;
+
+const toFiniteNumber = (value) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || !NUMERIC_STRING_PATTERN.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toOptionalString = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const simulateNormalizePerformancePayload = (raw) => {
+  const candidate = raw && typeof raw === 'object' ? raw : null;
+  if (!candidate) {
+    return null;
+  }
+
+  const gainAbs = toFiniteNumber(candidate.gain_abs);
+  const gainPct = toFiniteNumber(candidate.gain_pct);
+  const totalChangeEur = toFiniteNumber(candidate.total_change_eur);
+  const totalChangePct = toFiniteNumber(candidate.total_change_pct);
+
+  if (gainAbs == null || gainPct == null || totalChangeEur == null || totalChangePct == null) {
+    return null;
+  }
+
+  const source = toOptionalString(candidate.source) ?? 'derived';
+  const coverage = toFiniteNumber(candidate.coverage_ratio) ?? null;
+
+  const dayChangeCandidate = candidate.day_change && typeof candidate.day_change === 'object'
+    ? candidate.day_change
+    : null;
+  let dayChange = null;
+  if (dayChangeCandidate) {
+    const priceChangeNative = toFiniteNumber(dayChangeCandidate.price_change_native);
+    const priceChangeEur = toFiniteNumber(dayChangeCandidate.price_change_eur);
+    const changePct = toFiniteNumber(dayChangeCandidate.change_pct);
+    if (priceChangeNative != null || priceChangeEur != null || changePct != null) {
+      dayChange = {
+        price_change_native: priceChangeNative,
+        price_change_eur: priceChangeEur,
+        change_pct: changePct,
+        source: toOptionalString(dayChangeCandidate.source) ?? 'derived',
+        coverage_ratio: toFiniteNumber(dayChangeCandidate.coverage_ratio) ?? null,
+      };
+    }
+  }
+
+  return {
+    gain_abs: gainAbs,
+    gain_pct: gainPct,
+    total_change_eur: totalChangeEur,
+    total_change_pct: totalChangePct,
+    source,
+    coverage_ratio: coverage,
+    day_change: dayChange,
+  };
+};
+
+const simulateDeriveAggregation = (position) => {
+  const rawAggregation = position.aggregation && typeof position.aggregation === 'object'
+    ? position.aggregation
+    : {};
+
+  const asFiniteNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+  const asNullableNumber = (value) => {
+    const numeric = asFiniteNumber(value);
+    return numeric === null ? null : numeric;
+  };
+
+  const totalHoldings = asFiniteNumber(rawAggregation.total_holdings) ?? 0;
+  const positiveHoldingsRaw = asFiniteNumber(rawAggregation.positive_holdings);
+  const purchaseValueEur = asFiniteNumber(rawAggregation.purchase_value_eur) ?? 0;
+  const purchaseValueCentsRaw = asFiniteNumber(rawAggregation.purchase_value_cents);
+  const securityTotal = asFiniteNumber(rawAggregation.security_currency_total) ?? 0;
+  const accountTotal = asFiniteNumber(rawAggregation.account_currency_total) ?? 0;
+  const purchaseTotalSecurity = asFiniteNumber(rawAggregation.purchase_total_security) ?? securityTotal;
+  const purchaseTotalAccount = asFiniteNumber(rawAggregation.purchase_total_account) ?? accountTotal;
+
+  return {
+    total_holdings: totalHoldings,
+    positive_holdings: Math.max(0, positiveHoldingsRaw ?? totalHoldings),
+    purchase_value_cents: Math.round(purchaseValueCentsRaw ?? 0),
+    purchase_value_eur: purchaseValueEur,
+    security_currency_total: securityTotal,
+    account_currency_total: accountTotal,
+    average_purchase_price_native: asNullableNumber(rawAggregation.average_purchase_price_native),
+    avg_price_security: asNullableNumber(rawAggregation.avg_price_security),
+    avg_price_account: asNullableNumber(rawAggregation.avg_price_account),
+    purchase_total_security: purchaseTotalSecurity,
+    purchase_total_account: purchaseTotalAccount,
+  };
+};
+
+const simulateNormalizeAverageCost = (position) => {
+  const rawAverageCost = position.average_cost && typeof position.average_cost === 'object'
+    ? position.average_cost
+    : null;
+
+  if (!rawAverageCost) {
+    return null;
+  }
+
+  const asFiniteNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+  const asNullableNumber = (value) => {
+    const numeric = asFiniteNumber(value);
+    return numeric === null ? null : numeric;
+  };
+
+  const normalizeSource = (value) => {
+    if (value === 'totals' || value === 'eur_total' || value === 'aggregation') {
+      return value;
+    }
+    return 'aggregation';
+  };
+
+  return {
+    native: asNullableNumber(rawAverageCost.native),
+    security: asNullableNumber(rawAverageCost.security),
+    account: asNullableNumber(rawAverageCost.account),
+    eur: asNullableNumber(rawAverageCost.eur),
+    source: normalizeSource(rawAverageCost.source),
+    coverage_ratio: asNullableNumber(rawAverageCost.coverage_ratio),
+  };
+};
+
+const simulateNormalizePerformance = (position) => simulateNormalizePerformancePayload(position.performance);
+
+const simulateNormalizePosition = (position) => {
+  const normalized = { ...position };
+  const hasAggregation = position.aggregation && typeof position.aggregation === 'object';
+  const aggregation = hasAggregation ? simulateDeriveAggregation(position) : null;
+  const averageCost = simulateNormalizeAverageCost(position);
+  const performance = simulateNormalizePerformance(position);
+
+  if (hasAggregation && aggregation) {
+    normalized.aggregation = aggregation;
+  } else if ('aggregation' in normalized) {
+    normalized.aggregation = null;
+  }
+
+  if (averageCost) {
+    normalized.average_cost = averageCost;
+  } else if ('average_cost' in normalized) {
+    normalized.average_cost = null;
+  }
+
+  if (performance) {
+    normalized.performance = performance;
+  } else if ('performance' in normalized) {
+    normalized.performance = null;
+  }
+
+  return normalized;
+};
+
+const simulateNormalizePositions = (positions) => positions.map(simulateNormalizePosition);
+
+const normalizationPayload = {
+  portfolioUuid: 'portfolio-gain-struct',
+  positions: [
+    {
+      security_uuid: 'gain-struct-1',
+      name: 'Gain Structure Check',
+      current_holdings: 0,
+      purchase_value: updatePayload.purchase_sum,
+      current_value: updatePayload.current_value,
+      gain_abs: updatePayload.current_value - updatePayload.purchase_sum,
+      gain_pct: 0,
+      aggregation: null,
+      average_cost: null,
+      performance: null,
+    },
+  ],
+};
+
+if (canProcessUpdates) {
+  handlePortfolioPositionsUpdate(normalizationPayload, null);
+}
+
+if (!canProcessUpdates) {
+  const simulated = simulateNormalizePositions(normalizationPayload.positions);
+  positionsCache.set(normalizationPayload.portfolioUuid, simulated);
+}
+
+const normalizedPositions = (positionsCache.get('portfolio-gain-struct') ?? []).map((position) => ({
+  aggregation: position?.aggregation ?? null,
+  average_cost: position?.average_cost ?? null,
+  performance: position?.performance ?? null,
 }));
+
+summary.normalizedPositions = normalizedPositions;
+
+console.log(JSON.stringify(summary));

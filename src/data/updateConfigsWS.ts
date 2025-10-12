@@ -145,27 +145,33 @@ function normalizeAverageCost(
 }
 
 function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
-  const aggregation = deriveAggregation(position);
+  const normalized: PortfolioPositionData = { ...position };
+
+  const hasAggregation =
+    position.aggregation && typeof position.aggregation === 'object';
+  const aggregation = hasAggregation ? deriveAggregation(position) : null;
   const averageCost = normalizeAverageCost(position);
   const performance = normalizePerformanceMetrics(position);
-  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
-  return {
-    ...position,
-    current_holdings: aggregation.total_holdings,
-    purchase_value: aggregation.purchase_value_eur,
-    purchase_total_security: aggregation.purchase_total_security,
-    purchase_total_account: aggregation.purchase_total_account,
-    average_purchase_price_native: averageCost?.native ?? null,
-    avg_price_security: averageCost?.security ?? null,
-    avg_price_account: averageCost?.account ?? null,
-    average_cost: averageCost,
-    gain_abs: gainAbs,
-    gain_pct: gainPct,
-    performance,
-    aggregation,
-  };
+  if (hasAggregation && aggregation) {
+    normalized.aggregation = aggregation;
+  } else if ('aggregation' in normalized) {
+    normalized.aggregation = null;
+  }
+
+  if (averageCost) {
+    normalized.average_cost = averageCost;
+  } else if ('average_cost' in normalized) {
+    normalized.average_cost = null;
+  }
+
+  if (performance) {
+    normalized.performance = performance;
+  } else if ('performance' in normalized) {
+    normalized.performance = null;
+  }
+
+  return normalized;
 }
 
 function normalizePositions(positions: PortfolioPositionData[]): PortfolioPositionData[] {
