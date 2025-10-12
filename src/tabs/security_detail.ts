@@ -44,8 +44,6 @@ import { normalizePerformancePayload } from '../utils/performance';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
-const HISTORY_SYNC_TOLERANCE_MS = 6 * 60 * 60 * 1000; // 6 hours leeway between history close and price fetch
-const MAX_PRICE_STALENESS_MS = 36 * 60 * 60 * 1000; // 36 hours tolerance before treating last price as stale
 const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = '1Y';
 const AVAILABLE_HISTORY_RANGES: readonly SecurityHistoryRangeKey[] = [
   '1M',
@@ -227,10 +225,6 @@ export const __TEST_ONLY__ = {
     snapshot: SecuritySnapshotDetail | null | undefined,
   ): NormalizedHistoryEntry[] => buildHistorySeriesWithSnapshotPrice(historySeries, snapshot),
   resolveAveragePurchaseBaselineForTest: resolveAveragePurchaseBaseline,
-  applyHistoryDayChangeFallbackForTest: (
-    metrics: SecuritySnapshotMetrics | null,
-    historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-  ): boolean => applyHistoryDayChangeFallback(metrics, historySeries),
   resolvePurchaseFxTooltipForTest: (
     snapshot: SecuritySnapshotDetail | null | undefined,
     metrics: SecuritySnapshotMetrics | null | undefined,
@@ -957,28 +951,6 @@ function areNumbersClose(
   return absoluteDiff <= scale * 1e-4;
 }
 
-function computeDelta(
-  current: number | null | undefined,
-  reference: number | null | undefined,
-): number | null {
-  if (!isFiniteNumber(current) || !isFiniteNumber(reference)) {
-    return null;
-  }
-
-  return current - reference;
-}
-
-function convertNativeDiffToEur(
-  diffNative: number | null,
-  fxRate: number | null,
-): number | null {
-  if (!isFiniteNumber(diffNative) || !isPositiveFinite(fxRate)) {
-    return null;
-  }
-
-  return diffNative * fxRate;
-}
-
 function computePercentageChange(
   current: number | null,
   reference: number | null,
@@ -1103,160 +1075,6 @@ function computePriceChangeMetrics(
   const priceChangePct = computePercentageChange(effectiveLast, baseline);
 
   return { priceChange, priceChangePct };
-}
-
-function computeLatestHistoryDayChange(
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): { diff: number; pct: number | null } | null {
-  if (!Array.isArray(historySeries) || historySeries.length < 2) {
-    return null;
-  }
-
-  let latest: number | null = null;
-  let previous: number | null = null;
-
-  for (let index = historySeries.length - 1; index >= 0; index -= 1) {
-    const close = toFiniteNumber(historySeries[index]?.close);
-    if (!isFiniteNumber(close)) {
-      continue;
-    }
-
-    if (latest == null) {
-      latest = close;
-      continue;
-    }
-
-    previous = close;
-    break;
-  }
-
-  if (!isFiniteNumber(latest) || !isFiniteNumber(previous)) {
-    return null;
-  }
-
-  const rawDiff = latest - previous;
-  const diff = Object.is(rawDiff, -0) ? 0 : rawDiff;
-  const pct = computePercentageChange(latest, previous);
-
-  return { diff, pct };
-}
-
-function extractLatestHistoryTimestamp(
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): number | null {
-  if (!Array.isArray(historySeries) || historySeries.length === 0) {
-    return null;
-  }
-
-  for (let index = historySeries.length - 1; index >= 0; index -= 1) {
-    const entry = historySeries[index];
-    if (!entry) {
-      continue;
-    }
-
-    const parsedDate = parseHistoryDate(entry.date);
-    if (parsedDate) {
-      return parsedDate.getTime();
-    }
-  }
-
-  return null;
-}
-
-function isSnapshotPriceFresh(
-  metrics: SecuritySnapshotMetrics | null,
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): boolean {
-  if (!metrics) {
-    return false;
-  }
-
-  const fetchedAt = metrics.lastPriceFetchedAt;
-  if (!isFiniteNumber(fetchedAt)) {
-    return false;
-  }
-
-  const now = Date.now();
-  if (now - fetchedAt > MAX_PRICE_STALENESS_MS) {
-    return false;
-  }
-
-  const latestHistoryTimestamp = extractLatestHistoryTimestamp(historySeries);
-  if (
-    latestHistoryTimestamp != null &&
-    fetchedAt + HISTORY_SYNC_TOLERANCE_MS < latestHistoryTimestamp
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function shouldReplaceDayChange(value: number | null | undefined): boolean {
-  if (!isFiniteNumber(value)) {
-    return true;
-  }
-
-  return value === 0 || Object.is(value, -0);
-}
-
-function applyHistoryDayChangeFallback(
-  metrics: SecuritySnapshotMetrics | null,
-  historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
-): boolean {
-  if (!metrics) {
-    return false;
-  }
-
-  const replaceNative = shouldReplaceDayChange(metrics.dayPriceChangeNative);
-  const replaceEur = shouldReplaceDayChange(metrics.dayPriceChangeEur) || replaceNative;
-  const replacePct = shouldReplaceDayChange(metrics.dayChangePct);
-
-  if (!replaceNative && !replaceEur && !replacePct) {
-    return false;
-  }
-
-  if (isSnapshotPriceFresh(metrics, historySeries)) {
-    return false;
-  }
-
-  const fallback = computeLatestHistoryDayChange(historySeries);
-  if (!fallback) {
-    return false;
-  }
-
-  const { diff, pct } = fallback;
-
-  if (replaceNative) {
-    metrics.dayPriceChangeNative = diff;
-    if (metrics.performance?.day_change) {
-      metrics.performance.day_change.price_change_native = diff;
-    }
-  }
-
-  if (replaceEur) {
-    const converted = convertNativeDiffToEur(diff, metrics.fxRate);
-    if (isFiniteNumber(converted)) {
-      metrics.dayPriceChangeEur = converted;
-      if (metrics.performance?.day_change) {
-        metrics.performance.day_change.price_change_eur = converted;
-      }
-    } else if (replaceNative) {
-      metrics.dayPriceChangeEur = diff;
-      if (metrics.performance?.day_change) {
-        metrics.performance.day_change.price_change_eur = diff;
-      }
-    }
-  }
-
-  if (replacePct && pct != null) {
-    metrics.dayChangePct = pct;
-    if (metrics.performance?.day_change) {
-      metrics.performance.day_change.change_pct = pct;
-    }
-  }
-
-  return true;
 }
 
 function resolveRoundedTrendClass(
@@ -1712,7 +1530,6 @@ function buildHeaderMeta(
   const holdings = formatHoldings(holdingsSource);
   const lastPriceNativeRaw =
     snapshot.last_price_native ?? snapshot.last_price?.native ?? snapshot.last_price_eur;
-  const lastPriceNative = toFiniteNumber(lastPriceNativeRaw);
   const formattedLastPrice = formatPrice(lastPriceNativeRaw);
   const lastPriceDisplay =
     formattedLastPrice === '—'
@@ -1724,9 +1541,6 @@ function buildHeaderMeta(
     null;
   const purchaseTotalSecurity = toFiniteNumber(snapshot.purchase_total_security);
   const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
-  const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
-  const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
-  const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
   const averageCost = normalizeAverageCost(snapshot);
   const averagePurchaseNativeRaw =
     metrics?.averagePurchaseNative ??
@@ -1745,14 +1559,8 @@ function buildHeaderMeta(
   const resolvedAccountAverage = averagePurchaseAccountRaw ?? averagePurchaseEurRaw;
   const performancePayload = metrics?.performance ?? null;
   const dayChangePayload = performancePayload?.day_change ?? null;
-  const dayPriceChangeNative =
-    dayChangePayload?.price_change_native ??
-    metrics?.dayPriceChangeNative ??
-    computeDelta(lastPriceNative, lastCloseNative);
-  const dayPriceChangeEur =
-    dayChangePayload?.price_change_eur ??
-    metrics?.dayPriceChangeEur ??
-    computeDelta(lastPriceEur, lastCloseEur);
+  const dayPriceChangeNative = dayChangePayload?.price_change_native ?? null;
+  const dayPriceChangeEur = dayChangePayload?.price_change_eur ?? null;
   const dayChangeValue = isFiniteNumber(dayPriceChangeNative)
     ? dayPriceChangeNative
     : dayPriceChangeEur;
@@ -1823,15 +1631,15 @@ function buildHeaderMeta(
       )
     : wrapMissingValue('value--absolute');
   const dayChangePercentage = renderGainPercentage(
-    dayChangePayload?.change_pct ?? metrics?.dayChangePct,
+    dayChangePayload?.change_pct,
     'value--percentage',
   );
   const totalChangeAbsolute = renderGainValue(
-    performancePayload?.total_change_eur ?? metrics?.totalChangeEur,
+    performancePayload?.total_change_eur,
     'value--absolute',
   );
   const totalChangePercentage = renderGainPercentage(
-    performancePayload?.total_change_pct ?? metrics?.totalChangePct,
+    performancePayload?.total_change_pct,
     'value--percentage',
   );
   const accountCurrency = resolveAccountCurrencyCode(
@@ -2376,13 +2184,6 @@ export async function renderSecurityDetail(
           'Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden.',
       };
     }
-  }
-
-  if (
-    applyHistoryDayChangeFallback(snapshotMetrics, historySeries) &&
-    snapshotMetrics
-  ) {
-    SNAPSHOT_METRICS_REGISTRY.set(securityUuid, snapshotMetrics);
   }
 
   const displayHistorySeries = buildHistorySeriesWithSnapshotPrice(

@@ -18,7 +18,6 @@ const {
   normalizeAverageCostForTest,
   resolveAveragePurchaseBaselineForTest,
   resolvePurchaseFxTooltipForTest,
-  applyHistoryDayChangeFallbackForTest,
 } = __TEST_ONLY__;
 
 type SecuritySnapshotMetricsLike = NonNullable<
@@ -467,67 +466,40 @@ test('resolvePurchaseFxTooltipForTest annotates metadata from average cost paylo
   assert.match(tooltip ?? '', /Abdeckung: 75/);
 });
 
-test('applyHistoryDayChangeFallbackForTest updates performance day change metrics', () => {
+test('ensureSnapshotMetricsForTest leaves day change empty without performance payload', () => {
   clearSnapshotMetricsRegistryForTest();
 
-  const metrics = ensureSnapshotMetricsForTest('history-fallback', {
-    security_uuid: 'history-fallback',
-    total_holdings_precise: '10',
-    purchase_value_eur: '1000',
-    current_value_eur: '1100',
-    gain_abs_eur: '100',
-    gain_pct: '10',
-    day_price_change_native: 0,
-    day_price_change_eur: 0,
-    day_change_pct: 0,
-    last_price_native: '55',
-    last_close_native: '55',
-    last_price_eur: '110',
-    last_close_eur: '110',
-    currency_code: 'USD',
-    last_price_fetched_at: '2024-01-01T00:00:00Z',
+  const metrics = ensureSnapshotMetricsForTest('day-change-absent', {
+    security_uuid: 'day-change-absent',
+    total_holdings_precise: '5',
+    purchase_value_eur: '500',
+    current_value_eur: '600',
+    last_price_native: '12.5',
+    last_close_native: '12.1',
+    last_price_eur: '25',
+    last_close_eur: '24',
   });
 
   assert.ok(metrics, 'expected metrics to be initialised');
-
-  const applied = applyHistoryDayChangeFallbackForTest(metrics, [
-    { date: new Date('2024-05-13T00:00:00Z'), close: 54 },
-    { date: new Date('2024-05-14T00:00:00Z'), close: 55 },
-    { date: new Date('2024-05-15T00:00:00Z'), close: 58 },
-  ]);
-
-  assert.ok(applied, 'expected history fallback to update metrics');
-  assertApproximately(
+  assert.strictEqual(
     metrics?.dayPriceChangeNative,
-    3,
-    'native day change should reflect history-derived diff',
+    null,
+    'native day change should remain unset without performance payload',
   );
-  assertApproximately(
+  assert.strictEqual(
     metrics?.dayPriceChangeEur,
-    6,
-    'EUR day change should convert history diff using FX rate',
+    null,
+    'EUR day change should remain unset without performance payload',
   );
-  assertApproximately(
+  assert.strictEqual(
     metrics?.dayChangePct,
-    5.45,
-    'day change percentage should be derived from history series',
-    1e-2,
+    null,
+    'day change percentage should remain unset without performance payload',
   );
-  assertApproximately(
-    metrics?.performance?.day_change?.price_change_native,
-    3,
-    'performance payload should mirror fallback native change',
-  );
-  assertApproximately(
-    metrics?.performance?.day_change?.price_change_eur,
-    6,
-    'performance payload should mirror fallback EUR change',
-  );
-  assertApproximately(
-    metrics?.performance?.day_change?.change_pct,
-    5.45,
-    'performance payload should mirror fallback percentage change',
-    1e-2,
+  assert.strictEqual(
+    metrics?.performance?.day_change,
+    null,
+    'performance payload should not synthesise day change data',
   );
 });
 
