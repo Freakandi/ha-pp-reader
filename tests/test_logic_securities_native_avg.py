@@ -108,8 +108,32 @@ def test_purchase_value_and_native_average(
     ]
 
     tx_units = {
-        "tx-buy-1": {"fx_amount": 20000, "fx_currency_code": "USD"},
-        "tx-buy-2": {"fx_amount": 12000, "fx_currency_code": "USD"},
+        "tx-buy-1": {
+            "fx_amount": 20000,
+            "fx_currency_code": "USD",
+            "entries": [
+                {
+                    "type": 0,
+                    "amount": 20000,
+                    "currency_code": "USD",
+                    "fx_amount": 20000,
+                    "fx_currency_code": "USD",
+                }
+            ],
+        },
+        "tx-buy-2": {
+            "fx_amount": 12000,
+            "fx_currency_code": "USD",
+            "entries": [
+                {
+                    "type": 0,
+                    "amount": 12000,
+                    "currency_code": "USD",
+                    "fx_amount": 12000,
+                    "fx_currency_code": "USD",
+                }
+            ],
+        },
     }
 
     metrics = securities.db_calculate_sec_purchase_value(
@@ -169,7 +193,19 @@ def test_missing_native_data_yields_none(
     ]
 
     tx_units = {
-        "tx-buy-1": {"fx_amount": 15000, "fx_currency_code": "USD"},
+        "tx-buy-1": {
+            "fx_amount": 15000,
+            "fx_currency_code": "USD",
+            "entries": [
+                {
+                    "type": 0,
+                    "amount": 15000,
+                    "currency_code": "USD",
+                    "fx_amount": 15000,
+                    "fx_currency_code": "USD",
+                }
+            ],
+        },
         # Second transaction lacks native metadata → avg_price_native should be None
     }
 
