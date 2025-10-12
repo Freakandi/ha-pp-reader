@@ -451,7 +451,7 @@ tbody.appendChild(footer);
 const updatePayload = {
   uuid: 'portfolio-1',
   position_count: 2,
-  current_value: 1500,
+  current_value: 1500 / 100,
   purchase_sum: 0
 };
 

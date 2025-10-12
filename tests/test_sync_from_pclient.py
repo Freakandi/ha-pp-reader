@@ -20,6 +20,7 @@ from custom_components.pp_reader.data.sync_from_pclient import (
     maybe_field,
 )
 from custom_components.pp_reader.logic import securities as logic_securities
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 
 class _NoPresenceProto:
@@ -444,26 +445,33 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
 
     compacted = _compact_event_data("portfolio_positions", raw)
 
+    expected_purchase_value = cent_to_eur(12_345)
+    expected_current_value = round_currency(150.987)
+    expected_gain_abs = round_currency(27.54)
+    expected_gain_pct = round_currency(22.31)
+    expected_purchase_total_security = round_currency(321.09)
+    expected_purchase_total_account = round_currency(322.1)
+
     assert compacted["portfolio_uuid"] == "pf-3"
     assert compacted["positions"] == [
         {
             "security_uuid": "sec-1",
             "name": "Security A",
             "current_holdings": 5,
-            "purchase_value": 123.45,
-            "current_value": 150.99,
-            "gain_abs": 27.54,
-            "gain_pct": 22.31,
+            "purchase_value": expected_purchase_value,
+            "current_value": expected_current_value,
+            "gain_abs": expected_gain_abs,
+            "gain_pct": expected_gain_pct,
             "average_purchase_price_native": 24.123456,
-            "purchase_total_security": 321.09,
-            "purchase_total_account": 322.1,
+            "purchase_total_security": expected_purchase_total_security,
+            "purchase_total_account": expected_purchase_total_account,
             "avg_price_security": 25.654321,
             "avg_price_account": 25.987654,
             "performance": {
-                "gain_abs": 27.54,
-                "gain_pct": 22.31,
-                "total_change_eur": 27.54,
-                "total_change_pct": 22.31,
+                "gain_abs": expected_gain_abs,
+                "gain_pct": expected_gain_pct,
+                "total_change_eur": expected_gain_abs,
+                "total_change_pct": expected_gain_pct,
                 "source": "calculated",
                 "coverage_ratio": 1.0,
                 "day_change": {

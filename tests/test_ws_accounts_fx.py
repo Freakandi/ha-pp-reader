@@ -39,6 +39,8 @@ if SPEC is None or SPEC.loader is None:  # pragma: no cover - defensive guard
 _websocket_module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(_websocket_module)
 
+from custom_components.pp_reader.util import currency as currency_util
+
 _collect_active_fx_currencies = _websocket_module._collect_active_fx_currencies  # noqa: SLF001
 WS_GET_ACCOUNTS = _websocket_module.ws_get_accounts.__wrapped__
 DOMAIN = _websocket_module.DOMAIN
@@ -165,6 +167,39 @@ def test_ws_get_accounts_requests_fx_with_utc_timezone(
     monkeypatch.setattr(_websocket_module, "load_latest_rates", fake_load)
     monkeypatch.setattr(_websocket_module, "get_accounts", fake_get_accounts)
 
+    cent_calls: list[tuple[object, int, float | None, float | None]] = []
+    round_calls: list[tuple[object, int, float | None, float | None]] = []
+
+    original_cent_to_eur = _websocket_module.cent_to_eur
+    original_round_currency = _websocket_module.round_currency
+
+    def tracking_cent_to_eur(
+        value: object,
+        *,
+        decimals: int = currency_util.CURRENCY_DECIMALS,
+        default: float | None = None,
+    ) -> float | None:
+        result = original_cent_to_eur(value, decimals=decimals, default=default)
+        cent_calls.append((value, decimals, default, result))
+        return result
+
+    def tracking_round_currency(
+        value: object,
+        *,
+        decimals: int = currency_util.CURRENCY_DECIMALS,
+        default: float | None = None,
+    ) -> float | None:
+        result = original_round_currency(value, decimals=decimals, default=default)
+        round_calls.append((value, decimals, default, result))
+        return result
+
+    monkeypatch.setattr(_websocket_module, "cent_to_eur", tracking_cent_to_eur)
+    monkeypatch.setattr(
+        _websocket_module,
+        "round_currency",
+        tracking_round_currency,
+    )
+
     _run_ws_get_accounts(
         hass,
         connection,
@@ -180,12 +215,18 @@ def test_ws_get_accounts_requests_fx_with_utc_timezone(
                     {
                         "name": "Test Account",
                         "currency_code": "USD",
-                        "orig_balance": 125.0,
-                        "balance": 100.0,
+                        "orig_balance": round_calls[0][3] or 0.0,
+                        "balance": round_calls[1][3],
                     }
                 ]
             },
         )
+    ]
+
+    assert cent_calls == [(12_500, currency_util.CURRENCY_DECIMALS, 0.0, 125.0)]  # noqa: S101
+    assert round_calls == [  # noqa: S101
+        (125.0, currency_util.CURRENCY_DECIMALS, None, 125.0),
+        (100.0, currency_util.CURRENCY_DECIMALS, None, 100.0),
     ]
 
     dates = captured.get("dates")
