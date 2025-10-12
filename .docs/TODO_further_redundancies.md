@@ -177,11 +177,11 @@
       - Ziel/Ergebnis: Tests erwarten ausschließlich strukturierte Payloads.
 
 14. Frontend: Durchschnittswerte im Overview-Tab beim Rendern anwenden
-   a) [ ] Nutze `average_cost` direkt in `resolveAverageCost`-Verwendungen (z. B. Tabellenformatierung).\
+   a) [x] Nutze `average_cost` direkt in `resolveAverageCost`-Verwendungen (z. B. Tabellenformatierung).\
       - Dateipfad(e): `src/tabs/overview.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Renderfunktionen für Durchschnittswerte\
       - Ziel/Ergebnis: UI zeigt unverändert Backend-Werte an.
-   b) [ ] Entferne redundante Formatierungshelfer, die spezifisch für Legacyfelder geschrieben wurden.\
+   b) [x] Entferne redundante Formatierungshelfer, die spezifisch für Legacyfelder geschrieben wurden.\
       - Dateipfad(e): `src/tabs/overview.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Hilfsfunktionen für `avg_price_*`\
       - Ziel/Ergebnis: Übersichtscode ist aufgeräumt und legt Fokus auf strukturierte Daten.
