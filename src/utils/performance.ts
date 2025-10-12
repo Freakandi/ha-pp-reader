@@ -7,6 +7,8 @@ import type {
   PerformanceMetricsPayload,
 } from "../tabs/types";
 
+const NUMERIC_STRING_PATTERN = /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/;
+
 const toFiniteNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -18,14 +20,13 @@ const toFiniteNumber = (value: unknown): number | null => {
       return null;
     }
 
+    if (!NUMERIC_STRING_PATTERN.test(trimmed)) {
+      return null;
+    }
+
     const parsed = Number(trimmed);
     if (Number.isFinite(parsed)) {
       return parsed;
-    }
-
-    const relaxed = Number.parseFloat(trimmed);
-    if (Number.isFinite(relaxed)) {
-      return relaxed;
     }
   }
 

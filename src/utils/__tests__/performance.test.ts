@@ -48,3 +48,17 @@ void test("normalizePerformancePayload rejects non-numeric strings", () => {
 
   assert.strictEqual(payload, null);
 });
+
+void test("normalizePerformancePayload rejects partially numeric strings", () => {
+  const payload = normalizePerformancePayload({
+    gain_abs: "123abc",
+    gain_pct: "12.3%",
+    total_change_eur: "1,234",
+    total_change_pct: "5.6e2foo",
+    day_change: {
+      price_change_native: "7.8 EUR",
+    },
+  });
+
+  assert.strictEqual(payload, null);
+});
