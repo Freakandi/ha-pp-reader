@@ -38,11 +38,27 @@ export function toFiniteCurrency(value: unknown): number | null {
     const hasDot = lastDot !== -1;
 
     if (hasComma && (!hasDot || lastComma > lastDot)) {
-      normalized = normalized.replace(/\./g, '').replace(',', '.');
+      if (!hasDot) {
+        const commaGroups = normalized.split(',');
+        const decimalDigits = commaGroups[commaGroups.length - 1]?.length ?? 0;
+        const integerPart = commaGroups.slice(0, -1).join('');
+        const integerDigits = integerPart.replace(/[+-]/g, '').length;
+        const multipleCommas = commaGroups.length > 2;
+        const integerIsZero = /^[-+]?0$/.test(integerPart);
+
+        const treatAsThousands =
+          multipleCommas ||
+          decimalDigits === 0 ||
+          (decimalDigits === 3 && integerDigits > 0 && integerDigits <= 3 && !integerIsZero);
+
+        normalized = treatAsThousands
+          ? normalized.replace(/,/g, '')
+          : normalized.replace(',', '.');
+      } else {
+        normalized = normalized.replace(/\./g, '').replace(',', '.');
+      }
     } else if (hasDot && hasComma && lastDot > lastComma) {
       normalized = normalized.replace(/,/g, '');
-    } else if (hasComma && !hasDot) {
-      normalized = normalized.replace(/\./g, '').replace(',', '.');
     } else if (hasDot) {
       const decimals = normalized.length - lastDot - 1;
       if (decimals === 3 && /\d{4,}/.test(normalized.replace(/\./g, ''))) {

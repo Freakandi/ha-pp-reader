@@ -19,6 +19,10 @@ void test('toFiniteCurrency parses numbers and numeric strings', () => {
   assert.strictEqual(toFiniteCurrency('13.831,09'), 13831.09);
   assert.strictEqual(toFiniteCurrency('59,7602'), 59.7602);
   assert.strictEqual(toFiniteCurrency('1.234.567'), 1234567);
+  assert.strictEqual(toFiniteCurrency('1,234'), 1234);
+  assert.strictEqual(toFiniteCurrency('12,345,678 €'), 12345678);
+  assert.strictEqual(toFiniteCurrency('0,123'), 0.123);
+  assert.strictEqual(toFiniteCurrency('123456,789'), 123456.789);
   assert.strictEqual(toFiniteCurrency('1 234,56 €'), 1234.56);
   assert.strictEqual(toFiniteCurrency(''), null);
   assert.strictEqual(toFiniteCurrency('abc'), null);
