@@ -579,6 +579,14 @@ pendingMap.set('portfolio-1', {
         purchase_total_security: 500,
         purchase_total_account: 500,
       },
+      average_cost: {
+        native: null,
+        security: null,
+        account: null,
+        eur: null,
+        source: 'aggregation',
+        coverage_ratio: null,
+      },
     },
   ],
 });

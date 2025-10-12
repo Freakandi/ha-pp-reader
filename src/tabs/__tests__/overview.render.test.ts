@@ -91,6 +91,14 @@ void test(
           purchase_total_security: 724.89,
           purchase_total_account: 494.2,
         },
+        average_cost: {
+          native: 7.2489,
+          security: 7.2489,
+          account: 4.942,
+          eur: 4.942,
+          source: 'totals',
+          coverage_ratio: 1,
+        },
         performance: {
           gain_abs: 0,
           gain_pct: 0,
