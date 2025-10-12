@@ -31,6 +31,7 @@ def test_dashboard_bundle_smoke() -> None:
     assert payload["flushApplied"] is True
     assert payload["positionsMarkupIncludesTable"] is True
     assert payload["positionsMarkupLength"] > 0
+    assert payload["positionsMarkupHasPurchaseValue"] is True
     assert payload["pendingSizeBefore"] == 1
     assert payload["pendingSizeAfter"] == 0
     assert payload["detailsFound"] is True

@@ -72,8 +72,8 @@ function normalizePerformanceMetrics(
 function deriveAggregation(position: PortfolioPositionData): HoldingsAggregationPayload {
   const rawAggregation =
     position.aggregation && typeof position.aggregation === 'object'
-      ? position.aggregation
-      : null;
+      ? (position.aggregation as Partial<HoldingsAggregationPayload>)
+      : {};
 
   const asFiniteNumber = (value: unknown): number | null =>
     typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -83,61 +83,25 @@ function deriveAggregation(position: PortfolioPositionData): HoldingsAggregation
     return numeric === null ? null : numeric;
   };
 
-  const holdings =
-    asFiniteNumber(rawAggregation?.total_holdings) ??
-    asFiniteNumber(position.current_holdings) ??
-    0;
-  const positiveHoldings =
-    asFiniteNumber(rawAggregation?.positive_holdings) ??
-    (holdings > 0 ? holdings : 0);
-  const purchaseValueEur =
-    asFiniteNumber(rawAggregation?.purchase_value_eur) ??
-    asFiniteNumber(position.purchase_value) ??
-    0;
-
-  const purchaseValueCentsRaw = asFiniteNumber(rawAggregation?.purchase_value_cents);
-  const purchaseValueCents =
-    purchaseValueCentsRaw !== null
-      ? Math.round(purchaseValueCentsRaw)
-      : Math.round(purchaseValueEur * 100);
-
-  const securityTotal =
-    asFiniteNumber(rawAggregation?.security_currency_total) ??
-    asFiniteNumber(rawAggregation?.purchase_total_security) ??
-    asFiniteNumber(position.purchase_total_security) ??
-    0;
-  const accountTotal =
-    asFiniteNumber(rawAggregation?.account_currency_total) ??
-    asFiniteNumber(rawAggregation?.purchase_total_account) ??
-    asFiniteNumber(position.purchase_total_account) ??
-    0;
-
-  const averagePurchaseNative =
-    asNullableNumber(rawAggregation?.average_purchase_price_native ?? position.average_purchase_price_native);
-  const avgPriceSecurity =
-    asNullableNumber(rawAggregation?.avg_price_security ?? position.avg_price_security);
-  const avgPriceAccount =
-    asNullableNumber(rawAggregation?.avg_price_account ?? position.avg_price_account);
-
-  const purchaseTotalSecurity =
-    asFiniteNumber(rawAggregation?.purchase_total_security) ??
-    asFiniteNumber(position.purchase_total_security) ??
-    securityTotal;
-  const purchaseTotalAccount =
-    asFiniteNumber(rawAggregation?.purchase_total_account) ??
-    asFiniteNumber(position.purchase_total_account) ??
-    accountTotal;
+  const totalHoldings = asFiniteNumber(rawAggregation.total_holdings) ?? 0;
+  const positiveHoldingsRaw = asFiniteNumber(rawAggregation.positive_holdings);
+  const purchaseValueEur = asFiniteNumber(rawAggregation.purchase_value_eur) ?? 0;
+  const purchaseValueCentsRaw = asFiniteNumber(rawAggregation.purchase_value_cents);
+  const securityTotal = asFiniteNumber(rawAggregation.security_currency_total) ?? 0;
+  const accountTotal = asFiniteNumber(rawAggregation.account_currency_total) ?? 0;
+  const purchaseTotalSecurity = asFiniteNumber(rawAggregation.purchase_total_security) ?? securityTotal;
+  const purchaseTotalAccount = asFiniteNumber(rawAggregation.purchase_total_account) ?? accountTotal;
 
   return {
-    total_holdings: holdings,
-    positive_holdings: positiveHoldings > 0 ? positiveHoldings : 0,
-    purchase_value_cents: purchaseValueCents,
+    total_holdings: totalHoldings,
+    positive_holdings: Math.max(0, positiveHoldingsRaw ?? totalHoldings),
+    purchase_value_cents: Math.round(purchaseValueCentsRaw ?? 0),
     purchase_value_eur: purchaseValueEur,
     security_currency_total: securityTotal,
     account_currency_total: accountTotal,
-    average_purchase_price_native: averagePurchaseNative,
-    avg_price_security: avgPriceSecurity,
-    avg_price_account: avgPriceAccount,
+    average_purchase_price_native: asNullableNumber(rawAggregation.average_purchase_price_native),
+    avg_price_security: asNullableNumber(rawAggregation.avg_price_security),
+    avg_price_account: asNullableNumber(rawAggregation.avg_price_account),
     purchase_total_security: purchaseTotalSecurity,
     purchase_total_account: purchaseTotalAccount,
   };
