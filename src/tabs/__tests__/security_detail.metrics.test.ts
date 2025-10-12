@@ -355,6 +355,40 @@ test('normalizeAverageCostForTest falls back to legacy snapshot fields', () => {
   assert.strictEqual(normalized?.coverageRatio, null);
 });
 
+test('normalizeAverageCostForTest derives per-share totals when averages missing', () => {
+  const normalized = normalizeAverageCostForTest({
+    average_cost: null,
+    total_holdings_precise: '100',
+    purchase_total_security: '248100',
+    purchase_total_account: '1446.4',
+    purchase_value_eur: '1446.4',
+  });
+
+  assert.ok(normalized, 'expected totals to yield a derived average payload');
+  assertApproximately(
+    normalized?.native,
+    2481,
+    'native average should be derived from purchase_total_security totals',
+  );
+  assertApproximately(
+    normalized?.security,
+    2481,
+    'security average should match the derived native average',
+  );
+  assertApproximately(
+    normalized?.account,
+    14.464,
+    'account average should be derived from purchase_total_account totals',
+  );
+  assertApproximately(
+    normalized?.eur,
+    14.464,
+    'EUR average should be derived from purchase_value_eur totals',
+  );
+  assert.strictEqual(normalized?.source, 'aggregation');
+  assert.strictEqual(normalized?.coverageRatio, null);
+});
+
 test('normalizeAverageCostForTest returns null when no averages available', () => {
   const normalized = normalizeAverageCostForTest({
     average_cost: null,

@@ -153,6 +153,33 @@ function normalizeAverageCost(
     return 'aggregation';
   };
 
+  const holdingsValue =
+    parseNullableNumber(
+      (snapshot as { total_holdings_precise?: unknown }).total_holdings_precise,
+    ) ?? parseNullableNumber(snapshot.total_holdings);
+  const deriveAverageFromTotal = (total: unknown): number | null => {
+    const totalValue = parseNullableNumber(total);
+    if (
+      totalValue == null ||
+      holdingsValue == null ||
+      !Number.isFinite(holdingsValue) ||
+      holdingsValue === 0
+    ) {
+      return null;
+    }
+
+    const average = totalValue / holdingsValue;
+    return Number.isFinite(average) ? average : null;
+  };
+
+  const purchaseTotalSecurityAverage = deriveAverageFromTotal(
+    (snapshot as { purchase_total_security?: unknown }).purchase_total_security,
+  );
+  const purchaseTotalAccountAverage = deriveAverageFromTotal(
+    (snapshot as { purchase_total_account?: unknown }).purchase_total_account,
+  );
+  const purchaseValueEurAverage = deriveAverageFromTotal(snapshot.purchase_value_eur);
+
   const rawAverageCost = snapshot.average_cost;
   if (rawAverageCost && typeof rawAverageCost === 'object') {
     const native = parseNullableNumber((rawAverageCost as { native?: unknown }).native);
@@ -163,21 +190,49 @@ function normalizeAverageCost(
       (rawAverageCost as { coverage_ratio?: unknown }).coverage_ratio,
     );
 
+    const legacyNative = parseNullableNumber(snapshot.average_purchase_price_native);
+    const legacySecurity = parseNullableNumber(snapshot.avg_price_security);
+    const legacyAccount = parseNullableNumber(snapshot.avg_price_account);
+    const legacyEur = parseNullableNumber(snapshot.purchase_value_eur);
+
     return {
-      native: native ?? security ?? parseNullableNumber(snapshot.average_purchase_price_native),
-      security: security ?? native ?? parseNullableNumber(snapshot.avg_price_security),
-      account: account ?? parseNullableNumber(snapshot.avg_price_account) ?? eur ?? null,
-      eur: eur ?? parseNullableNumber(snapshot.purchase_value_eur),
+      native:
+        native ??
+        security ??
+        legacyNative ??
+        legacySecurity ??
+        purchaseTotalSecurityAverage ??
+        null,
+      security:
+        security ??
+        native ??
+        legacySecurity ??
+        legacyNative ??
+        purchaseTotalSecurityAverage ??
+        null,
+      account:
+        account ??
+        legacyAccount ??
+        purchaseTotalAccountAverage ??
+        eur ??
+        legacyEur ??
+        null,
+      eur: eur ?? purchaseValueEurAverage ?? legacyEur ?? null,
       source: normalizeSource((rawAverageCost as { source?: unknown }).source),
       coverageRatio,
     };
   }
 
-  const fallbackSecurity = parseNullableNumber(snapshot.avg_price_security);
+  const fallbackLegacyNative = parseNullableNumber(snapshot.average_purchase_price_native);
+  const fallbackLegacySecurity = parseNullableNumber(snapshot.avg_price_security);
+  const fallbackLegacyAccount = parseNullableNumber(snapshot.avg_price_account);
+  const fallbackLegacyEur = parseNullableNumber(snapshot.purchase_value_eur);
+  const fallbackSecurity = fallbackLegacySecurity ?? purchaseTotalSecurityAverage;
   const fallbackNative =
-    parseNullableNumber(snapshot.average_purchase_price_native) ?? fallbackSecurity;
-  const fallbackAccount = parseNullableNumber(snapshot.avg_price_account);
-  const fallbackEur = parseNullableNumber(snapshot.purchase_value_eur);
+    fallbackLegacyNative ?? fallbackSecurity ?? purchaseTotalSecurityAverage;
+  const fallbackAccount =
+    fallbackLegacyAccount ?? purchaseTotalAccountAverage ?? purchaseValueEurAverage;
+  const fallbackEur = purchaseValueEurAverage ?? fallbackLegacyEur ?? fallbackAccount;
 
   if (
     fallbackNative == null &&
