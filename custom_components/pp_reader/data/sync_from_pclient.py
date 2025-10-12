@@ -29,6 +29,7 @@ from ..logic.securities import (  # noqa: TID252
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
+from ..util.currency import cent_to_eur, round_currency
 from .db_access import (
     fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
     get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
@@ -1157,7 +1158,7 @@ class _SyncRunner:
         updated_accounts: list[dict[str, Any]] = []
         for account in db_accounts:
             currency = account["currency_code"]
-            orig_balance = account["raw_balance"] / 100.0
+            orig_balance = cent_to_eur(account["raw_balance"], default=0.0)
             fx_unavailable = False
             if currency != "EUR":
                 rate = fx_rates.get(currency)
@@ -1177,8 +1178,8 @@ class _SyncRunner:
                 {
                     "name": account["name"],
                     "currency_code": currency,
-                    "orig_balance": round(orig_balance, 2),
-                    "balance": round(eur_balance, 2) if eur_balance is not None else None,
+                    "orig_balance": orig_balance,
+                    "balance": round_currency(eur_balance, default=None),
                     "fx_unavailable": fx_unavailable,
                 }
             )

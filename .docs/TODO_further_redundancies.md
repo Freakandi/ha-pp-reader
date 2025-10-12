@@ -1,17 +1,17 @@
 1. Backend: Kontostands-Konvertierungen auf Currency-Utilities umstellen
-   a) [ ] Ersetze die manuelle Division durch `cent_to_eur` und `round_currency`, behalte Validierung bei.\
+   a) [x] Ersetze die manuelle Division durch `cent_to_eur` und `round_currency`, behalte Validierung bei.\
       - Dateipfad(e): `custom_components/pp_reader/logic/accounting.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `calculate_account_balance`\
       - Ziel/Ergebnis: Alle Konto-Salden nutzen zentrale Währungshelper, keine direkten `/ 100` mehr.
-   b) [ ] Konvertiere Rohsalden und EUR-Werte im Sync-Layer mit `cent_to_eur`/`round_currency`, entferne `round(...)`.\
+   b) [x] Konvertiere Rohsalden und EUR-Werte im Sync-Layer mit `cent_to_eur`/`round_currency`, entferne `round(...)`.\
       - Dateipfad(e): `custom_components/pp_reader/data/sync_from_pclient.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_emit_accounts_update`\
       - Ziel/Ergebnis: Einheitliche Rundung für `orig_balance`/`balance`, FX-Fehlerszenarien bleiben erhalten.
-   c) [ ] Aktualisiere Backend-Tests auf die Utility-Konvertierung (neue Erwartungswerte, Helper-Mocks).\
+   c) [x] Aktualisiere Backend-Tests auf die Utility-Konvertierung (neue Erwartungswerte, Helper-Mocks).\
       - Dateipfad(e): `tests/test_sync_from_pclient.py`, `tests/test_ws_accounts_fx.py`, `tests/test_db_access.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Assertions zu Kontosalden und FX-Fallbacks\
       - Ziel/Ergebnis: Tests spiegeln die geänderte Rundung/Skalierung wider.
-   d) [ ] Passe Kontosalden-Fixtures für Frontend-Snapshots an die Utility-Ausgabe an.\
+   d) [x] Passe Kontosalden-Fixtures für Frontend-Snapshots an die Utility-Ausgabe an.\
       - Dateipfad(e): `tests/frontend/portfolio_update_gain_abs.mjs`, `tests/frontend/test_portfolio_update_gain_abs.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete `orig_balance`/`balance` Werte\
       - Ziel/Ergebnis: Dashboard-Tests nutzen identische Zahlen wie der neue Backend-Serializer.
