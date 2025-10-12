@@ -37,6 +37,24 @@ def _estimate_event_size(payload: dict[str, Any]) -> int:
     return len(encoded.encode("utf-8"))
 
 
+def _normalize_currency_amount(value: Any, *, default: float = 0.0) -> float:
+    """Return a consistently rounded EUR amount from raw or cent values."""
+
+    if isinstance(value, bool):
+        return default
+
+    if isinstance(value, int):
+        normalized = cent_to_eur(value, default=None)
+        if normalized is not None:
+            return normalized
+
+    rounded = round_currency(value, default=None)
+    if rounded is not None:
+        return rounded
+
+    return default
+
+
 def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     """Compact a raw portfolio aggregation entry for event transport."""
     uuid = item.get("uuid") or item.get("portfolio_uuid")
@@ -55,30 +73,12 @@ def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] 
     raw_current_value = item.get("current_value")
     if raw_current_value is None:
         raw_current_value = item.get("value")
-    current_value = 0.0
-    if not isinstance(raw_current_value, bool):
-        current_value_candidate = cent_to_eur(raw_current_value, default=None)
-        if current_value_candidate is None:
-            current_value_candidate = round_currency(
-                raw_current_value,
-                default=0.0,
-            )
-        if current_value_candidate is not None:
-            current_value = current_value_candidate
+    current_value = _normalize_currency_amount(raw_current_value)
 
     raw_purchase_sum = item.get("purchase_sum")
     if raw_purchase_sum is None:
         raw_purchase_sum = item.get("purchaseSum")
-    purchase_sum = 0.0
-    if not isinstance(raw_purchase_sum, bool):
-        purchase_sum_candidate = cent_to_eur(raw_purchase_sum, default=None)
-        if purchase_sum_candidate is None:
-            purchase_sum_candidate = round_currency(
-                raw_purchase_sum,
-                default=0.0,
-            )
-        if purchase_sum_candidate is not None:
-            purchase_sum = purchase_sum_candidate
+    purchase_sum = _normalize_currency_amount(raw_purchase_sum)
 
     performance_mapping = item.get("performance")
     performance_payload: dict[str, Any]
@@ -237,16 +237,7 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         avg_price_account = _item_value("avg_price_account")
 
     current_value_raw = item.get("current_value")
-    current_value = 0.0
-    if not isinstance(current_value_raw, bool):
-        current_value_candidate = cent_to_eur(current_value_raw, default=None)
-        if current_value_candidate is None:
-            current_value_candidate = round_currency(
-                current_value_raw,
-                default=0.0,
-            )
-        if current_value_candidate is not None:
-            current_value = current_value_candidate
+    current_value = _normalize_currency_amount(current_value_raw)
 
     performance_mapping = item.get("performance")
     performance_payload: dict[str, Any]
