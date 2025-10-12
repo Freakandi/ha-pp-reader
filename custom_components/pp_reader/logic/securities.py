@@ -20,7 +20,11 @@ from custom_components.pp_reader.currencies.fx import (
 )
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.portfolio import normalize_shares
-from custom_components.pp_reader.util.currency import normalize_raw_price
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    normalize_raw_price,
+    round_currency,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,7 +106,7 @@ def _normalize_transaction_amounts(
     """Convert raw transaction figures into floats with fee/tax breakdown."""
 
     shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
-    gross = (transaction.amount or 0) / 100.0
+    gross = cent_to_eur(transaction.amount, default=0.0) or 0.0
     fees = 0.0
     taxes = 0.0
 
@@ -117,7 +121,7 @@ def _normalize_transaction_amounts(
             if isinstance(nested, list):
                 entries = [entry for entry in nested if isinstance(entry, dict)]
             else:
-                entries = [units]
+                entries = []
         else:
             entries = []
 
@@ -133,22 +137,18 @@ def _normalize_transaction_amounts(
             if amount_raw is None:
                 continue
 
-            if isinstance(amount_raw, (int, float)):
-                unit_amount = float(amount_raw)
-            else:
-                try:
-                    unit_amount = float(int(amount_raw))
-                except (TypeError, ValueError):
-                    continue
-
-            unit_amount /= 100.0
+            unit_amount = cent_to_eur(amount_raw)
+            if unit_amount is None:
+                continue
 
             if unit_type == 2:
                 fees += unit_amount
             elif unit_type == 1:
                 taxes += unit_amount
 
-    net_trade_account = gross - fees - taxes
+    fees = round_currency(fees, default=0.0) or 0.0
+    taxes = round_currency(taxes, default=0.0) or 0.0
+    net_trade_account = round_currency(gross - fees - taxes, default=0.0) or 0.0
 
     return _NormalizedTransactionAmounts(
         shares=shares,
@@ -325,17 +325,15 @@ def _resolve_native_amount(
     if not units:
         return None, None, None
 
-    aggregate: dict[str, Any] | None = None
     entries: list[dict[str, Any]]
     if isinstance(units, list):
         entries = [entry for entry in units if isinstance(entry, dict)]
     elif isinstance(units, dict):
-        aggregate = units
         nested = units.get("entries") if "entries" in units else None
         if isinstance(nested, list):
             entries = [entry for entry in nested if isinstance(entry, dict)]
         else:
-            entries = [units]
+            return None, None, None
     else:
         return None, None, None
 
@@ -346,38 +344,23 @@ def _resolve_native_amount(
     for entry in entries:
         unit_type_raw = entry.get("type")
 
-        if unit_type_raw is None and (
-            "fx_amount" in entry or "fx_currency_code" in entry or "amount" in entry
-        ):
-            unit_type = 0
-        else:
-            try:
-                unit_type = int(unit_type_raw)
-            except (TypeError, ValueError):
-                continue
+        try:
+            unit_type = int(unit_type_raw)
+        except (TypeError, ValueError):
+            continue
 
         if unit_type != 0:
             continue
 
         raw_amount = entry.get("amount")
-        if raw_amount is not None:
-            if isinstance(raw_amount, (int, float)):
-                account_amount = float(raw_amount) / 100.0
-            else:
-                try:
-                    account_amount = float(int(raw_amount)) / 100.0
-                except (TypeError, ValueError):
-                    account_amount = None
+        converted_account = cent_to_eur(raw_amount)
+        if converted_account is not None:
+            account_amount = converted_account
 
         fx_amount = entry.get("fx_amount")
-        if fx_amount is not None:
-            if isinstance(fx_amount, (int, float)):
-                native_amount = float(fx_amount) / 100.0
-            else:
-                try:
-                    native_amount = float(int(fx_amount)) / 100.0
-                except (TypeError, ValueError):
-                    native_amount = None
+        converted_native = cent_to_eur(fx_amount)
+        if converted_native is not None:
+            native_amount = converted_native
 
         currency = entry.get("fx_currency_code")
         if isinstance(currency, str):
@@ -385,22 +368,6 @@ def _resolve_native_amount(
 
         if native_amount is not None and account_amount is not None:
             break
-
-    if aggregate:
-        if native_amount is None:
-            fx_amount = aggregate.get("fx_amount")
-            if isinstance(fx_amount, (int, float)):
-                native_amount = float(fx_amount) / 100.0
-            elif fx_amount is not None:
-                try:
-                    native_amount = float(int(fx_amount)) / 100.0
-                except (TypeError, ValueError):
-                    native_amount = None
-
-        if native_currency is None:
-            currency = aggregate.get("fx_currency_code")
-            if isinstance(currency, str):
-                native_currency = currency
 
     return native_amount, native_currency, account_amount
 

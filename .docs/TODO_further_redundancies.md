@@ -17,19 +17,19 @@
       - Ziel/Ergebnis: Dashboard-Tests nutzen identische Zahlen wie der neue Backend-Serializer.
 
 2. Backend: Transaktionsbeträge durch Currency-Utilities normalisieren
-   a) [ ] Route alle Betragsspalten in `_normalize_transaction_amounts` über `cent_to_eur`/`round_currency`.\
+   a) [x] Route alle Betragsspalten in `_normalize_transaction_amounts` über `cent_to_eur`/`round_currency`.\
       - Dateipfad(e): `custom_components/pp_reader/logic/securities.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_transaction_amounts`\
       - Ziel/Ergebnis: Keine manuellen Cent→EUR-Rechnungen mehr innerhalb der Normalisierung.
-   b) [ ] Ersetze Eigenberechnungen in `_resolve_native_amount` durch die zentralen Helper.\
+   b) [x] Ersetze Eigenberechnungen in `_resolve_native_amount` durch die zentralen Helper.\
       - Dateipfad(e): `custom_components/pp_reader/logic/securities.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_resolve_native_amount`\
       - Ziel/Ergebnis: Native Legs (Brutto, Gebühren, Steuern) laufen durch Utility-Funktionen.
-   c) [ ] Entferne obsoletes Konvertierungs-Handling in den Securities-Helfern nachdem alle Aufrufer migriert sind.\
+   c) [x] Entferne obsoletes Konvertierungs-Handling in den Securities-Helfern nachdem alle Aufrufer migriert sind.\
       - Dateipfad(e): `custom_components/pp_reader/logic/securities.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Hilfszweige für manuelle Skalierung\
       - Ziel/Ergebnis: Codepfad nutzt ausschließlich geteilte Utilities.
-   d) [ ] Aktualisiere Testfälle und Fixtures für Wertpapier-Transaktionen auf die neue Rundung.\
+   d) [x] Aktualisiere Testfälle und Fixtures für Wertpapier-Transaktionen auf die neue Rundung.\
       - Dateipfad(e): `tests/test_logic_securities.py`, `tests/test_logic_securities_native_avg.py`, `tests/test_sync_from_pclient.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Konvertierungsergebnisse\
       - Ziel/Ergebnis: Tests bestätigen, dass die Helper in allen Fällen greifen.

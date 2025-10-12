@@ -616,8 +616,32 @@ def test_sync_portfolio_securities_persists_native_average(
     ]
 
     runner.tx_units = {
-        "tx-buy-1": {"fx_amount": 20000, "fx_currency_code": "USD"},
-        "tx-buy-2": {"fx_amount": 12000, "fx_currency_code": "USD"},
+        "tx-buy-1": {
+            "fx_amount": 20000,
+            "fx_currency_code": "USD",
+            "entries": [
+                {
+                    "type": 0,
+                    "amount": 20000,
+                    "currency_code": "USD",
+                    "fx_amount": 20000,
+                    "fx_currency_code": "USD",
+                }
+            ],
+        },
+        "tx-buy-2": {
+            "fx_amount": 12000,
+            "fx_currency_code": "USD",
+            "entries": [
+                {
+                    "type": 0,
+                    "amount": 12000,
+                    "currency_code": "USD",
+                    "fx_amount": 12000,
+                    "fx_currency_code": "USD",
+                }
+            ],
+        },
     }
     runner.changes.transactions = True
 
