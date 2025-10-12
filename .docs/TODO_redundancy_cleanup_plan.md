@@ -250,3 +250,10 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Dateien: `src/tabs/__tests__/overview.render.test.ts`, `src/tabs/__tests__/security_detail.metrics.test.ts`, ggf. weitere Snapshot-Tests
        - Ziel: Testfixtures um `performance` erweitern, Assertions auf neue Felder (`totalChangeEur`, `dayChangePct`, `gain_pct`) ergänzen und sicherstellen, dass entfernte Helper nicht mehr importiert werden.
        - Validierung: Tests schlagen fehl, falls Komponenten weiterhin alte Helper referenzieren oder `performance` ignorieren.
+
+## Dokumentation
+
+- [ ] README.md – Änderungen an Performance-Metriken und neuen Payloads beschreiben.
+- [ ] README-dev.md – Entwicklungsnotizen zu zentralisierten Performance-Helpern aktualisieren.
+- [ ] ARCHITECTURE.md – Datenflüsse für Performance- und Day-Change-Payloads ergänzen.
+- [ ] CHANGELOG.md – Neuerungen aus Abschnitt 7 dokumentieren.
