@@ -278,25 +278,35 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def _compact_portfolio_positions_payload(data: Any) -> Any:
     """Ensure position updates only transport the necessary keys."""
-    if not isinstance(data, Mapping):
-        return data
 
-    positions = data.get("positions")
-    compacted: list[dict[str, Any]] = []
-    if _is_sequence(positions):
-        for item in positions:
+    if isinstance(data, Mapping):
+        positions = data.get("positions")
+        compacted: list[dict[str, Any]] = []
+        if _is_sequence(positions):
+            for item in positions:
+                if isinstance(item, Mapping):
+                    normalized = _normalize_position_entry(item)
+                    if normalized is not None:
+                        compacted.append(normalized)
+
+        result: dict[str, Any] = {
+            "portfolio_uuid": data.get("portfolio_uuid"),
+            "positions": compacted,
+        }
+        if "error" in data:
+            result["error"] = data["error"]
+        return result
+
+    if _is_sequence(data):
+        compacted_items: list[dict[str, Any]] = []
+        for item in data:
             if isinstance(item, Mapping):
-                normalized = _normalize_position_entry(item)
-                if normalized is not None:
-                    compacted.append(normalized)
+                compacted_item = _compact_portfolio_positions_payload(item)
+                if compacted_item:
+                    compacted_items.append(compacted_item)
+        return compacted_items
 
-    result: dict[str, Any] = {
-        "portfolio_uuid": data.get("portfolio_uuid"),
-        "positions": compacted,
-    }
-    if "error" in data:
-        result["error"] = data["error"]
-    return result
+    return data
 
 
 def _compact_event_data(data_type: str, data: Any) -> Any:
