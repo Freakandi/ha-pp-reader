@@ -22,6 +22,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from custom_components.pp_reader.logic import accounting as _accounting_module
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
 from .performance import compose_performance_payload, select_performance_metrics
@@ -74,22 +75,35 @@ def _sync_data_to_db(
         )
 
 
-def _normalize_amount(value: Any) -> float:
-    """Konvertiert Cent-Werte oder Float-Werte zu EUR (float)."""
+def _normalize_portfolio_amount(value: Any) -> float:
+    """Normalize mixed cent/float values to a rounded EUR float."""
+
     if value is None:
         return 0.0
-    if isinstance(value, int):
-        return value / 100
+
     if isinstance(value, float):
-        return value
-    try:
-        as_int = int(value)
-    except (TypeError, ValueError):
+        normalized_float = round_currency(value, default=None)
+        return normalized_float if normalized_float is not None else 0.0
+
+    cent_value: int | None
+    if isinstance(value, int):
+        cent_value = value
+    else:
         try:
-            return float(value)
+            cent_value = int(value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            return 0.0
-    return as_int / 100
+            cent_value = None
+
+    if cent_value is not None:
+        normalized_cent = cent_to_eur(cent_value, default=None)
+        if normalized_cent is not None:
+            return normalized_cent
+
+    normalized_generic = round_currency(value, default=None)
+    if normalized_generic is not None:
+        return normalized_generic
+
+    return 0.0
 
 
 def _portfolio_contract_entry(
@@ -121,8 +135,8 @@ def _portfolio_contract_entry(
     except (TypeError, ValueError):
         position_count = 0
 
-    current_value = round(_normalize_amount(current_value_raw), 2)
-    purchase_sum = round(_normalize_amount(purchase_sum_raw), 2)
+    current_value = _normalize_portfolio_amount(current_value_raw)
+    purchase_sum = _normalize_portfolio_amount(purchase_sum_raw)
 
     performance_metrics, day_change_metrics = select_performance_metrics(
         current_value=current_value_raw,

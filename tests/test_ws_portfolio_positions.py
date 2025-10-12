@@ -14,6 +14,7 @@ pytest.importorskip(
 
 from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 WS_GET_PORTFOLIO_POSITIONS = getattr(
     websocket_module.ws_get_portfolio_positions,
@@ -164,10 +165,24 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert position["security_uuid"] == "security-1"  # noqa: S101
     assert position["name"] == "ACME Corp"  # noqa: S101
     assert position["current_holdings"] == pytest.approx(12.345678)  # noqa: S101
-    assert position["purchase_value"] == pytest.approx(1234.56)  # noqa: S101
-    assert position["current_value"] == pytest.approx(7890.12)  # noqa: S101
-    assert position["gain_abs"] == pytest.approx(6655.56)  # noqa: S101
-    assert position["gain_pct"] == pytest.approx(539.1)  # noqa: S101
+
+    expected_purchase_value = cent_to_eur(123_456, default=0.0) or 0.0
+    expected_current_value = cent_to_eur(789_012, default=0.0) or 0.0
+    expected_gain_abs = (
+        round_currency(expected_current_value - expected_purchase_value, default=0.0)
+        or 0.0
+    )
+    gain_pct_input = (
+        (expected_gain_abs / expected_purchase_value) * 100
+        if expected_purchase_value
+        else 0.0
+    )
+    expected_gain_pct = round_currency(gain_pct_input, default=0.0) or 0.0
+
+    assert position["purchase_value"] == pytest.approx(expected_purchase_value)  # noqa: S101
+    assert position["current_value"] == pytest.approx(expected_current_value)  # noqa: S101
+    assert position["gain_abs"] == pytest.approx(expected_gain_abs)  # noqa: S101
+    assert position["gain_pct"] == pytest.approx(expected_gain_pct)  # noqa: S101
     assert position["average_purchase_price_native"] == pytest.approx(45.678901)  # noqa: S101
     assert position["purchase_total_security"] == pytest.approx(2345.68)  # noqa: S101
     assert position["purchase_total_account"] == pytest.approx(3456.79)  # noqa: S101
