@@ -503,29 +503,39 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     }
     snapshot_payload = payload["snapshot"]
     average_cost = snapshot_payload["average_cost"]
-    assert (
-        average_cost["native"]
-        == snapshot_payload["average_purchase_price_native"]
-    )
+    expected_average_cost = {
+        "native": pytest.approx(14.877143, rel=0, abs=1e-6),
+        "security": pytest.approx(8.114286, rel=0, abs=1e-6),
+        "account": pytest.approx(9.914286, rel=0, abs=1e-6),
+        "eur": pytest.approx(0.0, rel=0, abs=1e-6),
+        "source": "totals",
+        "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+    }
+    assert average_cost == expected_average_cost
+    assert average_cost["native"] == snapshot_payload["average_purchase_price_native"]
     assert average_cost["security"] == snapshot_payload["avg_price_security"]
     assert average_cost["account"] == snapshot_payload["avg_price_account"]
-    assert average_cost["eur"] == pytest.approx(
-        snapshot_payload["purchase_value_eur"] / snapshot_payload["total_holdings"]
-        if snapshot_payload["total_holdings"]
-        else 0.0
-    )
-    assert average_cost["source"] == "totals"
-    assert average_cost["coverage_ratio"] == pytest.approx(1.0)
 
     performance = snapshot_payload["performance"]
     assert performance is not None
-    assert performance["gain_abs"] == pytest.approx(
-        snapshot_payload["market_value_eur"] - snapshot_payload["purchase_value_eur"],
-        rel=0,
-        abs=1e-6,
-    )
-    assert performance["total_change_eur"] == pytest.approx(performance["gain_abs"], rel=0, abs=1e-6)
-    assert performance["gain_pct"] == pytest.approx(performance["total_change_pct"], rel=0, abs=1e-6)
+    expected_day_change = {
+        "price_change_native": pytest.approx(1.75, rel=0, abs=1e-4),
+        "price_change_eur": pytest.approx(1.75, rel=0, abs=1e-4),
+        "change_pct": pytest.approx(16.28, rel=0, abs=1e-2),
+        "source": "native",
+        "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+    }
+    expected_performance = {
+        "gain_abs": pytest.approx(43.75, rel=0, abs=1e-2),
+        "gain_pct": pytest.approx(0.0, rel=0, abs=1e-2),
+        "total_change_eur": pytest.approx(43.75, rel=0, abs=1e-2),
+        "total_change_pct": pytest.approx(0.0, rel=0, abs=1e-2),
+        "source": "calculated",
+        "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+        "day_change": expected_day_change,
+    }
+    assert performance == expected_performance
+
     day_change = performance["day_change"]
     assert day_change["price_change_native"] == pytest.approx(
         snapshot_payload["day_price_change_native"],

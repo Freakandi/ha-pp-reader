@@ -11,7 +11,7 @@ pytest.importorskip(
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
-from custom_components.pp_reader.util.currency import cent_to_eur
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 
 @pytest.fixture
@@ -130,14 +130,69 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
 
     portfolios = {item["uuid"]: item for item in payload["portfolios"]}
 
-    assert portfolios["p1"]["current_value"] == cent_to_eur(175_000_000, default=0.0)
-    assert portfolios["p1"]["purchase_sum"] == cent_to_eur(150_000_000, default=0.0)
-    assert portfolios["p1"]["position_count"] == 1
+    expected_p1_current = cent_to_eur(175_000_000, default=0.0) or 0.0
+    expected_p1_purchase = cent_to_eur(150_000_000, default=0.0) or 0.0
+    expected_p1_gain_abs = (
+        round_currency(expected_p1_current - expected_p1_purchase, default=0.0) or 0.0
+    )
+    expected_p1_gain_pct = (
+        round_currency((expected_p1_gain_abs / expected_p1_purchase) * 100, default=0.0)
+        if expected_p1_purchase
+        else 0.0
+    ) or 0.0
 
-    assert portfolios["p2"]["current_value"] == cent_to_eur(620_000_000, default=0.0)
-    assert portfolios["p2"]["purchase_sum"] == cent_to_eur(500_000_000, default=0.0)
+    assert portfolios["p1"]["current_value"] == pytest.approx(expected_p1_current)
+    assert portfolios["p1"]["purchase_sum"] == pytest.approx(expected_p1_purchase)
+    assert portfolios["p1"]["gain_abs"] == pytest.approx(expected_p1_gain_abs)
+    assert portfolios["p1"]["gain_pct"] == pytest.approx(expected_p1_gain_pct)
+    assert portfolios["p1"]["position_count"] == 1
+    performance_p1 = portfolios["p1"]["performance"]
+    assert performance_p1 == {
+        "gain_abs": pytest.approx(expected_p1_gain_abs),
+        "gain_pct": pytest.approx(expected_p1_gain_pct),
+        "total_change_eur": pytest.approx(expected_p1_gain_abs),
+        "total_change_pct": pytest.approx(expected_p1_gain_pct),
+        "source": "calculated",
+        "coverage_ratio": pytest.approx(1.0),
+    }
+
+    expected_p2_current = cent_to_eur(620_000_000, default=0.0) or 0.0
+    expected_p2_purchase = cent_to_eur(500_000_000, default=0.0) or 0.0
+    expected_p2_gain_abs = (
+        round_currency(expected_p2_current - expected_p2_purchase, default=0.0) or 0.0
+    )
+    expected_p2_gain_pct = (
+        round_currency((expected_p2_gain_abs / expected_p2_purchase) * 100, default=0.0)
+        if expected_p2_purchase
+        else 0.0
+    ) or 0.0
+
+    assert portfolios["p2"]["current_value"] == pytest.approx(expected_p2_current)
+    assert portfolios["p2"]["purchase_sum"] == pytest.approx(expected_p2_purchase)
+    assert portfolios["p2"]["gain_abs"] == pytest.approx(expected_p2_gain_abs)
+    assert portfolios["p2"]["gain_pct"] == pytest.approx(expected_p2_gain_pct)
     assert portfolios["p2"]["position_count"] == 1
+    performance_p2 = portfolios["p2"]["performance"]
+    assert performance_p2 == {
+        "gain_abs": pytest.approx(expected_p2_gain_abs),
+        "gain_pct": pytest.approx(expected_p2_gain_pct),
+        "total_change_eur": pytest.approx(expected_p2_gain_abs),
+        "total_change_pct": pytest.approx(expected_p2_gain_pct),
+        "source": "calculated",
+        "coverage_ratio": pytest.approx(1.0),
+    }
 
     assert portfolios["p3"]["current_value"] == 0.0
     assert portfolios["p3"]["purchase_sum"] == 0.0
     assert portfolios["p3"]["position_count"] == 0
+    assert portfolios["p3"]["gain_abs"] == 0.0
+    assert portfolios["p3"]["gain_pct"] == 0.0
+    performance_p3 = portfolios["p3"]["performance"]
+    assert performance_p3 == {
+        "gain_abs": 0.0,
+        "gain_pct": 0.0,
+        "total_change_eur": 0.0,
+        "total_change_pct": 0.0,
+        "source": "calculated",
+        "coverage_ratio": pytest.approx(1.0),
+    }

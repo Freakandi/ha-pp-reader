@@ -29,7 +29,6 @@ from .db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
-from .performance import compose_performance_payload, select_performance_metrics
 
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
@@ -278,6 +277,19 @@ def _normalize_portfolio_positions(
         return []
 
     normalized: list[dict[str, Any]] = []
+
+    def _copy_payload(payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
+        """Return a shallow copy of the provided mapping payload."""
+
+        if not isinstance(payload, Mapping):
+            return None
+
+        copied = dict(payload)
+        nested_day_change = copied.get("day_change")
+        if isinstance(nested_day_change, Mapping):
+            copied["day_change"] = dict(nested_day_change)
+        return copied
+
     for item in positions:
         if not isinstance(item, Mapping):
             continue
@@ -286,66 +298,49 @@ def _normalize_portfolio_positions(
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _coerce_optional_float(
-            item.get("average_purchase_price_native")
-        )
-        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
-        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
+        average_cost = _copy_payload(item.get("average_cost"))
+        performance_payload = _copy_payload(item.get("performance")) or {}
+        aggregation_payload = _copy_payload(item.get("aggregation"))
 
-        purchase_total_security = _coerce_optional_float(
-            item.get("purchase_total_security")
-        )
+        purchase_total_security = item.get("purchase_total_security")
+        if purchase_total_security is None and aggregation_payload:
+            purchase_total_security = aggregation_payload.get("purchase_total_security")
         if purchase_total_security is None:
             purchase_total_security = 0.0
 
-        purchase_total_account = _coerce_optional_float(
-            item.get("purchase_total_account")
-        )
+        purchase_total_account = item.get("purchase_total_account")
+        if purchase_total_account is None and aggregation_payload:
+            purchase_total_account = aggregation_payload.get("purchase_total_account")
         if purchase_total_account is None:
             purchase_total_account = 0.0
 
-        purchase_value_raw = item.get("purchase_value")
-        purchase_value = round(_coerce_float(purchase_value_raw), 2)
+        avg_price_native = item.get("average_purchase_price_native")
+        if avg_price_native is None and aggregation_payload:
+            avg_price_native = aggregation_payload.get("average_purchase_price_native")
 
-        raw_average_cost = item.get("average_cost")
-        average_cost: dict[str, Any] | None = None
-        if isinstance(raw_average_cost, Mapping):
-            average_cost = dict(raw_average_cost)
+        avg_price_security = item.get("avg_price_security")
+        if avg_price_security is None and aggregation_payload:
+            avg_price_security = aggregation_payload.get("avg_price_security")
 
-        raw_performance = item.get("performance")
-        performance_mapping: Mapping[str, Any] | None = None
-        if isinstance(raw_performance, Mapping):
-            performance_mapping = raw_performance
+        avg_price_account = item.get("avg_price_account")
+        if avg_price_account is None and aggregation_payload:
+            avg_price_account = aggregation_payload.get("avg_price_account")
 
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=item.get("current_value"),
-            purchase_value=purchase_value_raw,
-            holdings=item.get("current_holdings"),
-        )
-        performance_payload = compose_performance_payload(
-            performance_mapping,
-            metrics=performance_metrics,
-            day_change=day_change_metrics,
-        )
-
-        gain_abs_value = round(
-            _coerce_float(performance_payload.get("gain_abs")), 2
-        )
-        gain_pct_value = round(
-            _coerce_float(performance_payload.get("gain_pct")), 2
-        )
+        purchase_value = item.get("purchase_value")
+        if purchase_value is None and aggregation_payload:
+            purchase_value = aggregation_payload.get("purchase_value_eur")
+        if purchase_value is None:
+            purchase_value = 0.0
 
         normalized.append(
             {
                 "security_uuid": security_uuid,
                 "name": item.get("name"),
-                "current_holdings": round(
-                    _coerce_float(item.get("current_holdings")), 6
-                ),
+                "current_holdings": item.get("current_holdings"),
                 "purchase_value": purchase_value,
-                "current_value": round(_coerce_float(item.get("current_value")), 2),
-                "gain_abs": gain_abs_value,
-                "gain_pct": gain_pct_value,
+                "current_value": item.get("current_value"),
+                "gain_abs": item.get("gain_abs"),
+                "gain_pct": item.get("gain_pct"),
                 "average_purchase_price_native": avg_price_native,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
@@ -353,6 +348,7 @@ def _normalize_portfolio_positions(
                 "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
                 "performance": performance_payload,
+                "aggregation": aggregation_payload,
             }
         )
 
