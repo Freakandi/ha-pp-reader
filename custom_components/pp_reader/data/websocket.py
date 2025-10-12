@@ -133,34 +133,6 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-def _coerce_float(value: Any, *, default: float = 0.0) -> float:
-    """Return ``value`` as float with a graceful fallback."""
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if value is None:
-        return default
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _coerce_optional_float(value: Any) -> float | None:
-    """Return ``value`` as float or ``None`` when conversion fails."""
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if value is None:
-        return None
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
     """Normalise snapshot payload for websocket transmission."""
     if not snapshot:
@@ -198,57 +170,70 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         currency = "EUR"
     data["currency_code"] = currency
 
-    data["total_holdings"] = _coerce_float(snapshot.get("total_holdings"))
-    data["last_price_native"] = _coerce_optional_float(
-        snapshot.get("last_price_native")
-    )
-    data["last_price_eur"] = _coerce_optional_float(snapshot.get("last_price_eur"))
-    data["market_value_eur"] = _coerce_optional_float(
-        snapshot.get("market_value_eur")
-    )
-    data["purchase_value_eur"] = _coerce_float(snapshot.get("purchase_value_eur"))
-    data["average_purchase_price_native"] = _coerce_optional_float(
-        snapshot.get("average_purchase_price_native")
-    )
+    total_holdings_candidate = snapshot.get("total_holdings")
+    try:
+        data["total_holdings"] = float(total_holdings_candidate)
+    except (TypeError, ValueError):
+        data["total_holdings"] = 0.0
 
-    purchase_total_security = _coerce_optional_float(
-        snapshot.get("purchase_total_security")
+    for key in (
+        "last_price_native",
+        "last_price_eur",
+        "average_purchase_price_native",
+        "last_close_native",
+        "last_close_eur",
+        "day_price_change_native",
+        "day_price_change_eur",
+        "day_change_pct",
+    ):
+        candidate = snapshot.get(key)
+        if candidate in (None, ""):
+            data[key] = None
+            continue
+        try:
+            data[key] = float(candidate)
+        except (TypeError, ValueError):
+            data[key] = None
+
+    market_value_eur = round_currency(
+        snapshot.get("market_value_eur"), default=None
+    )
+    data["market_value_eur"] = market_value_eur
+
+    purchase_value = round_currency(
+        snapshot.get("purchase_value_eur"), default=None
+    )
+    data["purchase_value_eur"] = purchase_value if purchase_value is not None else 0.0
+
+    purchase_total_security = round_currency(
+        snapshot.get("purchase_total_security"), default=None
     )
     data["purchase_total_security"] = (
         purchase_total_security if purchase_total_security is not None else 0.0
     )
 
-    purchase_total_account = _coerce_optional_float(
-        snapshot.get("purchase_total_account")
+    purchase_total_account = round_currency(
+        snapshot.get("purchase_total_account"), default=None
     )
     data["purchase_total_account"] = (
         purchase_total_account if purchase_total_account is not None else 0.0
     )
 
-    data["avg_price_security"] = _coerce_optional_float(
-        snapshot.get("avg_price_security")
-    )
-    data["avg_price_account"] = _coerce_optional_float(
-        snapshot.get("avg_price_account")
-    )
+    for key in ("avg_price_security", "avg_price_account"):
+        candidate = snapshot.get(key)
+        if candidate in (None, ""):
+            data[key] = None
+            continue
+        try:
+            data[key] = float(candidate)
+        except (TypeError, ValueError):
+            data[key] = None
 
     raw_average_cost = snapshot.get("average_cost")
     if isinstance(raw_average_cost, Mapping):
         data["average_cost"] = dict(raw_average_cost)
     else:
         data["average_cost"] = None
-    data["last_close_native"] = _coerce_optional_float(
-        snapshot.get("last_close_native")
-    )
-    data["last_close_eur"] = _coerce_optional_float(snapshot.get("last_close_eur"))
-    data["day_price_change_native"] = _coerce_optional_float(
-        snapshot.get("day_price_change_native")
-    )
-    data["day_price_change_eur"] = _coerce_optional_float(
-        snapshot.get("day_price_change_eur")
-    )
-    data["day_change_pct"] = _coerce_optional_float(snapshot.get("day_change_pct"))
-
     raw_performance = snapshot.get("performance")
     if isinstance(raw_performance, Mapping):
         performance_payload = dict(raw_performance)
@@ -261,10 +246,16 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
 
     last_price_raw = snapshot.get("last_price")
     if isinstance(last_price_raw, Mapping):
-        data["last_price"] = {
-            "native": _coerce_optional_float(last_price_raw.get("native")),
-            "eur": _coerce_optional_float(last_price_raw.get("eur")),
-        }
+        last_price_payload: dict[str, float | None] = {"native": None, "eur": None}
+        for price_key in ("native", "eur"):
+            price_candidate = last_price_raw.get(price_key)
+            if price_candidate in (None, ""):
+                continue
+            try:
+                last_price_payload[price_key] = float(price_candidate)
+            except (TypeError, ValueError):
+                last_price_payload[price_key] = None
+        data["last_price"] = last_price_payload
 
     return data
 
@@ -278,6 +269,15 @@ def _normalize_portfolio_positions(
         return []
 
     normalized: list[dict[str, Any]] = []
+
+    def _optional_float(candidate: Any) -> float | None:
+        if candidate in (None, ""):
+            return None
+        try:
+            return float(candidate)
+        except (TypeError, ValueError):
+            return None
+
     for item in positions:
         if not isinstance(item, Mapping):
             continue
@@ -286,26 +286,27 @@ def _normalize_portfolio_positions(
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _coerce_optional_float(
-            item.get("average_purchase_price_native")
-        )
-        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
-        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
+        avg_price_native = _optional_float(item.get("average_purchase_price_native"))
+        avg_price_security = _optional_float(item.get("avg_price_security"))
+        avg_price_account = _optional_float(item.get("avg_price_account"))
 
-        purchase_total_security = _coerce_optional_float(
-            item.get("purchase_total_security")
+        purchase_total_security = round_currency(
+            item.get("purchase_total_security"), default=None
         )
         if purchase_total_security is None:
             purchase_total_security = 0.0
 
-        purchase_total_account = _coerce_optional_float(
-            item.get("purchase_total_account")
+        purchase_total_account = round_currency(
+            item.get("purchase_total_account"), default=None
         )
         if purchase_total_account is None:
             purchase_total_account = 0.0
 
         purchase_value_raw = item.get("purchase_value")
-        purchase_value = round(_coerce_float(purchase_value_raw), 2)
+        purchase_value_normalized = round_currency(
+            purchase_value_raw, default=None
+        )
+        purchase_value = purchase_value_normalized if purchase_value_normalized is not None else 0.0
 
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
@@ -328,22 +329,34 @@ def _normalize_portfolio_positions(
             day_change=day_change_metrics,
         )
 
-        gain_abs_value = round(
-            _coerce_float(performance_payload.get("gain_abs")), 2
-        )
-        gain_pct_value = round(
-            _coerce_float(performance_payload.get("gain_pct")), 2
-        )
+        gain_abs_value = round_currency(
+            performance_payload.get("gain_abs"), default=0.0
+        ) or 0.0
+        gain_pct_value = round_currency(
+            performance_payload.get("gain_pct"), default=0.0
+        ) or 0.0
+
+        current_holdings_raw = item.get("current_holdings")
+        current_holdings_value = 0.0
+        if current_holdings_raw not in (None, ""):
+            try:
+                current_holdings_value = float(current_holdings_raw)
+            except (TypeError, ValueError):
+                current_holdings_value = 0.0
 
         normalized.append(
             {
                 "security_uuid": security_uuid,
                 "name": item.get("name"),
                 "current_holdings": round(
-                    _coerce_float(item.get("current_holdings")), 6
+                    current_holdings_value,
+                    6,
                 ),
                 "purchase_value": purchase_value,
-                "current_value": round(_coerce_float(item.get("current_value")), 2),
+                "current_value": round_currency(
+                    item.get("current_value"), default=0.0
+                )
+                or 0.0,
                 "gain_abs": gain_abs_value,
                 "gain_pct": gain_pct_value,
                 "average_purchase_price_native": avg_price_native,

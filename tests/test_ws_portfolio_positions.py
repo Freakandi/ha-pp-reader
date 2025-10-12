@@ -298,3 +298,51 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
             },
         }
     ]
+
+
+def test_normalize_portfolio_positions_handles_invalid_numbers() -> None:
+    """Normalisation should gracefully fall back when numeric inputs are invalid."""
+
+    normalized = websocket_module._normalize_portfolio_positions(  # noqa: SLF001
+        [
+            {
+                "security_uuid": "sec-invalid",
+                "name": "Problematic",
+                "current_holdings": "not-a-number",
+                "purchase_value": "oops",
+                "current_value": None,
+                "average_purchase_price_native": "",
+                "purchase_total_security": "broken",
+                "purchase_total_account": object(),
+                "avg_price_security": "n/a",
+                "avg_price_account": "also bad",
+                "average_cost": None,
+                "performance": {},
+            }
+        ]
+    )
+
+    assert len(normalized) == 1
+    position = normalized[0]
+
+    assert position["security_uuid"] == "sec-invalid"
+    assert position["name"] == "Problematic"
+    assert position["current_holdings"] == pytest.approx(0.0)
+    assert position["purchase_value"] == pytest.approx(0.0)
+    assert position["current_value"] == pytest.approx(0.0)
+    assert position["gain_abs"] == pytest.approx(0.0)
+    assert position["gain_pct"] == pytest.approx(0.0)
+    assert position["average_purchase_price_native"] is None
+    assert position["purchase_total_security"] == pytest.approx(0.0)
+    assert position["purchase_total_account"] == pytest.approx(0.0)
+    assert position["avg_price_security"] is None
+    assert position["avg_price_account"] is None
+    assert position["average_cost"] is None
+
+    performance = position["performance"]
+    assert performance["gain_abs"] == pytest.approx(0.0)
+    assert performance["gain_pct"] == pytest.approx(0.0)
+    assert performance["total_change_eur"] == pytest.approx(0.0)
+    assert performance["total_change_pct"] == pytest.approx(0.0)
+    assert performance["coverage_ratio"] == pytest.approx(0.0)
+    assert "day_change" not in performance

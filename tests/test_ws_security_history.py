@@ -544,6 +544,56 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     )
 
 
+def test_serialise_security_snapshot_handles_invalid_numbers() -> None:
+    """Snapshot serialisation should sanitise malformed numeric fields."""
+
+    snapshot = {
+        "name": 123,
+        "currency_code": "  ",
+        "total_holdings": "not-a-number",
+        "last_price_native": "invalid",
+        "last_price_eur": "",
+        "last_close_native": "bad",
+        "last_close_eur": object(),
+        "day_price_change_native": "oops",
+        "day_price_change_eur": None,
+        "day_change_pct": "broken",
+        "market_value_eur": "broken",
+        "purchase_value_eur": "oops",
+        "purchase_total_security": "fail",
+        "purchase_total_account": None,
+        "avg_price_security": "n/a",
+        "avg_price_account": "n/a",
+        "average_purchase_price_native": "",
+        "average_cost": [],
+        "performance": "invalid",
+        "last_price": {"native": "oops", "eur": 12},
+    }
+
+    payload = _websocket_module._serialise_security_snapshot(snapshot)  # noqa: SLF001
+
+    assert payload["name"] == "123"
+    assert payload["currency_code"] == "EUR"
+    assert payload["total_holdings"] == pytest.approx(0.0)
+    assert payload["last_price_native"] is None
+    assert payload["last_price_eur"] is None
+    assert payload["last_close_native"] is None
+    assert payload["last_close_eur"] is None
+    assert payload["day_price_change_native"] is None
+    assert payload["day_price_change_eur"] is None
+    assert payload["day_change_pct"] is None
+    assert payload["market_value_eur"] is None
+    assert payload["purchase_value_eur"] == pytest.approx(0.0)
+    assert payload["purchase_total_security"] == pytest.approx(0.0)
+    assert payload["purchase_total_account"] == pytest.approx(0.0)
+    assert payload["avg_price_security"] is None
+    assert payload["avg_price_account"] is None
+    assert payload["average_purchase_price_native"] is None
+    assert payload["average_cost"] is None
+    assert payload["performance"] is None
+    assert payload["last_price"] == {"native": None, "eur": 12.0}
+
+
 def test_ws_get_security_snapshot_missing_security(
     seeded_history_db: Path,
 ) -> None:
