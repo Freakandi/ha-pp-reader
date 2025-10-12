@@ -129,11 +129,11 @@
       - Ziel/Ergebnis: Tests verwenden die durchgeleiteten Strukturen.
 
 10. Frontend: `normalizeAverageCost` aus Websocket-Cache vereinfachen
-   a) [ ] Nutze das `AverageCostPayload` direkt und entferne Ableitungen aus Legacy-Feldern.\
+   a) [x] Nutze das `AverageCostPayload` direkt und entferne Ableitungen aus Legacy-Feldern.\
       - Dateipfad(e): `src/data/updateConfigsWS.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): `normalizeAverageCost`\
       - Ziel/Ergebnis: Average-Cost-Berechnung erfolgt ausschließlich basierend auf `position.average_cost`.
-   b) [ ] Bereinige Tests, die auf rekonstruierte Average-Cost-Werte prüfen.\
+  b) [x] Bereinige Tests, die auf rekonstruierte Average-Cost-Werte prüfen.\
       - Dateipfad(e): `tests/frontend/test_dashboard_smoke.py`, `src/tabs/__tests__/overview.render.test.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Average-Cost-Werte\
       - Ziel/Ergebnis: Tests erwarten direkte Backend-Werte.

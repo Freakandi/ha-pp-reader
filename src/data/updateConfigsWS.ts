@@ -109,11 +109,10 @@ function deriveAggregation(position: PortfolioPositionData): HoldingsAggregation
 
 function normalizeAverageCost(
   position: PortfolioPositionData,
-  aggregation: HoldingsAggregationPayload,
 ): AverageCostPayload | null {
   const rawAverageCost =
     position.average_cost && typeof position.average_cost === 'object'
-      ? position.average_cost
+      ? (position.average_cost as Partial<AverageCostPayload>)
       : null;
 
   const asFiniteNumber = (value: unknown): number | null =>
@@ -131,41 +130,23 @@ function normalizeAverageCost(
     return 'aggregation';
   };
 
-  if (rawAverageCost) {
-    return {
-      native: asNullableNumber(rawAverageCost.native),
-      security: asNullableNumber(rawAverageCost.security),
-      account: asNullableNumber(rawAverageCost.account),
-      eur: asNullableNumber(rawAverageCost.eur),
-      source: normalizeSource(rawAverageCost.source),
-      coverage_ratio: asNullableNumber(rawAverageCost.coverage_ratio),
-    };
-  }
-
-  const native = asNullableNumber(
-    position.average_purchase_price_native ?? aggregation.average_purchase_price_native,
-  );
-  const security = asNullableNumber(position.avg_price_security ?? aggregation.avg_price_security);
-  const account = asNullableNumber(position.avg_price_account ?? aggregation.avg_price_account);
-  const eur = asNullableNumber(position.purchase_value ?? aggregation.purchase_value_eur);
-
-  if (native === null && security === null && account === null && eur === null) {
+  if (!rawAverageCost) {
     return null;
   }
 
   return {
-    native,
-    security,
-    account,
-    eur,
-    source: 'aggregation',
-    coverage_ratio: null,
+    native: asNullableNumber(rawAverageCost.native),
+    security: asNullableNumber(rawAverageCost.security),
+    account: asNullableNumber(rawAverageCost.account),
+    eur: asNullableNumber(rawAverageCost.eur),
+    source: normalizeSource(rawAverageCost.source),
+    coverage_ratio: asNullableNumber(rawAverageCost.coverage_ratio),
   };
 }
 
 function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
   const aggregation = deriveAggregation(position);
-  const averageCost = normalizeAverageCost(position, aggregation);
+  const averageCost = normalizeAverageCost(position);
   const performance = normalizePerformanceMetrics(position);
   const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
   const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
