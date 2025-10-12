@@ -526,6 +526,8 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     )
     assert performance["total_change_eur"] == pytest.approx(performance["gain_abs"], rel=0, abs=1e-6)
     assert performance["gain_pct"] == pytest.approx(performance["total_change_pct"], rel=0, abs=1e-6)
+    assert performance["source"] == "calculated"
+    assert performance["coverage_ratio"] == pytest.approx(1.0)
     day_change = performance["day_change"]
     assert day_change["price_change_native"] == pytest.approx(
         snapshot_payload["day_price_change_native"],
@@ -542,6 +544,8 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         rel=0,
         abs=1e-2,
     )
+    assert day_change["source"] == "native"
+    assert day_change["coverage_ratio"] == pytest.approx(1.0)
 
 
 def test_ws_get_security_snapshot_missing_security(

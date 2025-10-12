@@ -105,15 +105,15 @@
       - Ziel/Ergebnis: Tests bestätigen unveränderte Payload-Struktur trotz Helper-Entfernung.
 
 8. Backend: `_normalize_portfolio_positions` auf Backend-Strukturen beschränken
-   a) [ ] Leite Aggregations-, Average-Cost- und Performance-Blöcke unverändert durch und entferne lokale Rekonstruktionen.\
+   a) [x] Leite Aggregations-, Average-Cost- und Performance-Blöcke unverändert durch und entferne lokale Rekonstruktionen.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_portfolio_positions`\
       - Ziel/Ergebnis: Serializer gibt direkt die vom Backend gelieferten Strukturen weiter.
-   b) [ ] Entferne lokale Summen-/Durchschnittsberechnungen (insb. für Kaufwerte, Gewinne).\
+   b) [x] Entferne lokale Summen-/Durchschnittsberechnungen (insb. für Kaufwerte, Gewinne).\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Manuelle Aggregationslogik\
       - Ziel/Ergebnis: Keine doppelte Implementierung der Aggregationslogik.
-   c) [ ] Aktualisiere Websocket-Payload-Tests auf die durchgereichten Strukturen.\
+   c) [x] Aktualisiere Websocket-Payload-Tests auf die durchgereichten Strukturen.\
       - Dateipfad(e): `tests/test_ws_portfolio_positions.py`, `tests/test_ws_portfolios_live.py`, `tests/test_ws_security_history.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Positions- und Snapshot-Payloads\
       - Ziel/Ergebnis: Tests validieren, dass die strukturierten Blöcke vorhanden sind.

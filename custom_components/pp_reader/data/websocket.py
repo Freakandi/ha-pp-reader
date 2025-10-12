@@ -29,7 +29,6 @@ from .db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
-from .performance import compose_performance_payload, select_performance_metrics
 
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
@@ -286,57 +285,129 @@ def _normalize_portfolio_positions(
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _coerce_optional_float(
-            item.get("average_purchase_price_native")
-        )
-        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
-        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
-
-        purchase_total_security = _coerce_optional_float(
-            item.get("purchase_total_security")
-        )
-        if purchase_total_security is None:
-            purchase_total_security = 0.0
-
-        purchase_total_account = _coerce_optional_float(
-            item.get("purchase_total_account")
-        )
-        if purchase_total_account is None:
-            purchase_total_account = 0.0
-
-        purchase_value_raw = item.get("purchase_value")
-        purchase_value = round_currency(
-            purchase_value_raw,
-            default=0.0,
-        )
-
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
         if isinstance(raw_average_cost, Mapping):
             average_cost = dict(raw_average_cost)
 
-        raw_performance = item.get("performance")
-        performance_mapping: Mapping[str, Any] | None = None
-        if isinstance(raw_performance, Mapping):
-            performance_mapping = raw_performance
+        def _first_present(*candidates: Any) -> Any:
+            for candidate in candidates:
+                if candidate not in (None, ""):
+                    return candidate
+            return None
 
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=item.get("current_value"),
-            purchase_value=purchase_value_raw,
-            holdings=item.get("current_holdings"),
-        )
-        performance_payload = compose_performance_payload(
-            performance_mapping,
-            metrics=performance_metrics,
-            day_change=day_change_metrics,
+        raw_aggregation = item.get("aggregation")
+        aggregation_payload: dict[str, Any] | None = None
+        if isinstance(raw_aggregation, Mapping):
+            aggregation_payload = dict(raw_aggregation)
+
+        holdings_source = _first_present(
+            aggregation_payload.get("total_holdings")
+            if aggregation_payload is not None
+            else None,
+            item.get("current_holdings"),
         )
 
-        gain_abs_value = round_currency(
-            performance_payload.get("gain_abs"),
+        avg_price_native = _coerce_optional_float(
+            _first_present(
+                average_cost.get("native") if average_cost is not None else None,
+                aggregation_payload.get("average_purchase_price_native")
+                if aggregation_payload is not None
+                else None,
+                item.get("average_purchase_price_native"),
+            )
+        )
+        avg_price_security = _coerce_optional_float(
+            _first_present(
+                average_cost.get("security") if average_cost is not None else None,
+                aggregation_payload.get("avg_price_security")
+                if aggregation_payload is not None
+                else None,
+                item.get("avg_price_security"),
+            )
+        )
+        avg_price_account = _coerce_optional_float(
+            _first_present(
+                average_cost.get("account") if average_cost is not None else None,
+                aggregation_payload.get("avg_price_account")
+                if aggregation_payload is not None
+                else None,
+                item.get("avg_price_account"),
+            )
+        )
+
+        purchase_total_security = round_currency(
+            _first_present(
+                aggregation_payload.get("purchase_total_security")
+                if aggregation_payload is not None
+                else None,
+                aggregation_payload.get("security_currency_total")
+                if aggregation_payload is not None
+                else None,
+                item.get("purchase_total_security"),
+                item.get("security_currency_total"),
+            ),
+            default=None,
+        )
+        if purchase_total_security is None:
+            purchase_total_security = 0.0
+
+        purchase_total_account = round_currency(
+            _first_present(
+                aggregation_payload.get("purchase_total_account")
+                if aggregation_payload is not None
+                else None,
+                aggregation_payload.get("account_currency_total")
+                if aggregation_payload is not None
+                else None,
+                item.get("purchase_total_account"),
+                item.get("account_currency_total"),
+            ),
+            default=None,
+        )
+        if purchase_total_account is None:
+            purchase_total_account = 0.0
+
+        purchase_value = round_currency(
+            _first_present(
+                aggregation_payload.get("purchase_value_eur")
+                if aggregation_payload is not None
+                else None,
+                item.get("purchase_value"),
+                item.get("purchase_value_eur"),
+            ),
             default=0.0,
         )
+
+        raw_performance = item.get("performance")
+        performance_payload: dict[str, Any] | None = None
+        if isinstance(raw_performance, Mapping):
+            performance_payload = dict(raw_performance)
+            day_change_raw = raw_performance.get("day_change")
+            if isinstance(day_change_raw, Mapping):
+                performance_payload["day_change"] = dict(day_change_raw)
+
+        gain_abs_source: Any = (
+            performance_payload.get("gain_abs")
+            if performance_payload is not None
+            else None
+        )
+        if gain_abs_source is None:
+            gain_abs_source = item.get("gain_abs")
+        gain_abs_value = round_currency(
+            gain_abs_source,
+            default=0.0,
+        )
+
+        gain_pct_source: Any = (
+            performance_payload.get("gain_pct")
+            if performance_payload is not None
+            else None
+        )
+        if gain_pct_source is None:
+            gain_pct_source = item.get("gain_pct")
         gain_pct_value = round_currency(
-            performance_payload.get("gain_pct"),
+            gain_pct_source,
             default=0.0,
         )
 
@@ -345,7 +416,7 @@ def _normalize_portfolio_positions(
                 "security_uuid": security_uuid,
                 "name": item.get("name"),
                 "current_holdings": round_currency(
-                    item.get("current_holdings"),
+                    holdings_source,
                     decimals=6,
                     default=0.0,
                 ),
@@ -362,6 +433,7 @@ def _normalize_portfolio_positions(
                 "avg_price_security": avg_price_security,
                 "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
+                "aggregation": aggregation_payload,
                 "performance": performance_payload,
             }
         )

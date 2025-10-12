@@ -138,9 +138,28 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
         cent_to_eur(150_000_000, default=0.0),
         default=0.0,
     )
+    expected_p1_gain_abs = round_currency(
+        expected_p1_current - expected_p1_purchase,
+        default=0.0,
+    )
+    gain_pct_input = (
+        (expected_p1_gain_abs / expected_p1_purchase) * 100
+        if expected_p1_purchase
+        else 0.0
+    )
+    expected_p1_gain_pct = round_currency(gain_pct_input, default=0.0)
+
     assert portfolios["p1"]["current_value"] == expected_p1_current
     assert portfolios["p1"]["purchase_sum"] == expected_p1_purchase
+    assert portfolios["p1"]["gain_abs"] == expected_p1_gain_abs
+    assert portfolios["p1"]["gain_pct"] == expected_p1_gain_pct
     assert portfolios["p1"]["position_count"] == 1
+
+    performance_p1 = portfolios["p1"]["performance"]
+    assert performance_p1["gain_abs"] == portfolios["p1"]["gain_abs"]
+    assert performance_p1["gain_pct"] == portfolios["p1"]["gain_pct"]
+    assert performance_p1["total_change_eur"] == portfolios["p1"]["gain_abs"]
+    assert performance_p1["total_change_pct"] == portfolios["p1"]["gain_pct"]
 
     expected_p2_current = round_currency(
         cent_to_eur(620_000_000, default=0.0),
@@ -150,9 +169,28 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
         cent_to_eur(500_000_000, default=0.0),
         default=0.0,
     )
+    expected_p2_gain_abs = round_currency(
+        expected_p2_current - expected_p2_purchase,
+        default=0.0,
+    )
+    gain_pct_input = (
+        (expected_p2_gain_abs / expected_p2_purchase) * 100
+        if expected_p2_purchase
+        else 0.0
+    )
+    expected_p2_gain_pct = round_currency(gain_pct_input, default=0.0)
+
     assert portfolios["p2"]["current_value"] == expected_p2_current
     assert portfolios["p2"]["purchase_sum"] == expected_p2_purchase
+    assert portfolios["p2"]["gain_abs"] == expected_p2_gain_abs
+    assert portfolios["p2"]["gain_pct"] == expected_p2_gain_pct
     assert portfolios["p2"]["position_count"] == 1
+
+    performance_p2 = portfolios["p2"]["performance"]
+    assert performance_p2["gain_abs"] == portfolios["p2"]["gain_abs"]
+    assert performance_p2["gain_pct"] == portfolios["p2"]["gain_pct"]
+    assert performance_p2["total_change_eur"] == portfolios["p2"]["gain_abs"]
+    assert performance_p2["total_change_pct"] == portfolios["p2"]["gain_pct"]
 
     assert portfolios["p3"]["current_value"] == 0.0
     assert portfolios["p3"]["purchase_sum"] == 0.0
