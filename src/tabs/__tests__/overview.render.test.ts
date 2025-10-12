@@ -73,7 +73,7 @@ void test(
     withOverviewModule(module => {
       const helper = module.__TEST_ONLY__
         .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
-      const { markup, ariaLabel } = helper({
+      const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-avg',
         name: 'SSR Mining',
         security_currency_code: 'CAD',
@@ -106,6 +106,7 @@ void test(
       assert.match(markup, /purchase-price--secondary">4,942\u00A0EUR/);
       assert.match(ariaLabel, /7,2489 CAD/);
       assert.match(ariaLabel, /4,942 EUR/);
+      assert.strictEqual(sortValue, 494.2);
     }),
 );
 
@@ -115,7 +116,7 @@ void test(
     withOverviewModule(module => {
       const helper = module.__TEST_ONLY__
         .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
-      const { markup, ariaLabel } = helper({
+      const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-fallback',
         name: 'Fallback Security',
         account_currency_code: 'USD',
@@ -154,6 +155,7 @@ void test(
       assert.match(markup, /purchase-price--primary">8,00\u00A0USD/);
       assert.doesNotMatch(markup, /purchase-price--secondary/);
       assert.strictEqual(ariaLabel, '8,00 USD');
+      assert.strictEqual(sortValue, 640);
     }),
 );
 
@@ -163,7 +165,7 @@ void test(
     withOverviewModule(module => {
       const helper = module.__TEST_ONLY__
         .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
-      const { markup, ariaLabel } = helper({
+      const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-average-cost',
         name: 'Average Cost Security',
         current_holdings: '42',
@@ -205,6 +207,28 @@ void test(
       assert.match(markup, /purchase-price--secondary">2,50\u00A0CHF/);
       assert.match(ariaLabel, /3,14159 USD/);
       assert.match(ariaLabel, /2,50 CHF/);
+      assert.strictEqual(sortValue, 105);
+    }),
+);
+
+void test(
+  'buildPurchasePriceDisplayForTest returns missing placeholder when both average_cost and aggregation absent',
+  async () =>
+    withOverviewModule(module => {
+      const helper = module.__TEST_ONLY__
+        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+      const { markup, ariaLabel, sortValue } = helper({
+        security_uuid: 'security-missing',
+        name: 'Missing Average Security',
+        security_currency_code: 'USD',
+      });
+
+      assert.match(
+        markup,
+        /role="note" aria-label="Kein Kaufpreis verfügbar" title="Kein Kaufpreis verfügbar">—<\/span>/,
+      );
+      assert.strictEqual(ariaLabel, 'Kein Kaufpreis verfügbar');
+      assert.strictEqual(sortValue, 0);
     }),
 );
 

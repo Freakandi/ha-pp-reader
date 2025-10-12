@@ -200,91 +200,52 @@ function resolveAverageCost(
       : source === 'aggregation'
         ? source
         : undefined;
+    const native = toNullableNumber(payload.native);
+    const security = toNullableNumber(payload.security);
+    const account = toNullableNumber(payload.account);
+    const eur = toNullableNumber(payload.eur);
+
+    if (native == null && security == null && account == null && eur == null) {
+      return null;
+    }
 
     return {
-      native: toNullableNumber(payload.native),
-      security: toNullableNumber(payload.security),
-      account: toNullableNumber(payload.account),
-      eur: toNullableNumber(payload.eur),
+      native,
+      security,
+      account,
+      eur,
       source: normalizedSource ?? 'aggregation',
-      coverage_ratio: toNullableNumber(payload.coverage_ratio),
+      coverage_ratio: toNullableNumber(
+        payload.coverage_ratio ??
+          (aggregation
+            ? (aggregation as { coverage_ratio?: unknown })?.coverage_ratio
+            : null),
+      ),
     };
   }
 
-  const holdingsCandidates: Array<number | null> = [
-    toNullableNumber(record['current_holdings']),
-  ];
-
   if (aggregation) {
-    holdingsCandidates.unshift(
-      toNullableNumber(aggregation.positive_holdings),
-      toNullableNumber(aggregation.total_holdings),
-    );
+    const native = toNullableNumber(aggregation.average_purchase_price_native);
+    const security = toNullableNumber(aggregation.avg_price_security);
+    const account = toNullableNumber(aggregation.avg_price_account);
+
+    if (native == null && security == null && account == null) {
+      return null;
+    }
+
+    return {
+      native,
+      security,
+      account,
+      eur: null,
+      source: 'aggregation',
+      coverage_ratio: toNullableNumber(
+        (aggregation as { coverage_ratio?: unknown })?.coverage_ratio,
+      ),
+    };
   }
 
-  const holdings = pickFirstFinite(...holdingsCandidates);
-
-  const purchaseTotalSecurity = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.purchase_total_security) : null,
-    toNullableNumber(record['purchase_total_security']),
-  );
-  const purchaseTotalAccount = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.purchase_total_account) : null,
-    toNullableNumber(record['purchase_total_account']),
-  );
-  const purchaseTotalEur = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.purchase_value_eur) : null,
-    toNullableNumber(record['purchase_value']),
-  );
-
-  const deriveAverage = (
-    total: number | null,
-    quantity: number | null,
-  ): number | null =>
-    total != null && typeof total === 'number' && isFiniteNumber(quantity) && quantity > 0
-      ? total / quantity
-      : null;
-
-  const native = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.average_purchase_price_native) : null,
-    toNullableNumber(record['average_purchase_price_native']),
-    toNullableNumber(record['avg_price_security']),
-    deriveAverage(purchaseTotalSecurity, holdings),
-  );
-
-  const security = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.avg_price_security) : null,
-    toNullableNumber(record['avg_price_security']),
-    native,
-    deriveAverage(purchaseTotalSecurity, holdings),
-  );
-
-  const account = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.avg_price_account) : null,
-    toNullableNumber(record['avg_price_account']),
-    deriveAverage(purchaseTotalAccount, holdings),
-    deriveAverage(purchaseTotalEur, holdings),
-  );
-
-  const eur = pickFirstFinite(
-    deriveAverage(purchaseTotalEur, holdings),
-    account,
-  );
-
-  if (native == null && security == null && account == null && eur == null) {
-    return null;
-  }
-
-  return {
-    native,
-    security,
-    account,
-    eur,
-    source: 'aggregation',
-    coverage_ratio: aggregation
-      ? toNullableNumber((aggregation as { coverage_ratio?: unknown })?.coverage_ratio)
-      : null,
-  };
+  return null;
 }
 
 function normalizePerformanceRecord(record: Record<string, unknown>): PerformanceMetricsPayload | null {
@@ -401,8 +362,7 @@ function buildPurchasePriceDisplay(
   }
 
   const markup = parts.join('<br>');
-  const sortValue =
-    toNullableNumber(aggregation?.purchase_value_eur ?? record['purchase_value']) ?? 0;
+  const sortValue = toNullableNumber(aggregation?.purchase_value_eur) ?? 0;
   const ariaLabel = ariaParts.join(', ');
 
   return { markup, sortValue, ariaLabel };
