@@ -49,15 +49,15 @@
       - Ziel/Ergebnis: Tests validieren weiterhin korrekt skalierte Werte.
 
 4. Backend: Websocket-Rundung auf `round_currency` umstellen
-   a) [ ] Tausche alle direkten `round(...)` Aufrufe im Positionsserializer gegen `round_currency`.\
+   a) [x] Tausche alle direkten `round(...)` Aufrufe im Positionsserializer gegen `round_currency`.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_portfolio_positions`, zugehörige Serializer\
       - Ziel/Ergebnis: Einheitliche Währungsrundung über alle Payloads.
-   b) [ ] Aktualisiere Berechnungen für Holdings- und Wertfelder, sodass keine redundanten `round`-Ketten verbleiben.\
+   b) [x] Aktualisiere Berechnungen für Holdings- und Wertfelder, sodass keine redundanten `round`-Ketten verbleiben.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Berechnung von `purchase_value`, `gain_abs`, `gain_pct`, `current_value`\
       - Ziel/Ergebnis: Alle Werte nutzen `round_currency` bzw. Utility-Rückgaben.
-   c) [ ] Passe Tests auf die neue Rundungsstrategie an.\
+   c) [x] Passe Tests auf die neue Rundungsstrategie an.\
       - Dateipfad(e): `tests/test_ws_portfolio_positions.py`, `tests/test_ws_portfolios_live.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Kauf-/Performancewerte\
       - Ziel/Ergebnis: Tests referenzieren `round_currency` Ergebnisse statt `round`.
