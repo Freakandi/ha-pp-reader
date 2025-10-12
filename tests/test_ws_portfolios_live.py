@@ -11,6 +11,7 @@ pytest.importorskip(
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
+from custom_components.pp_reader.util.currency import cent_to_eur
 
 
 @pytest.fixture
@@ -129,12 +130,12 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
 
     portfolios = {item["uuid"]: item for item in payload["portfolios"]}
 
-    assert portfolios["p1"]["current_value"] == 1_750_000.0
-    assert portfolios["p1"]["purchase_sum"] == 1_500_000.0
+    assert portfolios["p1"]["current_value"] == cent_to_eur(175_000_000, default=0.0)
+    assert portfolios["p1"]["purchase_sum"] == cent_to_eur(150_000_000, default=0.0)
     assert portfolios["p1"]["position_count"] == 1
 
-    assert portfolios["p2"]["current_value"] == 6_200_000.0
-    assert portfolios["p2"]["purchase_sum"] == 5_000_000.0
+    assert portfolios["p2"]["current_value"] == cent_to_eur(620_000_000, default=0.0)
+    assert portfolios["p2"]["purchase_sum"] == cent_to_eur(500_000_000, default=0.0)
     assert portfolios["p2"]["position_count"] == 1
 
     assert portfolios["p3"]["current_value"] == 0.0

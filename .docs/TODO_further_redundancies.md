@@ -35,15 +35,15 @@
       - Ziel/Ergebnis: Tests bestätigen, dass die Helper in allen Fällen greifen.
 
 3. Backend: Portfolio-Koordinator von `_normalize_amount` entkoppeln
-   a) [ ] Ersetze alle Aufrufe von `_normalize_amount` durch `cent_to_eur`/`round_currency`.\
+   a) [x] Ersetze alle Aufrufe von `_normalize_amount` durch `cent_to_eur`/`round_currency`.\
       - Dateipfad(e): `custom_components/pp_reader/data/coordinator.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_amount` Aufrufer innerhalb `PortfolioCoordinator`\
       - Ziel/Ergebnis: Koordinator verlässt sich vollständig auf die Currency-Utilities.
-   b) [ ] Entferne die Funktion `_normalize_amount` und bereinige Importe.\
+   b) [x] Entferne die Funktion `_normalize_amount` und bereinige Importe.\
       - Dateipfad(e): `custom_components/pp_reader/data/coordinator.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Funktionsdefinition `_normalize_amount`\
       - Ziel/Ergebnis: Redundanter Code entfällt nach der Migration.
-   c) [ ] Passe Koordinator-bezogene Tests auf das Entfernen der Helper-Funktion an.\
+   c) [x] Passe Koordinator-bezogene Tests auf das Entfernen der Helper-Funktion an.\
       - Dateipfad(e): `tests/test_ws_portfolio_positions.py`, `tests/test_ws_portfolios_live.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Assertions zu Koordinator-Ausgaben\
       - Ziel/Ergebnis: Tests validieren weiterhin korrekt skalierte Werte.
