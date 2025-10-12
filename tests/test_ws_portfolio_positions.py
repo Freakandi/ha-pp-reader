@@ -13,7 +13,9 @@ pytest.importorskip(
 )
 
 from custom_components.pp_reader.data import websocket as websocket_module
+from custom_components.pp_reader.data.db_access import get_portfolio_positions
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     round_currency,
@@ -222,10 +224,18 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     )  # noqa: S101
 
     average_cost = position["average_cost"]
+    assert average_cost is not None  # noqa: S101
     expected_avg_cost_native = expected_avg_price_native
     expected_avg_cost_security = expected_avg_price_security
     expected_avg_cost_account = expected_avg_price_account
-    expected_avg_cost_eur = round_currency(99.999368, decimals=6) or 0.0
+    expected_avg_cost_eur = (
+        round_currency(
+            expected_purchase_value / expected_holdings if expected_holdings else 0.0,
+            decimals=6,
+            default=0.0,
+        )
+        or 0.0
+    )
     assert average_cost["native"] == pytest.approx(
         expected_avg_cost_native
     )  # noqa: S101
@@ -241,23 +251,54 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert average_cost["native"] == position["average_purchase_price_native"]  # noqa: S101
     assert average_cost["security"] == position["avg_price_security"]  # noqa: S101
     assert average_cost["account"] == position["avg_price_account"]  # noqa: S101
-    assert average_cost["eur"] == pytest.approx(  # noqa: S101
-        position["purchase_value"] / position["current_holdings"]
+    assert average_cost["eur"] == pytest.approx(expected_avg_cost_eur)  # noqa: S101
+
+    aggregation = position["aggregation"]
+    assert aggregation is not None  # noqa: S101
+    expected_aggregation = {
+        "total_holdings": expected_holdings,
+        "positive_holdings": expected_holdings,
+        "purchase_value_cents": 123_456,
+        "purchase_value_eur": expected_purchase_value,
+        "security_currency_total": expected_purchase_total_security,
+        "account_currency_total": expected_purchase_total_account,
+        "average_purchase_price_native": expected_avg_price_native,
+        "avg_price_security": expected_avg_price_security,
+        "avg_price_account": expected_avg_price_account,
+        "purchase_total_security": expected_purchase_total_security,
+        "purchase_total_account": expected_purchase_total_account,
+    }
+    assert set(aggregation) == set(expected_aggregation)  # noqa: S101
+    for key, expected_value in expected_aggregation.items():
+        actual_value = aggregation.get(key)
+        if isinstance(expected_value, (int, float)):
+            assert actual_value == pytest.approx(expected_value)  # noqa: S101
+        else:
+            assert actual_value == expected_value  # noqa: S101
+
+    performance_metrics, _ = select_performance_metrics(
+        current_value=expected_current_value,
+        purchase_value=expected_purchase_value,
+        holdings=expected_holdings,
     )
+    expected_performance = {
+        "gain_abs": performance_metrics.gain_abs,
+        "gain_pct": performance_metrics.gain_pct,
+        "total_change_eur": performance_metrics.total_change_eur,
+        "total_change_pct": performance_metrics.total_change_pct,
+        "source": performance_metrics.source,
+        "coverage_ratio": performance_metrics.coverage_ratio,
+    }
 
     performance = position["performance"]
-    assert set(performance) == {
-        "gain_abs",
-        "gain_pct",
-        "total_change_eur",
-        "total_change_pct",
-        "source",
-        "coverage_ratio",
-    }  # noqa: S101
-    assert performance["gain_abs"] == pytest.approx(position["gain_abs"])  # noqa: S101
-    assert performance["gain_pct"] == pytest.approx(position["gain_pct"])  # noqa: S101
-    assert performance["total_change_eur"] == pytest.approx(position["gain_abs"])  # noqa: S101
-    assert performance["total_change_pct"] == pytest.approx(position["gain_pct"])  # noqa: S101
+    assert performance == expected_performance  # noqa: S101
+
+    backend_positions = get_portfolio_positions(populated_db, "portfolio-1")
+    assert len(backend_positions) == 1  # noqa: S101
+    backend_position = backend_positions[0]
+    assert backend_position["aggregation"] == aggregation  # noqa: S101
+    assert backend_position["average_cost"] == average_cost  # noqa: S101
+    assert backend_position["performance"] == performance  # noqa: S101
     assert performance["source"] == "calculated"  # noqa: S101
     assert performance["coverage_ratio"] == pytest.approx(1.0)  # noqa: S101
 
@@ -315,24 +356,24 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
             "current_holdings": pytest.approx(
                 round_currency(5.0, decimals=6, default=0.0) or 0.0
             ),
-            "purchase_value": pytest.approx(round_currency(250.0) or 0.0),
+            "purchase_value": pytest.approx(round_currency(123.45) or 0.0),
             "current_value": pytest.approx(round_currency(5678.0) or 0.0),
             "gain_abs": pytest.approx(round_currency(1357.0) or 0.0),
             "gain_pct": pytest.approx(round_currency(12.0) or 0.0),
             "average_purchase_price_native": pytest.approx(
-                round_price(3.456789, decimals=6) or 0.0
+                round_price(77.777777, decimals=6) or 0.0
             ),
             "purchase_total_security": pytest.approx(
-                round_currency(222.22) or 0.0
+                round_currency(999.99) or 0.0
             ),
             "purchase_total_account": pytest.approx(
-                round_currency(333.33) or 0.0
+                round_currency(888.88) or 0.0
             ),
             "avg_price_security": pytest.approx(
-                round_price(11.111111, decimals=6) or 0.0
+                round_price(99.999999, decimals=6) or 0.0
             ),
             "avg_price_account": pytest.approx(
-                round_price(22.222222, decimals=6) or 0.0
+                round_price(88.888888, decimals=6) or 0.0
             ),
             "average_cost": {
                 "native": pytest.approx(
@@ -355,6 +396,24 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "total_change_pct": pytest.approx(round_currency(12.0) or 0.0),
                 "source": "calculated",
                 "coverage_ratio": pytest.approx(round_currency(0.75) or 0.0),
+            },
+            "aggregation": {
+                "purchase_total_security": pytest.approx(
+                    round_currency(999.99) or 0.0
+                ),
+                "purchase_total_account": pytest.approx(
+                    round_currency(888.88) or 0.0
+                ),
+                "avg_price_security": pytest.approx(
+                    round_price(99.999999, decimals=6) or 0.0
+                ),
+                "avg_price_account": pytest.approx(
+                    round_price(88.888888, decimals=6) or 0.0
+                ),
+                "average_purchase_price_native": pytest.approx(
+                    round_price(77.777777, decimals=6) or 0.0
+                ),
+                "purchase_value_eur": pytest.approx(round_currency(123.45) or 0.0),
             },
         }
     ]

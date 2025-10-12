@@ -11,6 +11,7 @@ import asyncio
 import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -33,7 +34,6 @@ from .db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
-from .performance import compose_performance_payload, select_performance_metrics
 
 
 def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
@@ -273,64 +273,136 @@ def _normalize_portfolio_positions(
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = round_price(
-            item.get("average_purchase_price_native"),
-            decimals=6,
-        )
-        avg_price_security = round_price(
-            item.get("avg_price_security"),
-            decimals=6,
-        )
-        avg_price_account = round_price(
-            item.get("avg_price_account"),
-            decimals=6,
-        )
+        raw_aggregation = item.get("aggregation")
+        aggregation_payload: dict[str, Any] | None = None
+        if isinstance(raw_aggregation, Mapping):
+            aggregation_payload = dict(raw_aggregation)
+        elif is_dataclass(raw_aggregation):
+            aggregation_payload = asdict(raw_aggregation)
 
-        purchase_total_security = round_currency(
-            item.get("purchase_total_security")
-        )
-        if purchase_total_security is None:
-            purchase_total_security = 0.0
+        if aggregation_payload is not None:
+            security_total = aggregation_payload.get("security_currency_total")
+            if (
+                security_total not in (None, "")
+                and "purchase_total_security" not in aggregation_payload
+            ):
+                aggregation_payload["purchase_total_security"] = security_total
 
-        purchase_total_account = round_currency(
-            item.get("purchase_total_account")
-        )
-        if purchase_total_account is None:
-            purchase_total_account = 0.0
-
-        purchase_value_raw = item.get("purchase_value")
-        purchase_value = round_currency(
-            purchase_value_raw,
-            default=0.0,
-        )
+            account_total = aggregation_payload.get("account_currency_total")
+            if (
+                account_total not in (None, "")
+                and "purchase_total_account" not in aggregation_payload
+            ):
+                aggregation_payload["purchase_total_account"] = account_total
 
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
         if isinstance(raw_average_cost, Mapping):
             average_cost = dict(raw_average_cost)
+        elif is_dataclass(raw_average_cost):
+            average_cost = asdict(raw_average_cost)
 
         raw_performance = item.get("performance")
-        performance_mapping: Mapping[str, Any] | None = None
+        performance_payload: dict[str, Any] | None = None
         if isinstance(raw_performance, Mapping):
-            performance_mapping = raw_performance
+            performance_payload = dict(raw_performance)
+            day_change_raw = performance_payload.get("day_change")
+            if isinstance(day_change_raw, Mapping):
+                performance_payload["day_change"] = dict(day_change_raw)
+            elif is_dataclass(day_change_raw):
+                performance_payload["day_change"] = asdict(day_change_raw)
+        elif is_dataclass(raw_performance):
+            performance_payload = asdict(raw_performance)
 
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=item.get("current_value"),
-            purchase_value=purchase_value_raw,
-            holdings=item.get("current_holdings"),
+        def _resolve_aggregation_value(
+            *keys: str,
+            default: Any | None = None,
+        ) -> Any | None:
+            if aggregation_payload is None:
+                return default
+
+            for key in keys:
+                value = aggregation_payload.get(key)
+                if value not in (None, ""):
+                    return value
+
+            return default
+
+        purchase_value_source = _resolve_aggregation_value(
+            "purchase_value_eur",
+            "purchase_value",
+            default=item.get("purchase_value"),
         )
-        performance_payload = compose_performance_payload(
-            performance_mapping,
-            metrics=performance_metrics,
-            day_change=day_change_metrics,
+        purchase_value = round_currency(purchase_value_source, default=0.0)
+
+        holdings_source = _resolve_aggregation_value(
+            "total_holdings",
+            default=item.get("current_holdings"),
         )
 
+        avg_price_native = round_price(
+            _resolve_aggregation_value(
+                "average_purchase_price_native",
+                default=item.get("average_purchase_price_native"),
+            ),
+            decimals=6,
+        )
+        avg_price_security = round_price(
+            _resolve_aggregation_value(
+                "avg_price_security",
+                default=item.get("avg_price_security"),
+            ),
+            decimals=6,
+        )
+        avg_price_account = round_price(
+            _resolve_aggregation_value(
+                "avg_price_account",
+                default=item.get("avg_price_account"),
+            ),
+            decimals=6,
+        )
+
+        purchase_total_security = round_currency(
+            _resolve_aggregation_value(
+                "purchase_total_security",
+                "security_currency_total",
+                default=item.get("purchase_total_security"),
+            )
+        )
+        if purchase_total_security is None:
+            purchase_total_security = 0.0
+
+        purchase_total_account = round_currency(
+            _resolve_aggregation_value(
+                "purchase_total_account",
+                "account_currency_total",
+                default=item.get("purchase_total_account"),
+            )
+        )
+        if purchase_total_account is None:
+            purchase_total_account = 0.0
+
+        gain_abs_source: Any | None = None
+        if performance_payload is not None:
+            gain_abs_source = performance_payload.get("gain_abs")
+            if gain_abs_source in (None, ""):
+                gain_abs_source = performance_payload.get("total_change_eur")
+        if gain_abs_source in (None, ""):
+            gain_abs_source = item.get("gain_abs")
         gain_abs_value = round_currency(
-            performance_payload.get("gain_abs"),
+            gain_abs_source,
             default=0.0,
         )
+
+        gain_pct_source: Any | None = None
+        if performance_payload is not None:
+            gain_pct_source = performance_payload.get("gain_pct")
+            if gain_pct_source in (None, ""):
+                gain_pct_source = performance_payload.get("total_change_pct")
+        if gain_pct_source in (None, ""):
+            gain_pct_source = item.get("gain_pct")
         gain_pct_value = round_currency(
-            performance_payload.get("gain_pct"),
+            gain_pct_source,
             default=0.0,
         )
 
@@ -339,7 +411,7 @@ def _normalize_portfolio_positions(
                 "security_uuid": security_uuid,
                 "name": item.get("name"),
                 "current_holdings": round_currency(
-                    item.get("current_holdings"),
+                    holdings_source,
                     decimals=6,
                     default=0.0,
                 ),
@@ -357,6 +429,7 @@ def _normalize_portfolio_positions(
                 "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
                 "performance": performance_payload,
+                "aggregation": aggregation_payload,
             }
         )
 
