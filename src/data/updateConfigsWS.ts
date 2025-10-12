@@ -66,40 +66,7 @@ interface ApplyPositionsResult {
 function normalizePerformanceMetrics(
   position: PortfolioPositionData,
 ): PerformanceMetricsPayload | null {
-  const raw =
-    position.performance && typeof position.performance === 'object'
-      ? (position.performance as Partial<PerformanceMetricsPayload> & Record<string, unknown>)
-      : null;
-
-  return normalizePerformancePayload(position.performance, {
-    gain_abs:
-      typeof raw?.gain_abs === 'number' && Number.isFinite(raw.gain_abs)
-        ? raw.gain_abs
-        : typeof position.gain_abs === 'number' && Number.isFinite(position.gain_abs)
-          ? position.gain_abs
-          : undefined,
-    gain_pct:
-      typeof raw?.gain_pct === 'number' && Number.isFinite(raw.gain_pct)
-        ? raw.gain_pct
-        : typeof position.gain_pct === 'number' && Number.isFinite(position.gain_pct)
-          ? position.gain_pct
-          : undefined,
-    total_change_eur:
-      typeof raw?.total_change_eur === 'number' && Number.isFinite(raw.total_change_eur)
-        ? raw.total_change_eur
-        : typeof position.gain_abs === 'number' && Number.isFinite(position.gain_abs)
-          ? position.gain_abs
-          : undefined,
-    total_change_pct:
-      typeof raw?.total_change_pct === 'number' && Number.isFinite(raw.total_change_pct)
-        ? raw.total_change_pct
-        : typeof position.gain_pct === 'number' && Number.isFinite(position.gain_pct)
-          ? position.gain_pct
-          : undefined,
-    coverage_ratio: raw?.coverage_ratio,
-    source: raw?.source,
-    day_change: raw?.day_change,
-  });
+  return normalizePerformancePayload(position.performance);
 }
 
 function deriveAggregation(position: PortfolioPositionData): HoldingsAggregationPayload {
@@ -235,11 +202,9 @@ function normalizeAverageCost(
 function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
   const aggregation = deriveAggregation(position);
   const averageCost = normalizeAverageCost(position, aggregation);
-  const toNullableNumber = (value: unknown): number | null =>
-    typeof value === 'number' && Number.isFinite(value) ? value : null;
   const performance = normalizePerformanceMetrics(position);
-  const gainAbs = performance?.gain_abs ?? toNullableNumber(position.gain_abs);
-  const gainPct = performance?.gain_pct ?? toNullableNumber(position.gain_pct);
+  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
   return {
     ...position,
@@ -251,8 +216,8 @@ function normalizePosition(position: PortfolioPositionData): PortfolioPositionDa
     avg_price_security: averageCost?.security ?? null,
     avg_price_account: averageCost?.account ?? null,
     average_cost: averageCost,
-    gain_abs: gainAbs ?? null,
-    gain_pct: gainPct ?? null,
+    gain_abs: gainAbs,
+    gain_pct: gainPct,
     performance,
     aggregation,
   };
@@ -632,31 +597,14 @@ export function handlePortfolioUpdate(
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
     const posCount = Number(entry.position_count ?? entry.count ?? 0);
     const curVal = Number(entry.current_value ?? entry.value ?? 0);
-    const purchase = Number(entry.purchase_sum ?? entry.purchaseSum ?? 0);
-
-    const baseGainAbs = curVal - purchase;
-    const baseGainPct = purchase > 0 ? (baseGainAbs / purchase) * 100 : 0;
     const entryRecord = entry as Record<string, unknown>;
-    const fallbackGainAbs =
-      typeof entryRecord['gain_abs'] === 'number' && Number.isFinite(entryRecord['gain_abs'] as number)
-        ? (entryRecord['gain_abs'] as number)
-        : undefined;
-    const fallbackGainPct =
-      typeof entryRecord['gain_pct'] === 'number' && Number.isFinite(entryRecord['gain_pct'] as number)
-        ? (entryRecord['gain_pct'] as number)
-        : undefined;
-    const performance = normalizePerformancePayload(entryRecord['performance'], {
-      gain_abs: fallbackGainAbs,
-      gain_pct: fallbackGainPct,
-      total_change_eur: fallbackGainAbs ?? baseGainAbs,
-      total_change_pct: fallbackGainPct ?? baseGainPct,
-    });
-    const gainAbs = typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)
-      ? performance.gain_abs
-      : baseGainAbs;
-    const gainPct = typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
-      ? performance.gain_pct
-      : baseGainPct;
+    const performance = normalizePerformancePayload(entryRecord['performance']);
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    const purchaseRaw = entry.purchase_sum ?? entry.purchaseSum ?? null;
+    const purchase = typeof purchaseRaw === 'number' && Number.isFinite(purchaseRaw)
+      ? purchaseRaw
+      : null;
 
     const oldCur = parseNumLoose(curValCell.textContent);
     const oldCnt = parseNumLoose(posCountCell.textContent);
@@ -668,8 +616,8 @@ export function handlePortfolioUpdate(
     const rowData = {
       fx_unavailable: Boolean(entryRecord['fx_unavailable']),
       current_value: hasValue ? curVal : null,
-      gain_abs: hasValue ? gainAbs : null,
-      gain_pct: hasValue ? gainPct : null,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
     };
     const rowContext = { hasValue };
     const currentMarkup = formatValue('current_value', rowData.current_value, rowData, rowContext);
@@ -681,13 +629,15 @@ export function handlePortfolioUpdate(
     if (gainAbsCell) {
       const gainMarkup = formatValue('gain_abs', rowData.gain_abs, rowData, rowContext);
       gainAbsCell.innerHTML = gainMarkup;
-      gainAbsCell.dataset.gainPct = Number.isFinite(gainPct)
-        ? `${formatNumberLocal(gainPct)} %`
+      const hasGainPct = typeof gainPct === 'number' && Number.isFinite(gainPct);
+      const pctValue = hasGainPct ? gainPct : null;
+      gainAbsCell.dataset.gainPct = pctValue != null
+        ? `${formatNumberLocal(pctValue)} %`
         : '—';
-      gainAbsCell.dataset.gainSign = Number.isFinite(gainPct)
-        ? gainPct > 0
+      gainAbsCell.dataset.gainSign = pctValue != null
+        ? pctValue > 0
           ? 'positive'
-          : gainPct < 0
+          : pctValue < 0
             ? 'negative'
             : 'neutral'
         : 'neutral';
@@ -697,10 +647,10 @@ export function handlePortfolioUpdate(
     }
 
     row.dataset.positionCount = String(posCount);
-    row.dataset.currentValue = String(curVal);
-    row.dataset.purchaseSum = String(purchase);
-    row.dataset.gainAbs = String(gainAbs);
-    row.dataset.gainPct = String(gainPct);
+    row.dataset.currentValue = hasValue ? String(curVal) : '';
+    row.dataset.purchaseSum = purchase != null ? String(purchase) : '';
+    row.dataset.gainAbs = gainAbs != null ? String(gainAbs) : '';
+    row.dataset.gainPct = gainPct != null ? String(gainPct) : '';
 
     patched += 1;
   }

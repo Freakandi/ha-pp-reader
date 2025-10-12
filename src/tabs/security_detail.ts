@@ -389,6 +389,8 @@ function buildSnapshotFromPortfolioCache(
   let securityWeight = 0;
   let accountWeightedSum = 0;
   let accountWeight = 0;
+  let gainAbsSum = 0;
+  let gainAbsContributors = 0;
 
   for (const position of matches) {
     if (!name && typeof position?.name === 'string') {
@@ -455,6 +457,12 @@ function buildSnapshotFromPortfolioCache(
         accountWeight += holdings;
       }
     }
+
+    const performance = normalizePerformancePayload((position as Record<string, unknown>)['performance']);
+    if (performance && typeof performance.gain_abs === 'number') {
+      gainAbsSum += performance.gain_abs;
+      gainAbsContributors += 1;
+    }
   }
 
   const roundedHoldings =
@@ -463,13 +471,14 @@ function buildSnapshotFromPortfolioCache(
     roundCurrency(purchaseValueEur, { fallback: 0 }) ?? 0;
   const roundedCurrentValue =
     roundCurrency(currentValueEur, { fallback: 0 }) ?? 0;
-  const gainAbsUnrounded = roundedCurrentValue - roundedPurchaseValue;
-  const gainAbs = roundCurrency(gainAbsUnrounded, { fallback: 0 }) ?? 0;
-  const gainPct =
-    roundCurrency(
-      purchaseValueEur > 0 ? (gainAbsUnrounded / purchaseValueEur) * 100 : 0,
-      { fallback: 0 },
-    ) ?? 0;
+  const aggregatedGainAbs =
+    gainAbsContributors > 0
+      ? roundCurrency(gainAbsSum, { fallback: null })
+      : null;
+  const aggregatedGainPct =
+    gainAbsContributors > 0 && purchaseValueEur > 0
+      ? roundCurrency((gainAbsSum / purchaseValueEur) * 100, { fallback: null })
+      : null;
   const lastPriceEur =
     roundedHoldings > 0
       ? roundCurrency(roundedCurrentValue / roundedHoldings, { fallback: null })
@@ -502,14 +511,27 @@ function buildSnapshotFromPortfolioCache(
         })
       : null;
 
+  const performancePayload =
+    aggregatedGainAbs != null && aggregatedGainPct != null
+      ? {
+          gain_abs: aggregatedGainAbs,
+          gain_pct: aggregatedGainPct,
+          total_change_eur: aggregatedGainAbs,
+          total_change_pct: aggregatedGainPct,
+          source: 'cache',
+          coverage_ratio: null,
+          day_change: null,
+        }
+      : null;
+
   return {
     security_uuid: securityUuid,
     name,
     total_holdings: roundedHoldings,
     purchase_value_eur: roundedPurchaseValue,
     current_value_eur: roundedCurrentValue,
-    gain_abs_eur: gainAbs,
-    gain_pct: gainPct,
+    gain_abs_eur: aggregatedGainAbs,
+    gain_pct: aggregatedGainPct,
     last_price_eur: lastPriceEur,
     purchase_total_security: purchaseTotalSecurityRounded,
     purchase_total_account: purchaseTotalAccountRounded,
@@ -517,6 +539,7 @@ function buildSnapshotFromPortfolioCache(
     avg_price_account: averageAccount,
     average_purchase_price_native: averageNative,
     source: 'cache',
+    performance: performancePayload,
   };
 }
 
@@ -956,23 +979,6 @@ function convertNativeDiffToEur(
   return diffNative * fxRate;
 }
 
-function computeHoldingsAdjustedEurChange(
-  holdings: number | null,
-  diffNative: number | null,
-  fxRate: number | null,
-): number | null {
-  if (!isFiniteNumber(holdings)) {
-    return null;
-  }
-
-  const nativeInEur = convertNativeDiffToEur(diffNative, fxRate);
-  if (nativeInEur == null) {
-    return null;
-  }
-
-  return roundCurrency(nativeInEur * holdings);
-}
-
 function computePercentageChange(
   current: number | null,
   reference: number | null,
@@ -1018,9 +1024,6 @@ function ensureSnapshotMetrics(
     toFiniteNumber(snapshot.last_price_native) ??
     toFiniteNumber(snapshot.last_price?.native) ??
     null;
-  const lastPriceEur = toFiniteNumber(snapshot.last_price_eur);
-  const lastCloseNative = toFiniteNumber(snapshot.last_close_native);
-  const lastCloseEur = toFiniteNumber(snapshot.last_close_eur);
   const lastPriceFetchedAt =
     parseTimestamp((snapshot as { last_price_fetched_at?: unknown })?.last_price_fetched_at) ??
     parseTimestamp(
@@ -1031,91 +1034,15 @@ function ensureSnapshotMetrics(
   const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
   const safeHoldings = isFiniteNumber(holdings) ? holdings : null;
 
-  const legacyGainAbs =
-    toFiniteNumber((snapshot as { gain_abs_eur?: unknown })?.gain_abs_eur) ??
-    toFiniteNumber((snapshot as { gain_abs?: unknown })?.gain_abs);
-  const legacyGainPct = toFiniteNumber((snapshot as { gain_pct?: unknown })?.gain_pct);
-  const legacyTotalChangeEur = toFiniteNumber(
-    (snapshot as { total_change_eur?: unknown })?.total_change_eur,
-  );
-  const legacyTotalChangePct = toFiniteNumber(
-    (snapshot as { total_change_pct?: unknown })?.total_change_pct,
-  );
-
-  const rawDayChangeNative = toFiniteNumber(snapshot.day_price_change_native);
-  const rawDayChangeEur = toFiniteNumber(snapshot.day_price_change_eur);
-  const rawDayChangePct = toFiniteNumber(snapshot.day_change_pct);
-
-  const fallbackDayChangeNative =
-    rawDayChangeNative ?? computeDelta(lastPriceNative, lastCloseNative);
-  let fallbackDayChangeEur = rawDayChangeEur ?? computeDelta(lastPriceEur, lastCloseEur);
-  if (fallbackDayChangeEur == null && isFiniteNumber(fallbackDayChangeNative)) {
-    fallbackDayChangeEur = convertNativeDiffToEur(fallbackDayChangeNative, safeFxRate);
-  }
-
-  const fallbackDayChangePct =
-    (rawDayChangePct != null ? normalizePercentValue(rawDayChangePct) : null) ??
-    computePercentageChange(lastPriceNative, lastCloseNative) ??
-    computePercentageChange(lastPriceEur, lastCloseEur);
-
-  const derivedHoldingsDelta = computeDelta(lastPriceNative, averagePurchaseNative);
-  const derivedHoldingsChange = computeHoldingsAdjustedEurChange(
-    safeHoldings,
-    derivedHoldingsDelta,
-    safeFxRate,
-  );
-
-  const derivedDiffChange = computeDelta(currentValueEur, purchaseValueEur);
-  const fallbackTotalChangeEur =
-    derivedDiffChange != null ? roundCurrency(derivedDiffChange) : derivedHoldingsChange;
-
-  const fallbackTotalChangePct =
-    computePercentageChange(currentValueEur, purchaseValueEur) ??
-    computePercentageChange(lastPriceNative, averagePurchaseNative) ??
-    computePercentageChange(lastPriceEur, averagePurchaseEur);
-
-  const normalizedGainPct =
-    legacyGainPct != null ? normalizePercentValue(legacyGainPct) : null;
-  const normalizedTotalChangePct =
-    legacyTotalChangePct != null ? normalizePercentValue(legacyTotalChangePct) : null;
-
-  const performanceFallback = {
-    gain_abs: legacyGainAbs ?? fallbackTotalChangeEur ?? undefined,
-    gain_pct: normalizedGainPct ?? fallbackTotalChangePct ?? undefined,
-    total_change_eur: legacyTotalChangeEur ?? fallbackTotalChangeEur ?? undefined,
-    total_change_pct: normalizedTotalChangePct ?? fallbackTotalChangePct ?? undefined,
-    day_change:
-      fallbackDayChangeNative != null ||
-      fallbackDayChangeEur != null ||
-      fallbackDayChangePct != null
-        ? {
-            price_change_native: fallbackDayChangeNative ?? undefined,
-            price_change_eur: fallbackDayChangeEur ?? undefined,
-            change_pct: fallbackDayChangePct ?? undefined,
-          }
-        : undefined,
-  } as const;
-
-  const performance = normalizePerformancePayload(snapshot.performance, performanceFallback);
+  const performance = normalizePerformancePayload(snapshot.performance);
   const dayChange = performance?.day_change ?? null;
 
-  const dayPriceChangeNative =
-    dayChange?.price_change_native ?? fallbackDayChangeNative ?? null;
-  const dayPriceChangeEur = dayChange?.price_change_eur ?? fallbackDayChangeEur ?? null;
-  const dayChangePct = dayChange?.change_pct ?? fallbackDayChangePct ?? null;
+  const dayPriceChangeNative = dayChange?.price_change_native ?? null;
+  const dayPriceChangeEur = dayChange?.price_change_eur ?? null;
+  const dayChangePct = dayChange?.change_pct ?? null;
 
-  const totalChangeEur =
-    performance?.total_change_eur ??
-    legacyTotalChangeEur ??
-    legacyGainAbs ??
-    fallbackTotalChangeEur ??
-    null;
-  const totalChangePct =
-    performance?.total_change_pct ??
-    normalizedTotalChangePct ??
-    normalizedGainPct ??
-    fallbackTotalChangePct ??
-    null;
+  const totalChangeEur = performance?.total_change_eur ?? null;
+  const totalChangePct = performance?.total_change_pct ?? null;
 
   const metrics: SecuritySnapshotMetrics = {
     holdings: safeHoldings,

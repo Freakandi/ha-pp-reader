@@ -24,11 +24,7 @@ import type {
   PanelConfigLike,
   PerformanceMetricsPayload,
 } from './types';
-import {
-  normalizeCurrencyValue,
-  normalizePercentValue,
-  toFiniteCurrency,
-} from '../utils/currency';
+import { normalizeCurrencyValue, toFiniteCurrency } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
 
 interface PortfolioPositionLike {
@@ -249,38 +245,22 @@ function resolveAverageCost(
 }
 
 function normalizePerformanceRecord(record: Record<string, unknown>): PerformanceMetricsPayload | null {
-  const rawPerformance =
-    record['performance'] && typeof record['performance'] === 'object'
-      ? (record['performance'] as Partial<PerformanceMetricsPayload> & Record<string, unknown>)
-      : null;
-
-  const gainAbs = normalizeCurrencyValue(record['gain_abs']);
-  const gainPct = normalizePercentValue(record['gain_pct']);
-
-  return normalizePerformancePayload(record['performance'], {
-    gain_abs: gainAbs ?? undefined,
-    gain_pct: gainPct ?? undefined,
-    total_change_eur: rawPerformance?.total_change_eur ?? gainAbs ?? undefined,
-    total_change_pct: rawPerformance?.total_change_pct ?? gainPct ?? undefined,
-    coverage_ratio: rawPerformance?.coverage_ratio,
-    source: rawPerformance?.source,
-    day_change: rawPerformance?.day_change,
-  });
+  return normalizePerformancePayload(record['performance']);
 }
 
 function normalizePositionLike(position: PortfolioPositionLike): PortfolioPositionLike {
   const record = position as Record<string, unknown>;
   const performance = normalizePerformanceRecord(record);
-  const gainAbs = performance?.gain_abs ?? normalizeCurrencyValue(record['gain_abs']);
-  const gainPct = performance?.gain_pct ?? normalizePercentValue(record['gain_pct']);
+  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
   return {
     ...position,
     current_holdings: toNullableNumber(record['current_holdings']),
     purchase_value: normalizeCurrencyValue(record['purchase_value']),
     current_value: normalizeCurrencyValue(record['current_value']),
-    gain_abs: gainAbs ?? null,
-    gain_pct: gainPct ?? null,
+    gain_abs: gainAbs,
+    gain_pct: gainPct,
     performance,
   };
 }
@@ -662,20 +642,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     const hasValue = d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value);
     const currentValue = hasValue ? d.current_value! : null;
     const performance = d.performance;
-    const gainAbs = typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)
-      ? performance.gain_abs
-      : (typeof d.gain_abs === 'number' && Number.isFinite(d.gain_abs)
-        ? d.gain_abs
-        : hasValue && currentValue != null
-          ? currentValue - purchaseSum
-          : null);
-    const gainPct = typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
-      ? performance.gain_pct
-      : (typeof d.gain_pct === 'number' && Number.isFinite(d.gain_pct)
-        ? d.gain_pct
-        : hasValue && purchaseSum > 0 && gainAbs != null
-          ? ((gainAbs / purchaseSum) * 100)
-          : null);
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
     const partialValue = d.fx_unavailable && hasValue;
 
     const expanded = expandedPortfolios.has(d.uuid);
@@ -1430,32 +1398,11 @@ export async function renderDashboard(
         : 0;
       const rawCurrentValue = normalizeCurrencyValue(record.current_value);
       const purchaseSum = normalizeCurrencyValue(record.purchase_sum) ?? 0;
-      const rawGainAbs = normalizeCurrencyValue(record.gain_abs);
-      const rawGainPct = normalizePercentValue(record.gain_pct);
       const performance = normalizePerformanceRecord(record);
 
       const hasNumericCurrentValue = rawCurrentValue != null;
-      let gainAbs: number | null;
-      if (typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)) {
-        gainAbs = performance.gain_abs;
-      } else if (rawGainAbs != null) {
-        gainAbs = rawGainAbs;
-      } else if (hasNumericCurrentValue) {
-        gainAbs = normalizeCurrencyValue(rawCurrentValue! - purchaseSum);
-      } else {
-        gainAbs = null;
-      }
-
-      let gainPct: number | null;
-      if (typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)) {
-        gainPct = performance.gain_pct;
-      } else if (rawGainPct != null) {
-        gainPct = rawGainPct;
-      } else if (hasNumericCurrentValue && purchaseSum > 0 && gainAbs != null) {
-        gainPct = normalizePercentValue((gainAbs / purchaseSum) * 100);
-      } else {
-        gainPct = null;
-      }
+      const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+      const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
       const partialValue = missingPositions > 0;
       const hasValue = hasNumericCurrentValue;

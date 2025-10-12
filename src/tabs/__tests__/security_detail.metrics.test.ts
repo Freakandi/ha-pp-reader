@@ -240,7 +240,7 @@ test('normalizeAverageCostForTest normalises backend payload structure', () => {
   );
 });
 
-test('ensureSnapshotMetricsForTest builds performance fallback from legacy fields', () => {
+test('ensureSnapshotMetricsForTest uses provided performance payload without legacy fallback', () => {
   clearSnapshotMetricsRegistryForTest();
 
   const metrics = ensureSnapshotMetricsForTest('performance-legacy', {
@@ -248,16 +248,26 @@ test('ensureSnapshotMetricsForTest builds performance fallback from legacy field
     total_holdings_precise: '5',
     purchase_value_eur: '500',
     current_value_eur: '650',
-    gain_abs_eur: '150',
-    gain_pct: '30',
-    day_price_change_native: '0.25',
-    day_price_change_eur: '0.2',
-    day_change_pct: '0.45',
     last_price_native: '26.5',
     last_close_native: '26.25',
     last_price_eur: '32.5',
     last_close_eur: '32.3',
     currency_code: 'USD',
+    performance: {
+      gain_abs: 150,
+      gain_pct: 30,
+      total_change_eur: 150,
+      total_change_pct: 30,
+      source: 'snapshot',
+      coverage_ratio: 1,
+      day_change: {
+        price_change_native: 0.25,
+        price_change_eur: 0.2,
+        change_pct: 0.45,
+        source: 'native',
+        coverage_ratio: 1,
+      },
+    },
   });
 
   assert.ok(metrics?.performance, 'expected fallback performance payload to be generated');
@@ -282,23 +292,23 @@ test('ensureSnapshotMetricsForTest builds performance fallback from legacy field
     'total change percentage should reuse the legacy value',
   );
   assertApproximately(
-    metrics?.performance?.day_change?.price_change_native,
+    metrics?.performance?.day_change?.price_change_native ?? 0,
     0.25,
-    'native day change should default to legacy snapshot fields',
+    'native day change should reflect provided performance payload',
   );
   assertApproximately(
-    metrics?.performance?.day_change?.price_change_eur,
+    metrics?.performance?.day_change?.price_change_eur ?? 0,
     0.2,
-    'EUR day change should prefer legacy snapshot fields',
+    'EUR day change should reflect provided performance payload',
   );
   assertApproximately(
-    metrics?.performance?.day_change?.change_pct,
+    metrics?.performance?.day_change?.change_pct ?? 0,
     0.45,
-    'day change percentage should reuse the legacy field rounding',
+    'day change percentage should reflect provided performance payload',
   );
 });
 
-test('ensureSnapshotMetricsForTest derives performance when legacy fields absent', () => {
+test('ensureSnapshotMetricsForTest leaves performance null when no payload provided', () => {
   clearSnapshotMetricsRegistryForTest();
 
   const metrics = ensureSnapshotMetricsForTest('performance-derived', {
@@ -306,49 +316,10 @@ test('ensureSnapshotMetricsForTest derives performance when legacy fields absent
     total_holdings_precise: '2',
     purchase_value_eur: '100',
     current_value_eur: '112',
-    last_price_native: '56',
-    last_close_native: '50',
-    last_price_eur: '112',
-    last_close_eur: '100',
     currency_code: 'USD',
   });
 
-  assert.ok(metrics?.performance, 'expected derived performance payload');
-  assertApproximately(
-    metrics?.performance?.gain_abs,
-    12,
-    'gain absolute should be derived from EUR totals',
-  );
-  assertApproximately(
-    metrics?.performance?.gain_pct,
-    12,
-    'gain percentage should be calculated from EUR totals',
-  );
-  assertApproximately(
-    metrics?.performance?.total_change_eur,
-    12,
-    'total change EUR should mirror derived gains',
-  );
-  assertApproximately(
-    metrics?.performance?.total_change_pct,
-    12,
-    'total change percentage should mirror derived gains',
-  );
-  assertApproximately(
-    metrics?.performance?.day_change?.price_change_native,
-    6,
-    'native day change should be derived from latest snapshot prices',
-  );
-  assertApproximately(
-    metrics?.performance?.day_change?.price_change_eur,
-    12,
-    'EUR day change should be derived from snapshot EUR prices',
-  );
-  assertApproximately(
-    metrics?.performance?.day_change?.change_pct,
-    12,
-    'day change percentage should be derived from native snapshot prices',
-  );
+  assert.strictEqual(metrics?.performance, null, 'expected performance to remain null without payload');
 });
 
 test('normalizeAverageCostForTest falls back to legacy snapshot fields', () => {
