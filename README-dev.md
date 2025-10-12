@@ -75,6 +75,7 @@ More background on the available fixtures and test structure is available in [TE
 - Rules are defined in [`eslint.config.js`](eslint.config.js) using the flat-config API. The project extends `eslint:recommended` and `plugin:@typescript-eslint/recommended` while adding local overrides for consistent type-only imports and unused variable handling.
 - Install Node dependencies with `npm install`, then execute `npm run lint:ts` to lint all dashboard sources under `src/`.
 - Jest-style dashboard tests under `src/**/__tests__/` are configured to allow un-awaited promise helpers so snapshot utilities continue to work without excessive boilerplate.
+- Execute the TypeScript unit tests with `npm test`; the script runs the Node test runner via `tsx` so `.test.ts` and `.test.tsx` files under `src/` are transpiled automatically.
 
 ### Development environment settings
 - **VSCode**

@@ -1009,9 +1009,21 @@ function ensureSnapshotMetrics(
   const performance = normalizePerformancePayload(snapshot.performance);
   const dayChange = performance?.day_change ?? null;
 
-  const dayPriceChangeNative = dayChange?.price_change_native ?? null;
-  const dayPriceChangeEur = dayChange?.price_change_eur ?? null;
-  const dayChangePct = dayChange?.change_pct ?? null;
+  const fallbackDayPriceChangeNative = toFiniteNumber(
+    (snapshot as { day_price_change_native?: unknown })?.day_price_change_native,
+  );
+  const fallbackDayPriceChangeEur = toFiniteNumber(
+    (snapshot as { day_price_change_eur?: unknown })?.day_price_change_eur,
+  );
+  const fallbackDayChangePct = toFiniteNumber(
+    (snapshot as { day_change_pct?: unknown })?.day_change_pct,
+  );
+
+  const dayPriceChangeNative =
+    dayChange?.price_change_native ?? fallbackDayPriceChangeNative ?? null;
+  const dayPriceChangeEur =
+    dayChange?.price_change_eur ?? fallbackDayPriceChangeEur ?? null;
+  const dayChangePct = dayChange?.change_pct ?? fallbackDayChangePct ?? null;
 
   const totalChangeEur = performance?.total_change_eur ?? null;
   const totalChangePct = performance?.total_change_pct ?? null;
@@ -1319,7 +1331,7 @@ function formatFxRate(value: number | null | undefined): string | null {
 
   return value.toLocaleString('de-DE', {
     minimumFractionDigits: 4,
-    maximumFractionDigits: 6,
+    maximumFractionDigits: 4,
   });
 }
 

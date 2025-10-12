@@ -13,7 +13,7 @@
     "build:types": "tsc -p tsconfig.json",
     "lint": "npm run lint:ts",
     "lint:ts": "eslint \"src/**/*.{ts,tsx}\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node ./scripts/run_ts_tests.mjs"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +32,7 @@
     "eslint": "^9.5.0",
     "eslint-config-prettier": "^9.1.0",
     "rollup-plugin-visualizer": "^6.0.4",
+    "tsx": "^4.20.6",
     "typescript": "^5.4.0",
     "vite": "^5.2.0"
   },
