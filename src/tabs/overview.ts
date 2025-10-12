@@ -115,17 +115,6 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function pickFirstFinite(
-  ...values: Array<number | null | undefined>
-): number | null {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return null;
-}
-
 function normalizeCurrencyCode(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
