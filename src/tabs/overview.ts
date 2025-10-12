@@ -35,6 +35,7 @@ interface PortfolioPositionLike {
   current_value?: unknown;
   gain_abs?: unknown;
   gain_pct?: unknown;
+  average_cost?: AverageCostPayload | null;
   performance?: PerformanceMetricsPayload | null;
   [key: string]: unknown;
 }
@@ -173,10 +174,7 @@ function resolveAggregation(
   return aggregation as HoldingsAggregationPayload;
 }
 
-function resolveAverageCost(
-  record: Record<string, unknown>,
-  aggregation: HoldingsAggregationPayload | null,
-): AverageCostPayload | null {
+function resolveAverageCost(record: Record<string, unknown>): AverageCostPayload | null {
   const raw = record['average_cost'];
   if (raw && typeof raw === 'object') {
     const payload = raw as Partial<AverageCostPayload>;
@@ -205,35 +203,10 @@ function resolveAverageCost(
       eur,
       source: normalizedSource ?? 'aggregation',
       coverage_ratio: toNullableNumber(
-        payload.coverage_ratio ??
-          (aggregation
-            ? (aggregation as { coverage_ratio?: unknown })?.coverage_ratio
-            : null),
+        payload.coverage_ratio,
       ),
     };
   }
-
-  if (aggregation) {
-    const native = toNullableNumber(aggregation.average_purchase_price_native);
-    const security = toNullableNumber(aggregation.avg_price_security);
-    const account = toNullableNumber(aggregation.avg_price_account);
-
-    if (native == null && security == null && account == null) {
-      return null;
-    }
-
-    return {
-      native,
-      security,
-      account,
-      eur: null,
-      source: 'aggregation',
-      coverage_ratio: toNullableNumber(
-        (aggregation as { coverage_ratio?: unknown })?.coverage_ratio,
-      ),
-    };
-  }
-
   return null;
 }
 
@@ -243,6 +216,7 @@ function normalizePerformanceRecord(record: Record<string, unknown>): Performanc
 
 function normalizePositionLike(position: PortfolioPositionLike): PortfolioPositionLike {
   const record = position as Record<string, unknown>;
+  const averageCost = resolveAverageCost(record);
   const performance = normalizePerformanceRecord(record);
   const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
   const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
@@ -254,6 +228,7 @@ function normalizePositionLike(position: PortfolioPositionLike): PortfolioPositi
     current_value: normalizeCurrencyValue(record['current_value']),
     gain_abs: gainAbs,
     gain_pct: gainPct,
+    average_cost: averageCost,
     performance,
   };
 }
@@ -278,7 +253,9 @@ function buildPurchasePriceDisplay(
 ): { markup: string; sortValue: number; ariaLabel: string } {
   const record = position as Record<string, unknown>;
   const aggregation = resolveAggregation(record);
-  const averageCost = resolveAverageCost(record, aggregation);
+  const averageCost =
+    (position as { average_cost?: AverageCostPayload | null }).average_cost ??
+    resolveAverageCost(record);
 
   const securityCurrency = resolveCurrencyFromPosition(position, [
     'security_currency_code',
