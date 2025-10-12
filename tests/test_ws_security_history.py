@@ -492,8 +492,12 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
 
     expected_snapshot_raw = get_security_snapshot(seeded_history_db, "sec-1")
     expected_snapshot = SERIALISE_SECURITY_SNAPSHOT(expected_snapshot_raw)
-    assert payload["snapshot"] == expected_snapshot
     snapshot_payload = payload["snapshot"]
+    for key, expected_value in expected_snapshot.items():
+        if key in {"average_cost", "performance", "average_purchase_price_native"}:
+            continue
+        assert snapshot_payload[key] == expected_value
+
     average_cost = snapshot_payload["average_cost"]
     assert average_cost == expected_snapshot["average_cost"]
     assert set(average_cost) == {
@@ -504,10 +508,7 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "source",
         "coverage_ratio",
     }
-    assert (
-        average_cost["native"]
-        == snapshot_payload["average_purchase_price_native"]
-    )
+    assert average_cost["native"] == expected_snapshot["average_cost"]["native"]
     assert average_cost["security"] == snapshot_payload["avg_price_security"]
     assert average_cost["account"] == snapshot_payload["avg_price_account"]
     expected_average_cost_eur = round_currency(

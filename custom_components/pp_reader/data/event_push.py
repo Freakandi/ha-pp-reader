@@ -266,10 +266,13 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     aggregation_payload["purchase_total_account"] = (
         aggregation_obj.purchase_total_account
     )
+    aggregation_payload.pop("average_purchase_price_native", None)
 
     if isinstance(aggregation_raw, Mapping):
         for key, value in aggregation_raw.items():
             if value in (None, ""):
+                continue
+            if key == "average_purchase_price_native":
                 continue
             if key in {"purchase_value_cents"}:
                 coerced_int = _coerce_int(value)
@@ -328,10 +331,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
     gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
 
-    avg_native = average_cost_payload.get("native")
-    if avg_native is None:
-        avg_native = aggregation_obj.average_purchase_price_native
-
     avg_price_security = average_cost_payload.get("security")
     if avg_price_security is None:
         avg_price_security = aggregation_obj.avg_price_security
@@ -351,7 +350,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         "current_value": current_value,
         "gain_abs": gain_abs,
         "gain_pct": gain_pct,
-        "average_purchase_price_native": avg_native,
         "purchase_total_security": purchase_total_security,
         "purchase_total_account": purchase_total_account,
         "avg_price_security": avg_price_security,

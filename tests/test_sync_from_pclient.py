@@ -418,14 +418,12 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
                     "purchase_value_eur": 123.45,
                     "purchase_total_security": 321.09,
                     "purchase_total_account": 322.1,
-                    "average_purchase_price_native": 24.123456,
                     "avg_price_security": 25.654321,
                     "avg_price_account": 25.987654,
                 },
                 "purchase_value_eur": 123.45,
                 "purchase_total_security": None,
                 "purchase_total_account": None,
-                "average_purchase_price_native": None,
                 "avg_price_security": None,
                 "avg_price_account": None,
                 "average_cost": {
@@ -453,39 +451,40 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
     expected_purchase_total_account = round_currency(322.1)
 
     assert compacted["portfolio_uuid"] == "pf-3"
-    assert compacted["positions"] == [
-        {
-            "security_uuid": "sec-1",
-            "name": "Security A",
-            "current_holdings": 5,
-            "purchase_value": expected_purchase_value,
-            "current_value": expected_current_value,
-            "gain_abs": expected_gain_abs,
-            "gain_pct": expected_gain_pct,
-            "average_purchase_price_native": 24.123456,
-            "purchase_total_security": expected_purchase_total_security,
-            "purchase_total_account": expected_purchase_total_account,
-            "avg_price_security": 25.654321,
-            "avg_price_account": 25.987654,
-            "performance": {
-                "gain_abs": expected_gain_abs,
-                "gain_pct": expected_gain_pct,
-                "total_change_eur": expected_gain_abs,
-                "total_change_pct": expected_gain_pct,
-                "source": "calculated",
-                "coverage_ratio": 1.0,
-                "day_change": {
-                    "price_change_native": None,
-                    "price_change_eur": None,
-                    "change_pct": None,
-                    "source": "unavailable",
-                    "coverage_ratio": 0.0,
-                },
-            },
-        }
-    ]
 
-    position_entry = compacted["positions"][0]
+    positions = compacted["positions"]
+    assert isinstance(positions, list)
+    assert len(positions) == 1
+
+    position_entry = positions[0]
+    assert position_entry["security_uuid"] == "sec-1"
+    assert position_entry["name"] == "Security A"
+    assert position_entry["current_holdings"] == 5
+    assert position_entry["purchase_value"] == expected_purchase_value
+    assert position_entry["current_value"] == expected_current_value
+    assert position_entry["gain_abs"] == expected_gain_abs
+    assert position_entry["gain_pct"] == expected_gain_pct
+    assert position_entry["purchase_total_security"] == expected_purchase_total_security
+    assert position_entry["purchase_total_account"] == expected_purchase_total_account
+    assert position_entry["avg_price_security"] == 25.654321
+    assert position_entry["avg_price_account"] == 25.987654
+
+    average_cost = position_entry["average_cost"]
+    assert average_cost == {
+        "native": 24.123456,
+        "security": 25.654321,
+        "account": 25.987654,
+        "eur": expected_purchase_value,
+        "source": "aggregation",
+        "coverage_ratio": 1.0,
+    }
+
+    aggregation = position_entry["aggregation"]
+    assert aggregation["purchase_value_eur"] == 123.45
+    assert aggregation["purchase_total_security"] == 321.09
+    assert aggregation["purchase_total_account"] == 322.1
+    assert aggregation["avg_price_security"] == 25.654321
+    assert aggregation["avg_price_account"] == 25.987654
     position_performance = position_entry["performance"]
     assert position_performance["gain_abs"] == position_entry["gain_abs"]
     assert position_performance["gain_pct"] == position_entry["gain_pct"]

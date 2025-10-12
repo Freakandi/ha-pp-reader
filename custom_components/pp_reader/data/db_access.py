@@ -577,11 +577,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             purchase_total_security_value = 0.0
         if purchase_total_account_value is None:
             purchase_total_account_value = 0.0
-        average_purchase_price_native = (
-            aggregation.average_purchase_price_native
-            if aggregation.average_purchase_price_native is not None
-            else average_cost.native
-        )
         avg_price_security_value = aggregation.avg_price_security
         if avg_price_security_value is None:
             avg_price_security_value = average_cost.security
@@ -610,6 +605,11 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             and avg_price_account_value is None
         ):
             average_cost_payload["account"] = None
+        if (
+            average_cost_payload.get("native") is None
+            and aggregation.average_purchase_price_native is not None
+        ):
+            average_cost_payload["native"] = aggregation.average_purchase_price_native
 
         raw_last_close, last_close_native = fetch_previous_close(
             db_path,
@@ -662,7 +662,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "last_price_eur": last_price_eur_value,
             "market_value_eur": market_value_eur,
             "purchase_value_eur": purchase_value_eur,
-            "average_purchase_price_native": average_purchase_price_native,
             "purchase_total_security": purchase_total_security_value,
             "purchase_total_account": purchase_total_account_value,
             "avg_price_security": avg_price_security_value,
@@ -754,7 +753,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "current_value": float,           # EUR
         "gain_abs": float,                # EUR
         "gain_pct": float,                # %
-        "average_purchase_price_native": float | None,
         "purchase_total_security": float,
         "purchase_total_account": float,
         "avg_price_security": float | None,
@@ -837,11 +835,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             if purchase_total_account_value is None:
                 purchase_total_account_value = 0.0
 
-            average_purchase_price_native = (
-                aggregation.average_purchase_price_native
-                if aggregation.average_purchase_price_native is not None
-                else average_cost.native
-            )
             avg_price_security_value = aggregation.avg_price_security
             if avg_price_security_value is None:
                 avg_price_security_value = average_cost.security
@@ -870,6 +863,11 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 and avg_price_account_value is None
             ):
                 average_cost_payload["account"] = None
+            if (
+                average_cost_payload.get("native") is None
+                and aggregation.average_purchase_price_native is not None
+            ):
+                average_cost_payload["native"] = aggregation.average_purchase_price_native
 
             aggregation_dict = {
                 "total_holdings": aggregation.total_holdings,
@@ -878,7 +876,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 "purchase_value_eur": purchase_value,
                 "security_currency_total": purchase_total_security_value,
                 "account_currency_total": purchase_total_account_value,
-                "average_purchase_price_native": average_purchase_price_native,
                 "avg_price_security": avg_price_security_value,
                 "avg_price_account": avg_price_account_value,
                 "purchase_total_security": purchase_total_security_value,
@@ -906,9 +903,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                     "current_value": current_value,
                     "gain_abs": gain_abs,
                     "gain_pct": gain_pct,
-                    "average_purchase_price_native": aggregation_dict[
-                        "average_purchase_price_native"
-                    ],
                     "purchase_total_security": aggregation_dict[
                         "purchase_total_security"
                     ],

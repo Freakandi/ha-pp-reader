@@ -246,8 +246,7 @@ function resolveAverageCost(
       : null;
 
   const native = pickFirstFinite(
-    aggregation ? toNullableNumber(aggregation.average_purchase_price_native) : null,
-    toNullableNumber(record['average_purchase_price_native']),
+    aggregation ? toNullableNumber(aggregation.avg_price_security) : null,
     toNullableNumber(record['avg_price_security']),
     deriveAverage(purchaseTotalSecurity, holdings),
   );

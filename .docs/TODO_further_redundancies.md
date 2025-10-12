@@ -187,15 +187,15 @@
       - Ziel/Ergebnis: Übersichtscode ist aufgeräumt und legt Fokus auf strukturierte Daten.
 
 15. Backend/Frontend: `average_purchase_price_native` Feld entfernen
-   a) [ ] Entferne das Feld aus Websocket- und Snapshot-Serialisern nach Migration aller Frontend-Verbraucher.\
+   a) [x] Entferne das Feld aus Websocket- und Snapshot-Serialisern nach Migration aller Frontend-Verbraucher.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`, `custom_components/pp_reader/data/event_push.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Payload-Zusammenstellung für Portfolio-/Snapshot-Daten\
       - Ziel/Ergebnis: Feld wird nicht länger ausgeliefert.
-   b) [ ] Passe Datenmodelle und UI-Nutzung auf `average_cost.native` an.\
+   b) [x] Passe Datenmodelle und UI-Nutzung auf `average_cost.native` an.\
       - Dateipfad(e): `src/data/api.ts`, `src/tabs/types.ts`, `src/data/updateConfigsWS.ts`, `src/tabs/overview.ts`, `src/tabs/security_detail.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Interface-Definitionen, Renderer\
       - Ziel/Ergebnis: UI greift auf die strukturierte Average-Cost-Struktur zurück.
-   c) [ ] Aktualisiere Tests/Fixtures, die das Feld referenzieren.\
+   c) [x] Aktualisiere Tests/Fixtures, die das Feld referenzieren.\
       - Dateipfad(e): `tests/test_ws_portfolio_positions.py`, `tests/test_ws_security_history.py`, `tests/frontend/*`, `src/tabs/__tests__/*`\
       - Betroffene Funktion(en)/Abschnitt(e): Assertions/Fixture-Daten\
       - Ziel/Ergebnis: Keine Referenzen auf das entfernte Feld bleiben bestehen.

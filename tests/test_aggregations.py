@@ -57,7 +57,8 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
     assert result.purchase_total_security == pytest.approx(320.58)
     assert result.account_currency_total == pytest.approx(252.34)
     assert result.purchase_total_account == pytest.approx(252.34)
-    assert result.average_purchase_price_native == pytest.approx(24.004629)
+    selection = select_average_cost(result)
+    assert selection.native == pytest.approx(24.004629)
     assert result.avg_price_security is None
     assert result.avg_price_account == pytest.approx(39.197531)
 
@@ -95,7 +96,8 @@ def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> No
     assert result.purchase_value_eur == pytest.approx(0.0)
     assert result.security_currency_total == pytest.approx(0.0)
     assert result.account_currency_total == pytest.approx(0.0)
-    assert result.average_purchase_price_native is None
+    selection = select_average_cost(result)
+    assert selection.native is None
     assert result.avg_price_security is None
     assert result.avg_price_account is None
 
@@ -136,7 +138,7 @@ def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
     aggregation = compute_holdings_aggregation(rows)
     selection = select_average_cost(aggregation, holdings=8.0)
 
-    assert selection.native == pytest.approx(aggregation.average_purchase_price_native)
+    assert selection.native == pytest.approx(24.004629)
     assert selection.account == pytest.approx(aggregation.avg_price_account)
     assert selection.security == pytest.approx(40.0725)
     assert selection.eur == pytest.approx(4.375)

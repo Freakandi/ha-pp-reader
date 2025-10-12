@@ -148,7 +148,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "last_price_eur": None,
             "market_value_eur": None,
             "purchase_value_eur": 0.0,
-            "average_purchase_price_native": None,
             "purchase_total_security": 0.0,
             "purchase_total_account": 0.0,
             "avg_price_security": None,
@@ -187,11 +186,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["purchase_value_eur"] = (
         round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
     )
-    data["average_purchase_price_native"] = round_price(
-        snapshot.get("average_purchase_price_native"),
-        decimals=6,
-    )
-
     purchase_total_security = round_currency(
         snapshot.get("purchase_total_security"),
     )
@@ -294,6 +288,7 @@ def _normalize_portfolio_positions(
                 and "purchase_total_account" not in aggregation_payload
             ):
                 aggregation_payload["purchase_total_account"] = account_total
+            aggregation_payload.pop("average_purchase_price_native", None)
 
         raw_average_cost = item.get("average_cost")
         average_cost: dict[str, Any] | None = None
@@ -340,13 +335,6 @@ def _normalize_portfolio_positions(
             default=item.get("current_holdings"),
         )
 
-        avg_price_native = round_price(
-            _resolve_aggregation_value(
-                "average_purchase_price_native",
-                default=item.get("average_purchase_price_native"),
-            ),
-            decimals=6,
-        )
         avg_price_security = round_price(
             _resolve_aggregation_value(
                 "avg_price_security",
@@ -422,7 +410,6 @@ def _normalize_portfolio_positions(
                 ),
                 "gain_abs": gain_abs_value,
                 "gain_pct": gain_pct_value,
-                "average_purchase_price_native": avg_price_native,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
                 "avg_price_security": avg_price_security,

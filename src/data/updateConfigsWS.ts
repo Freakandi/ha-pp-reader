@@ -29,7 +29,6 @@ interface PortfolioPositionData {
   current_value?: number | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
-  average_purchase_price_native?: number | null;
   purchase_total_security?: number | null;
   purchase_total_account?: number | null;
   avg_price_security?: number | null;
@@ -157,7 +156,6 @@ function normalizePosition(position: PortfolioPositionData): PortfolioPositionDa
     purchase_value: aggregation.purchase_value_eur,
     purchase_total_security: aggregation.purchase_total_security,
     purchase_total_account: aggregation.purchase_total_account,
-    average_purchase_price_native: averageCost?.native ?? null,
     avg_price_security: averageCost?.security ?? null,
     avg_price_account: averageCost?.account ?? null,
     average_cost: averageCost,

@@ -366,43 +366,61 @@ def test_get_portfolio_positions_populates_aggregation_fields(
 
     expected_by_portfolio = {
         "p-usd-a": {
-            "total_holdings": pytest.approx(1.5),
-            "positive_holdings": pytest.approx(1.5),
-            "purchase_value_cents": 12_345,
-            "purchase_value_eur": pytest.approx(cent_to_eur(12_345)),
-            "security_currency_total": pytest.approx(round_currency(180.185184)),
-            "purchase_total_security": pytest.approx(round_currency(180.185184)),
-            "account_currency_total": pytest.approx(round_currency(173.981481)),
-            "purchase_total_account": pytest.approx(round_currency(173.981481)),
-            "average_purchase_price_native": pytest.approx(150.25, rel=0, abs=1e-6),
-            "avg_price_security": pytest.approx(120.123456, rel=0, abs=1e-6),
-            "avg_price_account": pytest.approx(115.987654, rel=0, abs=1e-6),
+            "aggregation": {
+                "total_holdings": pytest.approx(1.5),
+                "positive_holdings": pytest.approx(1.5),
+                "purchase_value_cents": 12_345,
+                "purchase_value_eur": pytest.approx(cent_to_eur(12_345)),
+                "security_currency_total": pytest.approx(round_currency(180.185184)),
+                "purchase_total_security": pytest.approx(round_currency(180.185184)),
+                "account_currency_total": pytest.approx(round_currency(173.981481)),
+                "purchase_total_account": pytest.approx(round_currency(173.981481)),
+                "avg_price_security": pytest.approx(120.123456, rel=0, abs=1e-6),
+                "avg_price_account": pytest.approx(115.987654, rel=0, abs=1e-6),
+            },
+            "average_cost": {
+                "native": pytest.approx(150.25, rel=0, abs=1e-6),
+                "security": pytest.approx(120.123456, rel=0, abs=1e-6),
+                "account": pytest.approx(115.987654, rel=0, abs=1e-6),
+            },
         },
         "p-usd-b": {
-            "total_holdings": pytest.approx(2.25),
-            "positive_holdings": pytest.approx(2.25),
-            "purchase_value_cents": 67_890,
-            "purchase_value_eur": pytest.approx(cent_to_eur(67_890)),
-            "security_currency_total": pytest.approx(round_currency(294.9727225)),
-            "purchase_total_security": pytest.approx(round_currency(294.9727225)),
-            "account_currency_total": pytest.approx(round_currency(272.527776)),
-            "purchase_total_account": pytest.approx(round_currency(272.527776)),
-            "average_purchase_price_native": pytest.approx(199.75, rel=0, abs=1e-6),
-            "avg_price_security": pytest.approx(130.654321, rel=0, abs=1e-6),
-            "avg_price_account": pytest.approx(121.123456, rel=0, abs=1e-6),
+            "aggregation": {
+                "total_holdings": pytest.approx(2.25),
+                "positive_holdings": pytest.approx(2.25),
+                "purchase_value_cents": 67_890,
+                "purchase_value_eur": pytest.approx(cent_to_eur(67_890)),
+                "security_currency_total": pytest.approx(round_currency(294.9727225)),
+                "purchase_total_security": pytest.approx(round_currency(294.9727225)),
+                "account_currency_total": pytest.approx(round_currency(272.527776)),
+                "purchase_total_account": pytest.approx(round_currency(272.527776)),
+                "avg_price_security": pytest.approx(130.654321, rel=0, abs=1e-6),
+                "avg_price_account": pytest.approx(121.123456, rel=0, abs=1e-6),
+            },
+            "average_cost": {
+                "native": pytest.approx(199.75, rel=0, abs=1e-6),
+                "security": pytest.approx(130.654321, rel=0, abs=1e-6),
+                "account": pytest.approx(121.123456, rel=0, abs=1e-6),
+            },
         },
         "p-eur": {
-            "total_holdings": pytest.approx(2.5),
-            "positive_holdings": pytest.approx(2.5),
-            "purchase_value_cents": 0,
-            "purchase_value_eur": pytest.approx(cent_to_eur(0)),
-            "security_currency_total": pytest.approx(round_currency(0.0)),
-            "purchase_total_security": pytest.approx(round_currency(0.0)),
-            "account_currency_total": pytest.approx(round_currency(0.0)),
-            "purchase_total_account": pytest.approx(round_currency(0.0)),
-            "average_purchase_price_native": None,
-            "avg_price_security": None,
-            "avg_price_account": None,
+            "aggregation": {
+                "total_holdings": pytest.approx(2.5),
+                "positive_holdings": pytest.approx(2.5),
+                "purchase_value_cents": 0,
+                "purchase_value_eur": pytest.approx(cent_to_eur(0)),
+                "security_currency_total": pytest.approx(round_currency(0.0)),
+                "purchase_total_security": pytest.approx(round_currency(0.0)),
+                "account_currency_total": pytest.approx(round_currency(0.0)),
+                "purchase_total_account": pytest.approx(round_currency(0.0)),
+                "avg_price_security": None,
+                "avg_price_account": None,
+            },
+            "average_cost": {
+                "native": None,
+                "security": None,
+                "account": None,
+            },
         },
     }
 
@@ -417,31 +435,30 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         aggregation = position.get("aggregation")
         assert aggregation is not None
 
-        for key, expected_value in expected.items():
+        expected_aggregation = expected["aggregation"]
+        for key, expected_value in expected_aggregation.items():
             if expected_value is None:
                 assert aggregation[key] is None
             else:
                 assert aggregation[key] == expected_value
 
         # Integer cent totals should remain available to guard against double rounding.
-        assert aggregation["purchase_value_cents"] == expected["purchase_value_cents"]
+        assert aggregation["purchase_value_cents"] == expected_aggregation["purchase_value_cents"]
 
         # Existing payload mirrors aggregation outcomes to ensure no duplicate math paths.
-        assert position["current_holdings"] == expected["total_holdings"]
-        assert position["purchase_value"] == expected["purchase_value_eur"]
-        assert position["purchase_total_security"] == expected["purchase_total_security"]
-        assert position["purchase_total_account"] == expected["purchase_total_account"]
-
-        if expected["average_purchase_price_native"] is None:
-            assert position["average_purchase_price_native"] is None
-        else:
-            assert (
-                position["average_purchase_price_native"]
-                == expected["average_purchase_price_native"]
-            )
+        assert position["current_holdings"] == expected_aggregation["total_holdings"]
+        assert position["purchase_value"] == expected_aggregation["purchase_value_eur"]
+        assert (
+            position["purchase_total_security"]
+            == expected_aggregation["purchase_total_security"]
+        )
+        assert (
+            position["purchase_total_account"]
+            == expected_aggregation["purchase_total_account"]
+        )
 
         for average_key in ("avg_price_security", "avg_price_account"):
-            expected_average = expected[average_key]
+            expected_average = expected_aggregation[average_key]
             if expected_average is None:
                 assert position[average_key] is None
             else:
@@ -486,19 +503,11 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         assert performance["coverage_ratio"] == pytest.approx(1.0)
         assert performance["source"] == "calculated"
 
-        if position["average_purchase_price_native"] is None:
-            assert average_cost["native"] is None
-        else:
-            assert (
-                average_cost["native"]
-                == position["average_purchase_price_native"]
-            )
+        expected_average_cost = expected["average_cost"]
+        assert average_cost["native"] == expected_average_cost["native"]
 
         for field in ("security", "account"):
-            if position[f"avg_price_{field}"] is None:
-                assert average_cost[field] is None
-            else:
-                assert average_cost[field] == position[f"avg_price_{field}"]
+            assert average_cost[field] == expected_average_cost[field]
 
         holdings = position["current_holdings"]
         purchase_value = position["purchase_value"]
@@ -617,11 +626,6 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
     assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
     assert snapshot["purchase_value_eur"] == pytest.approx(802.35, rel=0, abs=1e-2)
-    assert snapshot["average_purchase_price_native"] == pytest.approx(
-        179.95,
-        rel=0,
-        abs=1e-6,
-    )
     assert snapshot["purchase_total_security"] == pytest.approx(
         475.16,
         rel=0,
@@ -643,7 +647,11 @@ def test_get_security_snapshot_multicurrency(
         abs=1e-6,
     )
     average_cost = snapshot["average_cost"]
-    assert average_cost["native"] == snapshot["average_purchase_price_native"]
+    assert average_cost["native"] == pytest.approx(
+        179.95,
+        rel=0,
+        abs=1e-6,
+    )
     assert average_cost["security"] == snapshot["avg_price_security"]
     assert average_cost["account"] == snapshot["avg_price_account"]
     assert average_cost["eur"] == pytest.approx(
@@ -703,11 +711,6 @@ def test_get_security_snapshot_handles_null_purchase_value(
     snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
 
     assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
-    assert snapshot["average_purchase_price_native"] == pytest.approx(
-        179.95,
-        rel=0,
-        abs=1e-6,
-    )
     assert snapshot["purchase_total_security"] == pytest.approx(
         475.16,
         rel=0,
@@ -729,7 +732,11 @@ def test_get_security_snapshot_handles_null_purchase_value(
         abs=1e-6,
     )
     average_cost = snapshot["average_cost"]
-    assert average_cost["native"] == snapshot["average_purchase_price_native"]
+    assert average_cost["native"] == pytest.approx(
+        179.95,
+        rel=0,
+        abs=1e-6,
+    )
     assert average_cost["security"] == snapshot["avg_price_security"]
     assert average_cost["account"] == snapshot["avg_price_account"]
     assert average_cost["eur"] == pytest.approx(0.0, rel=0, abs=1e-6)
@@ -801,7 +808,6 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     assert snapshot["total_holdings"] == pytest.approx(0.0, rel=0, abs=1e-6)
     assert snapshot["market_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
     assert snapshot["purchase_value_eur"] == pytest.approx(123.45, rel=0, abs=1e-4)
-    assert snapshot["average_purchase_price_native"] is None
     assert snapshot["purchase_total_security"] == pytest.approx(
         475.16,
         rel=0,
