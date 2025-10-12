@@ -845,14 +845,22 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
   if (!positions || !positions.length) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
-  const rows = positions.map(position => ({
-    name: position.name,
-    current_holdings: position.current_holdings,
-    purchase_value: position.purchase_value,
-    current_value: position.current_value,
-    gain_abs: position.gain_abs,
-    gain_pct: position.gain_pct,
-  }));
+  const rows = positions.map(position => {
+    const performance = normalizePerformanceMetrics(position);
+    const gainAbs =
+      typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct =
+      typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+
+    return {
+      name: position.name,
+      current_holdings: position.current_holdings,
+      purchase_value: position.purchase_value,
+      current_value: position.current_value,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
+    };
+  });
 
   // Basis HTML
   const raw = makeTable(
@@ -913,13 +921,12 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
             return;
           }
           const position = positions[idx];
-          const performance = position?.performance ?? null;
+          const performance = normalizePerformanceMetrics(position);
           const gainPctValue =
-            typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
+            typeof performance?.gain_pct === 'number' &&
+            Number.isFinite(performance.gain_pct)
               ? performance.gain_pct
-              : typeof position?.gain_pct === 'number' && Number.isFinite(position.gain_pct)
-                ? position.gain_pct
-                : null;
+              : null;
           const pctLabel =
             gainPctValue != null
               ? `${gainPctValue.toLocaleString('de-DE', {

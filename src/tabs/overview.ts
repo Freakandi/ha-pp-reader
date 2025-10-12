@@ -450,24 +450,29 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
     { key: 'gain_abs', label: '+/-', align: 'right' as const },
     { key: 'gain_pct', label: '%', align: 'right' as const }
   ];
-  const rows = normalizedPositions.map(p => ({
-    name: typeof p.name === 'string' ? p.name : p.name != null ? String(p.name) : '',
-    current_holdings: typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
-      ? p.current_holdings
-      : null,
-    purchase_value: typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
-      ? p.purchase_value
-      : null,
-    current_value: typeof p.current_value === 'number' || typeof p.current_value === 'string'
-      ? p.current_value
-      : null,
-    gain_abs: typeof p.gain_abs === 'number' || typeof p.gain_abs === 'string'
-      ? p.gain_abs
-      : null,
-    gain_pct: typeof p.gain_pct === 'number' || typeof p.gain_pct === 'string'
-      ? p.gain_pct
-      : null,
-  }));
+  const rows = normalizedPositions.map(p => {
+    const performance = normalizePerformancePayload((p as Record<string, unknown>)['performance']);
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+
+    return {
+      name: typeof p.name === 'string' ? p.name : p.name != null ? String(p.name) : '',
+      current_holdings:
+        typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
+          ? p.current_holdings
+          : null,
+      purchase_value:
+        typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
+          ? p.purchase_value
+          : null,
+      current_value:
+        typeof p.current_value === 'number' || typeof p.current_value === 'string'
+          ? p.current_value
+          : null,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
+    };
+  });
 
   // Basis-HTML über makeTable erzeugen
   const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'gain_abs']);
@@ -514,12 +519,11 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
         }
         const gainCell = tr.cells?.[4] ?? null;
         if (gainCell) {
+          const performance = normalizePerformancePayload((pos as Record<string, unknown>)['performance']);
           const gainPctValue =
-            typeof pos.performance?.gain_pct === 'number' && Number.isFinite(pos.performance.gain_pct)
-              ? pos.performance.gain_pct
-              : typeof pos.gain_pct === 'number' && Number.isFinite(pos.gain_pct)
-                ? pos.gain_pct
-                : null;
+            typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
+              ? performance.gain_pct
+              : null;
           const pctLabel =
             gainPctValue != null
               ? `${gainPctValue.toLocaleString('de-DE', {
