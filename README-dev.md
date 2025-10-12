@@ -65,6 +65,27 @@ python -m script.hassfest  # optional
 
 More background on the available fixtures and test structure is available in [TESTING.md](TESTING.md).
 
+## Linting toolchain
+
+### Python (Ruff)
+- Configuration lives in [`.ruff.toml`](.ruff.toml) and mirrors the Home Assistant core profile (`select = ["ALL"]`). Expect Ruff to report findings across both runtime code and the test suite until those areas have been brought up to standard.
+- Run `./scripts/lint` for the canonical formatter + linter combo or call `ruff format .` / `ruff check .` directly inside the virtual environment.
+
+### TypeScript (ESLint)
+- Rules are defined in [`eslint.config.js`](eslint.config.js) using the flat-config API. The project extends `eslint:recommended` and `plugin:@typescript-eslint/recommended` while adding local overrides for consistent type-only imports and unused variable handling.
+- Install Node dependencies with `npm install`, then execute `npm run lint:ts` to lint all dashboard sources under `src/`.
+- Jest-style dashboard tests under `src/**/__tests__/` are configured to allow un-awaited promise helpers so snapshot utilities continue to work without excessive boilerplate.
+
+### Development environment settings
+- **VSCode**
+  1. Accept the recommended extensions when prompted (`charliermarsh.ruff` and `dbaeumer.vscode-eslint`).
+  2. Ensure the interpreter selector (`Ctrl`+`Shift`+`P` → “Python: Select Interpreter”) points at `${workspaceFolder}/.venv/bin/python`.
+  3. Keep `eslint.experimental.useFlatConfig` enabled and verify TypeScript files use ESLint as the default formatter. These workspace settings live in [`.vscode/settings.json`](.vscode/settings.json); adjust them via “Preferences: Open Workspace Settings (JSON)” if you prefer manual edits.
+- **Codex environment / devcontainer**
+  - The devcontainer bootstrap (`.devcontainer.json`) now runs `scripts/setup_VSC`, installs `requirements-dev.txt`, and executes `npm install` so both Ruff and ESLint have their dependencies immediately after `Dev Containers: Rebuild and Reopen in Container`.
+  - If you are using the Codex execution environment outside of VSCode, run the same commands manually: `./scripts/setup_container`, `pip install -r requirements-dev.txt`, and `npm install`.
+  - Both environments share the same workspace settings, so no additional Codex-specific toggles are required beyond using the `.venv` interpreter and keeping the Node dependencies up to date.
+
 ## Coding standards
 - Ruff is the canonical formatter and linter for Python; do not mix alternative formatters.
 - TypeScript code must pass the ESLint configuration and strict type checking via `npm run typecheck`.

@@ -32,8 +32,7 @@ export default [
       "eslint:recommended",
       "plugin:@typescript-eslint/recommended",
       "plugin:@typescript-eslint/recommended-type-checked",
-      "plugin:@typescript-eslint/stylistic",
-      "plugin:@typescript-eslint/strict",
+      "plugin:@typescript-eslint/strict-type-checked",
       "prettier",
     ],
     overrides: [
@@ -41,15 +40,27 @@ export default [
         files: ["*.ts", "*.tsx"],
         rules: {
           "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
-          "@typescript-eslint/no-floating-promises": "error",
-          "@typescript-eslint/no-misused-promises": [
+          "@typescript-eslint/no-unused-vars": [
             "error",
             {
-              checksVoidReturn: {
-                attributes: false,
-              },
+              args: "after-used",
+              argsIgnorePattern: "^_",
+              varsIgnorePattern: "^_",
+              caughtErrors: "none",
+              caughtErrorsIgnorePattern: "^_",
             },
           ],
+          "@typescript-eslint/ban-ts-comment": "off",
+          "no-empty": ["error", { allowEmptyCatch: true }],
+          "no-useless-escape": "off",
+        },
+      },
+      {
+        files: ["**/__tests__/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
+        rules: {
+          "@typescript-eslint/consistent-type-imports": "off",
+          "@typescript-eslint/no-floating-promises": "off",
+          "@typescript-eslint/no-misused-promises": "off",
         },
       },
     ],

@@ -4,7 +4,7 @@
     "mounts": [
         "source=${localWorkspaceFolder}/config,target=/config,type=bind,consistency=cached"
     ],
-    "postCreateCommand": "scripts/setup_VSC && python3 -m pip install --requirement requirements-dev.txt",
+    "postCreateCommand": "scripts/setup_VSC && python3 -m pip install --requirement requirements-dev.txt && npm install",
     "forwardPorts": [
         8123
     ],
@@ -18,6 +18,7 @@
         "vscode": {
             "extensions": [
                 "charliermarsh.ruff",
+                "dbaeumer.vscode-eslint",
                 "github.vscode-pull-request-github",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
