@@ -119,11 +119,11 @@
       - Ziel/Ergebnis: Tests validieren, dass die strukturierten Blöcke vorhanden sind.
 
 9. Frontend: `deriveAggregation` Fallback entfernen
-   a) [ ] Entferne alle Fallback-Rechnungen in `deriveAggregation` und vertraue ausschließlich auf `position.aggregation`.\
+   a) [x] Entferne alle Fallback-Rechnungen in `deriveAggregation` und vertraue ausschließlich auf `position.aggregation`.\
       - Dateipfad(e): `src/data/updateConfigsWS.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): `deriveAggregation`\
       - Ziel/Ergebnis: Keine lokalen Kaufwert-/Holdings-Neuberechnungen mehr.
-   b) [ ] Aktualisiere Frontend-Tests und Fixtures auf Aggregationsdaten aus dem Backend.\
+   b) [x] Aktualisiere Frontend-Tests und Fixtures auf Aggregationsdaten aus dem Backend.\
       - Dateipfad(e): `tests/frontend/test_dashboard_smoke.py`, `tests/frontend/dashboard_smoke.mjs`, `src/tabs/__tests__/overview.render.test.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Aggregationsfelder\
       - Ziel/Ergebnis: Tests verwenden die durchgeleiteten Strukturen.
