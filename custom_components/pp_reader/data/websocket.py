@@ -19,7 +19,11 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    round_currency,
+    round_price,
+)
 
 from .db_access import (
     fetch_live_portfolios,  # NEU: On-Demand Aggregation
@@ -133,34 +137,6 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-def _coerce_float(value: Any, *, default: float = 0.0) -> float:
-    """Return ``value`` as float with a graceful fallback."""
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if value is None:
-        return default
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _coerce_optional_float(value: Any) -> float | None:
-    """Return ``value`` as float or ``None`` when conversion fails."""
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if value is None:
-        return None
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
     """Normalise snapshot payload for websocket transmission."""
     if not snapshot:
@@ -198,38 +174,45 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         currency = "EUR"
     data["currency_code"] = currency
 
-    data["total_holdings"] = _coerce_float(snapshot.get("total_holdings"))
-    data["last_price_native"] = _coerce_optional_float(
-        snapshot.get("last_price_native")
+    data["total_holdings"] = (
+        round_currency(snapshot.get("total_holdings"), decimals=6, default=0.0) or 0.0
     )
-    data["last_price_eur"] = _coerce_optional_float(snapshot.get("last_price_eur"))
-    data["market_value_eur"] = _coerce_optional_float(
-        snapshot.get("market_value_eur")
+    data["last_price_native"] = round_price(
+        snapshot.get("last_price_native"), decimals=6
     )
-    data["purchase_value_eur"] = _coerce_float(snapshot.get("purchase_value_eur"))
-    data["average_purchase_price_native"] = _coerce_optional_float(
-        snapshot.get("average_purchase_price_native")
+    data["last_price_eur"] = round_price(
+        snapshot.get("last_price_eur"), decimals=6
+    )
+    data["market_value_eur"] = round_currency(snapshot.get("market_value_eur"))
+    data["purchase_value_eur"] = (
+        round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
+    )
+    data["average_purchase_price_native"] = round_price(
+        snapshot.get("average_purchase_price_native"),
+        decimals=6,
     )
 
-    purchase_total_security = _coerce_optional_float(
-        snapshot.get("purchase_total_security")
+    purchase_total_security = round_currency(
+        snapshot.get("purchase_total_security"),
     )
     data["purchase_total_security"] = (
         purchase_total_security if purchase_total_security is not None else 0.0
     )
 
-    purchase_total_account = _coerce_optional_float(
+    purchase_total_account = round_currency(
         snapshot.get("purchase_total_account")
     )
     data["purchase_total_account"] = (
         purchase_total_account if purchase_total_account is not None else 0.0
     )
 
-    data["avg_price_security"] = _coerce_optional_float(
-        snapshot.get("avg_price_security")
+    data["avg_price_security"] = round_price(
+        snapshot.get("avg_price_security"),
+        decimals=6,
     )
-    data["avg_price_account"] = _coerce_optional_float(
-        snapshot.get("avg_price_account")
+    data["avg_price_account"] = round_price(
+        snapshot.get("avg_price_account"),
+        decimals=6,
     )
 
     raw_average_cost = snapshot.get("average_cost")
@@ -237,17 +220,21 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         data["average_cost"] = dict(raw_average_cost)
     else:
         data["average_cost"] = None
-    data["last_close_native"] = _coerce_optional_float(
-        snapshot.get("last_close_native")
+    data["last_close_native"] = round_price(
+        snapshot.get("last_close_native"),
+        decimals=6,
     )
-    data["last_close_eur"] = _coerce_optional_float(snapshot.get("last_close_eur"))
-    data["day_price_change_native"] = _coerce_optional_float(
+    data["last_close_eur"] = round_price(
+        snapshot.get("last_close_eur"),
+        decimals=6,
+    )
+    data["day_price_change_native"] = round_currency(
         snapshot.get("day_price_change_native")
     )
-    data["day_price_change_eur"] = _coerce_optional_float(
+    data["day_price_change_eur"] = round_currency(
         snapshot.get("day_price_change_eur")
     )
-    data["day_change_pct"] = _coerce_optional_float(snapshot.get("day_change_pct"))
+    data["day_change_pct"] = round_currency(snapshot.get("day_change_pct"))
 
     raw_performance = snapshot.get("performance")
     if isinstance(raw_performance, Mapping):
@@ -262,8 +249,8 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     last_price_raw = snapshot.get("last_price")
     if isinstance(last_price_raw, Mapping):
         data["last_price"] = {
-            "native": _coerce_optional_float(last_price_raw.get("native")),
-            "eur": _coerce_optional_float(last_price_raw.get("eur")),
+            "native": round_price(last_price_raw.get("native"), decimals=6),
+            "eur": round_price(last_price_raw.get("eur"), decimals=6),
         }
 
     return data
@@ -286,19 +273,26 @@ def _normalize_portfolio_positions(
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _coerce_optional_float(
-            item.get("average_purchase_price_native")
+        avg_price_native = round_price(
+            item.get("average_purchase_price_native"),
+            decimals=6,
         )
-        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
-        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
+        avg_price_security = round_price(
+            item.get("avg_price_security"),
+            decimals=6,
+        )
+        avg_price_account = round_price(
+            item.get("avg_price_account"),
+            decimals=6,
+        )
 
-        purchase_total_security = _coerce_optional_float(
+        purchase_total_security = round_currency(
             item.get("purchase_total_security")
         )
         if purchase_total_security is None:
             purchase_total_security = 0.0
 
-        purchase_total_account = _coerce_optional_float(
+        purchase_total_account = round_currency(
             item.get("purchase_total_account")
         )
         if purchase_total_account is None:
