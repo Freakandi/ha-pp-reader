@@ -77,15 +77,15 @@
       - Ziel/Ergebnis: Tests spiegeln die Utility-basierte Rundung.
 
 6. Backend: `_normalize_position_entry` auf Aggregations-/Performance-Helfer umbauen
-   a) [ ] Verwende `compute_holdings_aggregation`, `select_average_cost` und `select_performance_metrics` statt Eigenberechnungen.\
+   a) [x] Verwende `compute_holdings_aggregation`, `select_average_cost` und `select_performance_metrics` statt Eigenberechnungen.\
       - Dateipfad(e): `custom_components/pp_reader/data/event_push.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_position_entry`\
       - Ziel/Ergebnis: Event-Payloads nutzen zentral erzeugte Aggregationsobjekte.
-   b) [ ] Entferne Duplikatberechnungen (Summen, Durchschnittspreise, Performance) nach der Migration.\
+   b) [x] Entferne Duplikatberechnungen (Summen, Durchschnittspreise, Performance) nach der Migration.\
       - Dateipfad(e): `custom_components/pp_reader/data/event_push.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Manuelle Aggregations-/Performance-Logik\
       - Ziel/Ergebnis: Kein paralleler Rechenpfad mehr neben den Shared-Helpern.
-   c) [ ] Aktualisiere Tests und Fixtures, damit sie die strukturierten Aggregations- und Performanceblöcke erwarten.\
+   c) [x] Aktualisiere Tests und Fixtures, damit sie die strukturierten Aggregations- und Performanceblöcke erwarten.\
       - Dateipfad(e): `tests/test_event_push.py`, `tests/panel_event_payload.yaml`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Event-Payloads\
       - Ziel/Ergebnis: Tests prüfen auf die neuen Datenstrukturen.
