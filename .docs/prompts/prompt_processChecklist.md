@@ -5,9 +5,11 @@ PROMPT:
 Arbeite als Implementierungs-Assistent für das Home Assistant Integration Projekt `pp_reader`.
 
 Ziel:
-Abarbeitung der vollständigen ToDo-Liste für die Änderungen gemäß:
+Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
 - .docs/redundancy_cleanup_plan.md
 - .docs/TODO_redundancy_cleanup_plan.md
+- .docs/linting_sweep_plan.md
+- .docs/TODO_linting_sweep_plan.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
