@@ -3,6 +3,41 @@ from __future__ import annotations
 from custom_components.pp_reader.data.event_push import _compact_event_data
 
 
+def test_compact_portfolio_values_converts_cent_amounts() -> None:
+    raw = [
+        {
+            "uuid": "portfolio-1",
+            "current_value": 12345,
+            "purchase_sum": 23456,
+            "performance": {
+                "gain_abs": 345.67,
+                "gain_pct": 8.9,
+            },
+        },
+        {
+            "uuid": "portfolio-2",
+            "current_value": True,
+            "purchase_sum": None,
+        },
+    ]
+
+    compacted = _compact_event_data("portfolio_values", raw)
+    assert isinstance(compacted, list)
+    assert len(compacted) == 2
+
+    first = compacted[0]
+    assert first["uuid"] == "portfolio-1"
+    assert first["current_value"] == 123.45
+    assert first["purchase_sum"] == 234.56
+    assert first["gain_abs"] == 345.67
+    assert first["gain_pct"] == 8.9
+
+    second = compacted[1]
+    assert second["uuid"] == "portfolio-2"
+    assert second["current_value"] == 0.0
+    assert second["purchase_sum"] == 0.0
+
+
 def test_compact_portfolio_positions_sequence() -> None:
     raw = [
         {
@@ -13,7 +48,7 @@ def test_compact_portfolio_positions_sequence() -> None:
                     "name": "Security A",
                     "current_holdings": 2,
                     "purchase_value_eur": 123.45,
-                    "current_value": 456.78,
+                    "current_value": 45678,
                     "performance": {
                         "gain_abs": 333.33,
                         "gain_pct": 4.5,
