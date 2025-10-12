@@ -63,15 +63,15 @@
       - Ziel/Ergebnis: Tests referenzieren `round_currency` Ergebnisse statt `round`.
 
 5. Backend: `_normalize_currency_amount` durch Utility-Aufrufe ersetzen
-   a) [ ] Ersetze den Funktionsinhalt von `_normalize_currency_amount` durch direkte Aufrufe der Currency-Utilities.\
+   a) [x] Ersetze den Funktionsinhalt von `_normalize_currency_amount` durch direkte Aufrufe der Currency-Utilities.\
       - Dateipfad(e): `custom_components/pp_reader/data/event_push.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_currency_amount`\
       - Ziel/Ergebnis: Helfer dient nur noch als dünne Fassade zu `cent_to_eur`/`round_currency`.
-   b) [ ] Migriere alle Aufrufer auf direkte Utility-Nutzung und lösche `_normalize_currency_amount`.\
+   b) [x] Migriere alle Aufrufer auf direkte Utility-Nutzung und lösche `_normalize_currency_amount`.\
       - Dateipfad(e): `custom_components/pp_reader/data/event_push.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Aufrufer in den Event-Push-Helfern\
       - Ziel/Ergebnis: Redundante Wrapper entfallen vollständig.
-   c) [ ] Aktualisiere Event-Push-Tests für die neue Utility-Verwendung.\
+   c) [x] Aktualisiere Event-Push-Tests für die neue Utility-Verwendung.\
       - Dateipfad(e): `tests/test_event_push.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Betragsfelder\
       - Ziel/Ergebnis: Tests spiegeln die Utility-basierte Rundung.
