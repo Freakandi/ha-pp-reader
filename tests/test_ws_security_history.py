@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from custom_components.pp_reader.util.currency import round_currency, round_price
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -344,8 +346,16 @@ def test_ws_get_security_history_returns_filtered_prices(
     assert payload["start_date"] == 20240102
     assert payload["end_date"] == 20240103
     assert payload["prices"] == [
-        {"date": 20240102, "close": 10.5, "close_raw": int(10.5 * 1e8)},
-        {"date": 20240103, "close": 10.75, "close_raw": int(10.75 * 1e8)},
+        {
+            "date": 20240102,
+            "close": round_price(10.5, decimals=6),
+            "close_raw": int(10.5 * 1e8),
+        },
+        {
+            "date": 20240103,
+            "close": round_price(10.75, decimals=6),
+            "close_raw": int(10.75 * 1e8),
+        },
     ]
 
 
@@ -428,9 +438,21 @@ def test_ws_get_security_history_supports_predefined_ranges(
     assert payload.get("start_date") == start_date
     assert payload.get("end_date") == end_date
     assert payload["prices"] == [
-        {"date": 20240101, "close": 10.0, "close_raw": int(10.0 * 1e8)},
-        {"date": 20240102, "close": 10.5, "close_raw": int(10.5 * 1e8)},
-        {"date": 20240103, "close": 10.75, "close_raw": int(10.75 * 1e8)},
+        {
+            "date": 20240101,
+            "close": round_price(10.0, decimals=6),
+            "close_raw": int(10.0 * 1e8),
+        },
+        {
+            "date": 20240102,
+            "close": round_price(10.5, decimals=6),
+            "close_raw": int(10.5 * 1e8),
+        },
+        {
+            "date": 20240103,
+            "close": round_price(10.75, decimals=6),
+            "close_raw": int(10.75 * 1e8),
+        },
     ]
 
 
@@ -455,52 +477,130 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     assert connection.sent and connection.sent[0][0] == 21
     payload = connection.sent[0][1]
     assert payload["security_uuid"] == "sec-1"
-    assert payload["snapshot"] == {
+
+    total_holdings = round_currency(1.5 + 2.0, decimals=6, default=0.0) or 0.0
+    last_price_native = round_price(12.5, decimals=6)
+    last_price_eur = round_price(12.5, decimals=6)
+    market_value_eur = round_currency(total_holdings * (last_price_native or 0.0)) or 0.0
+    purchase_value_eur = round_currency(0.0) or 0.0
+    weighted_avg_native = round_price(
+        ((1.5 * 12.34) + (2.0 * 16.78)) / total_holdings,
+        decimals=6,
+    )
+    purchase_total_security = round_currency(10.8 + 17.6) or 0.0
+    purchase_total_account = round_currency(14.7 + 20.0) or 0.0
+    avg_price_security = round_price(
+        purchase_total_security / total_holdings,
+        decimals=6,
+    )
+    avg_price_account = round_price(
+        purchase_total_account / total_holdings,
+        decimals=6,
+    )
+    average_cost_payload = {
+        "native": weighted_avg_native,
+        "security": avg_price_security,
+        "account": avg_price_account,
+        "eur": round_currency(0.0, decimals=6) or 0.0,
+        "source": "totals",
+        "coverage_ratio": round_currency(1.0) or 0.0,
+    }
+    last_close_native = round_price(10.75, decimals=6)
+    last_close_eur = round_price(10.75, decimals=6)
+    day_price_change_native = round_currency(
+        (last_price_native or 0.0) - (last_close_native or 0.0)
+    )
+    day_price_change_eur = round_currency(
+        (last_price_eur or 0.0) - (last_close_eur or 0.0)
+    )
+    day_change_pct = round_currency(
+        (
+            ((last_price_native or 0.0) - (last_close_native or 0.0))
+            / (last_close_native or 1.0)
+            * 100
+            if last_close_native
+            else 0.0
+        )
+    )
+    gain_abs = round_currency(market_value_eur - purchase_value_eur) or 0.0
+    gain_pct = round_currency(0.0) or 0.0
+
+    expected_snapshot = {
         "name": "Acme Corp",
         "currency_code": "EUR",
-        "total_holdings": 3.5,
-        "last_price_native": 12.5,
-        "last_price_eur": 12.5,
-        "market_value_eur": 43.75,
-        "purchase_value_eur": 0.0,
+        "total_holdings": total_holdings,
+        "last_price_native": last_price_native,
+        "last_price_eur": last_price_eur,
+        "market_value_eur": market_value_eur,
+        "purchase_value_eur": purchase_value_eur,
         "average_purchase_price_native": pytest.approx(
-            14.877143,
+            weighted_avg_native,
             rel=0,
             abs=1e-6,
         ),
-        "purchase_total_security": 28.4,
-        "purchase_total_account": 34.7,
-        "avg_price_security": pytest.approx(8.114286, rel=0, abs=1e-6),
-        "avg_price_account": pytest.approx(9.914286, rel=0, abs=1e-6),
+        "purchase_total_security": purchase_total_security,
+        "purchase_total_account": purchase_total_account,
+        "avg_price_security": pytest.approx(avg_price_security, rel=0, abs=1e-6),
+        "avg_price_account": pytest.approx(avg_price_account, rel=0, abs=1e-6),
         "average_cost": {
-            "native": pytest.approx(14.877143, rel=0, abs=1e-6),
-            "security": pytest.approx(8.114286, rel=0, abs=1e-6),
-            "account": pytest.approx(9.914286, rel=0, abs=1e-6),
-            "eur": pytest.approx(0.0, rel=0, abs=1e-6),
-            "source": "totals",
-            "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+            "native": pytest.approx(weighted_avg_native, rel=0, abs=1e-6),
+            "security": pytest.approx(avg_price_security, rel=0, abs=1e-6),
+            "account": pytest.approx(avg_price_account, rel=0, abs=1e-6),
+            "eur": pytest.approx(average_cost_payload["eur"], rel=0, abs=1e-6),
+            "source": average_cost_payload["source"],
+            "coverage_ratio": pytest.approx(
+                average_cost_payload["coverage_ratio"],
+                rel=0,
+                abs=1e-6,
+            ),
         },
-        "last_close_native": 10.75,
-        "last_close_eur": 10.75,
-        "day_price_change_native": pytest.approx(1.75, rel=0, abs=1e-4),
-        "day_price_change_eur": pytest.approx(1.75, rel=0, abs=1e-4),
-        "day_change_pct": pytest.approx(16.28, rel=0, abs=1e-2),
+        "last_close_native": last_close_native,
+        "last_close_eur": last_close_eur,
+        "day_price_change_native": pytest.approx(
+            day_price_change_native,
+            rel=0,
+            abs=1e-4,
+        ),
+        "day_price_change_eur": pytest.approx(
+            day_price_change_eur,
+            rel=0,
+            abs=1e-4,
+        ),
+        "day_change_pct": pytest.approx(day_change_pct, rel=0, abs=1e-2),
         "performance": {
-            "gain_abs": pytest.approx(43.75, rel=0, abs=1e-2),
-            "gain_pct": pytest.approx(0.0, rel=0, abs=1e-2),
-            "total_change_eur": pytest.approx(43.75, rel=0, abs=1e-2),
-            "total_change_pct": pytest.approx(0.0, rel=0, abs=1e-2),
+            "gain_abs": pytest.approx(gain_abs, rel=0, abs=1e-2),
+            "gain_pct": pytest.approx(gain_pct, rel=0, abs=1e-2),
+            "total_change_eur": pytest.approx(gain_abs, rel=0, abs=1e-2),
+            "total_change_pct": pytest.approx(gain_pct, rel=0, abs=1e-2),
             "source": "calculated",
-            "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+            "coverage_ratio": pytest.approx(
+                average_cost_payload["coverage_ratio"],
+                rel=0,
+                abs=1e-6,
+            ),
             "day_change": {
-                "price_change_native": pytest.approx(1.75, rel=0, abs=1e-4),
-                "price_change_eur": pytest.approx(1.75, rel=0, abs=1e-4),
-                "change_pct": pytest.approx(16.28, rel=0, abs=1e-2),
+                "price_change_native": pytest.approx(
+                    day_price_change_native,
+                    rel=0,
+                    abs=1e-4,
+                ),
+                "price_change_eur": pytest.approx(
+                    day_price_change_eur,
+                    rel=0,
+                    abs=1e-4,
+                ),
+                "change_pct": pytest.approx(day_change_pct, rel=0, abs=1e-2),
                 "source": "native",
-                "coverage_ratio": pytest.approx(1.0, rel=0, abs=1e-6),
+                "coverage_ratio": pytest.approx(
+                    average_cost_payload["coverage_ratio"],
+                    rel=0,
+                    abs=1e-6,
+                ),
             },
         },
     }
+
+    assert payload["snapshot"] == expected_snapshot
     snapshot_payload = payload["snapshot"]
     average_cost = snapshot_payload["average_cost"]
     assert (

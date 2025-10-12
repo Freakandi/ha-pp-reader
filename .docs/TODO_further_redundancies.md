@@ -91,15 +91,15 @@
       - Ziel/Ergebnis: Tests prüfen auf die neuen Datenstrukturen.
 
 7. Backend: `_coerce_float`-Helper durch Utility-Rückgaben ersetzen
-   a) [ ] Entferne alle Verwendungen von `_coerce_float`/`_coerce_optional_float` zugunsten der Currency-Utilities oder präziser Typprüfungen.\
+   a) [x] Entferne alle Verwendungen von `_coerce_float`/`_coerce_optional_float` zugunsten der Currency-Utilities oder präziser Typprüfungen.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Serializer für Snapshot- und Positionsdaten\
       - Ziel/Ergebnis: Doppelter Konvertierungscode entfällt.
-   b) [ ] Lösche die beiden Helper-Funktionen und bereinige Importe.\
+   b) [x] Lösche die beiden Helper-Funktionen und bereinige Importe.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Funktionsdefinitionen `_coerce_float`, `_coerce_optional_float`\
       - Ziel/Ergebnis: Codebasis enthält nur noch zentrale Helfer.
-   c) [ ] Passe Websocket-Testfälle auf das neue Normalisierungsverhalten an.\
+   c) [x] Passe Websocket-Testfälle auf das neue Normalisierungsverhalten an.\
       - Dateipfad(e): `tests/test_ws_portfolio_positions.py`, `tests/test_ws_security_history.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Feldausprägungen\
       - Ziel/Ergebnis: Tests bestätigen unveränderte Payload-Struktur trotz Helper-Entfernung.
