@@ -6,10 +6,8 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/redundancy_cleanup_plan.md
-- .docs/TODO_redundancy_cleanup_plan.md
-- .docs/linting_sweep_plan.md
-- .docs/TODO_linting_sweep_plan.md
+- .docs/further_redundancies.md
+- .docs/TODO_further_redundancies.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
