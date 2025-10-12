@@ -34,6 +34,7 @@ Additional setup variations (Windows, devcontainers) are covered in [TESTING.md 
 - The integration bootstraps state under `hass.data[DOMAIN][entry_id]` and relies on `fetch_live_portfolios` to aggregate data for WebSocket commands and events. Schema changes must keep this helper in sync.
 - Live pricing uses `yahooquery` with a minimum polling interval of 300 seconds. Respect the coordinator locks and logging expectations when adjusting the price service or revaluation logic.
 - The SQLite layer persists portfolio mirrors as well as daily close history for securities. Imports run diff-based updates, and automatic backups create snapshots every six hours; manual backups are exposed through `pp_reader.trigger_backup_debug`.
+- Gains, losses, and day-change deltas are centralised in `custom_components/pp_reader/data/performance.py`. Call `select_performance_metrics` (and its `DayChangeMetrics` helpers) with holdings and totals sourced from `HoldingsAggregation` so WebSocket responses, coordinator events, and sensors stay aligned. Avoid reimplementing rounding or FX fallbacks outside this module.
 - `portfolio_securities` stores EUR-denominated purchase totals (`purchase_value`, `avg_price`) alongside native totals and per-share averages (`avg_price_native`, `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`). Runtime migrations in `data.db_init.initialize_database_schema` add the columns for existing databases and backfill default values, so run `./scripts/develop` once after pulling schema changes to ensure the migration executes locally.
 - Canonical purchase samples (SSR Mining CAD vs. EUR and Harmonic Drive JPY) are documented in `.docs/fix_native_purchase.md`. The dataset mirrors the fixtures used in the FIFO regression tests and is safe to reference when validating new currency scenarios.
 
@@ -79,6 +80,7 @@ More background on the available fixtures and test structure is available in [TE
 - `fetch_live_portfolios` is the single source of truth for portfolio totals; WebSocket responses, price events, and the dashboard footer all consume its output.
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) must handle coordinator fallbacks and return aggregated data sourced from SQLite.
 - Daily close history stored during sync powers the security charts. Migrations or schema changes must ensure historical data and backups remain restorable across upgrades.
+- The shared `performance` payload (with `gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`, and optional day-change metrics) flows unchanged from `select_performance_metrics` through database helpers, WebSocket serializers, event push, and frontend caches. Update all consumers together when evolving the structure.
 
 ## Additional resources
 - [ARCHITECTURE.md](ARCHITECTURE.md) – module responsibilities and data flow diagrams.
