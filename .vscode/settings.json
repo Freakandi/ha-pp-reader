@@ -31,7 +31,7 @@
     "files.trimTrailingWhitespace": true,
     "editor.codeActionsOnSave": {
         "source.fixAll": "never",
-        "source.fixAll.eslint": true,
+        "source.fixAll.eslint": "explicit",
         "source.organizeImports": "explicit"
     },
     "python.analysis.typeCheckingMode": "basic",
