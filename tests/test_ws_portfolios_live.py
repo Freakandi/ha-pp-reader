@@ -10,6 +10,7 @@ pytest.importorskip(
 )
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
 from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
@@ -129,6 +130,14 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
     _, payload = connection.sent[0]
 
     portfolios = {item["uuid"]: item for item in payload["portfolios"]}
+    expected_performance_keys = {
+        "gain_abs",
+        "gain_pct",
+        "total_change_eur",
+        "total_change_pct",
+        "source",
+        "coverage_ratio",
+    }
 
     expected_p1_current = round_currency(
         cent_to_eur(175_000_000, default=0.0),
@@ -141,6 +150,34 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
     assert portfolios["p1"]["current_value"] == expected_p1_current
     assert portfolios["p1"]["purchase_sum"] == expected_p1_purchase
     assert portfolios["p1"]["position_count"] == 1
+    performance_p1, _ = select_performance_metrics(
+        current_value=expected_p1_current,
+        purchase_value=expected_p1_purchase,
+        holdings=1,
+    )
+    assert portfolios["p1"]["gain_abs"] == pytest.approx(performance_p1.gain_abs)
+    assert portfolios["p1"]["gain_pct"] == pytest.approx(performance_p1.gain_pct)
+    performance_payload_p1 = portfolios["p1"].get("performance")
+    assert performance_payload_p1 is not None
+    assert set(performance_payload_p1) == expected_performance_keys
+    assert performance_payload_p1["gain_abs"] == pytest.approx(
+        performance_p1.gain_abs
+    )
+    assert performance_payload_p1["gain_pct"] == pytest.approx(performance_p1.gain_pct)
+    assert performance_payload_p1["total_change_eur"] == pytest.approx(
+        performance_p1.total_change_eur
+    )
+    assert performance_payload_p1["total_change_pct"] == pytest.approx(
+        performance_p1.total_change_pct
+    )
+    assert performance_payload_p1["source"] == performance_p1.source
+    coverage_ratio_p1 = performance_p1.coverage_ratio
+    if coverage_ratio_p1 is None:
+        assert performance_payload_p1["coverage_ratio"] is None
+    else:
+        assert performance_payload_p1["coverage_ratio"] == pytest.approx(
+            coverage_ratio_p1
+        )
 
     expected_p2_current = round_currency(
         cent_to_eur(620_000_000, default=0.0),
@@ -153,7 +190,63 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
     assert portfolios["p2"]["current_value"] == expected_p2_current
     assert portfolios["p2"]["purchase_sum"] == expected_p2_purchase
     assert portfolios["p2"]["position_count"] == 1
+    performance_p2, _ = select_performance_metrics(
+        current_value=expected_p2_current,
+        purchase_value=expected_p2_purchase,
+        holdings=1,
+    )
+    assert portfolios["p2"]["gain_abs"] == pytest.approx(performance_p2.gain_abs)
+    assert portfolios["p2"]["gain_pct"] == pytest.approx(performance_p2.gain_pct)
+    performance_payload_p2 = portfolios["p2"].get("performance")
+    assert performance_payload_p2 is not None
+    assert set(performance_payload_p2) == expected_performance_keys
+    assert performance_payload_p2["gain_abs"] == pytest.approx(
+        performance_p2.gain_abs
+    )
+    assert performance_payload_p2["gain_pct"] == pytest.approx(performance_p2.gain_pct)
+    assert performance_payload_p2["total_change_eur"] == pytest.approx(
+        performance_p2.total_change_eur
+    )
+    assert performance_payload_p2["total_change_pct"] == pytest.approx(
+        performance_p2.total_change_pct
+    )
+    assert performance_payload_p2["source"] == performance_p2.source
+    coverage_ratio_p2 = performance_p2.coverage_ratio
+    if coverage_ratio_p2 is None:
+        assert performance_payload_p2["coverage_ratio"] is None
+    else:
+        assert performance_payload_p2["coverage_ratio"] == pytest.approx(
+            coverage_ratio_p2
+        )
 
     assert portfolios["p3"]["current_value"] == 0.0
     assert portfolios["p3"]["purchase_sum"] == 0.0
     assert portfolios["p3"]["position_count"] == 0
+    performance_p3, _ = select_performance_metrics(
+        current_value=0.0,
+        purchase_value=0.0,
+        holdings=0,
+    )
+    assert portfolios["p3"]["gain_abs"] == pytest.approx(performance_p3.gain_abs)
+    assert portfolios["p3"]["gain_pct"] == pytest.approx(performance_p3.gain_pct)
+    performance_payload_p3 = portfolios["p3"].get("performance")
+    assert performance_payload_p3 is not None
+    assert set(performance_payload_p3) == expected_performance_keys
+    assert performance_payload_p3["gain_abs"] == pytest.approx(
+        performance_p3.gain_abs
+    )
+    assert performance_payload_p3["gain_pct"] == pytest.approx(performance_p3.gain_pct)
+    assert performance_payload_p3["total_change_eur"] == pytest.approx(
+        performance_p3.total_change_eur
+    )
+    assert performance_payload_p3["total_change_pct"] == pytest.approx(
+        performance_p3.total_change_pct
+    )
+    assert performance_payload_p3["source"] == performance_p3.source
+    coverage_ratio_p3 = performance_p3.coverage_ratio
+    if coverage_ratio_p3 is None:
+        assert performance_payload_p3["coverage_ratio"] is None
+    else:
+        assert performance_payload_p3["coverage_ratio"] == pytest.approx(
+            coverage_ratio_p3
+        )
