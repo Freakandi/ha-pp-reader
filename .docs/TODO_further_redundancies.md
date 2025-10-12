@@ -163,15 +163,15 @@
       - Ziel/Ergebnis: Tests referenzieren `average_cost` aus dem Payload.
 
 13. Frontend: Sicherheitsdetail-Tab auf strukturierte Daten umstellen
-   a) [ ] Entferne Legacy-Fallbacks in `normalizeAverageCost` und nutze Snapshot-`average_cost` direkt.\
+   a) [x] Entferne Legacy-Fallbacks in `normalizeAverageCost` und nutze Snapshot-`average_cost` direkt.\
       - Dateipfad(e): `src/tabs/security_detail.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): `normalizeAverageCost`\
       - Ziel/Ergebnis: Snapshot-Normalisierung spiegelt Backend-Struktur wider.
-   b) [ ] Ersetze `resolveAveragePurchaseBaseline` durch Verwendung der Backend-Performance-/Average-Cost-Metriken.\
+   b) [x] Ersetze `resolveAveragePurchaseBaseline` durch Verwendung der Backend-Performance-/Average-Cost-Metriken.\
       - Dateipfad(e): `src/tabs/security_detail.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): `resolveAveragePurchaseBaseline`\
       - Ziel/Ergebnis: Chart-Baselines nutzen die gelieferten Metriken ohne Neuaufbau.
-   c) [ ] Aktualisiere Security-Detail-Tests und Storybook-/Snapshot-Fixtures.\
+   c) [x] Aktualisiere Security-Detail-Tests und Storybook-/Snapshot-Fixtures.\
       - Dateipfad(e): `src/tabs/__tests__/security_detail.metrics.test.ts`, `tests/frontend/dashboard_smoke.mjs`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Snapshot-Metriken\
       - Ziel/Ergebnis: Tests erwarten ausschließlich strukturierte Payloads.
