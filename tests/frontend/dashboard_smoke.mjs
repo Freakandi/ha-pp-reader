@@ -566,6 +566,14 @@ pendingMap.set('portfolio-1', {
       current_value: 1500,
       gain_abs: 1000,
       gain_pct: 200,
+      average_cost: {
+        native: 72.489,
+        security: 72.489,
+        account: 49.42,
+        eur: 65.432,
+        source: 'aggregation',
+        coverage_ratio: 1,
+      },
     },
   ],
 });

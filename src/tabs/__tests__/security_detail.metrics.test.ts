@@ -321,41 +321,23 @@ test('ensureSnapshotMetricsForTest leaves performance null when no payload provi
   assert.strictEqual(metrics?.performance, null, 'expected performance to remain null without payload');
 });
 
-test('normalizeAverageCostForTest falls back to legacy snapshot fields', () => {
+test('normalizeAverageCostForTest returns null without backend payload even with legacy fields', () => {
   const normalized = normalizeAverageCostForTest({
     average_cost: null,
-    average_purchase_price_native: null,
+    average_purchase_price_native: '12.34',
     avg_price_security: '7.2489',
     avg_price_account: 4.942,
     purchase_value_eur: '4.942',
   });
 
-  assert.ok(normalized, 'expected fallback payload to be derived from legacy fields');
-  assertApproximately(
-    normalized?.native,
-    7.2489,
-    'native average should default to security average',
+  assert.strictEqual(
+    normalized,
+    null,
+    'legacy fields should no longer generate derived average cost payloads',
   );
-  assertApproximately(
-    normalized?.security,
-    7.2489,
-    'security average should originate from snapshot avg_price_security',
-  );
-  assertApproximately(
-    normalized?.account,
-    4.942,
-    'account average should stem from snapshot avg_price_account',
-  );
-  assertApproximately(
-    normalized?.eur,
-    4.942,
-    'EUR average should fall back to purchase_value_eur',
-  );
-  assert.strictEqual(normalized?.source, 'aggregation');
-  assert.strictEqual(normalized?.coverageRatio, null);
 });
 
-test('normalizeAverageCostForTest derives per-share totals when averages missing', () => {
+test('normalizeAverageCostForTest ignores totals when backend payload absent', () => {
   const normalized = normalizeAverageCostForTest({
     average_cost: null,
     total_holdings_precise: '100',
@@ -364,38 +346,23 @@ test('normalizeAverageCostForTest derives per-share totals when averages missing
     purchase_value_eur: '1446.4',
   });
 
-  assert.ok(normalized, 'expected totals to yield a derived average payload');
-  assertApproximately(
-    normalized?.native,
-    2481,
-    'native average should be derived from purchase_total_security totals',
+  assert.strictEqual(
+    normalized,
+    null,
+    'purchase totals should not produce derived average cost payloads without backend data',
   );
-  assertApproximately(
-    normalized?.security,
-    2481,
-    'security average should match the derived native average',
-  );
-  assertApproximately(
-    normalized?.account,
-    14.464,
-    'account average should be derived from purchase_total_account totals',
-  );
-  assertApproximately(
-    normalized?.eur,
-    14.464,
-    'EUR average should be derived from purchase_value_eur totals',
-  );
-  assert.strictEqual(normalized?.source, 'aggregation');
-  assert.strictEqual(normalized?.coverageRatio, null);
 });
 
-test('normalizeAverageCostForTest returns null when no averages available', () => {
+test('normalizeAverageCostForTest returns null when backend payload lacks numeric fields', () => {
   const normalized = normalizeAverageCostForTest({
-    average_cost: null,
-    average_purchase_price_native: null,
-    avg_price_security: null,
-    avg_price_account: undefined,
-    purchase_value_eur: undefined,
+    average_cost: {
+      native: null,
+      security: undefined,
+      account: null,
+      eur: undefined,
+      source: 'aggregation',
+      coverage_ratio: null,
+    },
   });
 
   assert.strictEqual(normalized, null);
@@ -587,32 +554,45 @@ test('getHistoryChartOptionsForTest injects the native baseline into chart optio
   assert.match(tooltipContent, /USD/);
 });
 
-test('resolveAveragePurchaseBaselineForTest falls back to snapshot security averages', () => {
-  const snapshotWithSecurityAverage = {
-    avg_price_security: '7.2489',
-    average_purchase_price_native: '4.94',
+test('resolveAveragePurchaseBaselineForTest prioritises backend average cost payloads', () => {
+  const snapshotWithAverageCost = {
+    average_cost: {
+      security: '7.2489',
+      native: '7.2489',
+    },
   } as const;
 
   assert.strictEqual(
     resolveAveragePurchaseBaselineForTest(
       { averagePurchaseNative: 12.34 } as unknown as SecuritySnapshotMetricsLike,
-      snapshotWithSecurityAverage,
+      snapshotWithAverageCost,
     ),
     12.34,
   );
 
   assert.strictEqual(
-    resolveAveragePurchaseBaselineForTest(null, snapshotWithSecurityAverage),
+    resolveAveragePurchaseBaselineForTest(null, snapshotWithAverageCost),
     7.2489,
   );
 
-  const snapshotWithLegacyAverage = {
-    average_purchase_price_native: '45.67',
+  const snapshotWithNativeAverage = {
+    average_cost: {
+      native: '45.67',
+    },
   } as const;
 
   assert.strictEqual(
-    resolveAveragePurchaseBaselineForTest(null, snapshotWithLegacyAverage),
+    resolveAveragePurchaseBaselineForTest(null, snapshotWithNativeAverage),
     45.67,
+  );
+
+  const snapshotWithoutAverageCost = {
+    average_cost: null,
+  } as const;
+
+  assert.strictEqual(
+    resolveAveragePurchaseBaselineForTest(null, snapshotWithoutAverageCost),
+    null,
   );
 
   assert.strictEqual(
