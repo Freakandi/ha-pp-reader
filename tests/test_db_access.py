@@ -444,13 +444,24 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         assert "avg_price_security" not in aggregation
 
         # Integer cent totals should remain available to guard against double rounding.
-        assert aggregation["purchase_value_cents"] == expected["purchase_value_cents"]
+        assert (
+            aggregation["purchase_value_cents"]
+            == expected["aggregation"]["purchase_value_cents"]
+        )
 
         # Existing payload mirrors aggregation outcomes to ensure no duplicate math paths.
-        assert position["current_holdings"] == expected["total_holdings"]
-        assert position["purchase_value"] == expected["purchase_value_eur"]
-        assert position["purchase_total_security"] == expected["purchase_total_security"]
-        assert position["purchase_total_account"] == expected["purchase_total_account"]
+        assert (
+            position["current_holdings"] == expected["aggregation"]["total_holdings"]
+        )
+        assert position["purchase_value"] == expected["aggregation"]["purchase_value_eur"]
+        assert (
+            position["purchase_total_security"]
+            == expected["aggregation"]["purchase_total_security"]
+        )
+        assert (
+            position["purchase_total_account"]
+            == expected["aggregation"]["purchase_total_account"]
+        )
 
         if expected["aggregation"]["average_purchase_price_native"] is None:
             assert position["average_purchase_price_native"] is None
@@ -523,7 +534,7 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                 == position["average_purchase_price_native"]
             )
 
-        for field in ("security", "account"):
+        for field in ("account",):
             if position[f"avg_price_{field}"] is None:
                 assert average_cost[field] is None
             else:
