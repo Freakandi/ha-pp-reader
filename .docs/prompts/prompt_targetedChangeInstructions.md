@@ -5,6 +5,7 @@ You are assisting with the Portfolio Performance Reader repository. Follow this 
 1. Open `.docs/further_redundancies_2.md` and pick a single unchecked item from the numbered backlog. Prefer the highest-priority entry if priorities are noted; otherwise choose the first unchecked item.
 2. Investigate the codebase to map out every endpoint, module, and helper involved in both the legacy implementation and its modern replacement for the chosen item. Capture all relevant file paths and symbols.
 3. Append a new, detailed todo entry to `.docs/TODO_further_redundancies_2.md` that:
+   - Starts with an unchecked checkbox (`[ ]`) like the other TODO trackers in this repository.
    - Summarises the cleanup objective.
    - Lists each legacy endpoint to touch, grouped by backend/frontend as appropriate.
    - Lists the modern replacement endpoints or utilities that should remain.
