@@ -195,7 +195,7 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
 
     assert position["purchase_value"] == pytest.approx(expected_purchase_value)  # noqa: S101
     assert position["current_value"] == pytest.approx(expected_current_value)  # noqa: S101
-    assert position["gain_abs"] == pytest.approx(expected_gain_abs)  # noqa: S101
+    assert "gain_abs" not in position  # noqa: S101
     assert position["gain_pct"] == pytest.approx(expected_gain_pct)  # noqa: S101
     expected_avg_cost_native = round_price(45.678901, decimals=6) or 0.0
     expected_purchase_total_security = (
@@ -285,6 +285,7 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
 
     performance = position["performance"]
     assert performance == expected_performance  # noqa: S101
+    assert performance["gain_abs"] == pytest.approx(expected_gain_abs)  # noqa: S101
 
     backend_positions = get_portfolio_positions(populated_db, "portfolio-1")
     assert len(backend_positions) == 1  # noqa: S101
@@ -345,23 +346,16 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
         {
             "security_uuid": "sec-agg",
             "name": "Aggregated",
-                "current_holdings": pytest.approx(
-                    round_currency(5.0, decimals=6, default=0.0) or 0.0
-                ),
-                "purchase_value": pytest.approx(round_currency(123.45) or 0.0),
-                "current_value": pytest.approx(round_currency(5678.0) or 0.0),
-                "gain_abs": pytest.approx(round_currency(1357.0) or 0.0),
-                "gain_pct": pytest.approx(round_currency(12.0) or 0.0),
-                "purchase_total_security": pytest.approx(
-                    round_currency(999.99) or 0.0
-                ),
-                "purchase_total_account": pytest.approx(
-                    round_currency(888.88) or 0.0
-                ),
-                "average_cost": {
-                    "native": pytest.approx(
-                        round_price(3.456789, decimals=6) or 0.0
-                    ),
+            "current_holdings": pytest.approx(
+                round_currency(5.0, decimals=6, default=0.0) or 0.0
+            ),
+            "purchase_value": pytest.approx(round_currency(123.45) or 0.0),
+            "current_value": pytest.approx(round_currency(5678.0) or 0.0),
+            "gain_pct": pytest.approx(round_currency(12.0) or 0.0),
+            "purchase_total_security": pytest.approx(round_currency(999.99) or 0.0),
+            "purchase_total_account": pytest.approx(round_currency(888.88) or 0.0),
+            "average_cost": {
+                "native": pytest.approx(round_price(3.456789, decimals=6) or 0.0),
                 "security": pytest.approx(
                     round_price(11.111111, decimals=6) or 0.0
                 ),
@@ -381,18 +375,15 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "coverage_ratio": pytest.approx(round_currency(0.75) or 0.0),
             },
             "aggregation": {
-                "purchase_total_security": pytest.approx(
-                    round_currency(999.99) or 0.0
-                ),
-                "purchase_total_account": pytest.approx(
-                    round_currency(888.88) or 0.0
-                ),
+                "purchase_total_security": pytest.approx(round_currency(999.99) or 0.0),
+                "purchase_total_account": pytest.approx(round_currency(888.88) or 0.0),
                 "purchase_value_eur": pytest.approx(round_currency(123.45) or 0.0),
             },
         }
     ]
 
     normalized_entry = normalized[0]
+    assert "gain_abs" not in normalized_entry  # noqa: S101
     assert "avg_price_security" not in normalized_entry  # noqa: S101
     aggregation = normalized_entry["aggregation"]
     assert aggregation is not None  # noqa: S101

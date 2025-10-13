@@ -229,11 +229,11 @@
       - Ziel/Ergebnis: Testdaten enthalten keine Legacy-Felder mehr.
 
 18. Backend/Frontend: Flaches `gain_abs` Feld entfernen
-   a) [ ] Stoppe das Setzen von `gain_abs` im Positionsserializer, nutze nur `performance.gain_abs`.\
+   a) [x] Stoppe das Setzen von `gain_abs` im Positionsserializer, nutze nur `performance.gain_abs`.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_portfolio_positions`\
       - Ziel/Ergebnis: Performancewerte werden ausschließlich über den strukturierten Block geliefert.
-   b) [ ] Aktualisiere Frontend und Tests auf die verschachtelte Quelle.\
+   b) [x] Aktualisiere Frontend und Tests auf die verschachtelte Quelle.\
       - Dateipfad(e): `src/data/api.ts`, `src/data/updateConfigsWS.ts`, `tests/frontend/portfolio_update_gain_abs.mjs`, `tests/frontend/test_portfolio_update_gain_abs.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Position-Normalisierung, Assertions\
       - Ziel/Ergebnis: UI/Test greifen auf `position.performance.gain_abs` zu.

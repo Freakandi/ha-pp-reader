@@ -149,6 +149,14 @@ function normalizePosition(position: PortfolioPositionData): PortfolioPositionDa
   const aggregation = hasAggregation ? deriveAggregation(position) : null;
   const averageCost = normalizeAverageCost(position);
   const performance = normalizePerformanceMetrics(position);
+  const gainAbs =
+    typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)
+      ? performance.gain_abs
+      : null;
+  const gainPct =
+    typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
+      ? performance.gain_pct
+      : null;
 
   if (hasAggregation && aggregation) {
     normalized.aggregation = aggregation;
@@ -166,6 +174,18 @@ function normalizePosition(position: PortfolioPositionData): PortfolioPositionDa
     normalized.performance = performance;
   } else if ('performance' in normalized) {
     normalized.performance = null;
+  }
+
+  if (gainAbs !== null) {
+    normalized.gain_abs = gainAbs;
+  } else if ('gain_abs' in normalized) {
+    normalized.gain_abs = null;
+  }
+
+  if (gainPct !== null) {
+    normalized.gain_pct = gainPct;
+  } else if ('gain_pct' in normalized) {
+    normalized.gain_pct = null;
   }
 
   return normalized;
