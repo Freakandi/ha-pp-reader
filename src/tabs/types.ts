@@ -13,12 +13,6 @@ import type { HomeAssistant } from "../types/home-assistant";
  */
 export type AverageCostSource = "aggregation" | "totals" | "eur_total";
 
-/**
- * Normalised average purchase prices shared between backend payloads.
- *
- * The legacy fields `avg_price_account` and `purchase_value_eur` remain on the
- * individual payloads for compatibility, but their values mirror this object.
- */
 export interface AverageCostPayload {
   native: number | null;
   security: number | null;
@@ -26,7 +20,6 @@ export interface AverageCostPayload {
   eur: number | null;
   source: AverageCostSource;
   coverage_ratio: number | null;
-  [key: string]: unknown;
 }
 
 /**
@@ -38,7 +31,6 @@ export interface PerformanceDayChangePayload {
   change_pct: number | null;
   source: string;
   coverage_ratio: number | null;
-  [key: string]: unknown;
 }
 
 /**
@@ -56,7 +48,6 @@ export interface PerformanceMetricsPayload {
   source: string;
   coverage_ratio: number | null;
   day_change?: PerformanceDayChangePayload | null;
-  [key: string]: unknown;
 }
 
 export interface PanelConfigLike {
@@ -109,16 +100,13 @@ export interface SecuritySnapshotLike {
   total_holdings: number;
   purchase_value_eur: number;
   current_value_eur: number;
-  gain_abs_eur: number;
   gain_pct: number;
   purchase_total_security?: number;
   purchase_total_account?: number;
-  avg_price_account?: number | null;
   last_price_native?: number | null;
   last_price_eur: number | null;
   last_close_native?: number | null;
   last_close_eur?: number | null;
-  day_price_change_native?: number | null;
   /**
    * Structured selection of average purchase prices with provenance metadata.
    */
@@ -137,11 +125,8 @@ export interface HoldingsAggregationPayload {
   purchase_value_eur: number;
   security_currency_total: number;
   account_currency_total: number;
-  average_purchase_price_native: number | null;
-  avg_price_account: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
-  [key: string]: unknown;
 }
 
 export interface PortfolioPosition {

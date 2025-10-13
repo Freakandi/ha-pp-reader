@@ -65,15 +65,12 @@ def calculate_account_balance(
 
         # Hinweis: CASH_TRANSFER bereits oben separat behandelt
 
-    final_balance = round_currency(
-        cent_to_eur(saldo, default=0.0),
-        default=0.0,
-    )
-    result = validator.validate_account_balance(final_balance, account_uuid)
+    balance_eur = cent_to_eur(saldo)
+    result = validator.validate_account_balance(balance_eur, account_uuid)
     if not result.is_valid:
         _LOGGER.warning(result.message)
 
-    return final_balance
+    return round_currency(balance_eur, default=0.0) or 0.0
 
 
 def db_calc_account_balance(

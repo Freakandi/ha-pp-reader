@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,9 @@ def cent_to_eur(
     except (TypeError, ValueError):
         return default
 
+    if not isfinite(euros):
+        return default
+
     return round(euros, decimals)
 
 
@@ -64,6 +68,9 @@ def round_currency(
     try:
         numeric_value = float(value)
     except (TypeError, ValueError):
+        return default
+
+    if not isfinite(numeric_value):
         return default
 
     return round(numeric_value, decimals)
@@ -85,6 +92,9 @@ def round_price(
     except (TypeError, ValueError):
         return default
 
+    if not isfinite(numeric_value):
+        return default
+
     return round(numeric_value, decimals)
 
 
@@ -102,6 +112,9 @@ def normalize_raw_price(
     try:
         normalized = float(raw_price) / PRICE_SCALE
     except (TypeError, ValueError):
+        return default
+
+    if not isfinite(normalized):
         return default
 
     return round_price(normalized, decimals=decimals, default=default)

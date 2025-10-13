@@ -31,7 +31,6 @@ interface PortfolioPositionData {
   gain_pct?: number | null;
   purchase_total_security?: number | null;
   purchase_total_account?: number | null;
-  avg_price_account?: number | null;
   average_cost?: AverageCostPayload | null;
   performance?: PerformanceMetricsPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
@@ -76,11 +75,6 @@ function deriveAggregation(position: PortfolioPositionData): HoldingsAggregation
   const asFiniteNumber = (value: unknown): number | null =>
     typeof value === 'number' && Number.isFinite(value) ? value : null;
 
-  const asNullableNumber = (value: unknown): number | null => {
-    const numeric = asFiniteNumber(value);
-    return numeric === null ? null : numeric;
-  };
-
   const totalHoldings = asFiniteNumber(rawAggregation.total_holdings) ?? 0;
   const positiveHoldingsRaw = asFiniteNumber(rawAggregation.positive_holdings);
   const purchaseValueEur = asFiniteNumber(rawAggregation.purchase_value_eur) ?? 0;
@@ -97,8 +91,6 @@ function deriveAggregation(position: PortfolioPositionData): HoldingsAggregation
     purchase_value_eur: purchaseValueEur,
     security_currency_total: securityTotal,
     account_currency_total: accountTotal,
-    average_purchase_price_native: asNullableNumber(rawAggregation.average_purchase_price_native),
-    avg_price_account: asNullableNumber(rawAggregation.avg_price_account),
     purchase_total_security: purchaseTotalSecurity,
     purchase_total_account: purchaseTotalAccount,
   };

@@ -279,11 +279,11 @@
       - Ziel/Ergebnis: UI/Test nutzen das verschachtelte Feld.
 
 23. Typdefinitionen und Validierungen an neue Strukturen anpassen
-   a) [ ] Aktualisiere Payload-Typen (`AverageCostPayload`, `PerformanceMetricsPayload`, Aggregationsstrukturen) auf den neuen Minimalumfang.\
+   a) [x] Aktualisiere Payload-Typen (`AverageCostPayload`, `PerformanceMetricsPayload`, Aggregationsstrukturen) auf den neuen Minimalumfang.\
       - Dateipfad(e): `src/tabs/types.ts`, `src/data/api.ts`, `src/data/updateConfigsWS.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Typdefinitionen, Type Guards\
       - Ziel/Ergebnis: TypeScript spiegelt die bereinigten Payloads exakt wider.
-   b) [ ] Passe Validatoren/Normalisierer im Backend an (z. B. `validator.validate_account_balance`).\
+   b) [x] Passe Validatoren/Normalisierer im Backend an (z. B. `validator.validate_account_balance`).\
       - Dateipfad(e): `custom_components/pp_reader/logic/accounting.py`, `custom_components/pp_reader/util/currency.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Validierungslogik für Rundung/Konvertierung\
       - Ziel/Ergebnis: Validatoren erwarten neue Felder und liefern passende Fehlermeldungen.

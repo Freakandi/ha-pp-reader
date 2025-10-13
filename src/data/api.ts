@@ -52,14 +52,8 @@ export interface PortfolioPosition {
   current_holdings: number;
   purchase_value: number;
   current_value: number;
-  /** @deprecated Legacy field kept for backwards compatibility. */
-  gain_abs?: number | null;
-  /** @deprecated Legacy field kept for backwards compatibility. */
-  gain_pct?: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
-  /** @deprecated Legacy field kept for backwards compatibility. */
-  avg_price_account?: number | null;
   /** Structured selection of average purchase prices with provenance metadata. */
   average_cost?: AverageCostPayload | null;
   /** Structured gain metrics that mirror the legacy flat fields. */
@@ -88,7 +82,6 @@ export interface SecuritySnapshotResponse {
     market_value_eur?: number | null;
     purchase_total_security?: number;
     purchase_total_account?: number;
-    avg_price_account?: number | null;
     last_close_native?: number | null;
     last_close_eur?: number | null;
     /** Structured selection of average purchase prices with provenance metadata. */
