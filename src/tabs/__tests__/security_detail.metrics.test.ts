@@ -64,9 +64,21 @@ test('ensureSnapshotMetricsForTest prioritises security currency averages and to
     last_close_native: '7.85',
     last_price_eur: '5.49',
     last_close_eur: '5.27',
-    day_price_change_native: '0.27',
-    day_price_change_eur: '0.22',
-    day_change_pct: '2.5',
+    performance: {
+      gain_abs: 158.18,
+      gain_pct: 24.17,
+      total_change_eur: 158.18,
+      total_change_pct: 24.17,
+      source: 'snapshot',
+      coverage_ratio: 0.82,
+      day_change: {
+        price_change_native: 0.27,
+        price_change_eur: 0.22,
+        change_pct: 2.5,
+        source: 'snapshot',
+        coverage_ratio: 0.75,
+      },
+    },
   });
 
   assert.ok(metrics, 'expected metrics to be materialised');

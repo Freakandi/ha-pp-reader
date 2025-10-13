@@ -1088,9 +1088,6 @@ function ensureSnapshotMetrics(
   const performance = normalizePerformancePayload(snapshot.performance);
   const dayChange = performance?.day_change ?? null;
 
-  const fallbackDayPriceChangeNative = toFiniteNumber(
-    (snapshot as { day_price_change_native?: unknown })?.day_price_change_native,
-  );
   const fallbackDayPriceChangeEur = toFiniteNumber(
     (snapshot as { day_price_change_eur?: unknown })?.day_price_change_eur,
   );
@@ -1098,8 +1095,7 @@ function ensureSnapshotMetrics(
     (snapshot as { day_change_pct?: unknown })?.day_change_pct,
   );
 
-  const dayPriceChangeNative =
-    dayChange?.price_change_native ?? fallbackDayPriceChangeNative ?? null;
+  const dayPriceChangeNative = dayChange?.price_change_native ?? null;
   const dayPriceChangeEur =
     dayChange?.price_change_eur ?? fallbackDayPriceChangeEur ?? null;
   const dayChangePct = dayChange?.change_pct ?? fallbackDayChangePct ?? null;

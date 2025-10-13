@@ -546,11 +546,7 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "coverage_ratio",
     }
     assert day_change == expected_snapshot["performance"]["day_change"]
-    assert day_change["price_change_native"] == pytest.approx(
-        snapshot_payload["day_price_change_native"],
-        rel=0,
-        abs=1e-4,
-    )
+    assert "day_price_change_native" not in snapshot_payload
     assert day_change["price_change_eur"] == pytest.approx(
         snapshot_payload["day_price_change_eur"],
         rel=0,
