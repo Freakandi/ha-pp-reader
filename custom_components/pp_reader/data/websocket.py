@@ -150,7 +150,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "purchase_value_eur": 0.0,
             "purchase_total_security": 0.0,
             "purchase_total_account": 0.0,
-            "avg_price_security": None,
             "avg_price_account": None,
             "average_cost": None,
             "last_close_native": None,
@@ -201,10 +200,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         purchase_total_account if purchase_total_account is not None else 0.0
     )
 
-    data["avg_price_security"] = round_price(
-        snapshot.get("avg_price_security"),
-        decimals=6,
-    )
     data["avg_price_account"] = round_price(
         snapshot.get("avg_price_account"),
         decimals=6,
@@ -336,13 +331,6 @@ def _normalize_portfolio_positions(
             default=item.get("current_holdings"),
         )
 
-        avg_price_security = round_price(
-            _resolve_aggregation_value(
-                "avg_price_security",
-                default=item.get("avg_price_security"),
-            ),
-            decimals=6,
-        )
         avg_price_account = round_price(
             _resolve_aggregation_value(
                 "avg_price_account",
@@ -413,7 +401,6 @@ def _normalize_portfolio_positions(
                 "gain_pct": gain_pct_value,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
-                "avg_price_security": avg_price_security,
                 "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
                 "performance": performance_payload,

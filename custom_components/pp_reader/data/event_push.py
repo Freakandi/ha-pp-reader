@@ -195,7 +195,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
             average_purchase_price_native=_coerce_float(
                 mapping.get("average_purchase_price_native")
             ),
-            avg_price_security=_coerce_float(mapping.get("avg_price_security")),
             avg_price_account=_coerce_float(mapping.get("avg_price_account")),
         )
 
@@ -237,10 +236,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         avg_native = _coerce_float(item.get("average_purchase_price_native"))
         if avg_native is not None:
             row["avg_price_native"] = avg_native
-
-        avg_price_security = _coerce_float(item.get("avg_price_security"))
-        if avg_price_security is not None:
-            row["avg_price_security"] = avg_price_security
 
         avg_price_account = _coerce_float(item.get("avg_price_account"))
         if avg_price_account is not None:
@@ -328,10 +323,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
     gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
 
-    avg_price_security = average_cost_payload.get("security")
-    if avg_price_security is None:
-        avg_price_security = aggregation_obj.avg_price_security
-
     avg_price_account = average_cost_payload.get("account")
     if avg_price_account is None:
         avg_price_account = aggregation_obj.avg_price_account
@@ -349,7 +340,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         "gain_pct": gain_pct,
         "purchase_total_security": purchase_total_security,
         "purchase_total_account": purchase_total_account,
-        "avg_price_security": avg_price_security,
         "avg_price_account": avg_price_account,
     }
 

@@ -56,7 +56,6 @@ export interface PortfolioPosition {
   gain_pct: number;
   purchase_total_security: number;
   purchase_total_account: number;
-  avg_price_security: number | null;
   avg_price_account: number | null;
   /** Structured selection of average purchase prices with provenance metadata. */
   average_cost?: AverageCostPayload | null;
@@ -86,7 +85,6 @@ export interface SecuritySnapshotResponse {
     market_value_eur?: number | null;
     purchase_total_security?: number;
     purchase_total_account?: number;
-    avg_price_security?: number | null;
     avg_price_account?: number | null;
     last_close_native?: number | null;
     last_close_eur?: number | null;

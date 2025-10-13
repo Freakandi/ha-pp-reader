@@ -375,7 +375,6 @@ def _refresh_impacted_portfolio_securities(
                                current_value,
                                security_currency_total,
                                account_currency_total,
-                               avg_price_security,
                                avg_price_account
                         FROM portfolio_securities
                         WHERE security_uuid IN ({placeholders})
@@ -398,7 +397,6 @@ def _refresh_impacted_portfolio_securities(
                 cur_val,
                 sec_total,
                 acc_total,
-                avg_price_sec,
                 avg_price_acc,
             ) in cur.fetchall():
                 key = (portfolio_uuid, security_uuid)
@@ -416,11 +414,6 @@ def _refresh_impacted_portfolio_securities(
                     ),
                     "account_currency_total": (
                         float(acc_total) if acc_total is not None else 0.0
-                    ),
-                    "avg_price_security": (
-                        float(avg_price_sec)
-                        if avg_price_sec is not None
-                        else None
                     ),
                     "avg_price_account": (
                         float(avg_price_acc)
@@ -517,9 +510,6 @@ def _refresh_impacted_portfolio_securities(
                 account_total = (
                     metrics.account_currency_total if metrics else None
                 )
-                avg_price_security = (
-                    metrics.avg_price_security if metrics else None
-                )
                 avg_price_account = (
                     metrics.avg_price_account if metrics else None
                 )
@@ -537,8 +527,6 @@ def _refresh_impacted_portfolio_securities(
                     security_total = existing_entry.get("security_currency_total", 0.0)
                 if account_total is None and existing_entry:
                     account_total = existing_entry.get("account_currency_total", 0.0)
-                if avg_price_security is None and existing_entry:
-                    avg_price_security = existing_entry.get("avg_price_security")
                 if avg_price_account is None and existing_entry:
                     avg_price_account = existing_entry.get("avg_price_account")
 
@@ -551,7 +539,6 @@ def _refresh_impacted_portfolio_securities(
                     "avg_price_native": avg_price_native,
                     "security_currency_total": security_total or 0.0,
                     "account_currency_total": account_total or 0.0,
-                    "avg_price_security": avg_price_security,
                     "avg_price_account": avg_price_account,
                 }
 
@@ -578,7 +565,6 @@ def _refresh_impacted_portfolio_securities(
 
                 security_total_raw = data.get("security_currency_total")
                 account_total_raw = data.get("account_currency_total")
-                avg_price_security = data.get("avg_price_security")
                 avg_price_account = data.get("avg_price_account")
 
                 security_total_val = (
@@ -591,11 +577,6 @@ def _refresh_impacted_portfolio_securities(
                     if isinstance(account_total_raw, (int, float))
                     else 0.0
                 )
-                avg_price_security_val: float | None
-                if isinstance(avg_price_security, (int, float)):
-                    avg_price_security_val = float(avg_price_security)
-                else:
-                    avg_price_security_val = None
                 avg_price_account_val: float | None
                 if isinstance(avg_price_account, (int, float)):
                     avg_price_account_val = float(avg_price_account)
@@ -640,21 +621,6 @@ def _refresh_impacted_portfolio_securities(
                     < 1e-6
                     and (
                         (
-                            existing_entry.get("avg_price_security") is None
-                            and avg_price_security_val is None
-                        )
-                        or (
-                            existing_entry.get("avg_price_security") is not None
-                            and avg_price_security_val is not None
-                            and abs(
-                                float(existing_entry.get("avg_price_security", 0.0))
-                                - avg_price_security_val
-                            )
-                            < 1e-6
-                        )
-                    )
-                    and (
-                        (
                             existing_entry.get("avg_price_account") is None
                             and avg_price_account_val is None
                         )
@@ -680,7 +646,6 @@ def _refresh_impacted_portfolio_securities(
                         avg_price_native_val,
                         security_total_rounded,
                         account_total_rounded,
-                        avg_price_security_val,
                         avg_price_account_val,
                         current_value_cents,
                     )
@@ -701,10 +666,9 @@ def _refresh_impacted_portfolio_securities(
                             avg_price_native,
                             security_currency_total,
                             account_currency_total,
-                            avg_price_security,
                             avg_price_account,
                             current_value
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     upserts,
                 )

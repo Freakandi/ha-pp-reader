@@ -201,15 +201,15 @@
       - Ziel/Ergebnis: Keine Referenzen auf das entfernte Feld bleiben bestehen.
 
 16. Backend/Frontend: `avg_price_security` Feld abbauen
-   a) [ ] Entferne das Feld aus Backend-Serialisern und Aggregations-Rückgaben.\
+   a) [x] Entferne das Feld aus Backend-Serialisern und Aggregations-Rückgaben.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`, `custom_components/pp_reader/data/aggregations.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Payload-Building, Aggregationsdatensätze\
       - Ziel/Ergebnis: Feld entfällt nach Migration.
-   b) [ ] Aktualisiere Frontend-Interfaces und Renderer auf `average_cost.security`.\
+   b) [x] Aktualisiere Frontend-Interfaces und Renderer auf `average_cost.security`.\
       - Dateipfad(e): `src/data/api.ts`, `src/tabs/types.ts`, `src/tabs/overview.ts`, `src/tabs/security_detail.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Typdefinitionen, Formatierungen\
       - Ziel/Ergebnis: UI nutzt nur noch `average_cost.security`.
-   c) [ ] Bereinige Tests/Fixtures.\
+   c) [x] Bereinige Tests/Fixtures.\
       - Dateipfad(e): `tests/test_aggregations.py`, `tests/test_ws_portfolio_positions.py`, `tests/frontend/*`\
       - Betroffene Funktion(en)/Abschnitt(e): Erwartete Durchschnittspreise\
       - Ziel/Ergebnis: Keine Legacy-Feldprüfungen verbleiben.
