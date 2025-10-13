@@ -661,7 +661,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "last_close_native": last_close_native,
             "last_close_eur": last_close_eur,
             "day_price_change_native": day_change_payload["price_change_native"],
-            "day_change_pct": day_change_payload["change_pct"],
             "performance": performance_payload,
         }
     finally:
