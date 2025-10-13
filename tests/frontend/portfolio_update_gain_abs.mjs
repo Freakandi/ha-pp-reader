@@ -621,7 +621,6 @@ const simulateDeriveAggregation = (position) => {
     purchase_value_eur: purchaseValueEur,
     security_currency_total: securityTotal,
     account_currency_total: accountTotal,
-    average_purchase_price_native: asNullableNumber(rawAggregation.average_purchase_price_native),
     avg_price_security: asNullableNumber(rawAggregation.avg_price_security),
     avg_price_account: asNullableNumber(rawAggregation.avg_price_account),
     purchase_total_security: purchaseTotalSecurity,

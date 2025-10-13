@@ -54,8 +54,6 @@ export interface PortfolioPosition {
   current_value: number;
   gain_abs: number;
   gain_pct: number;
-  /** Mirrors `average_cost.native` for backwards compatibility. */
-  average_purchase_price_native?: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
   avg_price_security: number | null;
@@ -86,8 +84,6 @@ export interface SecuritySnapshotResponse {
     last_price_native?: number | null;
     last_price_eur?: number;
     market_value_eur?: number | null;
-    /** Mirrors `average_cost.native` for backwards compatibility. */
-    average_purchase_price_native?: number | string | null;
     purchase_total_security?: number;
     purchase_total_account?: number;
     avg_price_security?: number | null;

@@ -36,6 +36,7 @@ import type {
   SecurityHistoryRangeState,
   SecuritySnapshotLike,
   HoldingsAggregationPayload,
+  AverageCostPayload,
   AverageCostSource,
   PerformanceMetricsPayload,
 } from './types';
@@ -70,7 +71,6 @@ type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'
   market_value_eur?: number | string | null;
   current_value_eur?: number | string | null;
   currency_code?: string | null;
-  average_purchase_price_native?: number | string | null;
   last_close_native?: number | string | null;
   last_close_eur?: number | string | null;
   last_price?: {
@@ -334,6 +334,49 @@ function extractAggregation(
   return candidate;
 }
 
+function extractAverageCost(
+  position: PortfolioPositionLike | null | undefined,
+): AverageCostPayload | null {
+  if (!position || typeof position !== 'object') {
+    return null;
+  }
+
+  const rawAverageCost = (position as { average_cost?: unknown }).average_cost;
+  if (!rawAverageCost || typeof rawAverageCost !== 'object') {
+    return null;
+  }
+
+  const candidate = rawAverageCost as Partial<AverageCostPayload>;
+  const native = toFiniteNumber(candidate.native);
+  const security = toFiniteNumber(candidate.security);
+  const account = toFiniteNumber(candidate.account);
+  const eur = toFiniteNumber(candidate.eur);
+  const coverageRatio = toFiniteNumber(candidate.coverage_ratio);
+
+  if (
+    native == null &&
+    security == null &&
+    account == null &&
+    eur == null &&
+    coverageRatio == null
+  ) {
+    return null;
+  }
+
+  const source = candidate.source;
+  const normalizedSource: AverageCostSource =
+    source === 'totals' || source === 'eur_total' ? source : 'aggregation';
+
+  return {
+    native,
+    security,
+    account,
+    eur,
+    source: normalizedSource,
+    coverage_ratio: coverageRatio,
+  };
+}
+
 function buildSnapshotFromPortfolioCache(
   securityUuid: string,
 ): SecuritySnapshotDetail | null {
@@ -380,6 +423,7 @@ function buildSnapshotFromPortfolioCache(
     }
 
     const aggregation = extractAggregation(position);
+    const averageCost = extractAverageCost(position);
 
     const holdings =
       toFiniteNumber(aggregation?.total_holdings) ??
@@ -416,14 +460,17 @@ function buildSnapshotFromPortfolioCache(
 
     if (holdings != null && holdings > 0) {
       const avgNative =
-        toFiniteNumber(aggregation?.average_purchase_price_native) ??
-        toFiniteNumber(position?.average_purchase_price_native);
+        averageCost?.native ??
+        averageCost?.security ??
+        toFiniteNumber(aggregation?.avg_price_security);
       if (avgNative != null) {
         nativeWeightedSum += holdings * avgNative;
         nativeWeight += holdings;
       }
 
       const avgSecurity =
+        averageCost?.security ??
+        averageCost?.native ??
         toFiniteNumber(aggregation?.avg_price_security) ??
         toFiniteNumber(position?.avg_price_security);
       if (avgSecurity != null) {
@@ -432,6 +479,7 @@ function buildSnapshotFromPortfolioCache(
       }
 
       const avgAccount =
+        averageCost?.account ??
         toFiniteNumber(aggregation?.avg_price_account) ??
         toFiniteNumber(position?.avg_price_account);
       if (avgAccount != null) {
@@ -460,6 +508,10 @@ function buildSnapshotFromPortfolioCache(
   const aggregatedGainPct =
     gainAbsContributors > 0 && purchaseValueEur > 0
       ? roundCurrency((gainAbsSum / purchaseValueEur) * 100, { fallback: null })
+      : null;
+  const averageEur =
+    roundedHoldings > 0
+      ? roundCurrency(roundedPurchaseValue / roundedHoldings, { fallback: null })
       : null;
   const lastPriceEur =
     roundedHoldings > 0
@@ -493,6 +545,21 @@ function buildSnapshotFromPortfolioCache(
         })
       : null;
 
+  const aggregatedAverageCost: AverageCostPayload | null =
+    averageNative != null ||
+    averageSecurity != null ||
+    averageAccount != null ||
+    averageEur != null
+      ? {
+          native: averageNative,
+          security: averageSecurity ?? averageNative,
+          account: averageAccount,
+          eur: averageEur,
+          source: 'aggregation',
+          coverage_ratio: null,
+        }
+      : null;
+
   const performancePayload =
     aggregatedGainAbs != null && aggregatedGainPct != null
       ? {
@@ -519,9 +586,9 @@ function buildSnapshotFromPortfolioCache(
     purchase_total_account: purchaseTotalAccountRounded,
     avg_price_security: averageSecurity,
     avg_price_account: averageAccount,
-    average_purchase_price_native: averageNative,
     source: 'cache',
     performance: performancePayload,
+    average_cost: aggregatedAverageCost,
   };
 }
 
@@ -972,10 +1039,9 @@ function ensureSnapshotMetrics(
     toFiniteNumber(snapshot.current_value_eur);
   const averageCost = normalizeAverageCost(snapshot);
   const averagePurchaseNative =
-    averageCost?.security ??
     averageCost?.native ??
-    toFiniteNumber(snapshot.avg_price_security) ??
-    toFiniteNumber(snapshot.average_purchase_price_native);
+    averageCost?.security ??
+    toFiniteNumber(snapshot.avg_price_security);
   const averagePurchaseAccount =
     averageCost?.account ??
     toFiniteNumber(snapshot.avg_price_account);
@@ -1438,8 +1504,8 @@ function resolvePurchaseFxTooltip(
 
   const normalizedAverageCost = averageCostContext ?? normalizeAverageCost(snapshot);
   const averagePurchaseNativeValue =
-    normalizedAverageCost?.security ??
     normalizedAverageCost?.native ??
+    normalizedAverageCost?.security ??
     toFiniteNumber(averagePurchaseNative);
   const averagePurchaseAccountValue =
     normalizedAverageCost?.account ?? toFiniteNumber(averagePurchaseAccount);
@@ -1544,10 +1610,9 @@ function buildHeaderMeta(
   const averageCost = normalizeAverageCost(snapshot);
   const averagePurchaseNativeRaw =
     metrics?.averagePurchaseNative ??
-    averageCost?.security ??
     averageCost?.native ??
-    toFiniteNumber(snapshot.avg_price_security) ??
-    toFiniteNumber(snapshot.average_purchase_price_native);
+    averageCost?.security ??
+    toFiniteNumber(snapshot.avg_price_security);
   const averagePurchaseEurRaw =
     metrics?.averagePurchaseEur ??
     averageCost?.eur ??
