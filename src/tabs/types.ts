@@ -16,9 +16,8 @@ export type AverageCostSource = "aggregation" | "totals" | "eur_total";
 /**
  * Normalised average purchase prices shared between backend payloads.
  *
- * The legacy fields `avg_price_security`, `avg_price_account` and
- * `purchase_value_eur` remain on the individual payloads for compatibility,
- * but their values mirror this object.
+ * The legacy fields `avg_price_account` and `purchase_value_eur` remain on the
+ * individual payloads for compatibility, but their values mirror this object.
  */
 export interface AverageCostPayload {
   native: number | null;
@@ -114,7 +113,6 @@ export interface SecuritySnapshotLike {
   gain_pct: number;
   purchase_total_security?: number;
   purchase_total_account?: number;
-  avg_price_security?: number | null;
   avg_price_account?: number | null;
   last_price_native?: number | null;
   last_price_eur: number | null;
@@ -142,7 +140,6 @@ export interface HoldingsAggregationPayload {
   security_currency_total: number;
   account_currency_total: number;
   average_purchase_price_native: number | null;
-  avg_price_security: number | null;
   avg_price_account: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
@@ -159,7 +156,6 @@ export interface PortfolioPosition {
   gain_pct: number;
   purchase_total_security: number;
   purchase_total_account: number;
-  avg_price_security: number | null;
   avg_price_account: number | null;
   /**
    * Structured selection of average purchase prices with provenance metadata.

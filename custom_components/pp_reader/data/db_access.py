@@ -527,7 +527,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                 avg_price_native,
                 security_currency_total,
                 account_currency_total,
-                avg_price_security,
                 avg_price_account
             FROM portfolio_securities
             WHERE security_uuid = ?
@@ -582,14 +581,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             if aggregation.average_purchase_price_native is not None
             else average_cost.native
         )
-        avg_price_security_value = aggregation.avg_price_security
-        if avg_price_security_value is None:
-            avg_price_security_value = average_cost.security
-            if (
-                avg_price_security_value == 0.0
-                and purchase_total_security_value in (0.0, None)
-            ):
-                avg_price_security_value = None
         avg_price_account_value = aggregation.avg_price_account
         if avg_price_account_value is None:
             avg_price_account_value = average_cost.account
@@ -602,7 +593,7 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         average_cost_payload = asdict(average_cost)
         if (
             average_cost_payload["security"] == 0.0
-            and avg_price_security_value is None
+            and purchase_total_security_value in (0.0, None)
         ):
             average_cost_payload["security"] = None
         if (
@@ -665,7 +656,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "average_purchase_price_native": average_purchase_price_native,
             "purchase_total_security": purchase_total_security_value,
             "purchase_total_account": purchase_total_account_value,
-            "avg_price_security": avg_price_security_value,
             "avg_price_account": avg_price_account_value,
             "average_cost": average_cost_payload,
             "last_close_native": last_close_native,
@@ -757,7 +747,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "average_purchase_price_native": float | None,
         "purchase_total_security": float,
         "purchase_total_account": float,
-        "avg_price_security": float | None,
         "avg_price_account": float | None,
         "performance": dict[str, Any],
         "aggregation": dict[str, Any],
@@ -779,7 +768,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 ps.avg_price_native,
                 ps.security_currency_total,
                 ps.account_currency_total,
-                ps.avg_price_security,
                 ps.avg_price_account
             FROM portfolio_securities ps
             JOIN securities s ON s.uuid = ps.security_uuid
@@ -801,7 +789,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             avg_price_native_raw,
             security_total_raw,
             account_total_raw,
-            avg_price_security_raw,
             avg_price_account_raw,
         ) in rows:
             aggregation = compute_holdings_aggregation(
@@ -812,7 +799,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                         "avg_price_native": avg_price_native_raw,
                         "security_currency_total": security_total_raw,
                         "account_currency_total": account_total_raw,
-                        "avg_price_security": avg_price_security_raw,
                         "avg_price_account": avg_price_account_raw,
                     }
                 ]
@@ -842,14 +828,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 if aggregation.average_purchase_price_native is not None
                 else average_cost.native
             )
-            avg_price_security_value = aggregation.avg_price_security
-            if avg_price_security_value is None:
-                avg_price_security_value = average_cost.security
-                if (
-                    avg_price_security_value == 0.0
-                    and purchase_total_security_value in (0.0, None)
-                ):
-                    avg_price_security_value = None
             avg_price_account_value = aggregation.avg_price_account
             if avg_price_account_value is None:
                 avg_price_account_value = average_cost.account
@@ -862,7 +840,7 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             average_cost_payload = asdict(average_cost)
             if (
                 average_cost_payload["security"] == 0.0
-                and avg_price_security_value is None
+                and purchase_total_security_value in (0.0, None)
             ):
                 average_cost_payload["security"] = None
             if (
@@ -879,7 +857,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 "security_currency_total": purchase_total_security_value,
                 "account_currency_total": purchase_total_account_value,
                 "average_purchase_price_native": average_purchase_price_native,
-                "avg_price_security": avg_price_security_value,
                 "avg_price_account": avg_price_account_value,
                 "purchase_total_security": purchase_total_security_value,
                 "purchase_total_account": purchase_total_account_value,
@@ -915,7 +892,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                     "purchase_total_account": aggregation_dict[
                         "purchase_total_account"
                     ],
-                    "avg_price_security": aggregation_dict["avg_price_security"],
                     "avg_price_account": aggregation_dict["avg_price_account"],
                     "average_cost": average_cost_payload,
                     "performance": performance_payload,

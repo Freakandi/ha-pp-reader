@@ -419,14 +419,12 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
                     "purchase_total_security": 321.09,
                     "purchase_total_account": 322.1,
                     "average_purchase_price_native": 24.123456,
-                    "avg_price_security": 25.654321,
                     "avg_price_account": 25.987654,
                 },
                 "purchase_value_eur": 123.45,
                 "purchase_total_security": None,
                 "purchase_total_account": None,
                 "average_purchase_price_native": None,
-                "avg_price_security": None,
                 "avg_price_account": None,
                 "average_cost": {
                     "native": 24.123456,
@@ -465,7 +463,6 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             "average_purchase_price_native": 24.123456,
             "purchase_total_security": expected_purchase_total_security,
             "purchase_total_account": expected_purchase_total_account,
-            "avg_price_security": 25.654321,
             "avg_price_account": 25.987654,
             "performance": {
                 "gain_abs": expected_gain_abs,
@@ -491,6 +488,7 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
     assert position_performance["gain_pct"] == position_entry["gain_pct"]
     assert position_performance["total_change_eur"] == position_entry["gain_abs"]
     assert position_performance["total_change_pct"] == position_entry["gain_pct"]
+    assert "avg_price_security" not in position_entry
 
 
 def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> None:

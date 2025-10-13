@@ -31,7 +31,6 @@ interface PortfolioPositionData {
   gain_pct?: number | null;
   purchase_total_security?: number | null;
   purchase_total_account?: number | null;
-  avg_price_security?: number | null;
   avg_price_account?: number | null;
   average_cost?: AverageCostPayload | null;
   performance?: PerformanceMetricsPayload | null;
@@ -99,7 +98,6 @@ function deriveAggregation(position: PortfolioPositionData): HoldingsAggregation
     security_currency_total: securityTotal,
     account_currency_total: accountTotal,
     average_purchase_price_native: asNullableNumber(rawAggregation.average_purchase_price_native),
-    avg_price_security: asNullableNumber(rawAggregation.avg_price_security),
     avg_price_account: asNullableNumber(rawAggregation.avg_price_account),
     purchase_total_security: purchaseTotalSecurity,
     purchase_total_account: purchaseTotalAccount,

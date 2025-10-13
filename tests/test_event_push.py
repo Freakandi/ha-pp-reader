@@ -74,7 +74,6 @@ def test_compact_portfolio_positions_sequence() -> None:
                         "purchase_value_eur": 123.45,
                         "purchase_total_security": 210.0,
                         "purchase_total_account": 211.0,
-                        "avg_price_security": 10.0,
                         "avg_price_account": 10.5,
                     },
                     "unused": "value",
@@ -115,13 +114,13 @@ def test_compact_portfolio_positions_sequence() -> None:
     assert aggregation["purchase_value_eur"] == 123.45
     assert aggregation["purchase_total_security"] == 210.0
     assert aggregation["purchase_total_account"] == 211.0
-    assert aggregation["avg_price_security"] == 10.0
     assert aggregation["avg_price_account"] == 10.5
+    assert "avg_price_security" not in aggregation
     # ensure legacy flattened values continue to match the structured payload
     assert normalized["purchase_total_security"] == 210.0
     assert normalized["purchase_total_account"] == 211.0
-    assert normalized["avg_price_security"] == 12.5
     assert normalized["avg_price_account"] == 13.5
+    assert "avg_price_security" not in normalized
     average_cost = normalized["average_cost"]
     assert average_cost["native"] == 11.5
     assert average_cost["security"] == 12.5

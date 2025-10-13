@@ -41,7 +41,6 @@ data:
         purchase_value_eur: 1515.22
         purchase_total_security: 1680.75
         purchase_total_account: 1692.10
-        avg_price_security: 240.107143
         avg_price_account: 241.728571
       average_cost:
         native: null
@@ -71,7 +70,6 @@ data:
         purchase_value_eur: 2040.13
         purchase_total_security: 2281.44
         purchase_total_account: 2275.20
-        avg_price_security: 142.59
         avg_price_account: 142.2
       average_cost:
         native: null

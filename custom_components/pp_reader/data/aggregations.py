@@ -31,7 +31,6 @@ class HoldingsAggregation:
     security_currency_total: float
     account_currency_total: float
     average_purchase_price_native: float | None
-    avg_price_security: float | None
     avg_price_account: float | None
 
     @property
@@ -95,8 +94,6 @@ def compute_holdings_aggregation(
     account_currency_total_raw = 0.0
     native_weighted_sum = 0.0
     native_covered_shares = 0.0
-    security_weighted_sum = 0.0
-    security_covered_shares = 0.0
     account_weighted_sum = 0.0
     account_covered_shares = 0.0
 
@@ -131,13 +128,6 @@ def compute_holdings_aggregation(
                 native_weighted_sum += holdings * avg_native_raw
                 native_covered_shares += holdings
 
-            avg_security_raw = _coerce_float(
-                _get_value(row, "avg_price_security")
-            )
-            if avg_security_raw is not None:
-                security_weighted_sum += holdings * avg_security_raw
-                security_covered_shares += holdings
-
             avg_account_raw = _coerce_float(_get_value(row, "avg_price_account"))
             if avg_account_raw is not None:
                 account_weighted_sum += holdings * avg_account_raw
@@ -171,17 +161,6 @@ def compute_holdings_aggregation(
             decimals=6,
         )
 
-    avg_price_security = None
-    if (
-        security_covered_shares > 0
-        and positive_holdings_raw > 0
-        and abs(security_covered_shares - positive_holdings_raw) <= 1e-6
-    ):
-        avg_price_security = round_price(
-            security_weighted_sum / security_covered_shares,
-            decimals=6,
-        )
-
     avg_price_account = None
     if (
         account_covered_shares > 0
@@ -201,7 +180,6 @@ def compute_holdings_aggregation(
         security_currency_total=purchase_total_security,
         account_currency_total=purchase_total_account,
         average_purchase_price_native=average_purchase_price_native,
-        avg_price_security=avg_price_security,
         avg_price_account=avg_price_account,
     )
 
@@ -217,7 +195,7 @@ def select_average_cost(
     """Derive consistent average cost values based on a holdings aggregation."""
 
     native = aggregation.average_purchase_price_native
-    security = aggregation.avg_price_security
+    security = None
     account = aggregation.avg_price_account
     eur = None
 

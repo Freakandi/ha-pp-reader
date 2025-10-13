@@ -58,7 +58,6 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
     assert result.account_currency_total == pytest.approx(252.34)
     assert result.purchase_total_account == pytest.approx(252.34)
     assert result.average_purchase_price_native == pytest.approx(24.004629)
-    assert result.avg_price_security is None
     assert result.avg_price_account == pytest.approx(39.197531)
 
 
@@ -96,7 +95,6 @@ def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> No
     assert result.security_currency_total == pytest.approx(0.0)
     assert result.account_currency_total == pytest.approx(0.0)
     assert result.average_purchase_price_native is None
-    assert result.avg_price_security is None
     assert result.avg_price_account is None
 
 
@@ -155,7 +153,6 @@ def test_select_average_cost_handles_missing_positive_holdings() -> None:
         security_currency_total=100.0,
         account_currency_total=90.0,
         average_purchase_price_native=None,
-        avg_price_security=None,
         avg_price_account=None,
     )
 
@@ -180,7 +177,6 @@ def test_select_average_cost_prefers_explicit_totals_over_aggregation_defaults()
         security_currency_total=80.0,
         account_currency_total=60.0,
         average_purchase_price_native=2.5,
-        avg_price_security=None,
         avg_price_account=None,
     )
 
