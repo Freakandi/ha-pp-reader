@@ -19,9 +19,10 @@ import asyncio
 import logging
 import sqlite3
 import time
+from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -358,9 +359,7 @@ def _refresh_impacted_portfolio_securities(
 
     try:
         with sqlite3.connect(str(db_path)) as conn:
-            existing_entries: dict[
-                tuple[str, str], dict[str, float | int | None]
-            ] = {}
+            existing_entries: dict[tuple[str, str], dict[str, float | int | None]] = {}
             impacted_pairs: set[tuple[str, str]] = set()
 
             placeholders = ",".join("?" for _ in security_ids)
@@ -416,9 +415,7 @@ def _refresh_impacted_portfolio_securities(
                         float(acc_total) if acc_total is not None else 0.0
                     ),
                     "avg_price_account": (
-                        float(avg_price_acc)
-                        if avg_price_acc is not None
-                        else None
+                        float(avg_price_acc) if avg_price_acc is not None else None
                     ),
                 }
 
@@ -504,15 +501,9 @@ def _refresh_impacted_portfolio_securities(
                 metrics = purchase_metrics.get(key)
                 purchase_value = metrics.purchase_value if metrics else None
                 avg_price_native = metrics.avg_price_native if metrics else None
-                security_total = (
-                    metrics.security_currency_total if metrics else None
-                )
-                account_total = (
-                    metrics.account_currency_total if metrics else None
-                )
-                avg_price_account = (
-                    metrics.avg_price_account if metrics else None
-                )
+                security_total = metrics.security_currency_total if metrics else None
+                account_total = metrics.account_currency_total if metrics else None
+                avg_price_account = metrics.avg_price_account if metrics else None
 
                 existing_entry = existing_entries.get(key)
                 if holdings is None and existing_entry:
@@ -590,9 +581,13 @@ def _refresh_impacted_portfolio_securities(
 
                 existing_entry = existing_entries.get(key)
                 if existing_entry and (
-                    abs(existing_entry.get("current_holdings", 0.0) - current_holdings_val)
+                    abs(
+                        existing_entry.get("current_holdings", 0.0)
+                        - current_holdings_val
+                    )
                     < 1e-9
-                    and int(existing_entry.get("purchase_value", 0)) == purchase_value_cents
+                    and int(existing_entry.get("purchase_value", 0))
+                    == purchase_value_cents
                     and (
                         (
                             existing_entry.get("avg_price_native") is None
@@ -608,7 +603,8 @@ def _refresh_impacted_portfolio_securities(
                             < 1e-6
                         )
                     )
-                    and int(existing_entry.get("current_value", 0)) == current_value_cents
+                    and int(existing_entry.get("current_value", 0))
+                    == current_value_cents
                     and abs(
                         float(existing_entry.get("security_currency_total", 0.0))
                         - security_total_rounded
@@ -775,12 +771,12 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
                 performance_payload = asdict(performance_metrics)
                 performance_payload["day_change"] = asdict(day_change_metrics)
 
-            gain_abs = round_currency(
-                performance_payload.get("gain_abs"), default=0.0
-            ) or 0.0
-            gain_pct = round_currency(
-                performance_payload.get("gain_pct"), default=0.0
-            ) or 0.0
+            gain_abs = (
+                round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
+            )
+            gain_pct = (
+                round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
+            )
 
             payload.append(
                 {
@@ -958,9 +954,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         last_warn is None
                         or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
                     ):
-                        warn_msg = (
-                            "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
-                        )
+                        warn_msg = "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
                         _LOGGER.warning(warn_msg, error_counter)
                         store["price_zero_quotes_warn_ts"] = now_ts
                     else:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from typing import Any
 
 from homeassistant.const import EVENT_PANELS_UPDATED
@@ -13,7 +13,11 @@ from homeassistant.core import HomeAssistant, callback
 
 from ..const import DOMAIN
 from ..util.currency import cent_to_eur, round_currency
-from .aggregations import HoldingsAggregation, compute_holdings_aggregation, select_average_cost
+from .aggregations import (
+    HoldingsAggregation,
+    compute_holdings_aggregation,
+    select_average_cost,
+)
 from .performance import select_performance_metrics
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,7 +44,6 @@ def _estimate_event_size(payload: dict[str, Any]) -> int:
 
 def _normalize_currency_amount(value: Any, *, default: float = 0.0) -> float:
     """Return a consistently rounded EUR amount from raw or cent values."""
-
     if isinstance(value, bool):
         return default
 
@@ -146,7 +149,6 @@ def _compact_portfolio_values_payload(data: Any) -> Any:
 
 def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     """Keep only the fields required for position updates."""
-
     security_uuid = item.get("security_uuid")
     if security_uuid:
         security_uuid = str(security_uuid)
@@ -187,9 +189,7 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
             )
             or _coerce_float(mapping.get("purchase_total_security"))
             or 0.0,
-            account_currency_total=_coerce_float(
-                mapping.get("account_currency_total")
-            )
+            account_currency_total=_coerce_float(mapping.get("account_currency_total"))
             or _coerce_float(mapping.get("purchase_total_account"))
             or 0.0,
             average_purchase_price_native=_coerce_float(
@@ -283,7 +283,9 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     if purchase_value in (None, 0.0):
         fallback_value = round_currency(item.get("purchase_value"), default=None)
         if fallback_value is None:
-            fallback_value = round_currency(item.get("purchase_value_eur"), default=None)
+            fallback_value = round_currency(
+                item.get("purchase_value_eur"), default=None
+            )
         if fallback_value is not None:
             purchase_value = fallback_value
     if purchase_value is None:
@@ -353,7 +355,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def _compact_portfolio_positions_payload(data: Any) -> Any:
     """Ensure position updates only transport the necessary keys."""
-
     if isinstance(data, Mapping):
         positions = data.get("positions")
         compacted: list[dict[str, Any]] = []

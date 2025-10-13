@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-
 from typing import Any
 
 import pytest
@@ -50,7 +49,6 @@ async def hass(
 
         async def async_register_static_paths(self, paths):  # noqa: ANN001
             self.registered_static_paths.extend(paths)
-            return None
 
         async def async_register_view(self, _view):  # pragma: no cover - compatibility
             return None

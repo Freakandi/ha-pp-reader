@@ -95,8 +95,12 @@ def test_fetch_live_portfolios_basic(initialized_db: Path) -> None:
             "source",
             "coverage_ratio",
         }
-        assert performance["gain_abs"] == pytest.approx(entry["gain_abs"], rel=0, abs=1e-6)
-        assert performance["gain_pct"] == pytest.approx(entry["gain_pct"], rel=0, abs=1e-6)
+        assert performance["gain_abs"] == pytest.approx(
+            entry["gain_abs"], rel=0, abs=1e-6
+        )
+        assert performance["gain_pct"] == pytest.approx(
+            entry["gain_pct"], rel=0, abs=1e-6
+        )
         assert performance["total_change_eur"] == pytest.approx(
             entry["gain_abs"], rel=0, abs=1e-6
         )

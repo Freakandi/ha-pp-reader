@@ -110,7 +110,9 @@ class PortfolioSecurity:
     current_holdings: float  # Aktueller Bestand des Wertpapiers im Depot
     purchase_value: int  # Gesamter Kaufpreis des Bestands in Cent
     avg_price: float | None = None  # Durchschnittlicher Kaufpreis in Cent
-    avg_price_native: float | None = None  # Durchschnittlicher Kaufpreis in nativer Währung
+    avg_price_native: float | None = (
+        None  # Durchschnittlicher Kaufpreis in nativer Währung
+    )
     current_value: float | None = None  # Aktueller Wert des Bestands in Cent
 
 
@@ -123,7 +125,6 @@ def _resolve_average_cost_totals(
     account_total_override: float | None = None,
 ) -> tuple[AverageCostSelection, float, float, float]:
     """Select average cost values and derive consistent totals."""
-
     total_holdings = aggregation.total_holdings
     positive_holdings = aggregation.positive_holdings
 
@@ -187,7 +188,12 @@ def _resolve_average_cost_totals(
             if derived_account_total is not None:
                 purchase_total_account = derived_account_total
 
-    return selection, purchase_value_eur, purchase_total_security, purchase_total_account
+    return (
+        selection,
+        purchase_value_eur,
+        purchase_total_security,
+        purchase_total_account,
+    )
 
 
 def get_transactions(
@@ -584,22 +590,18 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         avg_price_account_value = aggregation.avg_price_account
         if avg_price_account_value is None:
             avg_price_account_value = average_cost.account
-            if (
-                avg_price_account_value == 0.0
-                and purchase_total_account_value in (0.0, None)
+            if avg_price_account_value == 0.0 and purchase_total_account_value in (
+                0.0,
+                None,
             ):
                 avg_price_account_value = None
 
         average_cost_payload = asdict(average_cost)
-        if (
-            average_cost_payload["security"] == 0.0
-            and purchase_total_security_value in (0.0, None)
-        ):
+        if average_cost_payload[
+            "security"
+        ] == 0.0 and purchase_total_security_value in (0.0, None):
             average_cost_payload["security"] = None
-        if (
-            average_cost_payload["account"] == 0.0
-            and avg_price_account_value is None
-        ):
+        if average_cost_payload["account"] == 0.0 and avg_price_account_value is None:
             average_cost_payload["account"] = None
 
         raw_last_close, last_close_native = fetch_previous_close(
@@ -622,15 +624,9 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                 last_close_eur = None
 
         fx_rate = None
-        if (
-            last_price_native not in (None, 0)
-            and last_price_eur_value not in (None, 0)
-        ):
+        if last_price_native not in (None, 0) and last_price_eur_value not in (None, 0):
             fx_rate = last_price_native / last_price_eur_value
-        elif (
-            last_close_native not in (None, 0)
-            and last_close_eur not in (None, 0)
-        ):
+        elif last_close_native not in (None, 0) and last_close_eur not in (None, 0):
             fx_rate = last_close_native / last_close_eur
 
         performance_metrics, day_change_metrics = select_performance_metrics(
@@ -829,17 +825,16 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
             avg_price_account_value = aggregation.avg_price_account
             if avg_price_account_value is None:
                 avg_price_account_value = average_cost.account
-                if (
-                    avg_price_account_value == 0.0
-                    and purchase_total_account_value in (0.0, None)
+                if avg_price_account_value == 0.0 and purchase_total_account_value in (
+                    0.0,
+                    None,
                 ):
                     avg_price_account_value = None
 
             average_cost_payload = asdict(average_cost)
-            if (
-                average_cost_payload["security"] == 0.0
-                and purchase_total_security_value in (0.0, None)
-            ):
+            if average_cost_payload[
+                "security"
+            ] == 0.0 and purchase_total_security_value in (0.0, None):
                 average_cost_payload["security"] = None
             if (
                 average_cost_payload["account"] == 0.0
@@ -921,7 +916,6 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
       - purchase_sum (Cent)
       - position_count
     """
-
     current_value = cent_to_eur(row["current_value"], default=0.0) or 0.0
     purchase_sum = cent_to_eur(row["purchase_sum"], default=0.0) or 0.0
     missing_value_positions = 0

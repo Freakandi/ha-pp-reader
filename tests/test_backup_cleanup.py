@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import logging
+from datetime import datetime
 
 from custom_components.pp_reader.data.backup_db import cleanup_old_backups
 
 
 def test_cleanup_skips_invalid_backups(tmp_path, caplog) -> None:
     """Ensure cleanup ignores backups with unexpected file names."""
-
     backup_dir = tmp_path / "backups"
     backup_dir.mkdir()
 

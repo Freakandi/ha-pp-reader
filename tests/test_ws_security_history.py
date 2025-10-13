@@ -51,7 +51,6 @@ def _ensure_minimal_homeassistant_stubs() -> None:
     class ActiveConnection:
         """Stub ActiveConnection placeholder."""
 
-
     def websocket_command(_schema):
         def decorator(func):
             async def wrapper(*args, **kwargs):
@@ -506,13 +505,16 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     }
     assert "avg_price_account" not in snapshot_payload
     assert "avg_price_security" not in snapshot_payload
-    expected_average_cost_eur = round_currency(
-        snapshot_payload["purchase_value_eur"] / snapshot_payload["total_holdings"]
-        if snapshot_payload["total_holdings"]
-        else 0.0,
-        decimals=6,
-        default=0.0,
-    ) or 0.0
+    expected_average_cost_eur = (
+        round_currency(
+            snapshot_payload["purchase_value_eur"] / snapshot_payload["total_holdings"]
+            if snapshot_payload["total_holdings"]
+            else 0.0,
+            decimals=6,
+            default=0.0,
+        )
+        or 0.0
+    )
     assert average_cost["eur"] == pytest.approx(expected_average_cost_eur)
     assert average_cost["source"] == "totals"
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)
@@ -534,8 +536,12 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         rel=0,
         abs=1e-6,
     )
-    assert performance["total_change_eur"] == pytest.approx(performance["gain_abs"], rel=0, abs=1e-6)
-    assert performance["gain_pct"] == pytest.approx(performance["total_change_pct"], rel=0, abs=1e-6)
+    assert performance["total_change_eur"] == pytest.approx(
+        performance["gain_abs"], rel=0, abs=1e-6
+    )
+    assert performance["gain_pct"] == pytest.approx(
+        performance["total_change_pct"], rel=0, abs=1e-6
+    )
     day_change = performance["day_change"]
     assert isinstance(day_change, dict)
     assert set(day_change) == {

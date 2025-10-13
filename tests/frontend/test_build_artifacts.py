@@ -12,15 +12,23 @@ MODULE_EXPORT_PATTERN = re.compile(
 
 def test_dashboard_bundle_artifacts_present() -> None:
     """Ensure the hashed dashboard bundle and source map exist and are referenced."""
-
     repo_root = Path(__file__).resolve().parents[2]
-    bundle_directory = repo_root / "custom_components" / "pp_reader" / "www" / "pp_reader_dashboard" / "js"
+    bundle_directory = (
+        repo_root
+        / "custom_components"
+        / "pp_reader"
+        / "www"
+        / "pp_reader_dashboard"
+        / "js"
+    )
 
     module_path = bundle_directory / "dashboard.module.js"
     module_contents = module_path.read_text(encoding="utf8")
 
     match = MODULE_EXPORT_PATTERN.search(module_contents)
-    assert match is not None, "dashboard.module.js must re-export a hashed dashboard bundle"
+    assert match is not None, (
+        "dashboard.module.js must re-export a hashed dashboard bundle"
+    )
 
     bundle_name = match.group("bundle")
     bundle_path = bundle_directory / bundle_name
@@ -34,16 +42,17 @@ def test_dashboard_bundle_artifacts_present() -> None:
     assert source_map_path.exists(), "source map for the dashboard bundle is missing"
 
     expected_source_map_reference = f"//# sourceMappingURL={source_map_path.name}"
-    assert (
-        expected_source_map_reference in bundle_source
-    ), "bundle should reference its source map for debugging"
+    assert expected_source_map_reference in bundle_source, (
+        "bundle should reference its source map for debugging"
+    )
 
     hashed_candidates = sorted(
         entry.name
         for entry in bundle_directory.iterdir()
-        if entry.is_file() and entry.name.startswith("dashboard.") and entry.name.endswith(".js")
+        if entry.is_file()
+        and entry.name.startswith("dashboard.")
+        and entry.name.endswith(".js")
     )
-    assert (
-        bundle_name in hashed_candidates
-    ), "resolved bundle should be among the available hashed dashboard artifacts"
-
+    assert bundle_name in hashed_candidates, (
+        "resolved bundle should be among the available hashed dashboard artifacts"
+    )

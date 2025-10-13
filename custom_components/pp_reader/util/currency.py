@@ -18,10 +18,10 @@ __all__ = [
     "CURRENCY_DECIMALS",
     "PRICE_DECIMALS",
     "cent_to_eur",
+    "normalize_price_to_eur_sync",
+    "normalize_raw_price",
     "round_currency",
     "round_price",
-    "normalize_raw_price",
-    "normalize_price_to_eur_sync",
 ]
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.util.currency")
@@ -33,13 +33,12 @@ PRICE_SCALE = 10**8
 
 
 def cent_to_eur(
-    value: float | int | None,
+    value: float | None,
     *,
     decimals: int = CURRENCY_DECIMALS,
     default: float | None = None,
 ) -> float | None:
     """Convert a cent-denominated value into EUR with consistent rounding."""
-
     if value in (None, ""):
         return default
 
@@ -55,13 +54,12 @@ def cent_to_eur(
 
 
 def round_currency(
-    value: float | int | None,
+    value: float | None,
     *,
     decimals: int = CURRENCY_DECIMALS,
     default: float | None = None,
 ) -> float | None:
     """Round a currency amount while gracefully handling missing values."""
-
     if value in (None, ""):
         return default
 
@@ -77,13 +75,12 @@ def round_currency(
 
 
 def round_price(
-    value: float | int | None,
+    value: float | None,
     *,
     decimals: int = PRICE_DECIMALS,
     default: float | None = None,
 ) -> float | None:
     """Round a price to the expected precision (4 decimal places)."""
-
     if value in (None, ""):
         return default
 
@@ -99,13 +96,12 @@ def round_price(
 
 
 def normalize_raw_price(
-    raw_price: float | int | None,
+    raw_price: float | None,
     *,
     decimals: int = PRICE_DECIMALS,
     default: float | None = None,
 ) -> float | None:
     """Convert an 8-decimal fixed-point price into a float."""
-
     if not raw_price:
         return default
 
@@ -121,7 +117,7 @@ def normalize_raw_price(
 
 
 def normalize_price_to_eur_sync(
-    raw_price: float | int | None,
+    raw_price: float | None,
     currency_code: str,
     reference_date: datetime,
     db_path: Path,
@@ -129,7 +125,6 @@ def normalize_price_to_eur_sync(
     decimals: int = PRICE_DECIMALS,
 ) -> float | None:
     """Normalize a raw price to EUR using synchronous FX helpers."""
-
     price_native = normalize_raw_price(raw_price, decimals=decimals)
     if price_native is None:
         return None
@@ -139,7 +134,9 @@ def normalize_price_to_eur_sync(
         return price_native
 
     try:
-        ensure_exchange_rates_for_dates_sync([reference_date], {normalized_currency}, db_path)
+        ensure_exchange_rates_for_dates_sync(
+            [reference_date], {normalized_currency}, db_path
+        )
         fx_rates: dict[str, Any] = load_latest_rates_sync(reference_date, db_path)
     except Exception:  # pragma: no cover - defensive
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def test_portfolio_update_gain_abs_handles_zero_purchase() -> None:
-    """ensure websocket updates keep gain when purchase_sum is zero."""
+    """Ensure websocket updates keep gain when purchase_sum is zero."""
     repo_root = Path(__file__).resolve().parents[1]
     script_path = repo_root / "frontend" / "portfolio_update_gain_abs.mjs"
     result = subprocess.run(

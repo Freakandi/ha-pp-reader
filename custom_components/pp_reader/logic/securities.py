@@ -37,7 +37,6 @@ _MISSING_NATIVE_POSITIONS: Counter[tuple[str, str]] = Counter()
 
 def get_missing_fx_diagnostics() -> dict[str, Any]:
     """Return a snapshot of accumulated missing FX diagnostics."""
-
     rate_failures = [
         {
             "currency": currency,
@@ -63,14 +62,12 @@ def get_missing_fx_diagnostics() -> dict[str, Any]:
 
 def reset_missing_fx_diagnostics() -> None:
     """Clear accumulated FX diagnostics (for tests or fresh runs)."""
-
     _FX_RATE_FAILURES.clear()
     _MISSING_NATIVE_POSITIONS.clear()
 
 
 def _record_rate_failure(currency: str | None, tx_date: datetime | None) -> None:
     """Track missing FX rate lookups grouped by currency and trade date."""
-
     if not currency or tx_date is None:
         return
 
@@ -81,7 +78,6 @@ def _record_missing_native_position(
     portfolio_uuid: str | None, security_uuid: str | None
 ) -> None:
     """Track purchases lacking native currency totals by portfolio/security."""
-
     if not portfolio_uuid or not security_uuid:
         return
 
@@ -104,7 +100,6 @@ def _normalize_transaction_amounts(
     tx_units: dict[str, Any] | None,
 ) -> _NormalizedTransactionAmounts:
     """Convert raw transaction figures into floats with fee/tax breakdown."""
-
     shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
     gross = cent_to_eur(transaction.amount, default=0.0) or 0.0
     fees = 0.0
@@ -401,9 +396,11 @@ def db_calculate_sec_purchase_value(
         native_currency: str | None = None
         native_account_amount: float | None = None
         if tx.type in PURCHASE_TYPES:
-            native_amount, native_currency, native_account_amount = _resolve_native_amount(
-                tx,
-                tx_units,
+            native_amount, native_currency, native_account_amount = (
+                _resolve_native_amount(
+                    tx,
+                    tx_units,
+                )
             )
         rate, _ = _determine_exchange_rate(
             tx,
@@ -452,7 +449,9 @@ def db_calculate_sec_purchase_value(
                 security_total = account_total
                 security_currency = security_currency or tx.currency_code
             security_price = (
-                security_total / shares if security_total is not None and shares > 0 else None
+                security_total / shares
+                if security_total is not None and shares > 0
+                else None
             )
             native_price = None
             if native_amount is not None and shares > 0:
@@ -518,7 +517,9 @@ def db_calculate_sec_purchase_value(
         portfolio_metrics[key] = PurchaseComputation(
             purchase_value=round(total_purchase, 2),
             avg_price_native=avg_price_native,
-            security_currency_total=round(security_total, 2) if security_shares else 0.0,
+            security_currency_total=round(security_total, 2)
+            if security_shares
+            else 0.0,
             account_currency_total=round(account_total, 2) if account_shares else 0.0,
             avg_price_security=avg_price_security,
             avg_price_account=avg_price_account,

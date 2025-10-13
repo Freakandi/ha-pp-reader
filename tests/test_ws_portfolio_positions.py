@@ -88,7 +88,6 @@ class StubConnection:
 @pytest.fixture
 def populated_db(tmp_path: Path) -> Path:
     """Create a SQLite database with one portfolio position."""
-
     db_path = tmp_path / "positions.db"
     initialize_database_schema(db_path)
 
@@ -138,9 +137,10 @@ def populated_db(tmp_path: Path) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path) -> None:
+async def test_ws_get_portfolio_positions_normalises_currency(
+    populated_db: Path,
+) -> None:
     """Ensure websocket payload applies shared currency helpers end-to-end."""
-
     entry = StubConfigEntry("entry-42", populated_db)
     hass = StubHass(entry)
     connection = StubConnection()
@@ -174,14 +174,20 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     expected_holdings = round_currency(12.345678, decimals=6, default=0.0) or 0.0
     assert position["current_holdings"] == pytest.approx(expected_holdings)  # noqa: S101
 
-    expected_purchase_value = round_currency(
-        cent_to_eur(123_456, default=0.0),
-        default=0.0,
-    ) or 0.0
-    expected_current_value = round_currency(
-        cent_to_eur(789_012, default=0.0),
-        default=0.0,
-    ) or 0.0
+    expected_purchase_value = (
+        round_currency(
+            cent_to_eur(123_456, default=0.0),
+            default=0.0,
+        )
+        or 0.0
+    )
+    expected_current_value = (
+        round_currency(
+            cent_to_eur(789_012, default=0.0),
+            default=0.0,
+        )
+        or 0.0
+    )
     expected_gain_abs = (
         round_currency(expected_current_value - expected_purchase_value, default=0.0)
         or 0.0
@@ -192,19 +198,15 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert "gain_abs" not in position  # noqa: S101
     assert "gain_pct" not in position  # noqa: S101
     expected_avg_cost_native = round_price(45.678901, decimals=6) or 0.0
-    expected_purchase_total_security = (
-        round_currency(2345.6789, default=0.0) or 0.0
-    )
-    expected_purchase_total_account = (
-        round_currency(3456.7891, default=0.0) or 0.0
-    )
+    expected_purchase_total_security = round_currency(2345.6789, default=0.0) or 0.0
+    expected_purchase_total_account = round_currency(3456.7891, default=0.0) or 0.0
 
     assert position["purchase_total_security"] == pytest.approx(
         expected_purchase_total_security
-    )  # noqa: S101
+    )
     assert position["purchase_total_account"] == pytest.approx(
         expected_purchase_total_account
-    )  # noqa: S101
+    )
     expected_avg_price_account = round_price(23.456789, decimals=6) or 0.0
     assert "avg_price_account" not in position  # noqa: S101
     assert "avg_price_security" not in position  # noqa: S101
@@ -228,15 +230,9 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
         )
         or 0.0
     )
-    assert average_cost["native"] == pytest.approx(
-        expected_avg_cost_native
-    )  # noqa: S101
-    assert average_cost["security"] == pytest.approx(
-        expected_avg_cost_security
-    )  # noqa: S101
-    assert average_cost["account"] == pytest.approx(
-        expected_avg_cost_account
-    )  # noqa: S101
+    assert average_cost["native"] == pytest.approx(expected_avg_cost_native)  # noqa: S101
+    assert average_cost["security"] == pytest.approx(expected_avg_cost_security)  # noqa: S101
+    assert average_cost["account"] == pytest.approx(expected_avg_cost_account)  # noqa: S101
     assert average_cost["eur"] == pytest.approx(expected_avg_cost_eur)  # noqa: S101
     assert average_cost["source"] == "totals"  # noqa: S101
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)  # noqa: S101
@@ -298,7 +294,6 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
 
 def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
     """Average-cost metrics should be forwarded from the payload without recomputing."""
-
     normalized = websocket_module._normalize_portfolio_positions(  # noqa: SLF001
         [
             {
@@ -349,12 +344,8 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
             "purchase_total_account": pytest.approx(round_currency(888.88) or 0.0),
             "average_cost": {
                 "native": pytest.approx(round_price(3.456789, decimals=6) or 0.0),
-                "security": pytest.approx(
-                    round_price(11.111111, decimals=6) or 0.0
-                ),
-                "account": pytest.approx(
-                    round_price(22.222222, decimals=6) or 0.0
-                ),
+                "security": pytest.approx(round_price(11.111111, decimals=6) or 0.0),
+                "account": pytest.approx(round_price(22.222222, decimals=6) or 0.0),
                 "eur": pytest.approx(round_currency(50.0) or 0.0),
                 "source": "totals",
                 "coverage_ratio": pytest.approx(round_currency(1.0) or 0.0),

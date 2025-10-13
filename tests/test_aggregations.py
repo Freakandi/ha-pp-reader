@@ -15,7 +15,6 @@ from custom_components.pp_reader.data.aggregations import (
 
 def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
     """The helper should sum holdings and compute weighted averages consistently."""
-
     rows = [
         {
             "current_holdings": 5,
@@ -60,7 +59,6 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
 
 def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> None:
     """Rows with missing or invalid data should gracefully fall back to defaults."""
-
     rows = [
         {
             "current_holdings": None,
@@ -95,7 +93,6 @@ def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> No
 
 def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
     """Average cost selection should prefer aggregation values and fall back to totals."""
-
     rows = [
         {
             "current_holdings": 5,
@@ -137,7 +134,6 @@ def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
 
 def test_select_average_cost_handles_missing_positive_holdings() -> None:
     """Totals fallback should use overall holdings when positive positions are absent."""
-
     aggregation = HoldingsAggregation(
         total_holdings=10.0,
         positive_holdings=0.0,
@@ -159,9 +155,10 @@ def test_select_average_cost_handles_missing_positive_holdings() -> None:
     assert selection.coverage_ratio == pytest.approx(1.0)
 
 
-def test_select_average_cost_prefers_explicit_totals_over_aggregation_defaults() -> None:
+def test_select_average_cost_prefers_explicit_totals_over_aggregation_defaults() -> (
+    None
+):
     """Explicit totals should drive the fallback calculations when provided."""
-
     aggregation = HoldingsAggregation(
         total_holdings=4.0,
         positive_holdings=4.0,

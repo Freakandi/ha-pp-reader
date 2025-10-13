@@ -77,7 +77,6 @@ def _sync_data_to_db(
 
 def _normalize_portfolio_amount(value: Any) -> float:
     """Normalize mixed cent/float values to a rounded EUR float."""
-
     if value is None:
         return 0.0
 
