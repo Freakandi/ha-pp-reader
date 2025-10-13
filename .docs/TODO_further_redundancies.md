@@ -239,11 +239,11 @@
       - Ziel/Ergebnis: UI/Test greifen auf `position.performance.gain_abs` zu.
 
 19. Backend/Frontend: Flaches `gain_pct` Feld entfernen
-   a) [ ] Entferne `gain_pct` aus Backend-Payloads.\
+   a) [x] Entferne `gain_pct` aus Backend-Payloads.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_normalize_portfolio_positions`\
       - Ziel/Ergebnis: Prozentwerte kommen nur noch aus `performance.gain_pct`.
-   b) [ ] Aktualisiere Frontend-Anzeigen und Tests.\
+   b) [x] Aktualisiere Frontend-Anzeigen und Tests.\
       - Dateipfad(e): `src/data/api.ts`, `src/data/updateConfigsWS.ts`, `src/tabs/overview.ts`, `tests/frontend/*`\
       - Betroffene Funktion(en)/Abschnitt(e): Prozentanzeige, Erwartungswerte\
       - Ziel/Ergebnis: UI/Test nutzen den verschachtelten Wert.

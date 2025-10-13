@@ -154,7 +154,8 @@ export interface PortfolioPosition {
   current_value: number;
   /** @deprecated Legacy field kept for backwards compatibility. */
   gain_abs?: number | null;
-  gain_pct: number;
+  /** @deprecated Legacy field kept for backwards compatibility. */
+  gain_pct?: number | null;
   purchase_total_security: number;
   purchase_total_account: number;
   /** @deprecated Legacy field kept for backwards compatibility. */

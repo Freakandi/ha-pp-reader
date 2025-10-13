@@ -156,7 +156,7 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
         holdings=1,
     )
     assert portfolios["p1"]["gain_abs"] == pytest.approx(performance_p1.gain_abs)
-    assert portfolios["p1"]["gain_pct"] == pytest.approx(performance_p1.gain_pct)
+    assert "gain_pct" not in portfolios["p1"]
     performance_payload_p1 = portfolios["p1"].get("performance")
     assert performance_payload_p1 is not None
     assert set(performance_payload_p1) == expected_performance_keys
@@ -196,7 +196,7 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
         holdings=1,
     )
     assert portfolios["p2"]["gain_abs"] == pytest.approx(performance_p2.gain_abs)
-    assert portfolios["p2"]["gain_pct"] == pytest.approx(performance_p2.gain_pct)
+    assert "gain_pct" not in portfolios["p2"]
     performance_payload_p2 = portfolios["p2"].get("performance")
     assert performance_payload_p2 is not None
     assert set(performance_payload_p2) == expected_performance_keys
@@ -228,7 +228,7 @@ async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -
         holdings=0,
     )
     assert portfolios["p3"]["gain_abs"] == pytest.approx(performance_p3.gain_abs)
-    assert portfolios["p3"]["gain_pct"] == pytest.approx(performance_p3.gain_pct)
+    assert "gain_pct" not in portfolios["p3"]
     performance_payload_p3 = portfolios["p3"].get("performance")
     assert performance_payload_p3 is not None
     assert set(performance_payload_p3) == expected_performance_keys
