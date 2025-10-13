@@ -581,7 +581,6 @@ pendingMap.set('portfolio-1', {
       purchase_value: 500,
       current_value: 1500,
       gain_abs: 1000,
-      gain_pct: 200,
       aggregation: {
         total_holdings: 10,
         positive_holdings: 10,
@@ -812,7 +811,6 @@ const normalizationPayload = {
       purchase_value: 3400,
       current_value: 3650,
       gain_abs: 250,
-      gain_pct: 7.35,
       aggregation: {
         total_holdings: '7',
         positive_holdings: undefined,
@@ -843,7 +841,6 @@ const normalizationPayload = {
       purchase_value: 800,
       current_value: 950,
       gain_abs: 150,
-      gain_pct: 18.75,
       aggregation: null,
       average_cost: null,
       performance: null,

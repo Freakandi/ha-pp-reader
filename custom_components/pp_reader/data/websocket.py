@@ -347,18 +347,6 @@ def _normalize_portfolio_positions(
         if purchase_total_account is None:
             purchase_total_account = 0.0
 
-        gain_pct_source: Any | None = None
-        if performance_payload is not None:
-            gain_pct_source = performance_payload.get("gain_pct")
-            if gain_pct_source in (None, ""):
-                gain_pct_source = performance_payload.get("total_change_pct")
-        if gain_pct_source in (None, ""):
-            gain_pct_source = item.get("gain_pct")
-        gain_pct_value = round_currency(
-            gain_pct_source,
-            default=0.0,
-        )
-
         normalized.append(
             {
                 "security_uuid": security_uuid,
@@ -373,7 +361,6 @@ def _normalize_portfolio_positions(
                     item.get("current_value"),
                     default=0.0,
                 ),
-                "gain_pct": gain_pct_value,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
                 "average_cost": average_cost,
@@ -491,7 +478,14 @@ async def _live_portfolios_payload(
             result = list(portfolios)
 
     if result is not None:
-        return result
+        normalized: list[dict[str, Any]] = []
+        for entry in result:
+            if not isinstance(entry, Mapping):
+                continue
+            normalized_entry = dict(entry)
+            normalized_entry.pop("gain_pct", None)
+            normalized.append(normalized_entry)
+        return normalized
 
     if not coordinator:
         return []

@@ -719,7 +719,6 @@ const normalizationPayload = {
       current_holdings: 0,
       purchase_value: updatePayload.purchase_sum,
       current_value: updatePayload.current_value,
-      gain_pct: 0,
       aggregation: null,
       average_cost: null,
       performance: {
