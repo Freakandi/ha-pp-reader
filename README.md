@@ -13,7 +13,8 @@ Portfolio Performance Reader syncs your local [Portfolio Performance](https://ww
 - **Live valuations with Yahoo Finance:** Fetches current quotes through `yahooquery`, recalculates affected portfolios, and emits compact update events only when prices change.
 - **Security drilldowns:** Security tabs show snapshot metrics (current value, gains, holdings) and chart historic closes captured during each import.
 - **Built-in dashboard panel:** Adds a persistent "Portfolio Dashboard" sidebar entry with streaming updates, expandable portfolio tables, and detail navigation.
-- **Unified performance metrics:** Gains and day-change deltas are calculated once in the backend and exposed as a structured `performance` payload that sensors, WebSocket consumers, and the dashboard all share.
+- **Structured purchase data:** Holdings aggregations and average-cost selections are computed once in the backend and exposed through the shared `aggregation`/`average_cost` payloads so every consumer sees identical purchase totals and provenance metadata.
+- **Unified performance metrics:** Gains and day-change deltas are calculated once in the backend and exposed as a structured `performance` payload that sensors, WebSocket consumers, and the dashboard all share – legacy flat fields such as `gain_abs`, `gain_pct`, or `day_price_change_*` are no longer emitted.
 - **Resilient storage:** Maintains six-hour rolling backups of the integration database and offers a manual service to trigger extra snapshots.
 
 ## Requirements
@@ -54,7 +55,7 @@ Releases include pre-built dashboard bundles. When working from a git checkout:
 - Portfolio value sensors expose current value, purchase sum, and gains in EUR for each portfolio.
 - Account balance sensors mirror the accounts from Portfolio Performance.
 - Last file update and backup sensors surface sync status information for automations.
-- Performance-related entities (portfolio value, unrealised gains, dashboard tables) reuse the same `performance` payload, so automations, WebSocket clients, and the dashboard all receive identical `gain_abs`, `gain_pct`, and day-change metrics with provenance metadata.
+- Performance-related entities (portfolio value, unrealised gains, dashboard tables) reuse the same `performance` payload, so automations, WebSocket clients, and the dashboard all receive identical gain, percentage, and day-change metrics with provenance metadata.
 
 ### Dashboard panel
 - The sidebar entry **Portfolio Dashboard** lists all portfolios with live updates, includes total footers, and highlights updated rows.
@@ -65,7 +66,9 @@ Releases include pre-built dashboard bundles. When working from a git checkout:
 
 ### Performance metrics payloads
 - WebSocket responses for portfolio positions and security snapshots bundle a `performance` object that contains aggregated gains, percentage deltas, and optional nested `day_change` details (native and EUR price differences plus coverage information).
-- Home Assistant events emitted during price updates reuse the same payload, so custom cards or automations receive the identical metrics as the dashboard.
+- Portfolio responses also surface an `average_cost` object that contains the selected purchase prices in native, security, account, and EUR denominations alongside their source (aggregation vs. derived totals) and coverage ratios.
+- Legacy flat fields such as `avg_price_security`, `avg_price_account`, `gain_abs`, `gain_pct`, and `day_price_change_*` have been removed from backend payloads. Automations or dashboards should depend on the structured `average_cost` and `performance` payloads instead.
+- Home Assistant events emitted during price updates reuse the same payloads, so custom cards or automations receive the identical metrics as the dashboard.
 
 ## Troubleshooting
 | Symptom | Suggested action |

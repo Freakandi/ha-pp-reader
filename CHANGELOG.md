@@ -16,6 +16,13 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
   payloads reuse the shared performance payload so gain/day-change fields stay aligned
   and embed optional overrides when provided.【F:custom_components/pp_reader/data/db_access.py†L645-L677】【F:custom_components/pp_reader/data/websocket.py†L315-L356】【F:custom_components/pp_reader/data/event_push.py†L83-L110】【F:custom_components/pp_reader/prices/price_service.py†L787-L833】【F:custom_components/pp_reader/sensors/gain_sensors.py†L91-L145】
 
+### Breaking Changes
+- Removed legacy flat payload fields (`avg_price_security`, `avg_price_account`,
+  `gain_abs`, `gain_pct`, `day_price_change_*`) from coordinator events, WebSocket
+  serializers, and dashboard APIs. Consumers must rely on the structured
+  `average_cost` and `performance` blocks to access purchase and performance
+  metrics going forward.【F:custom_components/pp_reader/data/websocket.py†L160-L356】【F:custom_components/pp_reader/data/event_push.py†L24-L118】【F:src/data/api.ts†L1-L211】【F:src/tabs/overview.ts†L78-L344】
+
 ## [0.13.0] - 2025-10-09
 
 ### Added
