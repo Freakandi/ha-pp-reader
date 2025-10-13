@@ -153,7 +153,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "average_cost": None,
             "last_close_native": None,
             "last_close_eur": None,
-            "day_price_change_eur": None,
             "day_change_pct": None,
             "performance": None,
         }
@@ -162,6 +161,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data.pop("average_purchase_price_native", None)
     data.pop("avg_price_account", None)
     data.pop("day_price_change_native", None)
+    data.pop("day_price_change_eur", None)
 
     raw_name = snapshot.get("name")
     data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
@@ -212,9 +212,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["last_close_eur"] = round_price(
         snapshot.get("last_close_eur"),
         decimals=6,
-    )
-    data["day_price_change_eur"] = round_currency(
-        snapshot.get("day_price_change_eur")
     )
     data["day_change_pct"] = round_currency(snapshot.get("day_change_pct"))
 

@@ -1088,16 +1088,12 @@ function ensureSnapshotMetrics(
   const performance = normalizePerformancePayload(snapshot.performance);
   const dayChange = performance?.day_change ?? null;
 
-  const fallbackDayPriceChangeEur = toFiniteNumber(
-    (snapshot as { day_price_change_eur?: unknown })?.day_price_change_eur,
-  );
   const fallbackDayChangePct = toFiniteNumber(
     (snapshot as { day_change_pct?: unknown })?.day_change_pct,
   );
 
   const dayPriceChangeNative = dayChange?.price_change_native ?? null;
-  const dayPriceChangeEur =
-    dayChange?.price_change_eur ?? fallbackDayPriceChangeEur ?? null;
+  const dayPriceChangeEur = dayChange?.price_change_eur ?? null;
   const dayChangePct = dayChange?.change_pct ?? fallbackDayChangePct ?? null;
 
   const totalChangeEur = performance?.total_change_eur ?? null;

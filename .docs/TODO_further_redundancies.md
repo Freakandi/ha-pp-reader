@@ -259,11 +259,11 @@
       - Ziel/Ergebnis: UI/Test erwarten nur noch `performance.day_change`.
 
 21. Backend/Frontend: `day_price_change_eur` Feld entfernen
-   a) [ ] Entferne das Feld aus Snapshot-/Positions-Payloads.\
+   a) [x] Entferne das Feld aus Snapshot-/Positions-Payloads.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_serialise_security_snapshot`, `_normalize_portfolio_positions`\
       - Ziel/Ergebnis: EUR-Preisänderung steckt nur im verschachtelten Performance-Block.
-   b) [ ] Aktualisiere UI/Tests auf die verschachtelte Struktur.\
+   b) [x] Aktualisiere UI/Tests auf die verschachtelte Struktur.\
       - Dateipfad(e): `src/data/api.ts`, `src/tabs/security_detail.ts`, `tests/frontend/dashboard_smoke.mjs`, `src/tabs/__tests__/security_detail.metrics.test.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Anzeige/Assertions für Tagesänderung\
       - Ziel/Ergebnis: UI/Test greifen auf `performance.day_change.price_change_eur` zu.
