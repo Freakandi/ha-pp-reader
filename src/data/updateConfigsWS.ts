@@ -29,7 +29,6 @@ interface PortfolioPositionData {
   current_value?: number | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
-  average_purchase_price_native?: number | null;
   purchase_total_security?: number | null;
   purchase_total_account?: number | null;
   avg_price_security?: number | null;

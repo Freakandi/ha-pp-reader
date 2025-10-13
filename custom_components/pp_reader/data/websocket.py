@@ -148,7 +148,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "last_price_eur": None,
             "market_value_eur": None,
             "purchase_value_eur": 0.0,
-            "average_purchase_price_native": None,
             "purchase_total_security": 0.0,
             "purchase_total_account": 0.0,
             "avg_price_security": None,
@@ -163,6 +162,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         }
 
     data = dict(snapshot)
+    data.pop("average_purchase_price_native", None)
 
     raw_name = snapshot.get("name")
     data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
@@ -187,11 +187,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["purchase_value_eur"] = (
         round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
     )
-    data["average_purchase_price_native"] = round_price(
-        snapshot.get("average_purchase_price_native"),
-        decimals=6,
-    )
-
     purchase_total_security = round_currency(
         snapshot.get("purchase_total_security"),
     )
@@ -281,6 +276,7 @@ def _normalize_portfolio_positions(
             aggregation_payload = asdict(raw_aggregation)
 
         if aggregation_payload is not None:
+            aggregation_payload.pop("average_purchase_price_native", None)
             security_total = aggregation_payload.get("security_currency_total")
             if (
                 security_total not in (None, "")
@@ -340,13 +336,6 @@ def _normalize_portfolio_positions(
             default=item.get("current_holdings"),
         )
 
-        avg_price_native = round_price(
-            _resolve_aggregation_value(
-                "average_purchase_price_native",
-                default=item.get("average_purchase_price_native"),
-            ),
-            decimals=6,
-        )
         avg_price_security = round_price(
             _resolve_aggregation_value(
                 "avg_price_security",
@@ -422,7 +411,6 @@ def _normalize_portfolio_positions(
                 ),
                 "gain_abs": gain_abs_value,
                 "gain_pct": gain_pct_value,
-                "average_purchase_price_native": avg_price_native,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
                 "avg_price_security": avg_price_security,
