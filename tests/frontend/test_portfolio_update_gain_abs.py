@@ -30,4 +30,9 @@ def test_portfolio_update_gain_abs_handles_zero_purchase() -> None:
     assert len(normalized_positions) == 1
     assert normalized_positions[0]["aggregation"] is None
     assert normalized_positions[0]["average_cost"] is None
-    assert normalized_positions[0]["performance"] is None
+    performance = normalized_positions[0]["performance"]
+    assert isinstance(performance, dict)
+    assert performance.get("gain_abs") == 15
+    assert performance.get("gain_pct") == 0
+    assert performance.get("total_change_eur") == 15
+    assert performance.get("total_change_pct") == 0

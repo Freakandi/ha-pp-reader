@@ -347,18 +347,6 @@ def _normalize_portfolio_positions(
         if purchase_total_account is None:
             purchase_total_account = 0.0
 
-        gain_abs_source: Any | None = None
-        if performance_payload is not None:
-            gain_abs_source = performance_payload.get("gain_abs")
-            if gain_abs_source in (None, ""):
-                gain_abs_source = performance_payload.get("total_change_eur")
-        if gain_abs_source in (None, ""):
-            gain_abs_source = item.get("gain_abs")
-        gain_abs_value = round_currency(
-            gain_abs_source,
-            default=0.0,
-        )
-
         gain_pct_source: Any | None = None
         if performance_payload is not None:
             gain_pct_source = performance_payload.get("gain_pct")
@@ -385,7 +373,6 @@ def _normalize_portfolio_positions(
                     item.get("current_value"),
                     default=0.0,
                 ),
-                "gain_abs": gain_abs_value,
                 "gain_pct": gain_pct_value,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,

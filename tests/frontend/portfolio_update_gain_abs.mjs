@@ -666,6 +666,14 @@ const simulateNormalizePosition = (position) => {
   const aggregation = hasAggregation ? simulateDeriveAggregation(position) : null;
   const averageCost = simulateNormalizeAverageCost(position);
   const performance = simulateNormalizePerformance(position);
+  const gainAbs =
+    typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)
+      ? performance.gain_abs
+      : null;
+  const gainPct =
+    typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
+      ? performance.gain_pct
+      : null;
 
   if (hasAggregation && aggregation) {
     normalized.aggregation = aggregation;
@@ -685,6 +693,18 @@ const simulateNormalizePosition = (position) => {
     normalized.performance = null;
   }
 
+  if (gainAbs !== null) {
+    normalized.gain_abs = gainAbs;
+  } else if ('gain_abs' in normalized) {
+    normalized.gain_abs = null;
+  }
+
+  if (gainPct !== null) {
+    normalized.gain_pct = gainPct;
+  } else if ('gain_pct' in normalized) {
+    normalized.gain_pct = null;
+  }
+
   return normalized;
 };
 
@@ -699,11 +719,17 @@ const normalizationPayload = {
       current_holdings: 0,
       purchase_value: updatePayload.purchase_sum,
       current_value: updatePayload.current_value,
-      gain_abs: updatePayload.current_value - updatePayload.purchase_sum,
       gain_pct: 0,
       aggregation: null,
       average_cost: null,
-      performance: null,
+      performance: {
+        gain_abs: String(updatePayload.current_value - updatePayload.purchase_sum),
+        gain_pct: '0',
+        total_change_eur: updatePayload.current_value - updatePayload.purchase_sum,
+        total_change_pct: 0,
+        source: 'derived',
+        coverage_ratio: null,
+      },
     },
   ],
 };
