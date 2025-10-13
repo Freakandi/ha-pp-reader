@@ -249,11 +249,11 @@
       - Ziel/Ergebnis: UI/Test nutzen den verschachtelten Wert.
 
 20. Backend/Frontend: `day_price_change_native` Feld entfernen
-   a) [ ] Entferne das Feld aus Snapshot-/Positionsserialisern.\
+   a) [x] Entferne das Feld aus Snapshot-/Positionsserialisern.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`\
       - Betroffene Funktion(en)/Abschnitt(e): `_serialise_security_snapshot`, `_normalize_portfolio_positions`\
       - Ziel/Ergebnis: Day-Change native kommt nur aus `performance.day_change.price_change_native`.
-   b) [ ] Passe UI und Tests auf das verschachtelte Feld an.\
+   b) [x] Passe UI und Tests auf das verschachtelte Feld an.\
       - Dateipfad(e): `src/data/api.ts`, `src/tabs/security_detail.ts`, `tests/frontend/dashboard_smoke.mjs`, `src/tabs/__tests__/security_detail.metrics.test.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Day-Change Darstellung\
       - Ziel/Ergebnis: UI/Test erwarten nur noch `performance.day_change`.
