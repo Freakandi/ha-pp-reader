@@ -24,7 +24,6 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
             "account_currency_total": 201.789,
             "avg_price_native": 20.3333333,
             "avg_price_security": 40.9876543,
-            "avg_price_account": 41.1234567,
         },
         {
             "current_holdings": "3",
@@ -33,7 +32,6 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
             "account_currency_total": None,
             "avg_price_native": "30.123456",
             "avg_price_security": None,
-            "avg_price_account": "35.987654",
         },
         {
             "current_holdings": -2,
@@ -42,7 +40,6 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
             "account_currency_total": "50.555",
             "avg_price_native": 25,
             "avg_price_security": 45,
-            "avg_price_account": 46,
         },
     ]
 
@@ -58,7 +55,7 @@ def test_compute_holdings_aggregation_handles_mixed_rows() -> None:
     assert result.account_currency_total == pytest.approx(252.34)
     assert result.purchase_total_account == pytest.approx(252.34)
     assert result.average_purchase_price_native == pytest.approx(24.004629)
-    assert result.avg_price_account == pytest.approx(39.197531)
+    assert result.avg_price_account is None
 
 
 def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> None:
@@ -72,7 +69,6 @@ def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> No
             "account_currency_total": None,
             "avg_price_native": None,
             "avg_price_security": None,
-            "avg_price_account": None,
         },
         SimpleNamespace(
             current_holdings="not-a-number",
@@ -81,7 +77,6 @@ def test_compute_holdings_aggregation_handles_missing_and_invalid_values() -> No
             account_currency_total=" ",
             avg_price_native="bad",
             avg_price_security="bad",
-            avg_price_account="bad",
         ),
     ]
 
@@ -109,7 +104,6 @@ def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
             "account_currency_total": 201.789,
             "avg_price_native": 20.3333333,
             "avg_price_security": 40.9876543,
-            "avg_price_account": 41.1234567,
         },
         {
             "current_holdings": "3",
@@ -118,7 +112,6 @@ def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
             "account_currency_total": None,
             "avg_price_native": "30.123456",
             "avg_price_security": None,
-            "avg_price_account": "35.987654",
         },
         {
             "current_holdings": -2,
@@ -127,7 +120,6 @@ def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
             "account_currency_total": "50.555",
             "avg_price_native": 25,
             "avg_price_security": 45,
-            "avg_price_account": 46,
         },
     ]
 
@@ -135,7 +127,8 @@ def test_select_average_cost_prefers_aggregation_and_totals_fallbacks() -> None:
     selection = select_average_cost(aggregation, holdings=8.0)
 
     assert selection.native == pytest.approx(aggregation.average_purchase_price_native)
-    assert selection.account == pytest.approx(aggregation.avg_price_account)
+    assert aggregation.avg_price_account is None
+    assert selection.account == pytest.approx(31.5425, rel=0, abs=1e-6)
     assert selection.security == pytest.approx(40.0725)
     assert selection.eur == pytest.approx(4.375)
     assert selection.source == "totals"

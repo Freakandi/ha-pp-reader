@@ -150,7 +150,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "purchase_value_eur": 0.0,
             "purchase_total_security": 0.0,
             "purchase_total_account": 0.0,
-            "avg_price_account": None,
             "average_cost": None,
             "last_close_native": None,
             "last_close_eur": None,
@@ -162,6 +161,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
 
     data = dict(snapshot)
     data.pop("average_purchase_price_native", None)
+    data.pop("avg_price_account", None)
 
     raw_name = snapshot.get("name")
     data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
@@ -198,11 +198,6 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     )
     data["purchase_total_account"] = (
         purchase_total_account if purchase_total_account is not None else 0.0
-    )
-
-    data["avg_price_account"] = round_price(
-        snapshot.get("avg_price_account"),
-        decimals=6,
     )
 
     raw_average_cost = snapshot.get("average_cost")
@@ -272,6 +267,7 @@ def _normalize_portfolio_positions(
 
         if aggregation_payload is not None:
             aggregation_payload.pop("average_purchase_price_native", None)
+            aggregation_payload.pop("avg_price_account", None)
             security_total = aggregation_payload.get("security_currency_total")
             if (
                 security_total not in (None, "")
@@ -329,14 +325,6 @@ def _normalize_portfolio_positions(
         holdings_source = _resolve_aggregation_value(
             "total_holdings",
             default=item.get("current_holdings"),
-        )
-
-        avg_price_account = round_price(
-            _resolve_aggregation_value(
-                "avg_price_account",
-                default=item.get("avg_price_account"),
-            ),
-            decimals=6,
         )
 
         purchase_total_security = round_currency(
@@ -401,7 +389,6 @@ def _normalize_portfolio_positions(
                 "gain_pct": gain_pct_value,
                 "purchase_total_security": purchase_total_security,
                 "purchase_total_account": purchase_total_account,
-                "avg_price_account": avg_price_account,
                 "average_cost": average_cost,
                 "performance": performance_payload,
                 "aggregation": aggregation_payload,

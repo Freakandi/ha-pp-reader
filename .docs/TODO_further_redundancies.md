@@ -215,15 +215,15 @@
       - Ziel/Ergebnis: Keine Legacy-Feldprüfungen verbleiben.
 
 17. Backend/Frontend: `avg_price_account` Feld entfernen
-   a) [ ] Entferne das Feld aus Aggregations-/Serializer-Payloads.\
+   a) [x] Entferne das Feld aus Aggregations-/Serializer-Payloads.\
       - Dateipfad(e): `custom_components/pp_reader/data/websocket.py`, `custom_components/pp_reader/data/aggregations.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Serialisierung für Portfolio/Snapshot\
       - Ziel/Ergebnis: Feld entfällt vollständig.
-   b) [ ] Stelle UI auf `average_cost.account` um.\
+   b) [x] Stelle UI auf `average_cost.account` um.\
       - Dateipfad(e): `src/data/api.ts`, `src/tabs/types.ts`, `src/tabs/overview.ts`, `src/tabs/security_detail.ts`\
       - Betroffene Funktion(en)/Abschnitt(e): Interfacetypen, Renderer\
       - Ziel/Ergebnis: UI referenziert das strukturierte Feld.
-   c) [ ] Aktualisiere Tests/Fixtures mit neuen Assertions.\
+   c) [x] Aktualisiere Tests/Fixtures mit neuen Assertions.\
       - Dateipfad(e): `tests/test_aggregations.py`, `tests/frontend/*`, `src/tabs/__tests__/*`\
       - Betroffene Funktion(en)/Abschnitt(e): Durchschnittspreis-Assertions\
       - Ziel/Ergebnis: Testdaten enthalten keine Legacy-Felder mehr.

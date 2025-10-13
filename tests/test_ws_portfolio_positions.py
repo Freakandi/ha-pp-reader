@@ -212,14 +212,19 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
         expected_purchase_total_account
     )  # noqa: S101
     expected_avg_price_account = round_price(23.456789, decimals=6) or 0.0
-    assert position["avg_price_account"] == pytest.approx(
-        expected_avg_price_account
-    )  # noqa: S101
+    assert "avg_price_account" not in position  # noqa: S101
     assert "avg_price_security" not in position  # noqa: S101
 
     average_cost = position["average_cost"]
     assert average_cost is not None  # noqa: S101
-    expected_avg_cost_security = round_price(12.345678, decimals=6) or 0.0
+    expected_avg_cost_security = (
+        round_price(
+            expected_purchase_total_security / expected_holdings,
+            decimals=6,
+        )
+        if expected_holdings
+        else 0.0
+    ) or 0.0
     expected_avg_cost_account = expected_avg_price_account
     expected_avg_cost_eur = (
         round_currency(
@@ -241,7 +246,6 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
     assert average_cost["eur"] == pytest.approx(expected_avg_cost_eur)  # noqa: S101
     assert average_cost["source"] == "totals"  # noqa: S101
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)  # noqa: S101
-    assert average_cost["account"] == position["avg_price_account"]  # noqa: S101
     assert average_cost["eur"] == pytest.approx(expected_avg_cost_eur)  # noqa: S101
 
     aggregation = position["aggregation"]
@@ -253,7 +257,6 @@ async def test_ws_get_portfolio_positions_normalises_currency(populated_db: Path
         "purchase_value_eur": expected_purchase_value,
         "security_currency_total": expected_purchase_total_security,
         "account_currency_total": expected_purchase_total_account,
-        "avg_price_account": expected_avg_price_account,
         "purchase_total_security": expected_purchase_total_security,
         "purchase_total_account": expected_purchase_total_account,
     }
@@ -313,7 +316,6 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "gain_pct": 12.0,
                 "purchase_total_security": 222.22,
                 "purchase_total_account": 333.33,
-                "avg_price_account": 22.222222,
                 "average_cost": {
                     "native": 3.456789,
                     "security": 11.111111,
@@ -333,7 +335,6 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "aggregation": {
                     "purchase_total_security": 999.99,
                     "purchase_total_account": 888.88,
-                    "avg_price_account": 88.888888,
                     "purchase_value_eur": 123.45,
                 },
             }
@@ -357,13 +358,10 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "purchase_total_account": pytest.approx(
                     round_currency(888.88) or 0.0
                 ),
-                "avg_price_account": pytest.approx(
-                    round_price(88.888888, decimals=6) or 0.0
-                ),
                 "average_cost": {
                     "native": pytest.approx(
-                    round_price(3.456789, decimals=6) or 0.0
-                ),
+                        round_price(3.456789, decimals=6) or 0.0
+                    ),
                 "security": pytest.approx(
                     round_price(11.111111, decimals=6) or 0.0
                 ),
@@ -389,9 +387,6 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
                 "purchase_total_account": pytest.approx(
                     round_currency(888.88) or 0.0
                 ),
-                "avg_price_account": pytest.approx(
-                    round_price(88.888888, decimals=6) or 0.0
-                ),
                 "purchase_value_eur": pytest.approx(round_currency(123.45) or 0.0),
             },
         }
@@ -402,3 +397,4 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
     aggregation = normalized_entry["aggregation"]
     assert aggregation is not None  # noqa: S101
     assert "avg_price_security" not in aggregation  # noqa: S101
+    assert "avg_price_account" not in aggregation  # noqa: S101
