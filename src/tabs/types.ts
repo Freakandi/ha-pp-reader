@@ -156,7 +156,8 @@ export interface PortfolioPosition {
   gain_pct: number;
   purchase_total_security: number;
   purchase_total_account: number;
-  avg_price_account: number | null;
+  /** @deprecated Legacy field kept for backwards compatibility. */
+  avg_price_account?: number | null;
   /**
    * Structured selection of average purchase prices with provenance metadata.
    */

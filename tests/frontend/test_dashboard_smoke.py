@@ -44,7 +44,7 @@ def test_dashboard_bundle_smoke() -> None:
     assert first_normalized["aggregation"]["total_holdings"] == 0
     assert first_normalized["aggregation"]["purchase_value_eur"] == 3400
     assert first_normalized["aggregation"]["purchase_total_security"] == 3500.25
-    assert first_normalized["aggregation"]["avg_price_account"] == 13.37
+    assert "avg_price_account" not in first_normalized["aggregation"]
     assert "avg_price_security" not in first_normalized["aggregation"]
     assert first_normalized["average_cost"]["native"] is None
     assert first_normalized["average_cost"]["security"] == 45.67

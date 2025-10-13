@@ -470,6 +470,14 @@ function buildSnapshotFromPortfolioCache(
             })
           : null;
 
+      const derivedAccountAverage =
+        accountTotal != null
+          ? roundCurrency(accountTotal / holdings, {
+              decimals: 6,
+              fallback: null,
+            })
+          : null;
+
       const avgNative =
         averageCost?.native ??
         averageCost?.security ??
@@ -490,8 +498,8 @@ function buildSnapshotFromPortfolioCache(
 
       const avgAccount =
         averageCost?.account ??
-        toFiniteNumber(aggregation?.avg_price_account) ??
-        toFiniteNumber(position?.avg_price_account);
+        averageCost?.eur ??
+        derivedAccountAverage;
       if (avgAccount != null) {
         accountWeightedSum += holdings * avgAccount;
         accountWeight += holdings;
@@ -594,7 +602,6 @@ function buildSnapshotFromPortfolioCache(
     last_price_eur: lastPriceEur,
     purchase_total_security: purchaseTotalSecurityRounded,
     purchase_total_account: purchaseTotalAccountRounded,
-    avg_price_account: averageAccount,
     source: 'cache',
     performance: performancePayload,
     average_cost: aggregatedAverageCost,
@@ -1046,14 +1053,23 @@ function ensureSnapshotMetrics(
   const currentValueEur =
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur);
+  const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
   const averageCost = normalizeAverageCost(snapshot);
   const averagePurchaseNative =
     averageCost?.native ??
     averageCost?.security ??
     null;
+  const fallbackAccountAverage =
+    isPositiveFinite(holdings) && isFiniteNumber(purchaseTotalAccount)
+      ? roundCurrency(purchaseTotalAccount / holdings, {
+          decimals: 6,
+          fallback: null,
+        })
+      : null;
   const averagePurchaseAccount =
     averageCost?.account ??
-    toFiniteNumber(snapshot.avg_price_account);
+    averageCost?.eur ??
+    fallbackAccountAverage;
   const averagePurchaseEur = averageCost?.eur ?? null;
   const lastPriceNative =
     toFiniteNumber(snapshot.last_price_native) ??

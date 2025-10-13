@@ -237,10 +237,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         if avg_native is not None:
             row["avg_price_native"] = avg_native
 
-        avg_price_account = _coerce_float(item.get("avg_price_account"))
-        if avg_price_account is not None:
-            row["avg_price_account"] = avg_price_account
-
         if not row:
             return compute_holdings_aggregation([])
         return compute_holdings_aggregation([row])
@@ -261,9 +257,12 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     aggregation_payload["purchase_total_account"] = (
         aggregation_obj.purchase_total_account
     )
+    aggregation_payload.pop("avg_price_account", None)
 
     if isinstance(aggregation_raw, Mapping):
         for key, value in aggregation_raw.items():
+            if key == "avg_price_account":
+                continue
             if value in (None, ""):
                 continue
             if key in {"purchase_value_cents"}:
@@ -323,10 +322,6 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
     gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
 
-    avg_price_account = average_cost_payload.get("account")
-    if avg_price_account is None:
-        avg_price_account = aggregation_obj.avg_price_account
-
     purchase_total_security = aggregation_obj.purchase_total_security
     purchase_total_account = aggregation_obj.purchase_total_account
 
@@ -340,10 +335,10 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         "gain_pct": gain_pct,
         "purchase_total_security": purchase_total_security,
         "purchase_total_account": purchase_total_account,
-        "avg_price_account": avg_price_account,
     }
 
     if aggregation_payload:
+        aggregation_payload.pop("avg_price_account", None)
         aggregation_payload.pop("average_purchase_price_native", None)
         normalized["aggregation"] = aggregation_payload
 

@@ -504,7 +504,7 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
         "source",
         "coverage_ratio",
     }
-    assert average_cost["account"] == snapshot_payload["avg_price_account"]
+    assert "avg_price_account" not in snapshot_payload
     assert "avg_price_security" not in snapshot_payload
     expected_average_cost_eur = round_currency(
         snapshot_payload["purchase_value_eur"] / snapshot_payload["total_holdings"]
