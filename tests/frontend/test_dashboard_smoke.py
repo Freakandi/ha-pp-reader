@@ -25,8 +25,12 @@ def test_dashboard_bundle_smoke() -> None:
     payload = json.loads(lines[-1])
 
     assert payload["footerGain"] == "1.500,00\u00a0€"
-    assert "positive" in payload["footerGainHtml"], "footer gain markup should signal positive gains"
-    assert payload["footerGainPct"] in ("", "0,00 %", "—"), "zero purchase should yield neutral gain pct"
+    assert "positive" in payload["footerGainHtml"], (
+        "footer gain markup should signal positive gains"
+    )
+    assert payload["footerGainPct"] in ("", "0,00 %", "—"), (
+        "zero purchase should yield neutral gain pct"
+    )
     assert payload["footerGainSign"] in ("", "positive", "neutral")
     assert payload["flushApplied"] is True
     assert payload["positionsMarkupIncludesTable"] is True

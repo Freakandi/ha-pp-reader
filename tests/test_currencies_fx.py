@@ -135,20 +135,20 @@ async def test_fetch_exchange_rates_handles_network_issues(
     """Network errors should be logged as warnings without raising exceptions."""
 
     class FailingRequest:
-        async def __aenter__(self) -> None:  # noqa: D401 - simple stub
+        async def __aenter__(self) -> None:
             raise OSError("Network is unreachable")
 
-        async def __aexit__(self, *_exc: Any) -> bool:
+        async def __aexit__(self, *_exc: object) -> bool:
             return False
 
     class FakeSession:
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             return None
 
-        async def __aenter__(self) -> "FakeSession":
+        async def __aenter__(self) -> FakeSession:
             return self
 
-        async def __aexit__(self, *_exc: Any) -> bool:
+        async def __aexit__(self, *_exc: object) -> bool:
             return False
 
         def get(self, *_args: Any, **_kwargs: Any) -> FailingRequest:
@@ -174,20 +174,20 @@ async def test_fetch_exchange_rates_logs_once(
     """Repeated failures should only emit a single warning per day/currency set."""
 
     class FailingRequest:
-        async def __aenter__(self) -> None:  # noqa: D401 - simple stub
+        async def __aenter__(self) -> None:
             raise OSError("Network is unreachable")
 
-        async def __aexit__(self, *_exc: Any) -> bool:
+        async def __aexit__(self, *_exc: object) -> bool:
             return False
 
     class FakeSession:
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             return None
 
-        async def __aenter__(self) -> "FakeSession":
+        async def __aenter__(self) -> FakeSession:
             return self
 
-        async def __aexit__(self, *_exc: Any) -> bool:
+        async def __aexit__(self, *_exc: object) -> bool:
             return False
 
         def get(self, *_args: Any, **_kwargs: Any) -> FailingRequest:

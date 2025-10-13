@@ -74,7 +74,6 @@ def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
 
 def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None:
     """Ensure `avg_price_native` exists on portfolio securities tables."""
-
     try:
         cur = conn.execute("PRAGMA table_info(portfolio_securities)")
         existing_cols = {row[1] for row in cur.fetchall()}
@@ -110,7 +109,6 @@ def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None
 
 def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
     """Ensure purchase summary columns on portfolio securities exist."""
-
     try:
         cur = conn.execute("PRAGMA table_info(portfolio_securities)")
         existing_cols = {row[1] for row in cur.fetchall()}
@@ -149,29 +147,23 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
         migrations.append(
             (
                 "avg_price_security",
-                (
-                    "ALTER TABLE portfolio_securities "
-                    "ADD COLUMN avg_price_security REAL"
-                ),
+                ("ALTER TABLE portfolio_securities ADD COLUMN avg_price_security REAL"),
             )
         )
     if "avg_price_account" not in existing_cols:
         migrations.append(
             (
                 "avg_price_account",
-                (
-                    "ALTER TABLE portfolio_securities "
-                    "ADD COLUMN avg_price_account REAL"
-                ),
+                ("ALTER TABLE portfolio_securities ADD COLUMN avg_price_account REAL"),
             )
         )
 
     if not migrations:
         _LOGGER.debug(
-            (
+
                 "Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - "
                 "nichts zu tun"
-            )
+
         )
     else:
         for col, ddl in migrations:
@@ -195,7 +187,6 @@ def _backfill_portfolio_purchase_extension_defaults(
     conn: sqlite3.Connection,
 ) -> None:
     """Populate default values for purchase extension columns."""
-
     updates: list[tuple[str, str]] = [
         (
             "security_currency_total",

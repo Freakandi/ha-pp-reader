@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
@@ -13,8 +13,8 @@ from custom_components.pp_reader.util.currency import (
 )
 
 __all__ = [
-    "HoldingsAggregation",
     "AverageCostSelection",
+    "HoldingsAggregation",
     "compute_holdings_aggregation",
     "select_average_cost",
 ]
@@ -36,13 +36,11 @@ class HoldingsAggregation:
     @property
     def purchase_total_security(self) -> float:
         """Return the aggregated security currency total."""
-
         return self.security_currency_total
 
     @property
     def purchase_total_account(self) -> float:
         """Return the aggregated account currency total."""
-
         return self.account_currency_total
 
 
@@ -60,7 +58,6 @@ class AverageCostSelection:
 
 def _coerce_float(value: Any) -> float | None:
     """Try to coerce the given value into a float."""
-
     if value in (None, ""):
         return None
     try:
@@ -71,7 +68,6 @@ def _coerce_float(value: Any) -> float | None:
 
 def _get_value(row: Mapping[str, Any] | Any, key: str) -> Any:
     """Extract a value from a mapping-like row."""
-
     if isinstance(row, Mapping):
         return row.get(key)
     if hasattr(row, key):
@@ -86,7 +82,6 @@ def compute_holdings_aggregation(
     rows: Iterable[Mapping[str, Any] | Any],
 ) -> HoldingsAggregation:
     """Compute aggregate metrics for portfolio security holdings."""
-
     total_holdings_raw = 0.0
     positive_holdings_raw = 0.0
     purchase_value_cents = 0
@@ -108,15 +103,11 @@ def compute_holdings_aggregation(
             except (TypeError, ValueError):
                 pass
 
-        security_total_raw = _coerce_float(
-            _get_value(row, "security_currency_total")
-        )
+        security_total_raw = _coerce_float(_get_value(row, "security_currency_total"))
         if security_total_raw is not None:
             security_currency_total_raw += security_total_raw
 
-        account_total_raw = _coerce_float(
-            _get_value(row, "account_currency_total")
-        )
+        account_total_raw = _coerce_float(_get_value(row, "account_currency_total"))
         if account_total_raw is not None:
             account_currency_total_raw += account_total_raw
 
@@ -136,15 +127,11 @@ def compute_holdings_aggregation(
     total_holdings = round(total_holdings_raw, 6)
     positive_holdings = round(positive_holdings_raw, 6)
 
-    purchase_total_security = round_currency(
-        security_currency_total_raw, default=0.0
-    )
+    purchase_total_security = round_currency(security_currency_total_raw, default=0.0)
     if purchase_total_security is None:
         purchase_total_security = 0.0
 
-    purchase_total_account = round_currency(
-        account_currency_total_raw, default=0.0
-    )
+    purchase_total_account = round_currency(account_currency_total_raw, default=0.0)
     if purchase_total_account is None:
         purchase_total_account = 0.0
 
@@ -193,7 +180,6 @@ def select_average_cost(
     account_currency_total: float | None = None,
 ) -> AverageCostSelection:
     """Derive consistent average cost values based on a holdings aggregation."""
-
     native = aggregation.average_purchase_price_native
     security = None
     account = aggregation.avg_price_account

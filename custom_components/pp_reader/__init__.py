@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Final
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import (
     async_register_built_in_panel,
+)
+from homeassistant.components.frontend import (
     async_remove_panel as frontend_async_remove_panel,
 )
 from homeassistant.components.http import StaticPathConfig
@@ -86,7 +88,6 @@ def _build_panel_config(
     placeholder: bool,
 ) -> dict[str, Any]:
     """Return the panel registration payload used for placeholder and live panels."""
-
     config: dict[str, Any] = {"entry_id": entry_id}
     if placeholder:
         config["placeholder"] = True
@@ -283,7 +284,6 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
 
 async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
     """Register a lightweight placeholder panel so /ppreader never 404s."""
-
     existing_panel = next(
         (
             panel
@@ -315,9 +315,7 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
             await register_result
         _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
     except ValueError:
-        _LOGGER.exception(
-            "❌ Fehler bei der Registrierung des Panel-Platzhalters"
-        )
+        _LOGGER.exception("❌ Fehler bei der Registrierung des Panel-Platzhalters")
     except AttributeError:
         _LOGGER.exception(
             "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"

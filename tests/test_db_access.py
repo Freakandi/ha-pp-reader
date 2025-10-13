@@ -157,12 +157,12 @@ sys.modules.setdefault("custom_components.pp_reader", pp_reader_pkg)
 
 # Ensure hierarchical attributes exist so monkeypatch resolution works when
 # submodules have not been imported yet.
-setattr(custom_components_pkg, "pp_reader", pp_reader_pkg)
+custom_components_pkg.pp_reader = pp_reader_pkg
 
 data_pkg = types.ModuleType("custom_components.pp_reader.data")
 data_pkg.__path__ = [str(REPO_ROOT / "custom_components" / "pp_reader" / "data")]
 sys.modules.setdefault("custom_components.pp_reader.data", data_pkg)
-setattr(pp_reader_pkg, "data", data_pkg)
+pp_reader_pkg.data = data_pkg
 
 
 from custom_components.pp_reader.data.db_access import (
@@ -173,8 +173,8 @@ from custom_components.pp_reader.data.db_access import (
     get_security_snapshot,
     iter_security_close_prices,
 )
-from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 
 @pytest.fixture
@@ -310,7 +310,6 @@ def seeded_snapshot_db(tmp_path: Path) -> Path:
 
 def test_get_portfolio_securities_exposes_native_average(tmp_path: Path) -> None:
     """Portfolio security loaders should surface stored native averages."""
-
     db_path = tmp_path / "portfolio_native.db"
     initialize_database_schema(db_path)
 
@@ -363,7 +362,6 @@ def test_get_portfolio_positions_populates_aggregation_fields(
     seeded_snapshot_db: Path,
 ) -> None:
     """Portfolio positions should expose aggregation metrics for all fields."""
-
     expected_by_portfolio = {
         "p-usd-a": {
             "aggregation": {
@@ -450,10 +448,10 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         )
 
         # Existing payload mirrors aggregation outcomes to ensure no duplicate math paths.
+        assert position["current_holdings"] == expected["aggregation"]["total_holdings"]
         assert (
-            position["current_holdings"] == expected["aggregation"]["total_holdings"]
+            position["purchase_value"] == expected["aggregation"]["purchase_value_eur"]
         )
-        assert position["purchase_value"] == expected["aggregation"]["purchase_value_eur"]
         assert (
             position["purchase_total_security"]
             == expected["aggregation"]["purchase_total_security"]
@@ -521,7 +519,11 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         account_total = aggregation.get("purchase_total_account")
         account_avg = aggregation.get("avg_price_account")
         expected_account_avg = account_avg
-        if expected_account_avg is None and account_total not in (None, "") and total_holdings:
+        if (
+            expected_account_avg is None
+            and account_total not in (None, "")
+            and total_holdings
+        ):
             expected_account_avg = round_currency(
                 account_total / total_holdings,
                 decimals=6,
@@ -554,8 +556,12 @@ def test_get_portfolio_positions_populates_aggregation_fields(
             expected_gain_pct = 0.0
 
         assert position["gain_pct"] == pytest.approx(expected_gain_pct, rel=0, abs=1e-2)
-        assert performance["gain_abs"] == pytest.approx(position["gain_abs"], rel=0, abs=1e-6)
-        assert performance["gain_pct"] == pytest.approx(position["gain_pct"], rel=0, abs=1e-6)
+        assert performance["gain_abs"] == pytest.approx(
+            position["gain_abs"], rel=0, abs=1e-6
+        )
+        assert performance["gain_pct"] == pytest.approx(
+            position["gain_pct"], rel=0, abs=1e-6
+        )
         assert performance["total_change_eur"] == pytest.approx(
             position["gain_abs"], rel=0, abs=1e-6
         )
@@ -568,10 +574,7 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         if position["average_purchase_price_native"] is None:
             assert average_cost["native"] is None
         else:
-            assert (
-                average_cost["native"]
-                == position["average_purchase_price_native"]
-            )
+            assert average_cost["native"] == position["average_purchase_price_native"]
 
         for field in ("account",):
             if position[f"avg_price_{field}"] is None:
@@ -587,16 +590,14 @@ def test_get_portfolio_positions_populates_aggregation_fields(
             assert average_cost["source"] == "totals"
             assert average_cost["coverage_ratio"] == pytest.approx(1.0)
         else:
-            assert (
-                average_cost["eur"] is None
-                or average_cost["eur"] == pytest.approx(0.0)
+            assert average_cost["eur"] is None or average_cost["eur"] == pytest.approx(
+                0.0
             )
             assert average_cost["coverage_ratio"] is None
 
         sources.add(average_cost["source"])
 
     assert "totals" in sources
-
 
 
 def test_iter_security_close_prices_orders_and_filters_range(
@@ -852,7 +853,6 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Zero holdings should not trigger division errors and keep purchase sums."""
-
     reference_date = datetime(2024, 5, 1, 12, 0, 0)
 
     class _FixedDatetime(datetime):

@@ -152,12 +152,8 @@ def test_purchase_value_and_native_average(
         expected_purchase_value, rel=0, abs=0.01
     )
     assert computation.avg_price_native == pytest.approx(110.0, rel=0, abs=1e-6)
-    assert computation.security_currency_total == pytest.approx(
-        220.0, rel=0, abs=1e-6
-    )
-    assert computation.account_currency_total == pytest.approx(
-        220.0, rel=0, abs=1e-6
-    )
+    assert computation.security_currency_total == pytest.approx(220.0, rel=0, abs=1e-6)
+    assert computation.account_currency_total == pytest.approx(220.0, rel=0, abs=1e-6)
     assert computation.avg_price_security == pytest.approx(110.0, rel=0, abs=1e-6)
     assert computation.avg_price_account == pytest.approx(110.0, rel=0, abs=1e-6)
 
@@ -222,12 +218,8 @@ def test_missing_native_data_yields_none(
     assert computation.purchase_value == pytest.approx(
         expected_purchase_value, rel=0, abs=0.01
     )
-    assert computation.security_currency_total == pytest.approx(
-        330.0, rel=0, abs=1e-6
-    )
-    assert computation.account_currency_total == pytest.approx(
-        330.0, rel=0, abs=1e-6
-    )
+    assert computation.security_currency_total == pytest.approx(330.0, rel=0, abs=1e-6)
+    assert computation.account_currency_total == pytest.approx(330.0, rel=0, abs=1e-6)
     assert computation.avg_price_security == pytest.approx(110.0, rel=0, abs=1e-6)
     assert computation.avg_price_account == pytest.approx(110.0, rel=0, abs=1e-6)
 

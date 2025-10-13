@@ -16,7 +16,6 @@ def _patch_fx(
     rates: dict[str, float] | None = None,
 ) -> None:
     """Stub FX helpers so transactions use deterministic rates."""
-
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
@@ -31,7 +30,6 @@ def _patch_fx(
 
 def _make_transaction() -> Transaction:
     """Return the SSR Mining purchase transaction."""
-
     return Transaction(
         uuid="b3002fd2-db71-4ab6-9370-977b76d34497",
         type=0,
@@ -51,7 +49,6 @@ def test_ssr_mining_purchase_metrics(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Native purchase totals should match Portfolio Performance exports."""
-
     _patch_fx(monkeypatch)
 
     db_path = tmp_path / "fx.sqlite"
@@ -83,12 +80,8 @@ def test_ssr_mining_purchase_metrics(
     computation = metrics[key]
 
     assert computation.purchase_value == pytest.approx(494.20, rel=0, abs=1e-6)
-    assert computation.security_currency_total == pytest.approx(
-        724.89, rel=0, abs=1e-6
-    )
-    assert computation.account_currency_total == pytest.approx(
-        494.20, rel=0, abs=1e-6
-    )
+    assert computation.security_currency_total == pytest.approx(724.89, rel=0, abs=1e-6)
+    assert computation.account_currency_total == pytest.approx(494.20, rel=0, abs=1e-6)
     assert computation.avg_price_native == pytest.approx(7.2489, rel=0, abs=1e-6)
     assert computation.avg_price_security == pytest.approx(7.2489, rel=0, abs=1e-6)
     assert computation.avg_price_account == pytest.approx(4.942, rel=0, abs=1e-6)
@@ -98,7 +91,6 @@ def test_harmonic_drive_purchase_without_fx_row(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """JPY purchases without native FX rows should fall back to account totals."""
-
     _patch_fx(monkeypatch, rates={"JPY": 1.0})
 
     db_path = tmp_path / "fx.sqlite"

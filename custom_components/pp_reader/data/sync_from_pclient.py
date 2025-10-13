@@ -37,7 +37,6 @@ from .db_access import (
 )
 from .event_push import _compact_event_data, _push_update  # noqa: F401
 
-
 SECONDS_PER_DAY = 86400
 UTC_ZONE = ZoneInfo("UTC")
 UNIX_EPOCH_DATE = date(1970, 1, 1)
@@ -63,34 +62,32 @@ SPARSE_PRICE_MEDIAN_THRESHOLD_DAYS = 7
 @lru_cache(maxsize=4096)
 def _weekday_from_epoch_day(epoch_day: int) -> int:
     """Return the weekday (0=Monday) for a Unix epoch day value."""
-
     return datetime.fromtimestamp(epoch_day * SECONDS_PER_DAY, tz=UTC_ZONE).weekday()
 
 
 def _segment_is_weekend_only(start: int, end: int) -> bool:
     """Check whether the missing date segment only covers weekend days."""
-
     return all(_weekday_from_epoch_day(day) >= 5 for day in range(start, end + 1))
 
 
 def _count_business_days(start: int, end: int) -> int:
     """Return how many days in the segment fall on weekdays."""
-
     return sum(1 for day in range(start, end + 1) if _weekday_from_epoch_day(day) < 5)
 
 
-def _evaluate_price_series_spacing(price_dates: Iterable[int]) -> tuple[bool, float | None]:
+def _evaluate_price_series_spacing(
+    price_dates: Iterable[int],
+) -> tuple[bool, float | None]:
     """Analyse price date spacing to determine if warnings should be suppressed."""
-
     sorted_dates = sorted(price_dates)
     if len(sorted_dates) < 2:
         return False, None
 
-    sample = sorted_dates[-(SPARSE_PRICE_RECENT_SAMPLE_SIZE + 1):]
+    sample = sorted_dates[-(SPARSE_PRICE_RECENT_SAMPLE_SIZE + 1) :]
     if len(sample) < 2:
         return False, None
 
-    intervals = [b - a for a, b in zip(sample, sample[1:]) if b > a]
+    intervals = [b - a for a, b in zip(sample, sample[1:], strict=False) if b > a]
     if len(intervals) < SPARSE_PRICE_MIN_INTERVALS:
         return False, None
 
@@ -195,7 +192,6 @@ def to_iso8601(ts: Timestamp) -> str:
 
 def _iso8601_to_epoch_day(value: str | None) -> int | None:
     """Convert an ISO 8601 date string into a Unix epoch day."""
-
     if not value:
         return None
 
@@ -497,7 +493,6 @@ class _SyncRunner:
 
     def _index_security_activity(self) -> None:
         """Map securities to the first transaction date (epoch day)."""
-
         self.security_first_activity = {}
         for transaction in self.all_transactions:
             security_uuid = getattr(transaction, "security", None)
@@ -829,7 +824,10 @@ class _SyncRunner:
                                     if _segment_is_weekend_only(start, end):
                                         ignored_weekend_segments += 1
                                         continue
-                                    if today_epoch_day - end > MAX_PRICE_GAP_WARNING_AGE_DAYS:
+                                    if (
+                                        today_epoch_day - end
+                                        > MAX_PRICE_GAP_WARNING_AGE_DAYS
+                                    ):
                                         ignored_stale_segments += 1
                                         continue
                                     if (
@@ -848,10 +846,14 @@ class _SyncRunner:
                                     self.stats.historical_price_gap_warnings += len(
                                         unexpected_segments
                                     )
-                                    self.stats.historical_price_gap_days += total_missing_days
+                                    self.stats.historical_price_gap_days += (
+                                        total_missing_days
+                                    )
 
                                     max_segments_to_log = 3
-                                    for start, end in unexpected_segments[:max_segments_to_log]:
+                                    for start, end in unexpected_segments[
+                                        :max_segments_to_log
+                                    ]:
                                         if start == end:
                                             _LOGGER.warning(
                                                 "sync_from_pclient: Historische Close-Lücke für %s am %s (keine Tagesdaten im Import)",
@@ -868,7 +870,9 @@ class _SyncRunner:
                                                 gap_days,
                                             )
 
-                                    remaining_segments = len(unexpected_segments) - max_segments_to_log
+                                    remaining_segments = (
+                                        len(unexpected_segments) - max_segments_to_log
+                                    )
                                     if remaining_segments > 0:
                                         _LOGGER.warning(
                                             "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet",
@@ -1421,5 +1425,3 @@ def fetch_positions_for_portfolios(
             )
             result[pid] = []
     return result
-
-

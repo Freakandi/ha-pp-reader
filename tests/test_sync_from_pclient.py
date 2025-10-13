@@ -239,7 +239,6 @@ def test_sync_portfolios_commits_changes(tmp_path: Path) -> None:
 
 def test_rebuild_transaction_units_collects_tax_and_fee(tmp_path: Path) -> None:
     """Transaction units rebuild should expose fee/tax metadata for consumers."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -530,7 +529,6 @@ def test_sync_portfolio_securities_persists_native_average(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Sync should persist avg_price_native alongside EUR purchase metrics."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -569,7 +567,9 @@ def test_sync_portfolio_securities_persists_native_average(
             result[key] = {**payload, "current_value": 0.0}
         return result
 
-    monkeypatch.setattr(sync_module, "db_calculate_holdings_value", _fake_holdings_value)
+    monkeypatch.setattr(
+        sync_module, "db_calculate_holdings_value", _fake_holdings_value
+    )
 
     runner.all_transactions = [
         Transaction(
@@ -800,7 +800,6 @@ def test_sync_securities_ignores_gap_before_first_transaction(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Price gaps before any transaction should not raise warnings."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -877,7 +876,6 @@ def test_sync_securities_skips_stale_gap_warnings(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Gaps far in the past should be ignored to avoid log spam."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -928,7 +926,6 @@ def test_sync_securities_ignores_weekend_gaps(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Warnungen sollten bei fehlenden Wochenendpreisen unterdrückt werden."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(
@@ -986,7 +983,6 @@ def test_sync_securities_ignores_short_holiday_gaps(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Kurzfristige Feiertagslücken sollen nicht zu Warnungen führen."""
-
     db_path = tmp_path / "portfolio.db"
     conn = _prepare_portfolio_db(db_path)
     runner = _SyncRunner(

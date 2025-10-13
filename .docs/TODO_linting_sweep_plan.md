@@ -4,17 +4,17 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 0. Vorbereitung & Baseline
 
-0. a) [ ] Umgebung vorbereiten
+0. a) [x] Umgebung vorbereiten
        - `./scripts/setup_container` (falls noch nicht geschehen) und `pip install -r requirements-dev.txt`
        - `npm install`
        - Ziel: Sicherstellen, dass alle Lint-Kommandos lauffähig sind.
 
-0. b) [ ] Python-Lint-Baseline erfassen
+0. b) [x] Python-Lint-Baseline erfassen
        - Kommando: `./scripts/lint`
        - Artefakt: Sammeln aller offenen `ruff`-Fehlermeldungen (gern als Markdown-Tabelle).
        - Ziel: Ausgangslage dokumentiert; automatische Fixes angewandt.
 
-0. c) [ ] Frontend-Lint-Baseline erfassen
+0. c) [x] Frontend-Lint-Baseline erfassen
        - Kommandos: `npm run lint:ts`, `npm run typecheck`
        - Artefakt: Übersicht der offenen ESLint-/TS-Fehler (inkl. Dateipfade & Regel-IDs).
        - Ziel: Ausgangslage dokumentiert.

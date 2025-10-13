@@ -12,13 +12,14 @@ import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, is_dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
@@ -57,10 +58,9 @@ def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
 
 
 async def _load_accounts_payload(
-    hass: "HomeAssistant", db_path: Path
+    hass: HomeAssistant, db_path: Path
 ) -> list[dict[str, Any]]:
     """Return account details formatted for websocket responses."""
-
     accounts = await async_run_executor_job(hass, get_accounts, db_path)
 
     fx_rates: dict[str, float] = {}
@@ -74,7 +74,7 @@ async def _load_accounts_payload(
                     "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
                 )
             else:
-                today = datetime.now(timezone.utc)
+                today = datetime.now(UTC)
                 await ensure_rates([today], active_fx_currencies, db_path)
                 fx_rates = await load_rates(today, db_path)
     except Exception:  # noqa: BLE001
@@ -89,7 +89,9 @@ async def _load_accounts_payload(
             continue
 
         currency = getattr(account, "currency_code", "EUR") or "EUR"
-        orig_balance = cent_to_eur(getattr(account, "balance", None), default=0.0) or 0.0
+        orig_balance = (
+            cent_to_eur(getattr(account, "balance", None), default=0.0) or 0.0
+        )
         fx_unavailable = False
         if currency != "EUR":
             rate = fx_rates.get(currency)
@@ -179,9 +181,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["last_price_native"] = round_price(
         snapshot.get("last_price_native"), decimals=6
     )
-    data["last_price_eur"] = round_price(
-        snapshot.get("last_price_eur"), decimals=6
-    )
+    data["last_price_eur"] = round_price(snapshot.get("last_price_eur"), decimals=6)
     data["market_value_eur"] = round_currency(snapshot.get("market_value_eur"))
     data["purchase_value_eur"] = (
         round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
@@ -193,9 +193,7 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         purchase_total_security if purchase_total_security is not None else 0.0
     )
 
-    purchase_total_account = round_currency(
-        snapshot.get("purchase_total_account")
-    )
+    purchase_total_account = round_currency(snapshot.get("purchase_total_account"))
     data["purchase_total_account"] = (
         purchase_total_account if purchase_total_account is not None else 0.0
     )
@@ -237,7 +235,6 @@ def _normalize_portfolio_positions(
     positions: Iterable[Mapping[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     """Return portfolio position payload including purchase metrics."""
-
     if not positions:
         return []
 
@@ -448,9 +445,7 @@ async def _live_portfolios_payload(
 
     result: list[dict[str, Any]] | None = None
     try:
-        portfolios = await async_run_executor_job(
-            hass, fetch_live_portfolios, db_path
-        )
+        portfolios = await async_run_executor_job(hass, fetch_live_portfolios, db_path)
     except Exception:  # noqa: BLE001 - broad catch keeps coordinator fallback intact
         context_suffix = f" ({log_context})" if log_context else ""
         _LOGGER.warning(
@@ -551,7 +546,7 @@ async def ws_get_dashboard_data(
     if db_path_raw:
         try:
             accounts = await _load_accounts_payload(hass, Path(db_path_raw))
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.exception("Fehler beim Laden der Kontodaten für das Dashboard")
             accounts = []
 
@@ -592,7 +587,9 @@ async def ws_get_accounts(
         account_data = await _load_accounts_payload(hass, Path(db_path))
         connection.send_result(msg["id"], {"accounts": account_data})
     except KeyError:
-        connection.send_error(msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten")
+        connection.send_error(
+            msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten"
+        )
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))

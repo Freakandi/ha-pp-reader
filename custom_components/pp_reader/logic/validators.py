@@ -264,7 +264,7 @@ class PPDataValidator:
         return ValidationResult(is_valid=True, message="Wechselkurs valid")
 
     def validate_account_balance(
-        self, balance: float | int | None, account_name: str
+        self, balance: float | None, account_name: str
     ) -> ValidationResult:
         """Validiert einen Kontostand auf Plausibilität."""
         normalized = round_currency(balance)

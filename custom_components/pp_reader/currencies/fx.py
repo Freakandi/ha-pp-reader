@@ -38,7 +38,6 @@ _FAILED_WARNINGS_LOCK = threading.Lock()
 
 def _should_log_warning(date: str, currencies: set[str]) -> bool:
     """Return True when the warning for the given date/currencies should be emitted."""
-
     # Normalize currencies to ensure deterministic comparison.
     key = frozenset(currencies or {"__none__"})
     with _FAILED_WARNINGS_LOCK:
@@ -47,6 +46,7 @@ def _should_log_warning(date: str, currencies: set[str]) -> bool:
             return False
         logged.add(key)
     return True
+
 
 # --- Hilfsfunktionen ---
 
@@ -149,7 +149,7 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
                     return {}
                 data = await response.json()
                 return {k: float(v) for k, v in data.get("rates", {}).items()}
-    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+    except (TimeoutError, aiohttp.ClientError, OSError) as err:
         if _should_log_warning(date, currencies):
             _LOGGER.warning(
                 "⚠️ Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
@@ -291,11 +291,10 @@ async def ensure_exchange_rates_for_dates(
                 fetched = await _fetch_exchange_rates(date_str, missing)
                 if fetched:
                     await _save_rates(db_path, date_str, fetched)
-                else:
-                    if _should_log_warning(date_str, missing):
-                        _LOGGER.warning(
-                            "⚠️ Keine Kurse erhalten für %s am %s", missing, date_str
-                        )
+                elif _should_log_warning(date_str, missing):
+                    _LOGGER.warning(
+                        "⚠️ Keine Kurse erhalten für %s am %s", missing, date_str
+                    )
             except Exception:
                 _LOGGER.exception("❌ Fehler beim Laden der Kurse")
 

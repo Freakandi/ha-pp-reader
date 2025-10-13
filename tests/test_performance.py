@@ -13,7 +13,6 @@ from custom_components.pp_reader.data.performance import (
 
 def test_select_performance_metrics_with_full_inputs() -> None:
     """Helper should return rounded gain and day-change metrics when all inputs are present."""
-
     performance, day_change = select_performance_metrics(
         current_value=1234.567,
         purchase_value=1000.432,
@@ -41,7 +40,6 @@ def test_select_performance_metrics_with_full_inputs() -> None:
 
 def test_select_performance_metrics_handles_missing_values() -> None:
     """Missing values should fall back to defaults and report limited coverage."""
-
     performance, day_change = select_performance_metrics(
         current_value=None,
         purchase_value=None,
@@ -67,7 +65,6 @@ def test_select_performance_metrics_handles_missing_values() -> None:
 
 def test_select_performance_metrics_partial_inputs_track_coverage() -> None:
     """Partial inputs should yield calculated metrics with proportional coverage ratios."""
-
     performance, day_change = select_performance_metrics(
         current_value="500.25",
         purchase_value="400.15",
@@ -93,7 +90,6 @@ def test_select_performance_metrics_partial_inputs_track_coverage() -> None:
 
 def test_select_performance_metrics_fx_based_day_deltas() -> None:
     """FX rates should convert native day changes into EUR and retain native-based percentages."""
-
     performance, day_change = select_performance_metrics(
         current_value=2000,
         purchase_value=1500,

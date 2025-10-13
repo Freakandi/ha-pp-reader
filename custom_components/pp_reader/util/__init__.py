@@ -17,7 +17,6 @@ async def async_run_executor_job(
     hass: HomeAssistant, func: Callable[..., _T], *args: Any
 ) -> _T:
     """Execute a blocking job and gracefully handle non-awaitable fallbacks."""
-
     result = hass.async_add_executor_job(func, *args)
 
     if isinstance(result, Awaitable) or isawaitable(result):

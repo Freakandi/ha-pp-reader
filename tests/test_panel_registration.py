@@ -1,4 +1,5 @@
-"""Ensure the custom panel is registered before the first coordinator refresh.
+"""
+Ensure the custom panel is registered before the first coordinator refresh.
 
 This prevents users from hitting a 404 on /ppreader while the initial data
 refresh is still running during Home Assistant startup.
@@ -71,7 +72,6 @@ async def test_placeholder_panel_registered_during_setup(
     hass: HomeAssistant, monkeypatch
 ) -> None:
     """A placeholder panel should be registered during component setup."""
-
     captured_configs: list[dict[str, Any]] = []
 
     def fake_register_panel(*args, **kwargs):  # noqa: ANN002, ANN003
@@ -92,7 +92,5 @@ async def test_placeholder_panel_registered_during_setup(
 
     assert hass.http.registered_static_paths, "Expected dashboard static path"
     static_path = hass.http.registered_static_paths[0]
-    expected_folder = (
-        Path(integration.__file__).parent / "www" / "pp_reader_dashboard"
-    )
+    expected_folder = Path(integration.__file__).parent / "www" / "pp_reader_dashboard"
     assert Path(static_path.path) == expected_folder.resolve()

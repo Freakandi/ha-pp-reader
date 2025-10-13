@@ -187,9 +187,7 @@ async def _load_live_entries(
 ) -> dict[str, dict[str, Any]]:
     live_entries: dict[str, dict[str, Any]] = {}
     try:
-        live_rows = await async_run_executor_job(
-            hass, fetch_live_portfolios, db_path
-        )
+        live_rows = await async_run_executor_job(hass, fetch_live_portfolios, db_path)
     except RuntimeError:
         _LOGGER.warning(
             (
