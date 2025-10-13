@@ -119,7 +119,6 @@ export interface SecuritySnapshotLike {
   last_close_native?: number | null;
   last_close_eur?: number | null;
   day_price_change_native?: number | null;
-  day_price_change_eur?: number | null;
   day_change_pct?: number | null;
   /**
    * Structured selection of average purchase prices with provenance metadata.
