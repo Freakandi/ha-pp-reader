@@ -289,11 +289,11 @@
       - Ziel/Ergebnis: Validatoren erwarten neue Felder und liefern passende Fehlermeldungen.
 
 24. Dokumentation & Release-Notizen aktualisieren
-   a) [ ] Beschreibe die entfernten Legacy-Felder und neuen Strukturen im Nutzer- und Entwickler-README.\
+   a) [x] Beschreibe die entfernten Legacy-Felder und neuen Strukturen im Nutzer- und Entwickler-README.\
       - Dateipfad(e): `README.md`, `README-dev.md`, `ARCHITECTURE.md`\
       - Betroffene Funktion(en)/Abschnitt(e): Abschnitte zu Payloads/Aggregationen\
       - Ziel/Ergebnis: Dokumentation erklärt den neuen Datenfluss.
-   b) [ ] Ergänze die Änderungen im Changelog (Breaking Changes, Migration).\
+   b) [x] Ergänze die Änderungen im Changelog (Breaking Changes, Migration).\
       - Dateipfad(e): `CHANGELOG.md`\
       - Betroffene Funktion(en)/Abschnitt(e): Anstehender Release-Eintrag\
       - Ziel/Ergebnis: Anwender werden auf die Feldentfernung vorbereitet.
