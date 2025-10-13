@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from custom_components.pp_reader.util.currency import round_currency
+
 try:  # pragma: no cover - dependency optional for unit tests
     from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 except ModuleNotFoundError:  # pragma: no cover - protobuf dependency missing
@@ -262,14 +264,22 @@ class PPDataValidator:
         return ValidationResult(is_valid=True, message="Wechselkurs valid")
 
     def validate_account_balance(
-        self, balance: float, account_name: str
+        self, balance: float | int | None, account_name: str
     ) -> ValidationResult:
         """Validiert einen Kontostand auf Plausibilität."""
-        if balance < MIN_ACCOUNT_BALANCE:  # Beispielgrenze für Überziehung
+        normalized = round_currency(balance)
+        if normalized is None:
             return ValidationResult(
                 is_valid=False,
-                message=f"Verdächtig hoher negativer Kontostand: {balance}€",
+                message="Kontostand fehlt oder ist ungültig",
                 details={"account": account_name, "balance": balance},
+            )
+
+        if normalized < MIN_ACCOUNT_BALANCE:  # Beispielgrenze für Überziehung
+            return ValidationResult(
+                is_valid=False,
+                message=f"Verdächtig hoher negativer Kontostand: {normalized}€",
+                details={"account": account_name, "balance": normalized},
             )
         return ValidationResult(is_valid=True, message="Kontostand plausibel")
 

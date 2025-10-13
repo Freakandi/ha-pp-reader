@@ -459,9 +459,6 @@ function buildSnapshotFromPortfolioCache(
     }
 
     if (holdings != null && holdings > 0) {
-      const derivedNativeAverage = toFiniteNumber(
-        aggregation?.average_purchase_price_native,
-      );
       const derivedSecurityAverage =
         securityTotal != null
           ? roundCurrency(securityTotal / holdings, {
@@ -479,9 +476,7 @@ function buildSnapshotFromPortfolioCache(
           : null;
 
       const avgNative =
-        averageCost?.native ??
-        averageCost?.security ??
-        derivedNativeAverage;
+        averageCost?.native ?? averageCost?.security ?? derivedSecurityAverage;
       if (avgNative != null) {
         nativeWeightedSum += holdings * avgNative;
         nativeWeight += holdings;
@@ -597,7 +592,6 @@ function buildSnapshotFromPortfolioCache(
     total_holdings: roundedHoldings,
     purchase_value_eur: roundedPurchaseValue,
     current_value_eur: roundedCurrentValue,
-    gain_abs_eur: aggregatedGainAbs,
     gain_pct: aggregatedGainPct,
     last_price_eur: lastPriceEur,
     purchase_total_security: purchaseTotalSecurityRounded,
