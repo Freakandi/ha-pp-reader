@@ -150,9 +150,8 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "last_price_eur": None,
             "market_value_eur": None,
             "purchase_value_eur": 0.0,
-            "purchase_total_security": 0.0,
-            "purchase_total_account": 0.0,
             "average_cost": None,
+            "aggregation": None,
             "last_close_native": None,
             "last_close_eur": None,
             "performance": None,
@@ -160,10 +159,11 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
 
     data = dict(snapshot)
     data.pop("average_purchase_price_native", None)
-    data.pop("avg_price_account", None)
     data.pop("day_price_change_native", None)
     data.pop("day_price_change_eur", None)
     data.pop("day_change_pct", None)
+    purchase_total_security = data.pop("purchase_total_security", None)
+    purchase_total_account = data.pop("purchase_total_account", None)
 
     raw_name = snapshot.get("name")
     data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
@@ -186,23 +186,70 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     data["purchase_value_eur"] = (
         round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
     )
-    purchase_total_security = round_currency(
-        snapshot.get("purchase_total_security"),
-    )
-    data["purchase_total_security"] = (
-        purchase_total_security if purchase_total_security is not None else 0.0
-    )
-
-    purchase_total_account = round_currency(snapshot.get("purchase_total_account"))
-    data["purchase_total_account"] = (
-        purchase_total_account if purchase_total_account is not None else 0.0
-    )
-
     raw_average_cost = snapshot.get("average_cost")
     if isinstance(raw_average_cost, Mapping):
         data["average_cost"] = dict(raw_average_cost)
     else:
         data["average_cost"] = None
+    raw_aggregation = snapshot.get("aggregation")
+    aggregation_payload: dict[str, Any] | None = None
+    if isinstance(raw_aggregation, Mapping):
+        aggregation_payload = dict(raw_aggregation)
+    elif is_dataclass(raw_aggregation):
+        aggregation_payload = asdict(raw_aggregation)
+
+    if aggregation_payload is None:
+        aggregation_payload = None
+    else:
+        aggregation_payload.pop("average_purchase_price_native", None)
+
+        security_total = aggregation_payload.get("security_currency_total")
+        if security_total in (None, "") and purchase_total_security not in (None, ""):
+            security_total = purchase_total_security
+            aggregation_payload["security_currency_total"] = security_total
+
+        account_total = aggregation_payload.get("account_currency_total")
+        if account_total in (None, "") and purchase_total_account not in (None, ""):
+            account_total = purchase_total_account
+            aggregation_payload["account_currency_total"] = account_total
+
+        aggregation_payload["total_holdings"] = round_currency(
+            aggregation_payload.get("total_holdings"),
+            decimals=6,
+            default=0.0,
+        ) or 0.0
+        aggregation_payload["positive_holdings"] = round_currency(
+            aggregation_payload.get("positive_holdings"),
+            decimals=6,
+            default=0.0,
+        ) or 0.0
+        aggregation_payload["purchase_value_cents"] = int(
+            aggregation_payload.get("purchase_value_cents") or 0
+        )
+        aggregation_payload["purchase_value_eur"] = (
+            round_currency(aggregation_payload.get("purchase_value_eur"), default=0.0)
+            or 0.0
+        )
+        aggregation_payload["security_currency_total"] = (
+            round_currency(security_total, default=0.0) or 0.0
+        )
+        aggregation_payload["account_currency_total"] = (
+            round_currency(account_total, default=0.0) or 0.0
+        )
+        aggregation_payload["purchase_total_security"] = (
+            round_currency(
+                aggregation_payload.get("purchase_total_security"), default=0.0
+            )
+            or 0.0
+        )
+        aggregation_payload["purchase_total_account"] = (
+            round_currency(
+                aggregation_payload.get("purchase_total_account"), default=0.0
+            )
+            or 0.0
+        )
+
+    data["aggregation"] = aggregation_payload
     data["last_close_native"] = round_price(
         snapshot.get("last_close_native"),
         decimals=6,
@@ -256,7 +303,6 @@ def _normalize_portfolio_positions(
 
         if aggregation_payload is not None:
             aggregation_payload.pop("average_purchase_price_native", None)
-            aggregation_payload.pop("avg_price_account", None)
             security_total = aggregation_payload.get("security_currency_total")
             if (
                 security_total not in (None, "")
@@ -316,26 +362,6 @@ def _normalize_portfolio_positions(
             default=item.get("current_holdings"),
         )
 
-        purchase_total_security = round_currency(
-            _resolve_aggregation_value(
-                "purchase_total_security",
-                "security_currency_total",
-                default=item.get("purchase_total_security"),
-            )
-        )
-        if purchase_total_security is None:
-            purchase_total_security = 0.0
-
-        purchase_total_account = round_currency(
-            _resolve_aggregation_value(
-                "purchase_total_account",
-                "account_currency_total",
-                default=item.get("purchase_total_account"),
-            )
-        )
-        if purchase_total_account is None:
-            purchase_total_account = 0.0
-
         normalized.append(
             {
                 "security_uuid": security_uuid,
@@ -350,8 +376,6 @@ def _normalize_portfolio_positions(
                     item.get("current_value"),
                     default=0.0,
                 ),
-                "purchase_total_security": purchase_total_security,
-                "purchase_total_account": purchase_total_account,
                 "average_cost": average_cost,
                 "performance": performance_payload,
                 "aggregation": aggregation_payload,
@@ -470,6 +494,7 @@ async def _live_portfolios_payload(
             if not isinstance(entry, Mapping):
                 continue
             normalized_entry = dict(entry)
+            normalized_entry.pop("gain_abs", None)
             normalized_entry.pop("gain_pct", None)
             normalized.append(normalized_entry)
         return normalized

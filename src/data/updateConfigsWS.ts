@@ -6,9 +6,9 @@ import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import { formatValue } from '../content/elements';
 import type { SortDirection } from '../content/elements';
+import { getOverviewHelpers } from '../dashboard/registry';
 import type {
   AverageCostPayload,
-  AverageCostSource,
   HoldingsAggregationPayload,
   PerformanceMetricsPayload,
   PortfolioPositionsUpdatedEventDetail,
@@ -16,6 +16,11 @@ import type {
 import { roundCurrency } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
 import type { AccountSummary, PortfolioSummary } from './api';
+import {
+  clearAllPortfolioPositions,
+  getPortfolioPositionsSnapshot,
+  setPortfolioPositions,
+} from './positionsCache';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 
@@ -27,10 +32,6 @@ interface PortfolioPositionData {
   current_holdings?: number | null;
   purchase_value?: number | null;
   current_value?: number | null;
-  gain_abs?: number | null;
-  gain_pct?: number | null;
-  purchase_total_security?: number | null;
-  purchase_total_account?: number | null;
   average_cost?: AverageCostPayload | null;
   performance?: PerformanceMetricsPayload | null;
   aggregation?: HoldingsAggregationPayload | null;
@@ -60,131 +61,58 @@ interface ApplyPositionsResult {
   reason?: 'invalid' | 'missing' | 'hidden';
 }
 
+const pendingPortfolioUpdates = new Map<string, PendingPortfolioUpdate>();
+const pendingRetryMetaMap = new Map<string, PendingRetryMeta>();
+
 function normalizePerformanceMetrics(
   position: PortfolioPositionData,
 ): PerformanceMetricsPayload | null {
   return normalizePerformancePayload(position.performance);
 }
 
-function deriveAggregation(position: PortfolioPositionData): HoldingsAggregationPayload {
-  const rawAggregation =
-    position.aggregation && typeof position.aggregation === 'object'
-      ? (position.aggregation as Partial<HoldingsAggregationPayload>)
-      : {};
-
-  const asFiniteNumber = (value: unknown): number | null =>
-    typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-  const totalHoldings = asFiniteNumber(rawAggregation.total_holdings) ?? 0;
-  const positiveHoldingsRaw = asFiniteNumber(rawAggregation.positive_holdings);
-  const purchaseValueEur = asFiniteNumber(rawAggregation.purchase_value_eur) ?? 0;
-  const purchaseValueCentsRaw = asFiniteNumber(rawAggregation.purchase_value_cents);
-  const securityTotal = asFiniteNumber(rawAggregation.security_currency_total) ?? 0;
-  const accountTotal = asFiniteNumber(rawAggregation.account_currency_total) ?? 0;
-  const purchaseTotalSecurity = asFiniteNumber(rawAggregation.purchase_total_security) ?? securityTotal;
-  const purchaseTotalAccount = asFiniteNumber(rawAggregation.purchase_total_account) ?? accountTotal;
-
-  return {
-    total_holdings: totalHoldings,
-    positive_holdings: Math.max(0, positiveHoldingsRaw ?? totalHoldings),
-    purchase_value_cents: Math.round(purchaseValueCentsRaw ?? 0),
-    purchase_value_eur: purchaseValueEur,
-    security_currency_total: securityTotal,
-    account_currency_total: accountTotal,
-    purchase_total_security: purchaseTotalSecurity,
-    purchase_total_account: purchaseTotalAccount,
-  };
-}
-
-function normalizeAverageCost(
-  position: PortfolioPositionData,
-): AverageCostPayload | null {
-  const rawAverageCost =
-    position.average_cost && typeof position.average_cost === 'object'
-      ? (position.average_cost as Partial<AverageCostPayload>)
-      : null;
-
-  const asFiniteNumber = (value: unknown): number | null =>
-    typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-  const asNullableNumber = (value: unknown): number | null => {
-    const numeric = asFiniteNumber(value);
-    return numeric === null ? null : numeric;
-  };
-
-  const normalizeSource = (value: unknown): AverageCostSource => {
-    if (value === 'totals' || value === 'eur_total' || value === 'aggregation') {
-      return value;
-    }
-    return 'aggregation';
-  };
-
-  if (!rawAverageCost) {
+function cloneAggregationPayload(
+  value: PortfolioPositionData['aggregation'],
+): HoldingsAggregationPayload | null {
+  if (!value || typeof value !== 'object') {
     return null;
   }
 
-  return {
-    native: asNullableNumber(rawAverageCost.native),
-    security: asNullableNumber(rawAverageCost.security),
-    account: asNullableNumber(rawAverageCost.account),
-    eur: asNullableNumber(rawAverageCost.eur),
-    source: normalizeSource(rawAverageCost.source),
-    coverage_ratio: asNullableNumber(rawAverageCost.coverage_ratio),
-  };
+  return { ...(value as HoldingsAggregationPayload) };
 }
 
-function normalizePosition(position: PortfolioPositionData): PortfolioPositionData {
+function cloneAverageCostPayload(
+  value: PortfolioPositionData['average_cost'],
+): AverageCostPayload | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  return { ...(value as AverageCostPayload) };
+}
+
+function sanitizePosition(position: PortfolioPositionData): PortfolioPositionData {
   const normalized: PortfolioPositionData = { ...position };
 
-  const hasAggregation =
-    position.aggregation && typeof position.aggregation === 'object';
-  const aggregation = hasAggregation ? deriveAggregation(position) : null;
-  const averageCost = normalizeAverageCost(position);
+  if (Object.prototype.hasOwnProperty.call(position, 'aggregation')) {
+    normalized.aggregation = cloneAggregationPayload(position.aggregation);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(position, 'average_cost')) {
+    normalized.average_cost = cloneAverageCostPayload(position.average_cost);
+  }
+
   const performance = normalizePerformanceMetrics(position);
-  const gainAbs =
-    typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)
-      ? performance.gain_abs
-      : null;
-  const gainPct =
-    typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
-      ? performance.gain_pct
-      : null;
-
-  if (hasAggregation && aggregation) {
-    normalized.aggregation = aggregation;
-  } else if ('aggregation' in normalized) {
-    normalized.aggregation = null;
-  }
-
-  if (averageCost) {
-    normalized.average_cost = averageCost;
-  } else if ('average_cost' in normalized) {
-    normalized.average_cost = null;
-  }
-
   if (performance) {
     normalized.performance = performance;
-  } else if ('performance' in normalized) {
+  } else if (Object.prototype.hasOwnProperty.call(position, 'performance')) {
     normalized.performance = null;
-  }
-
-  if (gainAbs !== null) {
-    normalized.gain_abs = gainAbs;
-  } else if ('gain_abs' in normalized) {
-    normalized.gain_abs = null;
-  }
-
-  if (gainPct !== null) {
-    normalized.gain_pct = gainPct;
-  } else if ('gain_pct' in normalized) {
-    normalized.gain_pct = null;
   }
 
   return normalized;
 }
 
-function normalizePositions(positions: PortfolioPositionData[]): PortfolioPositionData[] {
-  return positions.map(normalizePosition);
+function sanitizePositions(positions: PortfolioPositionData[]): PortfolioPositionData[] {
+  return positions.map(sanitizePosition);
 }
 
 interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
@@ -199,20 +127,6 @@ interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
 const PENDING_RETRY_INTERVAL = 500;
 const PENDING_MAX_ATTEMPTS = 10;
 export const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
-
-function ensurePendingMap(): Map<string, PendingPortfolioUpdate> {
-  if (!window.__ppReaderPendingPositions) {
-    window.__ppReaderPendingPositions = new Map<string, PendingPortfolioUpdate>();
-  }
-  return window.__ppReaderPendingPositions!;
-}
-
-function ensurePendingRetryMeta(): Map<string, PendingRetryMeta> {
-  if (!window.__ppReaderPendingRetryMeta) {
-    window.__ppReaderPendingRetryMeta = new Map<string, PendingRetryMeta>();
-  }
-  return window.__ppReaderPendingRetryMeta!;
-}
 
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
   const safeError = typeof error === 'string' ? error : String(error ?? 'Unbekannter Fehler');
@@ -235,20 +149,22 @@ function restoreSortAndInit(containerEl: HTMLElement, rootEl: QueryRoot, pid: st
     console.warn('restoreSortAndInit: sortTableRows Fehler:', e);
   }
 
-  try {
-    if (window.__ppReaderAttachPortfolioPositionsSorting) {
-      window.__ppReaderAttachPortfolioPositionsSorting(rootEl, pid);
+  const { attachPortfolioPositionsSorting, attachSecurityDetailListener } = getOverviewHelpers();
+
+  if (attachPortfolioPositionsSorting) {
+    try {
+      attachPortfolioPositionsSorting(rootEl, pid);
+    } catch (e) {
+      console.warn('restoreSortAndInit: attachPortfolioPositionsSorting Fehler:', e);
     }
-  } catch (e) {
-    console.warn('restoreSortAndInit: attachPortfolioPositionsSorting Fehler:', e);
   }
 
-  try {
-    if (window.__ppReaderAttachSecurityDetailListener) {
-      window.__ppReaderAttachSecurityDetailListener(rootEl, pid);
+  if (attachSecurityDetailListener) {
+    try {
+      attachSecurityDetailListener(rootEl, pid);
+    } catch (e) {
+      console.warn('restoreSortAndInit: attachSecurityDetailListener Fehler:', e);
     }
-  } catch (e) {
-    console.warn('restoreSortAndInit: attachSecurityDetailListener Fehler:', e);
   }
 }
 
@@ -296,8 +212,7 @@ function applyPortfolioPositionsToDom(
 }
 
 export function flushPendingPositions(root: QueryRoot | null | undefined, portfolioUuid: string): boolean {
-  const pendingMap = ensurePendingMap();
-  const pending = pendingMap.get(portfolioUuid);
+  const pending = pendingPortfolioUpdates.get(portfolioUuid);
   if (!pending) return false;
 
   const result = applyPortfolioPositionsToDom(
@@ -307,15 +222,14 @@ export function flushPendingPositions(root: QueryRoot | null | undefined, portfo
     pending.error
   );
   if (result.applied) {
-    pendingMap.delete(portfolioUuid);
+    pendingPortfolioUpdates.delete(portfolioUuid);
   }
   return result.applied;
 }
 
 export function flushAllPendingPositions(root: QueryRoot | null | undefined): boolean {
-  const pendingMap = ensurePendingMap();
   let appliedAny = false;
-  for (const [portfolioUuid] of pendingMap) {
+  for (const [portfolioUuid] of pendingPortfolioUpdates) {
     if (flushPendingPositions(root, portfolioUuid)) {
       appliedAny = true;
     }
@@ -324,8 +238,7 @@ export function flushAllPendingPositions(root: QueryRoot | null | undefined): bo
 }
 
 function schedulePendingRetry(root: QueryRoot | null | undefined, portfolioUuid: string): void {
-  const retryMetaMap = ensurePendingRetryMeta();
-  const meta: PendingRetryMeta = retryMetaMap.get(portfolioUuid) ?? {
+  const meta: PendingRetryMeta = pendingRetryMetaMap.get(portfolioUuid) ?? {
     attempts: 0,
     timer: null,
   };
@@ -340,16 +253,16 @@ function schedulePendingRetry(root: QueryRoot | null | undefined, portfolioUuid:
 
     const success = flushPendingPositions(root, portfolioUuid);
     if (success || meta.attempts >= PENDING_MAX_ATTEMPTS) {
-      retryMetaMap.delete(portfolioUuid);
+      pendingRetryMetaMap.delete(portfolioUuid);
       if (!success) {
-        ensurePendingMap().delete(portfolioUuid);
+        pendingPortfolioUpdates.delete(portfolioUuid);
       }
     } else {
       schedulePendingRetry(root, portfolioUuid);
     }
   }, PENDING_RETRY_INTERVAL);
 
-  retryMetaMap.set(portfolioUuid, meta);
+  pendingRetryMetaMap.set(portfolioUuid, meta);
 }
 
 /**
@@ -576,8 +489,7 @@ export function handlePortfolioUpdate(
     const rowData = {
       fx_unavailable: Boolean(entryRecord['fx_unavailable']),
       current_value: hasValue ? curVal : null,
-      gain_abs: gainAbs,
-      gain_pct: gainPct,
+      performance,
     };
     const rowContext = { hasValue };
     const currentMarkup = formatValue('current_value', rowData.current_value, rowData, rowContext);
@@ -587,7 +499,7 @@ export function handlePortfolioUpdate(
       setTimeout(() => row.classList.remove('flash-update'), 800);
     }
     if (gainAbsCell) {
-      const gainMarkup = formatValue('gain_abs', rowData.gain_abs, rowData, rowContext);
+      const gainMarkup = formatValue('gain_abs', gainAbs, rowData, rowContext);
       gainAbsCell.innerHTML = gainMarkup;
       const hasGainPct = typeof gainPct === 'number' && Number.isFinite(gainPct);
       const pctValue = hasGainPct ? gainPct : null;
@@ -603,7 +515,7 @@ export function handlePortfolioUpdate(
         : 'neutral';
     }
     if (gainPctCell) {
-      gainPctCell.innerHTML = formatValue('gain_pct', rowData.gain_pct, rowData, rowContext);
+      gainPctCell.innerHTML = formatValue('gain_pct', gainPct, rowData, rowContext);
     }
 
     row.dataset.positionCount = String(posCount);
@@ -714,25 +626,18 @@ function processPortfolioPositionsUpdate(
   const positions = Array.isArray(update?.positions)
     ? update.positions.filter((pos): pos is PortfolioPositionData => Boolean(pos))
     : [];
-  const normalizedPositions = normalizePositions(positions);
+  const normalizedPositions = sanitizePositions(positions);
 
-  // Positions-Cache aktualisieren (Lazy-Load bleibt bestehen)
-  try {
-    const cache = window.__ppReaderPortfolioPositionsCache;
-    if (cache && typeof cache.set === 'function' && !error) {
-      cache.set(portfolioUuid, normalizedPositions);
-    }
-  } catch (e) {
-    console.warn("handlePortfolioPositionsUpdate: Positions-Cache konnte nicht aktualisiert werden:", e);
+  if (!error) {
+    setPortfolioPositions(portfolioUuid, normalizedPositions);
   }
 
   const result = applyPortfolioPositionsToDom(root, portfolioUuid, normalizedPositions, error);
-  const pendingMap = ensurePendingMap();
 
   if (result.applied) {
-    pendingMap.delete(portfolioUuid);
+    pendingPortfolioUpdates.delete(portfolioUuid);
   } else {
-    pendingMap.set(portfolioUuid, { positions: normalizedPositions, error });
+    pendingPortfolioUpdates.set(portfolioUuid, { positions: normalizedPositions, error });
     if (result.reason !== 'hidden') {
       schedulePendingRetry(root, portfolioUuid);
     }
@@ -796,29 +701,25 @@ export function handlePortfolioPositionsUpdate(
 
 function renderPositionsTableInline(positions: PortfolioPositionData[]): string {
   // Konsistenz Push vs Lazy:
+  const { renderPositionsTable, applyGainPctMetadata } = getOverviewHelpers();
   try {
-    if (window.__ppReaderRenderPositionsTable) {
-      return window.__ppReaderRenderPositionsTable(positions);
+    if (typeof renderPositionsTable === 'function') {
+      return renderPositionsTable(positions);
     }
-  } catch (_) { }
+  } catch (_) {}
 
   if (!positions || !positions.length) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
   const rows = positions.map(position => {
     const performance = normalizePerformanceMetrics(position);
-    const gainAbs =
-      typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-    const gainPct =
-      typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
     return {
       name: position.name,
       current_holdings: position.current_holdings,
       purchase_value: position.purchase_value,
       current_value: position.current_value,
-      gain_abs: gainAbs,
-      gain_pct: gainPct,
+      performance,
     };
   });
 
@@ -864,9 +765,9 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
       });
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
-      if (window.__ppReaderApplyGainPctMetadata) {
+      if (typeof applyGainPctMetadata === 'function') {
         try {
-          window.__ppReaderApplyGainPctMetadata(table);
+          applyGainPctMetadata(table);
         } catch (err) {
           console.warn('renderPositionsTableInline: applyGainPctMetadata failed', err);
         }
@@ -914,25 +815,16 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
   return raw;
 }
 
-if (!window.__ppReaderFlushPendingPositions) {
-  window.__ppReaderFlushPendingPositions = (root, portfolioUuid) =>
-    flushPendingPositions(root, portfolioUuid);
-}
-
-if (!window.__ppReaderFlushAllPendingPositions) {
-  window.__ppReaderFlushAllPendingPositions = (root) => flushAllPendingPositions(root);
-}
-
 function updatePortfolioFooter(table: HTMLTableElement | null): void {
   if (!table) return;
-  try {
-    const helper = window.__ppReaderUpdatePortfolioFooter;
-    if (typeof helper === 'function') {
+  const { updatePortfolioFooter: helper } = getOverviewHelpers();
+  if (typeof helper === 'function') {
+    try {
       helper(table);
       return;
+    } catch (err) {
+      console.warn('updatePortfolioFooter: helper schlug fehl:', err);
     }
-  } catch (err) {
-    console.warn("updatePortfolioFooter: global Helper schlug fehl:", err);
   }
 
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'));
@@ -986,14 +878,24 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   const footerRowData = {
     fx_unavailable: sumIsPartial,
     current_value: hasAnyValue ? sumCurrent : null,
-    gain_abs: hasAnyValue ? sumGainAbs : null,
-    gain_pct: hasAnyValue ? sumGainPct : null,
-  };
+    performance: hasAnyValue
+      ? {
+          gain_abs: sumGainAbs,
+          gain_pct: sumGainPct,
+          total_change_eur: sumGainAbs,
+          total_change_pct: sumGainPct,
+          source: 'calculated',
+          coverage_ratio: 1,
+        }
+      : null,
+  } as Record<string, unknown>;
   const footerContext = { hasValue: hasAnyValue };
 
   const currentValueCell = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
-  const gainAbsCellMarkup = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
-  const gainPctCellMarkup = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
+  const gainAbsValue = hasAnyValue ? sumGainAbs : null;
+  const gainPctValue = hasAnyValue ? sumGainPct : null;
+  const gainAbsCellMarkup = formatValue('gain_abs', gainAbsValue, footerRowData, footerContext);
+  const gainPctCellMarkup = formatValue('gain_pct', gainPctValue, footerRowData, footerContext);
 
   footer.innerHTML = `
     <td>Summe</td>
@@ -1078,7 +980,7 @@ function updateTotalWealth(
  * zu vermeiden.
  *
  * Falls noch Referenzen auf updatePortfolioTable existieren, bitte auf handlePortfolioUpdate
- * umstellen. (dashboard.js ruft bereits nur noch _doRender -> handlePortfolioUpdate auf.)
+ * umstellen. (Das Dashboard-Modul ruft bereits nur noch _doRender -> handlePortfolioUpdate auf.)
  */
 // Entfernte Legacy-Funktion:
 // function updatePortfolioTable(...) { /* veraltet, entfernt */ }
@@ -1152,7 +1054,25 @@ export function reapplyPositionsSort(containerEl: HTMLElement | null): void {
   containerEl.dataset.sortDir = direction;
   sortTableRows(table, key, direction, true);
 }
-window.__ppReaderReapplyPositionsSort = reapplyPositionsSort; // Optional global für Lazy-Load-Code
+
+export const __TEST_ONLY__ = {
+  getPortfolioPositionsCacheSnapshot,
+  clearPortfolioPositionsCache: clearAllPortfolioPositions,
+  getPendingUpdateCount(): number {
+    return pendingPortfolioUpdates.size;
+  },
+  queuePendingUpdate(
+    portfolioUuid: string,
+    positions: PortfolioPositionData[],
+    error?: unknown,
+  ): void {
+    pendingPortfolioUpdates.set(portfolioUuid, { positions, error });
+  },
+  clearPendingUpdates(): void {
+    pendingPortfolioUpdates.clear();
+    pendingRetryMetaMap.clear();
+  },
+};
 
 // === Globale / modulweite Utilities ===
 function parseNumLoose(txt: string | null | undefined): number {

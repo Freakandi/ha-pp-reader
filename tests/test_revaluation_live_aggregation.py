@@ -60,14 +60,21 @@ async def test_revaluation_uses_live_portfolio_values(tmp_path: Path) -> None:
     portfolio_values = result["portfolio_values"]
     assert portfolio_values is not None
     assert "p1" in portfolio_values
-    assert portfolio_values["p1"]["value"] == 2500.0
-    assert portfolio_values["p1"]["purchase_sum"] == 2000.0
-    assert portfolio_values["p1"]["count"] == 1
+    entry = portfolio_values["p1"]
+    assert entry["uuid"] == "p1"
+    assert entry["current_value"] == 2500.0
+    assert entry["purchase_sum"] == 2000.0
+    assert entry["position_count"] == 1
+    assert "gain_abs" not in entry
+    assert "gain_pct" not in entry
+    performance = entry["performance"]
+    assert performance["gain_abs"] == pytest.approx(500.0)
+    assert performance["gain_pct"] == pytest.approx(25.0)
 
     positions = result["portfolio_positions"]
     assert positions is not None
     assert "p1" in positions
     assert positions["p1"][0]["current_value"] == pytest.approx(2500.0)
     assert positions["p1"][0]["purchase_value"] == pytest.approx(2000.0)
-    assert positions["p1"][0]["gain_abs"] == pytest.approx(500.0)
-    assert positions["p1"][0]["gain_pct"] == pytest.approx(25.0)
+    assert "gain_abs" not in positions["p1"][0]
+    assert "gain_pct" not in positions["p1"][0]

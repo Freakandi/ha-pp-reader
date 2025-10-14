@@ -582,11 +582,6 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             purchase_total_security_value = 0.0
         if purchase_total_account_value is None:
             purchase_total_account_value = 0.0
-        average_purchase_price_native = (
-            aggregation.average_purchase_price_native
-            if aggregation.average_purchase_price_native is not None
-            else average_cost.native
-        )
         avg_price_account_value = aggregation.avg_price_account
         if avg_price_account_value is None:
             avg_price_account_value = average_cost.account
@@ -641,6 +636,17 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         day_change_payload = asdict(day_change_metrics)
         performance_payload["day_change"] = day_change_payload
 
+        aggregation_payload = {
+            "total_holdings": total_holdings,
+            "positive_holdings": aggregation.positive_holdings,
+            "purchase_value_cents": aggregation.purchase_value_cents,
+            "purchase_value_eur": purchase_value_eur,
+            "security_currency_total": purchase_total_security_value,
+            "account_currency_total": purchase_total_account_value,
+            "purchase_total_security": purchase_total_security_value,
+            "purchase_total_account": purchase_total_account_value,
+        }
+
         return {
             "name": security_row["name"],
             "currency_code": currency_code,
@@ -649,14 +655,10 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
             "last_price_eur": last_price_eur_value,
             "market_value_eur": market_value_eur,
             "purchase_value_eur": purchase_value_eur,
-            "average_purchase_price_native": average_purchase_price_native,
-            "purchase_total_security": purchase_total_security_value,
-            "purchase_total_account": purchase_total_account_value,
-            "avg_price_account": avg_price_account_value,
             "average_cost": average_cost_payload,
+            "aggregation": aggregation_payload,
             "last_close_native": last_close_native,
             "last_close_eur": last_close_eur,
-            "day_price_change_native": day_change_payload["price_change_native"],
             "performance": performance_payload,
         }
     finally:
@@ -726,7 +728,7 @@ def fetch_previous_close(
 
 def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str, Any]]:
     """
-    Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Gewinn.
+    Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Performance.
 
     Rückgabe:
     [
@@ -736,12 +738,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
         "current_holdings": float,
         "purchase_value": float,          # EUR
         "current_value": float,           # EUR
-        "gain_abs": float,                # EUR
-        "gain_pct": float,                # %
-        "average_purchase_price_native": float | None,
-        "purchase_total_security": float,
-        "purchase_total_account": float,
-        "avg_price_account": float | None,
         "performance": dict[str, Any],
         "aggregation": dict[str, Any],
       },
@@ -850,7 +846,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 "security_currency_total": purchase_total_security_value,
                 "account_currency_total": purchase_total_account_value,
                 "average_purchase_price_native": average_purchase_price_native,
-                "avg_price_account": avg_price_account_value,
                 "purchase_total_security": purchase_total_security_value,
                 "purchase_total_account": purchase_total_account_value,
             }
@@ -864,9 +859,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 holdings=holdings,
             )
             performance_payload = asdict(performance_metrics)
-            gain_abs = performance_payload["gain_abs"]
-            gain_pct = performance_payload["gain_pct"]
-
             positions.append(
                 {
                     "security_uuid": security_uuid,
@@ -874,18 +866,6 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                     "current_holdings": holdings,
                     "purchase_value": purchase_value,
                     "current_value": current_value,
-                    "gain_abs": gain_abs,
-                    "gain_pct": gain_pct,
-                    "average_purchase_price_native": aggregation_dict[
-                        "average_purchase_price_native"
-                    ],
-                    "purchase_total_security": aggregation_dict[
-                        "purchase_total_security"
-                    ],
-                    "purchase_total_account": aggregation_dict[
-                        "purchase_total_account"
-                    ],
-                    "avg_price_account": aggregation_dict["avg_price_account"],
                     "average_cost": average_cost_payload,
                     "performance": performance_payload,
                     "aggregation": aggregation_dict,
@@ -933,16 +913,11 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
         holdings=row["position_count"],
     )
     performance_payload = asdict(performance_metrics)
-    gain_abs = performance_payload["gain_abs"]
-    gain_pct = performance_payload["gain_pct"]
-
     return {
         "uuid": row["uuid"],
         "name": row["name"],
         "current_value": current_value,
         "purchase_sum": purchase_sum,
-        "gain_abs": gain_abs,
-        "gain_pct": gain_pct,
         "performance": performance_payload,
         "position_count": row["position_count"]
         if row["position_count"] is not None
@@ -963,8 +938,6 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             "name": <str>,
             "current_value": <float>,    # EUR (2 Nachkommastellen)
             "purchase_sum": <float>,     # EUR (2 Nachkommastellen)
-            "gain_abs": <float>,         # EUR (2 Nachkommastellen)
-            "gain_pct": <float>,         # % (2 Nachkommastellen)
             "performance": <dict>,       # Gain & change metrics metadata
             "position_count": <int>
           },

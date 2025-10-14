@@ -1,10 +1,14 @@
-// @ts-nocheck
-
 /**
  * TypeScript entrypoint for the PP Reader panel custom element.
  * Mirrors the legacy panel.js behaviour during the migration.
  */
 import './dashboard';
+import {
+  registerDashboardElement,
+  registerPanelHost,
+  unregisterDashboardElement,
+  unregisterPanelHost,
+} from './dashboard/registry';
 
 const PANEL_URL = new URL(import.meta.url);
 const ASSET_BASE_URL = new URL('./', PANEL_URL);
@@ -47,20 +51,14 @@ class PPReaderPanel extends HTMLElement {
     } else {
       console.debug('[pp_reader] Dashboard Element referenziert.');
       try {
-        if (!window.__ppReaderDashboardElements) {
-          window.__ppReaderDashboardElements = new Set();
-        }
-        window.__ppReaderDashboardElements.add(this._dashboardEl);
+        registerDashboardElement(this._dashboardEl);
       } catch (error) {
         console.warn('[pp_reader] Konnte Dashboard-Referenz nicht registrieren', error);
       }
     }
 
     try {
-      if (!window.__ppReaderPanelHosts) {
-        window.__ppReaderPanelHosts = new Set();
-      }
-      window.__ppReaderPanelHosts.add(this);
+      registerPanelHost(this);
     } catch (error) {
       console.warn('[pp_reader] Konnte Panel-Instanz nicht verfolgen', error);
     }
@@ -161,12 +159,8 @@ class PPReaderPanel extends HTMLElement {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
     }
-    if (window.__ppReaderPanelHosts instanceof Set) {
-      window.__ppReaderPanelHosts.delete(this);
-    }
-    if (window.__ppReaderDashboardElements instanceof Set && this._dashboardEl) {
-      window.__ppReaderDashboardElements.delete(this._dashboardEl);
-    }
+    unregisterPanelHost(this);
+    unregisterDashboardElement(this._dashboardEl);
   }
 
   _upgradeProperty(propertyName) {

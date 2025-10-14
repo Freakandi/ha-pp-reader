@@ -17,6 +17,13 @@ import {
 } from '../data/api';
 import type { PortfolioPositionsResponse } from '../data/api';
 import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
+import { registerOverviewHelpers } from '../dashboard/registry';
+import {
+  getPortfolioPositions,
+  hasPortfolioPositions,
+  setPortfolioPositions,
+} from '../data/positionsCache';
+import type { PortfolioPositionRecord } from '../data/positionsCache';
 import type { HomeAssistant } from '../types/home-assistant';
 import type {
   AverageCostPayload,
@@ -38,10 +45,6 @@ interface PortfolioPositionLike {
   average_cost?: AverageCostPayload | null;
   performance?: PerformanceMetricsPayload | null;
   [key: string]: unknown;
-}
-
-interface PortfolioPositionsCache extends Map<string, PortfolioPositionLike[]> {
-  getSecurityPositions?: (securityUuid: string | null | undefined) => PortfolioPositionLike[];
 }
 
 interface PortfolioOverviewDepot {
@@ -103,7 +106,6 @@ function isPortfolioSortDirection(
 // On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.
 let _hassRef: HomeAssistant | null = null;
 let _panelConfigRef: PanelConfigLike | null = null;
-const portfolioPositionsCache: PortfolioPositionsCache = new Map();      // portfolio_uuid -> positions[]
 
 // --- Security-Aggregation für Detail-Ansicht ---
 const PRICE_FRACTION_DIGITS = { min: 2, max: 6 } as const;
@@ -149,75 +151,20 @@ function resolveCurrencyFromPosition(
   return fallback;
 }
 
-function resolveAggregation(
-  record: Record<string, unknown>,
-): HoldingsAggregationPayload | null {
-  const candidate = record['aggregation'];
-  if (!candidate || typeof candidate !== 'object') {
-    return null;
-  }
-
-  const aggregation = candidate as Partial<HoldingsAggregationPayload>;
-  const requiredKeys: (keyof HoldingsAggregationPayload)[] = [
-    'total_holdings',
-    'purchase_value_eur',
-    'purchase_total_security',
-    'purchase_total_account',
-  ];
-
-  for (const key of requiredKeys) {
-    if (typeof aggregation[key] !== 'number') {
-      return null;
-    }
-  }
-
-  return aggregation as HoldingsAggregationPayload;
-}
-
-function resolveAverageCost(record: Record<string, unknown>): AverageCostPayload | null {
-  const raw = record['average_cost'];
-  if (raw && typeof raw === 'object') {
-    const payload = raw as Partial<AverageCostPayload>;
-
-    const source = payload.source;
-    const normalizedSource:
-      | AverageCostPayload['source']
-      | undefined = source === 'totals' || source === 'eur_total'
-      ? source
-      : source === 'aggregation'
-        ? source
-        : undefined;
-    const native = toNullableNumber(payload.native);
-    const security = toNullableNumber(payload.security);
-    const account = toNullableNumber(payload.account);
-    const eur = toNullableNumber(payload.eur);
-
-    if (native == null && security == null && account == null && eur == null) {
-      return null;
-    }
-
-    return {
-      native,
-      security,
-      account,
-      eur,
-      source: normalizedSource ?? 'aggregation',
-      coverage_ratio: toNullableNumber(
-        payload.coverage_ratio,
-      ),
-    };
-  }
-  return null;
-}
-
-function normalizePerformanceRecord(record: Record<string, unknown>): PerformanceMetricsPayload | null {
-  return normalizePerformancePayload(record['performance']);
-}
-
-function normalizePositionLike(position: PortfolioPositionLike): PortfolioPositionLike {
+function sanitizePosition(position: PortfolioPositionLike): PortfolioPositionLike {
   const record = position as Record<string, unknown>;
-  const averageCost = resolveAverageCost(record);
-  const performance = normalizePerformanceRecord(record);
+
+  const averageCost =
+    position.average_cost && typeof position.average_cost === 'object'
+      ? (position.average_cost as AverageCostPayload)
+      : null;
+
+  const aggregation =
+    position.aggregation && typeof position.aggregation === 'object'
+      ? (position.aggregation as HoldingsAggregationPayload)
+      : null;
+
+  const performance = normalizePerformancePayload(record['performance']);
   const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
   const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
@@ -229,6 +176,7 @@ function normalizePositionLike(position: PortfolioPositionLike): PortfolioPositi
     gain_abs: gainAbs,
     gain_pct: gainPct,
     average_cost: averageCost,
+    aggregation,
     performance,
   };
 }
@@ -251,11 +199,14 @@ function formatPriceWithCurrency(
 function buildPurchasePriceDisplay(
   position: PortfolioPositionLike,
 ): { markup: string; sortValue: number; ariaLabel: string } {
-  const record = position as Record<string, unknown>;
-  const aggregation = resolveAggregation(record);
   const averageCost =
-    (position as { average_cost?: AverageCostPayload | null }).average_cost ??
-    resolveAverageCost(record);
+    position.average_cost && typeof position.average_cost === 'object'
+      ? (position.average_cost as AverageCostPayload)
+      : null;
+  const aggregation =
+    position.aggregation && typeof position.aggregation === 'object'
+      ? (position.aggregation as HoldingsAggregationPayload)
+      : null;
 
   const securityCurrency = resolveCurrencyFromPosition(position, [
     'security_currency_code',
@@ -338,37 +289,8 @@ export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
 };
 
-export function getSecurityPositionsFromCache(securityUuid: string | null | undefined): PortfolioPositionLike[] {
-  if (!securityUuid) {
-    return [];
-  }
-  const matches: PortfolioPositionLike[] = [];
-  for (const positions of portfolioPositionsCache.values()) {
-    if (!Array.isArray(positions) || positions.length === 0) {
-      continue;
-    }
-    for (const pos of positions) {
-      const posUuid = typeof pos?.security_uuid === 'string' ? pos.security_uuid : null;
-      if (pos && posUuid === securityUuid) {
-        matches.push(pos);
-      }
-    }
-  }
-
-  if (!matches.length) {
-    return [];
-  }
-
-  return matches.map((pos) => ({ ...pos }));
-}
-
-// Global für Push-Handler (Events); hält ausschließlich Positionsdaten für Lazy-Loads
-portfolioPositionsCache.getSecurityPositions = getSecurityPositionsFromCache;
-
-window.__ppReaderPortfolioPositionsCache = portfolioPositionsCache;
-if (!window.__ppReaderGetSecurityPositionsFromCache) {
-  window.__ppReaderGetSecurityPositionsFromCache = getSecurityPositionsFromCache;
-}
+// Global cache exports have been removed; cache interactions now flow through
+// the shared data/positionsCache module.
 const expandedPortfolios = new Set<string>();           // gemerkte geöffnete Depots (persistiert über Re-Renders)
 
 // ENTFERNT: Globaler document-Listener (Section 6 Hardening)
@@ -401,15 +323,11 @@ function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): voi
   });
 }
 
-if (!window.__ppReaderApplyGainPctMetadata) {
-  window.__ppReaderApplyGainPctMetadata = (tableEl: HTMLTableElement) => applyGainPctMetadata(tableEl);
-}
-
 function renderPositionsTable(positions: readonly PortfolioPositionLike[]): string {
   if (!positions || positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
-  const normalizedPositions = positions.map(normalizePositionLike);
+  const sanitizedPositions = positions.map(sanitizePosition);
   // Mapping für makeTable
   const cols = [
     { key: 'name', label: 'Wertpapier' },
@@ -419,7 +337,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
     { key: 'gain_abs', label: '+/-', align: 'right' as const },
     { key: 'gain_pct', label: '%', align: 'right' as const }
   ];
-  const rows = normalizedPositions.map(p => {
+  const rows = sanitizedPositions.map(p => {
     const performance = normalizePerformancePayload((p as Record<string, unknown>)['performance']);
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
     const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
@@ -466,7 +384,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
         if (tr.classList.contains('footer-row')) {
           return;
         }
-        const pos = normalizedPositions[idx];
+        const pos = sanitizedPositions[idx];
         if (!pos) {
           return;
         }
@@ -533,7 +451,6 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
 export function renderPortfolioPositions(positions: readonly PortfolioPositionLike[]): string {
   return renderPositionsTable(positions);
 }
-window.__ppReaderRenderPositionsTable = renderPositionsTable;
 
 function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid: string): void {
   if (!portfolioUuid) return;
@@ -580,10 +497,6 @@ function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid:
 
 export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolioUuid: string): void {
   attachSecurityDetailDelegation(root, portfolioUuid);
-}
-
-if (!window.__ppReaderAttachSecurityDetailListener) {
-  window.__ppReaderAttachSecurityDetailListener = attachSecurityDetailListener;
 }
 
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
@@ -688,8 +601,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
                 aria-label="Positionen für ${d.name}">
       <td colspan="5">
         <div class="positions-container">${expanded
-        ? (portfolioPositionsCache.has(d.uuid)
-          ? renderPositionsTable(portfolioPositionsCache.get(d.uuid) ?? [])
+        ? (hasPortfolioPositions(d.uuid)
+          ? renderPositionsTable(getPortfolioPositions(d.uuid))
           : '<div class=\"loading\">Lade Positionen...</div>')
         : ''
       }</div>
@@ -906,7 +819,6 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   footer.dataset.gainPct = sumHasValue && typeof sumGainPct === 'number' ? String(sumGainPct) : '';
   footer.dataset.hasValue = sumHasValue ? 'true' : 'false';
 }
-window.__ppReaderUpdatePortfolioFooter = updatePortfolioFooterFromDom;
 
 /**
  * Utility-Funktionen zum Auslesen und Wiederherstellen des Expand-States.
@@ -1075,11 +987,6 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
   });
 }
 
-// Exponiere zentrale Sortier-Funktion global für Push-Handler (Race-frei wiederverwendbar)
-if (!window.__ppReaderAttachPortfolioPositionsSorting) {
-  window.__ppReaderAttachPortfolioPositionsSorting = attachPortfolioPositionsSorting;
-}
-
 // NEU: Funktion zum erneuten Laden der Positionsdaten
 async function reloadPortfolioPositions(
   portfolioUuid: string,
@@ -1113,9 +1020,8 @@ async function reloadPortfolioPositions(
       return;
     }
     const positions = resp.positions ?? [];
-    const normalized = positions.map(normalizePositionLike);
-    portfolioPositionsCache.set(portfolioUuid, normalized);
-    targetContainer.innerHTML = renderPositionsTable(normalized);
+    setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
+    targetContainer.innerHTML = renderPositionsTable(positions);
     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
     try {
       attachPortfolioPositionsSorting(root, portfolioUuid);
@@ -1229,15 +1135,8 @@ export function attachPortfolioToggleHandler(root: HTMLElement): void {
             } catch (error) {
               console.warn('attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:', error);
             }
-            if (!pendingApplied && window.__ppReaderFlushPendingPositions) {
-              try {
-                pendingApplied = window.__ppReaderFlushPendingPositions(root, portfolioUuid);
-              } catch (error) {
-                console.warn('attachPortfolioToggleHandler: Global Pending-Flush fehlgeschlagen:', error);
-              }
-            }
 
-            if (!portfolioPositionsCache.has(portfolioUuid)) {
+            if (!hasPortfolioPositions(portfolioUuid)) {
               const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
               if (containerEl) {
                 containerEl.innerHTML = '<div class="loading">Lade Positionen...</div>';
@@ -1256,10 +1155,9 @@ export function attachPortfolioToggleHandler(root: HTMLElement): void {
                   return;
                 }
                 const positions = resp.positions ?? [];
-                const normalized = positions.map(normalizePositionLike);
-                portfolioPositionsCache.set(portfolioUuid, normalized);
+                setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
                 if (containerEl) {
-                  containerEl.innerHTML = renderPositionsTable(normalized);
+                  containerEl.innerHTML = renderPositionsTable(positions);
                   // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
                   try {
                     attachPortfolioPositionsSorting(root, portfolioUuid);
@@ -1284,7 +1182,7 @@ export function attachPortfolioToggleHandler(root: HTMLElement): void {
               const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
               if (containerEl) {
                 containerEl.innerHTML = renderPositionsTable(
-                  portfolioPositionsCache.get(portfolioUuid) ?? [],
+                  getPortfolioPositions(portfolioUuid),
                 );
                 attachPortfolioPositionsSorting(root, portfolioUuid);
                 try {
@@ -1557,7 +1455,7 @@ function schedulePostRenderSetup(root: HTMLElement | null, depots: readonly Port
 
       expandedPortfolios.forEach((pid) => {
         try {
-          if (portfolioPositionsCache.has(pid)) {
+          if (hasPortfolioPositions(pid)) {
             attachPortfolioPositionsSorting(root, pid);
             attachSecurityDetailListener(root, pid);
           }
@@ -1590,3 +1488,16 @@ function schedulePostRenderSetup(root: HTMLElement | null, depots: readonly Port
 
   schedule(() => schedule(run));
 }
+
+registerOverviewHelpers({
+  renderPositionsTable: (positions) =>
+    renderPortfolioPositions(positions as readonly PortfolioPositionLike[]),
+  applyGainPctMetadata,
+  attachSecurityDetailListener,
+  attachPortfolioPositionsSorting,
+  updatePortfolioFooter: (table) => {
+    if (table) {
+      updatePortfolioFooterFromDom(table);
+    }
+  },
+});

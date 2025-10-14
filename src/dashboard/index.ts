@@ -12,7 +12,6 @@ export * from '../dashboard';
 export {
   renderDashboard,
   attachPortfolioToggleHandler,
-  getSecurityPositionsFromCache,
   renderPortfolioPositions,
   attachSecurityDetailListener,
   updatePortfolioFooterFromDom,

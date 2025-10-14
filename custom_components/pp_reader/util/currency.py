@@ -22,6 +22,7 @@ __all__ = [
     "normalize_raw_price",
     "round_currency",
     "round_price",
+    "eur_to_cent",
 ]
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.util.currency")
@@ -72,6 +73,20 @@ def round_currency(
         return default
 
     return round(numeric_value, decimals)
+
+
+def eur_to_cent(
+    value: float | None,
+    *,
+    default: int | None = None,
+) -> int | None:
+    """Convert a EUR amount to integer cents using canonical rounding."""
+
+    rounded = round_currency(value, default=None)
+    if rounded is None:
+        return default
+
+    return int(round(rounded * CENT_IN_EURO))
 
 
 def round_price(

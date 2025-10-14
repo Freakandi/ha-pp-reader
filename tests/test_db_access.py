@@ -374,7 +374,6 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                 "account_currency_total": pytest.approx(round_currency(173.981481)),
                 "purchase_total_account": pytest.approx(round_currency(173.981481)),
                 "average_purchase_price_native": pytest.approx(150.25, rel=0, abs=1e-6),
-                "avg_price_account": pytest.approx(115.987654, rel=0, abs=1e-6),
             },
             "average_cost": {
                 "native": pytest.approx(150.25, rel=0, abs=1e-6),
@@ -393,7 +392,6 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                 "account_currency_total": pytest.approx(round_currency(272.527776)),
                 "purchase_total_account": pytest.approx(round_currency(272.527776)),
                 "average_purchase_price_native": pytest.approx(199.75, rel=0, abs=1e-6),
-                "avg_price_account": pytest.approx(121.123456, rel=0, abs=1e-6),
             },
             "average_cost": {
                 "native": pytest.approx(199.75, rel=0, abs=1e-6),
@@ -412,7 +410,6 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                 "account_currency_total": pytest.approx(round_currency(0.0)),
                 "purchase_total_account": pytest.approx(round_currency(0.0)),
                 "average_purchase_price_native": None,
-                "avg_price_account": None,
             },
             "average_cost": {
                 "native": None,
@@ -452,30 +449,13 @@ def test_get_portfolio_positions_populates_aggregation_fields(
         assert (
             position["purchase_value"] == expected["aggregation"]["purchase_value_eur"]
         )
-        assert (
-            position["purchase_total_security"]
-            == expected["aggregation"]["purchase_total_security"]
-        )
-        assert (
-            position["purchase_total_account"]
-            == expected["aggregation"]["purchase_total_account"]
-        )
 
-        if expected["aggregation"]["average_purchase_price_native"] is None:
-            assert position["average_purchase_price_native"] is None
-        else:
-            assert (
-                position["average_purchase_price_native"]
-                == expected["aggregation"]["average_purchase_price_native"]
-            )
+        assert "purchase_total_security" not in position
+        assert "purchase_total_account" not in position
+        assert "average_purchase_price_native" not in position
+        assert "avg_price_account" not in position
 
         assert "avg_price_security" not in position
-
-        expected_avg_account = expected["aggregation"]["avg_price_account"]
-        if expected_avg_account is None:
-            assert position["avg_price_account"] is None
-        else:
-            assert position["avg_price_account"] == expected_avg_account
 
         average_cost = position["average_cost"]
         assert set(average_cost) == {
@@ -517,13 +497,8 @@ def test_get_portfolio_positions_populates_aggregation_fields(
             )
 
         account_total = aggregation.get("purchase_total_account")
-        account_avg = aggregation.get("avg_price_account")
-        expected_account_avg = account_avg
-        if (
-            expected_account_avg is None
-            and account_total not in (None, "")
-            and total_holdings
-        ):
+        expected_account_avg = None
+        if account_total not in (None, "") and total_holdings:
             expected_account_avg = round_currency(
                 account_total / total_holdings,
                 decimals=6,
@@ -539,48 +514,57 @@ def test_get_portfolio_positions_populates_aggregation_fields(
             )
 
         performance = position["performance"]
-        assert set(performance) == {
-            "gain_abs",
-            "gain_pct",
-            "total_change_eur",
-            "total_change_pct",
-            "source",
-            "coverage_ratio",
-        }
+        assert "gain_abs" not in position
+        assert "gain_pct" not in position
 
         expected_gain_abs = position["current_value"] - position["purchase_value"]
-        assert position["gain_abs"] == pytest.approx(expected_gain_abs, rel=0, abs=1e-2)
         if position["purchase_value"] > 0:
             expected_gain_pct = (expected_gain_abs / position["purchase_value"]) * 100
         else:
             expected_gain_pct = 0.0
 
-        assert position["gain_pct"] == pytest.approx(expected_gain_pct, rel=0, abs=1e-2)
         assert performance["gain_abs"] == pytest.approx(
-            position["gain_abs"], rel=0, abs=1e-6
+            expected_gain_abs, rel=0, abs=1e-6
         )
         assert performance["gain_pct"] == pytest.approx(
-            position["gain_pct"], rel=0, abs=1e-6
+            expected_gain_pct, rel=0, abs=1e-6
         )
         assert performance["total_change_eur"] == pytest.approx(
-            position["gain_abs"], rel=0, abs=1e-6
+            expected_gain_abs, rel=0, abs=1e-6
         )
         assert performance["total_change_pct"] == pytest.approx(
-            position["gain_pct"], rel=0, abs=1e-6
+            expected_gain_pct, rel=0, abs=1e-6
         )
         assert performance["coverage_ratio"] == pytest.approx(1.0)
         assert performance["source"] == "calculated"
 
-        if position["average_purchase_price_native"] is None:
+        native_average = aggregation.get("average_purchase_price_native")
+        if native_average is None:
             assert average_cost["native"] is None
         else:
-            assert average_cost["native"] == position["average_purchase_price_native"]
+            assert average_cost["native"] == pytest.approx(
+                native_average,
+                rel=0,
+                abs=1e-6,
+            )
 
-        for field in ("account",):
-            if position[f"avg_price_{field}"] is None:
-                assert average_cost[field] is None
+        account_total = aggregation.get("purchase_total_account")
+        if account_total in (0.0, None) or holdings in (None, 0.0):
+            assert average_cost["account"] is None
+        else:
+            expected_account = round_currency(
+                account_total / holdings,
+                decimals=6,
+                default=None,
+            )
+            if expected_account is None:
+                assert average_cost["account"] is None
             else:
-                assert average_cost[field] == position[f"avg_price_{field}"]
+                assert average_cost["account"] == pytest.approx(
+                    expected_account,
+                    rel=0,
+                    abs=1e-6,
+                )
 
         holdings = position["current_holdings"]
         purchase_value = position["purchase_value"]
@@ -697,33 +681,34 @@ def test_get_security_snapshot_multicurrency(
     assert snapshot["last_price_eur"] == pytest.approx(160.0, rel=0, abs=1e-4)
     assert snapshot["market_value_eur"] == pytest.approx(600.0, rel=0, abs=1e-2)
     assert snapshot["purchase_value_eur"] == pytest.approx(802.35, rel=0, abs=1e-2)
-    assert snapshot["average_purchase_price_native"] == pytest.approx(
-        179.95,
-        rel=0,
-        abs=1e-6,
-    )
-    assert snapshot["purchase_total_security"] == pytest.approx(
+    assert "avg_price_account" not in snapshot
+    assert "avg_price_security" not in snapshot
+    assert "average_purchase_price_native" not in snapshot
+    aggregation = snapshot["aggregation"]
+    assert isinstance(aggregation, dict)
+    assert aggregation["purchase_total_security"] == pytest.approx(
         475.16,
         rel=0,
         abs=1e-2,
     )
-    assert snapshot["purchase_total_account"] == pytest.approx(
+    assert aggregation["purchase_total_account"] == pytest.approx(
         446.51,
         rel=0,
         abs=1e-2,
     )
-    assert snapshot["avg_price_account"] == pytest.approx(
-        119.069135,
+    assert aggregation["purchase_value_eur"] == pytest.approx(802.35, rel=0, abs=1e-2)
+    assert aggregation["purchase_value_cents"] == 80_235
+
+    average_cost = snapshot["average_cost"]
+    assert average_cost["native"] == pytest.approx(
+        179.95,
         rel=0,
         abs=1e-6,
     )
-    assert "avg_price_security" not in snapshot
-    average_cost = snapshot["average_cost"]
-    assert average_cost["native"] == snapshot["average_purchase_price_native"]
     expected_average_security = None
     if snapshot["total_holdings"]:
         expected_average_security = round_currency(
-            snapshot["purchase_total_security"] / snapshot["total_holdings"],
+            aggregation["purchase_total_security"] / snapshot["total_holdings"],
             decimals=6,
             default=None,
         )
@@ -736,7 +721,11 @@ def test_get_security_snapshot_multicurrency(
             rel=0,
             abs=1e-6,
         )
-    assert average_cost["account"] == snapshot["avg_price_account"]
+    assert average_cost["account"] == pytest.approx(
+        119.069135,
+        rel=0,
+        abs=1e-6,
+    )
     assert average_cost["eur"] == pytest.approx(
         snapshot["purchase_value_eur"] / snapshot["total_holdings"]
     )
@@ -744,7 +733,7 @@ def test_get_security_snapshot_multicurrency(
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)
     assert snapshot["last_close_native"] is None
     assert snapshot["last_close_eur"] is None
-    assert snapshot["day_price_change_native"] is None
+    assert "day_price_change_native" not in snapshot
     assert "day_price_change_eur" not in snapshot
     performance = snapshot["performance"]
     assert performance["gain_abs"] == pytest.approx(-202.35, rel=0, abs=1e-2)
@@ -793,33 +782,33 @@ def test_get_security_snapshot_handles_null_purchase_value(
     snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
 
     assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
-    assert snapshot["average_purchase_price_native"] == pytest.approx(
-        179.95,
-        rel=0,
-        abs=1e-6,
-    )
-    assert snapshot["purchase_total_security"] == pytest.approx(
+    assert "avg_price_account" not in snapshot
+    assert "avg_price_security" not in snapshot
+    assert "average_purchase_price_native" not in snapshot
+    aggregation = snapshot["aggregation"]
+    assert isinstance(aggregation, dict)
+    assert aggregation["purchase_total_security"] == pytest.approx(
         475.16,
         rel=0,
         abs=1e-2,
     )
-    assert snapshot["purchase_total_account"] == pytest.approx(
+    assert aggregation["purchase_total_account"] == pytest.approx(
         446.51,
         rel=0,
         abs=1e-2,
     )
-    assert snapshot["avg_price_account"] == pytest.approx(
-        119.069135,
+    assert aggregation["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+    assert aggregation["purchase_value_cents"] == 0
+    average_cost = snapshot["average_cost"]
+    assert average_cost["native"] == pytest.approx(
+        179.95,
         rel=0,
         abs=1e-6,
     )
-    assert "avg_price_security" not in snapshot
-    average_cost = snapshot["average_cost"]
-    assert average_cost["native"] == snapshot["average_purchase_price_native"]
     expected_average_security = None
     if snapshot["total_holdings"]:
         expected_average_security = round_currency(
-            snapshot["purchase_total_security"] / snapshot["total_holdings"],
+            aggregation["purchase_total_security"] / snapshot["total_holdings"],
             decimals=6,
             default=None,
         )
@@ -832,7 +821,11 @@ def test_get_security_snapshot_handles_null_purchase_value(
             rel=0,
             abs=1e-6,
         )
-    assert average_cost["account"] == snapshot["avg_price_account"]
+    assert average_cost["account"] == pytest.approx(
+        119.069135,
+        rel=0,
+        abs=1e-6,
+    )
     assert average_cost["eur"] == pytest.approx(0.0, rel=0, abs=1e-6)
     assert average_cost["source"] == "totals"
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)
@@ -901,19 +894,23 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     assert snapshot["total_holdings"] == pytest.approx(0.0, rel=0, abs=1e-6)
     assert snapshot["market_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
     assert snapshot["purchase_value_eur"] == pytest.approx(123.45, rel=0, abs=1e-4)
-    assert snapshot["average_purchase_price_native"] is None
-    assert snapshot["purchase_total_security"] == pytest.approx(
+    assert "avg_price_account" not in snapshot
+    assert "avg_price_security" not in snapshot
+    assert "average_purchase_price_native" not in snapshot
+    aggregation = snapshot["aggregation"]
+    assert isinstance(aggregation, dict)
+    assert aggregation["purchase_total_security"] == pytest.approx(
         475.16,
         rel=0,
         abs=1e-2,
     )
-    assert snapshot["purchase_total_account"] == pytest.approx(
+    assert aggregation["purchase_total_account"] == pytest.approx(
         446.51,
         rel=0,
         abs=1e-2,
     )
-    assert snapshot["avg_price_account"] is None
-    assert "avg_price_security" not in snapshot
+    assert aggregation["purchase_value_eur"] == pytest.approx(123.45, rel=0, abs=1e-4)
+    assert aggregation["purchase_value_cents"] == 12_345
     average_cost = snapshot["average_cost"]
     assert average_cost["native"] is None
     assert average_cost["security"] is None
@@ -923,11 +920,7 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     assert average_cost["coverage_ratio"] is None
     assert snapshot["last_close_native"] == pytest.approx(175.5, rel=0, abs=1e-4)
     assert snapshot["last_close_eur"] == pytest.approx(140.4, rel=0, abs=1e-4)
-    assert snapshot["day_price_change_native"] == pytest.approx(
-        24.5,
-        rel=0,
-        abs=1e-4,
-    )
+    assert "day_price_change_native" not in snapshot
     assert "day_price_change_eur" not in snapshot
     performance = snapshot["performance"]
     assert performance["gain_abs"] == pytest.approx(-123.45, rel=0, abs=1e-2)
@@ -937,7 +930,7 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     assert performance["coverage_ratio"] == pytest.approx(1.0)
     day_change = performance["day_change"]
     assert day_change["price_change_native"] == pytest.approx(
-        snapshot["day_price_change_native"],
+        24.5,
         rel=0,
         abs=1e-6,
     )

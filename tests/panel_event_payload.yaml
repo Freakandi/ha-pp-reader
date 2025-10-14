@@ -11,14 +11,16 @@ data:
     position_count: 45
     current_value: 50000.00
     purchase_sum: 40000.00
-    gain_abs: 10000.00
-    gain_pct: 25.0
+    performance:
+      gain_abs: 10000.00
+      gain_pct: 25.0
   - uuid: f9996e0d-743d-417f-b0f2-150dd68df646
     position_count: 2
     current_value: 1000.00
     purchase_sum: 500.00
-    gain_abs: 500.00
-    gain_pct: 100.0
+    performance:
+      gain_abs: 500.00
+      gain_pct: 100.0
 
 # --- portfolio_positions (ein Portfolio) ---
 domain: pp_reader
@@ -32,8 +34,6 @@ data:
       current_holdings: 7
       purchase_value: 1515.22
       current_value: 2475.10
-      gain_abs: 959.88
-      gain_pct: 63.4
       aggregation:
         total_holdings: 7
         positive_holdings: 7
@@ -60,8 +60,6 @@ data:
       current_holdings: 16
       purchase_value: 2040.13
       current_value: 3290.00
-      gain_abs: 1249.87
-      gain_pct: 61.3
       aggregation:
         total_holdings: 16
         positive_holdings: 16

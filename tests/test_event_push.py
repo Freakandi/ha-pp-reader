@@ -3,39 +3,65 @@ from __future__ import annotations
 from custom_components.pp_reader.data.event_push import _compact_event_data
 
 
-def test_compact_portfolio_values_converts_cent_amounts() -> None:
+def test_compact_portfolio_values_forwards_canonical_payload() -> None:
     raw = [
         {
             "uuid": "portfolio-1",
-            "current_value": 12345,
-            "purchase_sum": 23456,
+            "name": "Alpha Portfolio",
+            "position_count": 3,
+            "current_value": 123.45,
+            "purchase_sum": 234.56,
             "performance": {
                 "gain_abs": 345.67,
                 "gain_pct": 8.9,
+                "total_change_eur": 345.67,
+                "total_change_pct": 8.9,
+                "source": "calculated",
+                "coverage_ratio": 1.0,
+                "day_change": {
+                    "price_change_native": None,
+                    "price_change_eur": None,
+                    "change_pct": None,
+                    "source": "unavailable",
+                    "coverage_ratio": 0.0,
+                },
             },
+            "missing_value_positions": 0,
         },
         {
             "uuid": "portfolio-2",
-            "current_value": True,
-            "purchase_sum": None,
+            "count": 1,
+            "current_value": 10.0,
+            "purchase_sum": 5.0,
+            "performance": {
+                "gain_abs": 5.0,
+                "gain_pct": 50.0,
+            },
         },
     ]
 
     compacted = _compact_event_data("portfolio_values", raw)
+
     assert isinstance(compacted, list)
     assert len(compacted) == 2
-
-    first = compacted[0]
-    assert first["uuid"] == "portfolio-1"
-    assert first["current_value"] == 123.45
-    assert first["purchase_sum"] == 234.56
-    assert first["gain_abs"] == 345.67
-    assert first["gain_pct"] == 8.9
+    assert compacted[0] == {
+        "uuid": "portfolio-1",
+        "name": "Alpha Portfolio",
+        "position_count": 3,
+        "current_value": 123.45,
+        "purchase_sum": 234.56,
+        "performance": raw[0]["performance"],
+        "missing_value_positions": 0,
+    }
 
     second = compacted[1]
     assert second["uuid"] == "portfolio-2"
-    assert second["current_value"] == 0.0
-    assert second["purchase_sum"] == 0.0
+    assert second["position_count"] == 1
+    assert "count" not in second
+    assert second["current_value"] == 10.0
+    assert second["purchase_sum"] == 5.0
+    assert "gain_abs" not in second
+    assert "gain_pct" not in second
 
 
 def test_compact_portfolio_positions_sequence() -> None:
@@ -48,7 +74,7 @@ def test_compact_portfolio_positions_sequence() -> None:
                     "name": "Security A",
                     "current_holdings": 2,
                     "purchase_value_eur": 123.45,
-                    "current_value": 45678,
+                    "current_value": 456.78,
                     "performance": {
                         "gain_abs": 333.33,
                         "gain_pct": 4.5,
@@ -115,9 +141,8 @@ def test_compact_portfolio_positions_sequence() -> None:
     assert aggregation["purchase_total_account"] == 211.0
     assert "avg_price_security" not in aggregation
     assert "avg_price_account" not in aggregation
-    # ensure legacy flattened values continue to match the structured payload
-    assert normalized["purchase_total_security"] == 210.0
-    assert normalized["purchase_total_account"] == 211.0
+    assert "purchase_total_security" not in normalized
+    assert "purchase_total_account" not in normalized
     assert "avg_price_security" not in normalized
     assert "avg_price_account" not in normalized
     average_cost = normalized["average_cost"]

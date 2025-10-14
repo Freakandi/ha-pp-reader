@@ -38,7 +38,6 @@ import type {
   HoldingsAggregationPayload,
   AverageCostPayload,
   AverageCostSource,
-  PerformanceMetricsPayload,
 } from './types';
 import { roundCurrency, toFiniteCurrency, normalizePercentValue } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
@@ -106,86 +105,6 @@ type RangeStateRegistry = Map<string, SecurityHistoryRangeState>;
 
 type SnapshotDetailRegistry = Map<string, SecuritySnapshotDetail>;
 
-interface SecuritySnapshotMetrics {
-  holdings: number | null;
-  fxRate: number | null;
-  purchaseValueEur: number | null;
-  currentValueEur: number | null;
-  averagePurchaseNative: number | null;
-  averagePurchaseEur: number | null;
-  averagePurchaseAccount: number | null;
-  dayPriceChangeNative: number | null;
-  dayPriceChangeEur: number | null;
-  dayChangePct: number | null;
-  totalChangeEur: number | null;
-  totalChangePct: number | null;
-  performance: PerformanceMetricsPayload | null;
-  lastPriceFetchedAt: number | null;
-}
-
-type SnapshotMetricsRegistry = Map<string, SecuritySnapshotMetrics>;
-
-interface NormalizedAverageCostPayload {
-  native: number | null;
-  security: number | null;
-  account: number | null;
-  eur: number | null;
-  source: AverageCostSource;
-  coverageRatio: number | null;
-}
-
-function normalizeAverageCost(
-  snapshot: SecuritySnapshotDetail | null | undefined,
-): NormalizedAverageCostPayload | null {
-  if (!snapshot) {
-    return null;
-  }
-
-  const parseNullableNumber = (value: unknown): number | null => {
-    const numeric = toFiniteNumber(value);
-    return numeric == null ? null : numeric;
-  };
-
-  const normalizeSource = (value: unknown): AverageCostSource => {
-    if (value === 'totals' || value === 'eur_total') {
-      return value;
-    }
-    return 'aggregation';
-  };
-
-  const rawAverageCost = snapshot.average_cost;
-  if (!rawAverageCost || typeof rawAverageCost !== 'object') {
-    return null;
-  }
-
-  const native = parseNullableNumber((rawAverageCost as { native?: unknown }).native);
-  const security = parseNullableNumber((rawAverageCost as { security?: unknown }).security);
-  const account = parseNullableNumber((rawAverageCost as { account?: unknown }).account);
-  const eur = parseNullableNumber((rawAverageCost as { eur?: unknown }).eur);
-  const coverageRatio = parseNullableNumber(
-    (rawAverageCost as { coverage_ratio?: unknown }).coverage_ratio,
-  );
-
-  if (
-    native == null &&
-    security == null &&
-    account == null &&
-    eur == null &&
-    coverageRatio == null
-  ) {
-    return null;
-  }
-
-  return {
-    native,
-    security,
-    account,
-    eur,
-    source: normalizeSource((rawAverageCost as { source?: unknown }).source),
-    coverageRatio,
-  };
-}
-
 const AVERAGE_COST_SOURCE_LABELS: Record<AverageCostSource, string> = {
   aggregation: 'Aggregationsdaten',
   totals: 'Kaufsummen',
@@ -197,41 +116,128 @@ type LiveUpdateHandler = (event: Event) => void;
 const SECURITY_HISTORY_CACHE: HistoryCacheRegistry = new Map();
 const RANGE_STATE_REGISTRY: RangeStateRegistry = new Map();
 const SNAPSHOT_DETAIL_REGISTRY: SnapshotDetailRegistry = new Map();
-const SNAPSHOT_METRICS_REGISTRY: SnapshotMetricsRegistry = new Map();
 const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
 const LIVE_UPDATE_HANDLERS = new Map<string, LiveUpdateHandler>();
 
+function extractAverageCostPayload(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): AverageCostPayload | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  const rawAverageCost = snapshot.average_cost;
+  if (!rawAverageCost || typeof rawAverageCost !== 'object') {
+    return null;
+  }
+
+  const candidate = rawAverageCost as Partial<AverageCostPayload> & {
+    coverage_ratio?: unknown;
+    source?: unknown;
+  };
+
+  const native = toFiniteNumber(candidate.native);
+  const security = toFiniteNumber(candidate.security);
+  const account = toFiniteNumber(candidate.account);
+  const eur = toFiniteNumber(candidate.eur);
+  const coverageRatio = toFiniteNumber(candidate.coverage_ratio);
+
+  if (
+    native == null &&
+    security == null &&
+    account == null &&
+    eur == null &&
+    coverageRatio == null
+  ) {
+    return null;
+  }
+
+  const source = candidate.source;
+  const normalizedSource: AverageCostSource =
+    source === 'totals' || source === 'eur_total' ? source : 'aggregation';
+
+  return {
+    native,
+    security,
+    account,
+    eur,
+    source: normalizedSource,
+    coverage_ratio: coverageRatio,
+  };
+}
+
+function extractAggregationPayload(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): HoldingsAggregationPayload | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  const rawAggregation = snapshot.aggregation;
+  if (!rawAggregation || typeof rawAggregation !== 'object') {
+    return null;
+  }
+
+  const candidate = rawAggregation as Partial<HoldingsAggregationPayload> & {
+    purchase_value_cents?: unknown;
+  };
+
+  const totalHoldings = toFiniteNumber(candidate.total_holdings);
+  const positiveHoldings = toFiniteNumber(candidate.positive_holdings);
+  const purchaseValueEur = toFiniteNumber(candidate.purchase_value_eur);
+  const securityTotal =
+    toFiniteNumber(candidate.purchase_total_security) ??
+    toFiniteNumber(candidate.security_currency_total);
+  const accountTotal =
+    toFiniteNumber(candidate.purchase_total_account) ??
+    toFiniteNumber(candidate.account_currency_total);
+
+  const rawPurchaseValueCents = candidate.purchase_value_cents;
+  let purchaseValueCents = 0;
+  if (typeof rawPurchaseValueCents === 'number' && Number.isFinite(rawPurchaseValueCents)) {
+    purchaseValueCents = Math.trunc(rawPurchaseValueCents);
+  } else if (typeof rawPurchaseValueCents === 'string') {
+    const parsed = Number.parseInt(rawPurchaseValueCents, 10);
+    if (Number.isFinite(parsed)) {
+      purchaseValueCents = parsed;
+    }
+  }
+
+  const hasAnyValue =
+    totalHoldings != null ||
+    positiveHoldings != null ||
+    purchaseValueEur != null ||
+    securityTotal != null ||
+    accountTotal != null ||
+    purchaseValueCents !== 0;
+
+  if (!hasAnyValue) {
+    return null;
+  }
+
+  return {
+    total_holdings: totalHoldings ?? 0,
+    positive_holdings: positiveHoldings ?? 0,
+    purchase_value_cents: purchaseValueCents,
+    purchase_value_eur: purchaseValueEur ?? 0,
+    security_currency_total: securityTotal ?? 0,
+    account_currency_total: accountTotal ?? 0,
+    purchase_total_security: securityTotal ?? 0,
+    purchase_total_account: accountTotal ?? 0,
+  };
+}
+
 export const __TEST_ONLY__ = {
-  ensureSnapshotMetricsForTest: ensureSnapshotMetrics,
   getHistoryChartOptionsForTest: getHistoryChartOptions,
-  clearSnapshotMetricsRegistryForTest: () => {
-    SNAPSHOT_METRICS_REGISTRY.clear();
-  },
-  normalizeAverageCostForTest: normalizeAverageCost,
   mergeHistoryWithSnapshotPriceForTest: (
     historySeries: readonly NormalizedHistoryEntry[] | null | undefined,
     snapshot: SecuritySnapshotDetail | null | undefined,
   ): NormalizedHistoryEntry[] => buildHistorySeriesWithSnapshotPrice(historySeries, snapshot),
-  resolveAveragePurchaseBaselineForTest: resolveAveragePurchaseBaseline,
-  resolvePurchaseFxTooltipForTest: (
-    snapshot: SecuritySnapshotDetail | null | undefined,
-    metrics: SecuritySnapshotMetrics | null | undefined,
-    accountCurrency: string | null | undefined,
-    averagePurchaseNative: number | null | undefined,
-    averagePurchaseAccount: number | null | undefined,
-    purchaseTotalSecurity: number | null | undefined,
-    purchaseTotalAccount: number | null | undefined,
-  ): string | null =>
-    resolvePurchaseFxTooltip(
-      snapshot,
-      metrics,
-      accountCurrency,
-      averagePurchaseNative,
-      averagePurchaseAccount,
-      purchaseTotalSecurity,
-      purchaseTotalAccount,
-      normalizeAverageCost(snapshot),
-    ),
+  composeAveragePurchaseTooltipForTest: composeAveragePurchaseTooltip,
+  selectAveragePurchaseBaselineForTest: selectAveragePurchaseBaseline,
+  resolveAccountCurrencyCodeForTest: resolveAccountCurrencyCode,
+  resolvePurchaseFxTimestampForTest: resolvePurchaseFxTimestamp,
+  buildHeaderMetaForTest: buildHeaderMeta,
 };
 
 function buildCachedSnapshotNotice(params: {
@@ -294,312 +300,7 @@ function getCachedSecuritySnapshot(
     }
   }
 
-  const fallback = buildSnapshotFromPortfolioCache(securityUuid);
-  if (fallback) {
-    cacheSecuritySnapshotDetail(securityUuid, fallback);
-    return fallback;
-  }
-
   return null;
-}
-
-type PortfolioPositionsCacheLike = Map<string, PortfolioPositionLike[]>;
-
-interface PortfolioPositionLike extends Partial<PortfolioPosition> {
-  [key: string]: unknown;
-}
-
-function resolvePortfolioPositionsCache(): PortfolioPositionsCacheLike | null {
-  try {
-    const cache = window.__ppReaderPortfolioPositionsCache;
-    if (cache && typeof cache.values === 'function') {
-      return cache as PortfolioPositionsCacheLike;
-    }
-  } catch (error) {
-    console.warn('resolvePortfolioPositionsCache: Zugriff fehlgeschlagen', error);
-  }
-  return null;
-}
-
-function extractAggregation(
-  position: PortfolioPositionLike | null | undefined,
-): HoldingsAggregationPayload | null {
-  if (!position || typeof position !== 'object') {
-    return null;
-  }
-  const candidate = position.aggregation as HoldingsAggregationPayload | null | undefined;
-  if (!candidate || typeof candidate !== 'object') {
-    return null;
-  }
-  return candidate;
-}
-
-function extractAverageCost(
-  position: PortfolioPositionLike | null | undefined,
-): AverageCostPayload | null {
-  if (!position || typeof position !== 'object') {
-    return null;
-  }
-
-  const rawAverageCost = (position as { average_cost?: unknown }).average_cost;
-  if (!rawAverageCost || typeof rawAverageCost !== 'object') {
-    return null;
-  }
-
-  const candidate = rawAverageCost as Partial<AverageCostPayload>;
-  const native = toFiniteNumber(candidate.native);
-  const security = toFiniteNumber(candidate.security);
-  const account = toFiniteNumber(candidate.account);
-  const eur = toFiniteNumber(candidate.eur);
-  const coverageRatio = toFiniteNumber(candidate.coverage_ratio);
-
-  if (
-    native == null &&
-    security == null &&
-    account == null &&
-    eur == null &&
-    coverageRatio == null
-  ) {
-    return null;
-  }
-
-  const source = candidate.source;
-  const normalizedSource: AverageCostSource =
-    source === 'totals' || source === 'eur_total' ? source : 'aggregation';
-
-  return {
-    native,
-    security,
-    account,
-    eur,
-    source: normalizedSource,
-    coverage_ratio: coverageRatio,
-  };
-}
-
-function buildSnapshotFromPortfolioCache(
-  securityUuid: string,
-): SecuritySnapshotDetail | null {
-  const cache = resolvePortfolioPositionsCache();
-  if (!cache) {
-    return null;
-  }
-
-  const matches: PortfolioPositionLike[] = [];
-  for (const positions of cache.values()) {
-    if (!Array.isArray(positions) || positions.length === 0) {
-      continue;
-    }
-    for (const position of positions) {
-      const posUuid = position?.security_uuid;
-      if (typeof posUuid === 'string' && posUuid === securityUuid) {
-        matches.push(position);
-      }
-    }
-  }
-
-  if (!matches.length) {
-    return null;
-  }
-
-  let name = '';
-  let totalHoldings = 0;
-  let purchaseValueEur = 0;
-  let currentValueEur = 0;
-  let purchaseTotalSecurity = 0;
-  let purchaseTotalAccount = 0;
-  let nativeWeightedSum = 0;
-  let nativeWeight = 0;
-  let securityWeightedSum = 0;
-  let securityWeight = 0;
-  let accountWeightedSum = 0;
-  let accountWeight = 0;
-  let gainAbsSum = 0;
-  let gainAbsContributors = 0;
-
-  for (const position of matches) {
-    if (!name && typeof position?.name === 'string') {
-      name = position.name;
-    }
-
-    const aggregation = extractAggregation(position);
-    const averageCost = extractAverageCost(position);
-
-    const holdings =
-      toFiniteNumber(aggregation?.total_holdings) ??
-      toFiniteNumber(position?.current_holdings);
-    if (holdings != null) {
-      totalHoldings += holdings;
-    }
-
-    const purchaseValue =
-      toFiniteNumber(aggregation?.purchase_value_eur) ??
-      toFiniteNumber(position?.purchase_value);
-    if (purchaseValue != null) {
-      purchaseValueEur += purchaseValue;
-    }
-
-    const currentValue = toFiniteNumber(position?.current_value);
-    if (currentValue != null) {
-      currentValueEur += currentValue;
-    }
-
-    const securityTotal =
-      toFiniteNumber(aggregation?.purchase_total_security) ??
-      toFiniteNumber(position?.purchase_total_security);
-    if (securityTotal != null) {
-      purchaseTotalSecurity += securityTotal;
-    }
-
-    const accountTotal =
-      toFiniteNumber(aggregation?.purchase_total_account) ??
-      toFiniteNumber(position?.purchase_total_account);
-    if (accountTotal != null) {
-      purchaseTotalAccount += accountTotal;
-    }
-
-    if (holdings != null && holdings > 0) {
-      const derivedSecurityAverage =
-        securityTotal != null
-          ? roundCurrency(securityTotal / holdings, {
-              decimals: 6,
-              fallback: null,
-            })
-          : null;
-
-      const derivedAccountAverage =
-        accountTotal != null
-          ? roundCurrency(accountTotal / holdings, {
-              decimals: 6,
-              fallback: null,
-            })
-          : null;
-
-      const avgNative =
-        averageCost?.native ?? averageCost?.security ?? derivedSecurityAverage;
-      if (avgNative != null) {
-        nativeWeightedSum += holdings * avgNative;
-        nativeWeight += holdings;
-      }
-
-      const avgSecurity =
-        averageCost?.security ??
-        averageCost?.native ??
-        derivedSecurityAverage;
-      if (avgSecurity != null) {
-        securityWeightedSum += holdings * avgSecurity;
-        securityWeight += holdings;
-      }
-
-      const avgAccount =
-        averageCost?.account ??
-        averageCost?.eur ??
-        derivedAccountAverage;
-      if (avgAccount != null) {
-        accountWeightedSum += holdings * avgAccount;
-        accountWeight += holdings;
-      }
-    }
-
-    const performance = normalizePerformancePayload((position as Record<string, unknown>)['performance']);
-    if (performance && typeof performance.gain_abs === 'number') {
-      gainAbsSum += performance.gain_abs;
-      gainAbsContributors += 1;
-    }
-  }
-
-  const roundedHoldings =
-    roundCurrency(totalHoldings, { decimals: 6, fallback: 0 }) ?? 0;
-  const roundedPurchaseValue =
-    roundCurrency(purchaseValueEur, { fallback: 0 }) ?? 0;
-  const roundedCurrentValue =
-    roundCurrency(currentValueEur, { fallback: 0 }) ?? 0;
-  const aggregatedGainAbs =
-    gainAbsContributors > 0
-      ? roundCurrency(gainAbsSum, { fallback: null })
-      : null;
-  const aggregatedGainPct =
-    gainAbsContributors > 0 && purchaseValueEur > 0
-      ? roundCurrency((gainAbsSum / purchaseValueEur) * 100, { fallback: null })
-      : null;
-  const averageEur =
-    roundedHoldings > 0
-      ? roundCurrency(roundedPurchaseValue / roundedHoldings, { fallback: null })
-      : null;
-  const lastPriceEur =
-    roundedHoldings > 0
-      ? roundCurrency(roundedCurrentValue / roundedHoldings, { fallback: null })
-      : null;
-
-  const purchaseTotalSecurityRounded =
-    roundCurrency(purchaseTotalSecurity, { fallback: 0 }) ?? 0;
-  const purchaseTotalAccountRounded =
-    roundCurrency(purchaseTotalAccount, { fallback: 0 }) ?? 0;
-
-  const averageNative =
-    nativeWeight > 0
-      ? roundCurrency(nativeWeightedSum / nativeWeight, {
-          decimals: 6,
-          fallback: null,
-        })
-      : null;
-  const averageSecurity =
-    securityWeight > 0
-      ? roundCurrency(securityWeightedSum / securityWeight, {
-          decimals: 6,
-          fallback: null,
-        })
-      : null;
-  const averageAccount =
-    accountWeight > 0
-      ? roundCurrency(accountWeightedSum / accountWeight, {
-          decimals: 6,
-          fallback: null,
-        })
-      : null;
-
-  const aggregatedAverageCost: AverageCostPayload | null =
-    averageNative != null ||
-    averageSecurity != null ||
-    averageAccount != null ||
-    averageEur != null
-      ? {
-          native: averageNative,
-          security: averageSecurity ?? averageNative,
-          account: averageAccount,
-          eur: averageEur,
-          source: 'aggregation',
-          coverage_ratio: null,
-        }
-      : null;
-
-  const performancePayload =
-    aggregatedGainAbs != null && aggregatedGainPct != null
-      ? {
-          gain_abs: aggregatedGainAbs,
-          gain_pct: aggregatedGainPct,
-          total_change_eur: aggregatedGainAbs,
-          total_change_pct: aggregatedGainPct,
-          source: 'cache',
-          coverage_ratio: null,
-          day_change: null,
-        }
-      : null;
-
-  return {
-    security_uuid: securityUuid,
-    name,
-    total_holdings: roundedHoldings,
-    purchase_value_eur: roundedPurchaseValue,
-    current_value_eur: roundedCurrentValue,
-    gain_pct: aggregatedGainPct,
-    last_price_eur: lastPriceEur,
-    purchase_total_security: purchaseTotalSecurityRounded,
-    purchase_total_account: purchaseTotalAccountRounded,
-    source: 'cache',
-    performance: performancePayload,
-    average_cost: aggregatedAverageCost,
-  };
 }
 
 function ensureHistoryCache(securityUuid: string): SecurityHistoryCache {
@@ -631,7 +332,6 @@ function invalidateSnapshotCaches(securityUuid: string | null | undefined): void
   }
 
   SNAPSHOT_DETAIL_REGISTRY.delete(securityUuid);
-  SNAPSHOT_METRICS_REGISTRY.delete(securityUuid);
 }
 
 function handleLiveUpdateForSecurity(
@@ -961,35 +661,6 @@ function buildHistorySeriesWithSnapshotPrice(
   return seriesWithSnapshot;
 }
 
-function deriveFxRate(
-  snapshot: SecuritySnapshotDetail | null,
-  latestNativePrice: unknown,
-): number | null {
-  const currency = String(snapshot?.currency_code || '').toUpperCase();
-  if (!currency || currency === 'EUR') {
-    return 1;
-  }
-
-  const lastPriceEur = toFiniteNumber(snapshot?.last_price_eur);
-
-  if (lastPriceEur == null || lastPriceEur <= 0) {
-    return null;
-  }
-
-  const snapshotNative = toFiniteNumber(snapshot?.last_price_native);
-
-  if (snapshotNative != null && snapshotNative > 0) {
-    return lastPriceEur / snapshotNative;
-  }
-
-  const historyNative = toFiniteNumber(latestNativePrice);
-  if (historyNative != null && historyNative > 0) {
-    return lastPriceEur / historyNative;
-  }
-
-  return null;
-}
-
 function isFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -1025,99 +696,6 @@ function computePercentageChange(
   }
 
   return normalizePercentValue(((current - reference) / reference) * 100);
-}
-
-function ensureSnapshotMetrics(
-  securityUuid: string | null | undefined,
-  snapshot: SecuritySnapshotDetail | null,
-): SecuritySnapshotMetrics | null {
-  if (!securityUuid) {
-    return null;
-  }
-
-  if (!snapshot) {
-    SNAPSHOT_METRICS_REGISTRY.delete(securityUuid);
-    return null;
-  }
-
-  const holdingsSource =
-    snapshot.total_holdings_precise ?? snapshot.total_holdings ?? null;
-  const holdings = toFiniteNumber(holdingsSource);
-  const purchaseValueEur = toFiniteNumber(snapshot.purchase_value_eur);
-  const currentValueEur =
-    toFiniteNumber(snapshot.market_value_eur) ??
-    toFiniteNumber(snapshot.current_value_eur);
-  const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
-  const averageCost = normalizeAverageCost(snapshot);
-  const averagePurchaseNative =
-    averageCost?.native ??
-    averageCost?.security ??
-    null;
-  const fallbackAccountAverage =
-    isPositiveFinite(holdings) && isFiniteNumber(purchaseTotalAccount)
-      ? roundCurrency(purchaseTotalAccount / holdings, {
-          decimals: 6,
-          fallback: null,
-        })
-      : null;
-  const averagePurchaseAccount =
-    averageCost?.account ??
-    averageCost?.eur ??
-    fallbackAccountAverage;
-  const averagePurchaseEur = averageCost?.eur ?? null;
-  const lastPriceNative =
-    toFiniteNumber(snapshot.last_price_native) ??
-    toFiniteNumber(snapshot.last_price?.native) ??
-    null;
-  const lastPriceFetchedAt =
-    parseTimestamp((snapshot as { last_price_fetched_at?: unknown })?.last_price_fetched_at) ??
-    parseTimestamp(
-      (snapshot.last_price as { fetched_at?: unknown } | null | undefined)?.fetched_at,
-    );
-
-  const fxRate = deriveFxRate(snapshot, lastPriceNative);
-  const safeFxRate = isPositiveFinite(fxRate) ? fxRate : null;
-  const safeHoldings = isFiniteNumber(holdings) ? holdings : null;
-
-  const performance = normalizePerformancePayload(snapshot.performance);
-  const dayChange = performance?.day_change ?? null;
-
-  const dayPriceChangeNative = dayChange?.price_change_native ?? null;
-  const dayPriceChangeEur = dayChange?.price_change_eur ?? null;
-  const dayChangePct = dayChange?.change_pct ?? null;
-
-  const totalChangeEur = performance?.total_change_eur ?? null;
-  const totalChangePct = performance?.total_change_pct ?? null;
-
-  const metrics: SecuritySnapshotMetrics = {
-    holdings: safeHoldings,
-    fxRate: safeFxRate,
-    purchaseValueEur,
-    currentValueEur,
-    averagePurchaseNative,
-    averagePurchaseEur,
-    averagePurchaseAccount: averagePurchaseAccount ?? averagePurchaseEur,
-    dayPriceChangeNative,
-    dayPriceChangeEur,
-    dayChangePct,
-    totalChangeEur,
-    totalChangePct,
-    performance: performance ?? null,
-    lastPriceFetchedAt: lastPriceFetchedAt ?? null,
-  };
-
-  SNAPSHOT_METRICS_REGISTRY.set(securityUuid, metrics);
-  return metrics;
-}
-
-function getSnapshotMetrics(
-  securityUuid: string | null | undefined,
-): SecuritySnapshotMetrics | null {
-  if (!securityUuid) {
-    return null;
-  }
-
-  return SNAPSHOT_METRICS_REGISTRY.get(securityUuid) ?? null;
 }
 
 function computePriceChangeMetrics(
@@ -1323,11 +901,10 @@ function escapeAttribute(value: unknown): string {
 
 function resolveAccountCurrencyCode(
   snapshot: SecuritySnapshotDetail | null | undefined,
-  metrics: SecuritySnapshotMetrics | null | undefined,
   accountAverage: number | null | undefined,
   securityAverage: number | null | undefined,
 ): string | null {
-  const normalizedAverageCost = normalizeAverageCost(snapshot);
+  const normalizedAverageCost = extractAverageCostPayload(snapshot);
   const accountAverageNumeric =
     normalizedAverageCost?.account ??
     (isFiniteNumber(accountAverage) ? accountAverage : toFiniteNumber(accountAverage));
@@ -1348,6 +925,8 @@ function resolveAccountCurrencyCode(
     normalizedAverageCost?.security ??
     normalizedAverageCost?.native ??
     (isFiniteNumber(securityAverage) ? securityAverage : toFiniteNumber(securityAverage));
+
+  const aggregation = extractAggregationPayload(snapshot);
   if (
     securityCurrency &&
     isFiniteNumber(securityAverageNumeric) &&
@@ -1356,29 +935,37 @@ function resolveAccountCurrencyCode(
     return securityCurrency;
   }
 
-  const securityTotal = toFiniteNumber(snapshot?.purchase_total_security);
-  const accountTotal = toFiniteNumber(snapshot?.purchase_total_account);
+  const securityTotal =
+    toFiniteNumber(aggregation?.purchase_total_security) ??
+    toFiniteNumber((snapshot as { purchase_total_security?: unknown } | null | undefined)?.purchase_total_security);
+  const accountTotal =
+    toFiniteNumber(aggregation?.purchase_total_account) ??
+    toFiniteNumber((snapshot as { purchase_total_account?: unknown } | null | undefined)?.purchase_total_account);
   let ratio: number | null = null;
   if (isFiniteNumber(securityTotal) && securityTotal !== 0 && isFiniteNumber(accountTotal)) {
     ratio = accountTotal / securityTotal;
   }
 
-  const fxRate = metrics?.fxRate ?? null;
-  if (ratio != null) {
-    if (areNumbersClose(ratio, 1)) {
-      return securityCurrency || null;
-    }
-    if (isPositiveFinite(fxRate) && areNumbersClose(ratio, fxRate)) {
-      return 'EUR';
-    }
+  const averageSource = normalizedAverageCost?.source;
+  if (averageSource === 'eur_total') {
+    return 'EUR';
   }
 
-  if (securityCurrency === 'EUR') {
+  const averageEur = normalizedAverageCost?.eur;
+  if (isFiniteNumber(averageEur) && areNumbersClose(accountAverageNumeric, averageEur)) {
     return 'EUR';
   }
 
   const purchaseValueEur = toFiniteNumber(snapshot?.purchase_value_eur);
   if (isFiniteNumber(purchaseValueEur)) {
+    return 'EUR';
+  }
+
+  if (ratio != null && areNumbersClose(ratio, 1)) {
+    return securityCurrency || null;
+  }
+
+  if (securityCurrency === 'EUR') {
     return 'EUR';
   }
 
@@ -1398,7 +985,6 @@ function formatFxRate(value: number | null | undefined): string | null {
 
 function resolvePurchaseFxTimestamp(
   snapshot: SecuritySnapshotDetail | null | undefined,
-  metrics: SecuritySnapshotMetrics | null | undefined,
 ): number | null {
   const snapshotRecord = snapshot as Record<string, unknown> | null | undefined;
   const candidateKeys = [
@@ -1424,10 +1010,6 @@ function resolvePurchaseFxTimestamp(
     if (parsed != null) {
       return parsed;
     }
-  }
-
-  if (metrics?.lastPriceFetchedAt != null && Number.isFinite(metrics.lastPriceFetchedAt)) {
-    return metrics.lastPriceFetchedAt;
   }
 
   const fallbackCandidates: unknown[] = [];
@@ -1465,76 +1047,31 @@ function formatFxDateLabel(timestamp: number | null): string | null {
   return date.toLocaleDateString('de-DE');
 }
 
-function resolvePurchaseFxTooltip(
+function composeAveragePurchaseTooltip(
   snapshot: SecuritySnapshotDetail | null | undefined,
-  metrics: SecuritySnapshotMetrics | null | undefined,
   accountCurrency: string | null | undefined,
-  averagePurchaseNative: number | null | undefined,
-  averagePurchaseAccount: number | null | undefined,
-  purchaseTotalSecurity: number | null | undefined,
-  purchaseTotalAccount: number | null | undefined,
-  averageCostContext?: NormalizedAverageCostPayload | null,
 ): string | null {
   const securityCurrency = String(snapshot?.currency_code || '').trim().toUpperCase();
   const accountCurrencySafe = String(accountCurrency || '').trim().toUpperCase();
 
-  if (!securityCurrency || !accountCurrencySafe) {
+  if (!securityCurrency || !accountCurrencySafe || securityCurrency === accountCurrencySafe) {
     return null;
   }
 
-  if (securityCurrency === accountCurrencySafe) {
+  const averageCost = extractAverageCostPayload(snapshot);
+  if (!averageCost) {
     return null;
   }
 
-  const computeRate = (
-    accountValue: number | null | undefined,
-    securityValue: number | null | undefined,
-  ): number | null => {
-    if (
-      typeof accountValue !== 'number' ||
-      !Number.isFinite(accountValue) ||
-      accountValue <= 0
-    ) {
-      return null;
-    }
-    if (
-      typeof securityValue !== 'number' ||
-      !Number.isFinite(securityValue) ||
-      securityValue <= 0
-    ) {
-      return null;
-    }
+  const securityAverage = averageCost.native ?? averageCost.security ?? null;
+  const accountAverage = averageCost.account ?? averageCost.eur ?? null;
 
-    const rate = accountValue / securityValue;
-    return rate > 0 && Number.isFinite(rate) ? rate : null;
-  };
-
-  const normalizedAverageCost = averageCostContext ?? normalizeAverageCost(snapshot);
-  const averagePurchaseNativeValue =
-    normalizedAverageCost?.native ??
-    normalizedAverageCost?.security ??
-    toFiniteNumber(averagePurchaseNative);
-  const averagePurchaseAccountValue =
-    normalizedAverageCost?.account ?? toFiniteNumber(averagePurchaseAccount);
-  const purchaseTotalSecurityValue =
-    toFiniteNumber(purchaseTotalSecurity) ?? toFiniteNumber(snapshot?.purchase_total_security);
-  const purchaseTotalAccountValue =
-    toFiniteNumber(purchaseTotalAccount) ?? toFiniteNumber(snapshot?.purchase_total_account);
-
-  const rateCandidates = [
-    computeRate(averagePurchaseAccountValue, averagePurchaseNativeValue),
-    computeRate(purchaseTotalAccountValue, purchaseTotalSecurityValue),
-  ];
-
-  let fxRate: number | null = null;
-  for (const candidate of rateCandidates) {
-    if (candidate != null) {
-      fxRate = candidate;
-      break;
-    }
+  if (!isPositiveFinite(securityAverage) || !isPositiveFinite(accountAverage)) {
+    return null;
   }
 
-  if (fxRate == null) {
+  const fxRate = accountAverage / securityAverage;
+  if (!Number.isFinite(fxRate) || fxRate <= 0) {
     return null;
   }
 
@@ -1546,12 +1083,12 @@ function resolvePurchaseFxTooltip(
   let inverseRateLabel: string | null = null;
   if (fxRate > 0) {
     const inverse = 1 / fxRate;
-    if (Number.isFinite(inverse)) {
+    if (Number.isFinite(inverse) && inverse > 0) {
       inverseRateLabel = formatFxRate(inverse);
     }
   }
 
-  const timestamp = resolvePurchaseFxTimestamp(snapshot, metrics);
+  const timestamp = resolvePurchaseFxTimestamp(snapshot);
   const dateLabel = formatFxDateLabel(timestamp);
 
   const parts = [`FX-Kurs (Kauf): 1 ${securityCurrency} = ${formattedRate} ${accountCurrencySafe}`];
@@ -1560,25 +1097,18 @@ function resolvePurchaseFxTooltip(
   }
 
   const metadataParts: string[] = [];
-  if (normalizedAverageCost) {
-    const sourceLabel =
-      AVERAGE_COST_SOURCE_LABELS[normalizedAverageCost.source] ??
-      AVERAGE_COST_SOURCE_LABELS.aggregation;
-    metadataParts.push(`Quelle: ${sourceLabel}`);
+  const sourceLabel =
+    AVERAGE_COST_SOURCE_LABELS[averageCost.source] ?? AVERAGE_COST_SOURCE_LABELS.aggregation;
+  metadataParts.push(`Quelle: ${sourceLabel}`);
 
-    if (
-      typeof normalizedAverageCost.coverageRatio === 'number' &&
-      Number.isFinite(normalizedAverageCost.coverageRatio)
-    ) {
-      const percentage = normalizedAverageCost.coverageRatio * 100;
-      const safePercentage = Math.min(Math.max(percentage, 0), 100);
-      metadataParts.push(
-        `Abdeckung: ${safePercentage.toLocaleString('de-DE', {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 1,
-        })}%`,
-      );
-    }
+  if (isFiniteNumber(averageCost.coverage_ratio)) {
+    const percentage = Math.min(Math.max(averageCost.coverage_ratio * 100, 0), 100);
+    metadataParts.push(
+      `Abdeckung: ${percentage.toLocaleString('de-DE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1,
+      })}%`,
+    );
   }
 
   if (metadataParts.length) {
@@ -1589,17 +1119,21 @@ function resolvePurchaseFxTooltip(
   return `${parts.join(' · ')} (Stand: ${datePart})`;
 }
 
-function buildHeaderMeta(
-  snapshot: SecuritySnapshotDetail | null,
-  metrics: SecuritySnapshotMetrics | null = null,
-): string {
+function selectAveragePurchaseBaseline(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): number | null {
+  const averageCost = extractAverageCostPayload(snapshot);
+  const baseline = averageCost?.native ?? averageCost?.security ?? null;
+  return isFiniteNumber(baseline) ? baseline : null;
+}
+
+function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
   if (!snapshot) {
     return '<div class="meta-error">Keine Snapshot-Daten verfügbar.</div>';
   }
 
   const currency = snapshot.currency_code || 'EUR';
-  const holdingsSource =
-    metrics?.holdings ?? snapshot.total_holdings_precise ?? snapshot.total_holdings;
+  const holdingsSource = snapshot.total_holdings_precise ?? snapshot.total_holdings;
   const holdings = formatHoldings(holdingsSource);
   const lastPriceNativeRaw =
     snapshot.last_price_native ?? snapshot.last_price?.native ?? snapshot.last_price_eur;
@@ -1612,24 +1146,15 @@ function buildHeaderMeta(
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur) ??
     null;
-  const purchaseTotalSecurity = toFiniteNumber(snapshot.purchase_total_security);
-  const purchaseTotalAccount = toFiniteNumber(snapshot.purchase_total_account);
-  const averageCost = normalizeAverageCost(snapshot);
+  const averageCost = extractAverageCostPayload(snapshot);
   const averagePurchaseNativeRaw =
-    metrics?.averagePurchaseNative ??
     averageCost?.native ??
     averageCost?.security ??
     null;
-  const averagePurchaseEurRaw =
-    metrics?.averagePurchaseEur ??
-    averageCost?.eur ??
-    null;
-  const averagePurchaseAccountRaw =
-    metrics?.averagePurchaseAccount ??
-    averageCost?.account ??
-    null;
+  const averagePurchaseEurRaw = averageCost?.eur ?? null;
+  const averagePurchaseAccountRaw = averageCost?.account ?? null;
   const resolvedAccountAverage = averagePurchaseAccountRaw ?? averagePurchaseEurRaw;
-  const performancePayload = metrics?.performance ?? null;
+  const performancePayload = normalizePerformancePayload(snapshot.performance);
   const dayChangePayload = performancePayload?.day_change ?? null;
   const dayPriceChangeNative = dayChangePayload?.price_change_native ?? null;
   const dayPriceChangeEur = dayChangePayload?.price_change_eur ?? null;
@@ -1716,19 +1241,12 @@ function buildHeaderMeta(
   );
   const accountCurrency = resolveAccountCurrencyCode(
     snapshot,
-    metrics,
     resolvedAccountAverage,
     averagePurchaseNativeRaw,
   );
-  const averagePurchaseTooltip = resolvePurchaseFxTooltip(
+  const averagePurchaseTooltip = composeAveragePurchaseTooltip(
     snapshot,
-    metrics,
     accountCurrency,
-    averagePurchaseNativeRaw,
-    resolvedAccountAverage,
-    purchaseTotalSecurity,
-    purchaseTotalAccount,
-    averageCost,
   );
   const averageValueGroupAttributes = averagePurchaseTooltip
     ? ` title="${escapeAttribute(averagePurchaseTooltip)}"`
@@ -1825,25 +1343,6 @@ function normaliseHistoryError(error: unknown): string | null {
   } catch (_jsonError) {
     return String(error);
   }
-}
-
-function resolveAveragePurchaseBaseline(
-  metrics: SecuritySnapshotMetrics | null | undefined,
-  snapshot: SecuritySnapshotDetail | null | undefined,
-): number | null {
-  const metricsBaseline = metrics?.averagePurchaseNative;
-  if (typeof metricsBaseline === 'number' && Number.isFinite(metricsBaseline)) {
-    return metricsBaseline;
-  }
-
-  const normalizedAverageCost = normalizeAverageCost(snapshot);
-  const averageCostBaseline =
-    normalizedAverageCost?.security ?? normalizedAverageCost?.native ?? null;
-  if (typeof averageCostBaseline === 'number' && Number.isFinite(averageCostBaseline)) {
-    return averageCostBaseline;
-  }
-
-  return null;
 }
 
 function getHistoryChartOptions(
@@ -1987,7 +1486,6 @@ interface ScheduleRangeSetupOptions {
   panelConfig: PanelConfigLike | null | undefined;
   securityUuid: string;
   snapshot: SecuritySnapshotDetail | null;
-  metrics: SecuritySnapshotMetrics | null | undefined;
   initialRange: SecurityHistoryRangeKey;
   initialHistory: NormalizedHistoryEntry[];
   initialHistoryState: HistoryPlaceholderState;
@@ -2000,7 +1498,6 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     panelConfig,
     securityUuid,
     snapshot,
-    metrics,
     initialRange,
     initialHistory,
     initialHistoryState,
@@ -2017,8 +1514,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     }
 
     const cache = ensureHistoryCache(securityUuid);
-    const snapshotMetrics = metrics ?? getSnapshotMetrics(securityUuid);
-    const initialBaseline = resolveAveragePurchaseBaseline(snapshotMetrics, snapshot);
+    const initialBaseline = selectAveragePurchaseBaseline(snapshot);
     const shouldCacheInitial =
       Array.isArray(initialHistory) && initialHistoryState?.status !== 'error';
     if (shouldCacheInitial) {
@@ -2122,8 +1618,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         priceChangePct,
         snapshot?.currency_code,
       );
-      const currentMetrics = getSnapshotMetrics(securityUuid) ?? snapshotMetrics;
-      const rangeBaseline = resolveAveragePurchaseBaseline(currentMetrics, snapshot);
+      const rangeBaseline = selectAveragePurchaseBaseline(snapshot);
 
       updateHistoryPlaceholder(
         root,
@@ -2188,10 +1683,8 @@ export async function renderSecurityDetail(
   const effectiveSnapshot = snapshot || cachedSnapshot;
   const fallbackUsed = Boolean(cachedSnapshot && !snapshot);
   const flaggedAsCache = (effectiveSnapshot?.source ?? '') === 'cache';
-  let snapshotMetrics: SecuritySnapshotMetrics | null = null;
   if (securityUuid) {
     cacheSecuritySnapshotDetail(securityUuid, effectiveSnapshot ?? null);
-    snapshotMetrics = ensureSnapshotMetrics(securityUuid, effectiveSnapshot ?? null);
   }
   const staleNotice =
     effectiveSnapshot && (fallbackUsed || flaggedAsCache)
@@ -2202,7 +1695,7 @@ export async function renderSecurityDetail(
   if (error) {
     const headerCard = createHeaderCard(
       headerTitle,
-      buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
+      buildHeaderMeta(effectiveSnapshot),
     );
     return `
       ${headerCard.outerHTML}
@@ -2265,7 +1758,7 @@ export async function renderSecurityDetail(
 
   const headerCard = createHeaderCard(
     headerTitle,
-    buildHeaderMeta(effectiveSnapshot, snapshotMetrics),
+    buildHeaderMeta(effectiveSnapshot),
   );
 
   const snapshotLastPriceNative = extractSnapshotLastPriceNative(effectiveSnapshot);
@@ -2286,7 +1779,6 @@ export async function renderSecurityDetail(
     panelConfig,
     securityUuid,
     snapshot: effectiveSnapshot,
-    metrics: snapshotMetrics,
     initialRange: activeRange,
     initialHistory: historySeries,
     initialHistoryState: historyState,

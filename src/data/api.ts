@@ -7,6 +7,7 @@ import type {
   HoldingsAggregationPayload,
   PanelConfigLike,
   PerformanceMetricsPayload,
+  PortfolioPosition as TabsPortfolioPosition,
 } from "../tabs/types";
 import type { HomeAssistant } from "../types/home-assistant";
 
@@ -25,6 +26,7 @@ export interface PortfolioSummary {
   current_value?: number | null;
   purchase_sum?: number | null;
   position_count?: number | null;
+  performance?: PerformanceMetricsPayload | null;
   [key: string]: unknown;
 }
 
@@ -46,21 +48,7 @@ export interface PortfoliosResponse {
   [key: string]: unknown;
 }
 
-export interface PortfolioPosition {
-  security_uuid: string;
-  name: string;
-  current_holdings: number;
-  purchase_value: number;
-  current_value: number;
-  purchase_total_security: number;
-  purchase_total_account: number;
-  /** Structured selection of average purchase prices with provenance metadata. */
-  average_cost?: AverageCostPayload | null;
-  /** Structured gain metrics that mirror the legacy flat fields. */
-  performance?: PerformanceMetricsPayload | null;
-  aggregation?: HoldingsAggregationPayload | null;
-  [key: string]: unknown;
-}
+export type PortfolioPosition = TabsPortfolioPosition;
 
 export interface PortfolioPositionsResponse {
   portfolio_uuid: string;
@@ -80,12 +68,11 @@ export interface SecuritySnapshotResponse {
     last_price_native?: number | null;
     last_price_eur?: number;
     market_value_eur?: number | null;
-    purchase_total_security?: number;
-    purchase_total_account?: number;
     last_close_native?: number | null;
     last_close_eur?: number | null;
     /** Structured selection of average purchase prices with provenance metadata. */
     average_cost?: AverageCostPayload | null;
+    aggregation?: HoldingsAggregationPayload | null;
     /** Structured gain and day-change metrics shared across payloads. */
     performance?: PerformanceMetricsPayload | null;
     /** Raw snapshot provenance flag (e.g. cache vs. live). */

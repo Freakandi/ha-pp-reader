@@ -38,6 +38,7 @@ from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
     YahooQueryProvider,
 )
+from custom_components.pp_reader.util.currency import eur_to_cent, round_currency
 
 
 @pytest.fixture
@@ -131,6 +132,44 @@ def _make_quote(symbol: str, price: float, currency: str | None = None) -> Quote
     )
 
 
+def _performance_payload(gain_abs: float, gain_pct: float) -> dict[str, Any]:
+    return {
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
+        "total_change_eur": gain_abs,
+        "total_change_pct": gain_pct,
+        "source": "calculated",
+        "coverage_ratio": 1.0,
+        "day_change": {
+            "price_change_native": None,
+            "price_change_eur": None,
+            "change_pct": None,
+            "source": "unavailable",
+            "coverage_ratio": 0.0,
+        },
+    }
+
+
+def _make_portfolio_value_entry(
+    uuid: str,
+    name: str,
+    current_value: float,
+    purchase_sum: float,
+    position_count: int,
+) -> dict[str, Any]:
+    gain_abs = round(current_value - purchase_sum, 2)
+    gain_pct = round((gain_abs / purchase_sum * 100) if purchase_sum else 0.0, 2)
+    return {
+        "uuid": uuid,
+        "name": name,
+        "current_value": current_value,
+        "purchase_sum": purchase_sum,
+        "performance": _performance_payload(gain_abs, gain_pct),
+        "position_count": position_count,
+        "missing_value_positions": 0,
+    }
+
+
 @pytest.mark.asyncio
 async def test_change_triggers_events(monkeypatch, tmp_path):
     hass = FakeHass()
@@ -148,12 +187,9 @@ async def test_change_triggers_events(monkeypatch, tmp_path):
     async def fake_reval(hass_, conn, uuids):
         return {
             "portfolio_values": {
-                "pf1": {
-                    "name": "Depot",
-                    "value": 123.456,
-                    "count": 1,
-                    "purchase_sum": 100.0,
-                }
+                "pf1": _make_portfolio_value_entry(
+                    "pf1", "Depot", 123.456, 100.0, 1
+                )
             },
             "portfolio_positions": None,
         }
@@ -170,6 +206,187 @@ async def test_change_triggers_events(monkeypatch, tmp_path):
     assert meta["changed"] == 1
     # portfolio_values Event erwartet
     assert any(ev[0] == "portfolio_values" for ev in events)
+
+
+def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Portfolio security refresh should persist values using shared helpers."""
+
+    class DummyPurchase:
+        def __init__(
+            self,
+            purchase_value: float,
+            avg_price_native: float,
+            security_currency_total: float,
+            account_currency_total: float,
+            avg_price_account: float,
+        ) -> None:
+            self.purchase_value = purchase_value
+            self.avg_price_native = avg_price_native
+            self.security_currency_total = security_currency_total
+            self.account_currency_total = account_currency_total
+            self.avg_price_account = avg_price_account
+
+    purchase_value = 123.4567
+    current_value = 321.2345
+    security_total = 200.9876
+    account_total = 300.54321
+    avg_price_native = 12.345678
+    avg_price_account = 150.654321
+
+    db_path = tmp_path / "portfolio.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE portfolio_securities (
+            portfolio_uuid TEXT PRIMARY KEY,
+            security_uuid TEXT,
+            current_holdings REAL,
+            purchase_value INTEGER,
+            avg_price_native REAL,
+            security_currency_total REAL,
+            account_currency_total REAL,
+            avg_price_account REAL,
+            current_value INTEGER
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE transactions (
+            uuid TEXT,
+            type INTEGER,
+            account TEXT,
+            portfolio TEXT,
+            other_account TEXT,
+            other_portfolio TEXT,
+            date TEXT,
+            currency_code TEXT,
+            amount INTEGER,
+            shares INTEGER,
+            security TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE transaction_units (
+            transaction_uuid TEXT,
+            fx_amount INTEGER,
+            fx_currency_code TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "tx-1",
+            0,
+            "acct-1",
+            "pf-1",
+            None,
+            None,
+            "2024-01-01T00:00:00",
+            "EUR",
+            10_000,
+            100_000_000,
+            "sec-1",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    dummy_purchase = DummyPurchase(
+        purchase_value,
+        avg_price_native,
+        security_total,
+        account_total,
+        avg_price_account,
+    )
+    current_holdings = 3.0
+
+    monkeypatch.setattr(
+        price_service,
+        "db_calculate_current_holdings",
+        lambda _transactions: {("pf-1", "sec-1"): current_holdings},
+    )
+
+    monkeypatch.setattr(
+        price_service,
+        "db_calculate_sec_purchase_value",
+        lambda _transactions, _db_path, tx_units=None: {("pf-1", "sec-1"): dummy_purchase},
+    )
+
+    def _fake_holdings_value(
+        _db_path: Path,
+        _conn: sqlite3.Connection,
+        _current_hold_pur: dict[tuple[str, str], dict[str, float]],
+    ) -> dict[tuple[str, str], dict[str, float]]:
+        return {
+            ("pf-1", "sec-1"): {
+                "current_holdings": current_holdings,
+                "purchase_value": purchase_value,
+                "current_value": current_value,
+                "security_currency_total": security_total,
+                "account_currency_total": account_total,
+                "avg_price_native": avg_price_native,
+            }
+        }
+
+    monkeypatch.setattr(
+        price_service, "db_calculate_holdings_value", _fake_holdings_value
+    )
+
+    impacted = price_service._refresh_impacted_portfolio_securities(
+        db_path, {"sec-1": 10100}
+    )
+
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute(
+        """
+        SELECT
+            current_holdings,
+            purchase_value,
+            avg_price_native,
+            security_currency_total,
+            account_currency_total,
+            avg_price_account,
+            current_value
+        FROM portfolio_securities
+        WHERE portfolio_uuid = ? AND security_uuid = ?
+        """,
+        ("pf-1", "sec-1"),
+    ).fetchone()
+    conn.close()
+
+    assert impacted == {"pf-1"}
+    assert row is not None
+    (
+        current_holdings_db,
+        purchase_value_cents,
+        avg_price_native_db,
+        security_total_db,
+        account_total_db,
+        avg_price_account_db,
+        current_value_cents,
+    ) = row
+
+    expected_purchase_eur = round_currency(purchase_value, default=0.0)
+    assert current_holdings_db == pytest.approx(current_holdings)
+    assert purchase_value_cents == eur_to_cent(expected_purchase_eur, default=0)
+    assert avg_price_native_db == pytest.approx(avg_price_native, abs=1e-6)
+    assert security_total_db == pytest.approx(
+        round_currency(security_total, default=0.0)
+    )
+    assert account_total_db == pytest.approx(
+        round_currency(account_total, default=0.0)
+    )
+    assert avg_price_account_db is None
+    expected_current_eur = round_currency(current_value, default=0.0)
+    assert current_value_cents == eur_to_cent(expected_current_eur, default=0)
 
 
 @pytest.mark.asyncio
@@ -482,13 +699,9 @@ async def test_normal_batch(monkeypatch, tmp_path):
     async def _fake_revalue_after_price_updates(hass_, conn, updated_security_uuids):
         return {
             "portfolio_values": {
-                "port1": {
-                    "uuid": "port1",
-                    "name": "P1",
-                    "value": 1234.56,
-                    "count": 2,
-                    "purchase_sum": 1111.11,
-                }
+                "port1": _make_portfolio_value_entry(
+                    "port1", "P1", 1234.56, 1111.11, 2
+                )
             },
             "portfolio_positions": None,  # Positions kommen über separaten Fetch
         }
@@ -680,8 +893,8 @@ async def test_price_update_refreshes_portfolio_gains(monkeypatch, tmp_path):
     refresh_entry = next(item for item in payload if item["uuid"] == "pf-refresh")
     assert refresh_entry["current_value"] == pytest.approx(1200.0)
     assert refresh_entry["purchase_sum"] == pytest.approx(1000.0)
-    assert refresh_entry["gain_abs"] == pytest.approx(200.0)
-    assert refresh_entry["gain_pct"] == pytest.approx(20.0)
+    assert "gain_abs" not in refresh_entry
+    assert "gain_pct" not in refresh_entry
     performance = refresh_entry.get("performance")
     assert performance is not None
     assert performance["gain_abs"] == pytest.approx(200.0)
@@ -771,13 +984,9 @@ async def test_filter_invalid_price(monkeypatch, tmp_path):
         assert "secA" not in updated_security_uuids
         return {
             "portfolio_values": {
-                "portX": {
-                    "uuid": "portX",
-                    "name": "Portfolio X",
-                    "value": 999.99,
-                    "count": 2,
-                    "purchase_sum": 500.00,
-                }
+                "portX": _make_portfolio_value_entry(
+                    "portX", "Portfolio X", 999.99, 500.0, 2
+                )
             },
             "portfolio_positions": None,
         }
@@ -909,13 +1118,9 @@ async def test_missing_symbol(monkeypatch, tmp_path):
         assert "secA" not in updated_security_uuids
         return {
             "portfolio_values": {
-                "portZ": {
-                    "uuid": "portZ",
-                    "name": "Portfolio Z",
-                    "value": 555.55,
-                    "count": 1,
-                    "purchase_sum": 444.44,
-                }
+                "portZ": _make_portfolio_value_entry(
+                    "portZ", "Portfolio Z", 555.55, 444.44, 1
+                )
             },
             "portfolio_positions": None,
         }
@@ -1054,13 +1259,9 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
         assert updated_security_uuids == {"sec10"}
         return {
             "portfolio_values": {
-                "portCF": {
-                    "uuid": "portCF",
-                    "name": "Portfolio CF",
-                    "value": 12345.67,
-                    "count": 5,
-                    "purchase_sum": 11111.11,
-                }
+                "portCF": _make_portfolio_value_entry(
+                    "portCF", "Portfolio CF", 12345.67, 11111.11, 5
+                )
             },
             "portfolio_positions": None,
         }

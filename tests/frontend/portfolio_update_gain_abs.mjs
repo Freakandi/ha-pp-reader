@@ -357,9 +357,6 @@ global.document = document;
 global.navigator = window.navigator;
 global.CustomEvent = window.CustomEvent;
 
-let positionsCache = new Map();
-window.__ppReaderPortfolioPositionsCache = positionsCache;
-
 class HTMLElementStub {}
 
 global.HTMLElement = HTMLElementStub;
@@ -410,7 +407,22 @@ async function importDashboardBundle() {
 }
 
 const moduleApi = await importDashboardBundle();
-positionsCache = window.__ppReaderPortfolioPositionsCache ?? positionsCache;
+const testHelpers = moduleApi.__TEST_ONLY__ ?? {};
+const getCacheSnapshot =
+  typeof testHelpers.getPortfolioPositionsCacheSnapshot === 'function'
+    ? testHelpers.getPortfolioPositionsCacheSnapshot
+    : () => new Map();
+const clearCache =
+  typeof testHelpers.clearPortfolioPositionsCache === 'function'
+    ? testHelpers.clearPortfolioPositionsCache
+    : () => {};
+const clearPendingUpdates =
+  typeof testHelpers.clearPendingUpdates === 'function'
+    ? testHelpers.clearPendingUpdates
+    : () => {};
+
+clearCache();
+clearPendingUpdates();
 
 let handlePortfolioPositionsUpdate = moduleApi.handlePortfolioPositionsUpdate;
 
@@ -424,9 +436,12 @@ if (typeof handlePortfolioPositionsUpdate !== 'function') {
   });
 }
 
-const updatePortfolioFooter = window.__ppReaderUpdatePortfolioFooter;
+const updatePortfolioFooter =
+  typeof moduleApi.updatePortfolioFooterFromDom === 'function'
+    ? moduleApi.updatePortfolioFooterFromDom
+    : null;
 if (typeof updatePortfolioFooter !== 'function') {
-  throw new Error('dashboard bundle did not expose __ppReaderUpdatePortfolioFooter');
+  throw new Error('dashboard bundle did not expose updatePortfolioFooterFromDom');
 }
 
 const canProcessUpdates = typeof handlePortfolioPositionsUpdate === 'function';
@@ -594,121 +609,38 @@ const simulateNormalizePerformancePayload = (raw) => {
   };
 };
 
-const simulateDeriveAggregation = (position) => {
-  const rawAggregation = position.aggregation && typeof position.aggregation === 'object'
-    ? position.aggregation
-    : {};
+const simulateNormalizePerformance = (position) => simulateNormalizePerformancePayload(position.performance);
 
-  const asFiniteNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
-  const asNullableNumber = (value) => {
-    const numeric = asFiniteNumber(value);
-    return numeric === null ? null : numeric;
-  };
-
-  const totalHoldings = asFiniteNumber(rawAggregation.total_holdings) ?? 0;
-  const positiveHoldingsRaw = asFiniteNumber(rawAggregation.positive_holdings);
-  const purchaseValueEur = asFiniteNumber(rawAggregation.purchase_value_eur) ?? 0;
-  const purchaseValueCentsRaw = asFiniteNumber(rawAggregation.purchase_value_cents);
-  const securityTotal = asFiniteNumber(rawAggregation.security_currency_total) ?? 0;
-  const accountTotal = asFiniteNumber(rawAggregation.account_currency_total) ?? 0;
-  const purchaseTotalSecurity = asFiniteNumber(rawAggregation.purchase_total_security) ?? securityTotal;
-  const purchaseTotalAccount = asFiniteNumber(rawAggregation.purchase_total_account) ?? accountTotal;
-
-  return {
-    total_holdings: totalHoldings,
-    positive_holdings: Math.max(0, positiveHoldingsRaw ?? totalHoldings),
-    purchase_value_cents: Math.round(purchaseValueCentsRaw ?? 0),
-    purchase_value_eur: purchaseValueEur,
-    security_currency_total: securityTotal,
-    account_currency_total: accountTotal,
-    purchase_total_security: purchaseTotalSecurity,
-    purchase_total_account: purchaseTotalAccount,
-  };
-};
-
-const simulateNormalizeAverageCost = (position) => {
-  const rawAverageCost = position.average_cost && typeof position.average_cost === 'object'
-    ? position.average_cost
-    : null;
-
-  if (!rawAverageCost) {
+const clonePlainObject = (value) => {
+  if (!value || typeof value !== 'object') {
     return null;
   }
 
-  const asFiniteNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
-  const asNullableNumber = (value) => {
-    const numeric = asFiniteNumber(value);
-    return numeric === null ? null : numeric;
-  };
-
-  const normalizeSource = (value) => {
-    if (value === 'totals' || value === 'eur_total' || value === 'aggregation') {
-      return value;
-    }
-    return 'aggregation';
-  };
-
-  return {
-    native: asNullableNumber(rawAverageCost.native),
-    security: asNullableNumber(rawAverageCost.security),
-    account: asNullableNumber(rawAverageCost.account),
-    eur: asNullableNumber(rawAverageCost.eur),
-    source: normalizeSource(rawAverageCost.source),
-    coverage_ratio: asNullableNumber(rawAverageCost.coverage_ratio),
-  };
+  return { ...value };
 };
 
-const simulateNormalizePerformance = (position) => simulateNormalizePerformancePayload(position.performance);
-
-const simulateNormalizePosition = (position) => {
+const simulateSanitizePosition = (position) => {
   const normalized = { ...position };
-  const hasAggregation = position.aggregation && typeof position.aggregation === 'object';
-  const aggregation = hasAggregation ? simulateDeriveAggregation(position) : null;
-  const averageCost = simulateNormalizeAverageCost(position);
+
+  if (Object.prototype.hasOwnProperty.call(position, 'aggregation')) {
+    normalized.aggregation = clonePlainObject(position.aggregation);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(position, 'average_cost')) {
+    normalized.average_cost = clonePlainObject(position.average_cost);
+  }
+
   const performance = simulateNormalizePerformance(position);
-  const gainAbs =
-    typeof performance?.gain_abs === 'number' && Number.isFinite(performance.gain_abs)
-      ? performance.gain_abs
-      : null;
-  const gainPct =
-    typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
-      ? performance.gain_pct
-      : null;
-
-  if (hasAggregation && aggregation) {
-    normalized.aggregation = aggregation;
-  } else if ('aggregation' in normalized) {
-    normalized.aggregation = null;
-  }
-
-  if (averageCost) {
-    normalized.average_cost = averageCost;
-  } else if ('average_cost' in normalized) {
-    normalized.average_cost = null;
-  }
-
   if (performance) {
     normalized.performance = performance;
-  } else if ('performance' in normalized) {
+  } else if (Object.prototype.hasOwnProperty.call(position, 'performance')) {
     normalized.performance = null;
-  }
-
-  if (gainAbs !== null) {
-    normalized.gain_abs = gainAbs;
-  } else if ('gain_abs' in normalized) {
-    normalized.gain_abs = null;
-  }
-
-  if (gainPct !== null) {
-    normalized.gain_pct = gainPct;
-  } else if ('gain_pct' in normalized) {
-    normalized.gain_pct = null;
   }
 
   return normalized;
 };
 
-const simulateNormalizePositions = (positions) => positions.map(simulateNormalizePosition);
+const simulateSanitizePositions = (positions) => positions.map(simulateSanitizePosition);
 
 const normalizationPayload = {
   portfolioUuid: 'portfolio-gain-struct',
@@ -733,16 +665,25 @@ const normalizationPayload = {
   ],
 };
 
+let fallbackPositions = [];
+
 if (canProcessUpdates) {
   handlePortfolioPositionsUpdate(normalizationPayload, null);
 }
 
 if (!canProcessUpdates) {
-  const simulated = simulateNormalizePositions(normalizationPayload.positions);
-  positionsCache.set(normalizationPayload.portfolioUuid, simulated);
+  const simulated = simulateSanitizePositions(normalizationPayload.positions);
+  fallbackPositions = simulated;
 }
 
-const normalizedPositions = (positionsCache.get('portfolio-gain-struct') ?? []).map((position) => ({
+const cacheSnapshot = getCacheSnapshot();
+const cachedPositions = cacheSnapshot.get('portfolio-gain-struct');
+const sourcePositions =
+  Array.isArray(cachedPositions) && cachedPositions.length
+    ? cachedPositions
+    : fallbackPositions;
+
+const normalizedPositions = sourcePositions.map((position) => ({
   aggregation: position?.aggregation ?? null,
   average_cost: position?.average_cost ?? null,
   performance: position?.performance ?? null,

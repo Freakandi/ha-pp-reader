@@ -3,7 +3,7 @@
 ## Cluster 1: Backend event & aggregation normalization
 RUN SEPARATELY
 
-1.1 [ ] Backend: Retire `_normalize_currency_amount` wrapper in event push
+1.1 [x] Backend: Retire `_normalize_currency_amount` wrapper in event push
    - Summary: Remove the bespoke cent/float normaliser and invoke the shared currency helpers directly so event payloads follow the canonical rounding rules without duplicate logic.
    - Legacy surfaces to touch:
      * Backend:
@@ -20,7 +20,7 @@ RUN SEPARATELY
      * Run `pytest tests/test_sync_from_pclient.py` and `pytest tests/test_ws_portfolio_positions.py` to verify event payload snapshots and websocket expectations still match.
      * Perform targeted manual inspection of emitted events via the Home Assistant dev tools after deploying the cleanup, ensuring currency fields match backend values without double rounding.
 
-1.2 [ ] Backend: Remove `_normalize_portfolio_value_entry` recomputation
+1.2 [x] Backend: Remove `_normalize_portfolio_value_entry` recomputation
    - Summary: Delete the legacy recomputation paths inside the event compaction helper so push events forward the untouched `fetch_live_portfolios` payload byte-for-byte.
    - Legacy surfaces to touch:
      * Backend:
@@ -41,7 +41,7 @@ RUN SEPARATELY
      * Run `pytest tests/test_event_push.py`, `pytest tests/test_sync_from_pclient.py`, and `pytest tests/test_price_service.py` to cover both manual sync and revaluation event paths.
      * In a dev instance, trigger a portfolio sync and a price revaluation cycle, then inspect the `portfolio_values` event payloads in the HA dev tools to confirm the emitted metrics exactly match the records from `fetch_live_portfolios`.
 
-1.3 [ ] Backend: Retire `_normalize_position_entry` fallbacks in event push
+1.3 [x] Backend: Retire `_normalize_position_entry` fallbacks in event push
    - Summary: Delete the fallback that rebuilt holdings aggregates, average-cost selections, and performance metrics inside `_normalize_position_entry` so push events forward the canonical payload from `get_portfolio_positions` without divergent rounding.
    - Legacy surfaces to touch:
      * Backend:
@@ -66,7 +66,7 @@ RUN SEPARATELY
      * Run `pytest tests/test_event_push.py`, `pytest tests/test_sync_from_pclient.py`, `pytest tests/test_price_service.py`, and `pytest tests/test_ws_portfolio_positions.py` to cover manual sync, revaluation, and websocket consumers end-to-end.
      * In a dev HA instance, trigger a portfolio sync and inspect the emitted `portfolio_positions` event plus the websocket response from `pp_reader/get_portfolio_positions` to confirm both paths now deliver identical payloads.
 
-1.4 [ ] Backend: Retire `_portfolio_contract_entry` gain rounding fallbacks
+1.4 [x] Backend: Retire `_portfolio_contract_entry` gain rounding fallbacks
    - Summary: Remove the coordinator's manual `round(...)` fallbacks for `gain_abs`/`gain_pct` so portfolio sensor payloads inherit the canonical rounding from `compose_performance_payload` and the shared currency utilities.
    - Legacy surfaces to touch:
      * Backend:
@@ -87,7 +87,7 @@ RUN SEPARATELY
      * Run `pytest tests/test_fetch_live_portfolios.py`, `pytest tests/test_ws_portfolios_live.py`, and `pytest tests/test_event_push.py` to verify gain rounding stays consistent across coordinator, websocket, and push payloads.
      * In a dev Home Assistant instance, refresh the integration and inspect the `portfolio` sensor entities alongside the `pp_reader/get_live_portfolios` websocket response to confirm `gain_abs`/`gain_pct` match to two decimals without extra rounding artifacts.
 
-1.5 [ ] Backend: Eliminate price revaluation cent scaling duplication
+1.5 [x] Backend: Eliminate price revaluation cent scaling duplication
    - Summary: Delete the legacy cent reconversion and hand-rounding steps from the price revaluation pipeline so it exclusively reuses the shared currency utilities and canonical aggregation payloads before database upserts or event emission.
    - Legacy surfaces to touch:
      * Backend:
@@ -110,7 +110,7 @@ RUN SEPARATELY
      * Run `pytest tests/test_price_service.py`, `pytest tests/test_sync_from_pclient.py`, and `pytest tests/test_event_push.py` to cover the price revaluation cycle, portfolio sync fallback, and event emission paths.
      * In a dev Home Assistant instance, trigger a price update cycle and compare the resulting `portfolio_values` event plus the `pp_reader/get_live_portfolios` websocket response to confirm both payloads now match without extra cent-scaling conversions.
 
-1.6 [ ] Backend: Sunset legacy portfolio aggregation fallbacks
+1.6 [x] Backend: Sunset legacy portfolio aggregation fallbacks
    - Summary: Remove the bespoke FIFO and DB aggregation helpers so price revaluation and sensor refreshes rely solely on the shared `fetch_live_portfolios` source of truth.
    - Legacy surfaces to touch:
      * Backend:
@@ -133,7 +133,7 @@ RUN SEPARATELY
 ## Cluster 2: Canonical payload adoption across backend & dashboard
 RUN SEPARATELY
 
-2.1 [ ] Backend: Retire legacy average-cost mirror fields from portfolio positions payloads
+2.1 [x] Backend: Retire legacy average-cost mirror fields from portfolio positions payloads
    - Summary: Remove the flat `average_purchase_price_native`, `purchase_total_security`, `purchase_total_account`, and `avg_price_account` mirrors from portfolio position responses so clients consume the structured `average_cost` and `aggregation` blocks instead of duplicate legacy keys.
    - Legacy surfaces to touch:
      * Backend:
@@ -161,7 +161,7 @@ RUN SEPARATELY
      * Execute targeted frontend checks: `npm run test -- src/tabs/__tests__/overview.render.test.ts` and `npm run test -- src/tabs/__tests__/security_detail.metrics.test.ts` after updating fixtures to ensure UI selectors handle the new shape.
      * Smoke-test the Home Assistant panel via `./scripts/develop` + `npm run dev` to verify portfolio detail tabs render average-cost metrics purely from the structured payloads.
 
-2.2 [ ] Backend: Retire legacy average-cost mirror fields from security snapshot payloads
+2.2 [x] Backend: Retire legacy average-cost mirror fields from security snapshot payloads
    - Summary: Delete `average_purchase_price_native`, `purchase_total_security`, `purchase_total_account`, and `avg_price_account` from security snapshot responses so the detail views rely solely on the structured `average_cost` object and holdings aggregation metadata.
    - Legacy surfaces to touch:
      * Backend:
@@ -186,7 +186,7 @@ RUN SEPARATELY
      * Exercise websocket flows with `pytest tests/test_ws_security_history.py` (and targeted smoke tests via `pytest tests/test_ws_security_history.py::test_ws_get_security_snapshot_success`) to ensure the lean payload remains compatible.
      * Execute the detail tab metrics tests with `npm run test -- src/tabs/__tests__/security_detail.metrics.test.ts` and review the dashboard smoke tests to verify charts render correctly using only the structured average-cost data.
 
-2.3 [ ] Backend: Retire flattened gain metrics duplicated alongside structured performance payloads
+2.3 [x] Backend: Retire flattened gain metrics duplicated alongside structured performance payloads
    - Summary: Remove the legacy top-level `gain_abs`/`gain_pct` mirrors from portfolio payloads and events so clients exclusively consume the nested `performance` object for gain data.
    - Legacy surfaces to touch:
      * Backend:
@@ -213,7 +213,7 @@ RUN SEPARATELY
      * Re-run websocket tests: `pytest tests/test_ws_portfolios_live.py` and `pytest tests/test_ws_portfolio_positions.py` to verify event payloads continue to align with expectations.
      * Execute frontend checks: `npm run test -- src/tabs/__tests__/overview.render.test.ts`, `npm run test -- src/tabs/__tests__/security_detail.metrics.test.ts`, and the dashboard smoke suites to ensure UI rendering logic operates solely on the `performance` object.
 
-2.4 [ ] Backend: Retire legacy day-change mirrors from security snapshot payloads
+2.4 [x] Backend: Retire legacy day-change mirrors from security snapshot payloads
    - Summary: Remove the flat `day_price_change_native`/`day_price_change_eur`/`day_change_pct` mirrors from `get_security_snapshot` responses so downstream consumers rely on the structured `performance.day_change` block for intraday deltas.
    - Legacy surfaces to touch:
      * Backend:
@@ -235,7 +235,7 @@ RUN SEPARATELY
      * Smoke-test the Home Assistant panel via `./scripts/develop` + `npm run dev` to confirm security detail widgets render day-change deltas correctly from the nested payload.
      * Spot-check any recorder exports or saved snapshot caches after the cleanup to verify they serialise without the deprecated keys and continue to hydrate into the UI without errors.
 
-2.5 [ ] Backend: Retire legacy `avg_price_account` payload mirrors
+2.5 [x] Backend: Retire legacy `avg_price_account` payload mirrors
    - Summary: Delete the deprecated `avg_price_account` field wherever it appears so backend responses and websocket/event payloads rely solely on the structured `average_cost.account` value.
    - Legacy surfaces to touch:
      * Backend:
@@ -261,7 +261,7 @@ RUN SEPARATELY
      * Exercise the price-service pipeline via `pytest tests/test_sync_from_pclient.py` to ensure portfolio cache refreshes persist and emit consistent aggregates post-removal.
      * Execute representative frontend checks (`npm run test -- src/tabs/__tests__/overview.render.test.ts`, `npm run test -- src/tabs/__tests__/security_detail.metrics.test.ts`, and dashboard smoke tests) after updating fixtures to validate UI selectors rely solely on `average_cost.account`.
 
-2.6 [ ] Frontend: Drop the legacy `dashboard.js` fallback from the panel bootstrapper
+2.6 [x] Frontend: Drop the legacy `dashboard.js` fallback from the panel bootstrapper
    - Summary: Remove the legacy bundle loader so the panel element always imports the Vite-built module or the dev-server entry point, aligning production and development bootstrap paths.
    - Legacy surfaces to touch:
      * Frontend:
@@ -282,7 +282,7 @@ RUN SEPARATELY
      * Execute `npm run lint:ts` and `npm run test:frontend` (or the targeted dashboard smoke tests) to ensure the panel and dashboard entry points remain loadable without the legacy bundle.
      * Launch Home Assistant via `./scripts/develop` and open the panel with and without the Vite dev-server query param to verify both the hot-reload flow and the production bundle bootstrap succeed post-cleanup.
 
-2.7 [ ] Frontend: Remove `window.__ppReader*` compatibility shims from the dashboard bundle
+2.7 [x] Frontend: Remove `window.__ppReader*` compatibility shims from the dashboard bundle
    - Summary: Delete every `window.__ppReader*` compatibility shim so the dashboard relies solely on module imports, eliminating the legacy DOM-integration bridge that kept the globals alive.
    - Legacy surfaces to touch:
      * Frontend:
@@ -303,7 +303,7 @@ RUN SEPARATELY
      * Execute `npm run test:frontend` to cover the dashboard smoke tests with the new import-based wiring.
      * Build the production assets via `npm run build` (followed by `node scripts/update_dashboard_module.mjs`) to verify the emitted module stays self-contained without the shims.
 
-2.8 [ ] Frontend: Retire WebSocket position normaliser fallbacks
+2.8 [x] Frontend: Retire WebSocket position normaliser fallbacks
    - Summary: Remove the client-side re-derivation of holdings aggregations, average-cost payloads, and gain mirrors from WebSocket position updates so the UI trusts the backend-provided structures.
    - Legacy surfaces to touch:
      * Frontend:
@@ -327,7 +327,7 @@ RUN SEPARATELY
      * Exercise the dashboard manually (expand portfolio positions, trigger live updates) while watching the browser console for missing-field warnings after the cleanup.
      * If available, add integration or component tests that load cached websocket data into the DOM without touching the normalization helpers to prevent regressions.
 
-2.9 [ ] Frontend: Retire overview tab average-cost resolver fallback
+2.9 [x] Frontend: Retire overview tab average-cost resolver fallback
    - Summary: Delete the local `resolveAverageCost`/`resolveAggregation` logic on the overview tab so purchase price cells render the backend-provided `average_cost` payload directly without recomputing holdings totals.
    - Legacy surfaces to touch:
      * Frontend:
@@ -352,7 +352,7 @@ RUN SEPARATELY
      * Execute `pytest tests/test_ws_portfolio_positions.py` to verify websocket payloads still ship the normalized cost and performance blocks consumed by the overview tab.
      * Manually expand portfolios in the dashboard (via `npm run dev` + Home Assistant) and monitor browser console warnings to confirm direct backend values render without fallback logic.
 
-2.10 [ ] Frontend: Retire security detail average-cost & baseline fallbacks
+2.10 [x] Frontend: Retire security detail average-cost & baseline fallbacks
    - Summary: Delete the security detail tab's bespoke average-cost parsing, FX tooltip maths, and cached snapshot reconstruction so the UI renders backend-provided `average_cost`/`performance` payloads directly for snapshots, charts, and history overlays.
    - Legacy surfaces to touch:
      * Frontend:
@@ -376,7 +376,7 @@ RUN SEPARATELY
      * Execute `pytest tests/test_ws_security_snapshot.py` (or add an equivalent coverage target) to confirm websocket snapshot payloads stay stable while the frontend stops synthesising averages.
      * Smoke-test the security detail tab via `npm run dev` + Home Assistant, toggling history ranges and FX tooltips to confirm baselines, averages, and tooltips render directly from backend data without regression.
 
-2.11 [ ] Frontend: Sunset `buildSnapshotFromPortfolioCache` snapshot fallback
+2.11 [x] Frontend: Sunset `buildSnapshotFromPortfolioCache` snapshot fallback
    - Summary: Remove the security-detail snapshot reconstruction that walks cached portfolio positions so the tab relies solely on backend-provided snapshot payloads and shared utilities for holdings, totals, and performance values.
    - Legacy surfaces to touch:
      * Frontend:
@@ -396,7 +396,7 @@ RUN SEPARATELY
      * Run `npm run test` to exercise the frontend integration tests that cover portfolio updates and security detail rendering without the cache fallback.
      * Smoke-test the security detail tab manually against a development backend to confirm snapshots load, refresh, and render correctly solely through the websocket snapshot endpoint.
 
-2.12 [ ] Frontend: Retire `ensureSnapshotMetrics` derived metrics fallback
+2.12 [x] Frontend: Retire `ensureSnapshotMetrics` derived metrics fallback
    - Summary: Remove the security detail metrics registry logic that recomputes holdings, FX rates, and performance deltas client-side so the dashboard trusts the backend-provided snapshot metrics without duplicating math.
    - Legacy surfaces to touch:
      * Frontend:

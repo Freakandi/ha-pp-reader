@@ -5,20 +5,13 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
 
 from ..const import DOMAIN
-from ..util.currency import cent_to_eur, round_currency
-from .aggregations import (
-    HoldingsAggregation,
-    compute_holdings_aggregation,
-    select_average_cost,
-)
-from .performance import select_performance_metrics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,74 +35,29 @@ def _estimate_event_size(payload: dict[str, Any]) -> int:
     return len(encoded.encode("utf-8"))
 
 
-def _normalize_currency_amount(value: Any, *, default: float = 0.0) -> float:
-    """Return a consistently rounded EUR amount from raw or cent values."""
-    if isinstance(value, bool):
-        return default
-
-    if isinstance(value, int):
-        normalized = cent_to_eur(value, default=None)
-        if normalized is not None:
-            return normalized
-
-    rounded = round_currency(value, default=None)
-    if rounded is not None:
-        return rounded
-
-    return default
-
-
 def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
-    """Compact a raw portfolio aggregation entry for event transport."""
+    """Forward canonical portfolio aggregates without recomputation."""
     uuid = item.get("uuid") or item.get("portfolio_uuid")
     if not uuid:
         return None
 
-    def _int(value_key: str, fallback_key: str | None = None) -> int:
-        raw = item.get(value_key)
-        if raw is None and fallback_key is not None:
-            raw = item.get(fallback_key)
-        try:
-            return int(raw or 0)
-        except (TypeError, ValueError):
-            return 0
+    normalized: dict[str, Any] = {"uuid": str(uuid)}
 
-    raw_current_value = item.get("current_value")
-    if raw_current_value is None:
-        raw_current_value = item.get("value")
-    current_value = _normalize_currency_amount(raw_current_value)
+    position_count = item.get("position_count")
+    if position_count is None and "count" in item:
+        position_count = item.get("count")
+    if position_count is not None:
+        normalized["position_count"] = position_count
 
-    raw_purchase_sum = item.get("purchase_sum")
-    if raw_purchase_sum is None:
-        raw_purchase_sum = item.get("purchaseSum")
-    purchase_sum = _normalize_currency_amount(raw_purchase_sum)
-
-    performance_mapping = item.get("performance")
-    performance_payload: dict[str, Any]
-    if isinstance(performance_mapping, Mapping):
-        performance_payload = dict(performance_mapping)
-    else:
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=raw_current_value,
-            purchase_value=raw_purchase_sum,
-        )
-        performance_payload = asdict(performance_metrics)
-        performance_payload["day_change"] = asdict(day_change_metrics)
-
-    gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
-    gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
-
-    normalized = {
-        "uuid": str(uuid),
-        "position_count": _int("position_count", "count"),
-        "current_value": current_value,
-        "purchase_sum": purchase_sum,
-        "gain_abs": gain_abs,
-        "gain_pct": gain_pct,
-    }
-
-    if performance_payload:
-        normalized["performance"] = performance_payload
+    for key in (
+        "name",
+        "current_value",
+        "purchase_sum",
+        "performance",
+        "missing_value_positions",
+    ):
+        if key in item:
+            normalized[key] = item[key]
 
     return normalized
 
@@ -150,198 +98,66 @@ def _compact_portfolio_values_payload(data: Any) -> Any:
 def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
     """Keep only the fields required for position updates."""
     security_uuid = item.get("security_uuid")
-    if security_uuid:
-        security_uuid = str(security_uuid)
+    if not security_uuid:
+        return None
 
-    aggregation_raw = item.get("aggregation")
-    average_cost_raw = item.get("average_cost")
+    aggregation_payload: dict[str, Any] | None = None
+    raw_aggregation = item.get("aggregation")
+    if isinstance(raw_aggregation, Mapping):
+        aggregation_payload = dict(raw_aggregation)
+    elif is_dataclass(raw_aggregation):
+        aggregation_payload = asdict(raw_aggregation)
 
-    def _coerce_float(value: Any) -> float | None:
-        if isinstance(value, bool):
-            return None
-        if value in (None, ""):
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
+    if aggregation_payload is not None:
+        aggregation_payload.pop("average_purchase_price_native", None)
 
-    def _coerce_int(value: Any) -> int | None:
-        if isinstance(value, bool):
-            return None
-        if value in (None, ""):
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+    average_cost_payload: dict[str, Any] | None = None
+    raw_average_cost = item.get("average_cost")
+    if isinstance(raw_average_cost, Mapping):
+        average_cost_payload = dict(raw_average_cost)
+    elif is_dataclass(raw_average_cost):
+        average_cost_payload = asdict(raw_average_cost)
 
-    def _aggregation_from_mapping(mapping: Mapping[str, Any]) -> HoldingsAggregation:
-        return HoldingsAggregation(
-            total_holdings=_coerce_float(mapping.get("total_holdings")) or 0.0,
-            positive_holdings=_coerce_float(mapping.get("positive_holdings")) or 0.0,
-            purchase_value_cents=_coerce_int(mapping.get("purchase_value_cents")) or 0,
-            purchase_value_eur=_coerce_float(mapping.get("purchase_value_eur")) or 0.0,
-            security_currency_total=_coerce_float(
-                mapping.get("security_currency_total")
-            )
-            or _coerce_float(mapping.get("purchase_total_security"))
-            or 0.0,
-            account_currency_total=_coerce_float(mapping.get("account_currency_total"))
-            or _coerce_float(mapping.get("purchase_total_account"))
-            or 0.0,
-            average_purchase_price_native=_coerce_float(
-                mapping.get("average_purchase_price_native")
-            ),
-            avg_price_account=_coerce_float(mapping.get("avg_price_account")),
-        )
+    performance_payload: dict[str, Any] | None = None
+    raw_performance = item.get("performance")
+    if isinstance(raw_performance, Mapping):
+        performance_payload = dict(raw_performance)
+        day_change_raw = performance_payload.get("day_change")
+        if isinstance(day_change_raw, Mapping):
+            performance_payload["day_change"] = dict(day_change_raw)
+        elif is_dataclass(day_change_raw):
+            performance_payload["day_change"] = asdict(day_change_raw)
+    elif is_dataclass(raw_performance):
+        performance_payload = asdict(raw_performance)
 
-    def _build_aggregation_from_item() -> HoldingsAggregation:
-        holdings_value = _coerce_float(item.get("current_holdings"))
-        purchase_value_cents = _coerce_int(item.get("purchase_value_cents"))
-        if purchase_value_cents is None:
-            purchase_value_eur = round_currency(
-                item.get("purchase_value"), default=None
-            )
-            if purchase_value_eur is None:
-                purchase_value_eur = round_currency(
-                    item.get("purchase_value_eur"), default=None
-                )
-            if purchase_value_eur is not None:
-                try:
-                    purchase_value_cents = int(round(float(purchase_value_eur) * 100))
-                except (TypeError, ValueError):
-                    purchase_value_cents = None
-
-        row: dict[str, Any] = {}
-        if holdings_value is not None:
-            row["current_holdings"] = holdings_value
-        if purchase_value_cents is not None:
-            row["purchase_value"] = purchase_value_cents
-
-        security_total = _coerce_float(item.get("purchase_total_security"))
-        if security_total is None:
-            security_total = _coerce_float(item.get("security_currency_total"))
-        if security_total is not None:
-            row["security_currency_total"] = security_total
-
-        account_total = _coerce_float(item.get("purchase_total_account"))
-        if account_total is None:
-            account_total = _coerce_float(item.get("account_currency_total"))
-        if account_total is not None:
-            row["account_currency_total"] = account_total
-
-        avg_native = _coerce_float(item.get("average_purchase_price_native"))
-        if avg_native is not None:
-            row["avg_price_native"] = avg_native
-
-        if not row:
-            return compute_holdings_aggregation([])
-        return compute_holdings_aggregation([row])
-
-    def _select_aggregation() -> HoldingsAggregation:
-        if isinstance(aggregation_raw, HoldingsAggregation):
-            return aggregation_raw
-        if isinstance(aggregation_raw, Mapping):
-            return _aggregation_from_mapping(aggregation_raw)
-        return _build_aggregation_from_item()
-
-    aggregation_obj = _select_aggregation()
-
-    aggregation_payload = asdict(aggregation_obj)
-    aggregation_payload["purchase_total_security"] = (
-        aggregation_obj.purchase_total_security
-    )
-    aggregation_payload["purchase_total_account"] = (
-        aggregation_obj.purchase_total_account
-    )
-    aggregation_payload.pop("avg_price_account", None)
-
-    if isinstance(aggregation_raw, Mapping):
-        for key, value in aggregation_raw.items():
-            if key == "avg_price_account":
-                continue
-            if value in (None, ""):
-                continue
-            if key in {"purchase_value_cents"}:
-                coerced_int = _coerce_int(value)
-                if coerced_int is not None:
-                    aggregation_payload[key] = coerced_int
-                continue
-            coerced_float = _coerce_float(value)
-            if coerced_float is not None:
-                aggregation_payload[key] = coerced_float
-                continue
-            aggregation_payload[key] = value
-
-    holdings_value = _coerce_float(item.get("current_holdings"))
-    holdings = aggregation_obj.total_holdings or holdings_value or 0.0
-
-    purchase_value = round_currency(aggregation_obj.purchase_value_eur, default=None)
-    if purchase_value in (None, 0.0):
-        fallback_value = round_currency(item.get("purchase_value"), default=None)
-        if fallback_value is None:
-            fallback_value = round_currency(
-                item.get("purchase_value_eur"), default=None
-            )
-        if fallback_value is not None:
-            purchase_value = fallback_value
-    if purchase_value is None:
-        purchase_value = 0.0
-
-    average_cost_selection = select_average_cost(
-        aggregation_obj,
-        holdings=holdings if holdings else None,
-    )
-    average_cost_payload = asdict(average_cost_selection)
-    if isinstance(average_cost_raw, Mapping):
-        for key, value in average_cost_raw.items():
+    def _resolve_from_sources(*keys: str) -> Any | None:
+        for key in keys:
+            value = item.get(key)
             if value not in (None, ""):
-                if key in {"native", "security", "account", "eur"}:
-                    coerced = _coerce_float(value)
-                    if coerced is not None:
-                        average_cost_payload[key] = coerced
-                    continue
-                average_cost_payload[key] = value
-
-    current_value_raw = item.get("current_value")
-    current_value = _normalize_currency_amount(current_value_raw)
-
-    performance_mapping = item.get("performance")
-    if isinstance(performance_mapping, Mapping):
-        performance_payload = dict(performance_mapping)
-    else:
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=current_value_raw,
-            purchase_value=purchase_value,
-            holdings=holdings,
-        )
-        performance_payload = asdict(performance_metrics)
-        performance_payload["day_change"] = asdict(day_change_metrics)
-
-    gain_abs = round_currency(performance_payload.get("gain_abs"), default=0.0) or 0.0
-    gain_pct = round_currency(performance_payload.get("gain_pct"), default=0.0) or 0.0
-
-    purchase_total_security = aggregation_obj.purchase_total_security
-    purchase_total_account = aggregation_obj.purchase_total_account
+                return value
+        if aggregation_payload is None:
+            return None
+        for key in keys:
+            value = aggregation_payload.get(key)
+            if value not in (None, ""):
+                return value
+        return None
 
     normalized: dict[str, Any] = {
-        "security_uuid": security_uuid,
+        "security_uuid": str(security_uuid),
         "name": item.get("name"),
-        "current_holdings": holdings,
-        "purchase_value": purchase_value,
-        "current_value": current_value,
-        "gain_abs": gain_abs,
-        "gain_pct": gain_pct,
-        "purchase_total_security": purchase_total_security,
-        "purchase_total_account": purchase_total_account,
+        "current_holdings": _resolve_from_sources("current_holdings", "total_holdings"),
+        "purchase_value": _resolve_from_sources("purchase_value", "purchase_value_eur"),
+        "current_value": item.get("current_value"),
+    }
+
+    normalized = {
+        key: value
+        for key, value in normalized.items()
+        if value is not None
     }
 
     if aggregation_payload:
-        aggregation_payload.pop("avg_price_account", None)
-        aggregation_payload.pop("average_purchase_price_native", None)
         normalized["aggregation"] = aggregation_payload
 
     if average_cost_payload:
