@@ -26,10 +26,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
-from custom_components.pp_reader.data.db_access import (
-    Transaction as DbTransaction,
-    fetch_live_portfolios,
-)
+from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.data.sync_from_pclient import (
@@ -1031,59 +1028,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             # Events
             if changed_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
-
-                # Fallback: Wenn Revaluation nichts liefert, aber Preise geändert,
-                # aggregiere betroffene Portfolios direkt.
-                if not pv_dict:
-                    try:
-                        affected_portfolios: set[str] = set(impacted_portfolios)
-                        if not affected_portfolios:
-                            with sqlite3.connect(str(db_path)) as conn:
-                                for sec_uuid in scaled_updates:
-                                    cur = conn.execute(
-                                        "SELECT DISTINCT portfolio_uuid "
-                                        "FROM portfolio_securities "
-                                        "WHERE security_uuid=?",
-                                        (sec_uuid,),
-                                    )
-                                    affected_portfolios.update(
-                                        r for (r,) in cur.fetchall()
-                                    )
-
-                        if affected_portfolios:
-                            fallback: dict[str, dict[str, Any]] = {}
-                            try:
-                                live_rows = await async_run_executor_job(
-                                    hass,
-                                    fetch_live_portfolios,
-                                    db_path,
-                                )
-                            except Exception:  # noqa: BLE001 - Diagnosezweck
-                                _LOGGER.debug(
-                                    "prices_cycle: fetch_live_portfolios Fallback fehlgeschlagen",
-                                    exc_info=True,
-                                )
-                                live_rows = []
-
-                            for row in live_rows or []:
-                                if not isinstance(row, Mapping):
-                                    continue
-                                pid = row.get("uuid")
-                                if pid in affected_portfolios and pid:
-                                    fallback[str(pid)] = dict(row)
-
-                            if fallback:
-                                pv_dict = fallback
-                                fallback_msg = (
-                                    "prices_cycle: Revaluation leer - fetch_live_portfolios "
-                                    "Fallback genutzt (portfolios=%d)"
-                                )
-                                _LOGGER.debug(fallback_msg, len(fallback))
-                    except sqlite3.Error:
-                        _LOGGER.debug(
-                            "prices_cycle: Fallback Aggregation fehlgeschlagen",
-                            exc_info=True,
-                        )
 
                 if pv_dict:
                     try:

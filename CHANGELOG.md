@@ -114,7 +114,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - Regression tests safeguard the live aggregation as well as the WebSocket flows for portfolios and FX accounts.【F:tests/test_fetch_live_portfolios.py†L1-L72】【F:tests/test_ws_portfolios_live.py†L1-L94】【F:tests/test_ws_accounts_fx.py†L120-L191】
 ### Changed
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_last_file_update`) now load portfolios on demand from the database, fetch missing FX rates, and include coordinator fallbacks for graceful responses.【F:custom_components/pp_reader/data/websocket.py†L65-L341】
-- Revaluation and price events rely on `fetch_live_portfolios` to populate affected portfolios with consistent totals and fall back to per-portfolio aggregation when necessary.【F:custom_components/pp_reader/prices/revaluation.py†L1-L118】
+- Revaluation and price events rely on `fetch_live_portfolios` to populate affected portfolios with consistent totals.【F:custom_components/pp_reader/prices/revaluation.py†L1-L118】
 - The dashboard renders an expandable table with a DOM-based total footer and now caches only position data so updates work without manual override caches.【F:src/tabs/overview.ts†L1-L200】【F:src/tabs/overview.ts†L420-L720】
 - Event handling is unified: `_push_update` emits compact `EVENT_PANELS_UPDATED` payloads through the event loop, and the dashboard subscribes to `panels_updated`, filters by `entry_id`, and queues bus updates for replay after re-renders.【F:custom_components/pp_reader/data/event_push.py†L1-L200】【F:src/dashboard.ts†L230-L520】
 ### Removed
