@@ -41,7 +41,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Scope: `custom_components/pp_reader/currencies/`
        - Ziel: `ruff check custom_components/pp_reader/currencies` ohne Befund; insbesondere verschachtelte `async with`-Blöcke in `fx.py` auflösen.
 
-1. e2) [ ] Feature-Flags
+1. e2) [x] Feature-Flags
        - Scope: `custom_components/pp_reader/feature_flags.py`
        - Ziel: Typimporte in TYPE_CHECKING-Blöcke verschieben und verbleibende `ruff`-Warnungen beseitigen.
 
