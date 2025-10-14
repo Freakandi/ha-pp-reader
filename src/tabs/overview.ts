@@ -1129,9 +1129,8 @@ export function attachPortfolioToggleHandler(root: HTMLElement): void {
             if (caretEl) caretEl.textContent = '▼';
             expandedPortfolios.add(portfolioUuid);
 
-            let pendingApplied = false;
             try {
-              pendingApplied = flushPendingPositions(root, portfolioUuid);
+              flushPendingPositions(root, portfolioUuid);
             } catch (error) {
               console.warn('attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:', error);
             }
@@ -1273,7 +1272,7 @@ export async function renderDashboard(
         : 0;
       const rawCurrentValue = normalizeCurrencyValue(record.current_value);
       const purchaseSum = normalizeCurrencyValue(record.purchase_sum) ?? 0;
-      const performance = normalizePerformanceRecord(record);
+      const performance = normalizePerformancePayload(record['performance']);
 
       const hasNumericCurrentValue = rawCurrentValue != null;
       const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;

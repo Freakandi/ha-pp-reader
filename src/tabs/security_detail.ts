@@ -31,7 +31,6 @@ import type {
   DashboardTabRenderFn,
   PanelConfigLike,
   PortfolioPositionsUpdatedEventDetail,
-  PortfolioPosition,
   SecurityHistoryRangeKey,
   SecurityHistoryRangeState,
   SecuritySnapshotLike,
@@ -39,7 +38,7 @@ import type {
   AverageCostPayload,
   AverageCostSource,
 } from './types';
-import { roundCurrency, toFiniteCurrency, normalizePercentValue } from '../utils/currency';
+import { toFiniteCurrency, normalizePercentValue } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;

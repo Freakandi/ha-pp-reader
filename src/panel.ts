@@ -3,21 +3,44 @@
  * Mirrors the legacy panel.js behaviour during the migration.
  */
 import './dashboard';
+import type { DashboardElement } from './dashboard/registry';
 import {
   registerDashboardElement,
   registerPanelHost,
   unregisterDashboardElement,
   unregisterPanelHost,
 } from './dashboard/registry';
+import type {
+  HassPanel,
+  HassRoute,
+  HomeAssistant,
+} from './types/home-assistant';
+
+type PanelConfigLike = HassPanel | Record<string, unknown> | null | undefined;
+
+interface DashboardHostElement extends DashboardElement {
+  hass?: HomeAssistant | null | undefined;
+  narrow?: boolean | null | undefined;
+  route?: HassRoute | null | undefined;
+  panel?: PanelConfigLike;
+}
 
 const PANEL_URL = new URL(import.meta.url);
 const ASSET_BASE_URL = new URL('./', PANEL_URL);
 const ASSET_VERSION = PANEL_URL.searchParams.get('v');
 
 class PPReaderPanel extends HTMLElement {
+  private _dashboardEl: DashboardHostElement | null = null;
+  private _resizeObserver: ResizeObserver | null = null;
+  private _updateScheduled = false;
+  private _hass: HomeAssistant | null | undefined = undefined;
+  private _narrow: boolean | null | undefined = undefined;
+  private _route: HassRoute | null | undefined = null;
+  private _panel: PanelConfigLike = null;
+
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
+    const shadow = this.attachShadow({ mode: 'open' });
     const container = document.createElement('div');
     container.innerHTML = `
       <div class="panel-root">
@@ -37,7 +60,7 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('css/base.css');
     this._loadCss('css/cards.css');
     this._loadCss('css/nav.css');
-    this.shadowRoot.appendChild(container);
+    shadow.appendChild(container);
 
     this._upgradeProperty('hass');
     this._upgradeProperty('panel');
@@ -45,7 +68,7 @@ class PPReaderPanel extends HTMLElement {
     this._upgradeProperty('narrow');
 
     // NEU: Referenz auf das Dashboard-Element sichern
-    this._dashboardEl = container.querySelector('pp-reader-dashboard');
+    this._dashboardEl = container.querySelector<DashboardHostElement>('pp-reader-dashboard');
     if (!this._dashboardEl) {
       console.error('[pp_reader] Dashboard Element nicht gefunden – Rendering unmöglich.');
     } else {
@@ -63,7 +86,8 @@ class PPReaderPanel extends HTMLElement {
       console.warn('[pp_reader] Konnte Panel-Instanz nicht verfolgen', error);
     }
 
-    container.querySelector('.menu-button').addEventListener('click', () => {
+    const menuButton = container.querySelector<HTMLButtonElement>('.menu-button');
+    menuButton?.addEventListener('click', () => {
       const haMain = document
         .querySelector('home-assistant')
         ?.shadowRoot
@@ -75,11 +99,10 @@ class PPReaderPanel extends HTMLElement {
 
     this._resizeObserver = new ResizeObserver(() => this._updateWidth());
     this._resizeObserver.observe(this);
-    this._updateScheduled = false;
   }
 
   // Funktion zum Laden von CSS-Dateien ins Shadow DOM
-  _loadCss(relativePath) {
+  private _loadCss(relativePath: string): void {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     try {
@@ -92,12 +115,12 @@ class PPReaderPanel extends HTMLElement {
       console.error('[pp_reader] Fehler beim Auflösen des CSS-Pfades', relativePath, error);
       return;
     }
-    this.shadowRoot.appendChild(link);
+    this.shadowRoot?.appendChild(link);
   }
 
   // Dynamische Breitenanpassung
-  _updateWidth() {
-    const wrapper = this.shadowRoot.querySelector('.wrapper');
+  private _updateWidth(): void {
+    const wrapper = this.shadowRoot?.querySelector<HTMLElement>('.wrapper');
     if (wrapper) {
       const panelWidth = this.getBoundingClientRect().width;
       wrapper.style.setProperty('--panel-width', `${panelWidth}px`);
@@ -105,26 +128,26 @@ class PPReaderPanel extends HTMLElement {
   }
 
   // Setter für Home Assistant-Attribute
-  set hass(hass) {
+  set hass(hass: HomeAssistant | null | undefined) {
     this._hass = hass;
     this._updateDashboard();
     // console.log('PPReaderPanel: hass gesetzt:', this._hass); // Debugging
   }
-  set narrow(narrow) {
+  set narrow(narrow: boolean | null | undefined) {
     this._narrow = narrow;
     this._updateDashboard();
   }
-  set route(route) {
+  set route(route: HassRoute | null | undefined) {
     this._route = route;
     this._updateDashboard();
   }
-  set panel(panel) {
+  set panel(panel: PanelConfigLike) {
     this._panel = panel;
     this._updateDashboard();
   }
 
   // Dashboard aktualisieren
-  _updateDashboard() {
+  private _updateDashboard(): void {
     if (this._updateScheduled) {
       return;
     }
@@ -142,20 +165,21 @@ class PPReaderPanel extends HTMLElement {
     }
   }
 
-  _applyDashboardBindings() {
+  private _applyDashboardBindings(): void {
     // Fallback: falls beim ersten Setter noch nicht gesetzt, jetzt versuchen
     if (!this._dashboardEl) {
-      this._dashboardEl = this.shadowRoot?.querySelector('pp-reader-dashboard') || null;
+      this._dashboardEl =
+        this.shadowRoot?.querySelector<DashboardHostElement>('pp-reader-dashboard') || null;
       if (!this._dashboardEl) return; // nichts zu tun
     }
-    if (this._panel) this._dashboardEl.panel = this._panel;
-    if (this._route) this._dashboardEl.route = this._route;
-    if (this._narrow !== undefined) this._dashboardEl.narrow = this._narrow;
-    if (this._hass) this._dashboardEl.hass = this._hass;
+    if (this._panel !== undefined) this._dashboardEl.panel = this._panel;
+    if (this._route !== undefined) this._dashboardEl.route = this._route ?? undefined;
+    if (this._narrow !== undefined) this._dashboardEl.narrow = this._narrow ?? undefined;
+    if (this._hass !== undefined) this._dashboardEl.hass = this._hass ?? undefined;
   }
 
   // Cleanup beim Entfernen des Elements
-  disconnectedCallback() {
+  disconnectedCallback(): void {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
     }
@@ -163,7 +187,7 @@ class PPReaderPanel extends HTMLElement {
     unregisterDashboardElement(this._dashboardEl);
   }
 
-  _upgradeProperty(propertyName) {
+  private _upgradeProperty(propertyName: keyof this): void {
     if (!Object.prototype.hasOwnProperty.call(this, propertyName)) {
       return;
     }

@@ -13,7 +13,7 @@ import type {
   PerformanceMetricsPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
-import { roundCurrency } from '../utils/currency';
+import { normalizeCurrencyValue, roundCurrency, toFiniteCurrency } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
 import type { AccountSummary, PortfolioSummary } from './api';
 import {
@@ -21,6 +21,7 @@ import {
   getPortfolioPositionsSnapshot,
   setPortfolioPositions,
 } from './positionsCache';
+import type { PortfolioPositionRecord } from './positionsCache';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 
@@ -64,6 +65,14 @@ interface ApplyPositionsResult {
 const pendingPortfolioUpdates = new Map<string, PendingPortfolioUpdate>();
 const pendingRetryMetaMap = new Map<string, PendingRetryMeta>();
 
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function normalizePerformanceMetrics(
   position: PortfolioPositionData,
 ): PerformanceMetricsPayload | null {
@@ -90,29 +99,53 @@ function cloneAverageCostPayload(
   return { ...(value as AverageCostPayload) };
 }
 
-function sanitizePosition(position: PortfolioPositionData): PortfolioPositionData {
-  const normalized: PortfolioPositionData = { ...position };
-
-  if (Object.prototype.hasOwnProperty.call(position, 'aggregation')) {
-    normalized.aggregation = cloneAggregationPayload(position.aggregation);
+function sanitizePosition(position: PortfolioPositionData): PortfolioPositionRecord | null {
+  const securityUuid = toNonEmptyString(position.security_uuid);
+  const name = toNonEmptyString(position.name);
+  const currentHoldings = toFiniteCurrency(position.current_holdings);
+  const purchaseValue = normalizeCurrencyValue(position.purchase_value);
+  const currentValue = normalizeCurrencyValue(position.current_value);
+  if (
+    !securityUuid ||
+    !name ||
+    currentHoldings == null ||
+    purchaseValue == null ||
+    currentValue == null
+  ) {
+    return null;
   }
 
-  if (Object.prototype.hasOwnProperty.call(position, 'average_cost')) {
-    normalized.average_cost = cloneAverageCostPayload(position.average_cost);
-  }
-
+  const aggregation = cloneAggregationPayload(position.aggregation);
+  const averageCost = cloneAverageCostPayload(position.average_cost);
   const performance = normalizePerformanceMetrics(position);
-  if (performance) {
-    normalized.performance = performance;
-  } else if (Object.prototype.hasOwnProperty.call(position, 'performance')) {
-    normalized.performance = null;
-  }
 
-  return normalized;
+  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+
+  return {
+    ...position,
+    security_uuid: securityUuid,
+    name,
+    current_holdings: currentHoldings,
+    purchase_value: purchaseValue,
+    current_value: currentValue,
+    average_cost: averageCost,
+    aggregation,
+    performance,
+    gain_abs: gainAbs,
+    gain_pct: gainPct,
+  } as PortfolioPositionRecord;
 }
 
-function sanitizePositions(positions: PortfolioPositionData[]): PortfolioPositionData[] {
-  return positions.map(sanitizePosition);
+function sanitizePositions(positions: PortfolioPositionData[]): PortfolioPositionRecord[] {
+  const sanitized: PortfolioPositionRecord[] = [];
+  for (const position of positions) {
+    const normalized = sanitizePosition(position);
+    if (normalized) {
+      sanitized.push(normalized);
+    }
+  }
+  return sanitized;
 }
 
 interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
@@ -1056,7 +1089,7 @@ export function reapplyPositionsSort(containerEl: HTMLElement | null): void {
 }
 
 export const __TEST_ONLY__ = {
-  getPortfolioPositionsCacheSnapshot,
+  getPortfolioPositionsCacheSnapshot: getPortfolioPositionsSnapshot,
   clearPortfolioPositionsCache: clearAllPortfolioPositions,
   getPendingUpdateCount(): number {
     return pendingPortfolioUpdates.size;
