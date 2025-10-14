@@ -97,7 +97,9 @@ class PPReaderPanel extends HTMLElement {
       }
     });
 
-    this._resizeObserver = new ResizeObserver(() => this._updateWidth());
+    this._resizeObserver = new ResizeObserver(() => {
+      this._updateWidth();
+    });
     this._resizeObserver.observe(this);
   }
 
@@ -123,7 +125,10 @@ class PPReaderPanel extends HTMLElement {
     const wrapper = this.shadowRoot?.querySelector<HTMLElement>('.wrapper');
     if (wrapper) {
       const panelWidth = this.getBoundingClientRect().width;
-      wrapper.style.setProperty('--panel-width', `${panelWidth}px`);
+      const widthValue = Number.isFinite(panelWidth)
+        ? `${String(panelWidth)}px`
+        : '0px';
+      wrapper.style.setProperty('--panel-width', widthValue);
     }
   }
 
@@ -161,7 +166,7 @@ class PPReaderPanel extends HTMLElement {
     if (typeof queueMicrotask === 'function') {
       queueMicrotask(runUpdate);
     } else {
-      Promise.resolve().then(runUpdate);
+      void Promise.resolve().then(runUpdate);
     }
   }
 
@@ -192,7 +197,7 @@ class PPReaderPanel extends HTMLElement {
       return;
     }
     const value = this[propertyName];
-    delete this[propertyName];
+    Reflect.deleteProperty(this, propertyName);
     this[propertyName] = value;
   }
 }

@@ -53,19 +53,19 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 3. Frontend TypeScript (`src/`)
 
-3. a) [ ] Utilities & Typdefinitionen
+3. a) [x] Utilities & Typdefinitionen
        - Scope: `src/utils/`, `src/types/`
        - Ziel: `npm run lint:ts -- src/utils src/types` sowie `npm run typecheck` ohne Fehler in diesen Verzeichnissen.
 
-3. b) [ ] Datenebene & Interaktionen
+3. b) [x] Datenebene & Interaktionen
        - Scope: `src/data/`, `src/interaction/`
        - Ziel: ESLint/TS-Fehler behoben; ggf. `async`-Versprechen sauber behandelt.
 
-3. c) [ ] Panel-Einstiegspunkt
+3. c) [x] Panel-Einstiegspunkt
        - Scope: `src/panel.ts`
        - Ziel: Linting/Typecheck ohne Fehler; DOM-Zugriffe und Event-Handler streng typisieren.
 
-3. d) [ ] Dashboard-Komponenten
+3. d) [x] Dashboard-Komponenten
        - Scope: `src/dashboard/`
        - Ziel: Modulweise ESLint-Compliance sicherstellen, insbesondere bei dynamischen Layout-Berechnungen.
 

@@ -31,6 +31,25 @@ const dashboardElements = new Set<DashboardElement>();
 const panelHosts = new Set<HTMLElement>();
 const overviewHelpers: OverviewHelperRegistry = {};
 
+type OverviewHelperKey = keyof OverviewHelperRegistry;
+
+function isOverviewHelperValue<K extends OverviewHelperKey>(
+  candidate: OverviewHelperRegistry[K],
+): candidate is NonNullable<OverviewHelperRegistry[K]> {
+  return typeof candidate === 'function';
+}
+
+function assignOverviewHelper<K extends OverviewHelperKey>(
+  key: K,
+  candidate: OverviewHelperRegistry[K] | undefined,
+): void {
+  if (isOverviewHelperValue(candidate)) {
+    overviewHelpers[key] = candidate;
+    return;
+  }
+  Reflect.deleteProperty(overviewHelpers, key);
+}
+
 export function registerDashboardElement(element: DashboardElement | null | undefined): void {
   if (!element) {
     return;
@@ -68,7 +87,10 @@ export function getRegisteredPanelHosts(): ReadonlySet<HTMLElement> {
 }
 
 export function registerOverviewHelpers(helpers: OverviewHelperRegistry): void {
-  Object.assign(overviewHelpers, helpers);
+  const keys = Object.keys(helpers) as OverviewHelperKey[];
+  for (const key of keys) {
+    assignOverviewHelper(key, helpers[key]);
+  }
 }
 
 export function getOverviewHelpers(): OverviewHelperRegistry {
@@ -79,8 +101,8 @@ export const __TEST_ONLY__ = {
   clearRegistries(): void {
     dashboardElements.clear();
     panelHosts.clear();
-    for (const key of Object.keys(overviewHelpers) as Array<keyof OverviewHelperRegistry>) {
-      overviewHelpers[key] = undefined;
+    for (const key of Object.keys(overviewHelpers) as OverviewHelperKey[]) {
+      Reflect.deleteProperty(overviewHelpers, key);
     }
   },
 };

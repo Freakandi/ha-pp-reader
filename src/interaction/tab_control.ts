@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 /**
  * Swipe and tab interaction helpers mirrored from the legacy UI.
  */
@@ -10,15 +8,19 @@
  * @param {Function} onSwipeLeft - Callback für Swipe/Klick nach links (nächster Tab).
  * @param {Function} onSwipeRight - Callback für Swipe/Klick nach rechts (vorheriger Tab).
  */
-export function addSwipeEvents(element, onSwipeLeft, onSwipeRight) {
-  let startX = null;
+export function addSwipeEvents(
+  element: HTMLElement,
+  onSwipeLeft: () => void,
+  onSwipeRight: () => void,
+): void {
+  let startX: number | null = null;
 
   // Touch-Events für Mobilgeräte
   element.addEventListener(
     'touchstart',
-    e => {
-      if (e.touches.length === 1) {
-        startX = e.touches[0].clientX;
+    event => {
+      if (event.touches.length === 1) {
+        startX = event.touches[0].clientX;
       }
     },
     { passive: true } // Passive Listener für bessere Performance
@@ -26,9 +28,9 @@ export function addSwipeEvents(element, onSwipeLeft, onSwipeRight) {
 
   element.addEventListener(
     'touchend',
-    e => {
+    event => {
       if (startX === null) return;
-      const deltaX = e.changedTouches[0].clientX - startX;
+      const deltaX = event.changedTouches[0].clientX - startX;
       if (deltaX < -50) {
         onSwipeLeft();
       } else if (deltaX > 50) {
@@ -42,17 +44,17 @@ export function addSwipeEvents(element, onSwipeLeft, onSwipeRight) {
   // Maus-Events für Desktop
   element.addEventListener(
     'mousedown',
-    e => {
-      startX = e.clientX;
+    event => {
+      startX = event.clientX;
     },
     { passive: true } // Passive Listener für bessere Performance
   );
 
   element.addEventListener(
     'mouseup',
-    e => {
+    event => {
       if (startX === null) return;
-      const deltaX = e.clientX - startX;
+      const deltaX = event.clientX - startX;
       if (deltaX < -50) {
         onSwipeLeft();
       } else if (deltaX > 50) {
@@ -69,8 +71,11 @@ export function addSwipeEvents(element, onSwipeLeft, onSwipeRight) {
  * @param {number} targetIndex - Der Index des gewünschten Tabs.
  * @param {Function} onTabChange - Callback, der beim Wechsel aufgerufen wird.
  */
-export function goToTab(targetIndex, onTabChange) {
-  if (typeof onTabChange === 'function') {
+export function goToTab(
+  targetIndex: number,
+  onTabChange?: (index: number) => void,
+): void {
+  if (onTabChange) {
     onTabChange(targetIndex);
   }
 }

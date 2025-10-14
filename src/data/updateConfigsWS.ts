@@ -86,7 +86,7 @@ function cloneAggregationPayload(
     return null;
   }
 
-  return { ...(value as HoldingsAggregationPayload) };
+  return { ...value };
 }
 
 function cloneAverageCostPayload(
@@ -96,7 +96,7 @@ function cloneAverageCostPayload(
     return null;
   }
 
-  return { ...(value as AverageCostPayload) };
+  return { ...value };
 }
 
 function sanitizePosition(position: PortfolioPositionData): PortfolioPositionRecord | null {
@@ -162,7 +162,14 @@ const PENDING_MAX_ATTEMPTS = 10;
 export const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
 
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
-  const safeError = typeof error === 'string' ? error : String(error ?? 'Unbekannter Fehler');
+  const safeError =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === 'number' || typeof error === 'boolean'
+          ? String(error)
+          : 'Unbekannter Fehler';
   return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
 }
 
@@ -365,15 +372,19 @@ function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
 
   if (fxContainer) {
     fxContainer.innerHTML = makeTable(
-      fxAccounts.map(account => {
-        const origBalance = account.orig_balance;
-        const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
-        const fxDisplay = hasOrigBalance
-          ? `${origBalance.toLocaleString('de-DE', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}\u00A0${account.currency_code}`
-          : '';
+        fxAccounts.map(account => {
+          const origBalance = account.orig_balance;
+          const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
+          const currencyCode =
+            typeof account.currency_code === 'string' && account.currency_code
+              ? account.currency_code
+              : '';
+          const fxDisplay = hasOrigBalance
+            ? `${origBalance.toLocaleString('de-DE', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}\u00A0${currencyCode}`
+            : '';
 
         return {
           ...account,
@@ -445,9 +456,13 @@ export function handlePortfolioUpdate(
 
   // Helper Formatierer (lokal oder einfacher Fallback)
   const formatNumberLocal = (val: number): string => {
-    if (window.Intl) {
+    if (typeof Intl !== 'undefined') {
       try {
-        return new Intl.NumberFormat(navigator.language || 'de-DE', {
+        const locale =
+          typeof navigator !== 'undefined' && navigator.language
+            ? navigator.language
+            : 'de-DE';
+        return new Intl.NumberFormat(locale, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }).format(val);
@@ -460,16 +475,22 @@ export function handlePortfolioUpdate(
   };
 
   // Map: uuid -> Row
-  const rowMap = new Map<string, HTMLTableRowElement>(
-    Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr.portfolio-row'))
-      .filter(row => Boolean(row.dataset?.portfolio))
-      .map(row => [row.dataset.portfolio as string, row]),
+  const portfolioRows = Array.from(
+    tbody.querySelectorAll<HTMLTableRowElement>('tr.portfolio-row'),
   );
+  const rowPairs: Array<[string, HTMLTableRowElement]> = [];
+  for (const row of portfolioRows) {
+    const portfolioId = row.dataset.portfolio;
+    if (portfolioId) {
+      rowPairs.push([portfolioId, row]);
+    }
+  }
+  const rowMap = new Map<string, HTMLTableRowElement>(rowPairs);
 
   let patched = 0;
 
   const formatPositionCount = (value: number | null | undefined): string => {
-    const numeric = Number.isFinite(value) ? Number(value) : 0;
+    const numeric = typeof value === 'number' && Number.isFinite(value) ? value : 0;
     try {
       return numeric.toLocaleString('de-DE');
     } catch {
@@ -478,7 +499,7 @@ export function handlePortfolioUpdate(
   };
 
   for (const entry of update) {
-    const uuid = entry?.uuid;
+    const uuid = entry.uuid;
     if (typeof uuid !== 'string' || !uuid) {
       continue;
     }
@@ -501,8 +522,10 @@ export function handlePortfolioUpdate(
     }
 
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
-    const posCount = Number(entry.position_count ?? entry.count ?? 0);
-    const curVal = Number(entry.current_value ?? entry.value ?? 0);
+    const posCountRaw = entry.position_count ?? entry.count;
+    const posCount = typeof posCountRaw === 'number' ? posCountRaw : 0;
+    const curValRaw = entry.current_value ?? entry.value;
+    const curVal = typeof curValRaw === 'number' ? curValRaw : 0;
     const entryRecord = entry as Record<string, unknown>;
     const performance = normalizePerformancePayload(entryRecord['performance']);
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
@@ -526,11 +549,13 @@ export function handlePortfolioUpdate(
     };
     const rowContext = { hasValue };
     const currentMarkup = formatValue('current_value', rowData.current_value, rowData, rowContext);
-    if (Math.abs(oldCur - curVal) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
-      curValCell.innerHTML = currentMarkup;
-      row.classList.add('flash-update');
-      setTimeout(() => row.classList.remove('flash-update'), 800);
-    }
+      if (Math.abs(oldCur - curVal) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
+        curValCell.innerHTML = currentMarkup;
+        row.classList.add('flash-update');
+        setTimeout(() => {
+          row.classList.remove('flash-update');
+        }, 800);
+      }
     if (gainAbsCell) {
       const gainMarkup = formatValue('gain_abs', gainAbs, rowData, rowContext);
       gainAbsCell.innerHTML = gainMarkup;
@@ -560,11 +585,11 @@ export function handlePortfolioUpdate(
     patched += 1;
   }
 
-  if (patched === 0) {
-    console.debug('handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.');
-  } else {
-    console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht.`);
-  }
+    if (patched === 0) {
+      console.debug('handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.');
+    } else {
+      console.debug('handlePortfolioUpdate: %d Zeile(n) gepatcht.', patched);
+    }
 
   try {
     updatePortfolioFooter(table);
@@ -649,14 +674,19 @@ function processPortfolioPositionsUpdate(
   update: PortfolioPositionsUpdatePayload | null | undefined,
   root: QueryRoot | null | undefined,
 ): boolean {
+  if (!update || typeof update !== 'object') {
+    console.warn('handlePortfolioPositionsUpdate: Ungültiges Update:', update);
+    return false;
+  }
+
   const portfolioUuid = normalizePortfolioUuid(update);
   if (!portfolioUuid) {
     console.warn('handlePortfolioPositionsUpdate: Ungültiges Update:', update);
     return false;
   }
 
-  const error = update?.error;
-  const positions = Array.isArray(update?.positions)
+  const { error } = update;
+  const positions = Array.isArray(update.positions)
     ? update.positions.filter((pos): pos is PortfolioPositionData => Boolean(pos))
     : [];
   const normalizedPositions = sanitizePositions(positions);
@@ -680,7 +710,7 @@ function processPortfolioPositionsUpdate(
     const securityUuids = Array.from(
       new Set(
         normalizedPositions
-          .map(pos => pos?.security_uuid)
+          .map(pos => pos.security_uuid)
           .filter((uuid): uuid is string => typeof uuid === 'string' && uuid.length > 0),
       ),
     );
@@ -741,7 +771,7 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
     }
   } catch (_) {}
 
-  if (!positions || !positions.length) {
+  if (positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
   const rows = positions.map(position => {
@@ -790,9 +820,10 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
         if (tr.classList.contains('footer-row')) {
           return;
         }
-        const pos = positions[idx];
-        if (pos?.security_uuid) {
-          tr.dataset.security = pos.security_uuid;
+        const pos = positions.at(idx);
+        const securityId = pos?.security_uuid;
+        if (typeof securityId === 'string' && securityId) {
+          tr.dataset.security = securityId;
         }
         tr.classList.add('position-row');
       });
@@ -810,11 +841,14 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
           if (row.classList.contains('footer-row')) {
             return;
           }
-          const gainCell = row.cells?.[4];
+          const gainCell = row.cells.item(4);
           if (!gainCell) {
             return;
           }
-          const position = positions[idx];
+          const position = positions.at(idx);
+          if (!position) {
+            return;
+          }
           const performance = normalizePerformanceMetrics(position);
           const gainPctValue =
             typeof performance?.gain_pct === 'number' &&
@@ -860,38 +894,38 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     }
   }
 
-  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'));
-  let sumCurrent = 0;
-  let sumGainAbs = 0;
-  let sumPurchase = 0;
-  let sumPositions = 0;
+    const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'));
+    let sumCurrent = 0;
+    let sumGainAbs = 0;
+    let sumPurchase = 0;
+    let sumPositions = 0;
 
-  rows.forEach(r => {
-    const datasetCount = Number(r.dataset?.positionCount);
-    const posCount = Number.isFinite(datasetCount)
-      ? datasetCount
-      : parseInt((r.cells.item(1)?.textContent || '').replace(/\./g, ''), 10) || 0;
+    rows.forEach(r => {
+      const datasetCount = Number(r.dataset.positionCount ?? NaN);
+      const posCount = Number.isFinite(datasetCount)
+        ? datasetCount
+        : parseInt((r.cells.item(1)?.textContent || '').replace(/\./g, ''), 10) || 0;
 
-    const datasetCurrent = Number(r.dataset?.currentValue);
-    const currentValue = Number.isFinite(datasetCurrent)
-      ? datasetCurrent
-      : parseNumLoose(r.cells.item(2)?.textContent);
+      const datasetCurrent = Number(r.dataset.currentValue ?? NaN);
+      const currentValue = Number.isFinite(datasetCurrent)
+        ? datasetCurrent
+        : parseNumLoose(r.cells.item(2)?.textContent);
 
-    const datasetGain = Number(r.dataset?.gainAbs);
-    const gainAbs = Number.isFinite(datasetGain)
-      ? datasetGain
-      : parseNumLoose(r.cells.item(3)?.textContent);
+      const datasetGain = Number(r.dataset.gainAbs ?? NaN);
+      const gainAbs = Number.isFinite(datasetGain)
+        ? datasetGain
+        : parseNumLoose(r.cells.item(3)?.textContent);
 
-    const datasetPurchase = Number(r.dataset?.purchaseSum);
-    const purchase = Number.isFinite(datasetPurchase)
-      ? datasetPurchase
-      : (currentValue - gainAbs);
+      const datasetPurchase = Number(r.dataset.purchaseSum ?? NaN);
+      const purchase = Number.isFinite(datasetPurchase)
+        ? datasetPurchase
+        : (currentValue - gainAbs);
 
-    sumPositions += posCount;
-    sumCurrent += currentValue;
-    sumGainAbs += gainAbs;
-    sumPurchase += purchase;
-  });
+      sumPositions += posCount;
+      sumCurrent += currentValue;
+      sumGainAbs += gainAbs;
+      sumPurchase += purchase;
+    });
 
   if (sumPurchase <= 0) {
     sumPurchase = sumCurrent - sumGainAbs;
@@ -905,8 +939,8 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     table.querySelector('tbody')?.appendChild(footer);
   }
   const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
-  const hasAnyValue = rows.some(row => row.dataset?.hasValue === 'true');
-  const sumIsPartial = rows.some(row => row.dataset?.fxUnavailable === 'true');
+  const hasAnyValue = rows.some(row => row.dataset.hasValue === 'true');
+  const sumIsPartial = rows.some(row => row.dataset.fxUnavailable === 'true');
 
   const footerRowData = {
     fx_unavailable: sumIsPartial,
@@ -937,7 +971,7 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     <td class="align-right">${gainAbsCellMarkup}</td>
     <td class="align-right">${gainPctCellMarkup}</td>
   `;
-  const footerGainAbsCell = footer.cells?.[3];
+  const footerGainAbsCell = footer.cells.item(3);
   if (footerGainAbsCell) {
     footerGainAbsCell.dataset.gainPct = hasAnyValue && Number.isFinite(sumGainPct)
       ? `${formatNumber(sumGainPct)} %`
@@ -970,24 +1004,20 @@ function updateTotalWealth(
   const targetRoot: QueryRoot = root || document;
 
   const accountSum = (Array.isArray(accounts) ? accounts : []).reduce((acc, entry) => {
-    const value = entry != null && typeof entry === 'object'
-      ? entry.balance ?? entry.current_value ?? entry.value ?? 0
-      : entry;
-    const numeric = Number(value);
-    return acc + (Number.isFinite(numeric) ? numeric : 0);
+    const raw = entry.balance ?? entry.current_value ?? entry.value;
+    const numeric = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+    return acc + numeric;
   }, 0);
 
   const portfolioSum = (Array.isArray(portfolios) ? portfolios : []).reduce((acc, entry) => {
-    const value = entry != null && typeof entry === 'object'
-      ? entry.current_value ?? entry.value ?? 0
-      : entry;
-    const numeric = Number(value);
-    return acc + (Number.isFinite(numeric) ? numeric : 0);
+    const raw = entry.current_value ?? entry.value ?? entry.purchase_sum;
+    const numeric = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+    return acc + numeric;
   }, 0);
 
   const totalWealth = accountSum + portfolioSum;
 
-  const headerMeta = targetRoot?.querySelector<HTMLElement>('#headerMeta');
+  const headerMeta = targetRoot.querySelector<HTMLElement>('#headerMeta');
   if (!headerMeta) {
     console.warn('updateTotalWealth: #headerMeta nicht gefunden.');
     return;
@@ -1002,7 +1032,7 @@ function updateTotalWealth(
     headerMeta.textContent = `💰 Gesamtvermögen: ${formatNumber(totalWealth)}\u00A0€`;
   }
 
-  headerMeta.dataset.totalWealthEur = String(totalWealth);
+  headerMeta.dataset.totalWealthEur = totalWealth.toString();
 }
 
 /**
@@ -1110,8 +1140,8 @@ export const __TEST_ONLY__ = {
 // === Globale / modulweite Utilities ===
 function parseNumLoose(txt: string | null | undefined): number {
   if (txt == null) return 0;
-  return parseFloat(
-    String(txt)
+    return parseFloat(
+      txt
       .replace(/\u00A0/g, ' ')
       .replace(/[€%]/g, '')
       .replace(/\./g, '')

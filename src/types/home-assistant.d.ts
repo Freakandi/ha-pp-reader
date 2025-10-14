@@ -82,8 +82,10 @@ export interface HassUser {
   [key: string]: unknown;
 }
 
+export type HassEventOrigin = 'LOCAL' | 'REMOTE' | 'CLOUD';
+
 export interface HassEvent<T = unknown> {
-  origin: 'LOCAL' | 'REMOTE' | 'CLOUD' | string;
+  origin: HassEventOrigin;
   time_fired: string;
   event_type: string;
   context?: HassContext;
@@ -99,13 +101,13 @@ export type HassUnsubscribe = () => void;
 
 export interface HassWebSocketConnection {
   sendMessage(message: HassWebSocketMessage): void;
-  sendMessagePromise<T = unknown>(message: HassWebSocketMessage): Promise<T>;
-  subscribeMessage<T = unknown>(
-    callback: (response: T) => void,
+  sendMessagePromise<Response = unknown>(message: HassWebSocketMessage): Promise<Response>;
+  subscribeMessage(
+    callback: (response: unknown) => void,
     message: HassWebSocketMessage
   ): Promise<HassUnsubscribe>;
-  subscribeEvents<T = unknown>(
-    callback: (event: HassEvent<T>) => void,
+  subscribeEvents<EventData = unknown>(
+    callback: (event: HassEvent<EventData>) => void,
     eventType?: string
   ): Promise<HassUnsubscribe>;
   [key: string]: unknown;
@@ -121,8 +123,12 @@ export interface HomeAssistant {
     serviceData?: Record<string, unknown>,
     target?: HassServiceTarget
   ) => Promise<void> | void;
-  callApi?: <T = unknown>(method: string, path: string, parameters?: unknown) => Promise<T>;
-  callWS?: <T = unknown>(message: HassWebSocketMessage) => Promise<T>;
+  callApi?: <Response = unknown>(
+    method: string,
+    path: string,
+    parameters?: unknown
+  ) => Promise<Response>;
+  callWS?: <Response = unknown>(message: HassWebSocketMessage) => Promise<Response>;
   states?: Record<string, HassEntityState>;
   locale?: HassLocale;
   language?: string;
