@@ -89,7 +89,8 @@ def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None
 
     if "avg_price_native" in existing_cols:
         _LOGGER.debug(
-            "Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun"
+            "Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - "
+            "nichts zu tun"
         )
         return
 
@@ -98,7 +99,8 @@ def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None
             "ALTER TABLE portfolio_securities ADD COLUMN avg_price_native REAL"
         )
         _LOGGER.info(
-            "Runtime-Migration: Spalte 'avg_price_native' zu portfolio_securities hinzugefügt"
+            "Runtime-Migration: Spalte 'avg_price_native' zu "
+            "portfolio_securities hinzugefügt"
         )
     except sqlite3.Error:
         _LOGGER.warning(
@@ -168,7 +170,8 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
             try:
                 conn.execute(ddl)
                 _LOGGER.info(
-                    "Runtime-Migration: Spalte '%s' zu portfolio_securities hinzugefügt",
+                    "Runtime-Migration: Spalte '%s' zu portfolio_securities "
+                    "hinzugefügt",
                     col,
                 )
             except sqlite3.Error:

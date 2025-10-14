@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from inspect import isawaitable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from homeassistant.core import HomeAssistant
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 __all__ = ["async_run_executor_job"]
 
