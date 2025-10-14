@@ -213,16 +213,22 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             account_total = purchase_total_account
             aggregation_payload["account_currency_total"] = account_total
 
-        aggregation_payload["total_holdings"] = round_currency(
-            aggregation_payload.get("total_holdings"),
-            decimals=6,
-            default=0.0,
-        ) or 0.0
-        aggregation_payload["positive_holdings"] = round_currency(
-            aggregation_payload.get("positive_holdings"),
-            decimals=6,
-            default=0.0,
-        ) or 0.0
+        aggregation_payload["total_holdings"] = (
+            round_currency(
+                aggregation_payload.get("total_holdings"),
+                decimals=6,
+                default=0.0,
+            )
+            or 0.0
+        )
+        aggregation_payload["positive_holdings"] = (
+            round_currency(
+                aggregation_payload.get("positive_holdings"),
+                decimals=6,
+                default=0.0,
+            )
+            or 0.0
+        )
         aggregation_payload["purchase_value_cents"] = int(
             aggregation_payload.get("purchase_value_cents") or 0
         )

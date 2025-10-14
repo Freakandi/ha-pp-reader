@@ -80,3 +80,30 @@ Diese Übersicht dient als Referenz für die Priorisierung der nachgelagerten Ta
 `npm run lint:ts` meldet aktuell 389 Fehler über das Dashboard (`src/`). Die häufigsten Regelverletzungen stammen aus `@typescript-eslint/no-unnecessary-condition` (222), gefolgt von `@typescript-eslint/restrict-template-expressions` (32) sowie den `no-unsafe-*`-Regeln für Member-Zugriffe und Zuweisungen. Am stärksten betroffen sind die Dateien `src/tabs/__tests__/security_detail.metrics.test.ts` (70 Meldungen), `src/tabs/security_detail.ts` (57), `src/tabs/overview.ts` (51), `src/content/charting.ts` (48) und `src/dashboard.ts` (36). Diese Cluster geben die Priorisierung für die folgenden Tasks vor.
 
 `npm run typecheck` (`tsc --noEmit`) läuft hingegen ohne Fehler durch. TypeScript-spezifische Anpassungen können sich daher auf die von ESLint markierten Problemstellen fokussieren.
+
+### ESLint/TypeScript-Baseline Refresh (Task 0.c, 2025-02-15)
+
+`npm run lint:ts` erfasst derzeit 289 Fehler im Frontend (`src/`). Die Regelverteilung wird klar von `@typescript-eslint/no-unnecessary-condition` angeführt (159 Meldungen), gefolgt von `@typescript-eslint/restrict-template-expressions` (28), `@typescript-eslint/no-unsafe-member-access` (19), `@typescript-eslint/no-unsafe-call` (15), `@typescript-eslint/no-unnecessary-type-assertion` (10) und `@typescript-eslint/no-unnecessary-type-conversion` (10). Weitere relevante Cluster betreffen unsichere Zuweisungen/Rückgaben (`no-unsafe-assignment`, `no-unsafe-return`) sowie fehlertolerante Zeichenkettenkonvertierungen (`no-base-to-string`).
+
+Die größten Hotspots konzentrieren sich auf `src/tabs/overview.ts` (50 Meldungen), `src/content/charting.ts` (48), `src/tabs/security_detail.ts` (47), `src/dashboard.ts` (36) und `src/data/updateConfigsWS.ts` (30). Weitere auffällige Dateien sind die Interaktionsebene `src/interaction/tab_control.ts` (20) und die Performance-Test-Suite unter `src/utils/__tests__/performance.test.ts` (15). Diese Brennpunkte definieren die Reihenfolge für die nächsten Frontend-Aufgaben.
+
+`npm run typecheck` läuft weiterhin ohne Beanstandung durch, sodass sich die anstehenden Arbeiten auf die ESLint-Verstöße konzentrieren können.
+
+### Ruff-Baseline Refresh (Task 0.b, 2025-02-15)
+
+`./scripts/lint` wurde erneut ausgeführt. Dabei entfernte `ruff format` sieben triviale Verstöße automatisch; 1 705 Findings blieben offen und bilden die aktuelle Ausgangsbasis. `ruff check --statistics` lieferte folgendes Ranking der häufigsten Regeln:
+
+| Rule | Count | Beschreibung |
+| --- | ---: | --- |
+| S101 | 682 | Verwendung von `assert` in produktivem Code/Test |
+| ANN001 | 274 | Fehlende Typannotationen für Funktionsargumente |
+| ARG001 | 106 | Ungenutzte Funktionsargumente |
+| PLR2004 | 96 | Magische Vergleichswerte |
+| ANN202 | 83 | Fehlende Rückgabetypen in privaten Funktionen |
+| E501 | 80 | Zeilen länger als 88 Zeichen |
+| ANN201 | 52 | Fehlende Rückgabetypen in öffentlichen Funktionen |
+| SLF001 | 30 | Direkter Zugriff auf private Attribute |
+| ARG005 | 28 | Ungenutzte Lambda-Argumente |
+| ANN002 | 26 | Fehlende Typannotationen für Funktionsrückgabewerte |
+
+Die verbleibenden Regeln liegen jeweils im einstelligen Bereich. Die größten Problemcluster befinden sich weiterhin in den Testmodulen (`tests/test_price_service.py`, `tests/test_db_access.py`, `tests/test_ws_security_history.py`).

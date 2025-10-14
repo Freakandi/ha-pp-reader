@@ -151,11 +151,7 @@ def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
         "current_value": item.get("current_value"),
     }
 
-    normalized = {
-        key: value
-        for key, value in normalized.items()
-        if value is not None
-    }
+    normalized = {key: value for key, value in normalized.items() if value is not None}
 
     if aggregation_payload:
         normalized["aggregation"] = aggregation_payload
