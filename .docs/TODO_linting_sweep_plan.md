@@ -76,6 +76,10 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 3. e) [ ] Tab-Ansichten
        - Scope: `src/tabs/`
        - Ziel: Tabs strikt typisieren, Swipe-/Navigation-Logik lint-frei halten.
+       - 3.e.i) [ ] `src/tabs/overview.ts`
+       - 3.e.ii) [ ] `src/tabs/security_detail.ts`
+       - 3.e.iii) [ ] `src/tabs/types.ts`
+       - 3.e.iv) [ ] `src/tabs/__tests__/`
 
 3. f) [ ] Inhalts-Renderer & Charting
        - Scope: `src/content/`
