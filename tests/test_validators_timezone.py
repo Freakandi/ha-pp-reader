@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class DummyProtoTransaction:
         self.uuid = "uuid-1"
         self.date = DummyProtoDate(seconds)
 
-    def HasField(self, name: str) -> bool:  # noqa: N802 - protobuf API compatibility
+    def HasField(self, name: str) -> bool:
         """Replicate protobuf HasField behaviour for specific fields."""
         return name in {"uuid", "date"}
 
@@ -41,10 +41,10 @@ def test_validate_proto_transaction_accepts_current_timestamp(
 
     validator = validators.PPDataValidator()
 
-    now_seconds = int(datetime.now(tz=timezone.utc).timestamp())  # noqa: UP017
+    now_seconds = int(datetime.now(tz=datetime.UTC).timestamp())
     tx = DummyProtoTransaction(seconds=now_seconds)
 
-    result = validator._validate_proto_transaction(tx)  # noqa: SLF001
+    result = validator._validate_proto_transaction(tx)
 
-    assert result.is_valid  # noqa: S101
-    assert result.message == "PTransaction valid"  # noqa: S101
+    assert result.is_valid
+    assert result.message == "PTransaction valid"

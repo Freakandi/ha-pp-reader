@@ -47,11 +47,11 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 2. Python Tests & Scripts
 
-2. a) [ ] Testsuite
+2. a) [x] Testsuite
        - Scope: `tests/`
        - Ziel: `ruff check tests` fehlerfrei; ggf. pytest-spezifische Regeln (`PT`, `PLR`) berücksichtigen.
 
-2. b) [ ] Hilfsskripte
+2. b) [x] Hilfsskripte
        - Scope: `scripts/`, Wurzel-Python-Dateien
        - Ziel: `ruff check scripts *.py` ohne Verstöße; Skriptdokumentation ergänzen falls nötig.
 

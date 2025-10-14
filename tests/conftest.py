@@ -47,7 +47,7 @@ async def hass(
         def __init__(self) -> None:
             self.registered_static_paths: list[Any] = []
 
-        async def async_register_static_paths(self, paths):  # noqa: ANN001
+        async def async_register_static_paths(self, paths):
             self.registered_static_paths.extend(paths)
 
         async def async_register_view(self, _view):  # pragma: no cover - compatibility

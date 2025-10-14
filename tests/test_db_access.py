@@ -548,6 +548,8 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                 abs=1e-6,
             )
 
+        holdings = position["current_holdings"]
+
         account_total = aggregation.get("purchase_total_account")
         if account_total in (0.0, None) or holdings in (None, 0.0):
             assert average_cost["account"] is None
@@ -566,7 +568,6 @@ def test_get_portfolio_positions_populates_aggregation_fields(
                     abs=1e-6,
                 )
 
-        holdings = position["current_holdings"]
         purchase_value = position["purchase_value"]
         if holdings and abs(holdings) > 1e-9:
             expected_eur = purchase_value / holdings

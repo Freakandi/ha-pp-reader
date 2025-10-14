@@ -426,8 +426,8 @@ async def test_fetch_uses_configured_timeout(monkeypatch, tmp_path):
     async def fake_fetch(self, symbols):
         return {"AAPL": _make_quote("AAPL", 1.0, "USD")}
 
-    async def fake_wait_for(awaitable, timeout, *, loop=None):
-        assert timeout == price_service.PRICE_FETCH_TIMEOUT
+    async def fake_wait_for(awaitable, timeout_seconds, *, loop=None):
+        assert timeout_seconds == price_service.PRICE_FETCH_TIMEOUT
         return await awaitable
 
     monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)

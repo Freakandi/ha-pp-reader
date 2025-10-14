@@ -159,7 +159,7 @@ SPEC.loader.exec_module(_websocket_module)
 DOMAIN = _websocket_module.DOMAIN
 WS_GET_SECURITY_HISTORY = _websocket_module.ws_get_security_history
 WS_GET_SECURITY_SNAPSHOT = _websocket_module.ws_get_security_snapshot
-SERIALISE_SECURITY_SNAPSHOT = _websocket_module._serialise_security_snapshot  # noqa: SLF001
+SERIALISE_SECURITY_SNAPSHOT = _websocket_module._serialise_security_snapshot
 
 
 class StubConnection:
