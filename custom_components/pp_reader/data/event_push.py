@@ -11,7 +11,7 @@ from typing import Any
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
 
-from ..const import DOMAIN
+from custom_components.pp_reader.const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +95,9 @@ def _compact_portfolio_values_payload(data: Any) -> Any:
     return data
 
 
-def _normalize_position_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
+def _normalize_position_entry(  # noqa: PLR0912
+    item: Mapping[str, Any]
+) -> dict[str, Any] | None:
     """Keep only the fields required for position updates."""
     security_uuid = item.get("security_uuid")
     if not security_uuid:

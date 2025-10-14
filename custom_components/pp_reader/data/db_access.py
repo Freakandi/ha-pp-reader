@@ -504,7 +504,9 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
         conn.close()
 
 
-def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
+def get_security_snapshot(  # noqa: PLR0912, PLR0915
+    db_path: Path, security_uuid: str
+) -> dict[str, Any]:
     """Aggregate holdings and pricing information for a security."""
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
@@ -523,7 +525,8 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         )
         security_row = cursor.fetchone()
         if security_row is None:
-            raise LookupError(f"Unbekannte security_uuid: {security_uuid}")
+            unknown_message = f"Unbekannte security_uuid: {security_uuid}"
+            raise LookupError(unknown_message)
 
         holdings_cursor = conn.execute(
             """
@@ -549,7 +552,7 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
         if raw_price:
             try:
                 last_price_native = normalize_raw_price(raw_price, decimals=4)
-            except Exception:  # pragma: no cover - defensive
+            except (TypeError, ValueError):  # pragma: no cover - defensive
                 last_price_native = None
         last_price_eur = normalize_price_to_eur_sync(
             raw_price, currency_code, reference_date, db_path
@@ -615,7 +618,7 @@ def get_security_snapshot(db_path: Path, security_uuid: str) -> dict[str, Any]:
                 )
                 if last_close_eur is not None:
                     last_close_eur = round_price(last_close_eur, decimals=4)
-            except Exception:  # pragma: no cover - defensive
+            except (TypeError, ValueError):  # pragma: no cover - defensive
                 last_close_eur = None
 
         fx_rate = None
@@ -712,7 +715,7 @@ def fetch_previous_close(
             normalized_close = normalize_raw_price(int(raw_close), decimals=4)
             if normalized_close is not None:
                 close_native = round(normalized_close, 4)
-        except Exception:  # pragma: no cover - defensive
+        except (TypeError, ValueError):  # pragma: no cover - defensive
             _LOGGER.exception(
                 "Fehler bei der Normalisierung des Schlusskurses (security_uuid=%s)",
                 security_uuid,
@@ -899,7 +902,7 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
     current_value = cent_to_eur(row["current_value"], default=0.0) or 0.0
     purchase_sum = cent_to_eur(row["purchase_sum"], default=0.0) or 0.0
     missing_value_positions = 0
-    if "missing_value_positions" in row.keys():
+    if "missing_value_positions" in row:
         try:
             missing_value_positions = int(row["missing_value_positions"] or 0)
         except (TypeError, ValueError):

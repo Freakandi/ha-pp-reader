@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -77,6 +78,8 @@ def _get_value(row: Mapping[str, Any] | Any, key: str) -> Any:
     except (KeyError, TypeError, IndexError):
         return None
 
+PRECISION_EPSILON = 1e-6
+
 
 def compute_holdings_aggregation(
     rows: Iterable[Mapping[str, Any] | Any],
@@ -98,10 +101,8 @@ def compute_holdings_aggregation(
 
         purchase_raw = _get_value(row, "purchase_value")
         if purchase_raw not in (None, ""):
-            try:
-                purchase_value_cents += int(round(float(purchase_raw)))
-            except (TypeError, ValueError):
-                pass
+            with suppress(TypeError, ValueError):
+                purchase_value_cents += round(float(purchase_raw))
 
         security_total_raw = _coerce_float(_get_value(row, "security_currency_total"))
         if security_total_raw is not None:
@@ -141,7 +142,7 @@ def compute_holdings_aggregation(
     if (
         positive_holdings_raw > 0
         and native_covered_shares > 0
-        and abs(native_covered_shares - positive_holdings_raw) <= 1e-6
+        and abs(native_covered_shares - positive_holdings_raw) <= PRECISION_EPSILON
     ):
         average_purchase_price_native = round_price(
             native_weighted_sum / native_covered_shares,
@@ -152,7 +153,7 @@ def compute_holdings_aggregation(
     if (
         account_covered_shares > 0
         and positive_holdings_raw > 0
-        and abs(account_covered_shares - positive_holdings_raw) <= 1e-6
+        and abs(account_covered_shares - positive_holdings_raw) <= PRECISION_EPSILON
     ):
         avg_price_account = round_price(
             account_weighted_sum / account_covered_shares,
@@ -171,7 +172,7 @@ def compute_holdings_aggregation(
     )
 
 
-def select_average_cost(
+def select_average_cost(  # noqa: PLR0912, PLR0915
     aggregation: HoldingsAggregation,
     *,
     holdings: float | None = None,

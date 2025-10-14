@@ -21,25 +21,29 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 1. Python Backend (`custom_components/pp_reader/`)
 
-1. a) [ ] Utilities & Shared Modules
+1. a) [x] Utilities & Shared Modules
        - Scope: `custom_components/pp_reader/util/`, `helpers.py`, `const.py`
        - Ziel: `ruff check custom_components/pp_reader/util custom_components/pp_reader/helpers.py custom_components/pp_reader/const.py` fehlerfrei.
 
-1. b) [ ] Datenzugriff & Events
+1. b) [x] Datenzugriff & Events
        - Scope: `custom_components/pp_reader/data/`
        - Ziel: Keine `ruff`-Fehler mehr in diesem Paket; besondere Aufmerksamkeit für `F`-, `E`- und `W`-Klassen.
 
-1. c) [ ] Logik & Preise
+1. c) [x] Logik & Preise
        - Scope: `custom_components/pp_reader/logic/`, `custom_components/pp_reader/prices/`
        - Ziel: `ruff`-Konformität sicherstellen, inkl. Tests der Normalisierungshelfer.
 
-1. d) [ ] Integrationseinbindung & Flow
+1. d) [x] Integrationseinbindung & Flow
        - Scope: `custom_components/pp_reader/__init__.py`, `coordinator.py`, `config_flow.py`, `manifest_validator.py`
        - Ziel: `ruff` meldet keine Fehler; Imports und Logger folgen Konventionen.
 
-1. e) [ ] Weitere Backend-Module
-       - Scope: Alle verbleibenden Python-Dateien unter `custom_components/pp_reader/` (z. B. `services.py`, `models.py`)
-       - Ziel: `ruff check custom_components/pp_reader` ohne Befund.
+1. e1) [x] Wechselkurs-Client & Währungstabellen
+       - Scope: `custom_components/pp_reader/currencies/`
+       - Ziel: `ruff check custom_components/pp_reader/currencies` ohne Befund; insbesondere verschachtelte `async with`-Blöcke in `fx.py` auflösen.
+
+1. e2) [x] Feature-Flags
+       - Scope: `custom_components/pp_reader/feature_flags.py`
+       - Ziel: Typimporte in TYPE_CHECKING-Blöcke verschieben und verbleibende `ruff`-Warnungen beseitigen.
 
 ## 2. Python Tests & Scripts
 

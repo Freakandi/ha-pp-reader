@@ -71,7 +71,10 @@ async def _load_accounts_payload(
             load_rates = load_latest_rates
             if ensure_rates is None or load_rates is None:
                 _LOGGER.warning(
-                    "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+                    (
+                        "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
+                        "setze Fremdwährungswerte=0 EUR."
+                    ),
                 )
             else:
                 today = datetime.now(UTC)
@@ -79,7 +82,10 @@ async def _load_accounts_payload(
                 fx_rates = await load_rates(today, db_path)
     except Exception:  # noqa: BLE001
         _LOGGER.warning(
-            "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+            (
+                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
+                "setze Fremdwährungswerte=0 EUR."
+            ),
         )
         fx_rates = {}
 
@@ -101,7 +107,7 @@ async def _load_accounts_payload(
                 eur_balance = None
                 fx_unavailable = True
                 _LOGGER.warning(
-                    "FX: Kein Kurs für %s – EUR-Wert nicht verfügbar",
+                    "FX: Kein Kurs für %s - EUR-Wert nicht verfügbar",
                     currency,
                 )
         else:
@@ -139,7 +145,9 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+def _serialise_security_snapshot(  # noqa: PLR0912, PLR0915
+    snapshot: Mapping[str, Any] | None,
+) -> dict[str, Any]:
     """Normalise snapshot payload for websocket transmission."""
     if not snapshot:
         return {
@@ -284,7 +292,24 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
     return data
 
 
-def _normalize_portfolio_positions(
+def _resolve_aggregation_value(
+    payload: Mapping[str, Any] | None,
+    *keys: str,
+    default: Any | None = None,
+) -> Any | None:
+    """Return the first non-empty value for the provided keys."""
+    if payload is None:
+        return default
+
+    for key in keys:
+        value = payload.get(key)
+        if value not in (None, ""):
+            return value
+
+    return default
+
+
+def _normalize_portfolio_positions(  # noqa: PLR0912
     positions: Iterable[Mapping[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     """Return portfolio position payload including purchase metrics."""
@@ -342,21 +367,8 @@ def _normalize_portfolio_positions(
         elif is_dataclass(raw_performance):
             performance_payload = asdict(raw_performance)
 
-        def _resolve_aggregation_value(
-            *keys: str,
-            default: Any | None = None,
-        ) -> Any | None:
-            if aggregation_payload is None:
-                return default
-
-            for key in keys:
-                value = aggregation_payload.get(key)
-                if value not in (None, ""):
-                    return value
-
-            return default
-
         purchase_value_source = _resolve_aggregation_value(
+            aggregation_payload,
             "purchase_value_eur",
             "purchase_value",
             default=item.get("purchase_value"),
@@ -364,6 +376,7 @@ def _normalize_portfolio_positions(
         purchase_value = round_currency(purchase_value_source, default=0.0)
 
         holdings_source = _resolve_aggregation_value(
+            aggregation_payload,
             "total_holdings",
             default=item.get("current_holdings"),
         )
@@ -392,8 +405,8 @@ def _normalize_portfolio_positions(
 
 
 def _wrap_with_loop_fallback(
-    handler: Callable[[Any, Any, dict[str, Any]], None],
-) -> Callable[[Any, Any, dict[str, Any]], None]:
+    handler: Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any],
+) -> Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any]:
     """Ensure websocket handlers run in tests without a running event loop."""
     original = getattr(handler, "__wrapped__", None)
     if original is None:
@@ -426,7 +439,11 @@ def _wrap_with_loop_fallback(
             temp_loop.close()
 
     @wraps(handler)
-    def wrapper(hass, connection, msg):  # type: ignore[override]
+    def wrapper(
+        hass: HomeAssistant,
+        connection: ActiveConnection,
+        msg: dict[str, Any],
+    ) -> Any:
         loop = _resolve_loop(getattr(hass, "loop", None))
 
         if loop is not None and not loop.is_running():
@@ -456,7 +473,7 @@ def _wrap_with_loop_fallback(
     return wrapper
 
 
-async def _live_portfolios_payload(
+async def _live_portfolios_payload(  # noqa: PLR0912
     hass: HomeAssistant,
     entry_id: str,
     *,
@@ -885,7 +902,7 @@ ws_get_security_history = _wrap_with_loop_fallback(ws_get_security_history)
     }
 )
 @websocket_api.async_response
-async def ws_get_security_snapshot(
+async def ws_get_security_snapshot(  # noqa: PLR0911
     hass: HomeAssistant,
     connection: ActiveConnection,
     msg: dict[str, Any],

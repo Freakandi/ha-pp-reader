@@ -31,6 +31,12 @@ _LOGGER = logging.getLogger(__name__)
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
 
+UNIT_TYPE_NATIVE = 0
+UNIT_TYPE_TAX = 1
+UNIT_TYPE_FEE = 2
+
+SHARE_MATCH_EPSILON = 1e-6
+
 _FX_RATE_FAILURES: Counter[tuple[str, str]] = Counter()
 _MISSING_NATIVE_POSITIONS: Counter[tuple[str, str]] = Counter()
 
@@ -136,9 +142,9 @@ def _normalize_transaction_amounts(
             if unit_amount is None:
                 continue
 
-            if unit_type == 2:
+            if unit_type == UNIT_TYPE_FEE:
                 fees += unit_amount
-            elif unit_type == 1:
+            elif unit_type == UNIT_TYPE_TAX:
                 taxes += unit_amount
 
     fees = round_currency(fees, default=0.0) or 0.0
@@ -308,7 +314,7 @@ def db_calculate_current_holdings(
     return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
 
 
-def _resolve_native_amount(
+def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branching
     transaction: Transaction,
     tx_units: dict[str, Any] | None,
 ) -> tuple[float | None, str | None, float | None]:
@@ -344,7 +350,7 @@ def _resolve_native_amount(
         except (TypeError, ValueError):
             continue
 
-        if unit_type != 0:
+        if unit_type != UNIT_TYPE_NATIVE:
             continue
 
         raw_amount = entry.get("amount")
@@ -367,7 +373,7 @@ def _resolve_native_amount(
     return native_amount, native_currency, account_amount
 
 
-def db_calculate_sec_purchase_value(
+def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mirrors business rules
     transactions: list[Transaction],
     db_path: Path,
     *,
@@ -502,16 +508,25 @@ def db_calculate_sec_purchase_value(
                 account_total += lot.shares * lot.account_price
                 account_shares += lot.shares
 
-        if total_shares > 0:
-            if native_shares and abs(native_shares - total_shares) <= 1e-6:
-                avg_price_native = round(native_total / native_shares, 6)
+        if (
+            total_shares > 0
+            and native_shares
+            and abs(native_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
+            avg_price_native = round(native_total / native_shares, 6)
 
         avg_price_security: float | None = None
-        if security_shares and abs(security_shares - total_shares) <= 1e-6:
+        if (
+            security_shares
+            and abs(security_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
             avg_price_security = round(security_total / security_shares, 6)
 
         avg_price_account: float | None = None
-        if account_shares and abs(account_shares - total_shares) <= 1e-6:
+        if (
+            account_shares
+            and abs(account_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
             avg_price_account = round(account_total / account_shares, 6)
 
         portfolio_metrics[key] = PurchaseComputation(

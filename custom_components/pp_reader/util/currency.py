@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from math import isfinite
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
     load_latest_rates_sync,
 )
+
+if TYPE_CHECKING:
+    from datetime import datetime
+    from pathlib import Path
 
 __all__ = [
     "CENT_IN_EURO",
@@ -85,7 +87,7 @@ def eur_to_cent(
     if rounded is None:
         return default
 
-    return int(round(rounded * CENT_IN_EURO))
+    return round(rounded * CENT_IN_EURO)
 
 
 def round_price(

@@ -55,8 +55,6 @@ if TYPE_CHECKING:
 _NAMESPACE_ALIAS = "pp_reader"
 sys.modules[_NAMESPACE_ALIAS] = sys.modules[__name__]
 
-from .prices import price_service as price_service_module
-
 PRICE_LOGGER_NAMES = [
     "custom_components.pp_reader.prices",
     "custom_components.pp_reader.prices.price_service",
@@ -78,6 +76,8 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
+    from .prices import price_service as price_service_module
+
     return price_service_module
 
 
