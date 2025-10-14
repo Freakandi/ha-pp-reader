@@ -9,15 +9,15 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - `npm install`
        - Ziel: Sicherstellen, dass alle Lint-Kommandos lauffähig sind.
 
-0. b) [ ] Python-Lint-Baseline erfassen
-       - Kommando: `./scripts/lint`
-       - Artefakt: Sammeln aller offenen `ruff`-Fehlermeldungen (gern als Markdown-Tabelle).
+0. b) [x] Python-Lint-Baseline erfassen
+       - Kommando: `./scripts/lint` (2025-02-15 – 1 705 Findings verbleiben, 7 Auto-Fixes)
+       - Artefakt: Aktuelle Regelverteilung in `.docs/linting_sweep_plan.md` ergänzt.
        - Ziel: Ausgangslage dokumentiert; automatische Fixes angewandt.
 
-0. c) [ ] Frontend-Lint-Baseline erfassen
-       - Kommandos: `npm run lint:ts`, `npm run typecheck`
-       - Artefakt: Übersicht der offenen ESLint-/TS-Fehler (inkl. Dateipfade & Regel-IDs).
-       - Ziel: Ausgangslage dokumentiert.
+0. c) [x] Frontend-Lint-Baseline erfassen
+       - `npm run lint:ts` (2025-02-15 – 289 Fehler; dominant: `@typescript-eslint/no-unnecessary-condition` mit 159 Meldungen)
+       - `npm run typecheck` (läuft fehlerfrei durch)
+       - Hotspots: `src/tabs/overview.ts` (50), `src/content/charting.ts` (48), `src/tabs/security_detail.ts` (47), `src/dashboard.ts` (36), `src/data/updateConfigsWS.ts` (30)
 
 ## 1. Python Backend (`custom_components/pp_reader/`)
 

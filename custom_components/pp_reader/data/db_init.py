@@ -160,10 +160,8 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
 
     if not migrations:
         _LOGGER.debug(
-
-                "Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - "
-                "nichts zu tun"
-
+            "Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - "
+            "nichts zu tun"
         )
     else:
         for col, ddl in migrations:

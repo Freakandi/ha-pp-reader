@@ -224,6 +224,7 @@ def _build_portfolio_values_from_live_entries(
 
     return portfolio_values
 
+
 async def _load_portfolio_positions(
     hass: HomeAssistant, db_path: Path, affected: set[str]
 ) -> dict[str, list[dict]] | None:

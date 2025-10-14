@@ -28,15 +28,12 @@ def _build_entry(
 
 def test_portfolio_contract_entry_preserves_precision_overrides() -> None:
     """Custom performance overrides should remain untouched in the payload."""
-
     override = {
         "gain_abs": "12.3456",
         "gain_pct": "3.210987",
         "day_change": {},
     }
-    normalized = _portfolio_contract_entry(
-        _build_entry(performance=override)
-    )
+    normalized = _portfolio_contract_entry(_build_entry(performance=override))
     assert normalized is not None
     _, payload = normalized
 
@@ -50,7 +47,6 @@ def test_portfolio_contract_entry_preserves_precision_overrides() -> None:
 
 def test_portfolio_contract_entry_falls_back_to_calculated_metrics() -> None:
     """Invalid overrides should fall back to the calculated performance metrics."""
-
     normalized = _portfolio_contract_entry(
         _build_entry(performance={"gain_abs": object(), "gain_pct": None})
     )

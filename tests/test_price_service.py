@@ -187,9 +187,7 @@ async def test_change_triggers_events(monkeypatch, tmp_path):
     async def fake_reval(hass_, conn, uuids):
         return {
             "portfolio_values": {
-                "pf1": _make_portfolio_value_entry(
-                    "pf1", "Depot", 123.456, 100.0, 1
-                )
+                "pf1": _make_portfolio_value_entry("pf1", "Depot", 123.456, 100.0, 1)
             },
             "portfolio_positions": None,
         }
@@ -317,7 +315,9 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
     monkeypatch.setattr(
         price_service,
         "db_calculate_sec_purchase_value",
-        lambda _transactions, _db_path, tx_units=None: {("pf-1", "sec-1"): dummy_purchase},
+        lambda _transactions, _db_path, tx_units=None: {
+            ("pf-1", "sec-1"): dummy_purchase
+        },
     )
 
     def _fake_holdings_value(
@@ -381,9 +381,7 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
     assert security_total_db == pytest.approx(
         round_currency(security_total, default=0.0)
     )
-    assert account_total_db == pytest.approx(
-        round_currency(account_total, default=0.0)
-    )
+    assert account_total_db == pytest.approx(round_currency(account_total, default=0.0))
     assert avg_price_account_db is None
     expected_current_eur = round_currency(current_value, default=0.0)
     assert current_value_cents == eur_to_cent(expected_current_eur, default=0)
@@ -699,9 +697,7 @@ async def test_normal_batch(monkeypatch, tmp_path):
     async def _fake_revalue_after_price_updates(hass_, conn, updated_security_uuids):
         return {
             "portfolio_values": {
-                "port1": _make_portfolio_value_entry(
-                    "port1", "P1", 1234.56, 1111.11, 2
-                )
+                "port1": _make_portfolio_value_entry("port1", "P1", 1234.56, 1111.11, 2)
             },
             "portfolio_positions": None,  # Positions kommen über separaten Fetch
         }

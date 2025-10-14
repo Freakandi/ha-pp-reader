@@ -28,7 +28,6 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.event_push import _push_update
-from custom_components.pp_reader.data.performance import select_performance_metrics
 from custom_components.pp_reader.data.sync_from_pclient import (
     fetch_positions_for_portfolios,
 )
@@ -552,20 +551,14 @@ def _refresh_impacted_portfolio_securities(
                     avg_price_native_val = None
 
                 security_total = (
-                    round_currency(
-                        data.get("security_currency_total"), default=0.0
-                    )
+                    round_currency(data.get("security_currency_total"), default=0.0)
                     or 0.0
                 )
                 account_total = (
-                    round_currency(
-                        data.get("account_currency_total"), default=0.0
-                    )
+                    round_currency(data.get("account_currency_total"), default=0.0)
                     or 0.0
                 )
-                purchase_value_cents = eur_to_cent(
-                    purchase_value_eur, default=0
-                ) or 0
+                purchase_value_cents = eur_to_cent(purchase_value_eur, default=0) or 0
                 current_value_cents = (
                     eur_to_cent(current_value_eur, default=None)
                     if current_value_eur is not None
@@ -614,7 +607,6 @@ def _refresh_impacted_portfolio_securities(
                         - account_total
                     )
                     < 1e-6
-                    
                 ):
                     continue
 
@@ -729,7 +721,6 @@ def _process_currency_drift_mismatches(
 
 def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
     """Convert revaluation aggregates into the canonical portfolio payload."""
-
     payload: list[dict[str, Any]] = []
     for pid, data in pv_dict.items():
         if not isinstance(data, Mapping):
