@@ -21,12 +21,12 @@ RUN SEPARATELY
      * Perform targeted manual inspection of emitted events via the Home Assistant dev tools after deploying the cleanup, ensuring currency fields match backend values without double rounding.
 
 1.2 [ ] Backend: Remove `_normalize_portfolio_value_entry` recomputation
-   - Summary: Trust the canonical portfolio aggregates instead of rebuilding gains and day-change payloads inside the event compaction helper so push events mirror `fetch_live_portfolios` output byte-for-byte.
+   - Summary: Delete the legacy recomputation paths inside the event compaction helper so push events forward the untouched `fetch_live_portfolios` payload byte-for-byte.
    - Legacy surfaces to touch:
      * Backend:
-       - `custom_components/pp_reader/data/event_push.py`: Refactor `_normalize_portfolio_value_entry` (and `_compact_portfolio_values_payload`) to pass through the `performance` block and gain fields that arrive from upstream payloads instead of recomputing them with ad-hoc rounding.
+       - `custom_components/pp_reader/data/event_push.py`: Strip out the recomputation branches from `_normalize_portfolio_value_entry` (and `_compact_portfolio_values_payload`) so they only forward the `performance` block and gain fields delivered by upstream payloads.
        - `custom_components/pp_reader/data/sync_from_pclient.py`: Verify `_emit_portfolio_updates` keeps forwarding the raw `fetch_live_portfolios` result without stripping performance metadata once the compactor stops mutating it.
-       - `custom_components/pp_reader/prices/price_service.py`: Align `_build_portfolio_values_payload` (revaluation event path) so it no longer mirrors the legacy recomputation logic and instead reuses the same normalized payload structure that event push expects.
+       - `custom_components/pp_reader/prices/price_service.py`: Purge the legacy recomputation logic from `_build_portfolio_values_payload` (revaluation event path) so it simply reuses the normalized payload structure that event push expects.
        - `custom_components/pp_reader/prices/revaluation.py`: Confirm `_build_portfolio_values_from_live_entries` and related fallbacks continue to supply `name`, `value`, `purchase_sum`, and counts that match the canonical schema when performance fields are preserved.
      * Frontend: No direct API change required, but double-check websocket cache helpers in `src/data/updateConfigsWS.ts` continue to accept the unchanged payload schema when recomputed fields disappear.
    - Modern replacements to keep:
@@ -42,7 +42,7 @@ RUN SEPARATELY
      * In a dev instance, trigger a portfolio sync and a price revaluation cycle, then inspect the `portfolio_values` event payloads in the HA dev tools to confirm the emitted metrics exactly match the records from `fetch_live_portfolios`.
 
 1.3 [ ] Backend: Retire `_normalize_position_entry` fallbacks in event push
-   - Summary: Stop rebuilding holdings aggregates, average-cost selections, and performance metrics inside `_normalize_position_entry` so push events forward the canonical payload from `get_portfolio_positions` without divergent rounding.
+   - Summary: Delete the fallback that rebuilt holdings aggregates, average-cost selections, and performance metrics inside `_normalize_position_entry` so push events forward the canonical payload from `get_portfolio_positions` without divergent rounding.
    - Legacy surfaces to touch:
      * Backend:
        - `custom_components/pp_reader/data/event_push.py`: Delete the bespoke coercion helpers and aggregation rebuild inside `_normalize_position_entry`, letting `_compact_portfolio_positions_payload` pass through the `positions` list with minimal filtering while still respecting the event size guard.
@@ -57,7 +57,7 @@ RUN SEPARATELY
      * `custom_components/pp_reader/data/db_access.py`: `get_portfolio_positions` already normalises holdings, totals, and performance via `compute_holdings_aggregation` and `select_performance_metrics`; treat its output as the contract for both websockets and push events.
      * `custom_components/pp_reader/data/aggregations.py`: `compute_holdings_aggregation` and `select_average_cost` remain the authoritative helpers for holdings totals and average-cost derivation.
      * `custom_components/pp_reader/data/performance.py`: `select_performance_metrics` and `compose_performance_payload` provide the canonical gain/day-change calculations consumed by sensors, websockets, and db access.
-     * `custom_components/pp_reader/data/websocket.py`: `_normalize_portfolio_positions` demonstrates the target schema that consumers already expect; align the push path with this structure.
+     * `custom_components/pp_reader/data/websocket.py`: `_normalize_portfolio_positions` demonstrates the target schema that consumers already expect; strip any extra mutation from the push path so it matches this structure.
    - Dependencies / blockers:
      * Ensure every producer of `portfolio_positions` events (manual sync, price revaluation, future coordinator backfills) sends the complete payload, otherwise removing the fallback could surface `None` gaps; add fixtures for sparse DB rows to cover the edge cases.
      * Update event snapshot fixtures (`tests/fixtures/event_push/*.json`) and websocket assertions that previously relied on compactor-generated fields so they now match the canonical `get_portfolio_positions` output.
@@ -66,11 +66,11 @@ RUN SEPARATELY
      * Run `pytest tests/test_event_push.py`, `pytest tests/test_sync_from_pclient.py`, `pytest tests/test_price_service.py`, and `pytest tests/test_ws_portfolio_positions.py` to cover manual sync, revaluation, and websocket consumers end-to-end.
      * In a dev HA instance, trigger a portfolio sync and inspect the emitted `portfolio_positions` event plus the websocket response from `pp_reader/get_portfolio_positions` to confirm both paths now deliver identical payloads.
 
-1.4 [ ] Backend: Align `_portfolio_contract_entry` gain rounding with shared helpers
+1.4 [ ] Backend: Retire `_portfolio_contract_entry` gain rounding fallbacks
    - Summary: Remove the coordinator's manual `round(...)` fallbacks for `gain_abs`/`gain_pct` so portfolio sensor payloads inherit the canonical rounding from `compose_performance_payload` and the shared currency utilities.
    - Legacy surfaces to touch:
      * Backend:
-       - `custom_components/pp_reader/data/coordinator.py`: Refactor `_portfolio_contract_entry` to trust `compose_performance_payload` (and the upstream portfolio rows) for gain rounding instead of coercing floats locally; ensure `_build_portfolio_data` continues to expose `gain_*` mirrors sourced from the shared helper so sensors stay backwards compatible.
+       - `custom_components/pp_reader/data/coordinator.py`: Delete the bespoke rounding logic from `_portfolio_contract_entry` so it trusts `compose_performance_payload` (and the upstream portfolio rows) for gain rounding; ensure `_build_portfolio_data` continues to expose `gain_*` mirrors sourced from the shared helper so sensors stay backwards compatible.
        - `custom_components/pp_reader/data/coordinator.py`: Audit `_normalize_portfolio_amount` usage and the surrounding imports so currency rounding comes exclusively from `cent_to_eur`/`round_currency` rather than ad-hoc float math when composing the coordinator contract.
        - `custom_components/pp_reader/sensors/depot_sensors.py` & `custom_components/pp_reader/sensors/gain_sensors.py`: Verify entity state assembly still reads the coordinator payload (or recomputes metrics via `select_performance_metrics`) without assuming the legacy rounding behaviour once `_portfolio_contract_entry` stops patching values.
        - `custom_components/pp_reader/data/sync_from_pclient.py`: Double-check `_emit_portfolio_updates` keeps parity between coordinator data and websocket/event payloads so the removal of inline rounding doesn't reintroduce mismatches between sensor values and push events.
@@ -88,10 +88,10 @@ RUN SEPARATELY
      * In a dev Home Assistant instance, refresh the integration and inspect the `portfolio` sensor entities alongside the `pp_reader/get_live_portfolios` websocket response to confirm `gain_abs`/`gain_pct` match to two decimals without extra rounding artifacts.
 
 1.5 [ ] Backend: Eliminate price revaluation cent scaling duplication
-   - Summary: Ensure the price revaluation pipeline reuses the shared currency utilities and canonical aggregation payloads instead of reconverting EUR floats back to cents and hand-rounding totals before database upserts or event emission.
+   - Summary: Delete the legacy cent reconversion and hand-rounding steps from the price revaluation pipeline so it exclusively reuses the shared currency utilities and canonical aggregation payloads before database upserts or event emission.
    - Legacy surfaces to touch:
      * Backend:
-       - `custom_components/pp_reader/prices/price_service.py`: Refactor `_refresh_impacted_portfolio_securities` so portfolio security upserts rely on `round_currency`/`cent_to_eur` (or a shared cent-scaling helper) rather than multiplying floats by 100 and casting to `int`, and stop locally rounding `security_currency_total` / `account_currency_total` when the aggregation helpers already provide canonical precision.
+       - `custom_components/pp_reader/prices/price_service.py`: Delete `_refresh_impacted_portfolio_securities`' legacy cent-scaling paths so portfolio security upserts rely on `round_currency`/`cent_to_eur` (or a shared cent-scaling helper) instead of multiplying floats by 100 and casting to `int`, and stop locally rounding `security_currency_total` / `account_currency_total` when the aggregation helpers already provide canonical precision.
        - `custom_components/pp_reader/prices/price_service.py`: Audit `_build_portfolio_values_payload` and any downstream emitters to guarantee they pass through the canonical `performance` block from live aggregates instead of recomputing gain mirrors after manual rounding shortcuts.
        - `custom_components/pp_reader/prices/revaluation.py`: Update `_build_portfolio_values_from_live_entries` to treat the rows from `fetch_live_portfolios` as the source of truth, removing the extra `round(float(...), 2)` conversions and preserving the structured performance payload when present.
        - `custom_components/pp_reader/logic/securities.py`: Verify `db_calculate_holdings_value` and the supporting purchase metric helpers expose data that already conforms to the shared cent/rounding helpers so price revaluation no longer needs to massage the values before persistence.
@@ -162,11 +162,11 @@ RUN SEPARATELY
      * Smoke-test the Home Assistant panel via `./scripts/develop` + `npm run dev` to verify portfolio detail tabs render average-cost metrics purely from the structured payloads.
 
 2.2 [ ] Backend: Retire legacy average-cost mirror fields from security snapshot payloads
-   - Summary: Stop surfacing `average_purchase_price_native`, `purchase_total_security`, `purchase_total_account`, and `avg_price_account` on security snapshot responses so the detail views rely solely on the structured `average_cost` object and holdings aggregation metadata.
+   - Summary: Delete `average_purchase_price_native`, `purchase_total_security`, `purchase_total_account`, and `avg_price_account` from security snapshot responses so the detail views rely solely on the structured `average_cost` object and holdings aggregation metadata.
    - Legacy surfaces to touch:
      * Backend:
        - `custom_components/pp_reader/data/db_access.py`: Update `get_security_snapshot` to return only the structured `average_cost`/`performance` payloads from `_resolve_average_cost_totals`, trimming the duplicate flat keys and ensuring coordinator fallbacks match the lean schema.
-       - `custom_components/pp_reader/data/websocket.py`: Align `_serialise_security_snapshot` and `ws_get_security_snapshot` responses with the slimmer payload, removing normalization/backfill logic for the deprecated mirrors and keeping fallback snapshots compatible.
+       - `custom_components/pp_reader/data/websocket.py`: Delete the normalization/backfill logic for the deprecated mirrors from `_serialise_security_snapshot` and `ws_get_security_snapshot` so their responses match the slimmer payload while keeping fallback snapshots compatible.
      * Frontend:
        - `src/data/api.ts`: Drop the mirror fields from `SecuritySnapshotResponse` so Home Assistant callers stop expecting them in websocket replies.
        - `src/tabs/types.ts`: Update `SecuritySnapshotLike` (and any dependent types) to reflect the new backend contract without the legacy purchase-total keys.
@@ -197,7 +197,7 @@ RUN SEPARATELY
      * Frontend:
        - `src/data/updateConfigsWS.ts`: Drop normalization fallbacks that repopulate `gain_abs`/`gain_pct`, letting cache entries read the nested `performance` metrics instead.
        - `src/tabs/types.ts`: Remove the deprecated gain mirror fields from `PortfolioPosition`/`PortfolioSummary` contracts so the UI types align with the slim backend payload.
-       - `src/tabs/overview.ts` & `src/tabs/security_detail.ts`: Refactor table builders, aggregators, and formatting helpers to derive gain displays from `performance.gain_abs`/`performance.gain_pct` exclusively.
+       - `src/tabs/overview.ts` & `src/tabs/security_detail.ts`: Remove the legacy table-builder, aggregator, and formatting branches so gain displays derive from `performance.gain_abs`/`performance.gain_pct` exclusively.
        - `src/content/elements.ts`, `src/utils/performance.ts`, and related formatters: Ensure helper utilities no longer expect the flat keys when rendering gain values.
    - Modern replacements to keep:
      * `custom_components/pp_reader/data/performance.py`: `select_performance_metrics` and `compose_performance_payload` remain the single source for gain and change calculations.
@@ -236,13 +236,13 @@ RUN SEPARATELY
      * Spot-check any recorder exports or saved snapshot caches after the cleanup to verify they serialise without the deprecated keys and continue to hydrate into the UI without errors.
 
 2.5 [ ] Backend: Retire legacy `avg_price_account` payload mirrors
-   - Summary: Stop surfacing the deprecated `avg_price_account` field alongside modern average-cost payloads so backend responses and websocket/event payloads rely solely on the structured `average_cost.account` value.
+   - Summary: Delete the deprecated `avg_price_account` field wherever it appears so backend responses and websocket/event payloads rely solely on the structured `average_cost.account` value.
    - Legacy surfaces to touch:
      * Backend:
        - `custom_components/pp_reader/data/db_access.py`: Update `get_portfolio_positions` and `get_security_snapshot` to drop `avg_price_account` from serialized payloads while preserving the structured `average_cost` and `aggregation` data returned by `_resolve_average_cost_totals`.
        - `custom_components/pp_reader/data/event_push.py`: Remove ingestion/backfill of `avg_price_account` inside `_normalize_position_entry` and the compactors so live portfolio updates no longer expect or emit the deprecated key.
        - `custom_components/pp_reader/data/websocket.py`: Ensure `_normalize_portfolio_positions` and `_serialise_security_snapshot` no longer handle `avg_price_account`, and verify websocket command responses avoid reinserting the legacy field.
-       - `custom_components/pp_reader/prices/price_service.py`: Align the cache refresh upserts and impacted portfolio recomputations so coordinator snapshots and stored portfolio_securities rows stop persisting `avg_price_account` purely for payload compatibility.
+       - `custom_components/pp_reader/prices/price_service.py`: Strip the cache refresh upserts and impacted portfolio recomputations of any logic that persists `avg_price_account`, ensuring coordinator snapshots and stored `portfolio_securities` rows drop the legacy field entirely.
        - `custom_components/pp_reader/logic/securities.py`: Trim purchase-metrics computations to avoid calculating `avg_price_account` once downstream payloads have migrated, or gate the calculation behind an internal feature flag during rollout.
      * Frontend:
        - `src/tabs/types.ts`: Remove the deprecated optional `avg_price_account` property from `PortfolioPosition` and any derived types so dashboard code consumes the structured average-cost payload exclusively.
@@ -283,7 +283,7 @@ RUN SEPARATELY
      * Launch Home Assistant via `./scripts/develop` and open the panel with and without the Vite dev-server query param to verify both the hot-reload flow and the production bundle bootstrap succeed post-cleanup.
 
 2.7 [ ] Frontend: Remove `window.__ppReader*` compatibility shims from the dashboard bundle
-   - Summary: Stop exposing websocket handlers, DOM caches, and helpers on `window` so the dashboard relies solely on module imports, eliminating the legacy DOM-integration bridge that kept the globals alive.
+   - Summary: Delete every `window.__ppReader*` compatibility shim so the dashboard relies solely on module imports, eliminating the legacy DOM-integration bridge that kept the globals alive.
    - Legacy surfaces to touch:
      * Frontend:
        - `src/data/updateConfigsWS.ts`: Inline the pending-update maps, sorter hooks, and DOM helper access so `restoreSortAndInit`, `renderPositionsTableInline`, `updatePortfolioFooter`, and related routines no longer read or write `window.__ppReader*` state.
@@ -312,7 +312,7 @@ RUN SEPARATELY
        - `src/utils/performance.ts`: Ensure `normalizePerformancePayload` remains the shared entrypoint for optional backend payload validation once the redundant wrappers disappear.
      * Backend:
        - `custom_components/pp_reader/data/websocket.py`: Confirm `ws_get_portfolio_positions` already forwards the structured `aggregation`, `average_cost`, and `performance` blocks without legacy fallbacks and adjust serializers only if gaps remain.
-       - `custom_components/pp_reader/data/event_push.py`: Align push events for positions with the websocket payload contract so frontends can drop gain/aggregation reconstruction entirely.
+       - `custom_components/pp_reader/data/event_push.py`: Delete any remaining divergence in position push events so they match the websocket payload contract and let frontends drop gain/aggregation reconstruction entirely.
        - `custom_components/pp_reader/data/db_access.py`: Treat its `get_portfolio_positions` output as the authoritative structure; document any remaining legacy mirrors before trimming them on the frontend.
    - Modern replacements to keep:
      * `custom_components/pp_reader/data/aggregations.py`: `compute_holdings_aggregation` and `select_average_cost` continue to derive holdings totals and cost payloads server-side.
@@ -328,7 +328,7 @@ RUN SEPARATELY
      * If available, add integration or component tests that load cached websocket data into the DOM without touching the normalization helpers to prevent regressions.
 
 2.9 [ ] Frontend: Retire overview tab average-cost resolver fallback
-   - Summary: Drop the local `resolveAverageCost`/`resolveAggregation` logic on the overview tab so purchase price cells render the backend-provided `average_cost` payload directly without recomputing holdings totals.
+   - Summary: Delete the local `resolveAverageCost`/`resolveAggregation` logic on the overview tab so purchase price cells render the backend-provided `average_cost` payload directly without recomputing holdings totals.
    - Legacy surfaces to touch:
      * Frontend:
        - `src/tabs/overview.ts`: Remove `resolveAverageCost`, `resolveAggregation`, and `normalizePositionLike` fallbacks, update `buildPurchasePriceDisplay`/`renderPositionsTable` to trust the typed websocket payload, and ensure gain metadata keeps consuming `normalizePerformancePayload` without rehydrating legacy mirrors.
