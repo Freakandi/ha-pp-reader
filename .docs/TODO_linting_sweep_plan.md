@@ -57,6 +57,13 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 3. Frontend TypeScript (`src/`)
 
+**Arbeitsanweisungen für Abschnitt 3 (Stand 2025-02-18):**
+1. Tab-Views file-by-file abarbeiten; dazu dieses Item in Teilaufgaben splitten und nacheinander erledigen.
+2. Lint-Verstöße primär durch Codeänderungen beheben. Regel-Unterdrückungen sind nur zulässig, wenn eine saubere Lösung unverhältnismäßig komplex wäre oder angrenzende Module beeinflussen würde.
+3. Ein Item gilt erst als abgeschlossen, wenn alle relevanten Checks (`npx eslint` für den Scope, `npm run lint:ts`, `npm run typecheck`) fehlerfrei laufen.
+4. Keine priorisierten Einzeldateien bekannt – arbeite den Plan in logischer Reihenfolge ab.
+5. Es gibt keine parallelen Arbeiten, die auf diesen Bereich Einfluss nehmen.
+
 3. a) [ ] Utilities & Typdefinitionen
        - Scope: `src/utils/`, `src/types/`
        - Ziel: `npm run lint:ts -- src/utils src/types` sowie `npm run typecheck` ohne Fehler in diesen Verzeichnissen.
