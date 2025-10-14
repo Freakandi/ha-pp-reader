@@ -9,7 +9,7 @@ import threading
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import pytest
 
@@ -53,9 +53,9 @@ async def test_save_rates_retries_on_locked(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(fx, "_execute_db", fake_execute_db)
     monkeypatch.setattr(fx.asyncio, "sleep", fake_sleep)
 
-    await fx._save_rates(Path("dummy.db"), "2025-01-01", {"USD": 1.1})  # noqa: SLF001
+    await fx._save_rates(Path("dummy.db"), "2025-01-01", {"USD": 1.1})
 
-    assert call_count == RETRY_THRESHOLD  # noqa: S101
+    assert call_count == RETRY_THRESHOLD
 
 
 async def test_save_rates_raises_after_retry(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,7 +77,7 @@ async def test_save_rates_raises_after_retry(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(fx.asyncio, "sleep", fake_sleep)
 
     with pytest.raises(sqlite3.OperationalError):
-        await fx._save_rates(  # noqa: SLF001
+        await fx._save_rates(
             Path("dummy.db"),
             "2025-01-01",
             {"USD": 1.1},
@@ -117,7 +117,7 @@ async def test_concurrent_writes_are_serialized(
     monkeypatch.setattr(fx.sqlite3, "connect", fake_connect)
 
     async def call_save() -> None:
-        await fx._save_rates(  # noqa: SLF001
+        await fx._save_rates(
             Path("dummy.db"),
             "2025-01-01",
             {"USD": 1.1},
@@ -125,7 +125,7 @@ async def test_concurrent_writes_are_serialized(
 
     await asyncio.gather(*(call_save() for _ in range(3)))
 
-    assert max_concurrent == 1  # noqa: S101
+    assert max_concurrent == 1
 
 
 async def test_fetch_exchange_rates_handles_network_issues(
@@ -145,7 +145,7 @@ async def test_fetch_exchange_rates_handles_network_issues(
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             return None
 
-        async def __aenter__(self) -> FakeSession:
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, *_exc: object) -> bool:
@@ -158,13 +158,13 @@ async def test_fetch_exchange_rates_handles_network_issues(
 
     caplog.set_level(logging.WARNING)
 
-    result = await fx._fetch_exchange_rates("2025-01-01", {"USD"})  # noqa: SLF001
+    result = await fx._fetch_exchange_rates("2025-01-01", {"USD"})
 
-    assert result == {}  # noqa: S101
-    assert any(  # noqa: S101
+    assert result == {}
+    assert any(
         "Netzwerkproblem" in message for message in caplog.messages
     )
-    assert all(record.levelno < logging.ERROR for record in caplog.records)  # noqa: S101
+    assert all(record.levelno < logging.ERROR for record in caplog.records)
 
 
 async def test_fetch_exchange_rates_logs_once(
@@ -184,7 +184,7 @@ async def test_fetch_exchange_rates_logs_once(
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             return None
 
-        async def __aenter__(self) -> FakeSession:
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, *_exc: object) -> bool:
@@ -199,7 +199,7 @@ async def test_fetch_exchange_rates_logs_once(
     caplog.set_level(logging.WARNING)
 
     for _ in range(2):
-        await fx._fetch_exchange_rates("2025-01-01", {"USD", "JPY"})  # noqa: SLF001
+        await fx._fetch_exchange_rates("2025-01-01", {"USD", "JPY"})
 
     warning_count = sum("Netzwerkproblem" in message for message in caplog.messages)
-    assert warning_count == 1  # noqa: S101
+    assert warning_count == 1

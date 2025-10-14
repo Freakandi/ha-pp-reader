@@ -6,7 +6,7 @@ import asyncio
 import importlib.util
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -41,7 +41,7 @@ SPEC.loader.exec_module(_websocket_module)
 
 from custom_components.pp_reader.util import currency as currency_util
 
-_collect_active_fx_currencies = _websocket_module._collect_active_fx_currencies  # noqa: SLF001
+_collect_active_fx_currencies = _websocket_module._collect_active_fx_currencies
 WS_GET_ACCOUNTS = _websocket_module.ws_get_accounts.__wrapped__
 DOMAIN = _websocket_module.DOMAIN
 
@@ -68,7 +68,7 @@ def test_collect_active_fx_currencies_filters_invalid_entries() -> None:
         DummyAccount(123),
     ]
 
-    assert _collect_active_fx_currencies(accounts) == {"USD", "CHF"}  # noqa: S101
+    assert _collect_active_fx_currencies(accounts) == {"USD", "CHF"}
 
 
 class StubConnection:
@@ -156,7 +156,7 @@ def test_ws_get_accounts_requests_fx_with_utc_timezone(
         return {"USD": 1.25}
 
     def fake_get_accounts(path: Path) -> list[object]:
-        assert path == db_path  # noqa: S101 - ensure handler forwards db_path
+        assert path == db_path
         return [_make_account("USD", balance=12_500)]
 
     monkeypatch.setattr(
@@ -206,8 +206,8 @@ def test_ws_get_accounts_requests_fx_with_utc_timezone(
         {"id": 7, "type": "pp_reader/get_accounts", "entry_id": entry_id},
     )
 
-    assert connection.errors == []  # noqa: S101
-    assert connection.sent == [  # noqa: S101
+    assert connection.errors == []
+    assert connection.sent == [
         (
             7,
             {
@@ -223,19 +223,19 @@ def test_ws_get_accounts_requests_fx_with_utc_timezone(
         )
     ]
 
-    assert cent_calls == [(12_500, currency_util.CURRENCY_DECIMALS, 0.0, 125.0)]  # noqa: S101
-    assert round_calls == [  # noqa: S101
+    assert cent_calls == [(12_500, currency_util.CURRENCY_DECIMALS, 0.0, 125.0)]
+    assert round_calls == [
         (125.0, currency_util.CURRENCY_DECIMALS, None, 125.0),
         (100.0, currency_util.CURRENCY_DECIMALS, None, 100.0),
     ]
 
     dates = captured.get("dates")
-    assert dates is not None  # noqa: S101
-    assert isinstance(dates, list)  # noqa: S101
-    assert dates  # noqa: S101
-    assert dates[0].tzinfo is timezone.utc  # noqa: UP017,S101
-    assert captured.get("currencies") == {"USD"}  # noqa: S101
-    assert captured.get("ensure_path") == db_path  # noqa: S101
+    assert dates is not None
+    assert isinstance(dates, list)
+    assert dates
+    assert dates[0].tzinfo is datetime.UTC
+    assert captured.get("currencies") == {"USD"}
+    assert captured.get("ensure_path") == db_path
     load_args = captured.get("load_args")
-    assert load_args is not None  # noqa: S101
-    assert load_args[0].tzinfo is timezone.utc  # noqa: UP017,S101
+    assert load_args is not None
+    assert load_args[0].tzinfo is datetime.UTC

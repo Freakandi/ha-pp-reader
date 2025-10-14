@@ -74,7 +74,7 @@ async def test_placeholder_panel_registered_during_setup(
     """A placeholder panel should be registered during component setup."""
     captured_configs: list[dict[str, Any]] = []
 
-    def fake_register_panel(*args, **kwargs):  # noqa: ANN002, ANN003
+    def fake_register_panel(*args, **kwargs):
         captured_configs.append(kwargs.get("config", {}))
 
     monkeypatch.setattr(

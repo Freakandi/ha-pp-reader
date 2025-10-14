@@ -29,7 +29,7 @@ class _NoPresenceProto:
         for key, value in values.items():
             setattr(self, key, value)
 
-    def HasField(self, _name: str) -> bool:  # noqa: N802 - proto compatibility
+    def HasField(self, _name: str) -> bool:
         message = "Field does not have presence"
         raise ValueError(message)
 
@@ -42,7 +42,7 @@ class _PresenceProto:
         for key, value in values.items():
             setattr(self, key, value)
 
-    def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
+    def HasField(self, name: str) -> bool:
         return name in self._values and self._values[name] is not None
 
 
@@ -75,7 +75,7 @@ class _DummyPortfolio:
         self.isRetired = False
         self.updatedAt = None
 
-    def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
+    def HasField(self, name: str) -> bool:
         return getattr(self, name, None) is not None
 
 
@@ -118,7 +118,7 @@ class _DummyTransactionUnit:
         self.fxCurrencyCode = fx_currency
         self._fx_rate = _DummyFxRate(fx_rate) if fx_rate is not None else None
 
-    def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
+    def HasField(self, name: str) -> bool:
         if name == "fxRateToBase":
             return self._fx_rate is not None
         if name == "fxAmount":
@@ -126,7 +126,7 @@ class _DummyTransactionUnit:
         return getattr(self, name, None) is not None
 
     @property
-    def fxRateToBase(self) -> _DummyFxRate:  # noqa: N802 - proto compatibility
+    def fxRateToBase(self) -> _DummyFxRate:
         if self._fx_rate is None:
             raise AttributeError("fxRateToBase not set")
         return self._fx_rate
@@ -182,7 +182,7 @@ class _DummySecurity:
         self.tickerSymbol = None
         self.updatedAt = None
 
-    def HasField(self, name: str) -> bool:  # noqa: N802 - proto compatibility
+    def HasField(self, name: str) -> bool:
         return getattr(self, name, None) is not None
 
 
