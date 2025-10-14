@@ -1,3 +1,5 @@
+> **Concurrency guidance:** Both clusters below are flagged with `RUN SEPARATELY`. Each cluster touches overlapping backend modules and shared payload contracts, so you should schedule them sequentially rather than attempting to implement tasks from different clusters in parallel.
+
 ## Cluster 1: Backend event & aggregation normalization
 RUN SEPARATELY
 
