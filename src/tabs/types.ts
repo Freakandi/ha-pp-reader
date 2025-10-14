@@ -36,9 +36,8 @@ export interface PerformanceDayChangePayload {
 /**
  * Normalised gain and change metrics shared between backend payloads.
  *
- * Legacy flat fields such as `gain_abs`, `gain_pct` or `day_price_change_*`
- * remain on the individual payloads for compatibility, but mirror the values
- * exposed by this object.
+ * Consumers should rely on this payload for gain and percentage metrics rather
+ * than legacy flat mirrors.
  */
 export interface PerformanceMetricsPayload {
   gain_abs: number;
@@ -101,8 +100,6 @@ export interface SecuritySnapshotLike {
   purchase_value_eur: number;
   current_value_eur: number;
   gain_pct: number;
-  purchase_total_security?: number;
-  purchase_total_account?: number;
   last_price_native?: number | null;
   last_price_eur: number | null;
   last_close_native?: number | null;
@@ -111,6 +108,7 @@ export interface SecuritySnapshotLike {
    * Structured selection of average purchase prices with provenance metadata.
    */
   average_cost?: AverageCostPayload | null;
+  aggregation?: HoldingsAggregationPayload | null;
   /** Structured gain and day-change metrics shared across payloads. */
   performance?: PerformanceMetricsPayload | null;
   /** Raw snapshot provenance flag (e.g. cache vs. live). */
@@ -135,21 +133,17 @@ export interface PortfolioPosition {
   current_holdings: number;
   purchase_value: number;
   current_value: number;
-  /** @deprecated Legacy field kept for backwards compatibility. */
-  gain_abs?: number | null;
-  /** @deprecated Legacy field kept for backwards compatibility. */
-  gain_pct?: number | null;
-  purchase_total_security: number;
-  purchase_total_account: number;
-  /** @deprecated Legacy field kept for backwards compatibility. */
-  avg_price_account?: number | null;
   /**
    * Structured selection of average purchase prices with provenance metadata.
    */
-  average_cost?: AverageCostPayload | null;
-  /** Structured gain metrics that mirror the legacy flat fields. */
-  performance?: PerformanceMetricsPayload | null;
-  aggregation?: HoldingsAggregationPayload | null;
+  average_cost: AverageCostPayload | null;
+  /** Structured gain metrics supplied by the backend. */
+  performance: PerformanceMetricsPayload | null;
+  aggregation: HoldingsAggregationPayload | null;
+  /** Client-side convenience mirrors derived from the performance payload. */
+  gain_abs?: number | null;
+  /** Client-side convenience mirrors derived from the performance payload. */
+  gain_pct?: number | null;
   [key: string]: unknown;
 }
 

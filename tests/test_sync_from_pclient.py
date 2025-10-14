@@ -20,7 +20,6 @@ from custom_components.pp_reader.data.sync_from_pclient import (
     maybe_field,
 )
 from custom_components.pp_reader.logic import securities as logic_securities
-from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 
 class _NoPresenceProto:
@@ -297,34 +296,19 @@ def test_rebuild_transaction_units_collects_tax_and_fee(tmp_path: Path) -> None:
     assert tax_entry["amount"] == 50
 
 
-def test_compact_event_data_trims_portfolio_values_list() -> None:
-    """portfolio_values payloads should lose unused keys and get rounded values."""
+def test_compact_event_data_forwards_canonical_portfolio_values_list() -> None:
+    """portfolio_values payloads should forward canonical aggregates."""
     raw = [
         {
             "uuid": "pf-1",
             "name": "Long Portfolio Name",
-            "count": "3",
-            "value": "1234.567",
-            "purchase_sum": "1100.0",
-            "ignored": True,
-        }
-    ]
-
-    compacted = _compact_event_data("portfolio_values", raw)
-
-    assert isinstance(compacted, list)
-    assert compacted == [
-        {
-            "uuid": "pf-1",
             "position_count": 3,
-            "current_value": 1234.57,
+            "current_value": 1234.56,
             "purchase_sum": 1100.0,
-            "gain_abs": 134.57,
-            "gain_pct": 12.23,
             "performance": {
-                "gain_abs": 134.57,
+                "gain_abs": 134.56,
                 "gain_pct": 12.23,
-                "total_change_eur": 134.57,
+                "total_change_eur": 134.56,
                 "total_change_pct": 12.23,
                 "source": "calculated",
                 "coverage_ratio": 0.6667,
@@ -336,27 +320,53 @@ def test_compact_event_data_trims_portfolio_values_list() -> None:
                     "coverage_ratio": 0.0,
                 },
             },
+            "missing_value_positions": 0,
+            "ignored": True,
         }
     ]
 
-    entry = compacted[0]
-    performance = entry["performance"]
-    assert performance["gain_abs"] == entry["gain_abs"]
-    assert performance["gain_pct"] == entry["gain_pct"]
-    assert performance["total_change_eur"] == entry["gain_abs"]
-    assert performance["total_change_pct"] == entry["gain_pct"]
+    compacted = _compact_event_data("portfolio_values", raw)
+
+    assert isinstance(compacted, list)
+    assert compacted == [
+        {
+            "uuid": "pf-1",
+            "position_count": 3,
+            "name": "Long Portfolio Name",
+            "current_value": 1234.56,
+            "purchase_sum": 1100.0,
+            "performance": raw[0]["performance"],
+            "missing_value_positions": 0,
+        }
+    ]
 
 
-def test_compact_event_data_trims_portfolio_values_mapping() -> None:
-    """Mapping payloads should be normalised and drop auxiliary keys."""
+def test_compact_event_data_forwards_portfolio_values_mapping() -> None:
+    """Mapping payloads should forward canonical values and drop extras."""
     raw = {
         "portfolios": [
             {
                 "uuid": "pf-2",
                 "position_count": 1,
-                "current_value": 200.987,
+                "current_value": 200.98,
                 "purchase_sum": 199.0,
                 "name": "Unused",
+                "performance": {
+                    "gain_abs": 1.98,
+                    "gain_pct": 0.99,
+                    "total_change_eur": 1.98,
+                    "total_change_pct": 0.99,
+                    "source": "calculated",
+                    "coverage_ratio": 0.6667,
+                    "day_change": {
+                        "price_change_native": None,
+                        "price_change_eur": None,
+                        "change_pct": None,
+                        "source": "unavailable",
+                        "coverage_ratio": 0.0,
+                    },
+                },
+                "unused_key": "value",
             }
         ],
         "changed_portfolios": ["pf-2", "pf-3"],
@@ -370,34 +380,12 @@ def test_compact_event_data_trims_portfolio_values_mapping() -> None:
         {
             "uuid": "pf-2",
             "position_count": 1,
-            "current_value": 200.99,
+            "name": "Unused",
+            "current_value": 200.98,
             "purchase_sum": 199.0,
-            "gain_abs": 1.99,
-            "gain_pct": pytest.approx(1.0, rel=0, abs=0.01),
-            "performance": {
-                "gain_abs": 1.99,
-                "gain_pct": pytest.approx(1.0, rel=0, abs=0.01),
-                "total_change_eur": 1.99,
-                "total_change_pct": pytest.approx(1.0, rel=0, abs=0.01),
-                "source": "calculated",
-                "coverage_ratio": 0.6667,
-                "day_change": {
-                    "price_change_native": None,
-                    "price_change_eur": None,
-                    "change_pct": None,
-                    "source": "unavailable",
-                    "coverage_ratio": 0.0,
-                },
-            },
+            "performance": raw["portfolios"][0]["performance"],
         }
     ]
-
-    portfolio_entry = compacted["portfolios"][0]
-    portfolio_performance = portfolio_entry["performance"]
-    assert portfolio_performance["gain_abs"] == portfolio_entry["gain_abs"]
-    assert portfolio_performance["gain_pct"] == portfolio_entry["gain_pct"]
-    assert portfolio_performance["total_change_eur"] == portfolio_entry["gain_abs"]
-    assert portfolio_performance["total_change_pct"] == portfolio_entry["gain_pct"]
 
 
 def test_compact_event_data_trims_portfolio_positions() -> None:
@@ -408,23 +396,19 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
             {
                 "security_uuid": "sec-1",
                 "name": "Security A",
-                "current_holdings": 5,
-                "purchase_value": 999.999,  # ignored in favour of helper fields
-                "current_value": 150.987,
-                "gain_abs": 27.531,
-                "gain_pct": 22.1234,
+                "current_holdings": 5.0,
+                "purchase_value": 123.45,
+                "current_value": 150.99,
                 "aggregation": {
                     "purchase_value_eur": 123.45,
                     "purchase_total_security": 321.09,
                     "purchase_total_account": 322.1,
                     "average_purchase_price_native": 24.123456,
-                    "avg_price_account": 25.987654,
                 },
                 "purchase_value_eur": 123.45,
                 "purchase_total_security": None,
                 "purchase_total_account": None,
                 "average_purchase_price_native": None,
-                "avg_price_account": None,
                 "average_cost": {
                     "native": 24.123456,
                     "security": 25.654321,
@@ -442,51 +426,51 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
 
     compacted = _compact_event_data("portfolio_positions", raw)
 
-    expected_purchase_value = cent_to_eur(12_345)
-    expected_current_value = round_currency(150.987)
-    expected_gain_abs = round_currency(27.54)
-    expected_gain_pct = round_currency(22.31)
-    expected_purchase_total_security = round_currency(321.09)
-    expected_purchase_total_account = round_currency(322.1)
-
     assert compacted["portfolio_uuid"] == "pf-3"
-    assert compacted["positions"] == [
-        {
-            "security_uuid": "sec-1",
-            "name": "Security A",
-            "current_holdings": 5,
-            "purchase_value": expected_purchase_value,
-            "current_value": expected_current_value,
-            "gain_abs": expected_gain_abs,
-            "gain_pct": expected_gain_pct,
-            "average_purchase_price_native": 24.123456,
-            "purchase_total_security": expected_purchase_total_security,
-            "purchase_total_account": expected_purchase_total_account,
-            "avg_price_account": 25.987654,
-            "performance": {
-                "gain_abs": expected_gain_abs,
-                "gain_pct": expected_gain_pct,
-                "total_change_eur": expected_gain_abs,
-                "total_change_pct": expected_gain_pct,
-                "source": "calculated",
-                "coverage_ratio": 1.0,
-                "day_change": {
-                    "price_change_native": None,
-                    "price_change_eur": None,
-                    "change_pct": None,
-                    "source": "unavailable",
-                    "coverage_ratio": 0.0,
-                },
-            },
-        }
-    ]
+    assert len(compacted["positions"]) == 1
 
     position_entry = compacted["positions"][0]
-    position_performance = position_entry["performance"]
-    assert position_performance["gain_abs"] == position_entry["gain_abs"]
-    assert position_performance["gain_pct"] == position_entry["gain_pct"]
-    assert position_performance["total_change_eur"] == position_entry["gain_abs"]
-    assert position_performance["total_change_pct"] == position_entry["gain_pct"]
+    assert position_entry["security_uuid"] == "sec-1"
+    assert position_entry["name"] == "Security A"
+    assert position_entry["current_holdings"] == pytest.approx(5.0)
+    assert position_entry["purchase_value"] == pytest.approx(123.45)
+    assert position_entry["current_value"] == pytest.approx(150.99)
+    assert "gain_abs" not in position_entry
+    assert "gain_pct" not in position_entry
+
+    assert "aggregation" in position_entry
+    aggregation_entry = position_entry["aggregation"]
+    assert aggregation_entry["purchase_value_eur"] == pytest.approx(123.45)
+    assert aggregation_entry["purchase_total_security"] == pytest.approx(321.09)
+    assert aggregation_entry["purchase_total_account"] == pytest.approx(322.1)
+    assert "avg_price_account" not in aggregation_entry
+
+    assert "purchase_total_security" not in position_entry
+    assert "purchase_total_account" not in position_entry
+
+    assert "average_cost" in position_entry
+    average_cost_entry = position_entry["average_cost"]
+    assert average_cost_entry["native"] == pytest.approx(24.123456)
+    assert average_cost_entry["security"] == pytest.approx(25.654321)
+    assert average_cost_entry["account"] == pytest.approx(25.987654)
+    assert average_cost_entry["eur"] == pytest.approx(123.45)
+
+    performance_payload = position_entry["performance"]
+    assert performance_payload == {
+        "gain_abs": pytest.approx(27.54),
+        "gain_pct": pytest.approx(22.31),
+        "total_change_eur": pytest.approx(27.54),
+        "total_change_pct": pytest.approx(22.31),
+        "source": "calculated",
+        "coverage_ratio": 1.0,
+        "day_change": {
+            "price_change_native": None,
+            "price_change_eur": None,
+            "change_pct": None,
+            "source": "unavailable",
+            "coverage_ratio": 0.0,
+        },
+    }
     assert "avg_price_security" not in position_entry
 
 

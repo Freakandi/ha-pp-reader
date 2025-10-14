@@ -438,9 +438,6 @@ windowObj.window = windowObj;
 global.document = document;
 global.navigator = windowObj.navigator;
 
-let positionsCache = new Map();
-windowObj.__ppReaderPortfolioPositionsCache = positionsCache;
-
 class CustomEventImpl {
   constructor(type, detail = {}) {
     this.type = type;
@@ -501,7 +498,31 @@ async function importDashboardBundle() {
   return import(bundleUrl.href);
 }
 const moduleApi = await importDashboardBundle();
-positionsCache = windowObj.__ppReaderPortfolioPositionsCache ?? positionsCache;
+const testHelpers = moduleApi.__TEST_ONLY__ ?? {};
+const getCacheSnapshot =
+  typeof testHelpers.getPortfolioPositionsCacheSnapshot === 'function'
+    ? testHelpers.getPortfolioPositionsCacheSnapshot
+    : () => new Map();
+const clearCache =
+  typeof testHelpers.clearPortfolioPositionsCache === 'function'
+    ? testHelpers.clearPortfolioPositionsCache
+    : () => {};
+const queuePendingUpdate =
+  typeof testHelpers.queuePendingUpdate === 'function'
+    ? testHelpers.queuePendingUpdate
+    : () => {};
+const getPendingUpdateCount =
+  typeof testHelpers.getPendingUpdateCount === 'function'
+    ? testHelpers.getPendingUpdateCount
+    : () => 0;
+const clearPendingUpdates =
+  typeof testHelpers.clearPendingUpdates === 'function'
+    ? testHelpers.clearPendingUpdates
+    : () => {};
+
+clearCache();
+clearPendingUpdates();
+
 let handlePortfolioPositionsUpdate = moduleApi.handlePortfolioPositionsUpdate;
 
 if (typeof handlePortfolioPositionsUpdate !== 'function') {
@@ -514,9 +535,18 @@ if (typeof handlePortfolioPositionsUpdate !== 'function') {
   });
 }
 
-const updateFooter = windowObj.__ppReaderUpdatePortfolioFooter;
-const flushPending = windowObj.__ppReaderFlushPendingPositions;
-const reapplySort = windowObj.__ppReaderReapplyPositionsSort;
+const updateFooter =
+  typeof moduleApi.updatePortfolioFooterFromDom === 'function'
+    ? moduleApi.updatePortfolioFooterFromDom
+    : null;
+const flushPending =
+  typeof moduleApi.flushPendingPositions === 'function'
+    ? moduleApi.flushPendingPositions
+    : null;
+const reapplySort =
+  typeof moduleApi.reapplyPositionsSort === 'function'
+    ? moduleApi.reapplyPositionsSort
+    : null;
 
 if (typeof updateFooter !== 'function' || typeof flushPending !== 'function') {
   throw new Error('dashboard bundle missing expected helpers');
@@ -569,49 +599,41 @@ if (valueCell) {
 
 updateFooter(table);
 
-const pendingMap = windowObj.__ppReaderPendingPositions instanceof Map
-  ? windowObj.__ppReaderPendingPositions
-  : new Map();
-pendingMap.set('portfolio-1', {
-  positions: [
-    {
-      security_uuid: 'sec-1',
-      name: 'Test Security',
-      current_holdings: 10,
-      purchase_value: 500,
-      current_value: 1500,
-      gain_abs: 1000,
-      aggregation: {
-        total_holdings: 10,
-        positive_holdings: 10,
-        purchase_value_cents: 50000,
-        purchase_value_eur: 500,
-        security_currency_total: 500,
-        account_currency_total: 500,
-        purchase_total_security: 500,
-        purchase_total_account: 500,
-      },
-      average_cost: {
-        native: null,
-        security: null,
-        account: null,
-        eur: null,
-        source: 'aggregation',
-        coverage_ratio: null,
-      },
+queuePendingUpdate('portfolio-1', [
+  {
+    security_uuid: 'sec-1',
+    name: 'Test Security',
+    current_holdings: 10,
+    purchase_value: 500,
+    current_value: 1500,
+    gain_abs: 1000,
+    aggregation: {
+      total_holdings: 10,
+      positive_holdings: 10,
+      purchase_value_cents: 50000,
+      purchase_value_eur: 500,
+      security_currency_total: 500,
+      account_currency_total: 500,
+      purchase_total_security: 500,
+      purchase_total_account: 500,
     },
-  ],
-});
-windowObj.__ppReaderPendingPositions = pendingMap;
+    average_cost: {
+      native: null,
+      security: null,
+      account: null,
+      eur: null,
+      source: 'aggregation',
+      coverage_ratio: null,
+    },
+  },
+]);
 
-const pendingSizeBefore = pendingMap.size;
+const pendingSizeBefore = getPendingUpdateCount();
 const detailsLookup = document.querySelector(
   '.portfolio-table .portfolio-details[data-portfolio="portfolio-1"]',
 );
 const applied = flushPending(document, 'portfolio-1');
-const pendingSizeAfter = windowObj.__ppReaderPendingPositions instanceof Map
-  ? windowObj.__ppReaderPendingPositions.size
-  : 0;
+const pendingSizeAfter = getPendingUpdateCount();
 if (typeof reapplySort === 'function') {
   reapplySort(positionsContainer);
 }
@@ -848,16 +870,25 @@ const normalizationPayload = {
   ],
 };
 
+let fallbackPositions = [];
+
 if (canProcessUpdates) {
   handlePortfolioPositionsUpdate(normalizationPayload, null);
 }
 
 if (!canProcessUpdates) {
   const simulated = simulateNormalizePositions(normalizationPayload.positions);
-  positionsCache.set(normalizationPayload.portfolioUuid, simulated);
+  fallbackPositions = simulated;
 }
 
-const normalizedPositions = (positionsCache.get('portfolio-struct') ?? []).map((position) => ({
+const cacheSnapshot = getCacheSnapshot();
+const cachedPositions = cacheSnapshot.get('portfolio-struct');
+const sourcePositions =
+  Array.isArray(cachedPositions) && cachedPositions.length
+    ? cachedPositions
+    : fallbackPositions;
+
+const normalizedPositions = sourcePositions.map((position) => ({
   aggregation: position?.aggregation ?? null,
   average_cost: position?.average_cost ?? null,
   performance: position?.performance ?? null,

@@ -519,6 +519,29 @@ def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:
     assert average_cost["source"] == "totals"
     assert average_cost["coverage_ratio"] == pytest.approx(1.0)
 
+    aggregation = snapshot_payload["aggregation"]
+    assert aggregation == expected_snapshot["aggregation"]
+    assert set(aggregation) == {
+        "total_holdings",
+        "positive_holdings",
+        "purchase_value_cents",
+        "purchase_value_eur",
+        "security_currency_total",
+        "account_currency_total",
+        "purchase_total_security",
+        "purchase_total_account",
+    }
+    assert aggregation["purchase_total_security"] == pytest.approx(
+        expected_snapshot["aggregation"]["purchase_total_security"],
+        rel=0,
+        abs=1e-6,
+    )
+    assert aggregation["purchase_total_account"] == pytest.approx(
+        expected_snapshot["aggregation"]["purchase_total_account"],
+        rel=0,
+        abs=1e-6,
+    )
+
     performance = snapshot_payload["performance"]
     assert performance is not None
     assert performance == expected_snapshot["performance"]

@@ -200,13 +200,6 @@ async def test_ws_get_portfolio_positions_normalises_currency(
     expected_avg_cost_native = round_price(45.678901, decimals=6) or 0.0
     expected_purchase_total_security = round_currency(2345.6789, default=0.0) or 0.0
     expected_purchase_total_account = round_currency(3456.7891, default=0.0) or 0.0
-
-    assert position["purchase_total_security"] == pytest.approx(
-        expected_purchase_total_security
-    )
-    assert position["purchase_total_account"] == pytest.approx(
-        expected_purchase_total_account
-    )
     expected_avg_price_account = round_price(23.456789, decimals=6) or 0.0
     assert "avg_price_account" not in position  # noqa: S101
     assert "avg_price_security" not in position  # noqa: S101
@@ -340,8 +333,6 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
             ),
             "purchase_value": pytest.approx(round_currency(123.45) or 0.0),
             "current_value": pytest.approx(round_currency(5678.0) or 0.0),
-            "purchase_total_security": pytest.approx(round_currency(999.99) or 0.0),
-            "purchase_total_account": pytest.approx(round_currency(888.88) or 0.0),
             "average_cost": {
                 "native": pytest.approx(round_price(3.456789, decimals=6) or 0.0),
                 "security": pytest.approx(round_price(11.111111, decimals=6) or 0.0),
@@ -369,6 +360,8 @@ def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
     normalized_entry = normalized[0]
     assert "gain_abs" not in normalized_entry  # noqa: S101
     assert "gain_pct" not in normalized_entry  # noqa: S101
+    assert "purchase_total_security" not in normalized_entry  # noqa: S101
+    assert "purchase_total_account" not in normalized_entry  # noqa: S101
     assert "avg_price_security" not in normalized_entry  # noqa: S101
     aggregation = normalized_entry["aggregation"]
     assert aggregation is not None  # noqa: S101

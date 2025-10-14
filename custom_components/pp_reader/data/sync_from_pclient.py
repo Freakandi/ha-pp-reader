@@ -29,7 +29,7 @@ from ..logic.securities import (  # noqa: TID252
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
-from ..util.currency import cent_to_eur, round_currency
+from ..util.currency import cent_to_eur, eur_to_cent, round_currency
 from .db_access import (
     fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
     get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
@@ -1030,11 +1030,15 @@ class _SyncRunner:
         for (portfolio_uuid, security_uuid), data in current_holdings_values.items():
             current_holdings_val = data.get("current_holdings", 0)
             purchase_value = data.get("purchase_value", 0)
-            current_value_raw = data.get("current_value", 0)
-            if current_value_raw is None:
+            purchase_value_eur = round_currency(purchase_value, default=0.0) or 0.0
+            purchase_value_cent = eur_to_cent(purchase_value_eur, default=0) or 0
+
+            current_value_raw = data.get("current_value")
+            current_value_eur = round_currency(current_value_raw, default=None)
+            if current_value_eur is None:
                 current_value_cent: int | None = None
             else:
-                current_value_cent = int(round(current_value_raw * 100))
+                current_value_cent = eur_to_cent(current_value_eur, default=0) or 0
 
             self.cursor.execute(
                 """
@@ -1048,7 +1052,7 @@ class _SyncRunner:
 
             expected_values = (
                 current_holdings_val,
-                int(round(purchase_value * 100)),
+                purchase_value_cent,
                 data.get("avg_price_native"),
                 current_value_cent,
             )

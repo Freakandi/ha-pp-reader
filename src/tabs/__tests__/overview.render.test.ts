@@ -220,6 +220,17 @@ void test(
         security_uuid: 'security-missing',
         name: 'Missing Average Security',
         security_currency_code: 'USD',
+        aggregation: null,
+        average_cost: null,
+        performance: {
+          gain_abs: 0,
+          gain_pct: 0,
+          total_change_eur: 0,
+          total_change_pct: 0,
+          source: 'snapshot',
+          coverage_ratio: 1,
+          day_change: null,
+        },
       });
 
       assert.match(
@@ -228,6 +239,47 @@ void test(
       );
       assert.strictEqual(ariaLabel, 'Kein Kaufpreis verfügbar');
       assert.strictEqual(sortValue, 0);
+    }),
+);
+
+void test(
+  'buildPurchasePriceDisplayForTest does not derive averages from aggregation payloads',
+  async () =>
+    withOverviewModule(module => {
+      const helper = module.__TEST_ONLY__
+        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+      const { markup, ariaLabel, sortValue } = helper({
+        security_uuid: 'security-aggregation-only',
+        name: 'Aggregation Only',
+        security_currency_code: 'USD',
+        aggregation: {
+          total_holdings: 50,
+          positive_holdings: 50,
+          purchase_value_cents: 250000,
+          purchase_value_eur: 2500,
+          security_currency_total: 0,
+          account_currency_total: 2500,
+          purchase_total_security: 0,
+          purchase_total_account: 2500,
+        },
+        average_cost: null,
+        performance: {
+          gain_abs: 0,
+          gain_pct: 0,
+          total_change_eur: 0,
+          total_change_pct: 0,
+          source: 'snapshot',
+          coverage_ratio: 1,
+          day_change: null,
+        },
+      });
+
+      assert.match(
+        markup,
+        /role="note" aria-label="Kein Kaufpreis verfügbar" title="Kein Kaufpreis verfügbar">—<\/span>/,
+      );
+      assert.strictEqual(ariaLabel, 'Kein Kaufpreis verfügbar');
+      assert.strictEqual(sortValue, 2500);
     }),
 );
 

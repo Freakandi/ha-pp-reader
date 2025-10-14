@@ -157,23 +157,11 @@ def _portfolio_contract_entry(
             day_change=day_change_metrics,
         )
 
-    try:
-        gain_abs = round(float(performance_payload.get("gain_abs")), 2)
-    except (TypeError, ValueError):
-        gain_abs = round(performance_metrics.gain_abs, 2)
-
-    try:
-        gain_pct = round(float(performance_payload.get("gain_pct")), 2)
-    except (TypeError, ValueError):
-        gain_pct = round(performance_metrics.gain_pct, 2)
-
     return portfolio_uuid, {
         "name": entry.get("name"),
         "value": current_value,
         "count": position_count,
         "purchase_sum": purchase_sum,
-        "gain_abs": gain_abs,
-        "gain_pct": gain_pct,
         "performance": performance_payload,
     }
 

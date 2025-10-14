@@ -83,6 +83,15 @@ export function formatValue(
   };
 
   if (['gain_abs', 'gain_pct'].includes(key)) {
+    if (value == null && row && typeof row === 'object') {
+      const performance = (row as Record<string, unknown>).performance;
+      if (performance && typeof performance === 'object' && performance !== null) {
+        const metric = (performance as Record<string, unknown>)[key];
+        if (typeof metric === 'number') {
+          value = metric;
+        }
+      }
+    }
     const rowWithFlags = row as (TableRow & { fx_unavailable?: boolean }) | undefined;
     const missingReason = rowWithFlags?.fx_unavailable
       ? 'Wechselkurs nicht verfügbar – EUR-Wert unbekannt'
@@ -205,7 +214,16 @@ export function makeTable(
       let total = 0;
       let hasValue = false;
       rows.forEach(row => {
-        const v = row[c.key];
+        let v = row[c.key];
+        if ((c.key === 'gain_abs' || c.key === 'gain_pct') && (v == null || !Number.isFinite(v as number))) {
+          const performance = (row as Record<string, unknown>).performance;
+          if (performance && typeof performance === 'object') {
+            const metric = (performance as Record<string, unknown>)[c.key];
+            if (typeof metric === 'number') {
+              v = metric;
+            }
+          }
+        }
         if (typeof v === 'number' && Number.isFinite(v)) {
           total += v;
           hasValue = true;

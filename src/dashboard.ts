@@ -12,6 +12,7 @@ import {
   handlePortfolioPositionsUpdate,
 } from './data/updateConfigsWS';
 import { getEntryId } from './data/api';
+import { getRegisteredDashboardElements } from './dashboard/registry';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -394,12 +395,9 @@ function getSecurityDetailTabKey(securityUuid: string): string {
 }
 
 function findDashboardElement(): DashboardElement | null {
-  const registered = window.__ppReaderDashboardElements;
-  if (registered instanceof Set) {
-    for (const element of registered) {
-      if (element && element.isConnected) {
-        return element as DashboardElement;
-      }
+  for (const element of getRegisteredDashboardElements()) {
+    if (element && element.isConnected) {
+      return element as DashboardElement;
     }
   }
 
@@ -1116,7 +1114,7 @@ if (!customElements.get('pp-reader-dashboard')) {
   customElements.define('pp-reader-dashboard', PPReaderDashboard);
 }
 
-console.log('PPReader dashboard.js v20250914b geladen');
+console.log('PPReader dashboard module v20250914b geladen');
 
 registerSecurityDetailTab({
   setSecurityDetailTabFactory,
