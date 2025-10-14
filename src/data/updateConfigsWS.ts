@@ -65,6 +65,28 @@ interface ApplyPositionsResult {
 const pendingPortfolioUpdates = new Map<string, PendingPortfolioUpdate>();
 const pendingRetryMetaMap = new Map<string, PendingRetryMeta>();
 
+function formatErrorMessage(error: unknown): string {
+  if (typeof error === 'string') {
+    const trimmed = error.trim();
+    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
+  }
+  if (error instanceof Error) {
+    const trimmed = error.message.trim();
+    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
+  }
+  if (error != null) {
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') {
+        return serialized;
+      }
+    } catch {
+      // Ignore serialization issues and fall through to default label.
+    }
+  }
+  return 'Unbekannter Fehler';
+}
+
 function toNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -86,7 +108,8 @@ function cloneAggregationPayload(
     return null;
   }
 
-  return { ...(value as HoldingsAggregationPayload) };
+  const clone: HoldingsAggregationPayload = { ...value };
+  return clone;
 }
 
 function cloneAverageCostPayload(
@@ -96,7 +119,8 @@ function cloneAverageCostPayload(
     return null;
   }
 
-  return { ...(value as AverageCostPayload) };
+  const clone: AverageCostPayload = { ...value };
+  return clone;
 }
 
 function sanitizePosition(position: PortfolioPositionData): PortfolioPositionRecord | null {
@@ -162,7 +186,7 @@ const PENDING_MAX_ATTEMPTS = 10;
 export const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
 
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
-  const safeError = typeof error === 'string' ? error : String(error ?? 'Unbekannter Fehler');
+  const safeError = formatErrorMessage(error);
   return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
 }
 
@@ -368,11 +392,17 @@ function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
       fxAccounts.map(account => {
         const origBalance = account.orig_balance;
         const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
-        const fxDisplay = hasOrigBalance
-          ? `${origBalance.toLocaleString('de-DE', {
+        const currencyCode = toNonEmptyString(account.currency_code);
+        const amountLabel = hasOrigBalance
+          ? origBalance.toLocaleString('de-DE', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
-            })}\u00A0${account.currency_code}`
+            })
+          : null;
+        const fxDisplay = amountLabel
+          ? currencyCode
+            ? `${amountLabel}\u00A0${currencyCode}`
+            : amountLabel
           : '';
 
         return {
@@ -445,9 +475,12 @@ export function handlePortfolioUpdate(
 
   // Helper Formatierer (lokal oder einfacher Fallback)
   const formatNumberLocal = (val: number): string => {
-    if (window.Intl) {
+    if (typeof Intl !== 'undefined') {
       try {
-        return new Intl.NumberFormat(navigator.language || 'de-DE', {
+        const locale = typeof navigator !== 'undefined' && navigator.language
+          ? navigator.language
+          : 'de-DE';
+        return new Intl.NumberFormat(locale, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }).format(val);
@@ -460,16 +493,19 @@ export function handlePortfolioUpdate(
   };
 
   // Map: uuid -> Row
-  const rowMap = new Map<string, HTMLTableRowElement>(
-    Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr.portfolio-row'))
-      .filter(row => Boolean(row.dataset?.portfolio))
-      .map(row => [row.dataset.portfolio as string, row]),
-  );
+  const rowMap = new Map<string, HTMLTableRowElement>();
+  const portfolioRows = tbody.querySelectorAll<HTMLTableRowElement>('tr.portfolio-row');
+  portfolioRows.forEach(row => {
+    const portfolio = row.dataset.portfolio;
+    if (portfolio) {
+      rowMap.set(portfolio, row);
+    }
+  });
 
   let patched = 0;
 
   const formatPositionCount = (value: number | null | undefined): string => {
-    const numeric = Number.isFinite(value) ? Number(value) : 0;
+    const numeric = typeof value === 'number' && Number.isFinite(value) ? value : 0;
     try {
       return numeric.toLocaleString('de-DE');
     } catch {
@@ -478,7 +514,7 @@ export function handlePortfolioUpdate(
   };
 
   for (const entry of update) {
-    const uuid = entry?.uuid;
+    const uuid = entry.uuid;
     if (typeof uuid !== 'string' || !uuid) {
       continue;
     }
@@ -501,8 +537,8 @@ export function handlePortfolioUpdate(
     }
 
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
-    const posCount = Number(entry.position_count ?? entry.count ?? 0);
-    const curVal = Number(entry.current_value ?? entry.value ?? 0);
+    const posCount = toFiniteNumber(entry.position_count ?? entry.count);
+    const curVal = toFiniteNumber(entry.current_value ?? entry.value);
     const entryRecord = entry as Record<string, unknown>;
     const performance = normalizePerformancePayload(entryRecord['performance']);
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
@@ -529,7 +565,9 @@ export function handlePortfolioUpdate(
     if (Math.abs(oldCur - curVal) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
       curValCell.innerHTML = currentMarkup;
       row.classList.add('flash-update');
-      setTimeout(() => row.classList.remove('flash-update'), 800);
+      setTimeout(() => {
+        row.classList.remove('flash-update');
+      }, 800);
     }
     if (gainAbsCell) {
       const gainMarkup = formatValue('gain_abs', gainAbs, rowData, rowContext);
@@ -551,11 +589,11 @@ export function handlePortfolioUpdate(
       gainPctCell.innerHTML = formatValue('gain_pct', gainPct, rowData, rowContext);
     }
 
-    row.dataset.positionCount = String(posCount);
-    row.dataset.currentValue = hasValue ? String(curVal) : '';
-    row.dataset.purchaseSum = purchase != null ? String(purchase) : '';
-    row.dataset.gainAbs = gainAbs != null ? String(gainAbs) : '';
-    row.dataset.gainPct = gainPct != null ? String(gainPct) : '';
+    row.dataset.positionCount = posCount.toString();
+    row.dataset.currentValue = hasValue ? curVal.toString() : '';
+    row.dataset.purchaseSum = purchase != null ? purchase.toString() : '';
+    row.dataset.gainAbs = gainAbs != null ? gainAbs.toString() : '';
+    row.dataset.gainPct = gainPct != null ? gainPct.toString() : '';
 
     patched += 1;
   }
@@ -563,7 +601,8 @@ export function handlePortfolioUpdate(
   if (patched === 0) {
     console.debug('handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.');
   } else {
-    console.debug(`handlePortfolioUpdate: ${patched} Zeile(n) gepatcht.`);
+    const patchedLabel = patched.toLocaleString('de-DE');
+    console.debug(`handlePortfolioUpdate: ${patchedLabel} Zeile(n) gepatcht.`);
   }
 
   try {
@@ -680,7 +719,7 @@ function processPortfolioPositionsUpdate(
     const securityUuids = Array.from(
       new Set(
         normalizedPositions
-          .map(pos => pos?.security_uuid)
+          .map(pos => pos.security_uuid)
           .filter((uuid): uuid is string => typeof uuid === 'string' && uuid.length > 0),
       ),
     );
@@ -741,7 +780,7 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
     }
   } catch (_) {}
 
-  if (!positions || !positions.length) {
+  if (positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
   const rows = positions.map(position => {
@@ -791,16 +830,17 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
           return;
         }
         const pos = positions[idx];
-        if (pos?.security_uuid) {
+        if (pos.security_uuid) {
           tr.dataset.security = pos.security_uuid;
         }
         tr.classList.add('position-row');
       });
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
-      if (typeof applyGainPctMetadata === 'function') {
+      const gainPctMetadata = applyGainPctMetadata;
+      if (gainPctMetadata) {
         try {
-          applyGainPctMetadata(table);
+          gainPctMetadata(table);
         } catch (err) {
           console.warn('renderPositionsTableInline: applyGainPctMetadata failed', err);
         }
@@ -810,7 +850,7 @@ function renderPositionsTableInline(positions: PortfolioPositionData[]): string 
           if (row.classList.contains('footer-row')) {
             return;
           }
-          const gainCell = row.cells?.[4];
+          const gainCell = row.cells.item(4);
           if (!gainCell) {
             return;
           }
@@ -867,25 +907,29 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   let sumPositions = 0;
 
   rows.forEach(r => {
-    const datasetCount = Number(r.dataset?.positionCount);
+    const datasetCountRaw = r.dataset.positionCount;
+    const datasetCount = datasetCountRaw ? Number.parseFloat(datasetCountRaw) : Number.NaN;
     const posCount = Number.isFinite(datasetCount)
       ? datasetCount
-      : parseInt((r.cells.item(1)?.textContent || '').replace(/\./g, ''), 10) || 0;
+      : Number.parseInt((r.cells.item(1)?.textContent || '').replace(/\./g, ''), 10) || 0;
 
-    const datasetCurrent = Number(r.dataset?.currentValue);
+    const datasetCurrentRaw = r.dataset.currentValue;
+    const datasetCurrent = datasetCurrentRaw ? Number.parseFloat(datasetCurrentRaw) : Number.NaN;
     const currentValue = Number.isFinite(datasetCurrent)
       ? datasetCurrent
       : parseNumLoose(r.cells.item(2)?.textContent);
 
-    const datasetGain = Number(r.dataset?.gainAbs);
+    const datasetGainRaw = r.dataset.gainAbs;
+    const datasetGain = datasetGainRaw ? Number.parseFloat(datasetGainRaw) : Number.NaN;
     const gainAbs = Number.isFinite(datasetGain)
       ? datasetGain
       : parseNumLoose(r.cells.item(3)?.textContent);
 
-    const datasetPurchase = Number(r.dataset?.purchaseSum);
+    const datasetPurchaseRaw = r.dataset.purchaseSum;
+    const datasetPurchase = datasetPurchaseRaw ? Number.parseFloat(datasetPurchaseRaw) : Number.NaN;
     const purchase = Number.isFinite(datasetPurchase)
       ? datasetPurchase
-      : (currentValue - gainAbs);
+      : currentValue - gainAbs;
 
     sumPositions += posCount;
     sumCurrent += currentValue;
@@ -905,8 +949,8 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     table.querySelector('tbody')?.appendChild(footer);
   }
   const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
-  const hasAnyValue = rows.some(row => row.dataset?.hasValue === 'true');
-  const sumIsPartial = rows.some(row => row.dataset?.fxUnavailable === 'true');
+  const hasAnyValue = rows.some(row => row.dataset.hasValue === 'true');
+  const sumIsPartial = rows.some(row => row.dataset.fxUnavailable === 'true');
 
   const footerRowData = {
     fx_unavailable: sumIsPartial,
@@ -937,7 +981,7 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     <td class="align-right">${gainAbsCellMarkup}</td>
     <td class="align-right">${gainPctCellMarkup}</td>
   `;
-  const footerGainAbsCell = footer.cells?.[3];
+  const footerGainAbsCell = footer.cells.item(3);
   if (footerGainAbsCell) {
     footerGainAbsCell.dataset.gainPct = hasAnyValue && Number.isFinite(sumGainPct)
       ? `${formatNumber(sumGainPct)} %`
@@ -946,19 +990,30 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
       ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
       : 'neutral';
   }
-  footer.dataset.positionCount = String(Math.round(sumPositions));
-  footer.dataset.currentValue = String(sumCurrent);
-  footer.dataset.purchaseSum = String(sumPurchase);
-  footer.dataset.gainAbs = String(sumGainAbs);
-  footer.dataset.gainPct = String(sumGainPct);
+  footer.dataset.positionCount = Math.round(sumPositions).toString();
+  footer.dataset.currentValue = sumCurrent.toString();
+  footer.dataset.purchaseSum = sumPurchase.toString();
+  footer.dataset.gainAbs = sumGainAbs.toString();
+  footer.dataset.gainPct = sumGainPct.toString();
   footer.dataset.hasValue = hasAnyValue ? 'true' : 'false';
+}
+
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function formatNumber(v: number): string {
   const rounded = roundCurrency(v, { fallback: 0 }) ?? 0;
   return rounded.toLocaleString('de-DE', {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   });
 }
 
@@ -967,27 +1022,23 @@ function updateTotalWealth(
   portfolios: Array<{ current_value?: number | null; value?: number | null; purchase_sum?: number | null }> | null | undefined,
   root: QueryRoot | null | undefined,
 ): void {
-  const targetRoot: QueryRoot = root || document;
+  const targetRoot: QueryRoot = root ?? document;
 
-  const accountSum = (Array.isArray(accounts) ? accounts : []).reduce((acc, entry) => {
-    const value = entry != null && typeof entry === 'object'
-      ? entry.balance ?? entry.current_value ?? entry.value ?? 0
-      : entry;
-    const numeric = Number(value);
-    return acc + (Number.isFinite(numeric) ? numeric : 0);
+  const accountEntries = Array.isArray(accounts) ? accounts : [];
+  const accountSum = accountEntries.reduce((acc, entry) => {
+    const candidate = entry.balance ?? entry.current_value ?? entry.value ?? 0;
+    return acc + toFiniteNumber(candidate);
   }, 0);
 
-  const portfolioSum = (Array.isArray(portfolios) ? portfolios : []).reduce((acc, entry) => {
-    const value = entry != null && typeof entry === 'object'
-      ? entry.current_value ?? entry.value ?? 0
-      : entry;
-    const numeric = Number(value);
-    return acc + (Number.isFinite(numeric) ? numeric : 0);
+  const portfolioEntries = Array.isArray(portfolios) ? portfolios : [];
+  const portfolioSum = portfolioEntries.reduce((acc, entry) => {
+    const candidate = entry.current_value ?? entry.value ?? 0;
+    return acc + toFiniteNumber(candidate);
   }, 0);
 
   const totalWealth = accountSum + portfolioSum;
 
-  const headerMeta = targetRoot?.querySelector<HTMLElement>('#headerMeta');
+  const headerMeta = targetRoot.querySelector<HTMLElement>('#headerMeta');
   if (!headerMeta) {
     console.warn('updateTotalWealth: #headerMeta nicht gefunden.');
     return;
@@ -1002,7 +1053,7 @@ function updateTotalWealth(
     headerMeta.textContent = `💰 Gesamtvermögen: ${formatNumber(totalWealth)}\u00A0€`;
   }
 
-  headerMeta.dataset.totalWealthEur = String(totalWealth);
+  headerMeta.dataset.totalWealthEur = totalWealth.toString();
 }
 
 /**
@@ -1024,9 +1075,8 @@ export function handleLastFileUpdate(
   update: string | { last_file_update?: string | null } | null | undefined,
   root: QueryRoot | null | undefined,
 ): void {
-  const value = typeof update === 'string'
-    ? update
-    : (update && update.last_file_update) || '';
+  const resolvedUpdate = typeof update === 'string' ? update : update?.last_file_update;
+  const value = toNonEmptyString(resolvedUpdate) ?? '';
 
   if (!root) {
     console.warn('handleLastFileUpdate: root fehlt');
@@ -1075,10 +1125,14 @@ export function handleLastFileUpdate(
  * Nutzt sortTableRows(..., true) für Positions-Mapping.
  * @param {HTMLElement} containerEl .positions-container
  */
-export function reapplyPositionsSort(containerEl: HTMLElement | null): void {
-  if (!containerEl) return;
+export function reapplyPositionsSort(containerEl: HTMLElement | null | undefined): void {
+  if (containerEl == null) {
+    return;
+  }
   const table = containerEl.querySelector<HTMLTableElement>('table.sortable-positions');
-  if (!table) return;
+  if (table == null) {
+    return;
+  }
   const key = containerEl.dataset.sortKey || table.dataset.defaultSort || 'name';
   const dirValue = containerEl.dataset.sortDir || table.dataset.defaultDir || 'asc';
   const direction: SortDirection = dirValue === 'desc' ? 'desc' : 'asc';
@@ -1110,8 +1164,9 @@ export const __TEST_ONLY__ = {
 // === Globale / modulweite Utilities ===
 function parseNumLoose(txt: string | null | undefined): number {
   if (txt == null) return 0;
+  const rawText = txt;
   return parseFloat(
-    String(txt)
+    rawText
       .replace(/\u00A0/g, ' ')
       .replace(/[€%]/g, '')
       .replace(/\./g, '')

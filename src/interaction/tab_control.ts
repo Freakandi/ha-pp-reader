@@ -1,76 +1,73 @@
-// @ts-nocheck
-
 /**
  * Swipe and tab interaction helpers mirrored from the legacy UI.
  */
 
-/**
- * Fügt einem Element Swipe- und Maus-Events hinzu, um zwischen Tabs zu navigieren.
- * @param {HTMLElement} element - Das Element, das die Events erhalten soll.
- * @param {Function} onSwipeLeft - Callback für Swipe/Klick nach links (nächster Tab).
- * @param {Function} onSwipeRight - Callback für Swipe/Klick nach rechts (vorheriger Tab).
- */
-export function addSwipeEvents(element, onSwipeLeft, onSwipeRight) {
-  let startX = null;
+export type SwipeCallback = () => void;
 
-  // Touch-Events für Mobilgeräte
-  element.addEventListener(
-    'touchstart',
-    e => {
-      if (e.touches.length === 1) {
-        startX = e.touches[0].clientX;
-      }
-    },
-    { passive: true } // Passive Listener für bessere Performance
-  );
+const DEFAULT_SWIPE_THRESHOLD = 50;
 
-  element.addEventListener(
-    'touchend',
-    e => {
-      if (startX === null) return;
-      const deltaX = e.changedTouches[0].clientX - startX;
-      if (deltaX < -50) {
-        onSwipeLeft();
-      } else if (deltaX > 50) {
-        onSwipeRight();
-      }
-      startX = null;
-    },
-    { passive: true } // Passive Listener für bessere Performance
-  );
+type SwipeDirection = 'left' | 'right';
 
-  // Maus-Events für Desktop
-  element.addEventListener(
-    'mousedown',
-    e => {
-      startX = e.clientX;
-    },
-    { passive: true } // Passive Listener für bessere Performance
-  );
-
-  element.addEventListener(
-    'mouseup',
-    e => {
-      if (startX === null) return;
-      const deltaX = e.clientX - startX;
-      if (deltaX < -50) {
-        onSwipeLeft();
-      } else if (deltaX > 50) {
-        onSwipeRight();
-      }
-      startX = null;
-    },
-    { passive: true } // Passive Listener für bessere Performance
-  );
+function triggerSwipe(direction: SwipeDirection, callback: SwipeCallback): void {
+  try {
+    callback();
+  } catch (error) {
+    console.warn(`addSwipeEvents: ${direction} handler threw`, error);
+  }
 }
 
-/**
- * Optional: Funktion zum direkten Wechseln zu einem Tab per Index.
- * @param {number} targetIndex - Der Index des gewünschten Tabs.
- * @param {Function} onTabChange - Callback, der beim Wechsel aufgerufen wird.
- */
-export function goToTab(targetIndex, onTabChange) {
-  if (typeof onTabChange === 'function') {
-    onTabChange(targetIndex);
-  }
+export function addSwipeEvents(
+  element: HTMLElement,
+  onSwipeLeft: SwipeCallback,
+  onSwipeRight: SwipeCallback,
+): void {
+  let startX: number | null = null;
+
+  const handleSwipe = (deltaX: number): void => {
+    if (deltaX < -DEFAULT_SWIPE_THRESHOLD) {
+      triggerSwipe('left', onSwipeLeft);
+    } else if (deltaX > DEFAULT_SWIPE_THRESHOLD) {
+      triggerSwipe('right', onSwipeRight);
+    }
+  };
+
+  const handleTouchStart = (event: TouchEvent): void => {
+    if (event.touches.length === 1) {
+      startX = event.touches[0].clientX;
+    }
+  };
+
+  const handleTouchEnd = (event: TouchEvent): void => {
+    if (startX === null) {
+      return;
+    }
+    if (event.changedTouches.length === 0) {
+      startX = null;
+      return;
+    }
+    const touch = event.changedTouches[0];
+    handleSwipe(touch.clientX - startX);
+    startX = null;
+  };
+
+  const handleMouseDown = (event: MouseEvent): void => {
+    startX = event.clientX;
+  };
+
+  const handleMouseUp = (event: MouseEvent): void => {
+    if (startX === null) {
+      return;
+    }
+    handleSwipe(event.clientX - startX);
+    startX = null;
+  };
+
+  element.addEventListener('touchstart', handleTouchStart, { passive: true });
+  element.addEventListener('touchend', handleTouchEnd, { passive: true });
+  element.addEventListener('mousedown', handleMouseDown);
+  element.addEventListener('mouseup', handleMouseUp);
+}
+
+export function goToTab(targetIndex: number, onTabChange: (index: number) => void): void {
+  onTabChange(targetIndex);
 }

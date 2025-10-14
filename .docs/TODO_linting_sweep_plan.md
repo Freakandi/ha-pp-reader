@@ -64,37 +64,41 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 4. Keine priorisierten Einzeldateien bekannt – arbeite den Plan in logischer Reihenfolge ab.
 5. Es gibt keine parallelen Arbeiten, die auf diesen Bereich Einfluss nehmen.
 
-3. a) [ ] Utilities & Typdefinitionen
+3. a) [x] Utilities & Typdefinitionen
        - Scope: `src/utils/`, `src/types/`
        - Ziel: `npm run lint:ts -- src/utils src/types` sowie `npm run typecheck` ohne Fehler in diesen Verzeichnissen.
 
-3. b) [ ] Datenebene & Interaktionen
+3. b) [x] Datenebene & Interaktionen
        - Scope: `src/data/`, `src/interaction/`
        - Ziel: ESLint/TS-Fehler behoben; ggf. `async`-Versprechen sauber behandelt.
 
-3. c) [ ] Panel-Einstiegspunkt
+3. c) [x] Panel-Einstiegspunkt
        - Scope: `src/panel.ts`
        - Ziel: Linting/Typecheck ohne Fehler; DOM-Zugriffe und Event-Handler streng typisieren.
 
-3. d) [ ] Dashboard-Komponenten
+3. d) [x] Dashboard-Komponenten
        - Scope: `src/dashboard/`
        - Ziel: Modulweise ESLint-Compliance sicherstellen, insbesondere bei dynamischen Layout-Berechnungen.
 
 3. e) [ ] Tab-Ansichten
        - Scope: `src/tabs/`
        - Ziel: Tabs strikt typisieren, Swipe-/Navigation-Logik lint-frei halten.
-       - 3.e.i) [ ] `src/tabs/overview.ts`
-       - 3.e.ii) [ ] `src/tabs/security_detail.ts`
-       - 3.e.iii) [ ] `src/tabs/types.ts`
-       - 3.e.iv) [ ] `src/tabs/__tests__/`
+       - 3.e.i) [x] `src/tabs/overview.ts`
+       - 3.e.ii) [x] `src/tabs/security_detail.ts`
+       - 3.e.iii) [x] `src/tabs/types.ts`
+       - 3.e.iv) [x] `src/tabs/__tests__/`
 
-3. f) [ ] Inhalts-Renderer & Charting
+3. f) [x] Inhalts-Renderer & Charting
        - Scope: `src/content/`
        - Ziel: Render-Helfer und Charting-Module lint- und typecheck-konform überführen.
 
-3. g) [ ] Frontend-Tests
+3. g) [x] Frontend-Tests
        - Scope: `src/**/__tests__` und `.test.ts`
        - Ziel: ESLint-Ausnahmen begründet oder entfernt, TypeScript-Fehler beseitigt.
+
+3. h) [x] Dashboard-Hauptmodul
+       - Scope: `src/dashboard.ts`
+       - Ziel: Navigation und Event-Handling lint-konform ohne optionale Ketten oder schwebende Promises.
 
 
 ## 4. Abschlussarbeiten

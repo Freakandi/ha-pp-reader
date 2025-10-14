@@ -41,16 +41,6 @@ type LastFileUpdatePayload = Parameters<typeof handleLastFileUpdate>[0];
 type PortfolioValuesUpdatePayload = Parameters<typeof handlePortfolioUpdate>[0];
 type PortfolioPositionsUpdatePayload = Parameters<typeof handlePortfolioPositionsUpdate>[0];
 
-type PortfolioPositionsSingleUpdate = Extract<
-  PortfolioPositionsUpdatePayload,
-  Record<string, unknown>
->;
-
-type PortfolioPositionsArrayUpdate = Extract<
-  PortfolioPositionsUpdatePayload,
-  readonly unknown[]
->;
-
 type DashboardUpdateType =
   | 'accounts'
   | 'last_file_update'
@@ -117,6 +107,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as PromiseLike<T>).then === 'function'
+  );
+}
+
+function toErrorMessage(error: unknown): string {
+  if (typeof error === 'string') {
+    const trimmed = error.trim();
+    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
+  }
+  if (error instanceof Error) {
+    const trimmed = error.message.trim();
+    return trimmed.length > 0 ? trimmed : error.name;
+  }
+  if (error != null) {
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') {
+        return serialized;
+      }
+    } catch {
+      // Ignore serialization problems and fall back to String().
+    }
+  }
+  return String(error);
+}
+
 function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
   return (
     value === 'accounts' ||
@@ -127,13 +147,13 @@ function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
 }
 
 function extractPortfolioUuidFromSingleUpdate(
-  update: PortfolioPositionsSingleUpdate,
+  update: Record<string, unknown>,
 ): string | null {
-  const uuidCandidate = update.portfolio_uuid;
+  const uuidCandidate = update['portfolio_uuid'];
   if (typeof uuidCandidate === 'string' && uuidCandidate) {
     return uuidCandidate;
   }
-  const camelCaseCandidate = (update as Record<string, unknown>).portfolioUuid;
+  const camelCaseCandidate = update['portfolioUuid'];
   if (typeof camelCaseCandidate === 'string' && camelCaseCandidate) {
     return camelCaseCandidate;
   }
@@ -147,9 +167,9 @@ function extractPortfolioUuidFromPositionsUpdate(
     return null;
   }
   if (Array.isArray(update)) {
-    for (const item of update as PortfolioPositionsArrayUpdate) {
+    for (const item of update) {
       if (isRecord(item)) {
-        const uuid = extractPortfolioUuidFromSingleUpdate(item as PortfolioPositionsSingleUpdate);
+        const uuid = extractPortfolioUuidFromSingleUpdate(item);
         if (uuid) {
           return uuid;
         }
@@ -160,7 +180,7 @@ function extractPortfolioUuidFromPositionsUpdate(
   if (!isRecord(update)) {
     return null;
   }
-  return extractPortfolioUuidFromSingleUpdate(update as PortfolioPositionsSingleUpdate);
+  return extractPortfolioUuidFromSingleUpdate(update);
 }
 
 function normalizeDashboardUpdate(
@@ -227,6 +247,33 @@ function getVisibleTabs(): DashboardTabDescriptor[] {
 
   return [...baseTabs, ...detailTabs];
 }
+
+function getTabAtIndex(index: number): DashboardTabDescriptor | null {
+  const tabs = getVisibleTabs();
+  if (index < 0 || index >= tabs.length) {
+    return null;
+  }
+  return tabs[index];
+}
+
+function resolveDashboardPanel(panels: HassPanels | null | undefined): PanelLike {
+  if (!panels) {
+    return null;
+  }
+  const normalizedPanels = panels as Partial<Record<string, PanelLike>>;
+  const preferred = normalizedPanels.ppreader ?? normalizedPanels.pp_reader;
+  if (preferred) {
+    return preferred;
+  }
+  const fallback = Object.values(normalizedPanels).find((panelConfig) => {
+    if (!panelConfig || typeof panelConfig !== 'object') {
+      return false;
+    }
+    const name = (panelConfig as { webcomponent_name?: unknown }).webcomponent_name;
+    return name === 'pp-reader-panel';
+  });
+  return fallback ?? null;
+}
 function rememberCurrentPageScroll(): void {
   try {
     const dashboardElement = findDashboardElement();
@@ -269,13 +316,15 @@ async function navigateToPage(
 
   rememberCurrentPageScroll();
 
-  const currentTab = tabs[currentPage];
-  const currentSecurityUuid = extractSecurityUuidFromKey(currentTab?.key);
+  const currentTab = currentPage >= 0 && currentPage < tabs.length ? tabs[currentPage] : null;
+  const currentSecurityUuid = currentTab
+    ? extractSecurityUuidFromKey(currentTab.key)
+    : null;
   let nextIndex = clampedIndex;
 
   if (currentSecurityUuid) {
-    const intendedTarget = tabs[clampedIndex];
-    if (intendedTarget?.key === OVERVIEW_TAB_KEY) {
+    const intendedTarget = clampedIndex >= 0 && clampedIndex < tabs.length ? tabs[clampedIndex] : null;
+    if (intendedTarget && intendedTarget.key === OVERVIEW_TAB_KEY) {
       const closed = closeSecurityDetail(currentSecurityUuid, { suppressRender: true });
       if (closed) {
         const updatedTabs = getVisibleTabs();
@@ -352,8 +401,16 @@ export function unregisterDetailTab(key: string | null | undefined): void {
   const descriptor = detailTabRegistry.get(key);
   if (descriptor && typeof descriptor.cleanup === 'function') {
     try {
-      descriptor.cleanup({ key });
-    } catch (error) {
+      const cleanupResult = descriptor.cleanup({ key });
+      if (isPromiseLike<unknown>(cleanupResult)) {
+        cleanupResult.catch((cleanupError: unknown) => {
+          console.error(
+            'unregisterDetailTab: Fehler beim asynchronen cleanup',
+            cleanupError,
+          );
+        });
+      }
+    } catch (error: unknown) {
       console.error('unregisterDetailTab: Fehler beim Ausführen von cleanup', error);
     }
   }
@@ -396,8 +453,8 @@ function getSecurityDetailTabKey(securityUuid: string): string {
 
 function findDashboardElement(): DashboardElement | null {
   for (const element of getRegisteredDashboardElements()) {
-    if (element && element.isConnected) {
-      return element as DashboardElement;
+    if (element.isConnected) {
+      return element;
     }
   }
 
@@ -408,7 +465,7 @@ function findDashboardElement(): DashboardElement | null {
 
   const panelElements = document.querySelectorAll<HTMLElement>('pp-reader-panel');
   for (const panelElement of panelElements) {
-    if (!panelElement || !panelElement.shadowRoot) {
+    if (!panelElement.shadowRoot) {
       continue;
     }
 
@@ -560,13 +617,8 @@ async function renderTab(
   panel: PanelLike,
 ): Promise<void> {
   let effectivePanel = panel;
-  if (!effectivePanel && hass?.panels) {
-    const panels: HassPanels = hass.panels;
-    effectivePanel =
-      panels.ppreader ||
-      panels.pp_reader ||
-      Object.values(panels).find((p) => p?.webcomponent_name === 'pp-reader-panel') ||
-      null;
+  if (!effectivePanel) {
+    effectivePanel = resolveDashboardPanel(hass ? hass.panels : null);
   }
 
   const tabs = getVisibleTabs();
@@ -574,23 +626,18 @@ async function renderTab(
     currentPage = Math.max(0, tabs.length - 1);
   }
 
-  const tab = tabs[currentPage];
-  if (!tab || typeof tab.render !== 'function') {
+  const tab = getTabAtIndex(currentPage);
+  if (!tab) {
     console.error('renderTab: Kein gültiger Tab oder keine render-Methode gefunden!');
     return;
   }
 
-  let content: string | void;
+  let content: string | undefined;
   try {
     content = await tab.render(root, hass, effectivePanel);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('renderTab: Fehler beim Rendern des Tabs:', error);
-    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${(error as Error)?.message || error}</pre></div>`;
-    return;
-  }
-
-  if (!root) {
-    console.error('renderTab: Root-Element nicht gefunden!');
+    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${toErrorMessage(error)}</pre></div>`;
     return;
   }
 
@@ -612,10 +659,6 @@ async function renderTab(
     });
 
   const headerCard = await waitForHeaderCard();
-  if (!headerCard) {
-    console.error('Header-Card nicht gefunden!');
-    return;
-  }
 
   let anchor = root.querySelector<HTMLElement>(`#${STICKY_HEADER_ANCHOR_ID}`);
   if (!anchor) {
@@ -634,11 +677,10 @@ async function renderTab(
 
 function setupHeaderScrollBehavior(root: HTMLElement): void {
   const headerCard = root.querySelector<HTMLElement>('.header-card');
-  const scrollBorder = root;
   const anchor = root.querySelector<HTMLElement>(`#${STICKY_HEADER_ANCHOR_ID}`);
 
-  if (!headerCard || !scrollBorder || !anchor) {
-    console.error('Fehlende Elemente für das Scrollverhalten: headerCard, scrollBorder oder anchor.');
+  if (!headerCard || !anchor) {
+    console.error('Fehlende Elemente für das Scrollverhalten: headerCard oder anchor.');
     return;
   }
 
@@ -675,8 +717,12 @@ function setupSwipeOnHeaderCard(
 
   addSwipeEvents(
     headerCard,
-    () => navigateByDelta(1, root, hass, panel),
-    () => navigateByDelta(-1, root, hass, panel),
+    () => {
+      navigateByDelta(1, root, hass, panel);
+    },
+    () => {
+      navigateByDelta(-1, root, hass, panel);
+    },
   );
 }
 
@@ -813,15 +859,8 @@ class PPReaderDashboard extends HTMLElement {
       return;
     }
 
-    if (!this._panel && this._hass.panels) {
-      const panels: HassPanels = this._hass.panels;
-      this._panel =
-        panels.ppreader ||
-        panels.pp_reader ||
-        (Object.values(panels).find(
-          (panelConfig) => panelConfig?.webcomponent_name === 'pp-reader-panel',
-        ) as PanelLike) ||
-        null;
+    if (!this._panel) {
+      this._panel = resolveDashboardPanel(this._hass.panels ?? null);
     }
 
     const entryId = getEntryId(this._hass, this._panel);
@@ -852,44 +891,50 @@ class PPReaderDashboard extends HTMLElement {
     const eventTypes: readonly string[] = ['panels_updated'];
 
     const subs: HassUnsubscribe[] = [];
-    Promise.all(
-      eventTypes.map((et) =>
-        conn
-          .subscribeEvents(this._handleBusEvent.bind(this), et)
-          .then((unsub) => {
-            if (typeof unsub === 'function') {
-              subs.push(unsub);
-              console.debug('PPReaderDashboard: subscribed to', et);
-            } else {
-              console.error(
-                'PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für',
-                et,
-                unsub,
-              );
-            }
-          })
-          .catch((err) => {
-            console.error('PPReaderDashboard: Fehler bei subscribeEvents für', et, err);
-          }),
-      ),
-    ).then(() => {
-      this._unsubscribeEvents = () => {
-        subs.forEach((unsubscribe) => {
-          try {
-            unsubscribe();
-          } catch (error) {
-            // ignore cleanup errors
+    const subscriptionPromise = Promise.all(
+      eventTypes.map(async (eventType) => {
+        try {
+          const unsubscribe = await conn.subscribeEvents(
+            this._handleBusEvent.bind(this),
+            eventType,
+          );
+          if (typeof unsubscribe === 'function') {
+            subs.push(unsubscribe);
+            console.debug('PPReaderDashboard: subscribed to', eventType);
+          } else {
+            console.error(
+              'PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für',
+              eventType,
+              unsubscribe,
+            );
           }
-        });
-        console.debug('PPReaderDashboard: alle Event-Subscriptions entfernt');
-      };
-    });
+        } catch (subscribeError: unknown) {
+          console.error('PPReaderDashboard: Fehler bei subscribeEvents für', eventType, subscribeError);
+        }
+      }),
+    );
+    subscriptionPromise
+      .then(() => {
+        this._unsubscribeEvents = () => {
+          subs.forEach((unsubscribe) => {
+            try {
+              unsubscribe();
+            } catch (error: unknown) {
+              // ignore cleanup errors
+            }
+          });
+          console.debug('PPReaderDashboard: alle Event-Subscriptions entfernt');
+        };
+      })
+      .catch((error: unknown) => {
+        console.error('PPReaderDashboard: Fehler beim Registrieren der Events', error);
+      });
   }
   private _removeEventListeners(): void {
     if (typeof this._unsubscribeEvents === 'function') {
       try {
         this._unsubscribeEvents();
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('PPReaderDashboard: Fehler beim Entfernen der Event-Listener:', error);
       }
     }
@@ -902,8 +947,8 @@ class PPReaderDashboard extends HTMLElement {
       return;
     }
 
-    const eventData = event?.data;
-    if (!eventData || !isDashboardUpdateType(eventData.data_type)) {
+    const eventData = event.data;
+    if (!isDashboardUpdateType(eventData.data_type)) {
       return;
     }
 
@@ -998,13 +1043,13 @@ class PPReaderDashboard extends HTMLElement {
       if (typeof structuredClone === 'function') {
         return structuredClone(data);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('PPReaderDashboard: structuredClone fehlgeschlagen, falle auf JSON zurück', error);
     }
 
     try {
       return JSON.parse(JSON.stringify(data)) as T;
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('PPReaderDashboard: JSON-Clone fehlgeschlagen, referenziere Originaldaten', error);
       return data;
     }
@@ -1018,7 +1063,7 @@ class PPReaderDashboard extends HTMLElement {
     for (const item of this._pendingUpdates) {
       try {
         this._doRender(item.type, this._cloneData(item.data));
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('PPReaderDashboard: Fehler beim erneuten Anwenden eines Updates', item, error);
       }
     }
@@ -1035,15 +1080,7 @@ class PPReaderDashboard extends HTMLElement {
   }
 
   public rememberScrollPosition(page: number = currentPage): void {
-    if (!this._root) {
-      return;
-    }
-
     const targetPage = Number.isInteger(page) ? page : currentPage;
-    if (targetPage == null) {
-      return;
-    }
-
     this._scrollPositions[targetPage] = this._root.scrollTop || 0;
   }
 
@@ -1072,26 +1109,23 @@ class PPReaderDashboard extends HTMLElement {
       this._scrollPositions[this._lastPage] = this._root.scrollTop;
     }
 
-    const maybePromise = renderTab(this._root, this._hass, this._panel);
-    if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
-      (maybePromise as Promise<void>)
+    const renderResult = renderTab(this._root, this._hass, this._panel);
+    if (isPromiseLike<unknown>(renderResult)) {
+      renderResult
         .then(() => {
           this._afterRender(page);
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           console.error('PPReaderDashboard: Fehler beim Rendern des Tabs', error);
           this._afterRender(page);
         });
-    } else {
-      this._afterRender(page);
-    }
-  }
-
-  private _afterRender(page: number): void {
-    if (!this._root) {
       return;
     }
 
+    this._afterRender(page);
+  }
+
+  private _afterRender(page: number): void {
     const restore = this._scrollPositions[page] || 0;
     this._root.scrollTop = restore;
 

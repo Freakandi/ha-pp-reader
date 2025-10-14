@@ -22,6 +22,43 @@ const DEFAULT_BASELINE_COLOR = 'var(--pp-reader-chart-baseline, rgba(96, 125, 13
 const DEFAULT_BASELINE_DASH = '6 4';
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+function toAttributeValue(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value.toString() : null;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    return Number.isFinite(timestamp) ? value.toISOString() : null;
+  }
+  return null;
+}
+
+function safeText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toString();
+  }
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString();
+  }
+  return '';
+}
+
+function px(value: number): string {
+  return `${String(value)}px`;
+}
+
 export type LineChartInputDatum = unknown;
 
 export type LineChartAccessor = (
@@ -134,12 +171,13 @@ function createSvgElement<K extends keyof SVGElementTagNameMap>(
   tag: K,
   attrs: Record<string, unknown> = {},
 ): SVGElementTagNameMap[K] {
-  const element = document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
+  const element = document.createElementNS(SVG_NS, tag);
   Object.entries(attrs).forEach(([key, value]) => {
-    if (value == null) {
+    const attributeValue = toAttributeValue(value);
+    if (attributeValue == null) {
       return;
     }
-    element.setAttribute(key, String(value));
+    element.setAttribute(key, attributeValue);
   });
   return element;
 }
@@ -203,18 +241,21 @@ const defaultXFormatter: LineChartFormatter = (timestamp, dataPoint, _index) => 
 
   if (dataPoint && typeof dataPoint === 'object' && 'date' in dataPoint) {
     const raw = (dataPoint as { date?: unknown }).date;
-    return raw != null ? String(raw) : '';
+    const fallback = safeText(raw);
+    if (fallback) {
+      return fallback;
+    }
   }
 
-  if (timestamp == null) {
+  if (!Number.isFinite(timestamp)) {
     return '';
   }
 
-  return String(timestamp);
+  return timestamp.toString();
 };
 
 const defaultYFormatter: LineChartFormatter = (value, _dataPoint, _index) => {
-  const numeric = Number.isFinite(value) ? value : Number.parseFloat(String(value)) || 0;
+  const numeric = Number.isFinite(value) ? value : toNumber(value, 0) ?? 0;
   return numeric.toLocaleString('de-DE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -271,33 +312,39 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function buildAreaPath(points: readonly LineChartComputedPoint[], baselineY: number): string {
-  if (!Array.isArray(points) || points.length === 0) {
+  if (points.length === 0) {
     return '';
   }
 
-  const moveLine = points
-    .map((point, index) => {
-      const command = index === 0 ? 'M' : 'L';
-      return `${command}${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
-    })
-    .join(' ');
+  const segments: string[] = [];
+  points.forEach((point, index) => {
+    const command = index === 0 ? 'M' : 'L';
+    const x = point.x.toFixed(2);
+    const y = point.y.toFixed(2);
+    segments.push(`${command}${x} ${y}`);
+  });
 
-  const closing = `L${points[points.length - 1].x.toFixed(2)} ${baselineY.toFixed(2)} L${points[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const closing = `L${lastPoint.x.toFixed(2)} ${baselineY.toFixed(2)} L${firstPoint.x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
 
-  return `${moveLine} ${closing}`;
+  return `${segments.join(' ')} ${closing}`;
 }
 
 function buildLinePath(points: readonly LineChartComputedPoint[]): string {
-  if (!Array.isArray(points) || points.length === 0) {
+  if (points.length === 0) {
     return '';
   }
 
-  return points
-    .map((point, index) => {
-      const command = index === 0 ? 'M' : 'L';
-      return `${command}${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
-    })
-    .join(' ');
+  const segments: string[] = [];
+  points.forEach((point, index) => {
+    const command = index === 0 ? 'M' : 'L';
+    const x = point.x.toFixed(2);
+    const y = point.y.toFixed(2);
+    segments.push(`${command}${x} ${y}`);
+  });
+
+  return segments.join(' ');
 }
 
 function applyBaselineAppearance(state: LineChartInternalState): void {
@@ -353,7 +400,7 @@ function computePoints(
   const { width, height, margin } = dimensions;
   const { xAccessor, yAccessor } = accessors;
 
-  if (!Array.isArray(series) || series.length === 0) {
+  if (series.length === 0) {
     return { points: [], range: null };
   }
 
@@ -502,7 +549,9 @@ function updateTooltipPosition(
     vertical = anchorY + padding;
   }
   vertical = clamp(vertical, 0, maxVertical);
-  tooltip.style.transform = `translate(${Math.round(horizontal)}px, ${Math.round(vertical)}px)`;
+  const translateX = px(Math.round(horizontal));
+  const translateY = px(Math.round(vertical));
+  tooltip.style.transform = `translate(${translateX}, ${translateY})`;
 }
 
 function hideTooltip(state: LineChartInternalState): void {
@@ -528,7 +577,7 @@ function attachPointerHandlers(
   }
 
   const handlePointerMove = (event: PointerEvent) => {
-    if (!state.points || state.points.length === 0 || !state.svg) {
+    if (state.points.length === 0 || !state.svg) {
       hideTooltip(state);
       return;
     }
@@ -546,11 +595,6 @@ function attachPointerHandlers(
         minDistance = distance;
         closest = candidate;
       }
-    }
-
-    if (!closest) {
-      hideTooltip(state);
-      return;
     }
 
     if (state.focusCircle) {
@@ -595,11 +639,6 @@ export function renderLineChart(
   root: HTMLElement,
   options: LineChartOptions = {},
 ): LineChartContainerElement | null {
-  if (!root) {
-    console.error('renderLineChart: root element is required');
-    return null;
-  }
-
   const container = document.createElement('div') as LineChartContainerElement;
   container.className = 'line-chart-container';
   container.dataset.chartType = 'line';
@@ -608,7 +647,7 @@ export function renderLineChart(
   const svg = createSvgElement('svg', {
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
-    viewBox: `0 0 ${DEFAULT_WIDTH} ${DEFAULT_HEIGHT}`,
+    viewBox: `0 0 ${String(DEFAULT_WIDTH)} ${String(DEFAULT_HEIGHT)}`,
     role: 'img',
     'aria-hidden': 'true',
     focusable: 'false',
@@ -736,18 +775,10 @@ export function renderLineChart(
 
   assignDimensions(state, options.width, options.height, options.margin);
 
-  if (state.linePath) {
-    state.linePath.setAttribute('stroke', state.color);
-  }
-  if (state.focusLine) {
-    state.focusLine.setAttribute('stroke', state.color);
-  }
-  if (state.focusCircle) {
-    state.focusCircle.setAttribute('stroke', state.color);
-  }
-  if (state.areaPath) {
-    state.areaPath.setAttribute('fill', state.areaColor);
-  }
+  linePath.setAttribute('stroke', state.color);
+  focusLine.setAttribute('stroke', state.color);
+  focusCircle.setAttribute('stroke', state.color);
+  areaPath.setAttribute('fill', state.areaColor);
 
   updateLineChart(container, options);
   attachPointerHandlers(container, state);
@@ -813,7 +844,7 @@ export function updateLineChart(
   const { width, height, margin } = state;
   state.svg.setAttribute('width', String(width));
   state.svg.setAttribute('height', String(height));
-  state.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  state.svg.setAttribute('viewBox', `0 0 ${String(width)} ${String(height)}`);
 
   state.overlay.setAttribute('x', margin.left.toFixed(2));
   state.overlay.setAttribute('y', margin.top.toFixed(2));
@@ -826,8 +857,9 @@ export function updateLineChart(
     Math.max(height - margin.top - margin.bottom, 0).toFixed(2),
   );
 
-  const series = Array.isArray(options.series) ? options.series : state.series;
-  state.series = Array.isArray(series) ? [...series] : [];
+  if (Array.isArray(options.series)) {
+    state.series = Array.from(options.series);
+  }
 
   const { points, range } = computePoints(state.series, state, {
     xAccessor: state.xAccessor,
@@ -836,7 +868,7 @@ export function updateLineChart(
   state.points = points;
   state.range = range;
 
-  if (!points || points.length === 0) {
+  if (points.length === 0) {
     state.linePath.setAttribute('d', '');
     if (state.areaPath) {
       state.areaPath.setAttribute('d', '');
@@ -880,9 +912,9 @@ function updateAxes(state: LineChartInternalState): void {
   const effectiveWidth = Math.max(boundedWidth, 0);
   const effectiveHeight = Math.max(boundedHeight, 0);
 
-  xAxis.style.left = `${margin.left}px`;
-  xAxis.style.width = `${effectiveWidth}px`;
-  xAxis.style.top = `${height - margin.bottom + 6}px`;
+  xAxis.style.left = px(margin.left);
+  xAxis.style.width = px(effectiveWidth);
+  xAxis.style.top = px(height - margin.bottom + 6);
   xAxis.innerHTML = '';
 
   if (hasValidX && effectiveWidth > 0) {
@@ -895,7 +927,7 @@ function updateAxes(state: LineChartInternalState): void {
       tick.style.position = 'absolute';
       tick.style.bottom = '0';
       const ratio = clamp(positionRatio, 0, 1);
-      tick.style.left = `${ratio * effectiveWidth}px`;
+      tick.style.left = px(ratio * effectiveWidth);
       let translateX = '-50%';
       let textAlign: CSSStyleDeclaration['textAlign'] = 'center';
       if (ratio <= 0.001) {
@@ -914,17 +946,17 @@ function updateAxes(state: LineChartInternalState): void {
     });
   }
 
-  yAxis.style.top = `${margin.top}px`;
-  yAxis.style.height = `${effectiveHeight}px`;
+  yAxis.style.top = px(margin.top);
+  yAxis.style.height = px(effectiveHeight);
   const yAxisWidth = Math.max(margin.left - 6, 0);
   yAxis.style.left = '0';
-  yAxis.style.width = `${Math.max(yAxisWidth, 0)}px`;
+  yAxis.style.width = px(Math.max(yAxisWidth, 0));
   yAxis.innerHTML = '';
 
   if (hasValidY && effectiveHeight > 0) {
     const desiredTicks = Math.max(2, Math.min(6, Math.round(effectiveHeight / 60) || 4));
     const yTicks = generateNumericAxisTicks(minY, maxY, desiredTicks);
-    const applyFormatter = yFormatter ?? defaultYFormatter;
+    const applyFormatter = yFormatter;
     yTicks.forEach(({ value, positionRatio }) => {
       const tick = document.createElement('div');
       tick.className = 'line-chart-axis-tick line-chart-axis-tick-y';
@@ -932,7 +964,7 @@ function updateAxes(state: LineChartInternalState): void {
       tick.style.left = '0';
       const clampedRatio = clamp(positionRatio, 0, 1);
       const top = (1 - clampedRatio) * effectiveHeight;
-      tick.style.top = `${top}px`;
+      tick.style.top = px(top);
       tick.textContent = applyFormatter(value, null, -1);
       yAxis.appendChild(tick);
     });
@@ -1049,7 +1081,7 @@ function formatXAxisLabel(
     });
   }
 
-  return state.xFormatter ? state.xFormatter(timestamp, null, -1) : String(timestamp);
+  return state.xFormatter(timestamp, null, -1);
 }
 
 function generateNumericAxisTicks(

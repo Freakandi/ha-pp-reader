@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
+import { installDomEnvironment } from '../../__tests__/dom';
 
 type OverviewModule = typeof import('../overview');
 
@@ -16,54 +17,33 @@ type BuildPurchasePriceDisplayForTest = (position: Record<string, unknown>) => {
   ariaLabel: string;
 };
 
-let cachedModule: OverviewModule | null = null;
+interface OverviewTestHelpers {
+  buildPurchasePriceDisplayForTest: BuildPurchasePriceDisplayForTest;
+}
 
-const globalRef = globalThis as typeof globalThis & {
-  window?: Window & typeof globalThis;
-  document?: Document;
-  HTMLElement?: typeof HTMLElement;
-  HTMLTableElement?: typeof HTMLTableElement;
-  Element?: typeof Element;
-  Node?: typeof Node;
-};
+function getOverviewTestHelpers(module: OverviewModule): OverviewTestHelpers {
+  const { buildPurchasePriceDisplayForTest } = module.__TEST_ONLY__;
+  if (typeof buildPurchasePriceDisplayForTest !== 'function') {
+    throw new Error('Failed to load overview helper for tests');
+  }
+  return { buildPurchasePriceDisplayForTest };
+}
+
+let cachedModule: OverviewModule | undefined;
 
 async function withOverviewModule<T>(
   callback: (module: OverviewModule) => T | Promise<T>,
 ): Promise<T> {
-  const previousWindow = globalRef.window;
-  const previousDocument = globalRef.document;
-  const previousHTMLElement = globalRef.HTMLElement;
-  const previousHTMLTableElement = globalRef.HTMLTableElement;
-  const previousElement = globalRef.Element;
-  const previousNode = globalRef.Node;
-
-  const dom = new JSDOM('<!doctype html><div id="root"></div>');
-
-  globalRef.window = dom.window as unknown as Window & typeof globalThis;
-  globalRef.document = dom.window.document;
-  globalRef.HTMLElement = dom.window.HTMLElement;
-  globalRef.HTMLTableElement = dom.window.HTMLTableElement;
-  globalRef.Element = dom.window.Element;
-  globalRef.Node = dom.window.Node;
+  const env = installDomEnvironment();
 
   try {
     if (!cachedModule) {
       cachedModule = await import('../overview');
     }
 
-    const module = cachedModule;
-    if (!module?.__TEST_ONLY__?.buildPurchasePriceDisplayForTest) {
-      throw new Error('Failed to load overview helper for tests');
-    }
-
-    return await callback(module);
+    return await callback(cachedModule);
   } finally {
-    globalRef.window = previousWindow;
-    globalRef.document = previousDocument;
-    globalRef.HTMLElement = previousHTMLElement;
-    globalRef.HTMLTableElement = previousHTMLTableElement;
-    globalRef.Element = previousElement;
-    globalRef.Node = previousNode;
+    env.restore();
   }
 }
 
@@ -71,8 +51,7 @@ void test(
   'buildPurchasePriceDisplayForTest renders security currency as primary and account secondary',
   async () =>
     withOverviewModule(module => {
-      const helper = module.__TEST_ONLY__
-        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+      const { buildPurchasePriceDisplayForTest: helper } = getOverviewTestHelpers(module);
       const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-avg',
         name: 'SSR Mining',
@@ -119,8 +98,7 @@ void test(
   'buildPurchasePriceDisplayForTest falls back to account currency when security averages missing',
   async () =>
     withOverviewModule(module => {
-      const helper = module.__TEST_ONLY__
-        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+      const { buildPurchasePriceDisplayForTest: helper } = getOverviewTestHelpers(module);
       const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-fallback',
         name: 'Fallback Security',
@@ -165,8 +143,7 @@ void test(
   'buildPurchasePriceDisplayForTest prefers provided average_cost payload',
   async () =>
     withOverviewModule(module => {
-      const helper = module.__TEST_ONLY__
-        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+      const { buildPurchasePriceDisplayForTest: helper } = getOverviewTestHelpers(module);
       const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-average-cost',
         name: 'Average Cost Security',
@@ -214,8 +191,7 @@ void test(
   'buildPurchasePriceDisplayForTest returns missing placeholder when both average_cost and aggregation absent',
   async () =>
     withOverviewModule(module => {
-      const helper = module.__TEST_ONLY__
-        .buildPurchasePriceDisplayForTest as BuildPurchasePriceDisplayForTest;
+      const { buildPurchasePriceDisplayForTest: helper } = getOverviewTestHelpers(module);
       const { markup, ariaLabel, sortValue } = helper({
         security_uuid: 'security-missing',
         name: 'Missing Average Security',
@@ -328,24 +304,28 @@ void test(
       const row = dom.window.document.querySelector<HTMLTableRowElement>('tbody tr.position-row');
       assert.ok(row, 'expected a rendered position row');
 
-      const gainAbsCell = row?.querySelector<HTMLTableCellElement>('td.align-right[data-gain-pct]');
+      const gainAbsCell = row.querySelector<HTMLTableCellElement>('td.align-right[data-gain-pct]');
       assert.ok(gainAbsCell, 'expected gain absolute cell with metadata');
-      const gainAbsText = gainAbsCell?.textContent?.replace(/\s+/g, ' ').trim();
+      const gainAbsRaw = gainAbsCell.textContent;
+      assert.ok(gainAbsRaw, 'expected gain absolute cell to provide text content');
+      const gainAbsText = gainAbsRaw.replace(/\s+/g, ' ').trim();
       assert.ok(
-        gainAbsText?.includes('210,00'),
+        gainAbsText.includes('210,00'),
         `gain absolute cell should reflect performance payload, got ${gainAbsText}`,
       );
-      assert.strictEqual(gainAbsCell?.dataset.gainPct, '42,00 %');
-      assert.strictEqual(gainAbsCell?.dataset.gainSign, 'positive');
+      assert.strictEqual(gainAbsCell.dataset.gainPct, '42,00 %');
+      assert.strictEqual(gainAbsCell.dataset.gainSign, 'positive');
 
-      const gainPctCell = row?.querySelector<HTMLTableCellElement>('td.gain-pct-cell');
+      const gainPctCell = row.querySelector<HTMLTableCellElement>('td.gain-pct-cell');
       assert.ok(gainPctCell, 'expected gain percentage cell');
-      const gainPctText = gainPctCell?.textContent?.replace(/\s+/g, ' ').trim();
+      const gainPctRaw = gainPctCell.textContent;
+      assert.ok(gainPctRaw, 'expected gain percentage cell to provide text content');
+      const gainPctText = gainPctRaw.replace(/\s+/g, ' ').trim();
       assert.ok(
-        gainPctText?.includes('42,00'),
+        gainPctText.includes('42,00'),
         `gain percentage cell should reflect performance payload, got ${gainPctText}`,
       );
-      const trendSpan = gainPctCell?.querySelector('span.positive');
+      const trendSpan = gainPctCell.querySelector('span.positive');
       assert.ok(trendSpan, 'gain percentage cell should display positive trend styling');
     }),
 );

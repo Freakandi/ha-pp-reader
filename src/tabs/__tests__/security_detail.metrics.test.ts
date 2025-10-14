@@ -127,10 +127,12 @@ test('composeAveragePurchaseTooltipForTest renders FX information from averages'
 
   const tooltip = composeAveragePurchaseTooltipForTest(snapshot, 'EUR');
   assert.ok(tooltip, 'expected tooltip to be generated when averages are available');
-  assert.match(tooltip ?? '', /1 USD = 0,8000 EUR/);
-  assert.match(tooltip ?? '', /1 EUR = 1,2500 USD/);
-  assert.match(tooltip ?? '', /Abdeckung: 75,0%/);
-  assert.match(tooltip ?? '', /\(Stand: 02\.01\.2024\)/);
+  const tooltipText = tooltip;
+  assert.ok(tooltipText, 'tooltip text should be non-empty when averages exist');
+  assert.match(tooltipText, /1 USD = 0,8000 EUR/);
+  assert.match(tooltipText, /1 EUR = 1,2500 USD/);
+  assert.match(tooltipText, /Abdeckung: 75,0%/);
+  assert.match(tooltipText, /\(Stand: 02\.01\.2024\)/);
 });
 
 test('resolvePurchaseFxTimestampForTest prefers dedicated FX timestamps', () => {
@@ -141,7 +143,7 @@ test('resolvePurchaseFxTimestampForTest prefers dedicated FX timestamps', () => 
 
   assert.ok(timestamp, 'expected FX timestamp to be parsed');
   assert.strictEqual(
-    new Date(timestamp ?? 0).toISOString(),
+    new Date(timestamp).toISOString(),
     '2023-12-24T05:30:00.000Z',
     'purchase FX timestamp should have precedence over last price fallbacks',
   );
@@ -149,8 +151,9 @@ test('resolvePurchaseFxTimestampForTest prefers dedicated FX timestamps', () => 
   const fallbackTimestamp = resolvePurchaseFxTimestampForTest({
     last_price: { fetched_at: '2024-02-01T10:00:00Z' },
   });
+  assert.ok(fallbackTimestamp, 'expected fallback timestamp when dedicated value is absent');
   assert.strictEqual(
-    new Date(fallbackTimestamp ?? 0).toISOString(),
+    new Date(fallbackTimestamp).toISOString(),
     '2024-02-01T10:00:00.000Z',
     'last price metadata should be used when dedicated FX timestamps are absent',
   );
@@ -204,13 +207,15 @@ test('buildHeaderMetaForTest consumes backend performance payloads verbatim', ()
     '.security-meta-item--total-change .value-group',
   );
   assert.ok(totalChangeGroup, 'expected total change group to be rendered');
+  const totalChangeText = totalChangeGroup.textContent;
+  assert.ok(totalChangeText, 'expected text content for total change group');
   assert.match(
-    totalChangeGroup?.textContent ?? '',
+    totalChangeText,
     /158,18/,
     'total change should reuse backend rounded EUR values',
   );
   assert.match(
-    totalChangeGroup?.textContent ?? '',
+    totalChangeText,
     /24,17/,
     'total change percentage should reuse backend rounding',
   );
@@ -218,8 +223,11 @@ test('buildHeaderMetaForTest consumes backend performance payloads verbatim', ()
   const dayChangeGroup = document.querySelector(
     '.security-meta-item--day-change .value-group',
   );
+  assert.ok(dayChangeGroup, 'expected day change group to be rendered');
+  const dayChangeText = dayChangeGroup.textContent;
+  assert.ok(dayChangeText, 'expected text content for day change group');
   assert.match(
-    dayChangeGroup?.textContent ?? '',
+    dayChangeText,
     /0,27/,
     'day change native should originate from backend performance payload',
   );
@@ -228,8 +236,10 @@ test('buildHeaderMetaForTest consumes backend performance payloads verbatim', ()
     '.security-meta-item--average .value-group',
   );
   assert.ok(averageGroup, 'expected average purchase group to be rendered');
+  const averageGroupTitle = averageGroup.getAttribute('title');
+  assert.ok(averageGroupTitle, 'expected tooltip metadata for average group');
   assert.ok(
-    averageGroup?.getAttribute('title')?.includes('FX-Kurs (Kauf)'),
+    averageGroupTitle.includes('FX-Kurs (Kauf)'),
     'average purchase tooltip should be derived from backend averages',
   );
 });
