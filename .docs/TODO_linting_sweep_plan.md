@@ -61,13 +61,26 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Scope: `src/data/`, `src/interaction/`
        - Ziel: ESLint/TS-Fehler behoben; ggf. `async`-Versprechen sauber behandelt.
 
-3. c) [ ] Tabs & Komponenten
-       - Scope: `src/tabs/`, `src/content/`, `src/dashboard/`, `src/panel.ts`
-       - Ziel: Linting/Typecheck sauber; Snapshot-/Jest-Tests anpassen falls durch Lint-Fixes Logik betroffen ist.
+3. c) [ ] Panel-Einstiegspunkt
+       - Scope: `src/panel.ts`
+       - Ziel: Linting/Typecheck ohne Fehler; DOM-Zugriffe und Event-Handler streng typisieren.
 
-3. d) [ ] Frontend-Tests
+3. d) [ ] Dashboard-Komponenten
+       - Scope: `src/dashboard/`
+       - Ziel: Modulweise ESLint-Compliance sicherstellen, insbesondere bei dynamischen Layout-Berechnungen.
+
+3. e) [ ] Tab-Ansichten
+       - Scope: `src/tabs/`
+       - Ziel: Tabs strikt typisieren, Swipe-/Navigation-Logik lint-frei halten.
+
+3. f) [ ] Inhalts-Renderer & Charting
+       - Scope: `src/content/`
+       - Ziel: Render-Helfer und Charting-Module lint- und typecheck-konform überführen.
+
+3. g) [ ] Frontend-Tests
        - Scope: `src/**/__tests__` und `.test.ts`
        - Ziel: ESLint-Ausnahmen begründet oder entfernt, TypeScript-Fehler beseitigt.
+
 
 ## 4. Abschlussarbeiten
 
