@@ -137,18 +137,17 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
             timeout=timeout,
             trust_env=True,
             connector=connector,
-        ) as session:
-            async with session.get(url) as response:
-                if response.status != 200:  # noqa: PLR2004
-                    if _should_log_warning(date, currencies):
-                        _LOGGER.warning(
-                            "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
-                            date,
-                            response.status,
-                        )
-                    return {}
-                data = await response.json()
-                return {k: float(v) for k, v in data.get("rates", {}).items()}
+        ) as session, session.get(url) as response:
+            if response.status != 200:  # noqa: PLR2004
+                if _should_log_warning(date, currencies):
+                    _LOGGER.warning(
+                        "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                        date,
+                        response.status,
+                    )
+                return {}
+            data = await response.json()
+            return {k: float(v) for k, v in data.get("rates", {}).items()}
     except (TimeoutError, aiohttp.ClientError, OSError) as err:
         if _should_log_warning(date, currencies):
             _LOGGER.warning(

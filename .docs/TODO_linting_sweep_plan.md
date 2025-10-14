@@ -37,7 +37,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Scope: `custom_components/pp_reader/__init__.py`, `coordinator.py`, `config_flow.py`, `manifest_validator.py`
        - Ziel: `ruff` meldet keine Fehler; Imports und Logger folgen Konventionen.
 
-1. e1) [ ] Wechselkurs-Client & Währungstabellen
+1. e1) [x] Wechselkurs-Client & Währungstabellen
        - Scope: `custom_components/pp_reader/currencies/`
        - Ziel: `ruff check custom_components/pp_reader/currencies` ohne Befund; insbesondere verschachtelte `async with`-Blöcke in `fx.py` auflösen.
 
