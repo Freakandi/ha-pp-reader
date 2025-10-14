@@ -37,9 +37,13 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Scope: `custom_components/pp_reader/__init__.py`, `coordinator.py`, `config_flow.py`, `manifest_validator.py`
        - Ziel: `ruff` meldet keine Fehler; Imports und Logger folgen Konventionen.
 
-1. e) [ ] Weitere Backend-Module
-       - Scope: Alle verbleibenden Python-Dateien unter `custom_components/pp_reader/` (z. B. `services.py`, `models.py`)
-       - Ziel: `ruff check custom_components/pp_reader` ohne Befund.
+1. e1) [ ] Wechselkurs-Client & Währungstabellen
+       - Scope: `custom_components/pp_reader/currencies/`
+       - Ziel: `ruff check custom_components/pp_reader/currencies` ohne Befund; insbesondere verschachtelte `async with`-Blöcke in `fx.py` auflösen.
+
+1. e2) [ ] Feature-Flags
+       - Scope: `custom_components/pp_reader/feature_flags.py`
+       - Ziel: Typimporte in TYPE_CHECKING-Blöcke verschieben und verbleibende `ruff`-Warnungen beseitigen.
 
 ## 2. Python Tests & Scripts
 
