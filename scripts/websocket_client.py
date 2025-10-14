@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import json
 import sys
+from contextlib import AsyncExitStack
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -60,10 +61,13 @@ async def _send_history_request(
 ) -> dict[str, Any]:
     """Perform the WebSocket handshake and request security history."""
     connector = aiohttp.TCPConnector(ssl=verify_ssl)
-    async with (
-        aiohttp.ClientSession(connector=connector) as session,
-        session.ws_connect(ws_url, heartbeat=30) as websocket,
-    ):
+    async with AsyncExitStack() as stack:
+        session = await stack.enter_async_context(
+            aiohttp.ClientSession(connector=connector)
+        )
+        websocket = await stack.enter_async_context(
+            session.ws_connect(ws_url, heartbeat=30)
+        )
         message = await websocket.receive_json(timeout=response_timeout)
         if message.get("type") != "auth_required":
             reason = "Unexpected handshake response"
