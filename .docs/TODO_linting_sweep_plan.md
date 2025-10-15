@@ -111,6 +111,6 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Aufgabe: README/README-dev aktualisieren (falls nötig), um den verpflichtenden Lint-Workflow festzuhalten.
        - Ziel: Entwickler*innen wissen, welche Kommandos vor jedem PR laufen müssen.
 
-4. c) [ ] Optional: CI/Pre-Commit anpassen
+4. c) [x] Optional: CI/Pre-Commit anpassen
        - Aufgabe: Falls noch nicht vorhanden, Lint-Kommandos in CI oder `pre-commit` integrieren.
        - Ziel: Künftige Regressionen werden automatisch erkannt.

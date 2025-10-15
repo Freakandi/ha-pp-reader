@@ -81,3 +81,4 @@ Die verbleibenden Regeln liegen jeweils im einstelligen Bereich. Die größten P
 - `npm run lint:ts` – ESLint 9.34.0 meldet keine Fehler mehr, nachdem die fehlende Abhängigkeit `@eslint/js` über `npm install` bereitgestellt wurde.
 - `npm run typecheck` – `tsc --noEmit` läuft ohne Diagnosen durch.
 - README und README-dev dokumentieren das verpflichtende Lint-Workflow-Trio (`./scripts/lint`, `npm run lint:ts`, `npm run typecheck`) für alle nachfolgenden Beiträge.
+- GitHub Actions führt den Lint-Workflow (`ruff check`, `ruff format --check`, `npm run lint:ts`, `npm run typecheck`) bei Pushes und Pull Requests auf `main` und `dev` aus, um Regressionen zu verhindern.
