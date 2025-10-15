@@ -311,7 +311,7 @@
       - Dateipfad(e): `tests/test_validators_timezone.py`, `tests/test_ws_accounts_fx.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Datums-/Zeitzonenkonvertierungen\
       - Ziel/Ergebnis: Kompatibilität mit Python < 3.11 und HA-Testumgebung wiederhergestellt.
-   d) [ ] Lasse TypeScript-Linting und Type-Checks laufen (`npm run lint:ts`, `npm run typecheck`).\
+   d) [x] Lasse TypeScript-Linting und Type-Checks laufen (`npm run lint:ts`, `npm run typecheck`).\
       - Dateipfad(e): `src/`\
       - Betroffene Funktion(en)/Abschnitt(e): TS-Quellen und Tests\
       - Ziel/Ergebnis: Frontend bleibt typ- und lint-fehlerfrei.

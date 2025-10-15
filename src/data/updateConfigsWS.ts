@@ -905,13 +905,6 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   }
 
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'));
-  let sumCurrent = 0;
-  let sumGainAbs = 0;
-  let sumPurchase = 0;
-  let sumPositions = 0;
-  let hasValueRow = false;
-  let allRowsComplete = true;
-  let fxUnavailable = false;
 
   const parseDatasetNumber = (value: string | undefined): number | null => {
     if (value === undefined) {
@@ -921,40 +914,53 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     return Number.isFinite(parsed) ? parsed : null;
   };
 
-  rows.forEach(row => {
-    const positionCount = parseDatasetNumber(row.dataset.positionCount);
-    if (positionCount != null) {
-      sumPositions += positionCount;
-    }
+  const metrics = rows.reduce(
+    (acc, row) => {
 
-    if (row.dataset.fxUnavailable === 'true') {
-      fxUnavailable = true;
-    }
+      const positionCount = parseDatasetNumber(row.dataset.positionCount);
+      if (positionCount != null) {
+        acc.sumPositions += positionCount;
+      }
 
-    const hasValue = row.dataset.hasValue === 'true';
-    if (!hasValue) {
-      allRowsComplete = false;
-      return;
-    }
+      if (row.dataset.fxUnavailable === 'true') {
+        acc.fxUnavailable = true;
+      }
 
-    hasValueRow = true;
+      if (row.dataset.hasValue !== 'true') {
+        acc.incompleteRows += 1;
+        return acc;
+      }
 
-    const currentValue = parseDatasetNumber(row.dataset.currentValue);
-    const gainAbs = parseDatasetNumber(row.dataset.gainAbs);
-    const purchaseSum = parseDatasetNumber(row.dataset.purchaseSum);
+      acc.valueRows += 1;
 
-    if (currentValue == null || gainAbs == null || purchaseSum == null) {
-      allRowsComplete = false;
-      return;
-    }
+      const currentValue = parseDatasetNumber(row.dataset.currentValue);
+      const gainAbs = parseDatasetNumber(row.dataset.gainAbs);
+      const purchaseSum = parseDatasetNumber(row.dataset.purchaseSum);
 
-    sumCurrent += currentValue;
-    sumGainAbs += gainAbs;
-    sumPurchase += purchaseSum;
-  });
+      if (currentValue == null || gainAbs == null || purchaseSum == null) {
+        acc.incompleteRows += 1;
+        return acc;
+      }
 
-  const totalsComplete = hasValueRow && allRowsComplete;
-  const sumGainPct = totalsComplete && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
+      acc.sumCurrent += currentValue;
+      acc.sumGainAbs += gainAbs;
+      acc.sumPurchase += purchaseSum;
+
+      return acc;
+    },
+    {
+      sumCurrent: 0,
+      sumGainAbs: 0,
+      sumPurchase: 0,
+      sumPositions: 0,
+      valueRows: 0,
+      incompleteRows: 0,
+      fxUnavailable: false,
+    },
+  );
+
+  const totalsComplete = metrics.valueRows > 0 && metrics.incompleteRows === 0;
+  const sumGainPct = totalsComplete && metrics.sumPurchase > 0 ? (metrics.sumGainAbs / metrics.sumPurchase) * 100 : null;
 
   let footer = table.querySelector<HTMLTableRowElement>('tr.footer-row');
   if (!footer) {
@@ -962,15 +968,15 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     footer.className = 'footer-row';
     table.querySelector('tbody')?.appendChild(footer);
   }
-  const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
+  const sumPositionsDisplay = Math.round(metrics.sumPositions).toLocaleString('de-DE');
   const footerRowData = {
-    fx_unavailable: fxUnavailable || !totalsComplete,
-    current_value: totalsComplete ? sumCurrent : null,
+    fx_unavailable: metrics.fxUnavailable || !totalsComplete,
+    current_value: totalsComplete ? metrics.sumCurrent : null,
     performance: totalsComplete
       ? {
-          gain_abs: sumGainAbs,
+          gain_abs: metrics.sumGainAbs,
           gain_pct: sumGainPct,
-          total_change_eur: sumGainAbs,
+          total_change_eur: metrics.sumGainAbs,
           total_change_pct: sumGainPct,
           source: 'aggregated',
           coverage_ratio: 1,
@@ -980,7 +986,7 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   const footerContext = { hasValue: totalsComplete };
 
   const currentValueCell = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
-  const gainAbsValue = totalsComplete ? sumGainAbs : null;
+  const gainAbsValue = totalsComplete ? metrics.sumGainAbs : null;
   const gainPctValue = totalsComplete ? sumGainPct : null;
   const gainAbsCellMarkup = formatValue('gain_abs', gainAbsValue, footerRowData, footerContext);
   const gainPctCellMarkup = formatValue('gain_pct', gainPctValue, footerRowData, footerContext);
@@ -998,16 +1004,20 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
       ? `${formatNumber(sumGainPct)} %`
       : '—';
     footerGainAbsCell.dataset.gainSign = totalsComplete && typeof sumGainPct === 'number'
-      ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
+      ? sumGainPct > 0
+        ? 'positive'
+        : sumGainPct < 0
+          ? 'negative'
+          : 'neutral'
       : 'neutral';
   }
-  footer.dataset.positionCount = Math.round(sumPositions).toString();
-  footer.dataset.currentValue = totalsComplete ? sumCurrent.toString() : '';
-  footer.dataset.purchaseSum = totalsComplete ? sumPurchase.toString() : '';
-  footer.dataset.gainAbs = totalsComplete ? sumGainAbs.toString() : '';
+  footer.dataset.positionCount = Math.round(metrics.sumPositions).toString();
+  footer.dataset.currentValue = totalsComplete ? metrics.sumCurrent.toString() : '';
+  footer.dataset.purchaseSum = totalsComplete ? metrics.sumPurchase.toString() : '';
+  footer.dataset.gainAbs = totalsComplete ? metrics.sumGainAbs.toString() : '';
   footer.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number' ? sumGainPct.toString() : '';
   footer.dataset.hasValue = totalsComplete ? 'true' : 'false';
-  footer.dataset.fxUnavailable = fxUnavailable ? 'true' : 'false';
+  footer.dataset.fxUnavailable = metrics.fxUnavailable || !totalsComplete ? 'true' : 'false';
 }
 
 function toFiniteNumber(value: unknown): number {
