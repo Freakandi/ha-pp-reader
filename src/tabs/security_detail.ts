@@ -1096,7 +1096,11 @@ function formatFxDateLabel(timestamp: number | null): string | null {
     return null;
   }
 
-  return date.toLocaleDateString('de-DE');
+  return date.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 function composeAveragePurchaseTooltip(
@@ -1160,7 +1164,7 @@ function composeAveragePurchaseTooltip(
     const percentage = Math.min(Math.max(averageCost.coverage_ratio * 100, 0), 100);
     metadataParts.push(
       `Abdeckung: ${percentage.toLocaleString('de-DE', {
-        minimumFractionDigits: 0,
+        minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       })}%`,
     );
