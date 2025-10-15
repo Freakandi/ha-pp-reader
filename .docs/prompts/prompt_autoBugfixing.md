@@ -28,6 +28,7 @@ Perform an unattended bug-hunting loop for the `pp_reader` integration by launch
    - Add or update tests if they help verify the fix.
 5. **Validate**
    - Run appropriate checks (e.g., targeted tests, `./scripts/lint`) to confirm the fix.
+   - All linting runs (ESLint for TypeScript, ruff for Python) must be successful
 6. **Report**
    - Summarise the detected issue, outline the debugging steps, and explain the fix.
    - List verification commands executed and their outcomes.
