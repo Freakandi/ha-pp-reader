@@ -82,8 +82,14 @@ export interface HassUser {
   [key: string]: unknown;
 }
 
+export type HassEventOrigin = 'LOCAL' | 'REMOTE' | 'CLOUD';
+
 export interface HassEvent<T = unknown> {
-  origin: 'LOCAL' | 'REMOTE' | 'CLOUD' | string;
+  /**
+   * Known values include 'LOCAL', 'REMOTE' and 'CLOUD'; additional strings may
+   * appear depending on the backend transport.
+   */
+  origin: string;
   time_fired: string;
   event_type: string;
   context?: HassContext;
@@ -100,8 +106,8 @@ export type HassUnsubscribe = () => void;
 export interface HassWebSocketConnection {
   sendMessage(message: HassWebSocketMessage): void;
   sendMessagePromise<T = unknown>(message: HassWebSocketMessage): Promise<T>;
-  subscribeMessage<T = unknown>(
-    callback: (response: T) => void,
+  subscribeMessage(
+    callback: (response: unknown) => void,
     message: HassWebSocketMessage
   ): Promise<HassUnsubscribe>;
   subscribeEvents<T = unknown>(

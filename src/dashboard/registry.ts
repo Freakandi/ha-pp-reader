@@ -29,7 +29,26 @@ interface OverviewHelperRegistry {
 
 const dashboardElements = new Set<DashboardElement>();
 const panelHosts = new Set<HTMLElement>();
-const overviewHelpers: OverviewHelperRegistry = {};
+const overviewHelpers: Partial<OverviewHelperRegistry> = {};
+
+type OverviewHelperKey = keyof OverviewHelperRegistry;
+
+const OVERVIEW_HELPER_KEYS: readonly OverviewHelperKey[] = [
+  'renderPositionsTable',
+  'applyGainPctMetadata',
+  'attachSecurityDetailListener',
+  'attachPortfolioPositionsSorting',
+  'updatePortfolioFooter',
+];
+
+function setOverviewHelper<K extends OverviewHelperKey>(
+  key: K,
+  helper: OverviewHelperRegistry[K] | undefined,
+): void {
+  if (typeof helper === 'function') {
+    overviewHelpers[key] = helper;
+  }
+}
 
 export function registerDashboardElement(element: DashboardElement | null | undefined): void {
   if (!element) {
@@ -68,18 +87,20 @@ export function getRegisteredPanelHosts(): ReadonlySet<HTMLElement> {
 }
 
 export function registerOverviewHelpers(helpers: OverviewHelperRegistry): void {
-  Object.assign(overviewHelpers, helpers);
+  for (const key of OVERVIEW_HELPER_KEYS) {
+    setOverviewHelper(key, helpers[key]);
+  }
 }
 
-export function getOverviewHelpers(): OverviewHelperRegistry {
-  return overviewHelpers;
+export function getOverviewHelpers(): Readonly<OverviewHelperRegistry> {
+  return overviewHelpers as OverviewHelperRegistry;
 }
 
 export const __TEST_ONLY__ = {
   clearRegistries(): void {
     dashboardElements.clear();
     panelHosts.clear();
-    for (const key of Object.keys(overviewHelpers) as Array<keyof OverviewHelperRegistry>) {
+    for (const key of OVERVIEW_HELPER_KEYS) {
       overviewHelpers[key] = undefined;
     }
   },

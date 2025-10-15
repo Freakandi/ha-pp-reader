@@ -83,20 +83,19 @@ export function formatValue(
   };
 
   if (['gain_abs', 'gain_pct'].includes(key)) {
-    if (value == null && row && typeof row === 'object') {
-      const performance = (row as Record<string, unknown>).performance;
-      if (performance && typeof performance === 'object' && performance !== null) {
+    if (value == null && row) {
+      const performance = row.performance;
+      if (typeof performance === 'object' && performance !== null) {
         const metric = (performance as Record<string, unknown>)[key];
         if (typeof metric === 'number') {
           value = metric;
         }
       }
     }
-    const rowWithFlags = row as (TableRow & { fx_unavailable?: boolean }) | undefined;
-    const missingReason = rowWithFlags?.fx_unavailable
+    const missingReason = row?.fx_unavailable === true
       ? 'Wechselkurs nicht verfügbar – EUR-Wert unbekannt'
       : '';
-    if (value == null || (context && context.hasValue === false)) {
+    if (value == null || context?.hasValue === false) {
       return renderMissingValue(missingReason);
     }
     const numeric = typeof value === 'number' ? value : toNumber(value);
@@ -137,7 +136,16 @@ export function formatValue(
       maximumFractionDigits: 4
     });
   } else {
-    const base = typeof value === 'string' ? value : value != null ? String(value) : '';
+    let base = '';
+    if (typeof value === 'string') {
+      base = value;
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      base = value.toString();
+    } else if (typeof value === 'boolean') {
+      base = value ? 'true' : 'false';
+    } else if (value instanceof Date && Number.isFinite(value.getTime())) {
+      base = value.toISOString();
+    }
     formatted = base;
     if (formatted) {
       const MAX_LEN = 60;
@@ -152,7 +160,7 @@ export function formatValue(
       }
     }
   }
-  if (formatted == null || formatted === '') {
+  if (typeof formatted !== 'string' || formatted === '') {
     return renderMissingValue();
   }
 
@@ -172,7 +180,7 @@ export function makeTable(
    *
    * Bestehende Aufrufer (3 Parameter) bleiben kompatibel.
    */
-  const { sortable = false, defaultSort } = options || {};
+  const { sortable = false, defaultSort } = options;
   const defaultSortKey = defaultSort?.key ?? '';
   const defaultSortDir: SortDirection = defaultSort?.dir === 'desc' ? 'desc' : 'asc';
 
@@ -180,9 +188,19 @@ export function makeTable(
     if (value == null) {
       return '';
     }
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;');
+    let base = '';
+    if (typeof value === 'string') {
+      base = value;
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      base = value.toString();
+    } else if (typeof value === 'boolean') {
+      base = value ? 'true' : 'false';
+    } else if (value instanceof Date && Number.isFinite(value.getTime())) {
+      base = value.toISOString();
+    } else {
+      return '';
+    }
+    return base.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   };
 
   let html = '<table><thead><tr>';
@@ -211,26 +229,34 @@ export function makeTable(
   const sumMeta: Record<string, TableFooterContext> = {};
   cols.forEach(c => {
     if (sumColumns.includes(c.key)) {
-      let total = 0;
-      let hasValue = false;
-      rows.forEach(row => {
-        let v = row[c.key];
-        if ((c.key === 'gain_abs' || c.key === 'gain_pct') && (v == null || !Number.isFinite(v as number))) {
-          const performance = (row as Record<string, unknown>).performance;
-          if (performance && typeof performance === 'object') {
-            const metric = (performance as Record<string, unknown>)[c.key];
-            if (typeof metric === 'number') {
-              v = metric;
+      const aggregation = rows.reduce<{ total: number; hasValue: boolean }>(
+        (acc, row) => {
+          let candidate = row[c.key];
+          if ((c.key === 'gain_abs' || c.key === 'gain_pct') && (typeof candidate !== 'number' || !Number.isFinite(candidate))) {
+            const performance = row.performance;
+            if (typeof performance === 'object' && performance !== null) {
+              const metric = (performance as Record<string, unknown>)[c.key];
+              if (typeof metric === 'number') {
+                candidate = metric;
+              }
             }
           }
-        }
-        if (typeof v === 'number' && Number.isFinite(v)) {
-          total += v;
-          hasValue = true;
-        }
-      });
-      sums[c.key] = hasValue ? total : null;
-      sumMeta[c.key] = { hasValue };
+          if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+            const numericCandidate = candidate;
+            acc.total += numericCandidate;
+            acc.hasValue = true;
+          }
+          return acc;
+        },
+        { total: 0, hasValue: false },
+      );
+      if (aggregation.hasValue) {
+        sums[c.key] = aggregation.total;
+        sumMeta[c.key] = { hasValue: true };
+      } else {
+        sums[c.key] = null;
+        sumMeta[c.key] = { hasValue: false };
+      }
     }
   });
 
@@ -380,9 +406,13 @@ export function sortTableRows(
   dir: SortDirection = 'asc',
   isPositions = false,
 ): HTMLTableRowElement[] {
-  if (!tableEl) return [];
+  if (!tableEl) {
+    return [];
+  }
   const tbody = tableEl.querySelector('tbody');
-  if (!tbody) return [];
+  if (!tbody) {
+    return [];
+  }
 
   const footer = tbody.querySelector<HTMLTableRowElement>('tr.footer-row');
   const rows = Array
@@ -400,7 +430,10 @@ export function sortTableRows(
       gain_abs: 4,
       gain_pct: 5
     };
-    colIdx = posMap[key];
+    const mappedIdx = posMap[key];
+    if (typeof mappedIdx === 'number') {
+      colIdx = mappedIdx;
+    }
   } else {
     // Generisch über thead th[data-sort-key]
     const ths = Array.from(tableEl.querySelectorAll<HTMLTableCellElement>('thead th'));
@@ -411,10 +444,11 @@ export function sortTableRows(
       }
     }
   }
-  if (colIdx == null || colIdx < 0) return rows;
+  if (colIdx < 0) {
+    return rows;
+  }
 
   const toNumber = (txt: string): number => {
-    if (txt == null) return NaN;
     const cleaned = txt
       .replace(/\u00A0/g, ' ')
       .replace(/[%€]/g, '')

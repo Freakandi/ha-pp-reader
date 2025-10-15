@@ -25,17 +25,20 @@ void test("normalizePerformancePayload accepts numeric strings", () => {
   });
 
   assert.ok(payload, "expected payload to be normalised");
-  assert.strictEqual(payload?.gain_abs, 12.345);
-  assert.strictEqual(payload?.gain_pct, 5.67);
-  assert.strictEqual(payload?.total_change_eur, 8.9);
-  assert.strictEqual(payload?.total_change_pct, 1.23);
-  assert.strictEqual(payload?.source, "snapshot");
-  assert.strictEqual(payload?.coverage_ratio, 0.95);
-  assert.strictEqual(payload?.day_change?.price_change_native, 0.42);
-  assert.strictEqual(payload?.day_change?.price_change_eur, 0.39);
-  assert.strictEqual(payload?.day_change?.change_pct, 0.38);
-  assert.strictEqual(payload?.day_change?.source, "derived");
-  assert.strictEqual(payload?.day_change?.coverage_ratio, 0.5);
+  assert.strictEqual(payload.gain_abs, 12.345);
+  assert.strictEqual(payload.gain_pct, 5.67);
+  assert.strictEqual(payload.total_change_eur, 8.9);
+  assert.strictEqual(payload.total_change_pct, 1.23);
+  assert.strictEqual(payload.source, "snapshot");
+  assert.strictEqual(payload.coverage_ratio, 0.95);
+
+  const dayChange = payload.day_change;
+  assert.ok(dayChange, "expected day change metrics to be present");
+  assert.strictEqual(dayChange.price_change_native, 0.42);
+  assert.strictEqual(dayChange.price_change_eur, 0.39);
+  assert.strictEqual(dayChange.change_pct, 0.38);
+  assert.strictEqual(dayChange.source, "derived");
+  assert.strictEqual(dayChange.coverage_ratio, 0.5);
 });
 
 void test("normalizePerformancePayload rejects non-numeric strings", () => {

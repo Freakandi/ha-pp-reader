@@ -42,8 +42,9 @@ interface PortfolioPositionLike {
   current_value?: unknown;
   gain_abs?: unknown;
   gain_pct?: unknown;
-  average_cost?: AverageCostPayload | null;
-  performance?: PerformanceMetricsPayload | null;
+  average_cost?: unknown;
+  performance?: unknown;
+  aggregation?: unknown;
   [key: string]: unknown;
 }
 
@@ -102,6 +103,21 @@ function isPortfolioSortDirection(
   return value === 'asc' || value === 'desc';
 }
 
+type ToggleContainerElement = HTMLElement & {
+  __ppReaderSecurityClickBound?: boolean;
+  __ppReaderPortfolioToggleBound?: boolean;
+};
+
+type ToggleRootElement = HTMLElement & {
+  __ppReaderAttachToken?: number;
+  __ppReaderAttachInProgress?: boolean;
+};
+
+type SortableTableElement = HTMLTableElement & {
+  __ppReaderSortingBound?: boolean;
+  __ppReaderPortfolioFallbackBound?: boolean;
+};
+
 // === Modul-weiter State für Expand/Collapse & Lazy Load ===
 // On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.
 let _hassRef: HomeAssistant | null = null;
@@ -151,18 +167,55 @@ function resolveCurrencyFromPosition(
   return fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function hasAverageCostShape(value: Record<string, unknown>): boolean {
+  return (
+    ('native' in value && (typeof value.native === 'number' || value.native === null)) &&
+    ('security' in value && (typeof value.security === 'number' || value.security === null)) &&
+    ('account' in value && (typeof value.account === 'number' || value.account === null)) &&
+    ('eur' in value && (typeof value.eur === 'number' || value.eur === null)) &&
+    typeof value.source === 'string'
+  );
+}
+
+function toAverageCostPayload(value: unknown): AverageCostPayload | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return hasAverageCostShape(value) ? (value as unknown as AverageCostPayload) : null;
+}
+
+function hasHoldingsAggregationShape(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.total_holdings === 'number' &&
+    typeof value.positive_holdings === 'number' &&
+    typeof value.purchase_value_cents === 'number' &&
+    typeof value.purchase_value_eur === 'number' &&
+    typeof value.security_currency_total === 'number' &&
+    typeof value.account_currency_total === 'number' &&
+    typeof value.purchase_total_security === 'number' &&
+    typeof value.purchase_total_account === 'number'
+  );
+}
+
+function toHoldingsAggregationPayload(value: unknown): HoldingsAggregationPayload | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return hasHoldingsAggregationShape(value)
+    ? (value as unknown as HoldingsAggregationPayload)
+    : null;
+}
+
 function sanitizePosition(position: PortfolioPositionLike): PortfolioPositionLike {
   const record = position as Record<string, unknown>;
 
-  const averageCost =
-    position.average_cost && typeof position.average_cost === 'object'
-      ? (position.average_cost as AverageCostPayload)
-      : null;
+  const averageCost = toAverageCostPayload(position.average_cost);
 
-  const aggregation =
-    position.aggregation && typeof position.aggregation === 'object'
-      ? (position.aggregation as HoldingsAggregationPayload)
-      : null;
+  const aggregation = toHoldingsAggregationPayload(position.aggregation);
 
   const performance = normalizePerformancePayload(record['performance']);
   const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
@@ -199,14 +252,8 @@ function formatPriceWithCurrency(
 function buildPurchasePriceDisplay(
   position: PortfolioPositionLike,
 ): { markup: string; sortValue: number; ariaLabel: string } {
-  const averageCost =
-    position.average_cost && typeof position.average_cost === 'object'
-      ? (position.average_cost as AverageCostPayload)
-      : null;
-  const aggregation =
-    position.aggregation && typeof position.aggregation === 'object'
-      ? (position.aggregation as HoldingsAggregationPayload)
-      : null;
+  const averageCost = toAverageCostPayload(position.average_cost);
+  const aggregation = toHoldingsAggregationPayload(position.aggregation);
 
   const securityCurrency = resolveCurrencyFromPosition(position, [
     'security_currency_code',
@@ -297,36 +344,36 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
 // Stattdessen scoped Listener über attachPortfolioToggleHandler(root)
 
 // Rendert die Positions-Tabelle für ein Depot
-function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): void {
-  if (!tableEl) {
-    return;
+  function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): void {
+    if (!tableEl) {
+      return;
+    }
+    const bodyRows = Array.from(tableEl.querySelectorAll<HTMLTableRowElement>('tbody tr'));
+    bodyRows.forEach(row => {
+      const gainAbsCell = row.cells.item(4);
+      const gainPctCell = row.cells.item(5);
+      if (!gainAbsCell || !gainPctCell) {
+        return;
+      }
+      if (gainAbsCell.dataset.gainPct && gainAbsCell.dataset.gainSign) {
+        return;
+      }
+      const pctText = (gainPctCell.textContent || '').trim() || '—';
+      let pctSign: 'positive' | 'negative' | 'neutral' = 'neutral';
+      if (gainPctCell.querySelector('.positive')) {
+        pctSign = 'positive';
+      } else if (gainPctCell.querySelector('.negative')) {
+        pctSign = 'negative';
+      }
+      gainAbsCell.dataset.gainPct = pctText;
+      gainAbsCell.dataset.gainSign = pctSign;
+    });
   }
-  const bodyRows = Array.from(tableEl.querySelectorAll<HTMLTableRowElement>('tbody tr'));
-  bodyRows.forEach(row => {
-    const gainAbsCell = row.cells?.[4] ?? null;
-    const gainPctCell = row.cells?.[5] ?? null;
-    if (!gainAbsCell || !gainPctCell) {
-      return;
-    }
-    if (gainAbsCell.dataset.gainPct && gainAbsCell.dataset.gainSign) {
-      return;
-    }
-    const pctText = (gainPctCell.textContent || '').trim() || '—';
-    let pctSign: 'positive' | 'negative' | 'neutral' = 'neutral';
-    if (gainPctCell.querySelector('.positive')) {
-      pctSign = 'positive';
-    } else if (gainPctCell.querySelector('.negative')) {
-      pctSign = 'negative';
-    }
-    gainAbsCell.dataset.gainPct = pctText;
-    gainAbsCell.dataset.gainSign = pctSign;
-  });
-}
 
-function renderPositionsTable(positions: readonly PortfolioPositionLike[]): string {
-  if (!positions || positions.length === 0) {
-    return '<div class="no-positions">Keine Positionen vorhanden.</div>';
-  }
+  function renderPositionsTable(positions: readonly PortfolioPositionLike[]): string {
+    if (positions.length === 0) {
+      return '<div class="no-positions">Keine Positionen vorhanden.</div>';
+    }
   const sanitizedPositions = positions.map(sanitizePosition);
   // Mapping für makeTable
   const cols = [
@@ -337,13 +384,18 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
     { key: 'gain_abs', label: '+/-', align: 'right' as const },
     { key: 'gain_pct', label: '%', align: 'right' as const }
   ];
-  const rows = sanitizedPositions.map(p => {
-    const performance = normalizePerformancePayload((p as Record<string, unknown>)['performance']);
-    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    const rows = sanitizedPositions.map(p => {
+      const performance = normalizePerformancePayload((p as Record<string, unknown>)['performance']);
+      const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+      const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
-    return {
-      name: typeof p.name === 'string' ? p.name : p.name != null ? String(p.name) : '',
+      return {
+        name:
+          typeof p.name === 'string'
+            ? p.name
+            : typeof p.name === 'number'
+              ? String(p.name)
+              : '',
       current_holdings:
         typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
           ? p.current_holdings
@@ -371,29 +423,30 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
     const table = tpl.content.querySelector<HTMLTableElement>('table');
     if (table) {
       table.classList.add('sortable-positions');
-      const ths = table.querySelectorAll('thead th');
-      cols.forEach((c, i) => {
-        const th = ths[i];
-        if (th) {
-          th.setAttribute('data-sort-key', c.key);
+        const ths = Array.from(table.querySelectorAll<HTMLElement>('thead th'));
+        cols.forEach((col, i) => {
+          const th = ths.at(i);
+          if (!th) {
+            return;
+          }
+          th.setAttribute('data-sort-key', col.key);
           th.classList.add('sortable-col');
-        }
-      });
-      const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
-      bodyRows.forEach((tr, idx) => {
-        if (tr.classList.contains('footer-row')) {
-          return;
-        }
-        const pos = sanitizedPositions[idx];
-        if (!pos) {
-          return;
-        }
+        });
+        const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
+        bodyRows.forEach((tr, idx) => {
+          if (tr.classList.contains('footer-row')) {
+            return;
+          }
+          if (idx >= sanitizedPositions.length) {
+            return;
+          }
+          const pos = sanitizedPositions[idx];
         const securityUuid = typeof pos.security_uuid === 'string' ? pos.security_uuid : null;
         if (securityUuid) {
           tr.dataset.security = securityUuid;
         }
-        tr.classList.add('position-row');
-        const purchaseCell = tr.cells?.[2] ?? null;
+          tr.classList.add('position-row');
+          const purchaseCell = tr.cells.item(2);
         if (purchaseCell) {
           const { markup, sortValue, ariaLabel } = buildPurchasePriceDisplay(pos);
           purchaseCell.innerHTML = markup;
@@ -404,7 +457,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
             purchaseCell.removeAttribute('aria-label');
           }
         }
-        const gainCell = tr.cells?.[4] ?? null;
+          const gainCell = tr.cells.item(4);
         if (gainCell) {
           const performance = normalizePerformancePayload((pos as Record<string, unknown>)['performance']);
           const gainPctValue =
@@ -429,7 +482,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionLike[]): stri
           gainCell.dataset.gainPct = pctLabel;
           gainCell.dataset.gainSign = pctSign;
         }
-        const gainPctCell = tr.cells?.[5] ?? null;
+          const gainPctCell = tr.cells.item(5);
         if (gainPctCell) {
           gainPctCell.classList.add('gain-pct-cell');
         }
@@ -458,10 +511,11 @@ function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid:
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
   );
   if (!detailsRow) return;
-  const container = detailsRow.querySelector<HTMLElement>('.positions-container');
-  if (!container || container.__ppReaderSecurityClickBound) return;
+    const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+    if (!container) return;
+    if (container.__ppReaderSecurityClickBound) return;
 
-  container.__ppReaderSecurityClickBound = true;
+    container.__ppReaderSecurityClickBound = true;
 
   container.addEventListener('click', (event: MouseEvent) => {
     const target = event.target;
@@ -502,14 +556,17 @@ export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolio
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
 function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]): string {
   console.debug('buildExpandablePortfolioTable: render', depots.length, 'portfolios');
-  const escapeAttribute = (value: unknown): string => {
-    if (value == null) {
-      return '';
-    }
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;');
-  };
+    const escapeAttribute = (value: unknown): string => {
+      if (value == null) {
+        return '';
+      }
+      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+        return '';
+      }
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;');
+    };
 
   let html = '<table class="expandable-portfolio-table"><thead><tr>';
   const cols = [
@@ -525,12 +582,14 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
   });
   html += '</tr></thead><tbody>';
 
-  depots.forEach(d => {
-    if (!d || !d.uuid) return;
-    const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
-    const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
-    const hasValue = d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value);
-    const currentValue = hasValue ? d.current_value! : null;
+    depots.forEach(d => {
+      const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
+      const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
+      const currentValue =
+        d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value)
+          ? d.current_value
+          : null;
+      const hasValue = currentValue !== null;
     const performance = d.performance;
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
     const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
@@ -557,9 +616,12 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
       ? (gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral')
       : '';
 
-    const datasetCurrentValue = hasValue && typeof currentValue === 'number' && Number.isFinite(currentValue) ? currentValue : '';
-    const datasetGainAbs = hasValue && typeof gainAbs === 'number' && Number.isFinite(gainAbs) ? gainAbs : '';
-    const datasetGainPct = hasValue && typeof gainPct === 'number' && Number.isFinite(gainPct) ? gainPct : '';
+      const datasetCurrentValue = hasValue && typeof currentValue === 'number' && Number.isFinite(currentValue)
+        ? currentValue
+        : '';
+      const datasetGainAbs = hasValue && typeof gainAbs === 'number' && Number.isFinite(gainAbs) ? gainAbs : '';
+      const datasetGainPct = hasValue && typeof gainPct === 'number' && Number.isFinite(gainPct) ? gainPct : '';
+      const positionCountAttr = String(positionCount);
 
     let gainAbsAttributes = '';
     if (gainPctLabel) {
@@ -569,12 +631,12 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
       gainAbsAttributes += ' data-partial="true"';
     }
 
-    html += `<tr class="portfolio-row"
-                data-portfolio="${d.uuid}"
-                data-position-count="${positionCount}"
-                data-current-value="${escapeAttribute(datasetCurrentValue)}"
-                data-purchase-sum="${escapeAttribute(purchaseSum)}"
-                data-gain-abs="${escapeAttribute(datasetGainAbs)}"
+      html += `<tr class="portfolio-row"
+                  data-portfolio="${d.uuid}"
+                  data-position-count="${positionCountAttr}"
+                  data-current-value="${escapeAttribute(datasetCurrentValue)}"
+                  data-purchase-sum="${escapeAttribute(purchaseSum)}"
+                  data-gain-abs="${escapeAttribute(datasetGainAbs)}"
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
                 data-has-value="${hasValue ? 'true' : 'false'}"
                 data-fx-unavailable="${d.fx_unavailable ? 'true' : 'false'}">`;
@@ -588,7 +650,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
           <span class="portfolio-name">${d.name}</span>
         </button>
       </td>`;
-    html += `<td class="align-right">${positionCount}</td>`;
+      const positionCountDisplay = positionCount.toLocaleString('de-DE');
+      html += `<td class="align-right">${positionCountDisplay}</td>`;
     html += `<td class="align-right">${currentValueCell}</td>`;
     html += `<td class="align-right"${gainAbsAttributes}>${gainAbsCell}</td>`;
     html += `<td class="align-right gain-pct-cell">${gainPctCell}</td>`;
@@ -610,8 +673,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     </tr>`;
   });
 
-  const availableDepots = depots.filter(d => typeof d?.current_value === 'number' && Number.isFinite(d.current_value));
-  const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d?.position_count) ? d.position_count : 0), 0);
+    const availableDepots = depots.filter(d => typeof d.current_value === 'number' && Number.isFinite(d.current_value));
+    const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0), 0);
   const sumCurrent = availableDepots.reduce((a, d) => {
     if (typeof d.current_value === 'number' && Number.isFinite(d.current_value)) {
       return a + d.current_value;
@@ -657,16 +720,24 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
     sumGainAbsAttributes += ' data-partial="true"';
   }
 
-  html += `<tr class="footer-row"
-    data-position-count="${sumPositions}"
-    data-current-value="${escapeAttribute(sumHasValue ? sumCurrent : '')}"
-    data-purchase-sum="${escapeAttribute(sumHasValue ? sumPurchase : '')}"
-    data-gain-abs="${escapeAttribute(sumHasValue ? sumGainAbs : '')}"
-    data-gain-pct="${escapeAttribute(sumHasValue && typeof sumGainPct === 'number' && Number.isFinite(sumGainPct) ? sumGainPct : '')}"
-    data-has-value="${sumHasValue ? 'true' : 'false'}"
-    data-fx-unavailable="${sumIsPartial ? 'true' : 'false'}">
-    <td>Summe</td>
-    <td class="align-right">${Math.round(sumPositions).toLocaleString('de-DE')}</td>
+    const sumPositionAttr = String(Math.round(sumPositions));
+    const sumCurrentAttr = sumHasValue ? String(sumCurrent) : '';
+    const sumPurchaseAttr = sumHasValue ? String(sumPurchase) : '';
+    const sumGainAbsAttr = sumHasValue ? String(sumGainAbs) : '';
+    const sumGainPctAttr = sumHasValue && typeof sumGainPct === 'number' && Number.isFinite(sumGainPct)
+      ? String(sumGainPct)
+      : '';
+
+    html += `<tr class="footer-row"
+      data-position-count="${sumPositionAttr}"
+      data-current-value="${escapeAttribute(sumCurrentAttr)}"
+      data-purchase-sum="${escapeAttribute(sumPurchaseAttr)}"
+      data-gain-abs="${escapeAttribute(sumGainAbsAttr)}"
+      data-gain-pct="${escapeAttribute(sumGainPctAttr)}"
+      data-has-value="${sumHasValue ? 'true' : 'false'}"
+      data-fx-unavailable="${sumIsPartial ? 'true' : 'false'}">
+      <td>Summe</td>
+      <td class="align-right">${Math.round(sumPositions).toLocaleString('de-DE')}</td>
     <td class="align-right">${sumCurrentCell}</td>
     <td class="align-right"${sumGainAbsAttributes}>${sumGainAbsCell}</td>
     <td class="align-right gain-pct-cell">${sumGainPctCell}</td>
@@ -723,11 +794,11 @@ function extractNumericFromCell(cell: HTMLTableCellElement | null | undefined): 
 }
 
 export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoot | null | undefined): void {
-  const table = resolvePortfolioTable(target);
-  if (!table) {
-    return;
-  }
-  const tbody = table.tBodies?.[0];
+    const table = resolvePortfolioTable(target);
+    if (!table) {
+      return;
+    }
+    const tbody = table.tBodies.item(0);
   if (!tbody) {
     return;
   }
@@ -796,14 +867,14 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   const gainAbsHtml = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
   const gainPctHtml = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
 
-  footer.innerHTML = `
-    <td>Summe</td>
-    <td class="align-right">${sumPositionsDisplay}</td>
-    <td class="align-right">${currentValueHtml}</td>
-    <td class="align-right">${gainAbsHtml}</td>
-    <td class="align-right">${gainPctHtml}</td>
-  `;
-  const footerGainAbsCell = footer.cells?.[3];
+    footer.innerHTML = `
+      <td>Summe</td>
+      <td class="align-right">${sumPositionsDisplay}</td>
+      <td class="align-right">${currentValueHtml}</td>
+      <td class="align-right">${gainAbsHtml}</td>
+      <td class="align-right">${gainPctHtml}</td>
+    `;
+    const footerGainAbsCell = footer.cells.item(3);
   if (footerGainAbsCell) {
     footerGainAbsCell.dataset.gainPct = sumHasValue && typeof sumGainPct === 'number'
       ? `${formatNumber(sumGainPct)} %`
@@ -856,9 +927,9 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
   );
   if (!detailsRow) return;
-  const container = detailsRow.querySelector<HTMLElement>('.positions-container');
-  if (!container) return;
-  const table = container.querySelector<HTMLTableElement>('table.sortable-positions');
+    const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+    if (!container) return;
+    const table = container.querySelector<SortableTableElement>('table.sortable-positions');
   if (!table || table.__ppReaderSortingBound) return;
 
   table.__ppReaderSortingBound = true;
@@ -887,34 +958,47 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     };
 
     rows.sort((a, b) => {
-      const idxMap: Record<PortfolioPositionsSortKey, number> = {
-        name: 0,
-        current_holdings: 1,
-        purchase_value: 2,
-        current_value: 3,
-        gain_abs: 4,
-        gain_pct: 5,
-      };
-      const colIdx = idxMap[key];
-      if (colIdx == null) return 0;
-      const aCellEl = a.cells[colIdx];
-      const bCellEl = b.cells[colIdx];
-      const aCell = aCellEl?.textContent?.trim() ?? '';
-      const bCell = bCellEl?.textContent?.trim() ?? '';
+        const idxMap: Record<PortfolioPositionsSortKey, number> = {
+          name: 0,
+          current_holdings: 1,
+          purchase_value: 2,
+          current_value: 3,
+          gain_abs: 4,
+          gain_pct: 5,
+        };
+        const colIdx = idxMap[key];
+          const aCellEl = a.cells.item(colIdx);
+          const bCellEl = b.cells.item(colIdx);
 
-      const resolveSortValue = (
-        cell: HTMLTableCellElement | undefined,
-        text: string,
-      ): number => {
-        const sortAttr = cell?.dataset.sortValue;
-        if (sortAttr != null && sortAttr !== '') {
-          const numericAttr = Number(sortAttr);
-          if (Number.isFinite(numericAttr)) {
-            return numericAttr;
+        let aCell = '';
+        if (aCellEl) {
+          const raw = aCellEl.textContent;
+          if (typeof raw === 'string') {
+            aCell = raw.trim();
           }
         }
-        return parseNum(text);
-      };
+
+        let bCell = '';
+        if (bCellEl) {
+          const raw = bCellEl.textContent;
+          if (typeof raw === 'string') {
+            bCell = raw.trim();
+          }
+        }
+
+          const resolveSortValue = (
+            cell: HTMLTableCellElement | null | undefined,
+            text: string,
+          ): number => {
+            const sortAttr = cell ? cell.dataset.sortValue : undefined;
+            if (sortAttr != null && sortAttr !== '') {
+              const numericAttr = Number(sortAttr);
+              if (Number.isFinite(numericAttr)) {
+                return numericAttr;
+              }
+            }
+            return parseNum(text);
+          };
 
       let comp: number;
       if (key === 'name') {
@@ -1019,7 +1103,7 @@ async function reloadPortfolioPositions(
       targetContainer.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
       return;
     }
-    const positions = resp.positions ?? [];
+    const positions = Array.isArray(resp.positions) ? resp.positions : [];
     setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
     targetContainer.innerHTML = renderPositionsTable(positions);
     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
@@ -1050,24 +1134,29 @@ async function waitForElement<T extends Element>(
   return new Promise((resolve) => {
     const tick = () => {
       const el = root.querySelector<T>(selector);
-      if (el) return resolve(el);
-      if (performance.now() - start > timeoutMs) return resolve(null);
+      if (el) {
+        resolve(el);
+        return;
+      }
+      if (performance.now() - start > timeoutMs) {
+        resolve(null);
+        return;
+      }
       setTimeout(tick, intervalMs);
     };
     tick();
   });
 }
 
-export function attachPortfolioToggleHandler(root: HTMLElement): void {
-  if (!root) return;
-
-  const token = (root.__ppReaderAttachToken ?? 0) + 1;
+  export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
+    const previousToken = typeof root.__ppReaderAttachToken === 'number' ? root.__ppReaderAttachToken : 0;
+    const token = previousToken + 1;
   root.__ppReaderAttachToken = token;
   root.__ppReaderAttachInProgress = true;
 
-  (async () => {
+    void (async () => {
     try {
-      const container = await waitForElement<HTMLElement>(root, '.portfolio-table');
+        const container = await waitForElement<ToggleContainerElement>(root, '.portfolio-table');
       if (token !== root.__ppReaderAttachToken) {
         return; // Ein neuer Versuch läuft bereits – diesen abbrechen
       }
@@ -1082,140 +1171,142 @@ export function attachPortfolioToggleHandler(root: HTMLElement): void {
         console.debug("attachPortfolioToggleHandler: Noch keine Buttons – evtl. Recovery später");
       }
 
-      if (container.__ppReaderPortfolioToggleBound) {
-        return;
-      }
-      container.__ppReaderPortfolioToggleBound = true;
+        if (container.__ppReaderPortfolioToggleBound) {
+          return;
+        }
+        container.__ppReaderPortfolioToggleBound = true;
       console.debug("attachPortfolioToggleHandler: Listener registriert");
 
-      container.addEventListener('click', async (event: MouseEvent) => {
-        try {
-          const target = event.target;
-          if (!(target instanceof Element)) {
-            return;
-          }
-
-          const retryBtn = target.closest<HTMLButtonElement>('.retry-pos');
-          if (retryBtn && container.contains(retryBtn)) {
-            const pid = retryBtn.getAttribute('data-portfolio');
-            if (pid) {
-              const detailsRow = root.querySelector<HTMLTableRowElement>(
-                `.portfolio-details[data-portfolio="${pid}"]`,
-              );
-              const cont = detailsRow?.querySelector<HTMLElement>('.positions-container');
-              await reloadPortfolioPositions(pid, cont ?? null, root);
-            }
-            return;
-          }
-
-          const btn = target.closest<HTMLButtonElement>('.portfolio-toggle');
-          if (!btn || !container.contains(btn)) return;
-
-          const portfolioUuid = btn.getAttribute('data-portfolio');
-          if (!portfolioUuid) return;
-
-          const detailsRow = root.querySelector<HTMLTableRowElement>(
-            `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
-          );
-          if (!detailsRow) return;
-
-          const caretEl = btn.querySelector<HTMLElement>('.caret');
-          const isHidden = detailsRow.classList.contains('hidden');
-
-          if (isHidden) {
-            detailsRow.classList.remove('hidden');
-            btn.classList.add('expanded');
-            btn.setAttribute('aria-expanded', 'true');
-            if (caretEl) caretEl.textContent = '▼';
-            expandedPortfolios.add(portfolioUuid);
-
-            try {
-              flushPendingPositions(root, portfolioUuid);
-            } catch (error) {
-              console.warn('attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:', error);
+      container.addEventListener('click', (event: MouseEvent) => {
+        void (async () => {
+          try {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+              return;
             }
 
-            if (!hasPortfolioPositions(portfolioUuid)) {
-              const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
-              if (containerEl) {
-                containerEl.innerHTML = '<div class="loading">Lade Positionen...</div>';
-              }
-              try {
-                const resp: PortfolioPositionsResponse = await fetchPortfolioPositionsWS(
-                  _hassRef,
-                  _panelConfigRef,
-                  portfolioUuid,
+              const retryBtn = target.closest<HTMLButtonElement>('.retry-pos');
+            if (retryBtn && container.contains(retryBtn)) {
+              const pid = retryBtn.getAttribute('data-portfolio');
+              if (pid) {
+                const detailsRow = root.querySelector<HTMLTableRowElement>(
+                  `.portfolio-details[data-portfolio="${pid}"]`,
                 );
-                if (resp.error) {
-                  const errorText = typeof resp.error === 'string' ? resp.error : String(resp.error);
-                  if (containerEl) {
-                    containerEl.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
-                  }
-                  return;
-                }
-                const positions = resp.positions ?? [];
-                setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
+                const cont = detailsRow?.querySelector<ToggleContainerElement>('.positions-container');
+                await reloadPortfolioPositions(pid, cont ?? null, root);
+              }
+              return;
+            }
+
+            const btn = target.closest<HTMLButtonElement>('.portfolio-toggle');
+            if (!btn || !container.contains(btn)) return;
+
+            const portfolioUuid = btn.getAttribute('data-portfolio');
+            if (!portfolioUuid) return;
+
+              const detailsRow = root.querySelector<HTMLTableRowElement>(
+              `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
+            );
+            if (!detailsRow) return;
+
+            const caretEl = btn.querySelector<HTMLElement>('.caret');
+            const isHidden = detailsRow.classList.contains('hidden');
+
+            if (isHidden) {
+              detailsRow.classList.remove('hidden');
+              btn.classList.add('expanded');
+              btn.setAttribute('aria-expanded', 'true');
+              if (caretEl) caretEl.textContent = '▼';
+              expandedPortfolios.add(portfolioUuid);
+
+              try {
+                flushPendingPositions(root, portfolioUuid);
+              } catch (error) {
+                console.warn('attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:', error);
+              }
+
+              if (!hasPortfolioPositions(portfolioUuid)) {
+                const containerEl = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
                 if (containerEl) {
-                  containerEl.innerHTML = renderPositionsTable(positions);
-                  // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
-                  try {
-                    attachPortfolioPositionsSorting(root, portfolioUuid);
-                  } catch (error) {
-                    console.warn('attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:', error);
+                  containerEl.innerHTML = '<div class="loading">Lade Positionen...</div>';
+                }
+                try {
+                  const resp: PortfolioPositionsResponse = await fetchPortfolioPositionsWS(
+                    _hassRef,
+                    _panelConfigRef,
+                    portfolioUuid,
+                  );
+                  if (resp.error) {
+                    const errorText = typeof resp.error === 'string' ? resp.error : String(resp.error);
+                    if (containerEl) {
+                      containerEl.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
+                    }
+                    return;
                   }
+                  const positions = Array.isArray(resp.positions) ? resp.positions : [];
+                  setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
+                  if (containerEl) {
+                    containerEl.innerHTML = renderPositionsTable(positions);
+                    // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
+                    try {
+                      attachPortfolioPositionsSorting(root, portfolioUuid);
+                    } catch (error) {
+                      console.warn('attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:', error);
+                    }
+                    try {
+                      attachSecurityDetailListener(root, portfolioUuid);
+                    } catch (error) {
+                      console.warn('attachPortfolioToggleHandler: Security-Listener konnte nicht gebunden werden:', error);
+                    }
+                  }
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : String(error);
+                  const containerEl = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+                  if (containerEl) {
+                    containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
+                  }
+                  console.error('Fehler beim Lazy Load für', portfolioUuid, error);
+                }
+              } else {
+                const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
+                if (containerEl) {
+                  containerEl.innerHTML = renderPositionsTable(
+                    getPortfolioPositions(portfolioUuid),
+                  );
+                  attachPortfolioPositionsSorting(root, portfolioUuid);
                   try {
                     attachSecurityDetailListener(root, portfolioUuid);
                   } catch (error) {
-                    console.warn('attachPortfolioToggleHandler: Security-Listener konnte nicht gebunden werden:', error);
+                    console.warn('attachPortfolioToggleHandler: Security-Listener (Cache) Fehler:', error);
                   }
                 }
-              } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
-                if (containerEl) {
-                  containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
-                }
-                console.error('Fehler beim Lazy Load für', portfolioUuid, error);
               }
             } else {
-              const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
-              if (containerEl) {
-                containerEl.innerHTML = renderPositionsTable(
-                  getPortfolioPositions(portfolioUuid),
-                );
-                attachPortfolioPositionsSorting(root, portfolioUuid);
-                try {
-                  attachSecurityDetailListener(root, portfolioUuid);
-                } catch (error) {
-                  console.warn('attachPortfolioToggleHandler: Security-Listener (Cache) Fehler:', error);
-                }
-              }
+              detailsRow.classList.add('hidden');
+              btn.classList.remove('expanded');
+              btn.setAttribute('aria-expanded', 'false');
+              if (caretEl) caretEl.textContent = '▶';
+              expandedPortfolios.delete(portfolioUuid);
             }
-          } else {
-            detailsRow.classList.add('hidden');
-            btn.classList.remove('expanded');
-            btn.setAttribute('aria-expanded', 'false');
-            if (caretEl) caretEl.textContent = '▶';
-            expandedPortfolios.delete(portfolioUuid);
-          }
-        } catch (error) {
-          console.error('attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler', error);
-        }
+            } catch (error) {
+              console.error('attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler', error);
+            }
+        })();
       });
     } finally {
       if (token === root.__ppReaderAttachToken) {
         root.__ppReaderAttachInProgress = false;
       }
     }
-  })();
+    })();
 }
 
 // Fallback: direkter Listener auf die Tabelle selbst (falls outer container nicht klickt)
-export function ensurePortfolioRowFallbackListener(root: HTMLElement): void {
-  const table = root.querySelector<HTMLTableElement>('.expandable-portfolio-table');
-  if (!table) return;
-  if (table.__ppReaderPortfolioFallbackBound) return;
-  table.__ppReaderPortfolioFallbackBound = true;
+  export function ensurePortfolioRowFallbackListener(root: ToggleRootElement): void {
+    const table = root.querySelector<SortableTableElement>('.expandable-portfolio-table');
+    if (!table) return;
+    if (table.__ppReaderPortfolioFallbackBound) return;
+    table.__ppReaderPortfolioFallbackBound = true;
   table.addEventListener('click', (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -1224,7 +1315,7 @@ export function ensurePortfolioRowFallbackListener(root: HTMLElement): void {
     const btn = target.closest<HTMLButtonElement>('.portfolio-toggle');
     if (!btn) return;
     // Falls der Haupt-Listener schon aktiv war, nichts doppelt machen
-    const primaryContainer = root.querySelector<HTMLElement>('.portfolio-table');
+      const primaryContainer = root.querySelector<ToggleContainerElement>('.portfolio-table');
     if (primaryContainer?.__ppReaderPortfolioToggleBound) return;
     console.debug('Fallback-Listener aktiv – re-attach Hauptlistener');
     attachPortfolioToggleHandler(root);
@@ -1246,7 +1337,7 @@ export async function renderDashboard(
   );
 
   const accountsResp = await fetchAccountsWS(hass, panelConfig);
-  const accounts = accountsResp?.accounts ?? [];
+  const accounts = accountsResp.accounts;
   const normalizedAccounts: NormalizedAccountRow[] = accounts.map((account) => ({
     name: account.name ?? '—',
     balance: typeof account.balance === 'number' && Number.isFinite(account.balance)
@@ -1260,7 +1351,7 @@ export async function renderDashboard(
   }));
 
   const portfoliosResp = await fetchPortfoliosWS(hass, panelConfig);
-  const depots: PortfolioOverviewDepot[] = (portfoliosResp.portfolios ?? [])
+  const depots: PortfolioOverviewDepot[] = portfoliosResp.portfolios
     .map((p): PortfolioOverviewDepot | null => {
       const record = p as Record<string, unknown>;
       const uuid = typeof p.uuid === 'string' && p.uuid ? p.uuid : null;
@@ -1430,12 +1521,12 @@ export async function renderDashboard(
     ${footerCard}
   `;
 
-  schedulePostRenderSetup(root, depots);
+    schedulePostRenderSetup(root as ToggleRootElement, depots);
 
   return markup;
 }
 
-function schedulePostRenderSetup(root: HTMLElement | null, depots: readonly PortfolioOverviewDepot[]): void {
+  function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonly PortfolioOverviewDepot[]): void {
   if (!root) {
     return;
   }

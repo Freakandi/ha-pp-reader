@@ -221,7 +221,7 @@ export async function fetchLastFileUpdateWS(
     return response;
   }
 
-  const lastFileUpdate = response?.last_file_update;
+  const lastFileUpdate = response.last_file_update;
   return typeof lastFileUpdate === "string" ? lastFileUpdate : "";
 }
 
