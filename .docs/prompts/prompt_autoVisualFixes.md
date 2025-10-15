@@ -54,6 +54,7 @@ Repeat the following steps until every screen and component renders without visu
 - The proposed fix includes rationale explaining why and how it resolves the defect without introducing regressions.
 - The report delivers a unified diff (or equivalent explicit code edits) that implements the fix and is immediately suitable for a pull request.
 - The report specifies any tests, linting, or manual verification steps needed to validate the patch.
+- All linting runs (ESLint for TypeScript, ruff for Python) must be successful
 
 ## Reporting Template
 Provide a final report centered on the single most critical defect you investigated:
