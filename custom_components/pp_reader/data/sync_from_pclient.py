@@ -1016,16 +1016,95 @@ class _SyncRunner:
                         rows_written = 0
 
                         if existing_count:
-                            if existing_max_date is not None:
+                            append_rows: list[tuple[Any, ...]]
+                            rewrite_required = False
+
+                            if existing_max_date is None:
+                                append_rows = rows_to_persist
+                                rewrite_required = True
+                            else:
                                 append_rows = [
                                     row
                                     for row in rows_to_persist
                                     if row[1] > existing_max_date
                                 ]
-                            else:
-                                append_rows = rows_to_persist
 
-                            if append_rows:
+                                if append_rows:
+                                    existing_history_rows = self.cursor.execute(
+                                        """
+                                        SELECT date, close, high, low, volume
+                                        FROM historical_prices
+                                        WHERE security_uuid = ? AND date <= ?
+                                        ORDER BY date
+                                        """,
+                                        (security.uuid, existing_max_date),
+                                    ).fetchall()
+
+                                    expected_history_rows = [
+                                        (row[1], row[2], row[3], row[4], row[5])
+                                        for row in rows_to_persist
+                                        if row[1] <= existing_max_date
+                                    ]
+
+                                    if len(existing_history_rows) != len(
+                                        expected_history_rows
+                                    ):
+                                        rewrite_required = True
+                                    else:
+                                        for index, existing_row in enumerate(
+                                            existing_history_rows
+                                        ):
+                                            expected_row = expected_history_rows[index]
+                                            if existing_row[0] != expected_row[0]:
+                                                rewrite_required = True
+                                                break
+
+                                            for (
+                                                column_index,
+                                                existing_value,
+                                            ) in enumerate(existing_row[1:], start=1):
+                                                expected_value = expected_row[
+                                                    column_index
+                                                ]
+                                                if (
+                                                    existing_value is None
+                                                    or expected_value is None
+                                                ):
+                                                    if (
+                                                        existing_value
+                                                        is not expected_value
+                                                    ):
+                                                        rewrite_required = True
+                                                        break
+                                                elif not isclose(
+                                                    existing_value,
+                                                    expected_value,
+                                                    rel_tol=1e-12,
+                                                    abs_tol=1e-6,
+                                                ):
+                                                    rewrite_required = True
+                                                    break
+                                            if rewrite_required:
+                                                break
+
+                            if rewrite_required:
+                                self.cursor.execute(
+                                    (
+                                        "DELETE FROM historical_prices "
+                                        "WHERE security_uuid = ?"
+                                    ),
+                                    (security.uuid,),
+                                )
+                                self.cursor.executemany(
+                                    """
+                                    INSERT OR REPLACE INTO historical_prices (
+                                        security_uuid, date, close, high, low, volume
+                                    ) VALUES (?,?,?,?,?,?)
+                                    """,
+                                    rows_to_persist,
+                                )
+                                rows_written = total_rows
+                            elif append_rows:
                                 self.cursor.executemany(
                                     """
                                     INSERT OR REPLACE INTO historical_prices (

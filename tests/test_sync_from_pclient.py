@@ -832,6 +832,85 @@ def test_sync_securities_appends_only_new_history(
     assert runner_append.stats.historical_prices_skipped == len(base_prices)
 
 
+def test_sync_securities_rewrites_mismatched_history_before_appending(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Rewrites existing rows when earlier prices change alongside an append."""
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    base_prices = [
+        _DummyPrice(date=30, close=300),
+        _DummyPrice(date=31, close=310),
+        _DummyPrice(date=32, close=320),
+    ]
+    security = _DummySecurity(uuid="sec-rewrite", name="Rewrite", prices=base_prices)
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    runner = _SyncRunner(
+        client=_DummyClient([security]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+    runner.client.securities = [security]
+
+    try:
+        runner._sync_securities()
+        conn.commit()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    conn = sqlite3.connect(db_path)
+    corrected_prices = [
+        _DummyPrice(date=30, close=300),
+        _DummyPrice(date=31, close=311),
+        _DummyPrice(date=32, close=320),
+        _DummyPrice(date=33, close=330),
+    ]
+    security_corrected = _DummySecurity(
+        uuid="sec-rewrite", name="Rewrite", prices=corrected_prices
+    )
+    runner_corrected = _SyncRunner(
+        client=_DummyClient([security_corrected]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner_corrected.cursor = conn.cursor()
+    runner_corrected.client.securities = [security_corrected]
+
+    try:
+        runner_corrected._sync_securities()
+        conn.commit()
+        rows = conn.execute(
+            """
+            SELECT security_uuid, date, close
+            FROM historical_prices
+            ORDER BY date
+            """
+        ).fetchall()
+    finally:
+        runner_corrected.cursor.close()
+        conn.close()
+
+    assert rows == [
+        ("sec-rewrite", 30, 300),
+        ("sec-rewrite", 31, 311),
+        ("sec-rewrite", 32, 320),
+        ("sec-rewrite", 33, 330),
+    ]
+    assert runner_corrected.stats.historical_prices_written == len(corrected_prices)
+    assert runner_corrected.stats.historical_prices_skipped == 0
+
+
 def test_sync_securities_warns_about_missing_daily_prices(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
