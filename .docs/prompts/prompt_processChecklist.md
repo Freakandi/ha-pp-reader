@@ -6,8 +6,8 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/further_redundancies.md
-- .docs/TODO_further_redundancies.md
+- .docs/further_redundancies_1.md
+- .docs/TODO_further_redundancies_1.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -22,17 +22,18 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_redundancy_cleanup_plan.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_further_redundancies_1.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
+   - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
-8. Führe Tests aus, soweit notwendig oder sinnvoll
+9. Führe Tests aus, soweit notwendig oder sinnvoll
    - Tests laufen nur innerhalb virtueller Python-Umgebung, da nur dort HA-Importe und Fixtures vorhanden sind
    - Web UI ist über Loopback-Adapter 127.0.0.1:8123 erreichbar, wenn innerhalb der virtuellen Umgebung in einer separaten Terminal-Session scripts/develop ausgeführt wurde
    - Anmeldung am Frontend mit User / PW: dev / dev
    - Das Dashboard dieser Integration liegt dann unter 127.0.0.1:8123/ppreader
-9. Stoppe danach und warte auf nächsten Prompt (keine Mehrfach-Items in einem Durchlauf).
-10. Wenn Blocker (fehlende Info / Ambiguität) → Statt Code:
+10. Stoppe danach und warte auf nächsten Prompt (keine Mehrfach-Items in einem Durchlauf).
+11. Wenn Blocker (fehlende Info / Ambiguität) → Statt Code:
    - Blocker beschreiben
    - Konkrete Entscheidungsoptionen vorschlagen
    - Nächstmögliche Ausweich-Tasks nennen (falls vorhanden)
