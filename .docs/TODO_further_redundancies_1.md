@@ -307,7 +307,7 @@
       - Dateipfad(e): `src/data/updateConfigsWS.ts`, `tests/frontend/`, `src/tabs/`\
       - Betroffene Funktion(en)/Abschnitt(e): Aggregations-/Performance-Fallback-Logik\
       - Ziel/Ergebnis: Dashboard und Tests verlassen sich ausschließlich auf die vom Backend gelieferten Performance-Daten.
-   c) [ ] Ersetze verbleibende `datetime.UTC`-Verwendungen durch `datetime.timezone.utc`.\
+   c) [x] Ersetze verbleibende `datetime.UTC`-Verwendungen durch `datetime.timezone.utc`.\
       - Dateipfad(e): `tests/test_validators_timezone.py`, `tests/test_ws_accounts_fx.py`\
       - Betroffene Funktion(en)/Abschnitt(e): Datums-/Zeitzonenkonvertierungen\
       - Ziel/Ergebnis: Kompatibilität mit Python < 3.11 und HA-Testumgebung wiederhergestellt.

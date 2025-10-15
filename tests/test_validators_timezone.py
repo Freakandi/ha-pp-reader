@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ def test_validate_proto_transaction_accepts_current_timestamp(
 
     validator = validators.PPDataValidator()
 
-    now_seconds = int(datetime.now(tz=datetime.UTC).timestamp())
+    now_seconds = int(datetime.now(tz=timezone.utc).timestamp())  # noqa: UP017
     tx = DummyProtoTransaction(seconds=now_seconds)
 
     result = validator._validate_proto_transaction(tx)

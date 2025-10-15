@@ -6,7 +6,7 @@ import asyncio
 import importlib.util
 import sys
 import types
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -136,7 +136,7 @@ def _run_ws_get_accounts(*args: Any, **kwargs: Any) -> None:
 def test_ws_get_accounts_requests_fx_with_utc_timezone(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """FX helper receives timezone aware dates to avoid datetime.UTC dependency."""
+    """FX helper receives timezone aware dates without using datetime.UTC."""
     entry_id = "entry-1"
     db_path = _stub_db_path(tmp_path)
     hass = StubHass(entry_id, db_path)
@@ -233,9 +233,9 @@ def test_ws_get_accounts_requests_fx_with_utc_timezone(
     assert dates is not None
     assert isinstance(dates, list)
     assert dates
-    assert dates[0].tzinfo is datetime.UTC
+    assert dates[0].tzinfo is timezone.utc  # noqa: UP017
     assert captured.get("currencies") == {"USD"}
     assert captured.get("ensure_path") == db_path
     load_args = captured.get("load_args")
     assert load_args is not None
-    assert load_args[0].tzinfo is datetime.UTC
+    assert load_args[0].tzinfo is timezone.utc  # noqa: UP017
