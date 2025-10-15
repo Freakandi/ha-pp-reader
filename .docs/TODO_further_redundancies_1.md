@@ -303,7 +303,7 @@
       - Dateipfad(e): n/a (Kommandozeile)\
       - Betroffene Funktion(en)/Abschnitt(e): gesamter Python-Code\
       - Ziel/Ergebnis: Stil- und Qualitätsvorgaben eingehalten.
-   b) [ ] Bereinige verbleibende Performance-Fallbacks in Frontend-Konfiguration und Tests.\
+   b) [x] Bereinige verbleibende Performance-Fallbacks in Frontend-Konfiguration und Tests.\
       - Dateipfad(e): `src/data/updateConfigsWS.ts`, `tests/frontend/`, `src/tabs/`\
       - Betroffene Funktion(en)/Abschnitt(e): Aggregations-/Performance-Fallback-Logik\
       - Ziel/Ergebnis: Dashboard und Tests verlassen sich ausschließlich auf die vom Backend gelieferten Performance-Daten.

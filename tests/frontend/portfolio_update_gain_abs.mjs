@@ -536,112 +536,6 @@ const summary = {
   footerGainPct,
 };
 
-const NUMERIC_STRING_PATTERN = /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/;
-
-const toFiniteNumber = (value) => {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed || !NUMERIC_STRING_PATTERN.test(trimmed)) {
-      return null;
-    }
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-
-const toOptionalString = (value) => {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
-const simulateNormalizePerformancePayload = (raw) => {
-  const candidate = raw && typeof raw === 'object' ? raw : null;
-  if (!candidate) {
-    return null;
-  }
-
-  const gainAbs = toFiniteNumber(candidate.gain_abs);
-  const gainPct = toFiniteNumber(candidate.gain_pct);
-  const totalChangeEur = toFiniteNumber(candidate.total_change_eur);
-  const totalChangePct = toFiniteNumber(candidate.total_change_pct);
-
-  if (gainAbs == null || gainPct == null || totalChangeEur == null || totalChangePct == null) {
-    return null;
-  }
-
-  const source = toOptionalString(candidate.source) ?? 'derived';
-  const coverage = toFiniteNumber(candidate.coverage_ratio) ?? null;
-
-  const dayChangeCandidate = candidate.day_change && typeof candidate.day_change === 'object'
-    ? candidate.day_change
-    : null;
-  let dayChange = null;
-  if (dayChangeCandidate) {
-    const priceChangeNative = toFiniteNumber(dayChangeCandidate.price_change_native);
-    const priceChangeEur = toFiniteNumber(dayChangeCandidate.price_change_eur);
-    const changePct = toFiniteNumber(dayChangeCandidate.change_pct);
-    if (priceChangeNative != null || priceChangeEur != null || changePct != null) {
-      dayChange = {
-        price_change_native: priceChangeNative,
-        price_change_eur: priceChangeEur,
-        change_pct: changePct,
-        source: toOptionalString(dayChangeCandidate.source) ?? 'derived',
-        coverage_ratio: toFiniteNumber(dayChangeCandidate.coverage_ratio) ?? null,
-      };
-    }
-  }
-
-  return {
-    gain_abs: gainAbs,
-    gain_pct: gainPct,
-    total_change_eur: totalChangeEur,
-    total_change_pct: totalChangePct,
-    source,
-    coverage_ratio: coverage,
-    day_change: dayChange,
-  };
-};
-
-const simulateNormalizePerformance = (position) => simulateNormalizePerformancePayload(position.performance);
-
-const clonePlainObject = (value) => {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  return { ...value };
-};
-
-const simulateSanitizePosition = (position) => {
-  const normalized = { ...position };
-
-  if (Object.prototype.hasOwnProperty.call(position, 'aggregation')) {
-    normalized.aggregation = clonePlainObject(position.aggregation);
-  }
-
-  if (Object.prototype.hasOwnProperty.call(position, 'average_cost')) {
-    normalized.average_cost = clonePlainObject(position.average_cost);
-  }
-
-  const performance = simulateNormalizePerformance(position);
-  if (performance) {
-    normalized.performance = performance;
-  } else if (Object.prototype.hasOwnProperty.call(position, 'performance')) {
-    normalized.performance = null;
-  }
-
-  return normalized;
-};
-
-const simulateSanitizePositions = (positions) => positions.map(simulateSanitizePosition);
-
 const normalizationPayload = {
   portfolioUuid: 'portfolio-gain-struct',
   positions: [
@@ -665,25 +559,17 @@ const normalizationPayload = {
   ],
 };
 
-let fallbackPositions = [];
-
 if (canProcessUpdates) {
   handlePortfolioPositionsUpdate(normalizationPayload, null);
 }
 
-if (!canProcessUpdates) {
-  const simulated = simulateSanitizePositions(normalizationPayload.positions);
-  fallbackPositions = simulated;
-}
-
 const cacheSnapshot = getCacheSnapshot();
 const cachedPositions = cacheSnapshot.get('portfolio-gain-struct');
-const sourcePositions =
-  Array.isArray(cachedPositions) && cachedPositions.length
-    ? cachedPositions
-    : fallbackPositions;
+if (!Array.isArray(cachedPositions) || cachedPositions.length === 0) {
+  throw new Error('expected cached positions for portfolio-gain-struct');
+}
 
-const normalizedPositions = sourcePositions.map((position) => ({
+const normalizedPositions = cachedPositions.map((position) => ({
   aggregation: position?.aggregation ?? null,
   average_cost: position?.average_cost ?? null,
   performance: position?.performance ?? null,
