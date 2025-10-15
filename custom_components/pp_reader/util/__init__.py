@@ -1,12 +1,15 @@
-"""Utility helpers for Home Assistant executor interoperability."""
+"""Utility helpers for the Portfolio Performance Reader integration."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from inspect import isawaitable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from homeassistant.core import HomeAssistant
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+__all__ = ["async_run_executor_job"]
 
 _T = TypeVar("_T")
 
@@ -15,7 +18,6 @@ async def async_run_executor_job(
     hass: HomeAssistant, func: Callable[..., _T], *args: Any
 ) -> _T:
     """Execute a blocking job and gracefully handle non-awaitable fallbacks."""
-
     result = hass.async_add_executor_job(func, *args)
 
     if isinstance(result, Awaitable) or isawaitable(result):

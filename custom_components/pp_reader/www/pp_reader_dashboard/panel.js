@@ -1,8 +1,7 @@
 // Die Panel-Logik muss das Dashboard-Modul laden, bevor der Custom Element Code
-// ausgeführt wird. Wir nutzen Top-Level-Await, um zuerst das gebaute Bundle zu
-// importieren und bei Bedarf auf die Legacy-Datei zurückzufallen.
+// ausgeführt wird. Wir nutzen Top-Level-Await, um das gebaute Bundle zu
+// importieren und optional den Dev-Server für Hot-Reloading zu booten.
 const DASHBOARD_MODULE_SPECIFIER = './js/dashboard.module.js';
-const LEGACY_DASHBOARD_SPECIFIER = './js/dashboard.js';
 const DEV_SERVER_QUERY_PARAM = 'pp_reader_dev_server';
 const DEV_SERVER_STORAGE_KEY = 'pp_reader:viteDevServer';
 const DEV_SERVER_GLOBAL_KEY = '__PP_READER_VITE_DEV_SERVER__';
@@ -159,20 +158,8 @@ async function loadDashboardModule() {
     const bundledModuleUrl = resolveModuleUrl(DASHBOARD_MODULE_SPECIFIER);
     await import(/* @vite-ignore */ bundledModuleUrl);
   } catch (error) {
-    console.warn(
-      '[pp_reader] Konnte gebundeltes Dashboard nicht laden, versuche Legacy-Fallback.',
-      error,
-    );
-    try {
-      const legacyModuleUrl = resolveModuleUrl(LEGACY_DASHBOARD_SPECIFIER);
-      await import(/* @vite-ignore */ legacyModuleUrl);
-    } catch (fallbackError) {
-      console.error(
-        '[pp_reader] Fallback dashboard.js konnte ebenfalls nicht geladen werden.',
-        fallbackError,
-      );
-      throw fallbackError;
-    }
+    console.error('[pp_reader] Konnte gebündeltes Dashboard nicht laden.', error);
+    throw error;
   }
 }
 

@@ -56,7 +56,9 @@ custom_components/pp_reader/
   sensor.py                  # Sensor platform bootstrap
   services.yaml              # Service descriptions exposed to Home Assistant
   feature_flags.py           # Feature flag resolution helpers (backend entry store)
-  util.py                    # Executor helper resilient to coroutine-returning callables
+  util/
+    __init__.py              # Executor helper resilient to coroutine-returning callables
+    currency.py              # Shared rounding and FX normalisation helpers for EUR conversion
   name/
     __init__.py              # Namespace package for vendored Portfolio Performance schema
     abuchen/portfolio/
@@ -67,12 +69,14 @@ custom_components/pp_reader/
     fx.py                    # Frankfurter FX helper (EUR conversions)
   data/
     __init__.py
+    aggregations.py          # Holdings aggregation + AverageCostSelection dataclasses
     backup_db.py             # Periodic backups + service registration
     coordinator.py           # DataUpdateCoordinator for sensor snapshots
     db_access.py             # Query helpers used by coordinator & WebSockets
     db_init.py               # Database bootstrap + runtime migrations
     db_schema.py             # CREATE TABLE definitions & indices
     event_push.py            # Event compaction + EVENT_PANELS_UPDATED helpers
+    performance.py           # Gain/day-change computation + payload merging helpers
     reader.py                # .portfolio parser (protobuf extraction)
     sync_from_pclient.py     # File → SQLite diff synchronisation + event push
     websocket.py             # WebSocket commands & payload builders
@@ -103,6 +107,8 @@ Support tooling lives outside of the integration (for example `scripts/`, `tests
 
 TypeScript sources for the dashboard reside in `src/` and are bundled with Vite into the hashed assets above. Supporting build scripts live under `scripts/` (see [`scripts/update_dashboard_module.mjs`](scripts/update_dashboard_module.mjs)).【F:package.json†L1-L31】【F:scripts/update_dashboard_module.mjs†L1-L70】
 
+Utility helpers live in `custom_components/pp_reader/util/`, which exposes `async_run_executor_job` alongside the shared currency rounding helpers consumed by aggregation, database, websocket, and price modules.【F:custom_components/pp_reader/util/__init__.py†L1-L29】【F:custom_components/pp_reader/util/currency.py†L1-L180】 Aggregation-focused modules `data/aggregations.py` and `data/performance.py` hold the `HoldingsAggregation`/`AverageCostSelection` dataclasses plus the gain and day-change calculators reused across coordinators, database access, websocket handlers, and event push compaction.【F:custom_components/pp_reader/data/aggregations.py†L1-L200】【F:custom_components/pp_reader/data/performance.py†L1-L183】
+
 ---
 
 ## Packaging & generated assets
@@ -110,7 +116,7 @@ TypeScript sources for the dashboard reside in `src/` and are bundled with Vite 
 - `custom_components.pp_reader.__init__` registers the module under the alias `pp_reader` to satisfy legacy import paths used by the data sync helpers. Any new module must work through the canonical `custom_components.pp_reader` package; only compatibility shims should use the alias.
 - The Portfolio Performance protobuf schema lives in `custom_components/pp_reader/name/abuchen/portfolio/`. `client_pb2.py` is generated from `client.proto` and ships with a matching `.pyi` stub for typing. `client_pb2.py.bak` is retained solely as an upstream backup reference and is not imported at runtime.
 - The generated protobuf module is imported directly by `data.reader` and by the sync layer. Regeneration uses `protoc` with Python codegen and must preserve the namespace hierarchy to keep imports stable.
-- Dashboard assets are authored in TypeScript (`src/`) and compiled with Vite (`npm run build`). The build emits hashed browser bundles in `www/pp_reader_dashboard/js/` plus a stable `dashboard.module.js` entry that `panel.js` loads, falling back to legacy `dashboard.js` when required and supporting a dev-server override for live reloading.【F:package.json†L1-L31】【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L1-L160】
+- Dashboard assets are authored in TypeScript (`src/`) and compiled with Vite (`npm run build`). The build emits hashed browser bundles in `www/pp_reader_dashboard/js/` plus a stable `dashboard.module.js` entry that `panel.js` loads, with an optional dev-server override for live reloading.【F:package.json†L1-L31】【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L1-L163】
 
 ---
 
@@ -133,7 +139,7 @@ Developer tooling includes `ruff` and scripts under `scripts/` for linting and l
 
 ## Home Assistant integration layer
 ### Manifest
-`manifest.json` declares domain `pp_reader`, version `0.12.0`, the runtime dependencies above, and marks the integration as `local_polling` with a config flow. The `loggers` array covers all price subpackages (`prices`, `price_service`, `yahooquery_provider`, `revaluation`, `symbols`, `provider_base`) so the debug option can retune log levels without adjusting Home Assistant globally.【F:custom_components/pp_reader/manifest.json†L1-L24】【F:custom_components/pp_reader/__init__.py†L49-L70】
+`manifest.json` declares domain `pp_reader`, version `0.14.0`, the runtime dependencies above, and marks the integration as `local_polling` with a config flow.【F:custom_components/pp_reader/manifest.json†L1-L24】 The `loggers` array exposes the base integration plus the core price namespaces (`prices`, `prices.price_service`, `prices.yahooquery_provider`); `_apply_price_debug_logging` extends the same log level to `prices.revaluation`, `prices.symbols`, and `prices.provider_base` using the `PRICE_LOGGER_NAMES` list so diagnostics stay consistent across all helpers.【F:custom_components/pp_reader/manifest.json†L1-L24】【F:custom_components/pp_reader/__init__.py†L56-L66】【F:custom_components/pp_reader/__init__.py†L384-L407】
 
 ### Setup lifecycle
 
@@ -184,6 +190,8 @@ For each config entry `entry_id`, `hass.data[DOMAIN][entry_id]` stores:
 }
 ```
 
+`initialize_price_state` sets up the long-lived locks, error counters, and log throttling flags, while `_run_price_cycle` populates `price_symbols` and `price_symbol_to_uuids` on demand the first time active tickers are discovered.【F:custom_components/pp_reader/prices/price_service.py†L81-L107】【F:custom_components/pp_reader/prices/price_service.py†L777-L804】
+
 Keys prefixed with `price_` are initialised lazily by `initialize_price_state` and the cycle logic. Options reload and unload cleanup routines remove every `price_*` key before rescheduling to avoid stale state.
 
 ### Config flow & options flow
@@ -228,16 +236,23 @@ No credentials are required; Yahoo Finance quotes are public and the FX helper o
 ## Data ingestion & persistence
 ### Portfolio parsing and synchronization
 - `data.reader.parse_data_portfolio` extracts `data.portfolio` from the `.portfolio` ZIP, removes the `PPPBV1` prefix, and parses it into `client_pb2.PClient` from the vendored schema package.
-- `data.sync_from_pclient.sync_from_pclient` takes the protobuf payload and applies inserts/updates/deletes across SQLite tables. The function updates metadata such as `last_file_update`, refreshes derived holdings via `logic.*`, ensures FX side effects run through the `pp_reader.currencies` alias, and triggers downstream event pushes when aggregates change. Portfolio position sync delegates to `logic.securities.db_calculate_sec_purchase_value`, which emits a `PurchaseComputation` containing EUR totals, native-currency totals, and average prices per share. `_sync_portfolio_securities` persists the resulting metrics so each `(portfolio_uuid, security_uuid)` row keeps EUR purchase values alongside native totals (`security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`, plus the weighted six-decimal `avg_price_native`).
+- `data.sync_from_pclient.sync_from_pclient` takes the protobuf payload and applies inserts/updates/deletes across SQLite tables. The function updates metadata such as `last_file_update`, refreshes derived holdings via `logic.*`, ensures FX side effects run through the `pp_reader.currencies` alias, and triggers downstream event pushes when aggregates change. Portfolio position sync delegates to `logic.securities.db_calculate_sec_purchase_value`, which now returns a `HoldingsAggregation` plus `AverageCostSelection` payload in addition to the persisted EUR/native totals. `_sync_portfolio_securities` stores the aggregated EUR purchase values alongside native totals (`security_currency_total`, `account_currency_total`, weighted six-decimal `avg_price_native`) so the helpers can reconstruct structured `aggregation` and `average_cost` objects without leaking deprecated `avg_price_*` fields.
 
 ### Purchase price computation
 Cross-currency purchases rely on the normalisation helpers in `logic.securities`:
 
 - `_normalize_transaction_amounts` converts raw Portfolio Performance integers to floats (shares ÷ 1e8, cash ÷ 100), separates gross, fee (`transaction_units.type = 2`), and tax (`type = 1`) components, and derives the net account-currency exposure used for FIFO aggregation.
 - `_resolve_native_amount` inspects `transaction_units` rows with `type = 0` to obtain the security-currency trade value. When such rows are missing, `_determine_exchange_rate` exposes the applied FX rate so the logic can fall back to `net_trade_account / fx_rate` for cross-currency trades without explicit security totals.
-- `db_calculate_sec_purchase_value` stitches the helper outputs together: it aggregates per-security FIFO lots, keeps running totals in security and account currencies, and calculates per-share averages (`avg_price_security`, `avg_price_account`). The function continues to surface `avg_price_native` for legacy consumers while warning when neither native totals nor FX fallbacks are available.
+- `db_calculate_sec_purchase_value` stitches the helper outputs together: it aggregates per-security FIFO lots, keeps running totals in security and account currencies, and materialises the `HoldingsAggregation`/`AverageCostSelection` dataclasses that power downstream payloads. The function continues to surface `avg_price_native` for diagnostics, but deprecated per-share mirrors such as `avg_price_security` or `avg_price_account` are stripped before responses are serialised.
 
-The persisted metrics flow through `data.db_access`, `data.websocket`, and `data.event_push` so portfolio positions and security snapshots present security-currency purchase prices as primary values while still exposing account-currency references for diagnostics.
+The persisted metrics flow through `data.db_access`, `data.websocket`, and `data.event_push` so portfolio positions and security snapshots present the structured `aggregation` and `average_cost` payloads as primary values. Account- and security-currency totals continue to back those helpers, but the deprecated flat mirrors have been removed from emitted payloads.
+
+### Performance and day-change metrics
+`data.performance` centralises the gain and change calculations that previously lived across database, event, and WebSocket helpers. `select_performance_metrics` derives `PerformanceMetrics` and `DayChangeMetrics` dataclasses by combining current and purchase values with optional holdings and price inputs, rounding currency deltas with `util.currency` and annotating coverage metadata so downstream surfaces can expose source transparency.【F:custom_components/pp_reader/data/performance.py†L1-L143】 `compose_performance_payload` merges these metrics back into existing payload fragments, preserving backend overrides while ensuring the nested `day_change` block only ships when real values are available.【F:custom_components/pp_reader/data/performance.py†L145-L183】
+
+`data.db_access.get_security_snapshot` feeds the helper with persisted holdings, current EUR valuations, and the most recent native close to serialise unified `performance` and `average_cost` objects. The WebSocket layer strips the deprecated flat mirrors so coordinator caches and responses surface only the structured payloads without recomputing gains or rounding in multiple places.【F:custom_components/pp_reader/data/db_access.py†L612-L698】【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】 Portfolio aggregations reuse the helper to keep coordinator sensors and WebSocket responses aligned with the metrics stored in SQLite.【F:custom_components/pp_reader/data/db_access.py†L891-L968】
+
+Event payloads, price revaluation updates, and gain sensors rely on the shared helper when backend data does not already supply `performance`, preventing divergence from ad-hoc calculations and guaranteeing absolute and percentage changes always originate from the same rounding rules.【F:custom_components/pp_reader/data/event_push.py†L13-L132】【F:custom_components/pp_reader/prices/price_service.py†L780-L840】【F:custom_components/pp_reader/sensors/gain_sensors.py†L1-L120】
 
 ### Coordinator (`data.coordinator.PPReaderCoordinator`)
 - Polls every minute (minute-truncated file timestamp).
@@ -249,8 +264,8 @@ The persisted metrics flow through `data.db_access`, `data.websocket`, and `data
   - Stores a snapshot in `self.data` for sensors: `accounts`, `portfolios`, `transactions`, and `last_update` (ISO8601).
 
 ### SQLite schema & helpers
-- Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities (with `last_price_source` and `last_price_fetched_at`), portfolios, transactions, transaction units, historical prices, plans, watchlists, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`, which also performs runtime migrations to add native purchase columns (`avg_price_native`, `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`) alongside the historical EUR aggregates.
-- `db_access.py` offers strongly typed dataclasses and helper queries (e.g., `get_portfolio_positions`, `fetch_live_portfolios`, `get_security_snapshot`, `iter_security_close_prices`, `get_last_file_update`, `get_all_portfolio_securities`). Monetary values are stored as integers (cents) or scaled integers (`last_price` × 1e8) to avoid floating-point drift, while purchase totals are persisted as floats for security/account currency sums and six-decimal native averages.【F:custom_components/pp_reader/data/db_access.py†L189-L384】
+- Definitions live in `data.db_schema`. The integration maintains tables for accounts, securities (with `last_price_source` and `last_price_fetched_at`), portfolios, transactions, transaction units, historical prices, plans, watchlists, FX rates, and metadata. `ALL_SCHEMAS` and the additional `idx_portfolio_securities_portfolio` index are executed idempotently by `data.db_init.initialize_database_schema`, which also performs runtime migrations to add native purchase columns (`avg_price_native`, `security_currency_total`, `account_currency_total`, legacy `avg_price_security`, `avg_price_account`) alongside the historical EUR aggregates so older databases retain the information required by the aggregation helpers.
+- `db_access.py` offers strongly typed dataclasses and helper queries (e.g., `get_portfolio_positions`, `fetch_live_portfolios`, `get_security_snapshot`, `iter_security_close_prices`, `get_last_file_update`, `get_all_portfolio_securities`). Monetary values are stored as integers (cents) or scaled integers (`last_price` × 1e8) to avoid floating-point drift, while purchase totals are persisted as floats for security/account currency sums and six-decimal native averages. Legacy per-share columns remain in the schema for migration continuity but are filtered out when building payloads.【F:custom_components/pp_reader/data/db_access.py†L189-L384】【F:custom_components/pp_reader/data/websocket.py†L200-L360】
 
 ### Historical close series storage
 - `_sync_securities` filters Portfolio Performance price payloads so only active (non-retired) securities write new rows into `historical_prices`. Retired securities retain existing rows for archival reads but no longer receive inserts. Future-dated or malformed entries (missing `date`/`close`, negative epoch days) are skipped with throttled WARN logs.
@@ -272,6 +287,7 @@ The persisted metrics flow through `data.db_access`, `data.websocket`, and `data
 - `_compact_event_data` strips unused fields from `portfolio_values` and `portfolio_positions` payloads so emitted events stay below Home Assistant’s 32 KB recorder limit.
 - `_push_update` schedules `EVENT_PANELS_UPDATED` via `call_soon_threadsafe`, guarding against missing `hass` or `entry_id` values. It warns when payloads approach or exceed the recorder threshold so developers can tune payload size before events are dropped and ensures every payload carries `domain`, `entry_id`, `data_type`, and compacted `data` fields for downstream filtering.【F:custom_components/pp_reader/data/event_push.py†L17-L206】
 - `data.sync_from_pclient` invokes the helper after database writes to keep dashboard clients up to date, while `prices.price_service` reuses it when price changes require incremental UI refreshes.
+- Portfolio value and position events ship the `performance` object derived by the shared helper. When upstream payloads omit the structure, the compactor recomputes it so gain/percentage totals and nested day-change metrics always share the same rounding semantics and metadata as the database responses. Legacy flat fields are no longer emitted with the event payload.【F:custom_components/pp_reader/data/event_push.py†L13-L209】
 - The TypeScript dashboard controller (`src/dashboard.ts`) subscribes to the Home Assistant `panels_updated` event, filters bus messages by the active `entry_id`, and enqueues clones of each payload in `_pendingUpdates` so re-renders can replay every update after navigation or tab changes.【F:src/dashboard.ts†L815-L933】【F:src/dashboard.ts†L972-L1040】
 
 ---
@@ -279,14 +295,14 @@ The persisted metrics flow through `data.db_access`, `data.websocket`, and `data
 ## Price service
 `prices.price_service` owns the recurring quote fetch:
 
-1. **State initialisation** – `initialize_price_state` seeds locks, caches (`price_symbols`, `price_symbol_to_uuids`), error counters, and log throttling flags in `hass.data`.
+1. **State initialisation** – `initialize_price_state` seeds locks, error counters, and log throttling flags in `hass.data`; symbol caches are added later when `_run_price_cycle` discovers active tickers and writes `price_symbols`/`price_symbol_to_uuids` to the store.【F:custom_components/pp_reader/prices/price_service.py†L81-L107】【F:custom_components/pp_reader/prices/price_service.py†L777-L804】
 2. **Scheduling** – `_schedule_price_interval` (called from `__init__.py`) uses `async_track_time_interval` to run `_run_price_cycle` at the configured cadence. Option reloads reuse the helper and trigger an immediate cycle.
 3. **Symbol discovery** – `load_and_map_symbols` queries active securities with tickers, resets the "empty" log guard when symbols appear again, and records the list length for diagnostics shared with reload logging.【F:custom_components/pp_reader/prices/price_service.py†L105-L161】
 4. **Fetching quotes** – Batches use the provider `CHUNK_SIZE` (10 symbols) and wrap each `YahooQueryProvider.fetch` call in `asyncio.wait_for` with a 20 s timeout. Chunk failures bump `price_error_counter`, and zero-quote cycles trigger a throttled WARN via `price_zero_quotes_warn_ts` unless the provider import failed.【F:custom_components/pp_reader/prices/yahooquery_provider.py†L1-L100】【F:custom_components/pp_reader/prices/price_service.py†L692-L794】
 5. **Change detection** – `_detect_price_changes` compares scaled prices and filters out unchanged or invalid values (`price <= 0`). Currency mismatches log once per symbol by tracking `price_currency_drift_logged`.
 6. **Persistence** – Updated prices and metadata (`last_price`, `last_price_source`, `last_price_fetched_at`) are written to `securities` via `async_run_executor_job`. The cycle records meta information (batches, duration, skipped flag) and warns when execution time exceeds the 25 s watchdog threshold or when the consecutive error counter reaches three with zero quotes.【F:custom_components/pp_reader/prices/price_service.py†L795-L858】【F:custom_components/pp_reader/prices/price_service.py†L680-L770】
-7. **Revaluation** – `prices.revaluation.revalue_after_price_updates` recalculates affected portfolios, leveraging helpers in `logic.portfolio` and `logic.securities` to recompute holdings and values. It reloads impacted positions so follow-up events carry fresh data.
-8. **Event push** – `_push_update` from `data.event_push` is reused to dispatch `EVENT_PANELS_UPDATED`. The order remains `portfolio_values` followed by `portfolio_positions` per affected UUID, and the helper ensures payloads stay compact.
+7. **Revaluation** – `prices.revaluation.revalue_after_price_updates` recalculates affected portfolios by reusing `fetch_live_portfolios` for aggregates and `logic.securities` for holdings recomputation. It reloads impacted positions so follow-up events carry fresh data.
+8. **Event push** – `_push_update` from `data.event_push` is reused to dispatch `EVENT_PANELS_UPDATED`. Revaluation payloads rebuild the `performance` structure from the shared helper before emission, keeping price-driven gain deltas aligned with the database contract. The order remains `portfolio_values` followed by `portfolio_positions` per affected UUID, and the helper ensures payloads stay compact.【F:custom_components/pp_reader/prices/price_service.py†L780-L840】【F:custom_components/pp_reader/data/event_push.py†L13-L209】
 
 When no symbols are available the service logs the condition once and skips the fetch without treating it as an error. Persistent yahooquery import failures flip `price_provider_disabled` to avoid repeated logs. Reloading an entry reinitializes state and immediately triggers a new price cycle.
 
@@ -319,6 +335,8 @@ The FX helper logs and returns partial results on network or database failures t
 
 All commands default to the coordinator snapshot when live aggregation fails to keep the dashboard responsive. `_live_portfolios_payload` centralises the fetch logic: it queries SQLite via `fetch_live_portfolios` inside an executor, logs and falls back to coordinator snapshots on error, and normalises results before serialising. The accounts endpoint invokes `ensure_exchange_rates_for_dates`/`load_latest_rates` so FX metadata is up to date when non-EUR accounts are present. Security-specific commands reuse `async_run_executor_job` to call `get_security_snapshot` and `iter_security_close_prices`, ensuring blocking SQLite work never stalls the event loop.【F:custom_components/pp_reader/data/websocket.py†L640-L778】
 
+Portfolio and position responses merge any persisted `performance` payload with metrics derived from `select_performance_metrics`, ensuring gain/percentage totals and nested `day_change` values remain consistent with coordinator sensors and event payloads even when upstream caches omit fields. Deprecated flattenings (`gain_abs`, `gain_pct`, `day_price_change_*`, `avg_price_*`) are removed before the payload is emitted.【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】
+
 Feature flags are resolved through `feature_flags.is_enabled`, which reads overrides from `hass.data[DOMAIN][entry_id]["feature_flags"]` seeded during `async_setup_entry`. While no flags are currently active, the infrastructure remains available for future experiments without impacting core commands like security history.
 
 The custom panel lives under `www/pp_reader_dashboard`:
@@ -340,7 +358,7 @@ Key entities and their origin:
 | Account | SQLite `accounts` + transactions | `uuid`, `name`, `currency_code`, `balance` (cents) | Balances are recomputed per refresh, not stored. |
 | Security | SQLite `securities` | `uuid`, `name`, `ticker_symbol`, `currency_code`, `last_price` (scaled), `last_price_date` | `last_price_source`/`last_price_fetched_at` updated by price service; `historical_prices` captures daily Close series for active securities. |
 | Portfolio | SQLite `portfolios` | `uuid`, `name`, `reference_account`, `is_retired` | Aggregates are derived from `portfolio_securities`. |
-| PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price`, `avg_price_native`, `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account` | EUR purchase metrics (`purchase_value`, `avg_price`) coexist with native totals and per-share averages so the dashboard can prioritise security-currency prices without recomputing FX at runtime. |
+| PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price`, `avg_price_native`, `security_currency_total`, `account_currency_total`, legacy `avg_price_security`, `avg_price_account` | EUR purchase metrics (`purchase_value`, `avg_price`) coexist with native totals so `HoldingsAggregation`/`AverageCostSelection` can populate the structured `aggregation`/`average_cost` payloads. Deprecated per-share mirrors stay persisted for migrations but are removed from emitted responses. |
 | Transaction | SQLite `transactions` | `type`, `amount`, `currency_code`, `shares`, `security` | `transaction_units` store FX amounts for cross-currency transfers. |
 | FXRate | SQLite `fx_rates` | `date`, `currency`, `rate` | Populated on demand via `currencies.fx`. |
 | Metadata | SQLite `metadata` | `last_file_update` | Drives coordinator sync decisions.
@@ -395,9 +413,11 @@ Automated tests live under `tests/` (see [TESTING.md](TESTING.md)):
 
 - **Price orchestration** – `test_price_service.py`, `test_reload_initial_cycle.py`, `test_reload_logs.py`, `test_interval_change_reload.py`, `test_zero_quotes_warn.py`, `test_empty_symbols_logging.py`, `test_currency_drift_once.py`, `test_error_counter_reset.py`, `test_watchdog.py`, `test_batch_size_regression.py`, `test_price_persistence_fields.py`, and `test_debug_scope.py` exercise interval rescheduling, warning throttling, persistence fields, and logging scope.【F:tests/test_price_service.py†L1-L9】【F:tests/test_zero_quotes_warn.py†L1-L9】
 - **Provider integration** – `test_yahooquery_provider.py` validates chunked fetch behaviour and error handling for the Yahoo Finance client.【F:tests/test_yahooquery_provider.py†L1-L10】
-- **Aggregation & database helpers** – `test_fetch_live_portfolios.py`, `test_revaluation_live_aggregation.py`, `test_db_access.py`, and `test_ws_portfolios_live.py` cover on-demand aggregation helpers and confirm the coordinator and WebSocket layers read consistent snapshots.【F:tests/test_fetch_live_portfolios.py†L1-L10】【F:tests/test_db_access.py†L1-L10】
-- **WebSocket, FX & security detail** – `test_ws_accounts_fx.py`, `test_ws_last_file_update.py`, `test_ws_portfolios_live.py`, `test_ws_security_history.py`, and `test_currencies_fx.py` verify websocket payloads, FX enrichment, and historical price/ snapshot responses.【F:tests/test_ws_security_history.py†L1-L10】
-- **Sync & migrations** – `test_sync_from_pclient.py`, `test_migration.py`, and `test_price_persistence_fields.py` assert diff synchronisation, runtime schema migrations, and price field updates.
+- **Aggregation & performance metrics** – `test_aggregations.py`, `test_performance.py`, `test_logic_securities.py`, and `test_logic_securities_native_avg.py` ensure holdings aggregation, average cost selection, and gain/day-change computations remain numerically stable across cross-currency scenarios.【F:tests/test_aggregations.py†L1-L156】【F:tests/test_performance.py†L1-L112】【F:tests/test_logic_securities.py†L1-L140】【F:tests/test_logic_securities_native_avg.py†L1-L160】
+- **Database & coordinator contract** – `test_fetch_live_portfolios.py`, `test_db_access.py`, `test_coordinator_contract.py`, and `test_revaluation_live_aggregation.py` cover on-demand aggregation helpers, schema bootstrapping, and the coordinator/event payload contract so sensors and websocket responses stay aligned.【F:tests/test_fetch_live_portfolios.py†L1-L106】【F:tests/test_db_access.py†L1-L146】【F:tests/test_coordinator_contract.py†L1-L60】【F:tests/test_revaluation_live_aggregation.py†L1-L80】
+- **Event propagation & backups** – `test_event_push.py` verifies payload compaction for portfolios and positions, while `test_backup_cleanup.py` validates the tiered retention strategy and resilience to stray files.【F:tests/test_event_push.py†L1-L166】【F:tests/test_backup_cleanup.py†L1-L36】
+- **WebSocket, FX & security detail** – `test_ws_accounts_fx.py`, `test_ws_last_file_update.py`, `test_ws_portfolios_live.py`, `test_ws_portfolio_positions.py`, `test_ws_security_history.py`, and `test_currencies_fx.py` verify websocket payloads, FX enrichment, and historical price/snapshot responses.【F:tests/test_ws_accounts_fx.py†L1-L120】【F:tests/test_ws_last_file_update.py†L1-L120】【F:tests/test_ws_portfolios_live.py†L1-L132】【F:tests/test_ws_portfolio_positions.py†L1-L200】【F:tests/test_ws_security_history.py†L1-L10】【F:tests/test_currencies_fx.py†L1-L156】
+- **Sync & migrations** – `test_sync_from_pclient.py`, `test_migration.py`, and `test_price_persistence_fields.py` assert diff synchronisation, runtime schema migrations, and price field updates.【F:tests/test_sync_from_pclient.py†L1-L120】【F:tests/test_migration.py†L1-L120】【F:tests/test_price_persistence_fields.py†L1-L79】
 - **Panel & frontend assets** – `test_panel_registration.py` ensures Home Assistant registers the placeholder and runtime panel, while `tests/frontend/test_build_artifacts.py`, `tests/frontend/test_dashboard_smoke.py`, and `tests/frontend/test_portfolio_update_gain_abs.py` use jsdom-powered smoke tests to validate the bundled dashboard output.【F:tests/test_panel_registration.py†L1-L9】【F:tests/frontend/test_build_artifacts.py†L1-L9】【F:tests/frontend/test_dashboard_smoke.py†L1-L10】【F:tests/frontend/test_portfolio_update_gain_abs.py†L1-L10】
 - **Validation helpers** – `test_validators_timezone.py` guards transaction validation edge cases.【F:tests/test_validators_timezone.py†L1-L10】
 

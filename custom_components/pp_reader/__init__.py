@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Final
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import (
     async_register_built_in_panel,
+)
+from homeassistant.components.frontend import (
     async_remove_panel as frontend_async_remove_panel,
 )
 from homeassistant.components.http import StaticPathConfig
@@ -35,6 +37,7 @@ from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
+from .util import async_run_executor_job
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -52,8 +55,6 @@ if TYPE_CHECKING:
 
 _NAMESPACE_ALIAS = "pp_reader"
 sys.modules[_NAMESPACE_ALIAS] = sys.modules[__name__]
-
-from .prices import price_service as price_service_module
 
 PRICE_LOGGER_NAMES = [
     "custom_components.pp_reader.prices",
@@ -76,6 +77,8 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
+    from .prices import price_service as price_service_module
+
     return price_service_module
 
 
@@ -86,7 +89,6 @@ def _build_panel_config(
     placeholder: bool,
 ) -> dict[str, Any]:
     """Return the panel registration payload used for placeholder and live panels."""
-
     config: dict[str, Any] = {"entry_id": entry_id}
     if placeholder:
         config["placeholder"] = True
@@ -283,7 +285,6 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
 
 async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
     """Register a lightweight placeholder panel so /ppreader never 404s."""
-
     existing_panel = next(
         (
             panel
@@ -315,9 +316,7 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
             await register_result
         _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
     except ValueError:
-        _LOGGER.exception(
-            "❌ Fehler bei der Registrierung des Panel-Platzhalters"
-        )
+        _LOGGER.exception("❌ Fehler bei der Registrierung des Panel-Platzhalters")
     except AttributeError:
         _LOGGER.exception(
             "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
@@ -480,7 +479,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         try:
             _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
-            initialize_database_schema(db_path)
+            await async_run_executor_job(hass, initialize_database_schema, db_path)
         except Exception as exc:
             _LOGGER.exception("❌ Fehler bei der DB-Initialisierung")
             msg = "Datenbank konnte nicht initialisiert werden"

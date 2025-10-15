@@ -19,6 +19,7 @@ import asyncio
 import logging
 import sqlite3
 import time
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -30,29 +31,29 @@ from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.sync_from_pclient import (
     fetch_positions_for_portfolios,
 )
-from custom_components.pp_reader.logic.portfolio import (
-    db_calculate_portfolio_purchase_sum,
-    db_calculate_portfolio_value_and_count,
-)
 from custom_components.pp_reader.logic.securities import (
     db_calculate_current_holdings,
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
 from custom_components.pp_reader.prices import revaluation
-from custom_components.pp_reader.util import async_run_executor_job
-
-
-async def revalue_after_price_updates(*args, **kwargs):
-    """Proxy to the revaluation helper (patchable for tests)."""
-    return await revaluation.revalue_after_price_updates(*args, **kwargs)
-
-
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
     YahooQueryProvider,
     has_import_error,
 )
+from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    eur_to_cent,
+    round_currency,
+)
+
+
+async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Proxy to the revaluation helper (patchable for tests)."""
+    return await revaluation.revalue_after_price_updates(*args, **kwargs)
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -71,6 +72,8 @@ ZERO_QUOTES_WARN_INTERVAL = 1_800
 # 20s verhindern False-Timeouts.
 PRICE_FETCH_TIMEOUT = 20
 TRANSACTION_UNIT_CHUNK_SIZE = 500
+HOLDING_VALUE_MATCH_EPSILON = 1e-9
+TOTAL_VALUE_MATCH_EPSILON = 1e-6
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -250,7 +253,7 @@ def _detect_price_changes(
 def _load_prices_and_currencies(
     db_path: Path,
 ) -> tuple[dict[str, int], dict[str, str | None]]:
-    """Synchronously load cached prices and security currencies from SQLite."""
+    """Load cached prices and security currencies from SQLite."""
     with sqlite3.connect(str(db_path)) as conn:
         return _load_old_prices(conn), _load_security_currencies(conn)
 
@@ -340,7 +343,7 @@ def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
     return {k: v for k, v in updates.items() if isinstance(v, int) and v > 0}
 
 
-def _refresh_impacted_portfolio_securities(
+def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR0915 - SQL refresh mirrors legacy flow
     db_path: Path, scaled_updates: dict[str, int]
 ) -> set[str]:
     """Recalculate portfolio/security aggregates for affected securities."""
@@ -355,93 +358,92 @@ def _refresh_impacted_portfolio_securities(
 
     try:
         with sqlite3.connect(str(db_path)) as conn:
-            existing_entries: dict[
-                tuple[str, str], dict[str, float | int | None]
-            ] = {}
+            existing_entries: dict[tuple[str, str], dict[str, float | int | None]] = {}
             impacted_pairs: set[tuple[str, str]] = set()
 
-            placeholders = ",".join("?" for _ in security_ids)
             try:
-                cur = conn.execute(
-                    f"""
-                        SELECT portfolio_uuid,
-                               security_uuid,
-                               current_holdings,
-                               purchase_value,
-                               avg_price_native,
-                               current_value,
-                               security_currency_total,
-                               account_currency_total,
-                               avg_price_security,
-                               avg_price_account
-                        FROM portfolio_securities
-                        WHERE security_uuid IN ({placeholders})
-                    """,
-                    tuple(security_ids),
-                )
+                for sec_id in security_ids:
+                    cur = conn.execute(
+                        """
+                            SELECT portfolio_uuid,
+                                   security_uuid,
+                                   current_holdings,
+                                   purchase_value,
+                                   avg_price_native,
+                                   current_value,
+                                   security_currency_total,
+                                   account_currency_total
+                            FROM portfolio_securities
+                            WHERE security_uuid = ?
+                        """,
+                        (sec_id,),
+                    )
+                    for (
+                        portfolio_uuid,
+                        security_uuid,
+                        cur_hold,
+                        purch_val,
+                        avg_native,
+                        cur_val,
+                        sec_total,
+                        acc_total,
+                    ) in cur.fetchall():
+                        key = (portfolio_uuid, security_uuid)
+                        impacted_pairs.add(key)
+                        impacted_portfolios.add(portfolio_uuid)
+                        existing_entries[key] = {
+                            "current_holdings": float(cur_hold or 0.0),
+                            "purchase_value": int(purch_val or 0),
+                            "avg_price_native": (
+                                float(avg_native) if avg_native is not None else None
+                            ),
+                            "current_value": int(cur_val or 0),
+                            "security_currency_total": (
+                                float(sec_total) if sec_total is not None else 0.0
+                            ),
+                            "account_currency_total": (
+                                float(acc_total) if acc_total is not None else 0.0
+                            ),
+                        }
             except sqlite3.Error:
                 _LOGGER.debug(
-                    "prices_cycle: portfolio_securities Lookup übersprungen (Tabelle fehlt?)",
+                    (
+                        "prices_cycle: portfolio_securities Lookup übersprungen "
+                        "(Tabelle fehlt?)"
+                    ),
                     exc_info=True,
                 )
                 return set()
 
-            for (
-                portfolio_uuid,
-                security_uuid,
-                cur_hold,
-                purch_val,
-                avg_native,
-                cur_val,
-                sec_total,
-                acc_total,
-                avg_price_sec,
-                avg_price_acc,
-            ) in cur.fetchall():
-                key = (portfolio_uuid, security_uuid)
-                impacted_pairs.add(key)
-                impacted_portfolios.add(portfolio_uuid)
-                existing_entries[key] = {
-                    "current_holdings": float(cur_hold or 0.0),
-                    "purchase_value": int(purch_val or 0),
-                    "avg_price_native": (
-                        float(avg_native) if avg_native is not None else None
-                    ),
-                    "current_value": int(cur_val or 0),
-                    "security_currency_total": (
-                        float(sec_total) if sec_total is not None else 0.0
-                    ),
-                    "account_currency_total": (
-                        float(acc_total) if acc_total is not None else 0.0
-                    ),
-                    "avg_price_security": (
-                        float(avg_price_sec)
-                        if avg_price_sec is not None
-                        else None
-                    ),
-                    "avg_price_account": (
-                        float(avg_price_acc)
-                        if avg_price_acc is not None
-                        else None
-                    ),
-                }
-
             transaction_rows: list[tuple] = []
             try:
-                tx_cur = conn.execute(
-                    f"""
-                        SELECT uuid, type, account, portfolio, other_account, other_portfolio,
-                               date, currency_code, amount, shares, security
-                        FROM transactions
-                        WHERE security IN ({placeholders})
-                          AND portfolio IS NOT NULL
-                    """,
-                    tuple(security_ids),
-                )
-                transaction_rows = tx_cur.fetchall()
+                for sec_id in security_ids:
+                    tx_cur = conn.execute(
+                        """
+                            SELECT uuid,
+                                   type,
+                                   account,
+                                   portfolio,
+                                   other_account,
+                                   other_portfolio,
+                                   date,
+                                   currency_code,
+                                   amount,
+                                   shares,
+                                   security
+                            FROM transactions
+                            WHERE security = ?
+                              AND portfolio IS NOT NULL
+                        """,
+                        (sec_id,),
+                    )
+                    transaction_rows.extend(tx_cur.fetchall())
             except sqlite3.Error:
                 _LOGGER.debug(
-                    "prices_cycle: transactions Lookup fehlgeschlagen (Refresh übersprungen)",
+                    (
+                        "prices_cycle: transactions Lookup fehlgeschlagen "
+                        "(Refresh übersprungen)"
+                    ),
                     exc_info=True,
                 )
 
@@ -455,32 +457,37 @@ def _refresh_impacted_portfolio_securities(
                 if tx_ids:
                     for start in range(0, len(tx_ids), TRANSACTION_UNIT_CHUNK_SIZE):
                         chunk = tx_ids[start : start + TRANSACTION_UNIT_CHUNK_SIZE]
-                        placeholders_units = ",".join("?" for _ in chunk)
                         try:
-                            unit_cur = conn.execute(
-                                f"""
-                                    SELECT transaction_uuid, fx_amount, fx_currency_code
-                                    FROM transaction_units
-                                    WHERE transaction_uuid IN ({placeholders_units})
-                                      AND fx_amount IS NOT NULL
-                                """,
-                                tuple(chunk),
-                            )
+                            for tx_uuid in chunk:
+                                unit_cur = conn.execute(
+                                    """
+                                        SELECT transaction_uuid,
+                                               fx_amount,
+                                               fx_currency_code
+                                        FROM transaction_units
+                                        WHERE transaction_uuid = ?
+                                          AND fx_amount IS NOT NULL
+                                    """,
+                                    (tx_uuid,),
+                                )
+                                for unit_row in unit_cur.fetchall():
+                                    tx_unit_uuid, fx_amount, fx_currency = unit_row
+                                    if fx_amount is None or not fx_currency:
+                                        continue
+                                    tx_units[tx_unit_uuid] = {
+                                        "fx_amount": fx_amount,
+                                        "fx_currency_code": fx_currency,
+                                    }
                         except sqlite3.Error:
                             _LOGGER.debug(
-                                "prices_cycle: transaction_units Lookup fehlgeschlagen (Refresh übersprungen)",
+                                (
+                                    "prices_cycle: transaction_units Lookup "
+                                    "fehlgeschlagen (Refresh übersprungen)"
+                                ),
                                 exc_info=True,
                             )
                             tx_units = {}
                             break
-
-                        for tx_uuid, fx_amount, fx_currency in unit_cur.fetchall():
-                            if fx_amount is None or not fx_currency:
-                                continue
-                            tx_units[tx_uuid] = {
-                                "fx_amount": fx_amount,
-                                "fx_currency_code": fx_currency,
-                            }
 
             for tx in transactions:
                 if tx.portfolio and tx.security:
@@ -508,25 +515,15 @@ def _refresh_impacted_portfolio_securities(
                 metrics = purchase_metrics.get(key)
                 purchase_value = metrics.purchase_value if metrics else None
                 avg_price_native = metrics.avg_price_native if metrics else None
-                security_total = (
-                    metrics.security_currency_total if metrics else None
-                )
-                account_total = (
-                    metrics.account_currency_total if metrics else None
-                )
-                avg_price_security = (
-                    metrics.avg_price_security if metrics else None
-                )
-                avg_price_account = (
-                    metrics.avg_price_account if metrics else None
-                )
+                security_total = metrics.security_currency_total if metrics else None
+                account_total = metrics.account_currency_total if metrics else None
 
                 existing_entry = existing_entries.get(key)
                 if holdings is None and existing_entry:
                     holdings = float(existing_entry.get("current_holdings", 0.0))
                 if purchase_value is None and existing_entry:
-                    purchase_value = round(
-                        float(existing_entry.get("purchase_value", 0)) / 100, 2
+                    purchase_value = cent_to_eur(
+                        existing_entry.get("purchase_value"), default=0.0
                     )
                 if avg_price_native is None and existing_entry:
                     avg_price_native = existing_entry.get("avg_price_native")
@@ -534,10 +531,6 @@ def _refresh_impacted_portfolio_securities(
                     security_total = existing_entry.get("security_currency_total", 0.0)
                 if account_total is None and existing_entry:
                     account_total = existing_entry.get("account_currency_total", 0.0)
-                if avg_price_security is None and existing_entry:
-                    avg_price_security = existing_entry.get("avg_price_security")
-                if avg_price_account is None and existing_entry:
-                    avg_price_account = existing_entry.get("avg_price_account")
 
                 if holdings is None:
                     continue
@@ -548,8 +541,6 @@ def _refresh_impacted_portfolio_securities(
                     "avg_price_native": avg_price_native,
                     "security_currency_total": security_total or 0.0,
                     "account_currency_total": account_total or 0.0,
-                    "avg_price_security": avg_price_security,
-                    "avg_price_account": avg_price_account,
                 }
 
             if not current_hold_pur:
@@ -565,50 +556,52 @@ def _refresh_impacted_portfolio_securities(
             for key, data in holdings_values.items():
                 portfolio_uuid, security_uuid = key
                 current_holdings_val = float(data.get("current_holdings", 0.0) or 0.0)
-                purchase_value_eur = float(data.get("purchase_value", 0.0) or 0.0)
-                current_value_eur = float(data.get("current_value", 0.0) or 0.0)
+                purchase_value_eur = (
+                    round_currency(data.get("purchase_value"), default=0.0) or 0.0
+                )
+                current_value_raw = data.get("current_value")
+                current_value_eur = (
+                    round_currency(current_value_raw, default=None)
+                    if current_value_raw is not None
+                    else None
+                )
                 avg_price_native = data.get("avg_price_native")
                 if isinstance(avg_price_native, (int, float)):
                     avg_price_native_val: float | None = float(avg_price_native)
                 else:
                     avg_price_native_val = None
 
-                security_total_raw = data.get("security_currency_total")
-                account_total_raw = data.get("account_currency_total")
-                avg_price_security = data.get("avg_price_security")
-                avg_price_account = data.get("avg_price_account")
-
-                security_total_val = (
-                    float(security_total_raw)
-                    if isinstance(security_total_raw, (int, float))
-                    else 0.0
+                security_total = (
+                    round_currency(data.get("security_currency_total"), default=0.0)
+                    or 0.0
                 )
-                account_total_val = (
-                    float(account_total_raw)
-                    if isinstance(account_total_raw, (int, float))
-                    else 0.0
+                account_total = (
+                    round_currency(data.get("account_currency_total"), default=0.0)
+                    or 0.0
                 )
-                avg_price_security_val: float | None
-                if isinstance(avg_price_security, (int, float)):
-                    avg_price_security_val = float(avg_price_security)
-                else:
-                    avg_price_security_val = None
-                avg_price_account_val: float | None
-                if isinstance(avg_price_account, (int, float)):
-                    avg_price_account_val = float(avg_price_account)
-                else:
-                    avg_price_account_val = None
-
-                purchase_value_cents = int(round(purchase_value_eur * 100))
-                current_value_cents = int(round(current_value_eur * 100))
-                security_total_rounded = round(security_total_val, 2)
-                account_total_rounded = round(account_total_val, 2)
+                purchase_value_cents = eur_to_cent(purchase_value_eur, default=0) or 0
+                current_value_cents = (
+                    eur_to_cent(current_value_eur, default=None)
+                    if current_value_eur is not None
+                    else None
+                )
 
                 existing_entry = existing_entries.get(key)
+                existing_current_value = (
+                    existing_entry.get("current_value") if existing_entry else None
+                )
+                current_value_matches = existing_entry is not None and (
+                    existing_current_value == current_value_cents
+                )
+
                 if existing_entry and (
-                    abs(existing_entry.get("current_holdings", 0.0) - current_holdings_val)
-                    < 1e-9
-                    and int(existing_entry.get("purchase_value", 0)) == purchase_value_cents
+                    abs(
+                        existing_entry.get("current_holdings", 0.0)
+                        - current_holdings_val
+                    )
+                    < HOLDING_VALUE_MATCH_EPSILON
+                    and int(existing_entry.get("purchase_value", 0))
+                    == purchase_value_cents
                     and (
                         (
                             existing_entry.get("avg_price_native") is None
@@ -621,50 +614,20 @@ def _refresh_impacted_portfolio_securities(
                                 float(existing_entry.get("avg_price_native", 0.0))
                                 - avg_price_native_val
                             )
-                            < 1e-6
+                            < TOTAL_VALUE_MATCH_EPSILON
                         )
                     )
-                    and int(existing_entry.get("current_value", 0)) == current_value_cents
+                    and current_value_matches
                     and abs(
                         float(existing_entry.get("security_currency_total", 0.0))
-                        - security_total_rounded
+                        - security_total
                     )
-                    < 1e-6
+                    < TOTAL_VALUE_MATCH_EPSILON
                     and abs(
                         float(existing_entry.get("account_currency_total", 0.0))
-                        - account_total_rounded
+                        - account_total
                     )
-                    < 1e-6
-                    and (
-                        (
-                            existing_entry.get("avg_price_security") is None
-                            and avg_price_security_val is None
-                        )
-                        or (
-                            existing_entry.get("avg_price_security") is not None
-                            and avg_price_security_val is not None
-                            and abs(
-                                float(existing_entry.get("avg_price_security", 0.0))
-                                - avg_price_security_val
-                            )
-                            < 1e-6
-                        )
-                    )
-                    and (
-                        (
-                            existing_entry.get("avg_price_account") is None
-                            and avg_price_account_val is None
-                        )
-                        or (
-                            existing_entry.get("avg_price_account") is not None
-                            and avg_price_account_val is not None
-                            and abs(
-                                float(existing_entry.get("avg_price_account", 0.0))
-                                - avg_price_account_val
-                            )
-                            < 1e-6
-                        )
-                    )
+                    < TOTAL_VALUE_MATCH_EPSILON
                 ):
                     continue
 
@@ -675,10 +638,8 @@ def _refresh_impacted_portfolio_securities(
                         current_holdings_val,
                         purchase_value_cents,
                         avg_price_native_val,
-                        security_total_rounded,
-                        account_total_rounded,
-                        avg_price_security_val,
-                        avg_price_account_val,
+                        security_total,
+                        account_total,
                         current_value_cents,
                     )
                 )
@@ -698,10 +659,8 @@ def _refresh_impacted_portfolio_securities(
                             avg_price_native,
                             security_currency_total,
                             account_currency_total,
-                            avg_price_security,
-                            avg_price_account,
                             current_value
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     upserts,
                 )
@@ -782,44 +741,36 @@ def _process_currency_drift_mismatches(
 
 
 def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
-    """
-    Transformiert das Dict-Format der Revaluation in die erwartete Event-Payload.
-
-    (Identisch zur File-Sync Struktur.)
-    """
-    payload: list[dict] = []
+    """Convert revaluation aggregates into the canonical portfolio payload."""
+    payload: list[dict[str, Any]] = []
     for pid, data in pv_dict.items():
-        try:
-            raw_value = data.get("value", data.get("current_value", 0.0))
-            raw_purchase = data.get("purchase_sum", data.get("purchaseSum", 0.0))
-            current_value = round(raw_value or 0.0, 2)
-            purchase_sum = round(raw_purchase or 0.0, 2)
-            gain_abs = round(current_value - purchase_sum, 2)
-            gain_pct = round(
-                (gain_abs / purchase_sum * 100) if purchase_sum else 0.0,
-                2,
-            )
-            payload.append(
-                {
-                    "uuid": pid,
-                    "name": data.get("name", pid),
-                    "position_count": data.get("count", 0) or 0,
-                    "current_value": current_value,
-                    "purchase_sum": purchase_sum,
-                    "gain_abs": gain_abs,
-                    "gain_pct": gain_pct,
-                }
-            )
-        except (TypeError, ValueError):
-            _LOGGER.debug(
-                (
-                    "prices_cycle: Fehler beim Aufbau der portfolio_values Zeile "
-                    "pid=%s data=%r"
-                ),
-                pid,
-                data,
-                exc_info=True,
-            )
+        if not isinstance(data, Mapping):
+            continue
+
+        uuid = data.get("uuid", pid)
+        if not uuid:
+            continue
+
+        entry: dict[str, Any] = {"uuid": str(uuid)}
+
+        position_count = data.get("position_count")
+        if position_count is None and "count" in data:
+            position_count = data.get("count")
+        if position_count is not None:
+            entry["position_count"] = position_count
+
+        for key in (
+            "name",
+            "current_value",
+            "purchase_sum",
+            "performance",
+            "missing_value_positions",
+        ):
+            if key in data:
+                entry[key] = data[key]
+
+        payload.append(entry)
+
     return payload
 
 
@@ -975,14 +926,16 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         or (now_ts - last_warn) >= ZERO_QUOTES_WARN_INTERVAL
                     ):
                         warn_msg = (
-                            "prices_cycle: zero-quotes detected (WARN) - error_counter=%s"
+                            "prices_cycle: zero-quotes detected (WARN) - "
+                            "error_counter=%s"
                         )
                         _LOGGER.warning(warn_msg, error_counter)
                         store["price_zero_quotes_warn_ts"] = now_ts
                     else:
                         _LOGGER.debug(
                             (
-                                "prices_cycle: zero-quotes detected (WARN gedrosselt) -> "
+                                "prices_cycle: zero-quotes detected "
+                                "(WARN gedrosselt) -> "
                                 "error_counter=%s"
                             ),
                             error_counter,
@@ -1028,8 +981,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             )
             detected_changes = len(changed_security_uuids)
 
-            impacted_portfolios: set[str] = set()
-
             if scaled_updates and db_path:
                 scaled_updates = _filter_invalid_updates(scaled_updates)
                 if not scaled_updates:
@@ -1056,7 +1007,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         )
                     if updated_rows > 0:
                         try:
-                            impacted_portfolios = await async_run_executor_job(
+                            await async_run_executor_job(
                                 hass,
                                 _refresh_impacted_portfolio_securities,
                                 db_path,
@@ -1064,7 +1015,10 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             )
                         except Exception:  # noqa: BLE001 - Logging für Diagnose
                             _LOGGER.debug(
-                                "prices_cycle: Refresh portfolio_securities fehlgeschlagen",
+                                (
+                                    "prices_cycle: Refresh portfolio_securities "
+                                    "fehlgeschlagen"
+                                ),
                                 exc_info=True,
                             )
                     changed_count = updated_rows
@@ -1091,73 +1045,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             # Events
             if changed_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
-
-                # Fallback: Wenn Revaluation nichts liefert, aber Preise geändert,
-                # aggregiere betroffene Portfolios direkt.
-                if not pv_dict:
-                    try:
-                        affected_portfolios: set[str] = set(impacted_portfolios)
-                        if not affected_portfolios:
-                            with sqlite3.connect(str(db_path)) as conn:
-                                for sec_uuid in scaled_updates:
-                                    cur = conn.execute(
-                                        "SELECT DISTINCT portfolio_uuid "
-                                        "FROM portfolio_securities "
-                                        "WHERE security_uuid=?",
-                                        (sec_uuid,),
-                                    )
-                                    affected_portfolios.update(
-                                        r for (r,) in cur.fetchall()
-                                    )
-
-                        if affected_portfolios:
-                            fallback = {}
-                            for pid in affected_portfolios:
-                                try:
-                                    val, cnt = await async_run_executor_job(
-                                        hass,
-                                        db_calculate_portfolio_value_and_count,
-                                        pid,
-                                        db_path,
-                                    )
-                                    purch = await async_run_executor_job(
-                                        hass,
-                                        db_calculate_portfolio_purchase_sum,
-                                        pid,
-                                        db_path,
-                                    )
-                                    fallback[pid] = {
-                                        "name": pid,
-                                        "value": val,
-                                        "count": cnt,
-                                        "purchase_sum": purch,
-                                    }
-                                except (
-                                    HomeAssistantError,
-                                    sqlite3.Error,
-                                    ValueError,
-                                    TypeError,
-                                ):
-                                    _LOGGER.debug(
-                                        (
-                                            "prices_cycle: Fehler im Fallback-Aggregat "
-                                            "pid=%s"
-                                        ),
-                                        pid,
-                                        exc_info=True,
-                                    )
-                            if fallback:
-                                pv_dict = fallback
-                                fallback_msg = (
-                                    "prices_cycle: Revaluation leer - Fallback "
-                                    "Aggregation genutzt (portfolios=%d)"
-                                )
-                                _LOGGER.debug(fallback_msg, len(fallback))
-                    except sqlite3.Error:
-                        _LOGGER.debug(
-                            "prices_cycle: Fallback Aggregation fehlgeschlagen",
-                            exc_info=True,
-                        )
 
                 if pv_dict:
                     try:

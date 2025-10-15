@@ -11,10 +11,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from custom_components.pp_reader.logic.portfolio import (
-    calculate_unrealized_gain,
-    calculate_unrealized_gain_pct,
-)
+from custom_components.pp_reader.data.performance import select_performance_metrics
 
 if TYPE_CHECKING:
     from custom_components.pp_reader.sensors.depot_sensors import (
@@ -81,11 +78,8 @@ class PortfolioGainAbsSensor(CoordinatorEntity, SensorEntity):
         current_value = self._depot_sensor.native_value
         purchase_value = self._purchase_sensor.native_value
         try:
-            gain = calculate_unrealized_gain(
-                float(current_value),
-                float(purchase_value),
-            )
-            return round(gain, 2)
+            current = float(current_value)
+            purchase = float(purchase_value)
         except (TypeError, ValueError) as err:
             message = (
                 "❌ Fehler beim Berechnen des Kursgewinns für "
@@ -93,6 +87,12 @@ class PortfolioGainAbsSensor(CoordinatorEntity, SensorEntity):
             )
             _LOGGER.exception(message)
             return None
+
+        performance, _ = select_performance_metrics(
+            current_value=current,
+            purchase_value=purchase,
+        )
+        return performance.gain_abs
 
 
 class PortfolioGainPctSensor(CoordinatorEntity, SensorEntity):
@@ -128,11 +128,8 @@ class PortfolioGainPctSensor(CoordinatorEntity, SensorEntity):
         current_value = self._depot_sensor.native_value
         purchase_value = self._purchase_sensor.native_value
         try:
-            gain = calculate_unrealized_gain_pct(
-                float(current_value),
-                float(purchase_value),
-            )
-            return round(gain, 2)
+            current = float(current_value)
+            purchase = float(purchase_value)
         except (TypeError, ValueError) as err:
             message = (
                 "❌ Fehler beim Berechnen des Kursgewinns (%) für "
@@ -140,3 +137,9 @@ class PortfolioGainPctSensor(CoordinatorEntity, SensorEntity):
             )
             _LOGGER.exception(message)
             return None
+
+        performance, _ = select_performance_metrics(
+            current_value=current,
+            purchase_value=purchase,
+        )
+        return performance.gain_pct

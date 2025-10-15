@@ -17,7 +17,7 @@ Hinweise:
 - Positionsdetails werden bewusst in einem separaten Item ergänzt
   (Events-Phase).
 - Aggregation erfolgt primär via fetch_live_portfolios (Single Source of
-  Truth) mit Fallback auf calculate_portfolio_value / calculate_purchase_sum.
+  Truth).
 - Fehler dürfen den Preiszyklus nicht unterbrechen (fehlertolerant).
 """
 
@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -33,17 +32,11 @@ from custom_components.pp_reader.data.db_access import fetch_live_portfolios
 from custom_components.pp_reader.data.sync_from_pclient import (
     fetch_positions_for_portfolios,
 )
-from custom_components.pp_reader.logic.portfolio import (
-    calculate_portfolio_value,
-    calculate_purchase_sum,
-)
 from custom_components.pp_reader.util import async_run_executor_job
 
 # HINWEIS (Item portfolio_aggregation_reuse):
-# Die Revaluation nutzt primär fetch_live_portfolios als Single Source of Truth.
-# Für Resilienz bleibt ein Fallback auf calculate_portfolio_value /
-# calculate_purchase_sum erhalten, damit Events trotz temporärer Fehler
-# zuverlässig bleiben.
+# Die Revaluation nutzt fetch_live_portfolios als Single Source of Truth und
+# verzichtet auf die früheren manuellen Aggregationspfade.
 
 _LOGGER = logging.getLogger(__name__)
 __all__ = ["revalue_after_price_updates"]
@@ -103,10 +96,9 @@ async def revalue_after_price_updates(
 
     missing_portfolios = set(affected) - set(portfolio_values)
     if missing_portfolios:
-        fallback_values = await _fallback_aggregate_missing(
-            missing_portfolios, names, db_path
+        _LOGGER.debug(
+            "revaluation: missing live aggregates for %s", sorted(missing_portfolios)
         )
-        portfolio_values.update(fallback_values)
 
     if not portfolio_values:
         return {"portfolio_values": None, "portfolio_positions": None}
@@ -187,9 +179,7 @@ async def _load_live_entries(
 ) -> dict[str, dict[str, Any]]:
     live_entries: dict[str, dict[str, Any]] = {}
     try:
-        live_rows = await async_run_executor_job(
-            hass, fetch_live_portfolios, db_path
-        )
+        live_rows = await async_run_executor_job(hass, fetch_live_portfolios, db_path)
     except RuntimeError:
         _LOGGER.warning(
             (
@@ -217,66 +207,22 @@ def _build_portfolio_values_from_live_entries(
     portfolio_values: dict[str, dict[str, Any]] = {}
 
     for p_uuid, data in live_entries.items():
-        raw_value = data.get("current_value", data.get("value"))
-        raw_purchase_sum = data.get("purchase_sum")
-        raw_count = data.get("position_count", data.get("count"))
-
-        try:
-            value = round(float(raw_value), 2)
-        except (TypeError, ValueError):
-            value = 0.0
-
-        try:
-            purchase_sum = round(float(raw_purchase_sum), 2)
-        except (TypeError, ValueError):
-            purchase_sum = 0.0
-
-        try:
-            count = int(raw_count) if raw_count is not None else 0
-        except (TypeError, ValueError):
-            count = 0
-
-        portfolio_values[p_uuid] = {
-            "name": data.get("name") or names.get(p_uuid, p_uuid),
-            "value": value,
-            "count": count,
-            "purchase_sum": purchase_sum,
-        }
-
-    return portfolio_values
-
-
-async def _fallback_aggregate_missing(
-    missing_portfolios: set[str], names: dict[str, str], db_path: Path
-) -> dict[str, dict[str, Any]]:
-    if not missing_portfolios:
-        return {}
-
-    reference_date = datetime.now(tz=UTC)
-    aggregated: dict[str, dict[str, Any]] = {}
-
-    for p_uuid in list(missing_portfolios):
-        try:
-            value, count = await calculate_portfolio_value(
-                p_uuid, reference_date, db_path
-            )
-            purchase_sum = await calculate_purchase_sum(p_uuid, db_path)
-        except (RuntimeError, sqlite3.Error, ValueError):
-            _LOGGER.warning(
-                "revaluation: Fehler bei Aggregation für Portfolio %s",
-                p_uuid,
-                exc_info=True,
-            )
+        if not isinstance(data, dict):
             continue
 
-        aggregated[p_uuid] = {
-            "name": names.get(p_uuid, p_uuid),
-            "value": value,
-            "count": count,
-            "purchase_sum": purchase_sum,
-        }
+        entry = dict(data)
+        entry["uuid"] = entry.get("uuid", p_uuid)
 
-    return aggregated
+        if not entry.get("name"):
+            entry["name"] = names.get(p_uuid, p_uuid)
+
+        if "position_count" not in entry and "count" in entry:
+            entry["position_count"] = entry.get("count")
+        entry.pop("count", None)
+
+        portfolio_values[p_uuid] = entry
+
+    return portfolio_values
 
 
 async def _load_portfolio_positions(
