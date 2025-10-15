@@ -315,7 +315,7 @@
       - Dateipfad(e): `src/`\
       - Betroffene Funktion(en)/Abschnitt(e): TS-Quellen und Tests\
       - Ziel/Ergebnis: Frontend bleibt typ- und lint-fehlerfrei.
-   e) [ ] Baue die Dashboard-Bundles nach Abschluss der TS-Anpassungen.\
+   e) [x] Baue die Dashboard-Bundles nach Abschluss der TS-Anpassungen.\
       - Dateipfad(e): `custom_components/pp_reader/www/pp_reader_dashboard/dashboard.module.js` (generiert)\
       - Betroffene Funktion(en)/Abschnitt(e): `npm run build`, `scripts/update_dashboard_module.mjs`\
       - Ziel/Ergebnis: Statische Assets sind aktuell und für Pytest-Läufe verfügbar.
