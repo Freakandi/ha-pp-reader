@@ -4,6 +4,7 @@ import logging
 
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.validators import PPDataValidator
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,12 +65,12 @@ def calculate_account_balance(
 
         # Hinweis: CASH_TRANSFER bereits oben separat behandelt
 
-    final_balance = saldo / 100.0  # Cent → Euro
-    result = validator.validate_account_balance(final_balance, account_uuid)
+    balance_eur = cent_to_eur(saldo)
+    result = validator.validate_account_balance(balance_eur, account_uuid)
     if not result.is_valid:
         _LOGGER.warning(result.message)
 
-    return final_balance
+    return round_currency(balance_eur, default=0.0) or 0.0
 
 
 def db_calc_account_balance(

@@ -177,6 +177,7 @@ def restore_from_latest_backup(db_path: Path) -> bool:
 
 RETENTION_DAYS_DAILY = 7
 RETENTION_DAYS_WEEKLY = 28
+EXPECTED_STEM_PARTS = 3
 
 
 def cleanup_old_backups(backup_dir: Path) -> None:
@@ -203,7 +204,7 @@ def cleanup_old_backups(backup_dir: Path) -> None:
 
     for b in backups:
         stem_parts = b.stem.rsplit("_", 2)
-        if len(stem_parts) < 3:
+        if len(stem_parts) < EXPECTED_STEM_PARTS:
             _LOGGER.debug(
                 "⏭️ Überspringe Backup mit unerwartetem Dateinamen: %s", b.name
             )

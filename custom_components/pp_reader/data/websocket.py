@@ -11,14 +11,21 @@ import asyncio
 import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Mapping
-from datetime import datetime, timezone
+from dataclasses import asdict, is_dataclass
+from datetime import UTC, datetime, timezone
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    round_currency,
+    round_price,
+)
 
 from .db_access import (
     fetch_live_portfolios,  # NEU: On-Demand Aggregation
@@ -51,10 +58,9 @@ def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
 
 
 async def _load_accounts_payload(
-    hass: "HomeAssistant", db_path: Path
+    hass: HomeAssistant, db_path: Path
 ) -> list[dict[str, Any]]:
     """Return account details formatted for websocket responses."""
-
     accounts = await async_run_executor_job(hass, get_accounts, db_path)
 
     fx_rates: dict[str, float] = {}
@@ -65,15 +71,21 @@ async def _load_accounts_payload(
             load_rates = load_latest_rates
             if ensure_rates is None or load_rates is None:
                 _LOGGER.warning(
-                    "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+                    (
+                        "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
+                        "setze Fremdwährungswerte=0 EUR."
+                    ),
                 )
             else:
-                today = datetime.now(timezone.utc)
+                today = datetime.now(UTC)
                 await ensure_rates([today], active_fx_currencies, db_path)
                 fx_rates = await load_rates(today, db_path)
     except Exception:  # noqa: BLE001
         _LOGGER.warning(
-            "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - setze Fremdwährungswerte=0 EUR.",
+            (
+                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
+                "setze Fremdwährungswerte=0 EUR."
+            ),
         )
         fx_rates = {}
 
@@ -83,7 +95,9 @@ async def _load_accounts_payload(
             continue
 
         currency = getattr(account, "currency_code", "EUR") or "EUR"
-        orig_balance = account.balance / 100.0
+        orig_balance = (
+            cent_to_eur(getattr(account, "balance", None), default=0.0) or 0.0
+        )
         fx_unavailable = False
         if currency != "EUR":
             rate = fx_rates.get(currency)
@@ -93,7 +107,7 @@ async def _load_accounts_payload(
                 eur_balance = None
                 fx_unavailable = True
                 _LOGGER.warning(
-                    "FX: Kein Kurs für %s – EUR-Wert nicht verfügbar",
+                    "FX: Kein Kurs für %s - EUR-Wert nicht verfügbar",
                     currency,
                 )
         else:
@@ -102,8 +116,10 @@ async def _load_accounts_payload(
         account_entry = {
             "name": account.name,
             "currency_code": currency,
-            "orig_balance": round(orig_balance, 2),
-            "balance": round(eur_balance, 2) if eur_balance is not None else None,
+            "orig_balance": round_currency(orig_balance) or 0.0,
+            "balance": (
+                round_currency(eur_balance) if eur_balance is not None else None
+            ),
         }
         if fx_unavailable:
             account_entry["fx_unavailable"] = True
@@ -129,35 +145,9 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-def _coerce_float(value: Any, *, default: float = 0.0) -> float:
-    """Return ``value`` as float with a graceful fallback."""
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if value is None:
-        return default
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _coerce_optional_float(value: Any) -> float | None:
-    """Return ``value`` as float or ``None`` when conversion fails."""
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    if value is None:
-        return None
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+def _serialise_security_snapshot(  # noqa: PLR0912, PLR0915
+    snapshot: Mapping[str, Any] | None,
+) -> dict[str, Any]:
     """Normalise snapshot payload for websocket transmission."""
     if not snapshot:
         return {
@@ -168,16 +158,20 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
             "last_price_eur": None,
             "market_value_eur": None,
             "purchase_value_eur": 0.0,
-            "average_purchase_price_native": None,
-            "purchase_total_security": 0.0,
-            "purchase_total_account": 0.0,
-            "avg_price_security": None,
-            "avg_price_account": None,
+            "average_cost": None,
+            "aggregation": None,
             "last_close_native": None,
             "last_close_eur": None,
+            "performance": None,
         }
 
     data = dict(snapshot)
+    data.pop("average_purchase_price_native", None)
+    data.pop("day_price_change_native", None)
+    data.pop("day_price_change_eur", None)
+    data.pop("day_change_pct", None)
+    purchase_total_security = data.pop("purchase_total_security", None)
+    purchase_total_account = data.pop("purchase_total_account", None)
 
     raw_name = snapshot.get("name")
     data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
@@ -189,54 +183,136 @@ def _serialise_security_snapshot(snapshot: Mapping[str, Any] | None) -> dict[str
         currency = "EUR"
     data["currency_code"] = currency
 
-    data["total_holdings"] = _coerce_float(snapshot.get("total_holdings"))
-    data["last_price_native"] = _coerce_optional_float(
-        snapshot.get("last_price_native")
+    data["total_holdings"] = (
+        round_currency(snapshot.get("total_holdings"), decimals=6, default=0.0) or 0.0
     )
-    data["last_price_eur"] = _coerce_optional_float(snapshot.get("last_price_eur"))
-    data["market_value_eur"] = _coerce_optional_float(
-        snapshot.get("market_value_eur")
+    data["last_price_native"] = round_price(
+        snapshot.get("last_price_native"), decimals=6
     )
-    data["purchase_value_eur"] = _coerce_float(snapshot.get("purchase_value_eur"))
-    data["average_purchase_price_native"] = _coerce_optional_float(
-        snapshot.get("average_purchase_price_native")
+    data["last_price_eur"] = round_price(snapshot.get("last_price_eur"), decimals=6)
+    data["market_value_eur"] = round_currency(snapshot.get("market_value_eur"))
+    data["purchase_value_eur"] = (
+        round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
     )
-    data["purchase_total_security"] = round(
-        _coerce_float(snapshot.get("purchase_total_security")), 2
+    raw_average_cost = snapshot.get("average_cost")
+    if isinstance(raw_average_cost, Mapping):
+        data["average_cost"] = dict(raw_average_cost)
+    else:
+        data["average_cost"] = None
+    raw_aggregation = snapshot.get("aggregation")
+    aggregation_payload: dict[str, Any] | None = None
+    if isinstance(raw_aggregation, Mapping):
+        aggregation_payload = dict(raw_aggregation)
+    elif is_dataclass(raw_aggregation):
+        aggregation_payload = asdict(raw_aggregation)
+
+    if aggregation_payload is None:
+        aggregation_payload = None
+    else:
+        aggregation_payload.pop("average_purchase_price_native", None)
+
+        security_total = aggregation_payload.get("security_currency_total")
+        if security_total in (None, "") and purchase_total_security not in (None, ""):
+            security_total = purchase_total_security
+            aggregation_payload["security_currency_total"] = security_total
+
+        account_total = aggregation_payload.get("account_currency_total")
+        if account_total in (None, "") and purchase_total_account not in (None, ""):
+            account_total = purchase_total_account
+            aggregation_payload["account_currency_total"] = account_total
+
+        aggregation_payload["total_holdings"] = (
+            round_currency(
+                aggregation_payload.get("total_holdings"),
+                decimals=6,
+                default=0.0,
+            )
+            or 0.0
+        )
+        aggregation_payload["positive_holdings"] = (
+            round_currency(
+                aggregation_payload.get("positive_holdings"),
+                decimals=6,
+                default=0.0,
+            )
+            or 0.0
+        )
+        aggregation_payload["purchase_value_cents"] = int(
+            aggregation_payload.get("purchase_value_cents") or 0
+        )
+        aggregation_payload["purchase_value_eur"] = (
+            round_currency(aggregation_payload.get("purchase_value_eur"), default=0.0)
+            or 0.0
+        )
+        aggregation_payload["security_currency_total"] = (
+            round_currency(security_total, default=0.0) or 0.0
+        )
+        aggregation_payload["account_currency_total"] = (
+            round_currency(account_total, default=0.0) or 0.0
+        )
+        aggregation_payload["purchase_total_security"] = (
+            round_currency(
+                aggregation_payload.get("purchase_total_security"), default=0.0
+            )
+            or 0.0
+        )
+        aggregation_payload["purchase_total_account"] = (
+            round_currency(
+                aggregation_payload.get("purchase_total_account"), default=0.0
+            )
+            or 0.0
+        )
+
+    data["aggregation"] = aggregation_payload
+    data["last_close_native"] = round_price(
+        snapshot.get("last_close_native"),
+        decimals=6,
     )
-    data["purchase_total_account"] = round(
-        _coerce_float(snapshot.get("purchase_total_account")), 2
+    data["last_close_eur"] = round_price(
+        snapshot.get("last_close_eur"),
+        decimals=6,
     )
-    avg_price_security = _coerce_optional_float(
-        snapshot.get("avg_price_security")
-    )
-    data["avg_price_security"] = (
-        round(avg_price_security, 6) if avg_price_security is not None else None
-    )
-    avg_price_account = _coerce_optional_float(snapshot.get("avg_price_account"))
-    data["avg_price_account"] = (
-        round(avg_price_account, 6) if avg_price_account is not None else None
-    )
-    data["last_close_native"] = _coerce_optional_float(
-        snapshot.get("last_close_native")
-    )
-    data["last_close_eur"] = _coerce_optional_float(snapshot.get("last_close_eur"))
+    raw_performance = snapshot.get("performance")
+    if isinstance(raw_performance, Mapping):
+        performance_payload = dict(raw_performance)
+        day_change_raw = performance_payload.get("day_change")
+        if isinstance(day_change_raw, Mapping):
+            performance_payload["day_change"] = dict(day_change_raw)
+        data["performance"] = performance_payload
+    else:
+        data["performance"] = None
 
     last_price_raw = snapshot.get("last_price")
     if isinstance(last_price_raw, Mapping):
         data["last_price"] = {
-            "native": _coerce_optional_float(last_price_raw.get("native")),
-            "eur": _coerce_optional_float(last_price_raw.get("eur")),
+            "native": round_price(last_price_raw.get("native"), decimals=6),
+            "eur": round_price(last_price_raw.get("eur"), decimals=6),
         }
 
     return data
 
 
-def _normalize_portfolio_positions(
+def _resolve_aggregation_value(
+    payload: Mapping[str, Any] | None,
+    *keys: str,
+    default: Any | None = None,
+) -> Any | None:
+    """Return the first non-empty value for the provided keys."""
+    if payload is None:
+        return default
+
+    for key in keys:
+        value = payload.get(key)
+        if value not in (None, ""):
+            return value
+
+    return default
+
+
+def _normalize_portfolio_positions(  # noqa: PLR0912
     positions: Iterable[Mapping[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     """Return portfolio position payload including purchase metrics."""
-
     if not positions:
         return []
 
@@ -249,46 +325,79 @@ def _normalize_portfolio_positions(
         if security_uuid is not None:
             security_uuid = str(security_uuid)
 
-        avg_price_native = _coerce_optional_float(
-            item.get("average_purchase_price_native")
+        raw_aggregation = item.get("aggregation")
+        aggregation_payload: dict[str, Any] | None = None
+        if isinstance(raw_aggregation, Mapping):
+            aggregation_payload = dict(raw_aggregation)
+        elif is_dataclass(raw_aggregation):
+            aggregation_payload = asdict(raw_aggregation)
+
+        if aggregation_payload is not None:
+            aggregation_payload.pop("average_purchase_price_native", None)
+            security_total = aggregation_payload.get("security_currency_total")
+            if (
+                security_total not in (None, "")
+                and "purchase_total_security" not in aggregation_payload
+            ):
+                aggregation_payload["purchase_total_security"] = security_total
+
+            account_total = aggregation_payload.get("account_currency_total")
+            if (
+                account_total not in (None, "")
+                and "purchase_total_account" not in aggregation_payload
+            ):
+                aggregation_payload["purchase_total_account"] = account_total
+
+        raw_average_cost = item.get("average_cost")
+        average_cost: dict[str, Any] | None = None
+        if isinstance(raw_average_cost, Mapping):
+            average_cost = dict(raw_average_cost)
+        elif is_dataclass(raw_average_cost):
+            average_cost = asdict(raw_average_cost)
+
+        raw_performance = item.get("performance")
+        performance_payload: dict[str, Any] | None = None
+        if isinstance(raw_performance, Mapping):
+            performance_payload = dict(raw_performance)
+            day_change_raw = performance_payload.get("day_change")
+            if isinstance(day_change_raw, Mapping):
+                performance_payload["day_change"] = dict(day_change_raw)
+            elif is_dataclass(day_change_raw):
+                performance_payload["day_change"] = asdict(day_change_raw)
+        elif is_dataclass(raw_performance):
+            performance_payload = asdict(raw_performance)
+
+        purchase_value_source = _resolve_aggregation_value(
+            aggregation_payload,
+            "purchase_value_eur",
+            "purchase_value",
+            default=item.get("purchase_value"),
         )
-        avg_price_security = _coerce_optional_float(item.get("avg_price_security"))
-        avg_price_account = _coerce_optional_float(item.get("avg_price_account"))
+        purchase_value = round_currency(purchase_value_source, default=0.0)
+
+        holdings_source = _resolve_aggregation_value(
+            aggregation_payload,
+            "total_holdings",
+            default=item.get("current_holdings"),
+        )
 
         normalized.append(
             {
                 "security_uuid": security_uuid,
                 "name": item.get("name"),
-                "current_holdings": round(
-                    _coerce_float(item.get("current_holdings")), 6
+                "current_holdings": round_currency(
+                    holdings_source,
+                    decimals=6,
+                    default=0.0,
                 ),
-                "purchase_value": round(
-                    _coerce_float(item.get("purchase_value")), 2
+                "purchase_value": purchase_value,
+                "current_value": round_currency(
+                    item.get("current_value"),
+                    default=0.0,
                 ),
-                "current_value": round(_coerce_float(item.get("current_value")), 2),
-                "gain_abs": round(_coerce_float(item.get("gain_abs")), 2),
-                "gain_pct": round(_coerce_float(item.get("gain_pct")), 2),
-                "average_purchase_price_native": (
-                    round(avg_price_native, 6)
-                    if avg_price_native is not None
-                    else None
-                ),
-                "purchase_total_security": round(
-                    _coerce_float(item.get("purchase_total_security")), 2
-                ),
-                "purchase_total_account": round(
-                    _coerce_float(item.get("purchase_total_account")), 2
-                ),
-                "avg_price_security": (
-                    round(avg_price_security, 6)
-                    if avg_price_security is not None
-                    else None
-                ),
-                "avg_price_account": (
-                    round(avg_price_account, 6)
-                    if avg_price_account is not None
-                    else None
-                ),
+                "average_cost": average_cost,
+                "performance": performance_payload,
+                "aggregation": aggregation_payload,
             }
         )
 
@@ -296,8 +405,8 @@ def _normalize_portfolio_positions(
 
 
 def _wrap_with_loop_fallback(
-    handler: Callable[[Any, Any, dict[str, Any]], None],
-) -> Callable[[Any, Any, dict[str, Any]], None]:
+    handler: Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any],
+) -> Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any]:
     """Ensure websocket handlers run in tests without a running event loop."""
     original = getattr(handler, "__wrapped__", None)
     if original is None:
@@ -330,7 +439,11 @@ def _wrap_with_loop_fallback(
             temp_loop.close()
 
     @wraps(handler)
-    def wrapper(hass, connection, msg):  # type: ignore[override]
+    def wrapper(
+        hass: HomeAssistant,
+        connection: ActiveConnection,
+        msg: dict[str, Any],
+    ) -> Any:
         loop = _resolve_loop(getattr(hass, "loop", None))
 
         if loop is not None and not loop.is_running():
@@ -360,7 +473,7 @@ def _wrap_with_loop_fallback(
     return wrapper
 
 
-async def _live_portfolios_payload(
+async def _live_portfolios_payload(  # noqa: PLR0912
     hass: HomeAssistant,
     entry_id: str,
     *,
@@ -379,9 +492,7 @@ async def _live_portfolios_payload(
 
     result: list[dict[str, Any]] | None = None
     try:
-        portfolios = await async_run_executor_job(
-            hass, fetch_live_portfolios, db_path
-        )
+        portfolios = await async_run_executor_job(hass, fetch_live_portfolios, db_path)
     except Exception:  # noqa: BLE001 - broad catch keeps coordinator fallback intact
         context_suffix = f" ({log_context})" if log_context else ""
         _LOGGER.warning(
@@ -401,7 +512,15 @@ async def _live_portfolios_payload(
             result = list(portfolios)
 
     if result is not None:
-        return result
+        normalized: list[dict[str, Any]] = []
+        for entry in result:
+            if not isinstance(entry, Mapping):
+                continue
+            normalized_entry = dict(entry)
+            normalized_entry.pop("gain_abs", None)
+            normalized_entry.pop("gain_pct", None)
+            normalized.append(normalized_entry)
+        return normalized
 
     if not coordinator:
         return []
@@ -475,7 +594,7 @@ async def ws_get_dashboard_data(
     if db_path_raw:
         try:
             accounts = await _load_accounts_payload(hass, Path(db_path_raw))
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.exception("Fehler beim Laden der Kontodaten für das Dashboard")
             accounts = []
 
@@ -516,7 +635,9 @@ async def ws_get_accounts(
         account_data = await _load_accounts_payload(hass, Path(db_path))
         connection.send_result(msg["id"], {"accounts": account_data})
     except KeyError:
-        connection.send_error(msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten")
+        connection.send_error(
+            msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten"
+        )
     except Exception as e:
         _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
         connection.send_error(msg["id"], "db_error", str(e))
@@ -749,9 +870,14 @@ async def ws_get_security_history(
         )
         return
 
-    payload = [
-        {"date": date_value, "close": close_value} for date_value, close_value in prices
-    ]
+    payload: list[dict[str, Any]] = []
+    for date_value, close_value, close_raw in prices:
+        entry: dict[str, Any] = {"date": date_value}
+        if close_value is not None:
+            entry["close"] = close_value
+        if close_raw is not None:
+            entry["close_raw"] = close_raw
+        payload.append(entry)
 
     response: dict[str, Any] = {
         "security_uuid": security_uuid,
@@ -776,7 +902,7 @@ ws_get_security_history = _wrap_with_loop_fallback(ws_get_security_history)
     }
 )
 @websocket_api.async_response
-async def ws_get_security_snapshot(
+async def ws_get_security_snapshot(  # noqa: PLR0911
     hass: HomeAssistant,
     connection: ActiveConnection,
     msg: dict[str, Any],

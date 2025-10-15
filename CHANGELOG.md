@@ -6,7 +6,40 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
-- Noch keine Änderungen.
+- Noch keine Einträge.
+
+## [0.14.0] - 2025-10-15
+
+### Added
+- Centralised performance metric helpers, including `select_performance_metrics` and
+  `compose_performance_payload`, to compute rounded gain and day-change data with
+  coverage metadata plus dedicated unit tests covering edge cases.【F:custom_components/pp_reader/data/performance.py†L1-L200】【F:tests/test_performance.py†L1-L116】
+
+### Changed
+- Portfolio snapshots, WebSocket responses, coordinator events, sensors, and price-cycle
+  payloads reuse the shared performance payload so gain/day-change fields stay aligned
+  and embed optional overrides when provided.【F:custom_components/pp_reader/data/db_access.py†L820-L923】【F:custom_components/pp_reader/data/websocket.py†L312-L369】【F:custom_components/pp_reader/data/event_push.py†L70-L134】【F:custom_components/pp_reader/prices/price_service.py†L760-L776】【F:custom_components/pp_reader/sensors/gain_sensors.py†L80-L145】
+- Historical price imports now rewrite an entire series when Portfolio Performance
+  delivers corrections alongside appended data, ensuring the SQLite snapshot stays in
+  sync with upstream adjustments.【F:custom_components/pp_reader/data/sync_from_pclient.py†L976-L1159】
+
+### Fixed
+- Preserved average-cost values derived from holdings totals when stored aggregates
+  diverge, keeping purchase price displays consistent across payloads.【F:custom_components/pp_reader/data/db_access.py†L820-L923】
+- Gracefully report missing portfolio files instead of surfacing traceback-heavy update
+  failures, aligning the coordinator with Home Assistant error handling expectations.【F:custom_components/pp_reader/data/coordinator.py†L247-L292】
+- Restored the dashboard's ability to reopen the last viewed security detail tab when the
+  primary panel configuration is unavailable, so navigation fallbacks behave reliably in
+  split dashboard setups.【F:src/dashboard.ts†L204-L317】
+- Normalised average-cost coverage tooltips to render locale-formatted percentages and
+  metadata in the security detail view.【F:src/tabs/security_detail.ts†L1140-L1178】
+
+### Breaking Changes
+- Removed legacy flat payload fields (`avg_price_security`, `avg_price_account`,
+  `gain_abs`, `gain_pct`, `day_price_change_*`) from coordinator events, WebSocket
+  serializers, and dashboard APIs. Consumers must rely on the structured
+  `average_cost` and `performance` blocks to access purchase and performance
+  metrics going forward.【F:custom_components/pp_reader/data/websocket.py†L312-L369】【F:custom_components/pp_reader/data/event_push.py†L98-L134】【F:src/data/api.ts†L1-L178】【F:src/tabs/overview.ts†L204-L334】
 
 ## [0.13.0] - 2025-10-09
 
@@ -82,8 +115,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [0.12.0] - 2025-10-05
 ### Added
 - Persist daily Close prices for active securities during Portfolio Performance imports and provide helpers to query their time series for future dashboards.【F:custom_components/pp_reader/data/sync_from_pclient.py†L559-L676】【F:custom_components/pp_reader/data/db_access.py†L204-L289】
-- Delivered a security detail dashboard tab that opens from portfolio positions, renders snapshot metrics, and charts range-selectable history with lightweight SVG tooling and cache invalidation for live updates.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L1-L205】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/security_detail.js†L1-L210】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/content/charting.js†L1-L196】
-- Exposed always-on WebSocket commands for security drilldowns, including snapshot aggregation and history queries consumed by new frontend API wrappers.【F:custom_components/pp_reader/data/websocket.py†L574-L755】【F:custom_components/pp_reader/data/db_access.py†L291-L384】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/data/api.js†L69-L135】
+- Delivered a security detail dashboard tab that opens from portfolio positions, renders snapshot metrics, and charts range-selectable history with lightweight SVG tooling and cache invalidation for live updates.【F:src/dashboard.ts†L1-L230】【F:src/tabs/security_detail.ts†L1-L210】【F:src/content/charting.ts†L1-L210】
+- Exposed always-on WebSocket commands for security drilldowns, including snapshot aggregation and history queries consumed by new frontend API wrappers.【F:custom_components/pp_reader/data/websocket.py†L574-L755】【F:custom_components/pp_reader/data/db_access.py†L291-L384】【F:src/data/api.ts†L60-L150】
 
 ### Changed
 - Migrated the dashboard frontend to a TypeScript build pipeline powered by Vite, emitting hashed bundles and declaration files while keeping the module loader in sync for cache busting without altering Home Assistant imports.【F:vite.config.mjs†L1-L34】【F:tsconfig.json†L1-L39】【F:scripts/update_dashboard_module.mjs†L1-L70】【F:src/dashboard.ts†L1-L105】
@@ -99,9 +132,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - Regression tests safeguard the live aggregation as well as the WebSocket flows for portfolios and FX accounts.【F:tests/test_fetch_live_portfolios.py†L1-L72】【F:tests/test_ws_portfolios_live.py†L1-L94】【F:tests/test_ws_accounts_fx.py†L120-L191】
 ### Changed
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_last_file_update`) now load portfolios on demand from the database, fetch missing FX rates, and include coordinator fallbacks for graceful responses.【F:custom_components/pp_reader/data/websocket.py†L65-L341】
-- Revaluation and price events rely on `fetch_live_portfolios` to populate affected portfolios with consistent totals and fall back to per-portfolio aggregation when necessary.【F:custom_components/pp_reader/prices/revaluation.py†L1-L118】
-- The dashboard renders an expandable table with a DOM-based total footer and now caches only position data so updates work without manual override caches.【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js†L4-L160】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/tabs/overview.js†L203-L263】
-- Event handling is unified: `_push_update` emits compact `EVENT_PANELS_UPDATED` payloads through the event loop, and the dashboard subscribes to `panels_updated`, filters by `entry_id`, and queues bus updates for replay after re-renders.【F:custom_components/pp_reader/data/event_push.py†L17-L206】【F:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.js†L204-L505】
+- Revaluation and price events rely on `fetch_live_portfolios` to populate affected portfolios with consistent totals.【F:custom_components/pp_reader/prices/revaluation.py†L1-L118】
+- The dashboard renders an expandable table with a DOM-based total footer and now caches only position data so updates work without manual override caches.【F:src/tabs/overview.ts†L1-L200】【F:src/tabs/overview.ts†L420-L720】
+- Event handling is unified: `_push_update` emits compact `EVENT_PANELS_UPDATED` payloads through the event loop, and the dashboard subscribes to `panels_updated`, filters by `entry_id`, and queues bus updates for replay after re-renders.【F:custom_components/pp_reader/data/event_push.py†L1-L200】【F:src/dashboard.ts†L230-L520】
 ### Removed
 - Client override caches for portfolio values were removed; the UI now relies entirely on server-side aggregation and DOM recalculations.【F:README.md†L82-L93】
 ### Internal
@@ -126,7 +159,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [0.10.5] - 2025-09-25
 ### Fixed
-- The frontend received `panels_updated` events but subscribed to the literal name `EVENT_PANELS_UPDATED`, preventing live portfolio updates. Subscription in `dashboard.js` corrected.
+- The frontend received `panels_updated` events but subscribed to the literal name `EVENT_PANELS_UPDATED`, preventing live portfolio updates. Subscription in the dashboard module corrected.
 - Incremental portfolio updates were not patched because the initial table used `value` while events sent `current_value`. Normalisation (`current_value`/`value`, `purchase_sum`/`purchaseSum`, `count`/`position_count`) in `handlePortfolioUpdate`.
 - Key mismatch for `portfolio_values` from partial revaluation (mapping `value`→`current_value`, `count`→`position_count`) led to ignored updates – transformation and fallback logic added to the price cycle.
 

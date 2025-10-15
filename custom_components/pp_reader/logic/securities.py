@@ -19,9 +19,11 @@ from custom_components.pp_reader.currencies.fx import (
     load_latest_rates_sync,
 )
 from custom_components.pp_reader.data.db_access import Transaction
-from custom_components.pp_reader.logic.portfolio import (
-    normalize_price,
-    normalize_shares,
+from custom_components.pp_reader.logic.portfolio import normalize_shares
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    normalize_raw_price,
+    round_currency,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,13 +31,18 @@ _LOGGER = logging.getLogger(__name__)
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
 
+UNIT_TYPE_NATIVE = 0
+UNIT_TYPE_TAX = 1
+UNIT_TYPE_FEE = 2
+
+SHARE_MATCH_EPSILON = 1e-6
+
 _FX_RATE_FAILURES: Counter[tuple[str, str]] = Counter()
 _MISSING_NATIVE_POSITIONS: Counter[tuple[str, str]] = Counter()
 
 
 def get_missing_fx_diagnostics() -> dict[str, Any]:
     """Return a snapshot of accumulated missing FX diagnostics."""
-
     rate_failures = [
         {
             "currency": currency,
@@ -61,14 +68,12 @@ def get_missing_fx_diagnostics() -> dict[str, Any]:
 
 def reset_missing_fx_diagnostics() -> None:
     """Clear accumulated FX diagnostics (for tests or fresh runs)."""
-
     _FX_RATE_FAILURES.clear()
     _MISSING_NATIVE_POSITIONS.clear()
 
 
 def _record_rate_failure(currency: str | None, tx_date: datetime | None) -> None:
     """Track missing FX rate lookups grouped by currency and trade date."""
-
     if not currency or tx_date is None:
         return
 
@@ -79,7 +84,6 @@ def _record_missing_native_position(
     portfolio_uuid: str | None, security_uuid: str | None
 ) -> None:
     """Track purchases lacking native currency totals by portfolio/security."""
-
     if not portfolio_uuid or not security_uuid:
         return
 
@@ -102,9 +106,8 @@ def _normalize_transaction_amounts(
     tx_units: dict[str, Any] | None,
 ) -> _NormalizedTransactionAmounts:
     """Convert raw transaction figures into floats with fee/tax breakdown."""
-
     shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
-    gross = (transaction.amount or 0) / 100.0
+    gross = cent_to_eur(transaction.amount, default=0.0) or 0.0
     fees = 0.0
     taxes = 0.0
 
@@ -119,7 +122,7 @@ def _normalize_transaction_amounts(
             if isinstance(nested, list):
                 entries = [entry for entry in nested if isinstance(entry, dict)]
             else:
-                entries = [units]
+                entries = []
         else:
             entries = []
 
@@ -135,22 +138,18 @@ def _normalize_transaction_amounts(
             if amount_raw is None:
                 continue
 
-            if isinstance(amount_raw, (int, float)):
-                unit_amount = float(amount_raw)
-            else:
-                try:
-                    unit_amount = float(int(amount_raw))
-                except (TypeError, ValueError):
-                    continue
+            unit_amount = cent_to_eur(amount_raw)
+            if unit_amount is None:
+                continue
 
-            unit_amount /= 100.0
-
-            if unit_type == 2:
+            if unit_type == UNIT_TYPE_FEE:
                 fees += unit_amount
-            elif unit_type == 1:
+            elif unit_type == UNIT_TYPE_TAX:
                 taxes += unit_amount
 
-    net_trade_account = gross - fees - taxes
+    fees = round_currency(fees, default=0.0) or 0.0
+    taxes = round_currency(taxes, default=0.0) or 0.0
+    net_trade_account = round_currency(gross - fees - taxes, default=0.0) or 0.0
 
     return _NormalizedTransactionAmounts(
         shares=shares,
@@ -315,7 +314,7 @@ def db_calculate_current_holdings(
     return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
 
 
-def _resolve_native_amount(
+def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branching
     transaction: Transaction,
     tx_units: dict[str, Any] | None,
 ) -> tuple[float | None, str | None, float | None]:
@@ -327,17 +326,15 @@ def _resolve_native_amount(
     if not units:
         return None, None, None
 
-    aggregate: dict[str, Any] | None = None
     entries: list[dict[str, Any]]
     if isinstance(units, list):
         entries = [entry for entry in units if isinstance(entry, dict)]
     elif isinstance(units, dict):
-        aggregate = units
         nested = units.get("entries") if "entries" in units else None
         if isinstance(nested, list):
             entries = [entry for entry in nested if isinstance(entry, dict)]
         else:
-            entries = [units]
+            return None, None, None
     else:
         return None, None, None
 
@@ -348,38 +345,23 @@ def _resolve_native_amount(
     for entry in entries:
         unit_type_raw = entry.get("type")
 
-        if unit_type_raw is None and (
-            "fx_amount" in entry or "fx_currency_code" in entry or "amount" in entry
-        ):
-            unit_type = 0
-        else:
-            try:
-                unit_type = int(unit_type_raw)
-            except (TypeError, ValueError):
-                continue
+        try:
+            unit_type = int(unit_type_raw)
+        except (TypeError, ValueError):
+            continue
 
-        if unit_type != 0:
+        if unit_type != UNIT_TYPE_NATIVE:
             continue
 
         raw_amount = entry.get("amount")
-        if raw_amount is not None:
-            if isinstance(raw_amount, (int, float)):
-                account_amount = float(raw_amount) / 100.0
-            else:
-                try:
-                    account_amount = float(int(raw_amount)) / 100.0
-                except (TypeError, ValueError):
-                    account_amount = None
+        converted_account = cent_to_eur(raw_amount)
+        if converted_account is not None:
+            account_amount = converted_account
 
         fx_amount = entry.get("fx_amount")
-        if fx_amount is not None:
-            if isinstance(fx_amount, (int, float)):
-                native_amount = float(fx_amount) / 100.0
-            else:
-                try:
-                    native_amount = float(int(fx_amount)) / 100.0
-                except (TypeError, ValueError):
-                    native_amount = None
+        converted_native = cent_to_eur(fx_amount)
+        if converted_native is not None:
+            native_amount = converted_native
 
         currency = entry.get("fx_currency_code")
         if isinstance(currency, str):
@@ -388,26 +370,10 @@ def _resolve_native_amount(
         if native_amount is not None and account_amount is not None:
             break
 
-    if aggregate:
-        if native_amount is None:
-            fx_amount = aggregate.get("fx_amount")
-            if isinstance(fx_amount, (int, float)):
-                native_amount = float(fx_amount) / 100.0
-            elif fx_amount is not None:
-                try:
-                    native_amount = float(int(fx_amount)) / 100.0
-                except (TypeError, ValueError):
-                    native_amount = None
-
-        if native_currency is None:
-            currency = aggregate.get("fx_currency_code")
-            if isinstance(currency, str):
-                native_currency = currency
-
     return native_amount, native_currency, account_amount
 
 
-def db_calculate_sec_purchase_value(
+def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mirrors business rules
     transactions: list[Transaction],
     db_path: Path,
     *,
@@ -436,9 +402,11 @@ def db_calculate_sec_purchase_value(
         native_currency: str | None = None
         native_account_amount: float | None = None
         if tx.type in PURCHASE_TYPES:
-            native_amount, native_currency, native_account_amount = _resolve_native_amount(
-                tx,
-                tx_units,
+            native_amount, native_currency, native_account_amount = (
+                _resolve_native_amount(
+                    tx,
+                    tx_units,
+                )
             )
         rate, _ = _determine_exchange_rate(
             tx,
@@ -487,7 +455,9 @@ def db_calculate_sec_purchase_value(
                 security_total = account_total
                 security_currency = security_currency or tx.currency_code
             security_price = (
-                security_total / shares if security_total is not None and shares > 0 else None
+                security_total / shares
+                if security_total is not None and shares > 0
+                else None
             )
             native_price = None
             if native_amount is not None and shares > 0:
@@ -538,22 +508,30 @@ def db_calculate_sec_purchase_value(
                 account_total += lot.shares * lot.account_price
                 account_shares += lot.shares
 
-        if total_shares > 0:
-            if native_shares and abs(native_shares - total_shares) <= 1e-6:
-                avg_price_native = round(native_total / native_shares, 6)
+        if (
+            total_shares > 0
+            and native_shares
+            and abs(native_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
+            avg_price_native = round(native_total / native_shares, 6)
 
         avg_price_security: float | None = None
-        if security_shares and abs(security_shares - total_shares) <= 1e-6:
+        if (
+            security_shares
+            and abs(security_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
             avg_price_security = round(security_total / security_shares, 6)
 
         avg_price_account: float | None = None
-        if account_shares and abs(account_shares - total_shares) <= 1e-6:
+        if account_shares and abs(account_shares - total_shares) <= SHARE_MATCH_EPSILON:
             avg_price_account = round(account_total / account_shares, 6)
 
         portfolio_metrics[key] = PurchaseComputation(
             purchase_value=round(total_purchase, 2),
             avg_price_native=avg_price_native,
-            security_currency_total=round(security_total, 2) if security_shares else 0.0,
+            security_currency_total=round(security_total, 2)
+            if security_shares
+            else 0.0,
             account_currency_total=round(account_total, 2) if account_shares else 0.0,
             avg_price_security=avg_price_security,
             avg_price_account=avg_price_account,
@@ -605,7 +583,7 @@ def db_calculate_holdings_value(
         holdings = data.get("current_holdings", 0)
 
         # Hole den aktuellen Preis
-        latest_price = normalize_price(latest_prices.get(security_uuid, 0.0))
+        latest_price = normalize_raw_price(latest_prices.get(security_uuid, 0.0))
 
         # Hole die Währung
         currency_code = securities.get(security_uuid, "EUR")
