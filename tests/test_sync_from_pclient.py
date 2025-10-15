@@ -455,22 +455,7 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
     assert average_cost_entry["account"] == pytest.approx(25.987654)
     assert average_cost_entry["eur"] == pytest.approx(123.45)
 
-    performance_payload = position_entry["performance"]
-    assert performance_payload == {
-        "gain_abs": pytest.approx(27.54),
-        "gain_pct": pytest.approx(22.31),
-        "total_change_eur": pytest.approx(27.54),
-        "total_change_pct": pytest.approx(22.31),
-        "source": "calculated",
-        "coverage_ratio": 1.0,
-        "day_change": {
-            "price_change_native": None,
-            "price_change_eur": None,
-            "change_pct": None,
-            "source": "unavailable",
-            "coverage_ratio": 0.0,
-        },
-    }
+    assert "performance" not in position_entry
     assert "avg_price_security" not in position_entry
 
 
@@ -706,6 +691,145 @@ def test_sync_securities_persists_deduplicated_historical_prices(
     ]
     assert runner.stats.historical_prices_written == 2
     assert runner.stats.historical_prices_skipped == 2
+
+
+def test_sync_securities_skips_unchanged_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A second sync without changes should not rewrite historical prices."""
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    security = _DummySecurity(
+        uuid="sec-static",
+        name="Static",
+        prices=[_DummyPrice(date=10, close=100), _DummyPrice(date=11, close=110)],
+    )
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    runner = _SyncRunner(
+        client=_DummyClient([security]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+    runner.client.securities = [security]
+
+    try:
+        runner._sync_securities()
+        conn.commit()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    conn = sqlite3.connect(db_path)
+    runner_repeat = _SyncRunner(
+        client=_DummyClient([security]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner_repeat.cursor = conn.cursor()
+    runner_repeat.client.securities = [security]
+
+    try:
+        runner_repeat._sync_securities()
+        conn.commit()
+        rows = conn.execute(
+            """
+            SELECT security_uuid, date, close
+            FROM historical_prices
+            ORDER BY date
+            """
+        ).fetchall()
+    finally:
+        runner_repeat.cursor.close()
+        conn.close()
+
+    assert rows == [
+        ("sec-static", 10, 100),
+        ("sec-static", 11, 110),
+    ]
+    assert runner_repeat.stats.historical_prices_written == 0
+    assert runner_repeat.stats.historical_prices_skipped == len(security.prices)
+
+
+def test_sync_securities_appends_only_new_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Only appended Close rows should be persisted on subsequent syncs."""
+    db_path = tmp_path / "portfolio.db"
+    conn = _prepare_portfolio_db(db_path)
+    base_prices = [
+        _DummyPrice(date=20, close=200),
+        _DummyPrice(date=21, close=210),
+    ]
+    security = _DummySecurity(uuid="sec-append", name="Append", prices=base_prices)
+
+    monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+    monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+
+    runner = _SyncRunner(
+        client=_DummyClient([security]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner.cursor = conn.cursor()
+    runner.client.securities = [security]
+
+    try:
+        runner._sync_securities()
+        conn.commit()
+    finally:
+        runner.cursor.close()
+        conn.close()
+
+    conn = sqlite3.connect(db_path)
+    updated_prices = [*base_prices, _DummyPrice(date=22, close=220)]
+    security_updated = _DummySecurity(
+        uuid="sec-append", name="Append", prices=updated_prices
+    )
+    runner_append = _SyncRunner(
+        client=_DummyClient([security_updated]),
+        conn=conn,
+        hass=None,
+        entry_id=None,
+        last_file_update=None,
+        db_path=db_path,
+    )
+    runner_append.cursor = conn.cursor()
+    runner_append.client.securities = [security_updated]
+
+    try:
+        runner_append._sync_securities()
+        conn.commit()
+        rows = conn.execute(
+            """
+            SELECT security_uuid, date, close
+            FROM historical_prices
+            ORDER BY date
+            """
+        ).fetchall()
+    finally:
+        runner_append.cursor.close()
+        conn.close()
+
+    assert rows == [
+        ("sec-append", 20, 200),
+        ("sec-append", 21, 210),
+        ("sec-append", 22, 220),
+    ]
+    assert runner_append.stats.historical_prices_written == 1
+    assert runner_append.stats.historical_prices_skipped == len(base_prices)
 
 
 def test_sync_securities_warns_about_missing_daily_prices(
