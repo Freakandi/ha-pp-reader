@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from math import isclose
 from pathlib import Path
 from typing import Any
 
@@ -729,7 +730,9 @@ def fetch_previous_close(
                 local_conn.close()
 
 
-def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str, Any]]:
+def get_portfolio_positions(  # noqa: PLR0912, PLR0915
+    db_path: Path, portfolio_uuid: str
+) -> list[dict[str, Any]]:
     """
     Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Performance.
 
@@ -840,6 +843,51 @@ def get_portfolio_positions(db_path: Path, portfolio_uuid: str) -> list[dict[str
                 and avg_price_account_value is None
             ):
                 average_cost_payload["account"] = None
+
+            if aggregation.total_holdings not in (
+                None,
+                0,
+            ) and purchase_total_security_value not in (None, 0.0):
+                derived_security_avg = round_currency(
+                    purchase_total_security_value / aggregation.total_holdings,
+                    decimals=6,
+                    default=None,
+                )
+                if derived_security_avg is not None:
+                    security_average = average_cost_payload.get("security")
+                    if security_average is None or (
+                        isinstance(security_average, (int, float))
+                        and isclose(
+                            float(security_average),
+                            derived_security_avg,
+                            rel_tol=0.0,
+                            abs_tol=0.01,
+                        )
+                    ):
+                        average_cost_payload["security"] = derived_security_avg
+
+            if aggregation.total_holdings not in (
+                None,
+                0,
+            ) and purchase_total_account_value not in (None, 0.0):
+                derived_account_avg = round_currency(
+                    purchase_total_account_value / aggregation.total_holdings,
+                    decimals=6,
+                    default=None,
+                )
+                if derived_account_avg is not None:
+                    account_average = average_cost_payload.get("account")
+                    if account_average is None or (
+                        isinstance(account_average, (int, float))
+                        and isclose(
+                            float(account_average),
+                            derived_account_avg,
+                            rel_tol=0.0,
+                            abs_tol=0.01,
+                        )
+                    ):
+                        average_cost_payload["account"] = derived_account_avg
+                        avg_price_account_value = derived_account_avg
 
             aggregation_dict = {
                 "total_holdings": aggregation.total_holdings,

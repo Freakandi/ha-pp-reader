@@ -652,10 +652,14 @@ export function handlePortfolioUpdate(
     const portfolioDomValues = Array.from(
       table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'),
     ).map(row => {
-      const cv = parseNumLoose(row.cells.item(2)?.textContent);
-      const gain = parseNumLoose(row.cells.item(3)?.textContent);
-      const ps = cv - gain;
-      return { current_value: cv, purchase_sum: ps };
+      const currentValueRaw = row.dataset.currentValue;
+      const purchaseSumRaw = row.dataset.purchaseSum;
+      const currentValue = currentValueRaw ? Number.parseFloat(currentValueRaw) : Number.NaN;
+      const purchaseSum = purchaseSumRaw ? Number.parseFloat(purchaseSumRaw) : Number.NaN;
+      return {
+        current_value: Number.isFinite(currentValue) ? currentValue : 0,
+        purchase_sum: Number.isFinite(purchaseSum) ? purchaseSum : 0,
+      };
     });
 
     updateTotalWealth(accounts, portfolioDomValues, root);
@@ -901,46 +905,62 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   }
 
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'));
-  let sumCurrent = 0;
-  let sumGainAbs = 0;
-  let sumPurchase = 0;
-  let sumPositions = 0;
 
-  rows.forEach(r => {
-    const datasetCountRaw = r.dataset.positionCount;
-    const datasetCount = datasetCountRaw ? Number.parseFloat(datasetCountRaw) : Number.NaN;
-    const posCount = Number.isFinite(datasetCount)
-      ? datasetCount
-      : Number.parseInt((r.cells.item(1)?.textContent || '').replace(/\./g, ''), 10) || 0;
+  const parseDatasetNumber = (value: string | undefined): number | null => {
+    if (value === undefined) {
+      return null;
+    }
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
 
-    const datasetCurrentRaw = r.dataset.currentValue;
-    const datasetCurrent = datasetCurrentRaw ? Number.parseFloat(datasetCurrentRaw) : Number.NaN;
-    const currentValue = Number.isFinite(datasetCurrent)
-      ? datasetCurrent
-      : parseNumLoose(r.cells.item(2)?.textContent);
+  const metrics = rows.reduce(
+    (acc, row) => {
 
-    const datasetGainRaw = r.dataset.gainAbs;
-    const datasetGain = datasetGainRaw ? Number.parseFloat(datasetGainRaw) : Number.NaN;
-    const gainAbs = Number.isFinite(datasetGain)
-      ? datasetGain
-      : parseNumLoose(r.cells.item(3)?.textContent);
+      const positionCount = parseDatasetNumber(row.dataset.positionCount);
+      if (positionCount != null) {
+        acc.sumPositions += positionCount;
+      }
 
-    const datasetPurchaseRaw = r.dataset.purchaseSum;
-    const datasetPurchase = datasetPurchaseRaw ? Number.parseFloat(datasetPurchaseRaw) : Number.NaN;
-    const purchase = Number.isFinite(datasetPurchase)
-      ? datasetPurchase
-      : currentValue - gainAbs;
+      if (row.dataset.fxUnavailable === 'true') {
+        acc.fxUnavailable = true;
+      }
 
-    sumPositions += posCount;
-    sumCurrent += currentValue;
-    sumGainAbs += gainAbs;
-    sumPurchase += purchase;
-  });
+      if (row.dataset.hasValue !== 'true') {
+        acc.incompleteRows += 1;
+        return acc;
+      }
 
-  if (sumPurchase <= 0) {
-    sumPurchase = sumCurrent - sumGainAbs;
-  }
-  const sumGainPct = sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
+      acc.valueRows += 1;
+
+      const currentValue = parseDatasetNumber(row.dataset.currentValue);
+      const gainAbs = parseDatasetNumber(row.dataset.gainAbs);
+      const purchaseSum = parseDatasetNumber(row.dataset.purchaseSum);
+
+      if (currentValue == null || gainAbs == null || purchaseSum == null) {
+        acc.incompleteRows += 1;
+        return acc;
+      }
+
+      acc.sumCurrent += currentValue;
+      acc.sumGainAbs += gainAbs;
+      acc.sumPurchase += purchaseSum;
+
+      return acc;
+    },
+    {
+      sumCurrent: 0,
+      sumGainAbs: 0,
+      sumPurchase: 0,
+      sumPositions: 0,
+      valueRows: 0,
+      incompleteRows: 0,
+      fxUnavailable: false,
+    },
+  );
+
+  const totalsComplete = metrics.valueRows > 0 && metrics.incompleteRows === 0;
+  const sumGainPct = totalsComplete && metrics.sumPurchase > 0 ? (metrics.sumGainAbs / metrics.sumPurchase) * 100 : null;
 
   let footer = table.querySelector<HTMLTableRowElement>('tr.footer-row');
   if (!footer) {
@@ -948,29 +968,26 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     footer.className = 'footer-row';
     table.querySelector('tbody')?.appendChild(footer);
   }
-  const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
-  const hasAnyValue = rows.some(row => row.dataset.hasValue === 'true');
-  const sumIsPartial = rows.some(row => row.dataset.fxUnavailable === 'true');
-
+  const sumPositionsDisplay = Math.round(metrics.sumPositions).toLocaleString('de-DE');
   const footerRowData = {
-    fx_unavailable: sumIsPartial,
-    current_value: hasAnyValue ? sumCurrent : null,
-    performance: hasAnyValue
+    fx_unavailable: metrics.fxUnavailable || !totalsComplete,
+    current_value: totalsComplete ? metrics.sumCurrent : null,
+    performance: totalsComplete
       ? {
-          gain_abs: sumGainAbs,
+          gain_abs: metrics.sumGainAbs,
           gain_pct: sumGainPct,
-          total_change_eur: sumGainAbs,
+          total_change_eur: metrics.sumGainAbs,
           total_change_pct: sumGainPct,
-          source: 'calculated',
+          source: 'aggregated',
           coverage_ratio: 1,
         }
       : null,
   } as Record<string, unknown>;
-  const footerContext = { hasValue: hasAnyValue };
+  const footerContext = { hasValue: totalsComplete };
 
   const currentValueCell = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
-  const gainAbsValue = hasAnyValue ? sumGainAbs : null;
-  const gainPctValue = hasAnyValue ? sumGainPct : null;
+  const gainAbsValue = totalsComplete ? metrics.sumGainAbs : null;
+  const gainPctValue = totalsComplete ? sumGainPct : null;
   const gainAbsCellMarkup = formatValue('gain_abs', gainAbsValue, footerRowData, footerContext);
   const gainPctCellMarkup = formatValue('gain_pct', gainPctValue, footerRowData, footerContext);
 
@@ -983,19 +1000,24 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   `;
   const footerGainAbsCell = footer.cells.item(3);
   if (footerGainAbsCell) {
-    footerGainAbsCell.dataset.gainPct = hasAnyValue && Number.isFinite(sumGainPct)
+    footerGainAbsCell.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number'
       ? `${formatNumber(sumGainPct)} %`
       : '—';
-    footerGainAbsCell.dataset.gainSign = hasAnyValue && Number.isFinite(sumGainPct)
-      ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
+    footerGainAbsCell.dataset.gainSign = totalsComplete && typeof sumGainPct === 'number'
+      ? sumGainPct > 0
+        ? 'positive'
+        : sumGainPct < 0
+          ? 'negative'
+          : 'neutral'
       : 'neutral';
   }
-  footer.dataset.positionCount = Math.round(sumPositions).toString();
-  footer.dataset.currentValue = sumCurrent.toString();
-  footer.dataset.purchaseSum = sumPurchase.toString();
-  footer.dataset.gainAbs = sumGainAbs.toString();
-  footer.dataset.gainPct = sumGainPct.toString();
-  footer.dataset.hasValue = hasAnyValue ? 'true' : 'false';
+  footer.dataset.positionCount = Math.round(metrics.sumPositions).toString();
+  footer.dataset.currentValue = totalsComplete ? metrics.sumCurrent.toString() : '';
+  footer.dataset.purchaseSum = totalsComplete ? metrics.sumPurchase.toString() : '';
+  footer.dataset.gainAbs = totalsComplete ? metrics.sumGainAbs.toString() : '';
+  footer.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number' ? sumGainPct.toString() : '';
+  footer.dataset.hasValue = totalsComplete ? 'true' : 'false';
+  footer.dataset.fxUnavailable = metrics.fxUnavailable || !totalsComplete ? 'true' : 'false';
 }
 
 function toFiniteNumber(value: unknown): number {
