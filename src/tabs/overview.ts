@@ -1103,7 +1103,7 @@ async function reloadPortfolioPositions(
       targetContainer.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
       return;
     }
-                    const positions = resp.positions;
+    const positions = Array.isArray(resp.positions) ? resp.positions : [];
     setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
     targetContainer.innerHTML = renderPositionsTable(positions);
     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
@@ -1243,7 +1243,7 @@ async function waitForElement<T extends Element>(
                     }
                     return;
                   }
-                  const positions = resp.positions;
+                  const positions = Array.isArray(resp.positions) ? resp.positions : [];
                   setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
                   if (containerEl) {
                     containerEl.innerHTML = renderPositionsTable(positions);
