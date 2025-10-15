@@ -299,22 +299,30 @@
       - Ziel/Ergebnis: Anwender werden auf die Feldentfernung vorbereitet.
 
 25. Tests, Linting und Builds sicherstellen
-   a) [ ] Führe das Python-Linting über `./scripts/lint` aus und behebe Verstöße.\
+   a) [x] Führe das Python-Linting über `./scripts/lint` aus und behebe Verstöße.\
       - Dateipfad(e): n/a (Kommandozeile)\
       - Betroffene Funktion(en)/Abschnitt(e): gesamter Python-Code\
       - Ziel/Ergebnis: Stil- und Qualitätsvorgaben eingehalten.
-   b) [ ] Starte die Python-Test-Suite inklusive Coverage für die migrierten Bereiche.\
-      - Dateipfad(e): `tests/`\
-      - Betroffene Funktion(en)/Abschnitt(e): `pytest --cov=custom_components/pp_reader --cov-report=term-missing`\
-      - Ziel/Ergebnis: Regressionen werden ausgeschlossen.
-   c) [ ] Lasse TypeScript-Linting und Type-Checks laufen (`npm run lint:ts`, `npm run typecheck`).\
+   b) [ ] Bereinige verbleibende Performance-Fallbacks in Frontend-Konfiguration und Tests.\
+      - Dateipfad(e): `src/data/updateConfigsWS.ts`, `tests/frontend/`, `src/tabs/`\
+      - Betroffene Funktion(en)/Abschnitt(e): Aggregations-/Performance-Fallback-Logik\
+      - Ziel/Ergebnis: Dashboard und Tests verlassen sich ausschließlich auf die vom Backend gelieferten Performance-Daten.
+   c) [ ] Ersetze verbleibende `datetime.UTC`-Verwendungen durch `datetime.timezone.utc`.\
+      - Dateipfad(e): `tests/test_validators_timezone.py`, `tests/test_ws_accounts_fx.py`\
+      - Betroffene Funktion(en)/Abschnitt(e): Datums-/Zeitzonenkonvertierungen\
+      - Ziel/Ergebnis: Kompatibilität mit Python < 3.11 und HA-Testumgebung wiederhergestellt.
+   d) [ ] Lasse TypeScript-Linting und Type-Checks laufen (`npm run lint:ts`, `npm run typecheck`).\
       - Dateipfad(e): `src/`\
       - Betroffene Funktion(en)/Abschnitt(e): TS-Quellen und Tests\
       - Ziel/Ergebnis: Frontend bleibt typ- und lint-fehlerfrei.
-   d) [ ] Baue die Dashboard-Bundles nach Abschluss der TS-Anpassungen.\
+   e) [ ] Baue die Dashboard-Bundles nach Abschluss der TS-Anpassungen.\
       - Dateipfad(e): `custom_components/pp_reader/www/pp_reader_dashboard/dashboard.module.js` (generiert)\
       - Betroffene Funktion(en)/Abschnitt(e): `npm run build`, `scripts/update_dashboard_module.mjs`\
-      - Ziel/Ergebnis: Ausgelieferte Assets enthalten die bereinigte UI.
+      - Ziel/Ergebnis: Statische Assets sind aktuell und für Pytest-Läufe verfügbar.
+   f) [ ] Starte die Python-Test-Suite inklusive Coverage für die migrierten Bereiche.\
+      - Dateipfad(e): `tests/`\
+      - Betroffene Funktion(en)/Abschnitt(e): `pytest --cov=custom_components/pp_reader --cov-report=term-missing`\
+      - Ziel/Ergebnis: Regressionen werden ausgeschlossen.
 
 Optional
    a) [ ] Optional: Ergänze End-to-End-Tests, die Backend- und Frontend-Payloads gemeinsam prüfen.\
