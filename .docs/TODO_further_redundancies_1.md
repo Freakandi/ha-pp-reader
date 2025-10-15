@@ -319,7 +319,7 @@
       - Dateipfad(e): `custom_components/pp_reader/www/pp_reader_dashboard/dashboard.module.js` (generiert)\
       - Betroffene Funktion(en)/Abschnitt(e): `npm run build`, `scripts/update_dashboard_module.mjs`\
       - Ziel/Ergebnis: Statische Assets sind aktuell und für Pytest-Läufe verfügbar.
-   f) [ ] Starte die Python-Test-Suite inklusive Coverage für die migrierten Bereiche.\
+   f) [x] Starte die Python-Test-Suite inklusive Coverage für die migrierten Bereiche.\
       - Dateipfad(e): `tests/`\
       - Betroffene Funktion(en)/Abschnitt(e): `pytest --cov=custom_components/pp_reader --cov-report=term-missing`\
       - Ziel/Ergebnis: Regressionen werden ausgeschlossen.
