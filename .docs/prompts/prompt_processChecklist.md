@@ -25,6 +25,7 @@ Vorgehensweise (strikt einhalten):
    - TODO_further_redundancies_1.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
+   - All linting runs (ESLint for TypeScript, ruff for Python) must be successful
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
 9. Führe Tests aus, soweit notwendig oder sinnvoll
