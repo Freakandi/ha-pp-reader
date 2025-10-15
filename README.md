@@ -78,6 +78,17 @@ Releases include pre-built dashboard bundles. When working from a git checkout:
 | Dashboard totals or charts look stale | Ensure Home Assistant is running (price tasks trigger on schedule) and review the logs for database errors or WebSocket warnings. Restarting Home Assistant reschedules the price coordinator. |
 | Security detail tab shows empty charts | Verify that the integration has completed at least one import since updating to v0.12.0 and that the Portfolio Performance file includes securities with historical data. |
 
+## Contribution workflow
+Developers should run the shared lint stack before opening pull requests so Python and TypeScript changes stay aligned with the repository defaults:
+
+```bash
+./scripts/lint
+npm run lint:ts
+npm run typecheck
+```
+
+Running the trio catches formatting issues, Ruff violations, and TypeScript regressions before review and mirrors the checks used during the linting sweep.
+
 ## Further documentation
 - [Architecture](ARCHITECTURE.md) – module responsibilities and data flow diagrams.
 - [Testing guide](TESTING.md) – reproducible QA instructions.

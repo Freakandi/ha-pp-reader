@@ -96,7 +96,7 @@ def _compact_portfolio_values_payload(data: Any) -> Any:
 
 
 def _normalize_position_entry(  # noqa: PLR0912
-    item: Mapping[str, Any]
+    item: Mapping[str, Any],
 ) -> dict[str, Any] | None:
     """Keep only the fields required for position updates."""
     security_uuid = item.get("security_uuid")

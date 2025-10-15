@@ -80,7 +80,7 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
        - Scope: `src/dashboard/`
        - Ziel: Modulweise ESLint-Compliance sicherstellen, insbesondere bei dynamischen Layout-Berechnungen.
 
-3. e) [ ] Tab-Ansichten
+3. e) [x] Tab-Ansichten
        - Scope: `src/tabs/`
        - Ziel: Tabs strikt typisieren, Swipe-/Navigation-Logik lint-frei halten.
        - 3.e.i) [x] `src/tabs/overview.ts`
@@ -103,14 +103,14 @@ Legende: [ ] offen | [x] erledigt (Status wird im Verlauf gepflegt)
 
 ## 4. Abschlussarbeiten
 
-4. a) [ ] Globale Verifikation
+4. a) [x] Globale Verifikation
        - Kommandos: `./scripts/lint`, `npm run lint:ts`, `npm run typecheck`
        - Ziel: Alle Lints laufen ohne Fehler; Ergebnisse im Abschluss-Commit dokumentiert.
 
-4. b) [ ] Workflow verankern
+4. b) [x] Workflow verankern
        - Aufgabe: README/README-dev aktualisieren (falls nötig), um den verpflichtenden Lint-Workflow festzuhalten.
        - Ziel: Entwickler*innen wissen, welche Kommandos vor jedem PR laufen müssen.
 
-4. c) [ ] Optional: CI/Pre-Commit anpassen
+4. c) [x] Optional: CI/Pre-Commit anpassen
        - Aufgabe: Falls noch nicht vorhanden, Lint-Kommandos in CI oder `pre-commit` integrieren.
        - Ziel: Künftige Regressionen werden automatisch erkannt.

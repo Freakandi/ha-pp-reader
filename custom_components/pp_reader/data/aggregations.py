@@ -78,6 +78,7 @@ def _get_value(row: Mapping[str, Any] | Any, key: str) -> Any:
     except (KeyError, TypeError, IndexError):
         return None
 
+
 PRECISION_EPSILON = 1e-6
 
 
