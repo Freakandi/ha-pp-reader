@@ -280,6 +280,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "last_update": last_update_truncated.isoformat(),
             }
 
+        except FileNotFoundError:
+            message = f"Portfolio-Datei nicht gefunden: {self.file_path}"
+            _LOGGER.error(message)  # noqa: TRY400 - bewusst ohne Traceback
+            raise UpdateFailed(message) from None
         except Exception as e:
             _LOGGER.exception("Fehler beim Laden der Daten")
             msg = f"Update fehlgeschlagen: {e}"
