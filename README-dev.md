@@ -49,15 +49,18 @@ The dashboard is authored in TypeScript and built with Vite. Bundles live in `cu
 The security detail tab introduced in v0.12.0 consumes WebSocket commands `pp_reader/get_security_snapshot` and `pp_reader/get_security_history` to render snapshots and SVG charts using the imported daily close data. Keep these APIs backward compatible when evolving the dashboard.
 
 ## Testing & quality checks
-Follow the recommended sequence before submitting a pull request:
+Follow the required lint workflow and recommended checks before submitting a pull request:
 
 ```bash
 ./scripts/lint
+npm run lint:ts
+npm run typecheck
 pytest -q
 pytest --cov=custom_components/pp_reader --cov-report=term-missing
 python -m script.hassfest  # optional
 ```
 
+- `./scripts/lint`, `npm run lint:ts`, and `npm run typecheck` form the mandatory lint stack and must succeed locally prior to review.
 - Pytest relies on fixtures from `pytest-homeassistant-custom-component`; ensure the virtualenv is active and `requirements-dev.txt` is installed.
 - Frontend smoke tests live under `tests/frontend/` and execute Node scripts (powered by `jsdom`) to validate dashboard bundles.
 - For verbose logging during async tests, invoke `pytest -vv -o log_cli=true --log-cli-level=INFO`.

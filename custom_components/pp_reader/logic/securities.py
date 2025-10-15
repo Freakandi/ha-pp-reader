@@ -523,10 +523,7 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mi
             avg_price_security = round(security_total / security_shares, 6)
 
         avg_price_account: float | None = None
-        if (
-            account_shares
-            and abs(account_shares - total_shares) <= SHARE_MATCH_EPSILON
-        ):
+        if account_shares and abs(account_shares - total_shares) <= SHARE_MATCH_EPSILON:
             avg_price_account = round(account_total / account_shares, 6)
 
         portfolio_metrics[key] = PurchaseComputation(

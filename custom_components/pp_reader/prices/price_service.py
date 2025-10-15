@@ -50,9 +50,7 @@ from custom_components.pp_reader.util.currency import (
 )
 
 
-async def revalue_after_price_updates(
-    *args: Any, **kwargs: Any
-) -> dict[str, Any]:
+async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Proxy to the revaluation helper (patchable for tests)."""
     return await revaluation.revalue_after_price_updates(*args, **kwargs)
 

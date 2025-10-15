@@ -84,12 +84,9 @@ WARN_PRICE_FUTURE = (
 WARN_PRICE_NEGATIVE = (
     "sync_from_pclient: Überspringe historischen Preis mit negativem Datum für %s am %s"
 )
-DEBUG_DUPLICATE_CLOSE = (
-    "sync_from_pclient: Duplikater Close für %s am %s überschrieben"
-)
+DEBUG_DUPLICATE_CLOSE = "sync_from_pclient: Duplikater Close für %s am %s überschrieben"
 DEBUG_SUPPRESS_WARNINGS = (
-    "sync_from_pclient: Unterdrücke Warnungen zu historischen Preis-Lücken "
-    "für %s (%s)"
+    "sync_from_pclient: Unterdrücke Warnungen zu historischen Preis-Lücken für %s (%s)"
 )
 WARN_SINGLE_CLOSE_GAP = (
     "sync_from_pclient: Historische Close-Lücke für %s am %s "
@@ -100,21 +97,13 @@ WARN_RANGE_CLOSE_GAP = (
     "(%d Tage ohne Daten)"
 )
 WARN_ADDITIONAL_SEGMENTS = (
-    "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht "
-    "einzeln gelistet"
+    "sync_from_pclient: Weitere %d Zeitreihen-Lücken für %s nicht einzeln gelistet"
 )
 DEBUG_WEEKEND_GAPS = (
-    "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden "
-    "für %s"
+    "sync_from_pclient: Ignoriere %d Lücken ausschließlich an Wochenenden für %s"
 )
-DEBUG_STALE_GAPS = (
-    "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) "
-    "für %s"
-)
-DEBUG_SHORT_GAPS = (
-    "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) "
-    "für %s"
-)
+DEBUG_STALE_GAPS = "sync_from_pclient: Ignoriere %d veraltete Lücken (> %d Tage) für %s"
+DEBUG_SHORT_GAPS = "sync_from_pclient: Ignoriere %d kurze Lücken (≤ %d Werktage) für %s"
 DEBUG_PRE_ACTIVITY_GAPS = (
     "sync_from_pclient: Ignoriere %d Lücken vor der ersten Transaktion für %s"
 )

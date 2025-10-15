@@ -74,3 +74,10 @@ Die größten Hotspots konzentrieren sich auf `src/tabs/overview.ts` (50 Meldung
 | ANN002 | 26 | Fehlende Typannotationen für Funktionsrückgabewerte |
 
 Die verbleibenden Regeln liegen jeweils im einstelligen Bereich. Die größten Problemcluster befinden sich weiterhin in den Testmodulen (`tests/test_price_service.py`, `tests/test_db_access.py`, `tests/test_ws_security_history.py`).
+
+### Abschlussprüfung (Task 4.a, 2025-02-19)
+
+- `./scripts/lint` – Alle Python-Module bestehen den kombinierten `ruff format`/`ruff check`-Lauf; acht Dateien wurden automatisch formatiert, ansonsten keine Findings.
+- `npm run lint:ts` – ESLint 9.34.0 meldet keine Fehler mehr, nachdem die fehlende Abhängigkeit `@eslint/js` über `npm install` bereitgestellt wurde.
+- `npm run typecheck` – `tsc --noEmit` läuft ohne Diagnosen durch.
+- README und README-dev dokumentieren das verpflichtende Lint-Workflow-Trio (`./scripts/lint`, `npm run lint:ts`, `npm run typecheck`) für alle nachfolgenden Beiträge.

@@ -161,9 +161,7 @@ async def test_fetch_exchange_rates_handles_network_issues(
     result = await fx._fetch_exchange_rates("2025-01-01", {"USD"})
 
     assert result == {}
-    assert any(
-        "Netzwerkproblem" in message for message in caplog.messages
-    )
+    assert any("Netzwerkproblem" in message for message in caplog.messages)
     assert all(record.levelno < logging.ERROR for record in caplog.records)
 
 

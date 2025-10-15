@@ -133,11 +133,14 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     connector = aiohttp.TCPConnector(ssl=ssl_context)
 
     try:
-        async with aiohttp.ClientSession(
-            timeout=timeout,
-            trust_env=True,
-            connector=connector,
-        ) as session, session.get(url) as response:
+        async with (
+            aiohttp.ClientSession(
+                timeout=timeout,
+                trust_env=True,
+                connector=connector,
+            ) as session,
+            session.get(url) as response,
+        ):
             if response.status != 200:  # noqa: PLR2004
                 if _should_log_warning(date, currencies):
                     _LOGGER.warning(
