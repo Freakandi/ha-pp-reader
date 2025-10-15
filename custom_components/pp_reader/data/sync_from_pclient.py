@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from functools import lru_cache
 from itertools import pairwise
+from math import isclose
 from statistics import median
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -844,6 +845,7 @@ class _SyncRunner:
                                 missing_segments.append((gap_start, gap_end))
                             previous_date = current_date
 
+                        suppress_reason: str | None = None
                         if missing_segments:
                             calendar_value = maybe_field(security, "calendar")
                             calendar_hint = (
@@ -851,7 +853,6 @@ class _SyncRunner:
                                 if isinstance(calendar_value, str)
                                 else ""
                             )
-                            suppress_reason: str | None = None
                             if calendar_hint and "month" in calendar_hint:
                                 suppress_reason = f"Kalender '{calendar_value}'"
                             else:
@@ -988,15 +989,175 @@ class _SyncRunner:
                         )
 
                     if rows_to_persist:
-                        self.cursor.executemany(
+                        (
+                            existing_count,
+                            existing_date_sum,
+                            existing_close_sum,
+                            existing_max_date,
+                        ) = self.cursor.execute(
                             """
-                            INSERT OR REPLACE INTO historical_prices (
-                                security_uuid, date, close, high, low, volume
-                            ) VALUES (?,?,?,?,?,?)
-                            """,
-                            rows_to_persist,
+                                SELECT
+                                    COUNT(*),
+                                    COALESCE(SUM(date), 0),
+                                    COALESCE(SUM(close), 0.0),
+                                    MAX(date)
+                                FROM historical_prices
+                                WHERE security_uuid = ?
+                                """,
+                            (security.uuid,),
+                        ).fetchone()
+
+                        total_rows = len(rows_to_persist)
+                        total_date_sum = sum(row[1] for row in rows_to_persist)
+                        total_close_sum = sum(
+                            (row[2] or 0.0) for row in rows_to_persist
                         )
-                    self.stats.historical_prices_written += len(rows_to_persist)
+                        latest_date = rows_to_persist[-1][1]
+                        rows_written = 0
+
+                        if existing_count:
+                            append_rows: list[tuple[Any, ...]]
+                            rewrite_required = False
+
+                            if existing_max_date is None:
+                                append_rows = rows_to_persist
+                                rewrite_required = True
+                            else:
+                                append_rows = [
+                                    row
+                                    for row in rows_to_persist
+                                    if row[1] > existing_max_date
+                                ]
+
+                                if append_rows:
+                                    existing_history_rows = self.cursor.execute(
+                                        """
+                                        SELECT date, close, high, low, volume
+                                        FROM historical_prices
+                                        WHERE security_uuid = ? AND date <= ?
+                                        ORDER BY date
+                                        """,
+                                        (security.uuid, existing_max_date),
+                                    ).fetchall()
+
+                                    expected_history_rows = [
+                                        (row[1], row[2], row[3], row[4], row[5])
+                                        for row in rows_to_persist
+                                        if row[1] <= existing_max_date
+                                    ]
+
+                                    if len(existing_history_rows) != len(
+                                        expected_history_rows
+                                    ):
+                                        rewrite_required = True
+                                    else:
+                                        for index, existing_row in enumerate(
+                                            existing_history_rows
+                                        ):
+                                            expected_row = expected_history_rows[index]
+                                            if existing_row[0] != expected_row[0]:
+                                                rewrite_required = True
+                                                break
+
+                                            for (
+                                                column_index,
+                                                existing_value,
+                                            ) in enumerate(existing_row[1:], start=1):
+                                                expected_value = expected_row[
+                                                    column_index
+                                                ]
+                                                if (
+                                                    existing_value is None
+                                                    or expected_value is None
+                                                ):
+                                                    if (
+                                                        existing_value
+                                                        is not expected_value
+                                                    ):
+                                                        rewrite_required = True
+                                                        break
+                                                elif not isclose(
+                                                    existing_value,
+                                                    expected_value,
+                                                    rel_tol=1e-12,
+                                                    abs_tol=1e-6,
+                                                ):
+                                                    rewrite_required = True
+                                                    break
+                                            if rewrite_required:
+                                                break
+
+                            if rewrite_required:
+                                self.cursor.execute(
+                                    (
+                                        "DELETE FROM historical_prices "
+                                        "WHERE security_uuid = ?"
+                                    ),
+                                    (security.uuid,),
+                                )
+                                self.cursor.executemany(
+                                    """
+                                    INSERT OR REPLACE INTO historical_prices (
+                                        security_uuid, date, close, high, low, volume
+                                    ) VALUES (?,?,?,?,?,?)
+                                    """,
+                                    rows_to_persist,
+                                )
+                                rows_written = total_rows
+                            elif append_rows:
+                                self.cursor.executemany(
+                                    """
+                                    INSERT OR REPLACE INTO historical_prices (
+                                        security_uuid, date, close, high, low, volume
+                                    ) VALUES (?,?,?,?,?,?)
+                                    """,
+                                    append_rows,
+                                )
+                                rows_written = len(append_rows)
+                            elif (
+                                existing_count == total_rows
+                                and existing_max_date == latest_date
+                                and existing_date_sum == total_date_sum
+                                and isclose(
+                                    existing_close_sum,
+                                    total_close_sum,
+                                    rel_tol=1e-12,
+                                    abs_tol=1e-6,
+                                )
+                            ):
+                                rows_written = 0
+                            else:
+                                self.cursor.execute(
+                                    (
+                                        "DELETE FROM historical_prices "
+                                        "WHERE security_uuid = ?"
+                                    ),
+                                    (security.uuid,),
+                                )
+                                self.cursor.executemany(
+                                    """
+                                    INSERT OR REPLACE INTO historical_prices (
+                                        security_uuid, date, close, high, low, volume
+                                    ) VALUES (?,?,?,?,?,?)
+                                    """,
+                                    rows_to_persist,
+                                )
+                                rows_written = total_rows
+                        else:
+                            self.cursor.executemany(
+                                """
+                                INSERT OR REPLACE INTO historical_prices (
+                                    security_uuid, date, close, high, low, volume
+                                ) VALUES (?,?,?,?,?,?)
+                                """,
+                                rows_to_persist,
+                            )
+                            rows_written = total_rows
+
+                        self.stats.historical_prices_written += rows_written
+                        self.stats.historical_prices_skipped += (
+                            total_rows - rows_written
+                        )
                 else:
                     self.stats.historical_prices_skipped += len(security.prices)
 
