@@ -844,10 +844,10 @@ def get_portfolio_positions(  # noqa: PLR0912, PLR0915
             ):
                 average_cost_payload["account"] = None
 
-            if (
-                aggregation.total_holdings not in (None, 0)
-                and purchase_total_security_value not in (None, 0.0)
-            ):
+            if aggregation.total_holdings not in (
+                None,
+                0,
+            ) and purchase_total_security_value not in (None, 0.0):
                 derived_security_avg = round_currency(
                     purchase_total_security_value / aggregation.total_holdings,
                     decimals=6,
@@ -866,10 +866,10 @@ def get_portfolio_positions(  # noqa: PLR0912, PLR0915
                     ):
                         average_cost_payload["security"] = derived_security_avg
 
-            if (
-                aggregation.total_holdings not in (None, 0)
-                and purchase_total_account_value not in (None, 0.0)
-            ):
+            if aggregation.total_holdings not in (
+                None,
+                0,
+            ) and purchase_total_account_value not in (None, 0.0):
                 derived_account_avg = round_currency(
                     purchase_total_account_value / aggregation.total_holdings,
                     decimals=6,
