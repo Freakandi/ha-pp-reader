@@ -56,7 +56,9 @@ custom_components/pp_reader/
   sensor.py                  # Sensor platform bootstrap
   services.yaml              # Service descriptions exposed to Home Assistant
   feature_flags.py           # Feature flag resolution helpers (backend entry store)
-  util.py                    # Executor helper resilient to coroutine-returning callables
+  util/
+    __init__.py              # Executor helper resilient to coroutine-returning callables
+    currency.py              # Shared rounding and FX normalisation helpers for EUR conversion
   name/
     __init__.py              # Namespace package for vendored Portfolio Performance schema
     abuchen/portfolio/
@@ -67,12 +69,14 @@ custom_components/pp_reader/
     fx.py                    # Frankfurter FX helper (EUR conversions)
   data/
     __init__.py
+    aggregations.py          # Holdings aggregation + AverageCostSelection dataclasses
     backup_db.py             # Periodic backups + service registration
     coordinator.py           # DataUpdateCoordinator for sensor snapshots
     db_access.py             # Query helpers used by coordinator & WebSockets
     db_init.py               # Database bootstrap + runtime migrations
     db_schema.py             # CREATE TABLE definitions & indices
     event_push.py            # Event compaction + EVENT_PANELS_UPDATED helpers
+    performance.py           # Gain/day-change computation + payload merging helpers
     reader.py                # .portfolio parser (protobuf extraction)
     sync_from_pclient.py     # File → SQLite diff synchronisation + event push
     websocket.py             # WebSocket commands & payload builders
@@ -102,6 +106,8 @@ custom_components/pp_reader/
 Support tooling lives outside of the integration (for example `scripts/`, `tests/`, `TESTING.md`).
 
 TypeScript sources for the dashboard reside in `src/` and are bundled with Vite into the hashed assets above. Supporting build scripts live under `scripts/` (see [`scripts/update_dashboard_module.mjs`](scripts/update_dashboard_module.mjs)).【F:package.json†L1-L31】【F:scripts/update_dashboard_module.mjs†L1-L70】
+
+Utility helpers live in `custom_components/pp_reader/util/`, which exposes `async_run_executor_job` alongside the shared currency rounding helpers consumed by aggregation, database, websocket, and price modules.【F:custom_components/pp_reader/util/__init__.py†L1-L29】【F:custom_components/pp_reader/util/currency.py†L1-L180】 Aggregation-focused modules `data/aggregations.py` and `data/performance.py` hold the `HoldingsAggregation`/`AverageCostSelection` dataclasses plus the gain and day-change calculators reused across coordinators, database access, websocket handlers, and event push compaction.【F:custom_components/pp_reader/data/aggregations.py†L1-L200】【F:custom_components/pp_reader/data/performance.py†L1-L183】
 
 ---
 
@@ -133,7 +139,7 @@ Developer tooling includes `ruff` and scripts under `scripts/` for linting and l
 
 ## Home Assistant integration layer
 ### Manifest
-`manifest.json` declares domain `pp_reader`, version `0.12.0`, the runtime dependencies above, and marks the integration as `local_polling` with a config flow. The `loggers` array covers all price subpackages (`prices`, `price_service`, `yahooquery_provider`, `revaluation`, `symbols`, `provider_base`) so the debug option can retune log levels without adjusting Home Assistant globally.【F:custom_components/pp_reader/manifest.json†L1-L24】【F:custom_components/pp_reader/__init__.py†L49-L70】
+`manifest.json` declares domain `pp_reader`, version `0.14.0`, the runtime dependencies above, and marks the integration as `local_polling` with a config flow.【F:custom_components/pp_reader/manifest.json†L1-L24】 The `loggers` array exposes the base integration plus the core price namespaces (`prices`, `prices.price_service`, `prices.yahooquery_provider`); `_apply_price_debug_logging` extends the same log level to `prices.revaluation`, `prices.symbols`, and `prices.provider_base` using the `PRICE_LOGGER_NAMES` list so diagnostics stay consistent across all helpers.【F:custom_components/pp_reader/manifest.json†L1-L24】【F:custom_components/pp_reader/__init__.py†L56-L66】【F:custom_components/pp_reader/__init__.py†L384-L407】
 
 ### Setup lifecycle
 
@@ -183,6 +189,8 @@ For each config entry `entry_id`, `hass.data[DOMAIN][entry_id]` stores:
     "price_last_cycle_meta": dict[str, Any],  # Reserved for diagnostics (currently unused)
 }
 ```
+
+`initialize_price_state` sets up the long-lived locks, error counters, and log throttling flags, while `_run_price_cycle` populates `price_symbols` and `price_symbol_to_uuids` on demand the first time active tickers are discovered.【F:custom_components/pp_reader/prices/price_service.py†L81-L107】【F:custom_components/pp_reader/prices/price_service.py†L777-L804】
 
 Keys prefixed with `price_` are initialised lazily by `initialize_price_state` and the cycle logic. Options reload and unload cleanup routines remove every `price_*` key before rescheduling to avoid stale state.
 
@@ -287,7 +295,7 @@ Event payloads, price revaluation updates, and gain sensors rely on the shared h
 ## Price service
 `prices.price_service` owns the recurring quote fetch:
 
-1. **State initialisation** – `initialize_price_state` seeds locks, caches (`price_symbols`, `price_symbol_to_uuids`), error counters, and log throttling flags in `hass.data`.
+1. **State initialisation** – `initialize_price_state` seeds locks, error counters, and log throttling flags in `hass.data`; symbol caches are added later when `_run_price_cycle` discovers active tickers and writes `price_symbols`/`price_symbol_to_uuids` to the store.【F:custom_components/pp_reader/prices/price_service.py†L81-L107】【F:custom_components/pp_reader/prices/price_service.py†L777-L804】
 2. **Scheduling** – `_schedule_price_interval` (called from `__init__.py`) uses `async_track_time_interval` to run `_run_price_cycle` at the configured cadence. Option reloads reuse the helper and trigger an immediate cycle.
 3. **Symbol discovery** – `load_and_map_symbols` queries active securities with tickers, resets the "empty" log guard when symbols appear again, and records the list length for diagnostics shared with reload logging.【F:custom_components/pp_reader/prices/price_service.py†L105-L161】
 4. **Fetching quotes** – Batches use the provider `CHUNK_SIZE` (10 symbols) and wrap each `YahooQueryProvider.fetch` call in `asyncio.wait_for` with a 20 s timeout. Chunk failures bump `price_error_counter`, and zero-quote cycles trigger a throttled WARN via `price_zero_quotes_warn_ts` unless the provider import failed.【F:custom_components/pp_reader/prices/yahooquery_provider.py†L1-L100】【F:custom_components/pp_reader/prices/price_service.py†L692-L794】
@@ -405,9 +413,11 @@ Automated tests live under `tests/` (see [TESTING.md](TESTING.md)):
 
 - **Price orchestration** – `test_price_service.py`, `test_reload_initial_cycle.py`, `test_reload_logs.py`, `test_interval_change_reload.py`, `test_zero_quotes_warn.py`, `test_empty_symbols_logging.py`, `test_currency_drift_once.py`, `test_error_counter_reset.py`, `test_watchdog.py`, `test_batch_size_regression.py`, `test_price_persistence_fields.py`, and `test_debug_scope.py` exercise interval rescheduling, warning throttling, persistence fields, and logging scope.【F:tests/test_price_service.py†L1-L9】【F:tests/test_zero_quotes_warn.py†L1-L9】
 - **Provider integration** – `test_yahooquery_provider.py` validates chunked fetch behaviour and error handling for the Yahoo Finance client.【F:tests/test_yahooquery_provider.py†L1-L10】
-- **Aggregation & database helpers** – `test_fetch_live_portfolios.py`, `test_revaluation_live_aggregation.py`, `test_db_access.py`, and `test_ws_portfolios_live.py` cover on-demand aggregation helpers and confirm the coordinator and WebSocket layers read consistent snapshots.【F:tests/test_fetch_live_portfolios.py†L1-L10】【F:tests/test_db_access.py†L1-L10】
-- **WebSocket, FX & security detail** – `test_ws_accounts_fx.py`, `test_ws_last_file_update.py`, `test_ws_portfolios_live.py`, `test_ws_security_history.py`, and `test_currencies_fx.py` verify websocket payloads, FX enrichment, and historical price/ snapshot responses.【F:tests/test_ws_security_history.py†L1-L10】
-- **Sync & migrations** – `test_sync_from_pclient.py`, `test_migration.py`, and `test_price_persistence_fields.py` assert diff synchronisation, runtime schema migrations, and price field updates.
+- **Aggregation & performance metrics** – `test_aggregations.py`, `test_performance.py`, `test_logic_securities.py`, and `test_logic_securities_native_avg.py` ensure holdings aggregation, average cost selection, and gain/day-change computations remain numerically stable across cross-currency scenarios.【F:tests/test_aggregations.py†L1-L156】【F:tests/test_performance.py†L1-L112】【F:tests/test_logic_securities.py†L1-L140】【F:tests/test_logic_securities_native_avg.py†L1-L160】
+- **Database & coordinator contract** – `test_fetch_live_portfolios.py`, `test_db_access.py`, `test_coordinator_contract.py`, and `test_revaluation_live_aggregation.py` cover on-demand aggregation helpers, schema bootstrapping, and the coordinator/event payload contract so sensors and websocket responses stay aligned.【F:tests/test_fetch_live_portfolios.py†L1-L106】【F:tests/test_db_access.py†L1-L146】【F:tests/test_coordinator_contract.py†L1-L60】【F:tests/test_revaluation_live_aggregation.py†L1-L80】
+- **Event propagation & backups** – `test_event_push.py` verifies payload compaction for portfolios and positions, while `test_backup_cleanup.py` validates the tiered retention strategy and resilience to stray files.【F:tests/test_event_push.py†L1-L166】【F:tests/test_backup_cleanup.py†L1-L36】
+- **WebSocket, FX & security detail** – `test_ws_accounts_fx.py`, `test_ws_last_file_update.py`, `test_ws_portfolios_live.py`, `test_ws_portfolio_positions.py`, `test_ws_security_history.py`, and `test_currencies_fx.py` verify websocket payloads, FX enrichment, and historical price/snapshot responses.【F:tests/test_ws_accounts_fx.py†L1-L120】【F:tests/test_ws_last_file_update.py†L1-L120】【F:tests/test_ws_portfolios_live.py†L1-L132】【F:tests/test_ws_portfolio_positions.py†L1-L200】【F:tests/test_ws_security_history.py†L1-L10】【F:tests/test_currencies_fx.py†L1-L156】
+- **Sync & migrations** – `test_sync_from_pclient.py`, `test_migration.py`, and `test_price_persistence_fields.py` assert diff synchronisation, runtime schema migrations, and price field updates.【F:tests/test_sync_from_pclient.py†L1-L120】【F:tests/test_migration.py†L1-L120】【F:tests/test_price_persistence_fields.py†L1-L79】
 - **Panel & frontend assets** – `test_panel_registration.py` ensures Home Assistant registers the placeholder and runtime panel, while `tests/frontend/test_build_artifacts.py`, `tests/frontend/test_dashboard_smoke.py`, and `tests/frontend/test_portfolio_update_gain_abs.py` use jsdom-powered smoke tests to validate the bundled dashboard output.【F:tests/test_panel_registration.py†L1-L9】【F:tests/frontend/test_build_artifacts.py†L1-L9】【F:tests/frontend/test_dashboard_smoke.py†L1-L10】【F:tests/frontend/test_portfolio_update_gain_abs.py†L1-L10】
 - **Validation helpers** – `test_validators_timezone.py` guards transaction validation edge cases.【F:tests/test_validators_timezone.py†L1-L10】
 
