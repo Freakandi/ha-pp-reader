@@ -46,6 +46,7 @@ Repeat the following steps until all interactive elements have been exercised wi
 ## Verification Checklist
 - Rerun targeted tests (unit, integration, or linting) that cover the affected code paths.
 - Document any manual verification commands (e.g., `scripts/lint`, `pytest`, custom npm build steps).
+- All linting runs (ESLint for TypeScript, ruff for Python) must be successful
 - Capture noteworthy screenshots or console logs when they help explain the findings.
 
 ## Reporting Template
