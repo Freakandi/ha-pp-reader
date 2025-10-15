@@ -6,22 +6,40 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+- Noch keine Einträge.
+
+## [0.14.0] - 2025-10-15
+
 ### Added
 - Centralised performance metric helpers, including `select_performance_metrics` and
   `compose_performance_payload`, to compute rounded gain and day-change data with
-  coverage metadata plus dedicated unit tests covering edge cases.【F:custom_components/pp_reader/data/performance.py†L1-L195】【F:tests/test_performance.py†L1-L116】
+  coverage metadata plus dedicated unit tests covering edge cases.【F:custom_components/pp_reader/data/performance.py†L1-L200】【F:tests/test_performance.py†L1-L116】
 
 ### Changed
 - Portfolio snapshots, WebSocket responses, coordinator events, sensors, and price-cycle
   payloads reuse the shared performance payload so gain/day-change fields stay aligned
-  and embed optional overrides when provided.【F:custom_components/pp_reader/data/db_access.py†L645-L677】【F:custom_components/pp_reader/data/websocket.py†L315-L356】【F:custom_components/pp_reader/data/event_push.py†L83-L110】【F:custom_components/pp_reader/prices/price_service.py†L787-L833】【F:custom_components/pp_reader/sensors/gain_sensors.py†L91-L145】
+  and embed optional overrides when provided.【F:custom_components/pp_reader/data/db_access.py†L820-L923】【F:custom_components/pp_reader/data/websocket.py†L312-L369】【F:custom_components/pp_reader/data/event_push.py†L70-L134】【F:custom_components/pp_reader/prices/price_service.py†L760-L776】【F:custom_components/pp_reader/sensors/gain_sensors.py†L80-L145】
+- Historical price imports now rewrite an entire series when Portfolio Performance
+  delivers corrections alongside appended data, ensuring the SQLite snapshot stays in
+  sync with upstream adjustments.【F:custom_components/pp_reader/data/sync_from_pclient.py†L976-L1159】
+
+### Fixed
+- Preserved average-cost values derived from holdings totals when stored aggregates
+  diverge, keeping purchase price displays consistent across payloads.【F:custom_components/pp_reader/data/db_access.py†L820-L923】
+- Gracefully report missing portfolio files instead of surfacing traceback-heavy update
+  failures, aligning the coordinator with Home Assistant error handling expectations.【F:custom_components/pp_reader/data/coordinator.py†L247-L292】
+- Restored the dashboard's ability to reopen the last viewed security detail tab when the
+  primary panel configuration is unavailable, so navigation fallbacks behave reliably in
+  split dashboard setups.【F:src/dashboard.ts†L204-L317】
+- Normalised average-cost coverage tooltips to render locale-formatted percentages and
+  metadata in the security detail view.【F:src/tabs/security_detail.ts†L1140-L1178】
 
 ### Breaking Changes
 - Removed legacy flat payload fields (`avg_price_security`, `avg_price_account`,
   `gain_abs`, `gain_pct`, `day_price_change_*`) from coordinator events, WebSocket
   serializers, and dashboard APIs. Consumers must rely on the structured
   `average_cost` and `performance` blocks to access purchase and performance
-  metrics going forward.【F:custom_components/pp_reader/data/websocket.py†L160-L356】【F:custom_components/pp_reader/data/event_push.py†L24-L118】【F:src/data/api.ts†L1-L211】【F:src/tabs/overview.ts†L78-L344】
+  metrics going forward.【F:custom_components/pp_reader/data/websocket.py†L312-L369】【F:custom_components/pp_reader/data/event_push.py†L98-L134】【F:src/data/api.ts†L1-L178】【F:src/tabs/overview.ts†L204-L334】
 
 ## [0.13.0] - 2025-10-09
 
