@@ -28,7 +28,8 @@ Instructions:
 4. Update or add focused automated or manual tests (frontend or backend) that cover the fix when practicable.
 5. Rebuild or reload the frontend as needed and rerun the reproduction steps to confirm the issue is resolved.
 6. Run the appropriate project scripts (e.g., `./scripts/lint`, targeted tests) to validate the fix.
-7. Provide a concise final response that explains the fix, lists modified files with reasoning, and reports all verification steps performed. Call out any assumptions, risks, or follow-up tasks.
+7. All linting runs (ESLint for TypeScript, ruff for Python) must be successful
+8. Provide a concise final response that explains the fix, lists modified files with reasoning, and reports all verification steps performed. Call out any assumptions, risks, or follow-up tasks.
 
 Constraints:
 - Keep edits scoped to the relevant frontend files; avoid unrelated refactors unless essential to the fix.
