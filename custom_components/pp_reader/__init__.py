@@ -37,6 +37,7 @@ from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
+from .util import async_run_executor_job
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -478,7 +479,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         try:
             _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
-            initialize_database_schema(db_path)
+            await async_run_executor_job(hass, initialize_database_schema, db_path)
         except Exception as exc:
             _LOGGER.exception("❌ Fehler bei der DB-Initialisierung")
             msg = "Datenbank konnte nicht initialisiert werden"
