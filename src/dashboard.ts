@@ -12,7 +12,10 @@ import {
   handlePortfolioPositionsUpdate,
 } from './data/updateConfigsWS';
 import { getEntryId } from './data/api';
-import { getRegisteredDashboardElements } from './dashboard/registry';
+import {
+  getRegisteredDashboardElements,
+  getRegisteredPanelHosts,
+} from './dashboard/registry';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -79,6 +82,44 @@ interface DashboardElement extends HTMLElement {
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 const OVERVIEW_TAB_KEY = 'overview';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
+
+type LegacyDashboardRegistry = {
+  __ppReaderDashboardElements?: unknown;
+  __ppReaderPanelHosts?: unknown;
+};
+
+function getLegacyRegistry(): LegacyDashboardRegistry | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window as Window & LegacyDashboardRegistry;
+}
+
+function* iterateLegacySet(value: unknown): Iterable<HTMLElement> {
+  if (value instanceof Set) {
+    for (const entry of value) {
+      if (entry instanceof HTMLElement) {
+        yield entry;
+      }
+    }
+  }
+}
+
+function* iterateLegacyDashboardElements(): Iterable<HTMLElement> {
+  const registry = getLegacyRegistry();
+  if (!registry) {
+    return;
+  }
+  yield* iterateLegacySet(registry.__ppReaderDashboardElements);
+}
+
+function* iterateLegacyPanelHosts(): Iterable<HTMLElement> {
+  const registry = getLegacyRegistry();
+  if (!registry) {
+    return;
+  }
+  yield* iterateLegacySet(registry.__ppReaderPanelHosts);
+}
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
@@ -458,18 +499,22 @@ function findDashboardElement(): DashboardElement | null {
     }
   }
 
-  const direct = document.querySelector<DashboardElement>('pp-reader-dashboard');
-  if (direct) {
-    return direct;
+  for (const legacyElement of iterateLegacyDashboardElements()) {
+    if (legacyElement.isConnected) {
+      return legacyElement as DashboardElement;
+    }
   }
 
-  const panelElements = document.querySelectorAll<HTMLElement>('pp-reader-panel');
-  for (const panelElement of panelElements) {
-    if (!panelElement.shadowRoot) {
-      continue;
-    }
+  const hostCandidates = new Set<HTMLElement>();
+  for (const host of getRegisteredPanelHosts()) {
+    hostCandidates.add(host);
+  }
+  for (const legacyHost of iterateLegacyPanelHosts()) {
+    hostCandidates.add(legacyHost);
+  }
 
-    const nested = panelElement.shadowRoot.querySelector<DashboardElement>('pp-reader-dashboard');
+  for (const host of hostCandidates) {
+    const nested = host.shadowRoot?.querySelector<DashboardElement>('pp-reader-dashboard');
     if (nested) {
       return nested;
     }
