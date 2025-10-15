@@ -19,7 +19,8 @@ Instructions:
 3. Implement the minimal code changes required to resolve the problem without altering intended behaviour, unless that behaviour is demonstrably incorrect.
 4. Update or add focused tests that cover the bug fix when practicable.
 5. Run the appropriate project scripts (e.g., `./scripts/lint`, targeted tests) to validate the fix.
-6. Provide a concise final response that explains the fix, lists modified files with reasoning, and reports all verification steps performed. Call out any assumptions, risks, or follow-up tasks.
+6. All linting runs (ESLint for TypeScript, ruff for Python) must be successful
+7. Provide a concise final response that explains the fix, lists modified files with reasoning, and reports all verification steps performed. Call out any assumptions, risks, or follow-up tasks.
 
 Constraints:
 - New and changed code needs to be ruff-compliant
