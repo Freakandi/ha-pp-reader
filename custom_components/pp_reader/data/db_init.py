@@ -96,7 +96,7 @@ def _ensure_portfolio_securities_native_column(conn: sqlite3.Connection) -> None
 
     try:
         conn.execute(
-            "ALTER TABLE portfolio_securities ADD COLUMN avg_price_native REAL"
+            "ALTER TABLE portfolio_securities ADD COLUMN avg_price_native INTEGER"
         )
         _LOGGER.info(
             "Runtime-Migration: Spalte 'avg_price_native' zu "
@@ -131,7 +131,7 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
                 "security_currency_total",
                 (
                     "ALTER TABLE portfolio_securities "
-                    "ADD COLUMN security_currency_total REAL DEFAULT 0"
+                    "ADD COLUMN security_currency_total INTEGER DEFAULT 0"
                 ),
             )
         )
@@ -141,7 +141,7 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
                 "account_currency_total",
                 (
                     "ALTER TABLE portfolio_securities "
-                    "ADD COLUMN account_currency_total REAL DEFAULT 0"
+                    "ADD COLUMN account_currency_total INTEGER DEFAULT 0"
                 ),
             )
         )
@@ -149,14 +149,20 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
         migrations.append(
             (
                 "avg_price_security",
-                ("ALTER TABLE portfolio_securities ADD COLUMN avg_price_security REAL"),
+                (
+                    "ALTER TABLE portfolio_securities "
+                    "ADD COLUMN avg_price_security INTEGER"
+                ),
             )
         )
     if "avg_price_account" not in existing_cols:
         migrations.append(
             (
                 "avg_price_account",
-                ("ALTER TABLE portfolio_securities ADD COLUMN avg_price_account REAL"),
+                (
+                    "ALTER TABLE portfolio_securities "
+                    "ADD COLUMN avg_price_account INTEGER"
+                ),
             )
         )
 
@@ -193,7 +199,7 @@ def _backfill_portfolio_purchase_extension_defaults(
             "security_currency_total",
             (
                 "UPDATE portfolio_securities "
-                "SET security_currency_total = 0.0 "
+                "SET security_currency_total = 0 "
                 "WHERE security_currency_total IS NULL"
             ),
         ),
@@ -201,7 +207,7 @@ def _backfill_portfolio_purchase_extension_defaults(
             "account_currency_total",
             (
                 "UPDATE portfolio_securities "
-                "SET account_currency_total = 0.0 "
+                "SET account_currency_total = 0 "
                 "WHERE account_currency_total IS NULL"
             ),
         ),
