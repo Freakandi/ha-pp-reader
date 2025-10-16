@@ -81,14 +81,18 @@
       - Ziel/Ergebnis der Änderung: Provider-Schnittstelle definiert klar, wann Rohwerte vs. skalierte Preise erwartet werden
 
 4. [ ] Phase 3 – Backend Serialization & API
-   a) [ ] Update REST and websocket serializers to emit presentation-ready decimals derived from scaled integers.
-      - Dateipfad(e): custom_components/pp_reader/api/rest.py; custom_components/pp_reader/api/websocket.py
-      - Betroffene Funktion(en)/Abschnitt(e): serialize_portfolio_snapshot; websocket event payload builder
-      - Ziel/Ergebnis der Änderung: API liefert normierte Dezimalwerte (4 Stellen für Kurse/Anteile, 2 Stellen für Summen)
-   b) [ ] Revise response dataclasses or Pydantic models to expose both raw integers (falls benötigt) und formatierte Strings.
-      - Dateipfad(e): custom_components/pp_reader/api/models.py (oder gleichwertig)
-      - Betroffene Funktion(en)/Abschnitt(e): Response-Modelldefinitionen
-      - Ziel/Ergebnis der Änderung: Klare Trennung zwischen Rohdaten und Anzeigeformat für Clients
+   a) [ ] Aktualisiere `custom_components/pp_reader/data/websocket.py`, damit alle Payload-Builder skalierte Integer via `from_scaled_int` in formatierte Dezimalwerte (4 Nachkommastellen für Kurse/Anteile, 2 für Summen) wandeln und parallel Rohwerte bereitstellen.
+      - Dateipfad(e): custom_components/pp_reader/data/websocket.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_load_accounts_payload`, `_serialise_security_snapshot`, `_normalize_portfolio_positions`, `_live_portfolios_payload`, `ws_get_dashboard_data`, `ws_get_portfolio_data`, `ws_get_portfolio_positions`, `ws_get_security_snapshot`
+      - Ziel/Ergebnis der Änderung: Websocket-Antworten liefern konsistent formatierte Dezimalwerte plus Integer-Felder für weiterverarbeitende Clients
+   b) [ ] Passe `custom_components/pp_reader/data/event_push.py` an, damit Event-Payloads aus skalierten Integern generiert werden und sowohl formatierte Beträge als auch Rohwerte enthalten.
+      - Dateipfad(e): custom_components/pp_reader/data/event_push.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_normalize_portfolio_value_entry`, `_normalize_position_entry`, `_compact_portfolio_values_payload`, `_compact_portfolio_positions_payload`, `_push_update`
+      - Ziel/Ergebnis der Änderung: Über den Event-Bus veröffentlichte Updates transportieren anzeigefertige Dezimalwerte ohne Präzisionsverlust
+   c) [ ] Überarbeite `custom_components/pp_reader/prices/price_service.py`, sodass Revaluations-Payloads bei `_build_portfolio_values_payload` und den daran anschließenden `_push_update`-Aufrufen skalierte Integer in Dezimalwerte umwandeln und bei Bedarf beide Darstellungen ausliefern.
+      - Dateipfad(e): custom_components/pp_reader/prices/price_service.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_build_portfolio_values_payload`, `_refresh_impacted_portfolio_securities`, `_run_price_cycle`
+      - Ziel/Ergebnis der Änderung: Preis-Zyklen erzeugen API/Event-Payloads mit kanonischem 4/2-Dezimalformat auf Basis der Integerdaten
 
 5. [ ] Phase 4 – Frontend Adaptation
    a) [ ] Align TypeScript API types with the new formatted decimal payloads and remove client-side scaling math.
