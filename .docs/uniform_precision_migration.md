@@ -1,6 +1,6 @@
 Concept: Uniform 10^-8 Integer Precision
 
-Goal: Define the end-to-end migration path that converts every persisted monetary and price field to shared 10^-8 integer precision, ensuring consistent math between database, business logic, and UI rendering.
+Goal: Define the end-to-end plan that converts every persisted monetary and price field to shared 10^-8 integer precision, ensuring consistent math between database, business logic, and UI rendering without supporting legacy mixed-precision data.
 
 ---
 
@@ -16,14 +16,14 @@ Goal: Define the end-to-end migration path that converts every persisted monetar
 - All persisted numeric price, value, and quantity fields—totals, averages, holdings, FX rates—store scaled integers representing 10^-8 units, eliminating REAL columns in financial tables.
 - Every data access layer returns explicit objects containing both raw integers and formatted strings, centralizing conversion rules before API exposure.
 - Calculation helpers and websocket handlers operate exclusively on integer math until the presentation layer, guaranteeing identical rounding between environments.
-- Database migrations transform historical data without loss, including backfilling generated columns and recalculating dependent aggregates.
+- Portfolio Performance `.portfolio` importers perform the only format conversion; once the code path is updated, a regenerated database contains exclusively scaled integers.
 - Tests, fixtures, and documentation describe the integer scaling contract, and developer tooling surfaces helper utilities for conversions.
 - UX remains unchanged: dashboards still display localized decimals, but formatting derives from the new integer payloads.
 
 ## 3. Proposed Data Flow / Architecture
 1. Introduce shared scaling helpers (`to_scaled_int`, `from_scaled_int`) consuming Decimal for deterministic rounding.
-2. Update ingestion pipelines (Portfolio Performance export importers, sync routines) to convert incoming floats/strings into scaled integers at persistence boundaries.
-3. Modify DB schema via migrations that replace REAL columns with INTEGER equivalents, applying `ALTER TABLE`/shadow tables to rewrite existing data with 10^-8 scaling.
+2. Update ingestion pipelines (Portfolio Performance export importers, sync routines) to convert incoming floats/strings into scaled integers at persistence boundaries so freshly generated databases immediately use the new contract.
+3. Modify static SQLite schema definitions to declare INTEGER columns for all financial values and ensure table creation utilities use the new types.
 4. Adjust computation utilities to accept scaled integers, using integer arithmetic or Decimal intermediates before storing results back as scaled integers.
 5. Adapt websocket serializers to convert scaled integers into presentation-friendly floats/strings only at response time.
 6. Update frontend data models to expect integer payloads and call shared formatter utilities for display (e.g., new helpers in `src/lib/formatters`).
@@ -33,8 +33,7 @@ Goal: Define the end-to-end migration path that converts every persisted monetar
 
 | Change | File | Action |
 | --- | --- | --- |
-| Redefine schemas to INTEGER precision | `custom_components/pp_reader/data/db_schema.py` | Replace REAL columns, add migration annotations |
-| Implement migration routines | `custom_components/pp_reader/data/migrations/*.py` (new) | Create forward/backfill scripts for each table |
+| Redefine schemas to INTEGER precision | `custom_components/pp_reader/data/db_schema.py` | Replace REAL columns, ensure table creation uses INTEGER types |
 | Normalize access helpers | `custom_components/pp_reader/data/db_access.py` | Update fetch/store logic to use scaling helpers |
 | Adjust calculation utilities | `custom_components/pp_reader/logic/portfolio.py` | Convert to integer math, remove float assumptions |
 | Sync ingestion updates | `custom_components/pp_reader/data/sync_from_pclient.py` | Scale inputs before writing |
@@ -48,7 +47,7 @@ Supporting notes:
 - Leverage current test fixtures that already expose 10^-8 share counts as guidance for new integer expectations.
 
 ## 5. Out of Scope
-- Changing upstream Portfolio Performance export formats.
+- Changing upstream Portfolio Performance export formats themselves.
 - Revisiting FX rate sourcing logic beyond precision adjustments.
 - Altering dashboard UX copy or localization behaviour.
 - Replacing SQLite with alternative storage engines.
@@ -58,27 +57,27 @@ Supporting notes:
 1. **Phase 0 – Preparation**
    1. Audit existing numeric columns and produce mapping document from current type → scaled integer target.
    2. Introduce shared scaling helper module with unit tests.
-2. **Phase 1 – Schema Migration**
-   1. Write migrations that clone affected tables to temporary structures, convert data to integers, and swap tables.
-   2. Provide rollback scripts that reintroduce REAL columns (for safety during testing).
+2. **Phase 1 – Schema Definition Update**
+   1. Update `db_schema.py` so all table creation statements emit INTEGER columns for financial values.
+   2. Adjust schema-related fixtures and documentation to reflect the new contract.
 3. **Phase 2 – Backend Logic Updates**
-   1. Update data access, portfolio logic, and sync routines to use scaling helpers.
-   2. Adapt websocket payload builders to emit both raw integers and formatted strings if necessary for backwards compatibility.
+   1. Update data access, portfolio logic, and sync routines to use scaling helpers for all calculations and persistence.
+   2. Ensure `.portfolio` parsing paths convert upstream floats or decimals into scaled integers before insert.
 4. **Phase 3 – Frontend Adaptation**
    1. Update TypeScript models/interfaces to expect scaled integers.
    2. Adjust formatters and components to call conversion helpers.
 5. **Phase 4 – Validation & Cleanup**
    1. Refresh integration tests, adjust fixtures, and add regression tests for rounding.
-   2. Update documentation and migration guides for integrators.
+   2. Update documentation and release notes describing the reinitialisation requirement.
 
 ## 7. Performance & Risks
 
 | Risk | Description | Mitigation |
 | --- | --- | --- |
-| Migration downtime | Large table rewrites could block Home Assistant startup | Perform migrations during startup with progress logging; provide backup/rollback instructions |
-| Precision regression | Incorrect scaling may alter historical totals | Write conversion tests comparing pre/post snapshots; use Decimal arithmetic |
-| Frontend incompatibility | UI might misinterpret integer payloads | Introduce feature flag during rollout to allow fallback to float payloads |
-| Third-party automation impact | Existing automations reading floats may break | Communicate contract change and optionally expose both representations during transition |
+| Import conversion errors | Incorrect scaling during `.portfolio` parsing could seed bad data | Add unit tests for importer conversions and verify sample portfolios end-to-end |
+| Precision regression | Incorrect scaling may alter historical totals | Write conversion tests comparing importer outputs to reference Decimal calculations |
+| Frontend incompatibility | UI might misinterpret integer payloads | Update shared formatter utilities and TypeScript types before enabling new payloads |
+| Third-party automation impact | Existing automations reading floats may break | Communicate contract change and, if necessary, offer transitional duplicated fields in API responses |
 
 ## 8. Validation Criteria (Definition of Done)
 - All financial numeric columns in SQLite store 10^-8 scaled integers verified via schema inspection.
@@ -86,7 +85,7 @@ Supporting notes:
 - Websocket/API responses include deterministic values with no floating drift compared to legacy baseline snapshots.
 - Frontend renders identical currency/price formatting before and after migration in manual QA scenarios.
 - Documentation explicitly states the 10^-8 integer contract and references helper utilities.
-- Rollback path validated in test environment.
+- `.portfolio` regeneration produces identical portfolio totals (within rounding tolerance) when comparing Decimal-normalised exports to scaled-integer persisted values.
 
 ## 9. Planned Minimal Patch
 - **Backend**
@@ -100,18 +99,18 @@ Supporting notes:
     def from_scaled_int(value: int) -> Decimal:
         return Decimal(value) / SCALE
     ```
-  - Update schema migrations to rewrite `portfolio_securities.avg_price_native` and similar fields as INTEGER.
+  - Update schema definitions so newly created databases allocate INTEGER columns for `portfolio_securities.avg_price_native` and similar fields.
   - Adjust `db_access.get_security_snapshot` to operate on integers and only convert to Decimal when serializing.
 - **Frontend**
   - Extend `formatAmount` helper to accept scaled integers and call `fromScaledInt` conversion.
   - Update type definitions for positions/holdings to include integer fields (e.g., `avgPriceScaled`).
 - **Docs**
-  - Document migration steps and precision rationale in `ARCHITECTURE.md` and release notes.
+  - Document the integer precision contract, importer conversion rules, and the requirement to regenerate the database from `.portfolio` exports in `ARCHITECTURE.md` and release notes.
 
 ## 10. Additional Decisions
-- Counterargument: REAL columns allow quick ad-hoc SQL analysis without scaling. Decision: proceed with integer standardization and provide helper views or SQLite virtual columns for analysts if needed.
+- Counterargument: REAL columns allow quick ad-hoc SQL analysis without scaling. Decision: proceed with integer standardization and provide helper views (for example, a SQLite view `portfolio_securities_readable` that selects the raw INTEGER columns and exposes computed `avg_price_native_dec` by dividing by `1e8` using SQLite math functions) for analysts needing decimal readability without altering stored precision. The helper view can be materialised on demand during debugging and documented as an optional convenience.
 
 ## 11. Summary of Decisions
 - Adopt a single 10^-8 integer precision standard across all financial data.
-- Implement comprehensive migrations, helper utilities, and frontend adjustments to honor the new contract.
-- Provide mitigations for migration risk and communication for downstream consumers.
+- Update schemas, helpers, and UI to operate solely on scaled integers, assuming fresh database generation from updated code.
+- Provide mitigations for importer conversion issues and communicate the precision change to downstream consumers.
