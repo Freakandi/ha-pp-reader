@@ -6,8 +6,8 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/further_redundancies_1.md
-- .docs/TODO_further_redundancies_1.md
+- .docs/uniform_precision_migration.md
+- .docs/TODO_uniform_precision_migration.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -22,10 +22,10 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_further_redundancies_1.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_uniform_precision_migration.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
-   - All linting runs (ESLint for TypeScript, ruff for Python) must be successful
+   - Alle lint-Prüfungen müssen erfolgreich durchlaufen (ESLint für TypeScript, ruff für Python)
    - Mögliche Seiteneffekte?
    - Braucht das neue Element Tests, die erst in späterem Schritt kommen? (Nur beschreiben!)
 9. Führe Tests aus, soweit notwendig oder sinnvoll
