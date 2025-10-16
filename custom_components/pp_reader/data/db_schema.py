@@ -101,7 +101,12 @@ PORTFOLIO_SECURITIES_SCHEMA = [
         avg_price INTEGER GENERATED ALWAYS AS (
             CASE
                 WHEN current_holdings > 0 THEN
-                    (purchase_value * 100000000) / current_holdings
+                    CAST(
+                        ROUND(
+                            (purchase_value / 100.0) * 100000000.0
+                            / (current_holdings / 100000000.0)
+                        ) AS INTEGER
+                    )
                 ELSE NULL
             END
         ) STORED,                          -- Durchschnittlicher Kaufpreis (10^-8)
