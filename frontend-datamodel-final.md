@@ -53,10 +53,8 @@ This document consolidates the future-facing backend payloads required by the Po
 | `positions[].purchase_value_eur` | number (EUR) | Hidden dataset & FX tooltip | Aggregate purchase cost per holding for gain and disclosure logic. |
 | `positions[].average_cost.primary.value` | number | “Ø Kaufpreis” primary line | Average price per unit in the security currency. Shares the same dataset as the security snapshot average cost. |
 | `positions[].average_cost.primary.currency` | string (ISO 4217) | “Ø Kaufpreis” primary line | Currency code for the primary average price. |
-| `positions[].average_cost.secondary.value` | number (optional) | “Ø Kaufpreis” secondary line | Average price converted to the account currency when applicable. |
-| `positions[].average_cost.secondary.currency` | string (ISO 4217, optional) | “Ø Kaufpreis” secondary line | Currency code for the secondary average price. |
-| `positions[].average_cost.source` | enum (`lots_weighted`, `portfolio_weighted`, `imported`) | Tooltip provenance line | Explains how the average cost was computed. |
-| `positions[].average_cost.coverage_ratio` | number (0–1, optional) | Tooltip coverage meter | Portion of the position backed by reliable purchase data. |
+| `positions[].average_cost.secondary.value` | number (EUR, optional) | “Ø Kaufpreis” secondary line | Average price converted from the primary value into EUR by applying the backend FX translation. |
+| `positions[].average_cost.secondary.currency` | string (`"EUR"`, optional) | “Ø Kaufpreis” secondary line | Always `EUR`; matches the converted secondary average price. |
 | `positions[].average_cost.fx_rate_timestamp` | ISO 8601 datetime string (nullable) | Tooltip FX timestamp | Timestamp of the FX rate supporting the converted average price. |
 | `positions[].security_currency_code` | string (ISO 4217) | Currency badges | Trading currency for the security, reused in tooltips and formatting. |
 | `positions[].performance.gain_eur` | number (EUR) | Gain column (absolute) | Direct gain metric delivered by the backend. |
@@ -91,10 +89,8 @@ This document consolidates the future-facing backend payloads required by the Po
 | `purchase_value_eur` | number (EUR) | FX tooltip context | Total purchase value in EUR used for gain calculations. |
 | `average_cost.primary.value` | number | Average purchase card primary line | Shares the same backend dataset as `positions[].average_cost.primary.value`. |
 | `average_cost.primary.currency` | string (ISO 4217) | Average purchase card primary line | Currency code for the primary average purchase price. |
-| `average_cost.secondary.value` | number (optional) | Average purchase card secondary line | Converted average price supplied directly by the backend. |
-| `average_cost.secondary.currency` | string (ISO 4217, optional) | Average purchase card secondary line | Currency for the secondary average price. |
-| `average_cost.source` | enum (`lots_weighted`, `portfolio_weighted`, `imported`) | Tooltip provenance line | Matches the positions average cost provenance values. |
-| `average_cost.coverage_ratio` | number (0–1, optional) | Tooltip coverage meter | Portion of the holdings covered by reliable purchase data. |
+| `average_cost.secondary.value` | number (EUR, optional) | Average purchase card secondary line | Average price converted from the primary value into EUR by applying the backend FX translation. |
+| `average_cost.secondary.currency` | string (`"EUR"`, optional) | Average purchase card secondary line | Always `EUR`; matches the converted secondary average price. |
 | `average_cost.fx_rate_timestamp` | ISO 8601 datetime string (nullable) | Tooltip FX timestamp | Timestamp of the FX rate supporting the converted average price. |
 | `performance.total.gain_eur` | number (EUR) | Total gain tile | Total gain provided by backend calculations. |
 | `performance.total.gain_pct` | number (%) | Total gain tile | Total gain percentage delivered by the backend. |
@@ -104,7 +100,7 @@ This document consolidates the future-facing backend payloads required by the Po
 | `performance.day_change.coverage_ratio` | number (0–1, optional) | Tooltip | Coverage of the day change data when incomplete. |
 | `performance.day_change.source` | enum (`market`, `estimated`, `cached`) | Tooltip | Provenance of the day change values. |
 | `purchase_totals.security_currency` | number | FX tooltip | Aggregate purchase value in the security currency. |
-| `purchase_totals.account_currency` | number (optional) | FX tooltip | Aggregate purchase value in the account currency. |
+| `purchase_totals.account_currency` | number (EUR, optional) | FX tooltip | Aggregate purchase value converted to EUR by the backend, regardless of the account currency used at purchase time. |
 | `purchase_fx.rate` | number | FX tooltip | Exchange rate used for conversions in the purchase context. |
 | `purchase_fx.currency_pair` | string | FX tooltip | Currency pair used for the exchange rate. |
 | `purchase_fx.as_of` | ISO 8601 datetime string | FX tooltip “Stand” line | Timestamp associated with `purchase_fx.rate`. |
@@ -116,7 +112,7 @@ This document consolidates the future-facing backend payloads required by the Po
 | Field | Format | Used in | Description |
 | --- | --- | --- | --- |
 | `security_id` | string (UUID) | History chart container | Identifies which security the series belongs to. |
-| `range` | string (`1M`, `3M`, `1Y`, `ALL`, etc.) | Range selector dataset | Confirms which pre-computed window the backend returned. |
+| `range` | string (`1M`, `3M`, `1Y`, `5Y`, `ALL`, etc.) | Range selector dataset | Confirms which pre-computed window the backend returned. |
 | `series_source` | enum (`portfolio_performance`, `market_data`) | Chart legend | States where the price series originated. |
 | `prices` | array of price points ordered by date | History chart | Time-series data for plotting. |
 | `prices[].date` | ISO 8601 date string | Chart axis | Daily timestamp of the price point. |
