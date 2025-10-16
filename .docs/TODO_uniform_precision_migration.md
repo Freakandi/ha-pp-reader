@@ -39,22 +39,46 @@
       - Ziel/Ergebnis der Änderung: Testdatenbanken spiegeln die integer-skalierten Tabellen und verhindern Float-Rückfälle
 
 3. [ ] Phase 2 – Backend Logic Updates
-   a) [ ] Refactor db_access helpers to read/write scaled integers and delegate conversions to scaling helpers.
+   a) [ ] Stelle `custom_components/pp_reader/data/db_access.py` auf skalierte Integerlese- und -schreibpfade um und verwende die Rundungshelfer konsistent.
       - Dateipfad(e): custom_components/pp_reader/data/db_access.py
-      - Betroffene Funktion(en)/Abschnitt(e): get_security_snapshot; update_security_position; round_currency; verwandte Speicherroutinen
-      - Ziel/Ergebnis der Änderung: Alle Datenzugriffe arbeiten intern mit skalierter Ganzzahlpräzision
-   b) [ ] Update portfolio valuation logic to operate on integers or Decimal intermediates until serialization.
-      - Dateipfad(e): custom_components/pp_reader/logic/portfolio.py; custom_components/pp_reader/prices/revaluation.py
-      - Betroffene Funktion(en)/Abschnitt(e): calculate_portfolio_value; update_security_values; weitere Durchschnitts-/Summenberechnungen
-      - Ziel/Ergebnis der Änderung: Backend-Berechnungen vermeiden Float-Arithmetik und behalten Präzision bei
-   c) [ ] Ensure sync/import pipelines convert incoming Portfolio Performance values into scaled integers at persistence boundaries.
-      - Dateipfad(e): custom_components/pp_reader/data/sync_from_pclient.py; custom_components/pp_reader/data/importers/**
-      - Betroffene Funktion(en)/Abschnitt(e): Persistenzpfade für `.portfolio`-Import; Sync-Write-Routinen
-      - Ziel/Ergebnis der Änderung: Neu importierte Daten entsprechen sofort dem 10^-8-Kontrakt
-   d) [ ] Adjust live price services to maintain scaled integer storage and hand off conversions to helpers.
-      - Dateipfad(e): custom_components/pp_reader/prices/price_service.py; custom_components/pp_reader/prices/providers/**
-      - Betroffene Funktion(en)/Abschnitt(e): update_price_cache; Provider-spezifische Konvertierungsstellen
-      - Ziel/Ergebnis der Änderung: Laufende Aktualisierungen verletzen die Präzision nicht
+      - Betroffene Funktion(en)/Abschnitt(e): Dataclasses `Transaction`, `PortfolioSecurity`; Helper `_resolve_average_cost_totals`; Funktionen `get_security_snapshot`, `fetch_previous_close`, `get_portfolio_positions`, `_normalize_portfolio_row`, `fetch_live_portfolios`
+      - Ziel/Ergebnis der Änderung: Datenzugriffsschicht persistiert und liefert Beträge/Bestände ausschließlich als 10^-8-Integer mit zentralen Konvertierungen
+   b) [ ] Richte `custom_components/pp_reader/data/aggregations.py` auf skalierte Integerwerte aus und ersetze Float-Coercion durch Skalierungshelfer.
+      - Dateipfad(e): custom_components/pp_reader/data/aggregations.py
+      - Betroffene Funktion(en)/Abschnitt(e): Dataclasses `HoldingsAggregation`, `AverageCostSelection`; Funktionen `_coerce_float`, `compute_holdings_aggregation`, `select_average_cost`
+      - Ziel/Ergebnis der Änderung: Aggregationen nutzen skalierte Eingaben/Ausgaben und behalten Rundung per `to_scaled_int`/`from_scaled_int` bei
+   c) [ ] Aktualisiere `custom_components/pp_reader/data/performance.py`, sodass Kennzahlen ausschließlich aus skalierten Integern bzw. Decimal-Zwischenwerten berechnet werden.
+      - Dateipfad(e): custom_components/pp_reader/data/performance.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_to_scaled_decimal` (neu), `_round_percentage`, `select_performance_metrics`, `compose_performance_payload`
+      - Ziel/Ergebnis der Änderung: Performance-Berechnung übernimmt skalierte Eingaben verlustfrei und gibt normierte Dezimalwerte zurück
+   d) [ ] Passe `custom_components/pp_reader/data/coordinator.py` an, damit Sensoraufbereitung und Performance-Payloads mit skalierten Integern arbeiten.
+      - Dateipfad(e): custom_components/pp_reader/data/coordinator.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_normalize_portfolio_amount`, `_portfolio_contract_entry`, `_build_portfolio_data`
+      - Ziel/Ergebnis der Änderung: Coordinator-Daten für Home Assistant basieren auf Integerwerten und vermeiden Float-Lecks
+   e) [ ] Überführe `custom_components/pp_reader/data/sync_from_pclient.py` in skalierte Persistenzpfade für Import und Synchronisation.
+      - Dateipfad(e): custom_components/pp_reader/data/sync_from_pclient.py
+      - Betroffene Funktion(en)/Abschnitt(e): `normalize_shares`, `normalize_amount`, `extract_exchange_rate`, `sync_from_pclient`, `fetch_positions_for_portfolios`
+      - Ziel/Ergebnis der Änderung: Eingehende `.portfolio`-Daten werden vor dem Schreiben vollständig auf 10^-8-Integer abgebildet
+   f) [ ] Ersetze in `custom_components/pp_reader/logic/portfolio.py` Float-Normalisierungen durch Integer-/Decimal-Konvertierungen via Skalierungshelfer.
+      - Dateipfad(e): custom_components/pp_reader/logic/portfolio.py
+      - Betroffene Funktion(en)/Abschnitt(e): `normalize_shares`
+      - Ziel/Ergebnis der Änderung: Portfolio-Helfer liefern deterministische Mengen auf Basis skalierter Ganzzahlen
+   g) [ ] Aktualisiere `custom_components/pp_reader/logic/securities.py` auf skalierte Berechnungen für Kaufwerte, Gebühren und Bestände.
+      - Dateipfad(e): custom_components/pp_reader/logic/securities.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_normalize_transaction_amounts`, `db_calculate_current_holdings`, `_resolve_native_amount`, `db_calculate_sec_purchase_value`, `db_calculate_holdings_value`
+      - Ziel/Ergebnis der Änderung: Bewertungslogik rechnet ohne Float-Drift und gibt skalierte Totale zurück
+   h) [ ] Lasse `custom_components/pp_reader/prices/revaluation.py` skalierte Integerwerte von `fetch_live_portfolios` übernehmen und nur für Ausgabe dekonvertieren.
+      - Dateipfad(e): custom_components/pp_reader/prices/revaluation.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_load_live_entries`, `_build_portfolio_values_from_live_entries`, `_load_portfolio_positions`
+      - Ziel/Ergebnis der Änderung: Revaluationspfad behält Integerpräzision bis zur Seriendaten-Erzeugung
+   i) [ ] Überarbeite `custom_components/pp_reader/prices/price_service.py`, damit Preisupdates, Aggregat-Rebuilds und Payloads skalierte Integer nutzen.
+      - Dateipfad(e): custom_components/pp_reader/prices/price_service.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_load_old_prices`, `_detect_price_changes`, `_apply_price_updates`, `_refresh_impacted_portfolio_securities`, `_build_portfolio_values_payload`
+      - Ziel/Ergebnis der Änderung: Laufende Preiszyklen aktualisieren ausschließlich skalierte Werte und erzeugen integerbasierte Aggregationen
+   j) [ ] Passe `custom_components/pp_reader/prices/provider_base.py` an, sodass Quotes skalierte Integerpreise bereitstellen oder explizit als Rohwerte markiert werden.
+      - Dateipfad(e): custom_components/pp_reader/prices/provider_base.py
+      - Betroffene Funktion(en)/Abschnitt(e): Dataclass `Quote`, Methode `is_price_valid`
+      - Ziel/Ergebnis der Änderung: Provider-Schnittstelle definiert klar, wann Rohwerte vs. skalierte Preise erwartet werden
 
 4. [ ] Phase 3 – Backend Serialization & API
    a) [ ] Update REST and websocket serializers to emit presentation-ready decimals derived from scaled integers.
