@@ -1,12 +1,24 @@
 1. [ ] Phase 0 – Preparation
-   a) [ ] Audit all persisted monetary, price, and quantity columns to map current REAL/INTEGER usage to target 10^-8 integer precision.
-      - Dateipfad(e): custom_components/pp_reader/data/db_schema.py; custom_components/pp_reader/data/db_access.py; custom_components/pp_reader/data/models/**
-      - Betroffene Funktion(en)/Abschnitt(e): TABLE_DEFINITIONS mapping; data access column descriptors; ORM/dataclass definitions
-      - Ziel/Ergebnis der Änderung: Dokumentierte Zuordnung alt → neu in .docs/uniform_precision_migration.md zur Steuerung der Migration
-   b) [ ] Add shared scaling helper module providing to_scaled_int/from_scaled_int using Decimal rounding-half-even semantics.
-      - Dateipfad(e): custom_components/pp_reader/util/scaling.py (neu); tests/test_scaling.py (neu)
-      - Betroffene Funktion(en)/Abschnitt(e): to_scaled_int; from_scaled_int; zugehörige Pytest-Testfälle
-      - Ziel/Ergebnis der Änderung: Zentrale, getestete Konvertierungsfunktionen für alle Präzisionsanpassungen
+   a) [ ] Ergänze in `.docs/uniform_precision_migration.md` eine Tabelle, die jede monetäre/quantitative Spalte aus `custom_components/pp_reader/data/db_schema.py` mit aktuellem SQLite-Typ, Skalierungsfaktor und Zielpräzision (10^-8 INTEGER) abbildet.
+      - Dateipfad(e): .docs/uniform_precision_migration.md (Abschnitt „Phase 0 Audit – db_schema.py“)
+      - Betroffene Funktion(en)/Abschnitt(e): Tabellen `accounts`, `transactions`, `transaction_units`, `portfolio_securities`, `securities`, `historical_prices`, `plans`, `exchange_rates`, `fx_rates` innerhalb des Schemas
+      - Ziel/Ergebnis der Änderung: Vollständige Dokumentation aller schema-seitig persistierten Beträge/Kurse als Grundlage für spätere Migrationen
+   b) [ ] Ergänze `.docs/uniform_precision_migration.md` um einen Audit-Abschnitt zu `custom_components/pp_reader/data/db_init.py`, der jede dort per `ALTER TABLE` nachgezogene numerische Spalte mit aktuellem Typ und angestrebter 10^-8-Integer-Konvertierung erfasst.
+      - Dateipfad(e): .docs/uniform_precision_migration.md (Abschnitt „Phase 0 Audit – db_init.py“)
+      - Betroffene Funktion(en)/Abschnitt(e): `_ensure_runtime_price_columns`; `_ensure_portfolio_securities_native_column`; `_ensure_portfolio_purchase_extensions`
+      - Ziel/Ergebnis der Änderung: Sicherstellung, dass auch Laufzeit-Migrationen im Präzisionsmapping berücksichtigt werden
+   c) [ ] Dokumentiere in `.docs/uniform_precision_migration.md`, welche Felder in `custom_components/pp_reader/data/db_access.py` aktuell Floats erwarten oder liefern und wie sie auf skalierte Integerwerte abgebildet werden sollen.
+      - Dateipfad(e): .docs/uniform_precision_migration.md (Abschnitt „Phase 0 Audit – db_access.py“)
+      - Betroffene Funktion(en)/Abschnitt(e): Dataclasses `PortfolioSecurity`, `Transaction`, `Portfolio`, `Account`; Helper `_resolve_average_cost_totals`
+      - Ziel/Ergebnis der Änderung: Klarer Umsetzungsplan für die Umstellung der Datenzugriffsschicht auf skalierte Ganzzahlen
+   d) [ ] Implementiere `to_scaled_int` und `from_scaled_int` mit Decimal-ROUND_HALF_EVEN in neuem Hilfsmodul.
+      - Dateipfad(e): custom_components/pp_reader/util/scaling.py
+      - Betroffene Funktion(en)/Abschnitt(e): Modulinitialisierung; Funktionen `to_scaled_int`, `from_scaled_int`
+      - Ziel/Ergebnis der Änderung: Zentrale Konvertierungshelfer zur Wiederverwendung in Schema-, Import- und Berechnungslogik
+   e) [ ] Füge dedizierte Unit-Tests für die Skalierungshelfer hinzu, die typische und grenznahe Rundungsszenarien abdecken.
+      - Dateipfad(e): tests/test_scaling.py
+      - Betroffene Funktion(en)/Abschnitt(e): Testfälle `test_to_scaled_int_*`, `test_from_scaled_int_*`
+      - Ziel/Ergebnis der Änderung: Abgesicherte Rundungssemantik für alle nachfolgenden Migrationsphasen
 
 2. [ ] Phase 1 – Schema Definition Update
    a) [ ] Update SQLite schema definitions so every financial column stores INTEGER 10^-8 scaled values, removing REAL types.
