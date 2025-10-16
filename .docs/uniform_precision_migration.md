@@ -58,6 +58,63 @@ Supporting notes:
 1. **Phase 0 – Preparation**
    1. Audit existing numeric columns and produce mapping document from current type → scaled integer target.
    2. Introduce shared scaling helper module with unit tests.
+
+### Phase 0 Audit – db_schema.py
+
+| Table | Column | Current SQLite type | Current scaling / units | Target representation |
+| --- | --- | --- | --- | --- |
+| `accounts` | `balance` | INTEGER | Cents (10^-2) | 10^-8 INTEGER (scaled value) |
+| `transactions` | `amount` | INTEGER | Cents (10^-2) | 10^-8 INTEGER (scaled value) |
+| `transactions` | `shares` | INTEGER | Shares ×10^-8 | 10^-8 INTEGER (already scaled) |
+| `transaction_units` | `amount` | INTEGER | Cents (10^-2) | 10^-8 INTEGER (scaled value) |
+| `transaction_units` | `fx_amount` | INTEGER | Cents (10^-2) | 10^-8 INTEGER (scaled value) |
+| `transaction_units` | `fx_rate_to_base` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `current_holdings` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `purchase_value` | INTEGER | Cents (10^-2) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `avg_price` | REAL (generated) | Float (derived cents) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `avg_price_native` | REAL | Float (native currency) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `security_currency_total` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `account_currency_total` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `avg_price_security` | REAL | Float (security currency) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `avg_price_account` | REAL | Float (account currency) | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `current_value` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `securities` | `last_price` | INTEGER | Price ×10^-8 | 10^-8 INTEGER (already scaled) |
+| `historical_prices` | `close` | INTEGER | Price ×10^-8 | 10^-8 INTEGER (already scaled) |
+| `historical_prices` | `high` | INTEGER | Price ×10^-8 | 10^-8 INTEGER (already scaled) |
+| `historical_prices` | `low` | INTEGER | Price ×10^-8 | 10^-8 INTEGER (already scaled) |
+| `historical_prices` | `volume` | INTEGER | Trade volume (units) | Integer (unit count, unchanged) |
+| `plans` | `amount` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `plans` | `fees` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `plans` | `taxes` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `exchange_rates` | `rate` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+| `fx_rates` | `rate` | REAL | Float (unscaled) | 10^-8 INTEGER (scaled value) |
+
+### Phase 0 Audit – db_init.py
+
+| Table | Column | Introduced via | Current SQLite type | Current default / behaviour | Target representation |
+| --- | --- | --- | --- | --- | --- |
+| `portfolio_securities` | `avg_price_native` | `_ensure_portfolio_securities_native_column` | REAL | Added without default, populated as floats when runtime migration runs | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `security_currency_total` | `_ensure_portfolio_purchase_extensions` | REAL | Added with `DEFAULT 0`, backfilled to 0.0 when NULL | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `account_currency_total` | `_ensure_portfolio_purchase_extensions` | REAL | Added with `DEFAULT 0`, backfilled to 0.0 when NULL | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `avg_price_security` | `_ensure_portfolio_purchase_extensions` | REAL | Added without default, left NULL when no average | 10^-8 INTEGER (scaled value) |
+| `portfolio_securities` | `avg_price_account` | `_ensure_portfolio_purchase_extensions` | REAL | Added without default, left NULL when no average | 10^-8 INTEGER (scaled value) |
+
+### Phase 0 Audit – db_access.py
+
+| Element | Current float usage | Target representation |
+| --- | --- | --- |
+| `PortfolioSecurity.current_holdings` | Loaded as Python `float` from the `REAL` column and forwarded unchanged to aggregations and payloads. | Store and expose holdings as 10^-8 scaled integers; only convert to Decimal for display. |
+| `PortfolioSecurity.avg_price` | Generated column delivers float cents derived from `purchase_value / current_holdings`. | Represent per-share price as 10^-8 scaled integer derived from integer math. |
+| `PortfolioSecurity.avg_price_native` | Runtime migration populates native average prices as floats. | Persist native averages as 10^-8 scaled integers with helper-based conversion. |
+| `PortfolioSecurity.avg_price_account` | Helper `_resolve_average_cost_totals` treats the field as float EUR per share. | Promote to 10^-8 scaled integer (account currency) and expose formatted strings separately. |
+| `PortfolioSecurity.current_value` | Fetched as float (EUR cents) and fed into performance calculations. | Keep raw portfolio values as 10^-8 scaled integers, derive decimals when needed. |
+| `_resolve_average_cost_totals` | Accepts float overrides and returns floats for purchase totals (`purchase_value_eur`, `security_total`, `account_total`). | Consume and return scaled integers (10^-8) so downstream payloads can rely on integer math. |
+| `iter_security_close_prices` / `fetch_previous_close` | Yield floats for normalized close prices beside the raw integer column. | Return scaled integers for the normalized price field; only convert when presentation code requires decimals. |
+| `get_security_snapshot` | Builds dictionaries containing floats for holdings, totals, average costs, FX rates, and performance payloads. | Emit payloads backed by scaled integers and add derived display decimals during formatting. |
+| `get_portfolio_positions` | Returns floats for `current_holdings`, `purchase_value`, `current_value`, and nested average-cost totals. | Provide scaled integer fields for holdings and monetary values; attach formatted strings for UI use. |
+| `_normalize_portfolio_row` / `fetch_live_portfolios` | Convert cent integers to floats when composing the live portfolio list. | Preserve scaled integers in the aggregation response and defer conversion to later serialization layers. |
+
+`Transaction`, `Portfolio`, and `Account` dataclasses in this module already restrict numeric values to integers (cents or scaled shares) and therefore require no precision migration beyond adopting shared helpers.
 2. **Phase 1 – Schema Definition Update**
    1. Update `db_schema.py` so all table creation statements emit INTEGER columns for financial values.
    2. Adjust schema-related fixtures and documentation to reflect the new contract.
