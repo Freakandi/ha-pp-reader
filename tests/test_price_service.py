@@ -240,12 +240,12 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
         CREATE TABLE portfolio_securities (
             portfolio_uuid TEXT PRIMARY KEY,
             security_uuid TEXT,
-            current_holdings REAL,
+            current_holdings INTEGER,
             purchase_value INTEGER,
-            avg_price_native REAL,
-            security_currency_total REAL,
-            account_currency_total REAL,
-            avg_price_account REAL,
+            avg_price_native INTEGER,
+            security_currency_total INTEGER,
+            account_currency_total INTEGER,
+            avg_price_account INTEGER,
             current_value INTEGER
         )
         """
@@ -1401,7 +1401,7 @@ async def test_total_chunk_failure_counts_as_error(hass, tmp_path, monkeypatch, 
       - Provider.fetch wirft für den einzigen Batch eine Exception.
       - Erwartung: 0 Quotes, Fehlerzähler >=1, changed=0, keine Events.
     """
-    from custom_components.pp_reader.prices import price_service
+    from custom_components.pp_reader.prices import price_service  # noqa: PLC0415
 
     entry_id = "fail1"
     db_path = _create_db_with_security(tmp_path, "secX", "FAILSYM", "EUR", None)

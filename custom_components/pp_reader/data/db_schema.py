@@ -96,20 +96,21 @@ PORTFOLIO_SECURITIES_SCHEMA = [
     CREATE TABLE IF NOT EXISTS portfolio_securities (
         portfolio_uuid TEXT NOT NULL,       -- UUID des Depots
         security_uuid TEXT NOT NULL,        -- UUID des Wertpapiers
-        current_holdings REAL DEFAULT 0.0, -- Aktueller Bestand des Wertpapiers im Depot
+        current_holdings INTEGER DEFAULT 0, -- Bestand in 10^-8 Einheiten
         purchase_value INTEGER DEFAULT 0,  -- Gesamter Kaufpreis des Bestands in Cent
-        avg_price REAL GENERATED ALWAYS AS (
+        avg_price INTEGER GENERATED ALWAYS AS (
             CASE
-                WHEN current_holdings > 0 THEN purchase_value / current_holdings
+                WHEN current_holdings > 0 THEN
+                    (purchase_value * 100000000) / current_holdings
                 ELSE NULL
             END
-        ) STORED,                          -- Durchschnittlicher Kaufpreis in Cent
-        avg_price_native REAL,             -- Kaufpreis in nativer Währung
-        security_currency_total REAL DEFAULT 0.0, -- Kaufwert in WP-Währung
-        account_currency_total REAL DEFAULT 0.0,  -- Kaufwert in Kontowährung
-        avg_price_security REAL,           -- Ø-Preis pro Aktie in WP-Währung
-        avg_price_account REAL,            -- Ø-Preis pro Aktie in Kontowährung
-        current_value REAL DEFAULT 0.0,    -- Aktueller Wert des Bestands in Cent
+        ) STORED,                          -- Durchschnittlicher Kaufpreis (10^-8)
+        avg_price_native INTEGER,          -- Kaufpreis in nativer Währung (10^-8)
+        security_currency_total INTEGER DEFAULT 0, -- Kaufwert in WP-Währung (10^-8)
+        account_currency_total INTEGER DEFAULT 0,  -- Kaufwert in Kontowährung (10^-8)
+        avg_price_security INTEGER,        -- Ø-Preis pro Aktie in WP-Währung (10^-8)
+        avg_price_account INTEGER,         -- Ø-Preis pro Aktie in Kontowährung (10^-8)
+        current_value INTEGER DEFAULT 0,   -- Aktueller Wert in 10^-8 Einheiten
         PRIMARY KEY (portfolio_uuid, security_uuid),
         FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
@@ -149,7 +150,7 @@ TRANSACTION_SCHEMA = [
         currency_code TEXT,
         fx_amount INTEGER,             -- Optional: Cent-Betrag
         fx_currency_code TEXT,         -- Optional
-        fx_rate_to_base REAL,         -- Optional: Float, NOT NULL constraint entfernt
+        fx_rate_to_base INTEGER,      -- Optional: 10^-8 skaliert
         FOREIGN KEY (transaction_uuid) REFERENCES transactions(uuid)
     );
     """,
@@ -173,9 +174,9 @@ PLAN_SCHEMA = [
         portfolio TEXT,
         account TEXT,
         amount_str TEXT,
-        amount REAL,
-        fees REAL,
-        taxes REAL,
+        amount INTEGER,               -- Betrag in 10^-8 Einheiten
+        fees INTEGER,                 -- Gebühren in 10^-8 Einheiten
+        taxes INTEGER,                -- Steuern in 10^-8 Einheiten
         auto_generate INTEGER,
         date TEXT,
         interval INTEGER,
@@ -348,7 +349,7 @@ EXCHANGE_SCHEMA = [
         base_currency TEXT NOT NULL,
         term_currency TEXT NOT NULL,
         date TEXT NOT NULL,
-        rate REAL NOT NULL,
+        rate INTEGER NOT NULL,        -- Wechselkurs in 10^-8 Einheiten
         PRIMARY KEY (base_currency, term_currency, date)
     );
     \"""
@@ -360,7 +361,7 @@ FX_SCHEMA = [
 CREATE TABLE IF NOT EXISTS fx_rates (
     date TEXT NOT NULL,
     currency TEXT NOT NULL,
-    rate REAL NOT NULL,
+    rate INTEGER NOT NULL,  -- Wechselkurs in 10^-8 Einheiten
     PRIMARY KEY (date, currency)
 );
 """
