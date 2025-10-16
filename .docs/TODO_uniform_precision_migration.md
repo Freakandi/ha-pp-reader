@@ -227,18 +227,46 @@
       - Ziel/Ergebnis der Änderung: Frontend-Test-Fixture deckt Integerpräzision und Anzeigeformat konsistent ab
 
 7. [ ] Phase 6 – Documentation & Release Notes
-   a) [ ] Document the 10^-8 integer precision contract, helper usage, and migration steps.
-      - Dateipfad(e): ARCHITECTURE.md; README.md; README-dev.md
-      - Betroffene Funktion(en)/Abschnitt(e): Datenpersistenzkapitel; Setup-/Migrationabschnitte
-      - Ziel/Ergebnis der Änderung: Entwickler- und Nutzer-Dokumentation beschreibt das neue Präzisionsmodell eindeutig
-   b) [ ] Update `.docs/native_price/` materials to reference scaled integer handling.
-      - Dateipfad(e): .docs/native_price/**
-      - Betroffene Funktion(en)/Abschnitt(e): Präzisions-/Speicherbeschreibung
-      - Ziel/Ergebnis der Änderung: Begleitdokumentation konsistent mit dem Zielzustand
-   c) [ ] Add release notes detailing regeneration requirements for existing databases.
-      - Dateipfad(e): CHANGELOG.md; docs/release_notes.md (falls vorhanden)
-      - Betroffene Funktion(en)/Abschnitt(e): Eintrag für die Präzisionsmigration
-      - Ziel/Ergebnis der Änderung: Anwender wissen über notwendige Neuimporte und Präzisionsänderungen Bescheid
+   a) [ ] Überarbeite `ARCHITECTURE.md`, um den 10^-8-Integervertrag, die Skalierungshelfer und Migrationsschritte zu dokumentieren.
+      - Dateipfad(e): ARCHITECTURE.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitte „Data ingestion & persistence“, „Price service“, „Foreign exchange helper“, „WebSocket API & frontend“, „Domain model snapshot“
+      - Ziel/Ergebnis der Änderung: Architekturleitfaden beschreibt präzise Speichereinheiten, Rundungspfad und benötigte Migrationen
+   b) [ ] Aktualisiere `README.md`, damit Anwender über die 10^-8-Skalierung, benötigte Datenreimporte und Umgang mit bestehenden Daten informiert werden.
+      - Dateipfad(e): README.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitte „Overview“, „Usage“, „Troubleshooting“
+      - Ziel/Ergebnis der Änderung: Nutzer-Dokumentation weist auf neue Präzisionslogik sowie erforderliche Neuimporte hin
+   c) [ ] Ergänze `README-dev.md` um Hinweise zur Integer-Skalierung, Helper-Nutzung und Testanpassungen.
+      - Dateipfad(e): README-dev.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitte „Backend development notes“, „Testing & QA“, „Release workflow“
+      - Ziel/Ergebnis der Änderung: Beitragende kennen den Skalierungsvertrag und wissen, welche Tests/Migrationen bei Änderungen anzupassen sind
+   d) [ ] Ergänze `.docs/uniform_precision_migration.md` um Phase-6-Anweisungen zur Dokumentationsaktualisierung und Release-Kommunikation.
+      - Dateipfad(e): .docs/uniform_precision_migration.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitt „Phase 6 – Documentation & Release Notes“, Abschluss-Checkliste
+      - Ziel/Ergebnis der Änderung: Migrationsleitfaden listet alle Dokumentations- und Kommunikationsschritte explizit auf
+   e) [ ] Überarbeite `.docs/native_price/fix_native_purchase.md`, damit die Beispiele und Umsetzungsschritte skalierte Integerwerte sowie `to_scaled_int`/`from_scaled_int` widerspiegeln.
+      - Dateipfad(e): .docs/native_price/fix_native_purchase.md
+      - Betroffene Funktion(en)/Abschnitt(e): Tabellen „transactions“, „transaction_units“, Abschnitt „Plan to display correct FX purchase prices per share“
+      - Ziel/Ergebnis der Änderung: Referenzbeispiele zeigen neue Speicherung/Umrechnung ohne handschriftliche Division durch 1e8
+   f) [ ] Aktualisiere `.docs/native_price/native_avg_purchase_price.md`, um Zielzustand und Datenfluss auf 10^-8-Integer und zentrale Skalierungshelfer auszurichten.
+      - Dateipfad(e): .docs/native_price/native_avg_purchase_price.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitte „Current State“, „Target State“, „Proposed Data Flow / Architecture“, „Incremental Implementation“
+      - Ziel/Ergebnis der Änderung: Konzeptpapier verlangt Integerpersistenz und verweist auf Skalierungshelfer statt Float-Teilungen
+   g) [ ] Passe `.docs/native_price/TODO_fix_native_purchase.md` an, sodass Aufgaben die neuen Skalierungshelfer und Integerwerte verwenden.
+      - Dateipfad(e): .docs/native_price/TODO_fix_native_purchase.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitt „Aufgabenstellung“, Schrittlisten mit 1e8-Teilungen
+      - Ziel/Ergebnis der Änderung: TODO beschreibt Umsetzungsschritte mit zentralem Skalierungsmodul statt manuellem Float-Handling
+   h) [ ] Passe `.docs/native_price/TODO_native_avg_purchase_price.md` auf den Integervertrag und die Nutzung der Skalierungshelfer an.
+      - Dateipfad(e): .docs/native_price/TODO_native_avg_purchase_price.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitt „Ziel“, Maßnahmenliste für Schema/Logik/Frontend
+      - Ziel/Ergebnis der Änderung: TODO ruft explizit zur Nutzung skalierten Persistenz/Helper auf
+   i) [ ] Ergänze `CHANGELOG.md` um einen Eintrag, der die Präzisionsmigration, erforderliche Datenmigration und Auswirkungen auf Bestandsnutzer beschreibt.
+      - Dateipfad(e): CHANGELOG.md
+      - Betroffene Funktion(en)/Abschnitt(e): Nächster Release-Block bzw. „Unreleased“-Abschnitt
+      - Ziel/Ergebnis der Änderung: Release Notes kommunizieren Neuimporte, Schemaänderungen und Helper-Nutzung
+   j) [ ] Lege `.docs/release_notes_uniform_precision.md` an oder erweitere bestehende Release-Hinweise, um Schritt-für-Schritt-Anweisungen zur Datenregeneration bereitzustellen.
+      - Dateipfad(e): .docs/release_notes_uniform_precision.md
+      - Betroffene Funktion(en)/Abschnitt(e): Gesamtdokument (Neu)
+      - Ziel/Ergebnis der Änderung: Ergänzende Release-Notizen führen Nutzer durch Backup, Neuimport und Validierung nach der Migration
 
 8. [ ] Phase 7 – Rollout & Tooling
    a) [ ] Provide migration/regen tooling to rebuild databases from `.portfolio` exports using new scaling.
