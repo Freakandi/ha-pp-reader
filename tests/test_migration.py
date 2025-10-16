@@ -146,9 +146,13 @@ from custom_components.pp_reader.data.db_init import initialize_database_schema
 def _get_columns(db_path: Path, table: str) -> dict[str, dict]:
     conn = sqlite3.connect(str(db_path))
     try:
-        rows = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
-        # PRAGMA table_info: cid, name, type, notnull, dflt_value, pk
-        return {r[1]: {"type": r[2], "notnull": r[3], "pk": r[5]} for r in rows}
+        rows = conn.execute(f"PRAGMA table_xinfo('{table}')").fetchall()
+        # PRAGMA table_xinfo: cid, name, type, notnull, dflt_value, pk, hidden
+        return {
+            r[1]: {"type": r[2], "notnull": r[3], "pk": r[5], "hidden": r[6]}
+            for r in rows
+            if r[1] is not None
+        }
     finally:
         conn.close()
 
@@ -173,9 +177,46 @@ def test_fresh_schema_contains_price_columns(tmp_path):
     assert "last_price_fetched_at" in cols, (
         "Spalte last_price_fetched_at fehlt in frischer DB"
     )
-    assert cols["type"]["type"].upper() == "TEXT"
-    assert cols["last_price_source"]["type"].upper() == "TEXT"
-    assert cols["last_price_fetched_at"]["type"].upper() == "TEXT"
+    assert (cols["type"]["type"] or "").upper() == "TEXT"
+    assert (cols["last_price_source"]["type"] or "").upper() == "TEXT"
+    assert (cols["last_price_fetched_at"]["type"] or "").upper() == "TEXT"
+
+    portfolio_cols = _get_columns(db_path, "portfolio_securities")
+    assert "current_holdings" in portfolio_cols
+    assert (portfolio_cols["current_holdings"]["type"] or "").upper() == "INTEGER"
+    assert "purchase_value" in portfolio_cols
+    assert (portfolio_cols["purchase_value"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price" in portfolio_cols
+    assert (portfolio_cols["avg_price"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_native" in portfolio_cols
+    assert (portfolio_cols["avg_price_native"]["type"] or "").upper() == "INTEGER"
+    assert "security_currency_total" in portfolio_cols
+    assert (portfolio_cols["security_currency_total"]["type"] or "").upper() == "INTEGER"
+    assert "account_currency_total" in portfolio_cols
+    assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_security" in portfolio_cols
+    assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_account" in portfolio_cols
+    assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
+    assert "current_value" in portfolio_cols
+    assert (portfolio_cols["current_value"]["type"] or "").upper() == "INTEGER"
+
+    transaction_unit_cols = _get_columns(db_path, "transaction_units")
+    assert "fx_rate_to_base" in transaction_unit_cols
+    assert (transaction_unit_cols["fx_rate_to_base"]["type"] or "").upper() == "INTEGER"
+
+    plan_cols = _get_columns(db_path, "plans")
+    for column in ("amount", "fees", "taxes"):
+        assert column in plan_cols
+        assert (plan_cols[column]["type"] or "").upper() == "INTEGER"
+
+    exchange_rate_cols = _get_columns(db_path, "exchange_rates")
+    assert "rate" in exchange_rate_cols
+    assert (exchange_rate_cols["rate"]["type"] or "").upper() == "INTEGER"
+
+    fx_rate_cols = _get_columns(db_path, "fx_rates")
+    assert "rate" in fx_rate_cols
+    assert (fx_rate_cols["rate"]["type"] or "").upper() == "INTEGER"
 
 
 def test_legacy_schema_migrated(tmp_path):
@@ -201,6 +242,28 @@ def test_legacy_schema_migrated(tmp_path):
             """
         )
         conn.execute(
+            """
+            CREATE TABLE portfolio_securities (
+                portfolio_uuid TEXT NOT NULL,
+                security_uuid TEXT NOT NULL,
+                current_holdings REAL DEFAULT 0.0,
+                purchase_value REAL DEFAULT 0.0,
+                avg_price REAL GENERATED ALWAYS AS (
+                    CASE
+                        WHEN current_holdings > 0 THEN purchase_value / current_holdings
+                        ELSE NULL
+                    END
+                ) STORED,
+                PRIMARY KEY (portfolio_uuid, security_uuid)
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO portfolio_securities (portfolio_uuid, security_uuid, current_holdings, purchase_value) "
+            "VALUES (?,?,?,?)",
+            ("p1", "u1", 10.0, 123.0),
+        )
+        conn.execute(
             "INSERT INTO securities (uuid, name, ticker_symbol, currency_code, retired, last_price, last_price_date) "
             "VALUES (?,?,?,?,?,?,?)",
             ("u1", "TestSec", "ABC", "EUR", 0, 123456789, 20240101),
@@ -218,16 +281,47 @@ def test_legacy_schema_migrated(tmp_path):
     assert "last_price_fetched_at" in cols, (
         "Migration hat last_price_fetched_at nicht ergänzt"
     )
-    assert cols["type"]["type"].upper() == "TEXT"
+    assert (cols["type"]["type"] or "").upper() == "TEXT"
+
+    portfolio_cols = _get_columns(db_path, "portfolio_securities")
+    assert "avg_price_native" in portfolio_cols
+    assert (portfolio_cols["avg_price_native"]["type"] or "").upper() == "INTEGER"
+    assert "security_currency_total" in portfolio_cols
+    assert (portfolio_cols["security_currency_total"]["type"] or "").upper() == "INTEGER"
+    assert "account_currency_total" in portfolio_cols
+    assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_security" in portfolio_cols
+    assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_account" in portfolio_cols
+    assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
 
     # Datenintegrität prüfen
     conn2 = sqlite3.connect(str(db_path))
     try:
-        row = conn2.execute(
+        sec_row = conn2.execute(
             "SELECT uuid, last_price FROM securities WHERE uuid='u1'"
         ).fetchone()
-        assert row is not None, "Bestandsdatensatz fehlt nach Migration"
-        assert row[1] == 123456789, "last_price Wert geändert durch Migration"
+        assert sec_row is not None, "Bestandsdatensatz fehlt nach Migration"
+        assert sec_row[1] == 123456789, "last_price Wert geändert durch Migration"
+
+        portfolio_row = conn2.execute(
+            """
+            SELECT
+                security_currency_total,
+                account_currency_total,
+                avg_price_native,
+                avg_price_security,
+                avg_price_account
+            FROM portfolio_securities
+            WHERE portfolio_uuid='p1' AND security_uuid='u1'
+            """
+        ).fetchone()
+        assert portfolio_row is not None, "Portfolio-Security fehlt nach Migration"
+        assert portfolio_row[0] == 0, "security_currency_total muss 0 sein"
+        assert portfolio_row[1] == 0, "account_currency_total muss 0 sein"
+        assert portfolio_row[2] is None, "avg_price_native sollte NULL bleiben"
+        assert portfolio_row[3] is None, "avg_price_security sollte NULL bleiben"
+        assert portfolio_row[4] is None, "avg_price_account sollte NULL bleiben"
     finally:
         conn2.close()
 

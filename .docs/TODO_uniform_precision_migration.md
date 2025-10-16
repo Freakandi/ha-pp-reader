@@ -21,19 +21,19 @@
       - Ziel/Ergebnis der Änderung: Abgesicherte Rundungssemantik für alle nachfolgenden Migrationsphasen
 
 2. [ ] Phase 1 – Schema Definition Update
-   a) [ ] Ersetze in `custom_components/pp_reader/data/db_schema.py` alle REAL-/FLOAT-Felder der Finanztabellen durch INTEGER-Spalten mit 10^-8-Skalierung und passe abhängige Ausdrücke an.
+   a) [x] Ersetze in `custom_components/pp_reader/data/db_schema.py` alle REAL-/FLOAT-Felder der Finanztabellen durch INTEGER-Spalten mit 10^-8-Skalierung und passe abhängige Ausdrücke an.
       - Dateipfad(e): custom_components/pp_reader/data/db_schema.py
       - Betroffene Funktion(en)/Abschnitt(e): `PORTFOLIO_SECURITIES_SCHEMA` (Felder `current_holdings`, `avg_price_native`, `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`, `current_value`, generierte Spalte `avg_price`); `TRANSACTION_SCHEMA` (`transaction_units.fx_rate_to_base`); `PLAN_SCHEMA` (`amount`, `fees`, `taxes`); `EXCHANGE_SCHEMA` (`exchange_rates.rate`); `FX_SCHEMA` (`fx_rates.rate`)
       - Ziel/Ergebnis der Änderung: Alle neu erzeugten Tabellen speichern Preise, Werte, Anteile und FX-Raten ausschließlich als 10^-8-ganzzahlige Werte
-   b) [ ] Aktualisiere die Laufzeit-Migrationshelfer in `custom_components/pp_reader/data/db_init.py`, damit neu erzeugte oder nachgezogene Spalten die INTEGER-Skalierung erhalten und bestehende REAL-Defaults entfernt werden.
+   b) [x] Aktualisiere die Laufzeit-Migrationshelfer in `custom_components/pp_reader/data/db_init.py`, damit neu erzeugte oder nachgezogene Spalten die INTEGER-Skalierung erhalten und bestehende REAL-Defaults entfernt werden.
       - Dateipfad(e): custom_components/pp_reader/data/db_init.py
       - Betroffene Funktion(en)/Abschnitt(e): `_ensure_portfolio_securities_native_column`, `_ensure_portfolio_purchase_extensions`, `_backfill_portfolio_purchase_extension_defaults`, `initialize_database_schema`
       - Ziel/Ergebnis der Änderung: Schema-Initialisierung und Best-effort-Migration erzeugen integer-skalierte Spalten ohne Float-Rückstände
-   c) [ ] Passe die Schema-Prüfungen in `tests/test_migration.py` an, sodass sie die neuen INTEGER-Typen und Spalteninhalte validieren.
+   c) [x] Passe die Schema-Prüfungen in `tests/test_migration.py` an, sodass sie die neuen INTEGER-Typen und Spalteninhalte validieren.
       - Dateipfad(e): tests/test_migration.py
       - Betroffene Funktion(en)/Abschnitt(e): `_get_columns`; Tests `test_fresh_schema_contains_price_columns`, `test_legacy_schema_migrated`
       - Ziel/Ergebnis der Änderung: Tests schlagen an, sobald Schema-Definitionen von der integer-skalierten Vorgabe abweichen
-   d) [ ] Überarbeite die Inline-Schema-Fixtures in `tests/test_price_service.py`, damit sie die INTEGER-Skalierung für Portfolio- und Transaktionstabellen widerspiegeln.
+   d) [x] Überarbeite die Inline-Schema-Fixtures in `tests/test_price_service.py`, damit sie die INTEGER-Skalierung für Portfolio- und Transaktionstabellen widerspiegeln.
       - Dateipfad(e): tests/test_price_service.py
       - Betroffene Funktion(en)/Abschnitt(e): Hilfsfunktion `_create_db_with_security`; temporäre Tabellen in `test_refresh_impacted_portfolio_securities_*`
       - Ziel/Ergebnis der Änderung: Testdatenbanken spiegeln die integer-skalierten Tabellen und verhindern Float-Rückfälle
