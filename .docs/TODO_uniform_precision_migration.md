@@ -133,18 +133,98 @@
       - Ziel/Ergebnis der Änderung: Charts setzen formattierte Dezimalwerte direkt für Achsen/Beschriftungen ein und greifen nur bei Bedarf auf Roh-Integerwerte zurück
 
 6. [ ] Phase 5 – Tests & Validation
-   a) [ ] Refresh backend unit tests and fixtures to assert integer storage and conversion accuracy.
-      - Dateipfad(e): tests/test_db_access.py; tests/data/**
-      - Betroffene Funktion(en)/Abschnitt(e): Tests für get_security_snapshot & Co.; Fixture-Erzeugung
-      - Ziel/Ergebnis der Änderung: Tests schlagen Alarm bei Präzisionsregressionen
-   b) [ ] Extend importer and price service tests to cover scaling helpers and ROUND_HALF_EVEN Verhalten.
-      - Dateipfad(e): tests/test_sync_from_pclient.py; tests/test_price_service.py
-      - Betroffene Funktion(en)/Abschnitt(e): Konvertierungspfad-Tests
-      - Ziel/Ergebnis der Änderung: Sicherstellung korrekter Rundung über alle Zuflüsse
-   c) [ ] Update frontend tests (unit/component/e2e) to match formatted decimal expectations.
-      - Dateipfad(e): tests/frontend/**
-      - Betroffene Funktion(en)/Abschnitt(e): Snapshot- oder Rendering-Assertions
-      - Ziel/Ergebnis der Änderung: Frontend-Tests spiegeln das neue Payload-Verhalten wider
+   a) [ ] Passe `tests/test_db_access.py` an, sodass alle Fixtures und Erwartungen skalierte 10^-8-Integer speichern und per `from_scaled_int` konvertieren.
+      - Dateipfad(e): tests/test_db_access.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_get_portfolio_securities_exposes_native_average`, `test_get_portfolio_positions_populates_aggregation_fields`, `test_get_security_snapshot_*`
+      - Ziel/Ergebnis der Änderung: Datenzugriffs-Regressionstests schlagen an, sobald skalierte Ganzzahlen oder Rundungskontrakte verletzt werden
+   b) [ ] Harmonisiere `tests/test_aggregations.py` mit den Skalierungshelfern und erwarte Integer-Inputs in allen Aggregationsfällen.
+      - Dateipfad(e): tests/test_aggregations.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_compute_holdings_aggregation_*`, `test_select_average_cost_*`
+      - Ziel/Ergebnis der Änderung: Aggregations-Tests sichern die Integer-Berechnungen und ROUND_HALF_EVEN-Ausgabe ab
+   c) [ ] Aktualisiere `tests/test_performance.py`, damit Performance-Metriken auf skalierte Integer/Decimal-Zwischenwerte geprüft werden.
+      - Dateipfad(e): tests/test_performance.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_select_performance_metrics_*`
+      - Ziel/Ergebnis der Änderung: Performance-Regressionstests decken Rundungsfehler bei Kennzahlen sofort auf
+   d) [ ] Überarbeite `tests/test_fetch_live_portfolios.py` auf integerbasierte Summen und formattierte Dezimalausgaben der Koordinator-Daten.
+      - Dateipfad(e): tests/test_fetch_live_portfolios.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_fetch_live_portfolios_basic`
+      - Ziel/Ergebnis der Änderung: Live-Portfolio-Aggregationstests reflektieren integerbasierte Eingaben und API-konforme Ausgaben
+   e) [ ] Passe `tests/test_coordinator_contract.py` an, damit `_portfolio_contract_entry` die neuen Decimal-Felder und Rohwerte validiert.
+      - Dateipfad(e): tests/test_coordinator_contract.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_build_entry`, `test_portfolio_contract_entry_*`
+      - Ziel/Ergebnis der Änderung: Vertragstests stellen sicher, dass Koordinator-Payloads formatierte Dezimalwerte aus skalierten Integers erzeugen
+   f) [ ] Aktualisiere `tests/test_revaluation_live_aggregation.py`, damit Revaluation-Payloads skalierten Integerinput und formatierte Ausgabe kombinieren.
+      - Dateipfad(e): tests/test_revaluation_live_aggregation.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_revaluation_uses_live_portfolio_values`
+      - Ziel/Ergebnis der Änderung: Revaluationspfad-Tests garantieren Präzision während Live-Updates
+   g) [ ] Modernisiere `tests/test_logic_securities.py` auf Integer-Fixwerte und prüfe Decimal-Konvertierungen in allen Bewertungsfällen.
+      - Dateipfad(e): tests/test_logic_securities.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_db_calculate_*`, `test_normalize_transaction_amounts`
+      - Ziel/Ergebnis der Änderung: Logiktests verhindern Rückfall auf Float-Arithmetik in Sicherheitsberechnungen
+   h) [ ] Übertrage `tests/test_logic_securities_native_avg.py` auf skalierte Integer und Decimal-Ausgaben für native Durchschnittskäufe.
+      - Dateipfad(e): tests/test_logic_securities_native_avg.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_db_calculate_native_avg_price_*`
+      - Ziel/Ergebnis der Änderung: Native-Durchschnittstests bewahren Integerpräzision bei unterschiedlichen Währungen
+   i) [ ] Ergänze `tests/test_sync_from_pclient.py` um skalierte Importpfade und ROUND_HALF_EVEN-Assertionen je Konvertierung.
+      - Dateipfad(e): tests/test_sync_from_pclient.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_sync_from_pclient_*`, `_assert_written_positions`
+      - Ziel/Ergebnis der Änderung: Importtests decken fehlerhafte Skalierung oder Rundung sofort auf
+   j) [ ] Justiere `tests/test_price_service.py`, sodass Preisaktualisierungen skaliert gespeicherte Werte und formatierte Payloads erwarten.
+      - Dateipfad(e): tests/test_price_service.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_setup_price_rows`, `test_refresh_impacted_portfolio_securities_uses_currency_helpers`
+      - Ziel/Ergebnis der Änderung: Preisservice-Tests prüfen Integerpersistenz und korrekte Dezimalausgabe nach Updates
+   k) [ ] Passe `tests/test_price_persistence_fields.py` auf 10^-8-Skalenwerte und neue Pflichtspaltenprüfungen an.
+      - Dateipfad(e): tests/test_price_persistence_fields.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_only_allowed_price_columns_persisted`
+      - Ziel/Ergebnis der Änderung: Persistenztests garantieren, dass nur erlaubte Integer-Spalten geschrieben werden
+   l) [ ] Synchronisiere `tests/test_migration.py` mit den aktualisierten Schema-Definitionen und prüfe Integer-Datentypen je Migration.
+      - Dateipfad(e): tests/test_migration.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_migrate_schema_*`
+      - Ziel/Ergebnis der Änderung: Migrationstests verifizieren die vollständige Integerumstellung über alle Schema-Versionen
+   m) [ ] Aktualisiere `tests/test_ws_portfolio_positions.py`, damit Websocket-Payloads formatierte Dezimalwerte und Roh-Integer-Felder korrekt spiegeln.
+      - Dateipfad(e): tests/test_ws_portfolio_positions.py
+      - Betroffene Funktion(en)/Abschnitt(e): `populated_db`-Fixture, `test_ws_get_portfolio_positions_normalises_currency`, `test_normalize_portfolio_positions_uses_average_cost_payload`
+      - Ziel/Ergebnis der Änderung: Websocket-Positions-Tests validieren Integer-Einlagerung und formattierte Ausgabe parallel
+   n) [ ] Überarbeite `tests/test_ws_portfolios_live.py` auf integerbasierte Aggregationen und dezimalformatierte Antworten.
+      - Dateipfad(e): tests/test_ws_portfolios_live.py
+      - Betroffene Funktion(en)/Abschnitt(e): `initialized_db`, `test_ws_get_portfolio_data_returns_live_values`
+      - Ziel/Ergebnis der Änderung: Live-Websocket-Tests sichern integerbasierte Summen und Präsentationswerte ab
+   o) [ ] Passe `tests/test_ws_security_history.py` an, sodass Historien- und Snapshot-Payloads skalierte Preis- und Mengenwerte korrekt konvertieren.
+      - Dateipfad(e): tests/test_ws_security_history.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_run_ws_get_security_history`, `_run_ws_get_security_snapshot`, `test_ws_get_security_history_returns_filtered_prices`, `test_ws_get_security_history_ignores_unknown_feature_flags`, `test_ws_get_security_history_supports_predefined_ranges`, `test_ws_get_security_snapshot_success`, `test_ws_get_security_snapshot_missing_security`
+      - Ziel/Ergebnis der Änderung: Sicherheits-Historientests prüfen Integer-Speicher und Formatierung der Ausgaben
+   p) [ ] Aktualisiere `tests/test_ws_accounts_fx.py` auf skalierte Kontosalden und explizite Decimal-/Stringausgaben im FX-Handler.
+      - Dateipfad(e): tests/test_ws_accounts_fx.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_make_account`, `test_collect_active_fx_currencies_filters_invalid_entries`, `test_ws_get_accounts_requests_fx_with_utc_timezone`
+      - Ziel/Ergebnis der Änderung: Account-/FX-Websocket-Tests verifizieren Integer-Salden und korrekte Anzeigeformate
+   q) [ ] Justiere `tests/test_ws_last_file_update.py`, damit Zeitstempeltests die neuen Payload-Felder aus integerbasierten Quellen widerspiegeln.
+      - Dateipfad(e): tests/test_ws_last_file_update.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_ws_last_file_update_formats_timestamp`, `test_ws_last_file_update_uses_single_entry_default`, `test_ws_last_file_update_requires_entry_for_multiple_entries`
+      - Ziel/Ergebnis der Änderung: Last-Update-Websocket-Tests bleiben stabil nach Präzisionsmigration
+   r) [ ] Aktualisiere `tests/test_event_push.py` auf integerbasierte Backend-Payloads und formattierte Performancewerte.
+      - Dateipfad(e): tests/test_event_push.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_compact_portfolio_values_forwards_canonical_payload`, `test_compact_portfolio_positions_sequence`
+      - Ziel/Ergebnis der Änderung: Event-Bus-Tests überwachen korrekte Konvertierungen zwischen Integer-Rohdaten und Dezimal-Ausgaben
+   s) [ ] Überarbeite `tests/panel_event_payload.yaml`, sodass Beispielpayloads skalierte Integers und neue Dezimalfelder widerspiegeln.
+      - Dateipfad(e): tests/panel_event_payload.yaml
+      - Betroffene Funktion(en)/Abschnitt(e): Portfolio-/Positions-Beispiele
+      - Ziel/Ergebnis der Änderung: Manuelle QA-Vorlagen zeigen den erwarteten Payload-Contract nach Migration
+   t) [ ] Aktualisiere `tests/frontend/test_dashboard_smoke.py`, damit Dashboard-Smoke-Tests die formattierten Dezimalfelder konsumieren.
+      - Dateipfad(e): tests/frontend/test_dashboard_smoke.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_dashboard_bundle_smoke`
+      - Ziel/Ergebnis der Änderung: Frontend-Smoke-Test validiert neue Anzeigeformate ohne zusätzliche Konvertierungen
+   u) [ ] Passe `tests/frontend/dashboard_smoke.mjs` an, sodass die Testdaten integerbasierte Inputs und gerenderte Dezimalwerte abbilden.
+      - Dateipfad(e): tests/frontend/dashboard_smoke.mjs
+      - Betroffene Funktion(en)/Abschnitt(e): Portfolio-/Positions-Datensamples
+      - Ziel/Ergebnis der Änderung: Node-Smoke-Skript reproduziert das neue Payload-Layout deterministisch
+   v) [ ] Aktualisiere `tests/frontend/test_portfolio_update_gain_abs.py` auf die skalierten Payloads und formatierten Gains.
+      - Dateipfad(e): tests/frontend/test_portfolio_update_gain_abs.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_portfolio_update_gain_abs_handles_zero_purchase`
+      - Ziel/Ergebnis der Änderung: Frontend-Regressions-Test prüft Gain-Berechnungen anhand der neuen Dezimalwerte
+   w) [ ] Passe `tests/frontend/portfolio_update_gain_abs.mjs` an, damit die Fixtures skalierten Integerinput und formattierte Ausgabe enthalten.
+      - Dateipfad(e): tests/frontend/portfolio_update_gain_abs.mjs
+      - Betroffene Funktion(en)/Abschnitt(e): Mock-Payload-Erstellung
+      - Ziel/Ergebnis der Änderung: Frontend-Test-Fixture deckt Integerpräzision und Anzeigeformat konsistent ab
 
 7. [ ] Phase 6 – Documentation & Release Notes
    a) [ ] Document the 10^-8 integer precision contract, helper usage, and migration steps.
