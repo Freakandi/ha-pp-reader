@@ -191,7 +191,9 @@ def test_fresh_schema_contains_price_columns(tmp_path):
     assert "avg_price_native" in portfolio_cols
     assert (portfolio_cols["avg_price_native"]["type"] or "").upper() == "INTEGER"
     assert "security_currency_total" in portfolio_cols
-    assert (portfolio_cols["security_currency_total"]["type"] or "").upper() == "INTEGER"
+    assert (
+        portfolio_cols["security_currency_total"]["type"] or ""
+    ).upper() == "INTEGER"
     assert "account_currency_total" in portfolio_cols
     assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
     assert "avg_price_security" in portfolio_cols
@@ -287,7 +289,9 @@ def test_legacy_schema_migrated(tmp_path):
     assert "avg_price_native" in portfolio_cols
     assert (portfolio_cols["avg_price_native"]["type"] or "").upper() == "INTEGER"
     assert "security_currency_total" in portfolio_cols
-    assert (portfolio_cols["security_currency_total"]["type"] or "").upper() == "INTEGER"
+    assert (
+        portfolio_cols["security_currency_total"]["type"] or ""
+    ).upper() == "INTEGER"
     assert "account_currency_total" in portfolio_cols
     assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
     assert "avg_price_security" in portfolio_cols
