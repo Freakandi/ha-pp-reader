@@ -268,15 +268,27 @@
       - Betroffene Funktion(en)/Abschnitt(e): Gesamtdokument (Neu)
       - Ziel/Ergebnis der Änderung: Ergänzende Release-Notizen führen Nutzer durch Backup, Neuimport und Validierung nach der Migration
 
-8. [ ] Phase 7 – Rollout & Tooling
-   a) [ ] Provide migration/regen tooling to rebuild databases from `.portfolio` exports using new scaling.
-      - Dateipfad(e): scripts/**; custom_components/pp_reader/scripts/**
-      - Betroffene Funktion(en)/Abschnitt(e): CLI- oder Skriptlogik zur Neuinitialisierung
-      - Ziel/Ergebnis der Änderung: Anwender können bestehende Daten zuverlässig migrieren
-   b) [ ] Validate end-to-end sample portfolios comparing Decimal baselines vs. scaled integer outputs.
-      - Dateipfad(e): tests/integration/**; .docs/uniform_precision_migration.md (Validierungsabschnitt ergänzen)
-      - Betroffene Funktion(en)/Abschnitt(e): Integrations-/Smoke-Tests; Dokumentationsnachweis
-      - Ziel/Ergebnis der Änderung: Nachweis, dass Migration Gleichwertigkeit wahrt
+8. [ ] Phase 7 – Rollout & Neuinitialisierung
+   a) [ ] Entferne in `custom_components/pp_reader/data/db_init.py` alle Laufzeit-Migrationen und ergänze eine Guard, die REAL-Spalten oder fehlende 10^-8-Integer erkennt und eine `UniformPrecisionRebuildRequired`-Exception auslöst.
+      - Dateipfad(e): custom_components/pp_reader/data/db_init.py
+      - Betroffene Funktion(en)/Abschnitt(e): `_ensure_runtime_price_columns`, `_ensure_portfolio_securities_native_column`, `_ensure_portfolio_purchase_extensions`, `_backfill_portfolio_purchase_extension_defaults`, `initialize_database_schema`
+      - Ziel/Ergebnis der Änderung: Setup bricht deterministisch ab, sobald eine Alt-Datenbank erkannt wird, und fordert zur Neuinitialisierung auf
+   b) [ ] Ergänze `custom_components/pp_reader/__init__.py` um Fehlerbehandlung für `UniformPrecisionRebuildRequired`, die eine persistente Benachrichtigung erzeugt und `ConfigEntryNotReady` mit einem Hinweis zum Neuaufbau auslöst.
+      - Dateipfad(e): custom_components/pp_reader/__init__.py
+      - Betroffene Funktion(en)/Abschnitt(e): `async_setup_entry`
+      - Ziel/Ergebnis der Änderung: Anwender erhalten einen klaren Hinweis, dass alte Datenbanken gelöscht und via `.portfolio` neu eingelesen werden müssen
+   c) [ ] Ergänze `tests/test_migration.py` um Assertions für die neue Guard-Exception, sodass Alt-Schema-Datenbanken den Neuaufbau erzwingen.
+      - Dateipfad(e): tests/test_migration.py
+      - Betroffene Funktion(en)/Abschnitt(e): `test_legacy_schema_migrated`, Hilfsfunktionen zur Schema-Initialisierung
+      - Ziel/Ergebnis der Änderung: Tests verhindern, dass veraltete REAL-Spalten stillschweigend migriert werden
+   d) [ ] Aktualisiere `.docs/uniform_precision_migration.md`, um Phase 7 explizit auf die verpflichtende Neuinitialisierung ohne Migrationstool auszurichten.
+      - Dateipfad(e): .docs/uniform_precision_migration.md
+      - Betroffene Funktion(en)/Abschnitt(e): Abschnitt „Phase 7“/Rollout (Planungs- und Ablaufbeschreibung)
+      - Ziel/Ergebnis der Änderung: Migrationsleitfaden verlangt das Löschen alter Datenbanken und erneutes `.portfolio`-Parsing
+   e) [ ] Ergänze `.docs/release_notes_uniform_precision.md` um Schritt-für-Schritt-Hinweise zum Löschen der alten DB und erneuten Import über bestehende Sync-Funktionen.
+      - Dateipfad(e): .docs/release_notes_uniform_precision.md
+      - Betroffene Funktion(en)/Abschnitt(e): Gesamtdokument bzw. Abschnitt „Upgrade Steps“
+      - Ziel/Ergebnis der Änderung: Release Notes führen Nutzer durch den vollständigen Neuaufbau statt eine Migrationstoolkette anzubieten
 
 9. Optional
    a) [ ] Optional: Offer temporary duplicate API fields exposing raw integers for third-party automations during transition.
