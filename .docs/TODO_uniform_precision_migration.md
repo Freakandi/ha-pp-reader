@@ -95,14 +95,42 @@
       - Ziel/Ergebnis der Änderung: Preis-Zyklen erzeugen API/Event-Payloads mit kanonischem 4/2-Dezimalformat auf Basis der Integerdaten
 
 5. [ ] Phase 4 – Frontend Adaptation
-   a) [ ] Align TypeScript API types with the new formatted decimal payloads and remove client-side scaling math.
-      - Dateipfad(e): src/lib/api-types.ts; src/lib/formatters.ts
-      - Betroffene Funktion(en)/Abschnitt(e): API-Datentypen; Formatierungshelfer
-      - Ziel/Ergebnis der Änderung: Frontend behandelt Werte als anzeigefertige Dezimalzahlen ohne eigene Konvertierung
-   b) [ ] Update Vue/Svelte/React Komponenten (je nach Implementierung) to expect formatted decimals only.
-      - Dateipfad(e): src/components/**; src/views/**
-      - Betroffene Funktion(en)/Abschnitt(e): Komponenten, die Portfolio-Werte rendern
-      - Ziel/Ergebnis der Änderung: UI nutzt direkte Anzeige ohne Float-Schutzlogik
+   a) [ ] Passe `src/data/api.ts` an die neuen Payloads mit formatierten Dezimalwerten plus Roh-Integerfeldern an und entferne temporäre Float-Normalisierungen.
+      - Dateipfad(e): src/data/api.ts
+      - Betroffene Funktion(en)/Abschnitt(e): Interfaces `AccountSummary`, `PortfolioSummary`, `DashboardDataResponse`, `PortfolioPositionsResponse`, `SecuritySnapshotResponse`, `SecurityHistoryPoint`; Helper `deriveEntryId`; Websocket-Wrapper `fetchDashboardDataWS`, `fetchAccountsWS`, `fetchPortfoliosWS`, `fetchPortfolioPositionsWS`, `fetchSecuritySnapshotWS`, `fetchSecurityHistoryWS`
+      - Ziel/Ergebnis der Änderung: Typdefinitionen spiegeln formattierte Dezimalfelder (`*_display`, `*_formatted`) und zugehörige `*_raw` Integer wider; Fetcher reichen Werte unverändert an das UI weiter
+   b) [ ] Aktualisiere `src/tabs/types.ts`, sodass alle Payload-Interfaces und Type-Guards die formatierten Dezimalwerte sowie `*_raw`-Integerfelder erwarten.
+      - Dateipfad(e): src/tabs/types.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `AverageCostPayload`, `PerformanceMetricsPayload`, `HoldingsAggregationPayload`, `PortfolioPosition`, `SecuritySnapshotLike`, Guards `isAverageCostPayload`, `isRecord`, `isNumber`, `isNullableNumber`
+      - Ziel/Ergebnis der Änderung: Frontend-Typen deklarieren klar getrennte Anzeige- und Rohwerte und verhindern Float-Konvertierungen in Type-Guards
+   c) [ ] Reduziere `src/utils/currency.ts` auf Format-/Fallback-Helfer, die formattierte Dezimalstrings oder bereits gerundete Zahlen unverändert übernehmen.
+      - Dateipfad(e): src/utils/currency.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `toFiniteCurrency`, `roundCurrency`, `normalizeCurrencyValue`, `normalizePercentValue`
+      - Ziel/Ergebnis der Änderung: Hilfsfunktionen verlassen sich auf Backend-Rundung, akzeptieren nur optionale Fallbacks und entfernen Skalierungs-/Parsing-Logik
+   d) [ ] Passe `src/utils/performance.ts` an, damit Performance-Payload-Normalisierung neue formatierte Felder und Integer-Backups respektiert.
+      - Dateipfad(e): src/utils/performance.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `normalizePerformancePayload`, `normalizeDayChangePayload`, interne Parser
+      - Ziel/Ergebnis der Änderung: Performance-Helfer übernehmen vorformatierte Zahlen direkt und nutzen `*_raw`-Werte nur als Fallback
+   e) [ ] Überarbeite `src/data/updateConfigsWS.ts`, damit Live-Update-Handler ohne lokale Skalierung auskommen und neue Anzeige-/Rohwerte korrekt zwischenspeichern.
+      - Dateipfad(e): src/data/updateConfigsWS.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `sanitizePosition`, `sanitizePositions`, `handleAccountUpdate`, `handlePortfolioUpdate`, Tabellenrenderer `renderPositionsTable`
+      - Ziel/Ergebnis der Änderung: Pending-Caches und DOM-Patcher konsumieren formattierte Dezimalfelder direkt und halten Roh-Integerwerte lediglich für Sortierung bereit
+   f) [ ] Aktualisiere `src/tabs/overview.ts`, sodass Render- und Normalisierungslogik ausschließlich mit gelieferten Anzeigeformaten arbeitet und nur für Sortierung auf `*_raw` zurückgreift.
+      - Dateipfad(e): src/tabs/overview.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `PortfolioPositionLike`, `sanitizePosition`, `buildPurchasePriceDisplay`, `renderPortfolioPositions`, `renderDashboard`
+      - Ziel/Ergebnis der Änderung: Übersichtstab zeigt vom Backend formatierte Beträge/Bestände ohne eigene Rundung und nutzt Integer-Beifelder für Berechnungen
+   g) [ ] Passe `src/tabs/security_detail.ts` an, damit Snapshot- und Historienaufbereitung die neuen formatierten Felder nutzen und 10^-8-Integer nur als Fallback behandeln.
+      - Dateipfad(e): src/tabs/security_detail.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `SecuritySnapshotDetail`, `extractAverageCostPayload`, `extractAggregationPayload`, `normaliseHistorySeries`, `renderSecurityDetail`
+      - Ziel/Ergebnis der Änderung: Sicherheitsdetail nutzt Backend-Dezimalwerte für Anzeige, entfernt Divisionen durch `1e8` und bewahrt Rohdaten für Diagramme
+   h) [ ] Überarbeite `src/content/elements.ts`, um Formatierungshelfer (`formatValue`, `formatNumber`, `formatGain`, `formatGainPct`) auf vorgerundete Werte auszurichten und optionale Rohwerte für Sortierung zu berücksichtigen.
+      - Dateipfad(e): src/content/elements.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `formatValue`, `formatNumber`, `formatGain`, `formatGainPct`, `sortTableRows`
+      - Ziel/Ergebnis der Änderung: Tabellen-Renderer verlassen sich auf Backend-Formatierung, nutzen Roh-Integerfelder nur zur numerischen Sortierung und entfernen Legacy-Parsing
+   i) [ ] Aktualisiere `src/content/charting.ts`, damit Linienchart-Helfer neue Historienfelder (`close_formatted`, `close_raw`) akzeptieren und ohne lokales Skalieren auskommen.
+      - Dateipfad(e): src/content/charting.ts
+      - Betroffene Funktion(en)/Abschnitt(e): `LineChartOptions`, `LineChartAccessor`, Parser `toNumber`, `normaliseHistorySeries`, Tooltip-Formatter
+      - Ziel/Ergebnis der Änderung: Charts setzen formattierte Dezimalwerte direkt für Achsen/Beschriftungen ein und greifen nur bei Bedarf auf Roh-Integerwerte zurück
 
 6. [ ] Phase 5 – Tests & Validation
    a) [ ] Refresh backend unit tests and fixtures to assert integer storage and conversion accuracy.
