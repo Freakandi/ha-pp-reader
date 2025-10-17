@@ -264,8 +264,8 @@ flowchart TD
   Range --> Payload[security_history payload]
   Series --> Payload
   Payload --> FieldSource["series_source"]
-  Payload --> FieldNative[prices[].close_native]
-  Payload --> FieldEur[prices[].close_eur]
+  Payload --> FieldNative["prices[].close_native"]
+  Payload --> FieldEur["prices[].close_eur"]
   FieldSource --> UI
   FieldNative --> UI
   FieldEur --> UI
