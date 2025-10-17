@@ -17,7 +17,7 @@ flowchart TD
   subgraph Portfolios
     P1[(SQLite portfolio_securities)]
   end
-  A1 -->|balances + fx flags| L1[[_load_accounts_payload]]
+    A1 -->|balances + fx flags| L1[[_load_accounts_payload]]
   A2 -->|rate freshness| L1
   P1 -->|current values| L2[[fetch_live_portfolios]]
   L1 --> Agg[[ws_get_dashboard_data aggregation]]
