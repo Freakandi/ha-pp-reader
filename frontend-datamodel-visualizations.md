@@ -11,21 +11,21 @@
 ```mermaid
 flowchart TD
   subgraph Accounts & FX
-    A1[(SQLite `accounts`)]
-    A2[(SQLite `fx_rates`)]
+    A1[(SQLite accounts)]
+    A2[(SQLite fx_rates)]
   end
   subgraph Portfolios
-    P1[(SQLite `portfolio_securities`)]
+    P1[(SQLite portfolio_securities)]
   end
-  A1 -->|balances + fx flags| L1[[`_load_accounts_payload`]]
+    A1 -->|balances + fx flags| L1[[_load_accounts_payload]]
   A2 -->|rate freshness| L1
-  P1 -->|current values| L2[[`fetch_live_portfolios`]]
-  L1 --> Agg[[`ws_get_dashboard_data` aggregation]]
+  P1 -->|current values| L2[[fetch_live_portfolios]]
+  L1 --> Agg[[ws_get_dashboard_data aggregation]]
   L2 --> Agg
-  Agg --> Total[`summary.total_wealth_eur`]
-  L1 --> FX[`summary.fx_status`]
-  Clock[[`datetime.now()` UTC]] --> Stamp[`summary.calculated_at`]
-  Total --> Payload[[`dashboard_summary` payload]]
+  Agg --> Total["summary.total_wealth_eur"]
+  L1 --> FX["summary.fx_status"]
+  Clock[[datetime.now() UTC]] --> Stamp["summary.calculated_at"]
+  Total --> Payload[[dashboard_summary payload]]
   FX --> Payload
   Stamp --> Payload
 ```
@@ -52,16 +52,16 @@ flowchart TD
 **Mermaid visualization**
 ```mermaid
 flowchart TD
-  Proto[`PAccount stream`]
-  Proto --> Sync[[`_sync_accounts`]]
-  Sync --> DB[(SQLite `accounts`)]
-  Rates[(SQLite `fx_rates`)] --> Loader[[`_load_accounts_payload`]]
+  Proto["PAccount stream"]
+  Proto --> Sync[[_sync_accounts]]
+  Sync --> DB[(SQLite accounts)]
+  Rates[(SQLite fx_rates)] --> Loader[[_load_accounts_payload]]
   DB --> Loader
-  Loader --> Balance[`accounts[].balance_eur`]
-  Loader --> Native[`accounts[].balance_native`]
-  Loader --> FXDate[`accounts[].fx_rate_updated_at`]
-  Loader --> FXStatus[`accounts[].fx_status`]
-  Loader --> Identity[`accounts` array with ids, names, currency`]
+  Loader --> Balance["accounts[].balance_eur"]
+  Loader --> Native["accounts[].balance_native"]
+  Loader --> FXDate["accounts[].fx_rate_updated_at"]
+  Loader --> FXStatus["accounts[].fx_status"]
+  Loader --> Identity["accounts array with ids, names, currency"]
   subgraph Payload
     Balance --> Out
     Native --> Out
@@ -254,16 +254,16 @@ flowchart TD
 **Mermaid visualization**
 ```mermaid
 flowchart TD
-  ProtoPrices[`Portfolio Performance prices`] --> SyncHist[[`sync_from_pclient`]]
-  Yahoo[`Yahoo history ingest`] --> HistDB[(SQLite `historical_prices`)]
+  ProtoPrices["Portfolio Performance prices"] --> SyncHist[[sync_from_pclient]]
+  Yahoo["Yahoo history ingest"] --> HistDB[(SQLite historical_prices)]
   SyncHist --> HistDB
-  FX[(FX normalization helpers)] --> History[[`ws_get_security_history`]]
+  FX[(FX normalization helpers)] --> History[[ws_get_security_history]]
   HistDB --> History
-  History --> Range[`range token mapping`]
-  History --> Series[`prices[] entries`]
-  Range --> Payload[`security_history` payload`]
+  History --> Range["range token mapping"]
+  History --> Series["prices[] entries"]
+  Range --> Payload["security_history payload"]
   Series --> Payload
-  Payload -->|`series_source`, `prices[].close_native`, `prices[].close_eur`| UI
+  Payload -->|series_source, prices[].close_native, prices[].close_eur| UI
 ```
 
 **Data contract table**
