@@ -17,14 +17,14 @@ flowchart TD
   subgraph Portfolios
     P1[(SQLite portfolio_securities)]
   end
-    A1 -->|balances + fx flags| L1[[_load_accounts_payload]]
+  A1 -->|balances + fx flags| L1[[_load_accounts_payload]]
   A2 -->|rate freshness| L1
   P1 -->|current values| L2[[fetch_live_portfolios]]
   L1 --> Agg[[ws_get_dashboard_data aggregation]]
   L2 --> Agg
-  Agg --> Total["summary.total_wealth_eur"]
-  L1 --> FX["summary.fx_status"]
-  Clock[[datetime.now() UTC]] --> Stamp["summary.calculated_at"]
+  Agg --> Total[summary.total_wealth_eur]
+  L1 --> FX[summary.fx_status]
+  Clock[[datetime.now() UTC]] --> Stamp[summary.calculated_at]
   Total --> Payload[[dashboard_summary payload]]
   FX --> Payload
   Stamp --> Payload
@@ -254,16 +254,17 @@ flowchart TD
 **Mermaid visualization**
 ```mermaid
 flowchart TD
-  ProtoPrices["Portfolio Performance prices"] --> SyncHist[[sync_from_pclient]]
-  Yahoo["Yahoo history ingest"] --> HistDB[(SQLite historical_prices)]
+  ProtoPrices[Portfolio Performance prices] --> SyncHist[[sync_from_pclient]]
+  Yahoo[Yahoo history ingest] --> HistDB[(SQLite historical_prices)]
   SyncHist --> HistDB
   FX[(FX normalization helpers)] --> History[[ws_get_security_history]]
   HistDB --> History
-  History --> Range["range token mapping"]
-  History --> Series["prices[] entries"]
-  Range --> Payload["security_history payload"]
+  History --> Range[range token mapping]
+  History --> Series[prices[] entries]
+  Range --> Payload[security_history payload]
   Series --> Payload
-  Payload -->|series_source, prices[].close_native, prices[].close_eur| UI
+  Payload --> Fields[series_source<br/>prices[].close_native<br/>prices[].close_eur]
+  Fields --> UI
 ```
 
 **Data contract table**
