@@ -263,8 +263,12 @@ flowchart TD
   History --> Series["prices[] entries"]
   Range --> Payload[security_history payload]
   Series --> Payload
-  Payload --> Fields[series_source<br/>prices[].close_native<br/>prices[].close_eur]
-  Fields --> UI
+  Payload --> FieldSource[series_source]
+  Payload --> FieldNative[prices[].close_native]
+  Payload --> FieldEur[prices[].close_eur]
+  FieldSource --> UI
+  FieldNative --> UI
+  FieldEur --> UI
 ```
 
 **Data contract table**
