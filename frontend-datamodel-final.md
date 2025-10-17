@@ -16,11 +16,11 @@ This document consolidates the future-facing backend payloads required by the Po
 
 | Field | Format | Used in | Description | Data source back end | Source logic confirmed |
 | --- | --- | --- | --- | --- | --- |
-| `accounts` | array of account objects | Overview liquidity tables | Ordered list of all investment and cash accounts displayed in the overview. | 1. passed from portfolio file and stored in database |  |
-| `accounts[].account_id` | string (UUID) | Liquidity tables row keys & push update matching | Stable identifier matching the backend `accounts` table primary key. | 1. passed from portfolio file and stored in database |  |
-| `accounts[].name` | string | Liquidity tables | Human-readable account name rendered verbatim. | 1. passed from portfolio file and stored in database |  |
-| `accounts[].currency_code` | string (ISO 4217) | EUR/FX grouping headers & currency badges | Currency associated with the account. | 1. passed from portfolio file and stored in database |  |
-| `accounts[].balance_native` | number (account currency, nullable) | FX account table | Account balance expressed in the original account currency; nullable for EUR-only accounts. | 1. passed from portfolio file and stored in database |  |
+| `accounts` | array of account objects | Overview liquidity tables | Ordered list of all investment and cash accounts displayed in the overview. | 1. passed from portfolio file and stored in database | Portfolio file streams repeated `PAccount` entries through `PClient.accounts`, and `_sync_accounts` upserts each payload into the SQLite `accounts` table for API reads. |
+| `accounts[].account_id` | string (UUID) | Liquidity tables row keys & push update matching | Stable identifier matching the backend `accounts` table primary key. | 1. passed from portfolio file and stored in database | `_sync_accounts` writes `PAccount.uuid` into `accounts.uuid`, keeping the proto account identifier as the database primary key. |
+| `accounts[].name` | string | Liquidity tables | Human-readable account name rendered verbatim. | 1. passed from portfolio file and stored in database | The importer maps `PAccount.name` directly into `accounts.name`, so the UI receives the exact label supplied by the portfolio file. |
+| `accounts[].currency_code` | string (ISO 4217) | EUR/FX grouping headers & currency badges | Currency associated with the account. | 1. passed from portfolio file and stored in database | Proto `PAccount.currencyCode` is a string field and `_sync_accounts` writes it into the SQLite `accounts.currency_code` column so the frontend sees the original code. |
+| `accounts[].balance_native` | number (account currency, nullable) | FX account table | Account balance expressed in the original account currency; nullable for EUR-only accounts. | 1. passed from portfolio file and stored in database | Portfolio exports do not carry an account balance field, and `_sync_accounts` currently recomputes `accounts.balance` via `db_calc_account_balance`; need follow-up to align the data source with this documentation. |
 | `accounts[].balance_eur` | number (EUR) | EUR account table, totals calculations | Canonical EUR valuation for the account supplied directly by the backend. | 6. Calculate it from database values in a function or method and hand it over directly to the front end. |  |
 | `accounts[].fx_rate_updated_at` | ISO 8601 datetime string (nullable) | FX tooltips | Timestamp of the FX rate used to derive `balance_eur`. | 3. Frankfurt, APIFX fetch store and database. |  |
 | `accounts[].fx_status` | enum (`complete`, `partial`, `missing`) | Account-level warning badges and banner aggregation | FX health indicator for the specific account, sharing the same backing dataset as the dashboard summary status. | 6. Calculate it from database values in a function or method and hand it over directly to the front end. |  |
@@ -29,9 +29,9 @@ This document consolidates the future-facing backend payloads required by the Po
 
 | Field | Format | Used in | Description | Data source back end | Source logic confirmed |
 | --- | --- | --- | --- | --- | --- |
-| `portfolios` | array of portfolio summary objects | Portfolio overview table | Collection of portfolio aggregates aligned with the frontend ordering. | 1. passed from portfolio file and stored in database |  |
-| `portfolios[].portfolio_id` | string (UUID) | Portfolio table row keys & push update matching | Primary key matching the backend `portfolios` table. | 1. passed from portfolio file and stored in database |  |
-| `portfolios[].name` | string | Portfolio table first column | Portfolio display name shown in the overview. | 1. passed from portfolio file and stored in database |  |
+| `portfolios` | array of portfolio summary objects | Portfolio overview table | Collection of portfolio aggregates aligned with the frontend ordering. | 1. passed from portfolio file and stored in database | Repeated `PPortfolio` entries from `PClient.portfolios` are inserted by `_sync_portfolios` into the `portfolios` table, preserving the order for API reads. |
+| `portfolios[].portfolio_id` | string (UUID) | Portfolio table row keys & push update matching | Primary key matching the backend `portfolios` table. | 1. passed from portfolio file and stored in database | `PPortfolio.uuid` (string) arrives via the portfolio file and `_sync_portfolios` writes it directly into `portfolios.uuid`, so the frontend keys rows off the persisted proto identifier. |
+| `portfolios[].name` | string | Portfolio table first column | Portfolio display name shown in the overview. | 1. passed from portfolio file and stored in database | `_sync_portfolios` copies `PPortfolio.name` into the SQLite `portfolios.name` column, ensuring the UI renders the exact label from the import. |
 | `portfolios[].position_count` | integer | “Anzahl Positionen” column | Persisted count of active positions. | 4. Calculate and stored inside the database. |  |
 | `portfolios[].current_value_eur` | number (EUR) | “Aktueller Wert” column & totals | Current market value already converted to EUR. | 6. Calculate it from database values in a function or method and hand it over directly to the front end. |  |
 | `portfolios[].purchase_value_eur` | number (EUR) | Hidden totals dataset | Total invested capital in EUR used for performance calculations. | 4. Calculate and stored inside the database. |  |
@@ -44,7 +44,7 @@ This document consolidates the future-facing backend payloads required by the Po
 
 | Field | Format | Used in | Description | Data source back end | Source logic confirmed |
 | --- | --- | --- | --- | --- | --- |
-| `portfolio_id` | string (UUID) | Expandable table container | Identifies which portfolio the enclosed positions belong to. | 1. passed from portfolio file and stored in database |  |
+| `portfolio_id` | string (UUID) | Expandable table container | Identifies which portfolio the enclosed positions belong to. | 1. passed from portfolio file and stored in database | The WebSocket layer reads the stored `portfolios.uuid` (originally `PPortfolio.uuid`) and returns it as `portfolio_uuid`, which the payload exposes as the portfolio identifier for the nested positions. |
 | `positions` | array of position objects | Positions detail tables | Ordered holdings for the selected portfolio. | 1. passed from portfolio file and stored in database |  |
 | `positions[].position_id` | string (UUID) | Row dataset attributes & diffing | Stable identifier for the position row within the portfolio. | 4. Calculate and stored inside the database. |  |
 | `positions[].portfolio_id` | string (UUID) | Push reconciliation | Portfolio identifier repeated for differential updates. | 1. passed from portfolio file and stored in database |  |
