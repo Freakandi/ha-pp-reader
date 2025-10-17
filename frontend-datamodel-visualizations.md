@@ -24,7 +24,7 @@ flowchart TD
   L2 --> Agg
   Agg --> Total[summary.total_wealth_eur]
   L1 --> FX[summary.fx_status]
-  Clock[[datetime.now() UTC]] --> Stamp[summary.calculated_at]
+  Clock[[UTC timestamp helper]] --> Stamp[summary.calculated_at]
   Total --> Payload[[dashboard_summary payload]]
   FX --> Payload
   Stamp --> Payload
@@ -260,7 +260,7 @@ flowchart TD
   FX[(FX normalization helpers)] --> History[[ws_get_security_history]]
   HistDB --> History
   History --> Range[range token mapping]
-  History --> Series[prices[] entries]
+  History --> Series["prices[] entries"]
   Range --> Payload[security_history payload]
   Series --> Payload
   Payload --> Fields[series_source<br/>prices[].close_native<br/>prices[].close_eur]
