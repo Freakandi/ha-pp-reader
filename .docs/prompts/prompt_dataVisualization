@@ -1,0 +1,54 @@
+You are ChatGPT, helping document the future data model for the Portfolio Performance Reader integration. The canonical source for field definitions, sources, and follow-up items is `frontend-datamodel-final.md`. Use that file to drive every statement you produce.
+
+Task: Draft a **section-by-section** visualization package that will later be combined into a single consolidated document. Stay focused on depicting the target (future) data model, not the current implementation gaps.
+
+Working rules
+- Process each top-level section from `frontend-datamodel-final.md` in order:
+  1. Dashboard summary (`pp_reader/get_dashboard_summary` / `dashboard_summary` push)
+  2. Account summaries (`pp_reader/get_accounts` / `accounts` push)
+  3. Portfolio summaries (`pp_reader/get_portfolios` / `portfolio_values` push)
+  4. Portfolio positions (`pp_reader/get_portfolio_positions` / `portfolio_positions` push)
+  5. Last file update (`pp_reader/get_last_file_update` / `last_file_update` push)
+  6. Security snapshot (`pp_reader/get_security_snapshot` / `security_snapshot` push)
+  7. Security history (`pp_reader/get_security_history` / `security_history` push)
+  8. Live update envelope (`panels_updated` bus)
+- Finish one section completely before moving to the next. Do **not** merge sections or provide an all-in-one diagram; that will happen later.
+- Keep language concise and professional. Reference follow-up tasks exactly as phrased in the source file when needed, but do not invent new requirements.
+
+For each section output a block with the following structure (adjust diagram types and tables to match the content of that section):
+
+```
+### <Section title copied verbatim>
+
+**Scope**
+- 2–3 bullet points summarising the purpose of this dataset, its role in the frontend, and any critical performance guarantees.
+
+**Mermaid visualization**
+```mermaid
+<Choose the most appropriate diagram type>
+```
+- Pick the Mermaid diagram style that best communicates the data flow for this section:
+  - Flowchart for transformations and aggregations.
+  - Sequence diagram for request/response lifecycles.
+  - ERD/class diagram for record structures.
+  - State diagram for status propagation.
+  - Use multiple small diagrams only if absolutely required to show distinct perspectives.
+- The diagram must trace how raw inputs (database tables, external services, calculations) produce the fields listed for this section. Highlight intermediate transformations when the source file calls for backend computation (options 4–6).
+
+**Data contract table**
+| Field / Subgroup | Source category | Notes / follow-up |
+| --- | --- | --- |
+| <Group fields logically (e.g., summary metrics, status flags, payload metadata) rather than copying every row verbatim.> |
+- Summarise where each cluster of fields originates (options 1–6 from the source table) and capture any outstanding follow-up wording already recorded in `frontend-datamodel-final.md`.
+
+**Implementation cues**
+- Provide 2–3 action-oriented bullets linking this section to backend modules or pipelines named in the source file (e.g., `data/websocket.py`, `data/db_access.py`). Mention specific functions when cited.
+- Emphasise precomputation requirements, caching expectations, or sequencing constraints that will matter when building the future model.
+```
+
+General output requirements
+- Do not cite files or line numbers in the text; the consumer already has the source table.
+- Keep the entire response Markdown-compatible with GitHub.
+- Maintain consistent terminology (e.g., `valuation_state.status`, `fx_status`) exactly as written in `frontend-datamodel-final.md`.
+- If the source file lists a field with no confirmed logic yet, mark it as a follow-up in the table but still show the intended flow in the diagram.
+- Avoid speculation beyond the documented future model scope.
