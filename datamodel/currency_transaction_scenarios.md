@@ -17,8 +17,14 @@ This note captures example records from `transactions` and their linked `transac
   - `fx_amount = 24_913_248` in JPY
   - `fx_rate_to_base = 0.0534606851`
 
-## Scenario 3 – Account transfer, JPY → EUR
-- No matching transaction records found (`COUNT(*) = 0`).
+## Scenario 3 – Account transfer, JPY → EUR (IBKR JPY → IBKR)
+- `transactions.uuid`: `19945d41-525b-40d9-881c-d60322872348`
+- Accounts: IBKR JPY (JPY) → IBKR (EUR)
+- Transaction currency & amount: JPY `13_348`
+- Linked `transaction_units` row:
+  - `type = 0`, `amount = 13_348` (JPY)
+  - `fx_amount = 78` in EUR
+  - `fx_rate_to_base = 9_314.6489851393`
 
 ## Scenario 4 – Purchase of EUR security via EUR account (AIXTRON)
 - `transactions.uuid`: `16165b33-2805-44d5-9be3-2af2aa98bed7`
