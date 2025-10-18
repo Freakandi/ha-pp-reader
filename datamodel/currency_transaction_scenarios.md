@@ -64,3 +64,21 @@ This note captures example records from `transactions` and their linked `transac
   1. `type = 2`, `amount = 997` (EUR); no FX columns populated.
   2. `type = 0`, `amount = 80_850` (EUR), `fx_amount = 76_161` (CHF), `fx_rate_to_base = 9.4065555458`
 
+## Scenario 9 – Dividend of non-EUR security to EUR account (Roche Holding AG)
+- `transactions.uuid`: `08afd779-d838-41fb-81f5-aaa99096a158`
+- Account & security currencies: Haspa Giro (EUR) receives dividend from Roche Holding AG (CHF)
+- Transaction currency & amount: EUR `3_305`, shares: `600_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 0`, `amount = 6_070` (EUR), `fx_amount = 5_820` (CHF), `fx_rate_to_base = 50.1012262146`
+  2. `type = 1`, `amount = 607` (EUR); no FX columns populated.
+  3. `type = 1`, `amount = 33` (EUR); no FX columns populated.
+  4. `type = 1`, `amount = 2_125` (EUR); no FX columns populated.
+
+## Scenario 10 – Dividend of EUR security to EUR account (RWE AG)
+- `transactions.uuid`: `5ac977d1-a381-4bf6-8cff-666af138ca59`
+- Account & security currencies: Haspa Giro (EUR) receives dividend from RWE AG (EUR)
+- Transaction currency & amount: EUR `3_644`, shares: `4_500_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 1`, `amount = 1_238` (EUR); no FX columns populated.
+  2. `type = 1`, `amount = 68` (EUR); no FX columns populated.
+
