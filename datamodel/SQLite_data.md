@@ -64,11 +64,11 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
-| 2 | date | integer (epoch day) | no (part of PRIMARY KEY) | — | Trading date stored as Unix epoch day. | PHistoricalPrice.date | int64 |
-| 3 | close | integer (10⁻⁸ units) | no | — | Closing price scaled by 10⁻⁸. | PHistoricalPrice.close | int64 |
-| 4 | high | integer (10⁻⁸ units) | yes | — | Daily high price scaled by 10⁻⁸. | PFullHistoricalPrice.high | int64 |
-| 5 | low | integer (10⁻⁸ units) | yes | — | Daily low price scaled by 10⁻⁸. | PFullHistoricalPrice.low | int64 |
-| 6 | volume | integer | yes | — | Trading volume. | PFullHistoricalPrice.volume | int64 |
+| 2 | date | integer (epoch day) | no (part of PRIMARY KEY) | — | Trading date stored as Unix epoch day. | YahooQuery historical quotes (`date` field) | int64 |
+| 3 | close | integer (10⁻⁸ units) | no | — | Closing price scaled by 10⁻⁸. | YahooQuery historical quotes (`adjclose`/`close` scaled); fallback inserts parsed `PHistoricalPrice.close` only when the date is absent. | int64 |
+| 4 | high | integer (10⁻⁸ units) | yes | — | Daily high price scaled by 10⁻⁸. | YahooQuery historical quotes (`high` scaled); fallback uses `PFullHistoricalPrice.high` if the trading day is missing. | int64 |
+| 5 | low | integer (10⁻⁸ units) | yes | — | Daily low price scaled by 10⁻⁸. | YahooQuery historical quotes (`low` scaled); fallback uses `PFullHistoricalPrice.low` if the trading day is missing. | int64 |
+| 6 | volume | integer | yes | — | Trading volume. | YahooQuery historical quotes (`volume`); fallback inserts `PFullHistoricalPrice.volume` only for absent days. | int64 |
 
 **Indexes**
 
@@ -161,14 +161,13 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 6 | other_portfolio | string (TEXT) | yes | — | Counterparty portfolio UUID. | PTransaction.otherPortfolio | optional string |
 | 7 | other_uuid | string (TEXT) | yes | — | External reference UUID. | PTransaction.otherUuid | optional string |
 | 8 | other_updated_at | string (TEXT, ISO 8601) | yes | — | Timestamp for external reference. | PTransaction.otherUpdatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
-| 9 | date | string (TEXT, ISO 8601) | no | — | Transaction date in ISO 8601. | PTransaction.date | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
-| 10 | currency_code | string (TEXT) | yes | — | Currency involved in transaction. | PTransaction.currencyCode | string |
-| 11 | amount | integer (cents) | yes | — | Monetary amount stored in cents. | PTransaction.amount | int64 |
-| 12 | shares | integer (scaled by 10⁸) | yes | — | Share quantity scaled for precision. | PTransaction.shares | optional int64 |
+| 9 | transaction_date | string (TEXT, ISO 8601) | no | — | Transaction date in ISO 8601. | PTransaction.date | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
+| 10 | transaction_currency | string (TEXT) | yes | — | Currency involved in transaction. | PTransaction.currencyCode | string |
+| 11 | transaction_amount | integer (cents) | yes | — | Monetary amount stored in cents. | PTransaction.amount | int64 |
+| 12 | transaction_shares | integer (scaled by 10⁸) | yes | — | Share quantity scaled for precision. | PTransaction.shares | optional int64 |
 | 13 | note | string (TEXT) | yes | — | Optional note. | PTransaction.note | optional string |
 | 14 | security | string (TEXT) | yes | — | Security UUID involved. | PTransaction.security | optional string |
-| 15 | source | string (TEXT) | yes | — | Origin of the transaction record. | PTransaction.source | optional string |
-| 16 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PTransaction.updatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
+| 15 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PTransaction.updatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
 
 **Indexes**
 
@@ -183,17 +182,17 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | transaction_uuid | string (TEXT) | no | — | References `transactions.uuid`. | PTransaction.uuid | string |
 | 2 | type | integer | no | — | Enumerated unit type. | PTransactionUnit.type | PTransactionUnit.Type |
-| 3 | amount | integer (cents) | yes | — | Amount stored in cents. | PTransactionUnit.amount | int64 |
-| 4 | currency_code | string (TEXT) | yes | — | Currency code for amount. | PTransactionUnit.currencyCode | string |
-| 5 | fx_amount | integer (cents) | yes | — | Foreign currency amount in cents. | PTransactionUnit.fxAmount | optional int64 |
-| 6 | fx_currency_code | string (TEXT) | yes | — | Foreign currency code. | PTransactionUnit.fxCurrencyCode | optional string |
-| 7 | fx_rate_to_base | real | yes | — | Conversion rate to base currency. | PTransactionUnit.fxRateToBase | optional PDecimalValue |
+| 3 | transaction_amount | integer (cents) | yes | — | Amount stored in cents. | PTransactionUnit.amount | int64 |
+| 4 | transaction_currency | string (TEXT) | yes | — | Currency code for amount. | PTransactionUnit.currencyCode | string |
+| 5 | transaction_fx_amount | integer (cents) | yes | — | Foreign currency amount in cents. | PTransactionUnit.fxAmount | optional int64 |
+| 6 | transaction_fx_currency | string (TEXT) | yes | — | Foreign currency code. | PTransactionUnit.fxCurrencyCode | optional string |
+| 7 | transaction_fx_rate | real | yes | — | Conversion rate to base currency. | PTransactionUnit.fxRateToBase | optional PDecimalValue |
 
 **Indexes**
 
 | Index Name | Columns | Type | Notes |
 | --- | --- | --- | --- |
-| idx_transaction_units_currency | fx_currency_code | non-unique | Facilitates FX lookups. |
+| idx_transaction_units_currency | transaction_fx_currency | non-unique | Facilitates FX lookups. |
 
 ## fx_rates
 
