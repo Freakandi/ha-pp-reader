@@ -20,6 +20,24 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- |
 | PRIMARY KEY | uuid | unique | Backed by `sqlite_autoindex_accounts_1`. |
 
+### accounts → account_balances_performance (subtable)
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | account_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `accounts.uuid`. | PAccount.uuid | string |
+| 2 | date | integer (epoch day) | no (part of PRIMARY KEY) | — | Snapshot trading date for the balance roll-up. | Derived during account balance rebuild (max transaction date fallback) | int64 |
+| 3 | balance_native | integer (cents) | yes | 0 | Account balance in native currency calculated from transactions up to `date`. | db_calc_account_balance(account_uuid, filtered_transactions, tx_units) | int |
+| 4 | fx_rate_to_eur | real | yes | 1.0 | EUR conversion rate pulled from `fx_rates` for the snapshot date (defaults to `1.0` for EUR accounts). | Frankfurter FX API via `_sync_accounts` time-series rebuild | float |
+| 5 | balance_eur | integer (cents) | yes | 0 | EUR-denominated balance (`balance_native` × `fx_rate_to_eur`, rounded to cents). | Calculated during account balance time-series rebuild | int |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | account_uuid, date | unique | Backed by `sqlite_autoindex_account_balances_performance_1`. |
+| idx_account_balances_perf_account | account_uuid | non-unique | Speeds scans for a single account's time series. |
+| idx_account_balances_perf_date | date | non-unique | Supports cross-account daily balance slices. |
+
 ## account_attributes
 
 | Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
