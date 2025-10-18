@@ -8,10 +8,10 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | uuid | string (TEXT) | no (PRIMARY KEY) | — | Unique account identifier. | PAccount.uuid | string |
 | 2 | name | string (TEXT) | no | — | Human-readable account name. | PAccount.name | string |
-| 3 | currency_code | string (TEXT) | no | — | ISO 4217 currency of the account. | PAccount.currencyCode | string |
+| 3 | account_currency | string (TEXT) | no | — | ISO 4217 currency of the account. | PAccount.currencyCode | string |
 | 4 | note | string (TEXT) | yes | — | Optional descriptive note. | PAccount.note | optional string |
 | 5 | is_retired | integer (0/1) | yes | — | Retirement flag (treated as boolean). | PAccount.isRetired | bool |
-| 6 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PAccount.updatedAt | google.protobuf.Timestamp |
+| 6 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PAccount.updatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
 | 7 | balance | integer (cents) | yes | 0 | Account balance stored in cents. | db_calc_account_balance(account_uuid, account_transactions, accounts_currency_map, tx_units) | int returned by `db_calc_account_balance` during `_SyncRunner._sync_accounts`. |
 
 **Indexes**
@@ -45,12 +45,12 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 5 | ticker_symbol | string (TEXT) | yes | — | Optional ticker symbol. | PSecurity.tickerSymbol | optional string |
 | 6 | feed | string (TEXT) | yes | — | Price feed source. | PSecurity.feed | optional string |
 | 7 | type | string (TEXT) | yes | — | Security type classification. | — | — |
-| 8 | currency_code | string (TEXT) | yes | — | Trading currency. | PSecurity.currencyCode | optional string |
+| 8 | security_currency | string (TEXT) | yes | — | Trading currency. | PSecurity.currencyCode | optional string |
 | 9 | retired | integer (0/1) | yes | — | Retirement flag. | PSecurity.isRetired | bool |
-| 10 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PSecurity.updatedAt | google.protobuf.Timestamp |
-| 11 | last_price | integer (10⁻⁸ units) | yes | — | Last fetched price scaled by 10⁻⁸. | PFullHistoricalPrice.close | int64 |
-| 12 | last_price_date | integer (Unix timestamp) | yes | — | Epoch seconds of last price date. | PFullHistoricalPrice.date | int64 |
-| 13 | last_price_source | string (TEXT) | yes | — | Source of last price (e.g., 'yahoo'). | PSecurity.latestFeed | optional string |
+| 10 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PSecurity.updatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
+| 11 | last_price | integer (10⁻⁸ units) | yes | — | Last fetched price scaled by 10⁻⁸. | Live quote from `prices.price_service._apply_price_updates` (YahooQuery provider) with fallback to `PFullHistoricalPrice.close` inside `_SyncRunner._sync_securities` when live data is missing. | int64 |
+| 12 | last_price_time | string (TEXT, ISO 8601 with timezone when available) | yes | — | Market time of the last price (prefer Yahoo live data including timezone; fallback uses the ISO date of the latest historical close). | `prices.price_service._apply_price_updates` will persist Yahoo quote timestamps (`Quote.ts`) when extended; `_SyncRunner._sync_securities` substitutes `PFullHistoricalPrice.date` converted through `to_iso8601` otherwise. | string |
+| 13 | last_price_source | string (TEXT) | yes | — | Source of last price ("Yahoo" for live quotes, "File" for imported historical data). | `prices.price_service._apply_price_updates` ("Yahoo") or `_SyncRunner._sync_securities` ("File"). | optional string |
 | 14 | last_price_fetched_at | string (TEXT, ISO 8601 UTC) | yes | — | Timestamp when price was fetched. | _apply_price_updates(db_path, updates, fetched_at, source) | ISO 8601 string supplied via the `fetched_at` argument (defaults to `_utc_now_iso()`). |
 
 **Indexes**
@@ -86,7 +86,7 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 3 | note | string (TEXT) | yes | — | Optional descriptive note. | PPortfolio.note | optional string |
 | 4 | reference_account | string (TEXT) | yes | — | Linked reference account UUID. | PPortfolio.referenceAccount | optional string |
 | 5 | is_retired | integer (0/1) | yes | — | Retirement flag. | PPortfolio.isRetired | bool |
-| 6 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PPortfolio.updatedAt | google.protobuf.Timestamp |
+| 6 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PPortfolio.updatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
 
 **Indexes**
 
@@ -114,10 +114,13 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
 | 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
-| 3 | current_holdings | real | yes | 0.0 | Current share quantity in portfolio. | db_calculate_current_holdings(transactions) | float share total from `db_calculate_current_holdings` in `_SyncRunner._sync_portfolio_securities`. |
-| 4 | purchase_value | integer (cents) | yes | 0 | Total purchase cost in cents. | db_calculate_sec_purchase_value(transactions, db_path, tx_units) → eur_to_cent(round_currency(purchase_value_eur)) | int cents converted from the EUR total returned by `db_calculate_sec_purchase_value`. |
-| 5 | current_value | real (cents) | yes | 0.0 | Current market value in cents. | db_calculate_holdings_value(db_path, conn, current_hold_pur) → eur_to_cent(round_currency(current_value_eur)) | int cents derived from `db_calculate_holdings_value` for each (portfolio, security). |
-| 6 | avg_price | real (computed cents) | generated | — | Stored generated column: `purchase_value / current_holdings` when holdings > 0. | SQLite expression using `purchase_value` and `current_holdings`. |
+| 3 | share_count | real | yes | 0.0 | Current share quantity in portfolio. | db_calculate_current_holdings(transactions) | Float share total from `db_calculate_current_holdings` in `_SyncRunner._sync_portfolio_securities`. |
+| 4 | purchase_value_native | integer (10⁻⁸ units) | yes | 0 | Total purchase cost in the security's native currency. | db_calculate_sec_purchase_value(transactions, db_path, tx_units).security_currency_total (requires persistence update to store the native total). | int scaled representation of `security_currency_total` produced by `db_calculate_sec_purchase_value`. |
+| 5 | current_value_native | integer (10⁻⁸ units) | yes | 0 | Current market value in the security's native currency. | (New helper required; existing `db_calculate_holdings_value` only returns EUR totals.) | int scaled native-market valuation computed by the planned helper. |
+| 6 | avg_price_native | real (10⁻⁸ units) | yes | — | Average purchase price per share in the security's native currency. | db_calculate_sec_purchase_value(transactions, db_path, tx_units).avg_price_security | float derived from `avg_price_security` returned by `db_calculate_sec_purchase_value`. |
+| 7 | purchase_value_eur | integer (cents) | yes | 0 | Purchase value in EUR (only stored when native currency ≠ EUR; otherwise mirrors native). | db_calculate_sec_purchase_value(transactions, db_path, tx_units) → eur_to_cent(round_currency(purchase_value_eur)). | int cents converted from the EUR total returned by `db_calculate_sec_purchase_value`. |
+| 8 | current_value_eur | integer (cents) | yes | 0 | Current market value in EUR (only stored when native currency ≠ EUR). | db_calculate_holdings_value(db_path, conn, current_hold_pur) → eur_to_cent(round_currency(current_value_eur)). | int cents derived from `db_calculate_holdings_value` for each (portfolio, security). |
+| 9 | avg_price_eur | real (computed cents) | generated | — | Average purchase price per share in EUR (`purchase_value_eur / share_count`). | SQLite expression using `purchase_value_eur` and `share_count`. |
 
 **Indexes**
 
@@ -125,6 +128,26 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- |
 | PRIMARY KEY | portfolio_uuid, security_uuid | unique | Backed by `sqlite_autoindex_portfolio_securities_1`. |
 | idx_portfolio_securities_portfolio | portfolio_uuid | non-unique | Speeds portfolio lookups. |
+
+## portfolio_securities_transactions
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
+| 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
+| 3 | transaction_type | integer (enum) | no | — | Transaction classification (purchase/sale/dividend/fees/taxes) stored as `PTransaction.Type`. | PTransaction.type | enum value persisted alongside `transaction_type_name` for readability. |
+| 4 | transaction_type_name | string (TEXT) | no | — | Human-readable label for `transaction_type` (e.g., "purchase"). | Derived from `PTransaction.Type.Name`. | string |
+| 5 | transaction_share_count | real | yes | 0.0 | Shares involved in the transaction (native precision). | Normalized share output from `db_calculate_current_holdings` pipeline. | float |
+| 6 | transaction_value_native | integer (10⁻⁸ units) | yes | 0 | Transaction amount in the security's native currency. | (Requires new aggregation helper to capture native amounts from `db_calculate_sec_purchase_value` normalization.) | int |
+| 7 | transaction_value_eur | integer (cents) | yes | 0 | Transaction amount converted to EUR at execution time. | Derived from `db_calculate_sec_purchase_value` / FX normalization routines. | int |
+| 8 | transaction_date | string (TEXT, ISO 8601) | no | — | Execution timestamp. | PTransaction.date | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | portfolio_uuid, security_uuid, transaction_date, transaction_type | unique | Prevents duplicate event rows. |
+| idx_portfolio_securities_tx_portfolio | portfolio_uuid | non-unique | Speeds per-portfolio transaction lookups. |
 
 ## transactions
 
@@ -137,15 +160,15 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 5 | other_account | string (TEXT) | yes | — | Counterparty account UUID. | PTransaction.otherAccount | optional string |
 | 6 | other_portfolio | string (TEXT) | yes | — | Counterparty portfolio UUID. | PTransaction.otherPortfolio | optional string |
 | 7 | other_uuid | string (TEXT) | yes | — | External reference UUID. | PTransaction.otherUuid | optional string |
-| 8 | other_updated_at | string (TEXT, ISO 8601) | yes | — | Timestamp for external reference. | PTransaction.otherUpdatedAt | google.protobuf.Timestamp |
-| 9 | date | string (TEXT, ISO 8601) | no | — | Transaction date in ISO 8601. | PTransaction.date | google.protobuf.Timestamp |
+| 8 | other_updated_at | string (TEXT, ISO 8601) | yes | — | Timestamp for external reference. | PTransaction.otherUpdatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
+| 9 | date | string (TEXT, ISO 8601) | no | — | Transaction date in ISO 8601. | PTransaction.date | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
 | 10 | currency_code | string (TEXT) | yes | — | Currency involved in transaction. | PTransaction.currencyCode | string |
 | 11 | amount | integer (cents) | yes | — | Monetary amount stored in cents. | PTransaction.amount | int64 |
 | 12 | shares | integer (scaled by 10⁸) | yes | — | Share quantity scaled for precision. | PTransaction.shares | optional int64 |
 | 13 | note | string (TEXT) | yes | — | Optional note. | PTransaction.note | optional string |
 | 14 | security | string (TEXT) | yes | — | Security UUID involved. | PTransaction.security | optional string |
 | 15 | source | string (TEXT) | yes | — | Origin of the transaction record. | PTransaction.source | optional string |
-| 16 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PTransaction.updatedAt | google.protobuf.Timestamp |
+| 16 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PTransaction.updatedAt | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
 
 **Indexes**
 
