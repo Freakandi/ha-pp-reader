@@ -135,18 +135,19 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
 | 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
-| 3 | transaction_type | integer (enum) | no | — | Transaction classification (purchase/sale/dividend/fees/taxes) stored as `PTransaction.Type`. | PTransaction.type | enum value persisted alongside `transaction_type_name` for readability. |
-| 4 | transaction_type_name | string (TEXT) | no | — | Human-readable label for `transaction_type` (e.g., "purchase"). | Derived from `PTransaction.Type.Name`. | string |
-| 5 | transaction_share_count | real | yes | 0.0 | Shares involved in the transaction (native precision). | Normalized share output from `db_calculate_current_holdings` pipeline. | float |
-| 6 | transaction_value_native | integer (10⁻⁸ units) | yes | 0 | Transaction amount in the security's native currency. | (Requires new aggregation helper to capture native amounts from `db_calculate_sec_purchase_value` normalization.) | int |
-| 7 | transaction_value_eur | integer (cents) | yes | 0 | Transaction amount converted to EUR at execution time. | Derived from `db_calculate_sec_purchase_value` / FX normalization routines. | int |
-| 8 | transaction_date | string (TEXT, ISO 8601) | no | — | Execution timestamp. | PTransaction.date | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
+| 3 | transaction_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `transactions.uuid` so rollups can be deleted when a canonical row disappears. | PTransaction.uuid | string |
+| 4 | transaction_type | integer (enum) | no | — | Transaction classification (purchase/sale/dividend/fees/taxes) stored as `PTransaction.Type`. | PTransaction.type | enum value persisted alongside `transaction_type_name` for readability. |
+| 5 | transaction_type_name | string (TEXT) | no | — | Human-readable label for `transaction_type` (e.g., "purchase"). | Derived from `PTransaction.Type.Name`. | string |
+| 6 | transaction_share_count | real | yes | 0.0 | Shares involved in the transaction (native precision). | Aggregated share total derived from the persisted `transactions` rows during the rollup rebuild. | float |
+| 7 | transaction_value_native | integer (10⁻⁸ units) | yes | 0 | Transaction amount in the security's native currency. | Captured by the rollup helper that groups stored `transactions` (and their FX legs) after `_sync_transactions` completes. | int |
+| 8 | transaction_value_eur | integer (cents) | yes | 0 | Transaction amount converted to EUR at execution time. | Derived from the canonical `transactions` persistence plus FX normalization when rebuilding the rollup. | int |
+| 9 | transaction_date | string (TEXT, ISO 8601) | no | — | Execution timestamp. | PTransaction.date | google.protobuf.Timestamp via `to_iso8601` (timezone omitted because `Timestamp.ToDatetime()` runs without `tzinfo`). |
 
 **Indexes**
 
 | Index Name | Columns | Type | Notes |
 | --- | --- | --- | --- |
-| PRIMARY KEY | portfolio_uuid, security_uuid, transaction_date, transaction_type | unique | Prevents duplicate event rows. |
+| PRIMARY KEY | portfolio_uuid, security_uuid, transaction_uuid | unique | Ensures each canonical transaction only creates one rollup row, enabling direct deletes. |
 | idx_portfolio_securities_tx_portfolio | portfolio_uuid | non-unique | Speeds per-portfolio transaction lookups. |
 
 ## transactions
