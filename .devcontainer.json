@@ -26,7 +26,8 @@
                 "openai.chatgpt",
                 "ms-azuretools.vscode-containers",
                 "github.vscode-github-actions",
-                "pamaron.pytest-runner"
+                "pamaron.pytest-runner",
+                "MermaidChart.vscode-mermaid-chart"
             ],
             "settings": {
                 "files.eol": "\n",
