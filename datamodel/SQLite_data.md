@@ -129,6 +129,26 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | PRIMARY KEY | portfolio_uuid, security_uuid | unique | Backed by `sqlite_autoindex_portfolio_securities_1`. |
 | idx_portfolio_securities_portfolio | portfolio_uuid | non-unique | Speeds portfolio lookups. |
 
+### portfolio_securities → portfolio_securities_performance (subtable)
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
+| 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
+| 3 | date | integer (epoch day) | no (part of PRIMARY KEY) | — | Trading date of the snapshot. | YahooQuery historical quotes (`date` field) | int64 |
+| 4 | share_count | real | yes | 0.0 | Shares held on the snapshot day. | db_calculate_current_holdings(transactions) as of `date` | float |
+| 5 | close_price_native | integer (10⁻⁸ units) | yes | 0 | Closing price in the security's native currency for the snapshot day. | YahooQuery historical quotes (`adjclose`/`close` scaled) | int64 |
+| 6 | value_native | integer (10⁻⁸ units) | yes | 0 | Native-currency position value (`share_count` × `close_price_native`). | Calculated during snapshot rebuild | int64 |
+| 7 | value_eur | integer (cents) | yes | 0 | EUR-converted position value using the Frankfurter FX rate for the snapshot day. | Calculated during snapshot rebuild | int |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | portfolio_uuid, security_uuid, date | unique | Backed by `sqlite_autoindex_portfolio_securities_performance_1`. |
+| idx_portfolio_securities_perf_portfolio_date | portfolio_uuid, date | non-unique | Optimises per-portfolio time-series scans. |
+| idx_portfolio_securities_perf_security_date | security_uuid, date | non-unique | Optimises per-security time-series scans. |
+
 ## portfolio_securities_transactions
 
 | Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |

@@ -15,6 +15,7 @@ flowchart TD
   FXProto["Frankfurter FX ingest"] --> A2[(SQLite fx_rates)]
   HoldingsProto["PPortfolio + PTransaction stream"] --> SyncHoldings[[_sync_portfolio_securities]]
   SyncHoldings --> P1[(SQLite portfolio_securities)]
+  SyncHoldings --> PPerf[(SQLite portfolio_securities_performance)]
   A1 -->|stored balances + fx flags| L1[[_load_accounts_payload]]
   A2 -->|rate freshness| L1
   P1 -->|stored EUR valuations| L2[[fetch_live_portfolios]]
@@ -22,6 +23,7 @@ flowchart TD
   L2 --> Agg
   Agg --> Total[summary.total_wealth_eur]
   L1 --> FX[summary.fx_status]
+  PPerf -->|historical valuations| Hist[[portfolio time-series cache]]
   Clock[[UTC timestamp helper]] --> Stamp[summary.calculated_at]
   Total --> Payload[[dashboard_summary payload]]
   FX --> Payload
@@ -34,6 +36,7 @@ flowchart TD
 | Summary totals (`summary.total_wealth_eur`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Aggregate the persisted `accounts.balance` cents and `portfolio_securities.current_value_eur` totals loaded via `_load_accounts_payload` and `fetch_live_portfolios` before responding. |
 | FX coverage (`summary.fx_status`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Derive status from the stored FX availability flags returned by `_load_accounts_payload` when consolidating the websocket payload. |
 | Metadata (`summary.calculated_at`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Stamp the payload with `datetime.now()` (UTC) during websocket assembly; no SQLite persistence required. |
+| Historical valuation cache | 4 – Calculate and stored inside the database. | `portfolio_securities_performance` holds daily valuation snapshots so dashboard trend widgets can pull precomputed data. |
 
 **Implementation cues**
 - Extend `custom_components/pp_reader/data/websocket.py::ws_get_dashboard_data` to consolidate `_load_accounts_payload` and `fetch_live_portfolios` outputs, emit the enum-mapped FX status, and stamp `datetime.now(tz=UTC)`.
@@ -133,18 +136,21 @@ flowchart TD
   Proto[`PPortfolio` + `PTransaction` + `PSecurity`]
   Proto --> SyncTxn[[`_sync_transactions`]]
   Proto --> SyncPortSec[[`_sync_portfolio_securities`]]
+  Proto --> SyncPerf[[`rebuild_portfolio_security_performance`]]
   Proto --> SyncSec[[`_sync_securities`]]
   SyncPortSec --> PSDB[(SQLite `portfolio_securities`)]
   SyncPortSec --> TxAggDB[(SQLite `portfolio_securities_transactions`)]
   SyncTxn --> TxDB[(SQLite `transactions`)]
   TxDB --> TxRollup[[`rebuild_portfolio_security_transactions`]]
   TxRollup --> TxAggDB[(SQLite `portfolio_securities_transactions`)]
+  SyncPerf --> PerfDB[(SQLite `portfolio_securities_performance`)]
   SyncSec --> SecDB[(SQLite `securities`)]
   FXDB[(SQLite `fx_rates`)] --> Positions[[`get_portfolio_positions`]]
   PSDB --> Positions
   TxAggDB --> Positions
   TxDB --> Positions
   SecDB --> Positions
+  PerfDB --> Trends[[`load_position_performance_series`]]
   Positions --> Agg[[`compute_holdings_aggregation`]]
   Agg --> Norm[[`_normalize_portfolio_positions`]]
   Norm --> Payload[`portfolio_positions` payload`]
@@ -161,6 +167,7 @@ flowchart TD
 | Holdings & valuations (`positions[].quantity`, `positions[].current_value_eur`, `positions[].purchase_value_eur`) | `positions[].quantity`: 4 – Calculate and stored inside the database. `positions[].current_value_eur`: 4 – Calculate and stored inside the database. `positions[].purchase_value_eur`: 4 – Calculate and stored inside the database. | `portfolio_securities.share_count`, `current_value_eur`, and `purchase_value_eur` persist the post-aggregation holdings so the websocket layer can forward them without recomputing. |
 | Average cost & FX (`positions[].average_cost.*`, `positions[].average_cost.fx_rate_timestamp`) | `average_cost.primary.value`: 4 – Calculate and stored inside the database. `average_cost.primary.currency`: 1 – Passed from portfolio file and stored in database. `average_cost.secondary.value`: 4 – Calculate and stored inside the database. `average_cost.secondary.currency`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `average_cost.fx_rate_timestamp`: 3 – Frankfurt, APIFX fetch store and database. | `portfolio_securities.avg_price_native` and `avg_price_eur` persist the native and EUR share prices; ensure the websocket formatter tags the EUR slot explicitly and forwards the saved FX timestamp sourced from `fx_rates`. |
 | Performance & state (`positions[].performance.gain_eur`, `positions[].performance.gain_pct`, `positions[].valuation_state.*`, `positions[].data_state.*`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Use the persisted holdings, rollups rebuilt from the canonical `transactions` table, and Frankfurter/Yahoo context to derive valuation enums before responding. Follow-up: the normalization layer still needs to translate loader errors into the documented `data_state.*` fields and attach valuation reasons per row. |
+| Historical valuation series | 4 – Calculate and stored inside the database. | `portfolio_securities_performance` persists daily native and EUR valuations so the frontend can chart position history without recomputing. |
 
 **Implementation cues**
 - Extend `custom_components/pp_reader/data/db_access.py::get_portfolio_positions` to persist `position_id`, expose the security currency code, and surface FX timestamps pulled from `fx_rates` joins.
