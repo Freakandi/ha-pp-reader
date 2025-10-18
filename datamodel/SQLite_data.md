@@ -12,7 +12,7 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 4 | note | string (TEXT) | yes | — | Optional descriptive note. | PAccount.note | optional string |
 | 5 | is_retired | integer (0/1) | yes | — | Retirement flag (treated as boolean). | PAccount.isRetired | bool |
 | 6 | updated_at | string (TEXT, ISO 8601) | yes | — | Last update timestamp. | PAccount.updatedAt | google.protobuf.Timestamp |
-| 7 | balance | integer (cents) | yes | 0 | Account balance stored in cents. | — | — |
+| 7 | balance | integer (cents) | yes | 0 | Account balance stored in cents. | db_calc_account_balance(account_uuid, account_transactions, accounts_currency_map, tx_units) | int returned by `db_calc_account_balance` during `_SyncRunner._sync_accounts`. |
 
 **Indexes**
 
@@ -51,7 +51,7 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 11 | last_price | integer (10⁻⁸ units) | yes | — | Last fetched price scaled by 10⁻⁸. | PFullHistoricalPrice.close | int64 |
 | 12 | last_price_date | integer (Unix timestamp) | yes | — | Epoch seconds of last price date. | PFullHistoricalPrice.date | int64 |
 | 13 | last_price_source | string (TEXT) | yes | — | Source of last price (e.g., 'yahoo'). | PSecurity.latestFeed | optional string |
-| 14 | last_price_fetched_at | string (TEXT, ISO 8601 UTC) | yes | — | Timestamp when price was fetched. | — | — |
+| 14 | last_price_fetched_at | string (TEXT, ISO 8601 UTC) | yes | — | Timestamp when price was fetched. | _apply_price_updates(db_path, updates, fetched_at, source) | ISO 8601 string supplied via the `fetched_at` argument (defaults to `_utc_now_iso()`). |
 
 **Indexes**
 
@@ -114,10 +114,10 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
 | 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
-| 3 | current_holdings | real | yes | 0.0 | Current share quantity in portfolio. | — | — |
-| 4 | purchase_value | integer (cents) | yes | 0 | Total purchase cost in cents. | — | — |
-| 5 | current_value | real (cents) | yes | 0.0 | Current market value in cents. | — | — |
-| 6 | avg_price | real (computed cents) | generated | — | Stored generated column: `purchase_value / current_holdings` when holdings > 0. | — | — |
+| 3 | current_holdings | real | yes | 0.0 | Current share quantity in portfolio. | db_calculate_current_holdings(transactions) | float share total from `db_calculate_current_holdings` in `_SyncRunner._sync_portfolio_securities`. |
+| 4 | purchase_value | integer (cents) | yes | 0 | Total purchase cost in cents. | db_calculate_sec_purchase_value(transactions, db_path, tx_units) → eur_to_cent(round_currency(purchase_value_eur)) | int cents converted from the EUR total returned by `db_calculate_sec_purchase_value`. |
+| 5 | current_value | real (cents) | yes | 0.0 | Current market value in cents. | db_calculate_holdings_value(db_path, conn, current_hold_pur) → eur_to_cent(round_currency(current_value_eur)) | int cents derived from `db_calculate_holdings_value` for each (portfolio, security). |
+| 6 | avg_price | real (computed cents) | generated | — | Stored generated column: `purchase_value / current_holdings` when holdings > 0. | SQLite expression using `purchase_value` and `current_holdings`. |
 
 **Indexes**
 
@@ -190,8 +190,8 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 
 | Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | key | string (TEXT) | no (PRIMARY KEY) | — | Metadata key. | — | — |
-| 2 | date | string (TEXT, ISO 8601) | no | — | Associated timestamp. | — | — |
+| 1 | key | string (TEXT) | no (PRIMARY KEY) | — | Metadata key. | _SyncRunner._store_last_file_update(last_file_update) | Literal `'last_file_update'` inserted alongside the provided timestamp. |
+| 2 | date | string (TEXT, ISO 8601) | no | — | Associated timestamp. | _SyncRunner._store_last_file_update(last_file_update) | ISO 8601 string passed as `last_file_update`. |
 
 **Indexes**
 
