@@ -17,8 +17,14 @@ This note captures example records from `transactions` and their linked `transac
   - `fx_amount = 24_913_248` in JPY
   - `fx_rate_to_base = 0.0534606851`
 
-## Scenario 3 – Account transfer, JPY → EUR
-- No matching transaction records found (`COUNT(*) = 0`).
+## Scenario 3 – Account transfer, JPY → EUR (IBKR JPY → IBKR)
+- `transactions.uuid`: `19945d41-525b-40d9-881c-d60322872348`
+- Accounts: IBKR JPY (JPY) → IBKR (EUR)
+- Transaction currency & amount: JPY `13_348`
+- Linked `transaction_units` row:
+  - `type = 0`, `amount = 13_348` (JPY)
+  - `fx_amount = 78` in EUR
+  - `fx_rate_to_base = 9_314.6489851393`
 
 ## Scenario 4 – Purchase of EUR security via EUR account (AIXTRON)
 - `transactions.uuid`: `16165b33-2805-44d5-9be3-2af2aa98bed7`
@@ -43,4 +49,36 @@ This note captures example records from `transactions` and their linked `transac
 - Linked `transaction_units` row:
   - `type = 2`, `amount = 19_900` (JPY)
   - No FX columns populated.
+
+## Scenario 7 – Delivery of EUR security directly into portfolio (DEKA DAX ETF)
+- `transactions.uuid`: `84c9b74a-840e-48ac-b505-062acb901668`
+- Portfolio-only booking: S-Broker receives DEKA DAX UCITS ETF INHABER-ANTEILE (EUR); no account is referenced (`account = NULL`).
+- Transaction currency & amount: EUR `5_000`, shares: `29_540_000`
+- Linked `transaction_units`: none (`COUNT(*) = 0`), matching the portfolio-only delivery without FX data.
+
+## Scenario 8 – Delivery of non-EUR security directly into portfolio (BARRY CALLEBAUT)
+- `transactions.uuid`: `5a5daa04-bb2c-468b-86df-c54c2cb0b7fd`
+- Portfolio-only booking: S-Broker receives BARRY CALLEBAUT AG NAMENSAKTIEN SF 0,02 (CHF); no account is referenced (`account = NULL`).
+- Transaction currency & amount: EUR `81_847`, shares: `100_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 2`, `amount = 997` (EUR); no FX columns populated.
+  2. `type = 0`, `amount = 80_850` (EUR), `fx_amount = 76_161` (CHF), `fx_rate_to_base = 9.4065555458`
+
+## Scenario 9 – Dividend of non-EUR security to EUR account (Roche Holding AG)
+- `transactions.uuid`: `08afd779-d838-41fb-81f5-aaa99096a158`
+- Account & security currencies: Haspa Giro (EUR) receives dividend from Roche Holding AG (CHF)
+- Transaction currency & amount: EUR `3_305`, shares: `600_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 0`, `amount = 6_070` (EUR), `fx_amount = 5_820` (CHF), `fx_rate_to_base = 50.1012262146`
+  2. `type = 1`, `amount = 607` (EUR); no FX columns populated.
+  3. `type = 1`, `amount = 33` (EUR); no FX columns populated.
+  4. `type = 1`, `amount = 2_125` (EUR); no FX columns populated.
+
+## Scenario 10 – Dividend of EUR security to EUR account (RWE AG)
+- `transactions.uuid`: `5ac977d1-a381-4bf6-8cff-666af138ca59`
+- Account & security currencies: Haspa Giro (EUR) receives dividend from RWE AG (EUR)
+- Transaction currency & amount: EUR `3_644`, shares: `4_500_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 1`, `amount = 1_238` (EUR); no FX columns populated.
+  2. `type = 1`, `amount = 68` (EUR); no FX columns populated.
 
