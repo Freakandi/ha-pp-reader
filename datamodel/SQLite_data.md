@@ -20,6 +20,24 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- |
 | PRIMARY KEY | uuid | unique | Backed by `sqlite_autoindex_accounts_1`. |
 
+### accounts → account_balances_performance (subtable)
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | account_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `accounts.uuid`. | PAccount.uuid | string |
+| 2 | date | integer (epoch day) | no (part of PRIMARY KEY) | — | Snapshot trading date for the balance roll-up. | Derived during account balance rebuild (max transaction date fallback) | int64 |
+| 3 | balance_native | integer (cents) | yes | 0 | Account balance in native currency calculated from transactions up to `date`. | db_calc_account_balance(account_uuid, filtered_transactions, tx_units) | int |
+| 4 | fx_rate_to_eur | real | yes | 1.0 | EUR conversion rate pulled from `fx_rates` for the snapshot date (defaults to `1.0` for EUR accounts). | Frankfurter FX API via `_sync_accounts` time-series rebuild | float |
+| 5 | balance_eur | integer (cents) | yes | 0 | EUR-denominated balance (`balance_native` × `fx_rate_to_eur`, rounded to cents). | Calculated during account balance time-series rebuild | int |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | account_uuid, date | unique | Backed by `sqlite_autoindex_account_balances_performance_1`. |
+| idx_account_balances_perf_account | account_uuid | non-unique | Speeds scans for a single account's time series. |
+| idx_account_balances_perf_date | date | non-unique | Supports cross-account daily balance slices. |
+
 ## account_attributes
 
 | Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
@@ -128,6 +146,26 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- |
 | PRIMARY KEY | portfolio_uuid, security_uuid | unique | Backed by `sqlite_autoindex_portfolio_securities_1`. |
 | idx_portfolio_securities_portfolio | portfolio_uuid | non-unique | Speeds portfolio lookups. |
+
+### portfolio_securities → portfolio_securities_performance (subtable)
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
+| 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
+| 3 | date | integer (epoch day) | no (part of PRIMARY KEY) | — | Trading date of the snapshot. | YahooQuery historical quotes (`date` field) | int64 |
+| 4 | share_count | real | yes | 0.0 | Shares held on the snapshot day. | db_calculate_current_holdings(transactions) as of `date` | float |
+| 5 | close_price_native | integer (10⁻⁸ units) | yes | 0 | Closing price in the security's native currency for the snapshot day. | YahooQuery historical quotes (`adjclose`/`close` scaled) | int64 |
+| 6 | value_native | integer (10⁻⁸ units) | yes | 0 | Native-currency position value (`share_count` × `close_price_native`). | Calculated during snapshot rebuild | int64 |
+| 7 | value_eur | integer (cents) | yes | 0 | EUR-converted position value using the Frankfurter FX rate for the snapshot day. | Calculated during snapshot rebuild | int |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | portfolio_uuid, security_uuid, date | unique | Backed by `sqlite_autoindex_portfolio_securities_performance_1`. |
+| idx_portfolio_securities_perf_portfolio_date | portfolio_uuid, date | non-unique | Optimises per-portfolio time-series scans. |
+| idx_portfolio_securities_perf_security_date | security_uuid, date | non-unique | Optimises per-security time-series scans. |
 
 ## portfolio_securities_transactions
 
