@@ -17,8 +17,14 @@ This note captures example records from `transactions` and their linked `transac
   - `fx_amount = 24_913_248` in JPY
   - `fx_rate_to_base = 0.0534606851`
 
-## Scenario 3 – Account transfer, JPY → EUR
-- No matching transaction records found (`COUNT(*) = 0`).
+## Scenario 3 – Account transfer, JPY → EUR (IBKR JPY → IBKR)
+- `transactions.uuid`: `19945d41-525b-40d9-881c-d60322872348`
+- Accounts: IBKR JPY (JPY) → IBKR (EUR)
+- Transaction currency & amount: JPY `13_348`
+- Linked `transaction_units` row:
+  - `type = 0`, `amount = 13_348` (JPY)
+  - `fx_amount = 78` in EUR
+  - `fx_rate_to_base = 9_314.6489851393`
 
 ## Scenario 4 – Purchase of EUR security via EUR account (AIXTRON)
 - `transactions.uuid`: `16165b33-2805-44d5-9be3-2af2aa98bed7`
@@ -43,4 +49,18 @@ This note captures example records from `transactions` and their linked `transac
 - Linked `transaction_units` row:
   - `type = 2`, `amount = 19_900` (JPY)
   - No FX columns populated.
+
+## Scenario 7 – Delivery of EUR security directly into portfolio (DEKA DAX ETF)
+- `transactions.uuid`: `84c9b74a-840e-48ac-b505-062acb901668`
+- Portfolio-only booking: S-Broker receives DEKA DAX UCITS ETF INHABER-ANTEILE (EUR); no account is referenced (`account = NULL`).
+- Transaction currency & amount: EUR `5_000`, shares: `29_540_000`
+- Linked `transaction_units`: none (`COUNT(*) = 0`), matching the portfolio-only delivery without FX data.
+
+## Scenario 8 – Delivery of non-EUR security directly into portfolio (BARRY CALLEBAUT)
+- `transactions.uuid`: `5a5daa04-bb2c-468b-86df-c54c2cb0b7fd`
+- Portfolio-only booking: S-Broker receives BARRY CALLEBAUT AG NAMENSAKTIEN SF 0,02 (CHF); no account is referenced (`account = NULL`).
+- Transaction currency & amount: EUR `81_847`, shares: `100_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 2`, `amount = 997` (EUR); no FX columns populated.
+  2. `type = 0`, `amount = 80_850` (EUR), `fx_amount = 76_161` (CHF), `fx_rate_to_base = 9.4065555458`
 
