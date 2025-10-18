@@ -50,3 +50,17 @@ This note captures example records from `transactions` and their linked `transac
   - `type = 2`, `amount = 19_900` (JPY)
   - No FX columns populated.
 
+## Scenario 7 – Delivery of EUR security directly into portfolio (DEKA DAX ETF)
+- `transactions.uuid`: `84c9b74a-840e-48ac-b505-062acb901668`
+- Portfolio-only booking: S-Broker receives DEKA DAX UCITS ETF INHABER-ANTEILE (EUR); no account is referenced (`account = NULL`).
+- Transaction currency & amount: EUR `5_000`, shares: `29_540_000`
+- Linked `transaction_units`: none (`COUNT(*) = 0`), matching the portfolio-only delivery without FX data.
+
+## Scenario 8 – Delivery of non-EUR security directly into portfolio (BARRY CALLEBAUT)
+- `transactions.uuid`: `5a5daa04-bb2c-468b-86df-c54c2cb0b7fd`
+- Portfolio-only booking: S-Broker receives BARRY CALLEBAUT AG NAMENSAKTIEN SF 0,02 (CHF); no account is referenced (`account = NULL`).
+- Transaction currency & amount: EUR `81_847`, shares: `100_000_000`
+- Linked `transaction_units` rows:
+  1. `type = 2`, `amount = 997` (EUR); no FX columns populated.
+  2. `type = 0`, `amount = 80_850` (EUR), `fx_amount = 76_161` (CHF), `fx_rate_to_base = 9.4065555458`
+
