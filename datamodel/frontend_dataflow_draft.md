@@ -4,7 +4,7 @@ This draft consolidates how the Home Assistant dashboard renders backend payload
 
 ```mermaid
 ---
-id: c78b0042-baf3-4090-9ba4-ef5b5e9df95d
+id: 42839b89-6c94-40be-8a54-e17296222dfa
 ---
 flowchart LR
   subgraph OverviewTab["Overview tab"]
