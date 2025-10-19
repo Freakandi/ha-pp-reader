@@ -70,6 +70,8 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | 12 | last_price_time | string (TEXT, ISO 8601 with timezone when available) | yes | — | Market time of the last price (prefer Yahoo live data including timezone; fallback uses the ISO date of the latest historical close). | `prices.price_service._apply_price_updates` will persist Yahoo quote timestamps (`Quote.ts`) when extended; `_SyncRunner._sync_securities` substitutes `PFullHistoricalPrice.date` converted through `to_iso8601` otherwise. | string |
 | 13 | last_price_source | string (TEXT) | yes | — | Source of last price ("Yahoo" for live quotes, "File" for imported historical data). | `prices.price_service._apply_price_updates` ("Yahoo") or `_SyncRunner._sync_securities` ("File"). | optional string |
 | 14 | last_price_fetched_at | string (TEXT, ISO 8601 UTC) | yes | — | Timestamp when price was fetched. | _apply_price_updates(db_path, updates, fetched_at, source) | ISO 8601 string supplied via the `fetched_at` argument (defaults to `_utc_now_iso()`). |
+| 15 | day_change_native | integer (10⁻⁸ units) | yes | 0 | Native-currency day price delta (`last_price` − latest close) stored for reuse across payloads. | Calculated during the price cycle by subtracting the most recent `historical_prices.close` from the refreshed `last_price`. | int64 |
+| 16 | day_change_eur | integer (10⁻⁸ units) | yes | 0 | EUR-translated day price delta derived from `day_change_native`. | The price cycle multiplies `day_change_native` by the freshest Frankfurter FX rate (when available) before persisting the scaled EUR change. | int64 |
 
 **Indexes**
 

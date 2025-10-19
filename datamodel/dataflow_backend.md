@@ -81,7 +81,6 @@ flowchart TB
 
   subgraph LastFileUpdate["Last File Update"]
     ImportRun[["Portfolio import"]] --> StoreLastUpdate[["_SyncRunner._store_last_file_update"]]
-    SourceMeta[["Import metadata"]] --> StoreLastUpdate
     StoreLastUpdate --> MetadataDB[("SQLite metadata")]
     MetadataDB --> LastFileLoader[["get_last_file_update"]]
     LastFileLoader --> LastFilePayload[["last_file_update payload"]]
@@ -100,6 +99,7 @@ flowchart TB
     PositionTxAggDB --> SecuritySnapshotLoader
     TransactionsDB --> SecuritySnapshotLoader
     FxRates --> SecuritySnapshotLoader
+    HistoricalPricesDB --> SecuritySnapshotLoader
     SecuritySnapshotLoader --> SnapshotPerf[["select_performance_metrics"]]
     SecuritySnapshotLoader --> SnapshotAvg[["_resolve_average_cost_totals"]]
     SnapshotPerf --> SnapshotSerial[["_serialise_security_snapshot"]]
@@ -137,8 +137,8 @@ flowchart TB
 | `accounts` | Provides canonical account listings, balances, and FX metadata. | `accounts[].balance_eur`, `accounts[].balance_native`, `accounts[].fx_rate_updated_at`, `accounts[].fx_status`. |
 | `portfolio_values` | Supplies aggregated holdings metrics and health flags per portfolio. | `current_value_eur`, `purchase_value_eur`, `position_count`, `performance.*`, `valuation_state.*`. |
 | `portfolio_positions` | Delivers per-position holdings, valuation, and state data. | Position identity fields, holdings totals, average cost details, `valuation_state.*`, `data_state.*`. |
-| `last_file_update` | Communicates the most recent portfolio import timestamp and source. | `last_file_update.ingested_at`, `last_file_update.source`. |
-| `security_snapshot` | Combines holdings, pricing, performance, and FX context for a single security. | `holdings.*`, `market_value_eur`, `average_cost.*`, `performance.*`, `purchase_totals.*`. |
+| `last_file_update` | Communicates the most recent portfolio import timestamp. | `last_file_update.ingested_at`. |
+| `security_snapshot` | Combines holdings, pricing, performance, and FX context for a single security. | `holdings.*`, `market_value_eur`, `average_cost.*`, `performance.*`, `purchase_totals.*`, `last_price.market_time`, `last_price.fetched_at`. |
 | `security_history` | Streams chart-ready price history with native and EUR closes. | `series_source`, `prices[].close_native`, `prices[].close_eur`, `prices[].date`. |
 | `panels_updated` | Notifies the UI which payload has fresh data. | `data_type`, `data`, `synced_at` routing metadata. |
 
@@ -151,7 +151,7 @@ flowchart TB
 | `SQLite portfolios` | Portfolio values | Provides portfolio identity and metadata required during aggregation. |
 | `SQLite transactions` | Portfolio positions, security snapshot | Serves as the canonical transaction source for rebuilding rollups and timestamps. |
 | `SQLite fx_rates` | Dashboard summary, accounts payload, portfolio positions, security snapshot, security history | Supplies Frankfurter rates and timestamps for EUR normalization and FX metadata. |
-| `SQLite metadata` | Last file update | Stores the latest import timestamp and provenance for UI display. |
+| `SQLite metadata` | Last file update | Stores the latest import timestamp for UI display. |
 | `SQLite historical_prices` | Security history | Contains consolidated historical quotes from Portfolio Performance and Yahoo for range queries. |
 | Yahoo price services | Security snapshot, security history | Provide live and historical market inputs used to enrich holdings and price series. |
 | Frankfurter FX ingest | Dashboard summary, accounts payload, security snapshot, security history | Updates conversion rates that inform balances, valuations, and FX timestamps. |
