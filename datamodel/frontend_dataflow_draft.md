@@ -5,12 +5,12 @@ This draft consolidates how the Home Assistant dashboard renders backend payload
 ```mermaid
 flowchart LR
   subgraph OverviewTab["Overview tab"]
-    DashboardSummary[["`dashboard_summary` payload"]]
-    Accounts[["`accounts` payload"]]
-    PortfolioValues[["`portfolio_values` payload"]]
-    PortfolioPositions[["`portfolio_positions` payload"]]
-    LastFileUpdate[["`last_file_update` payload"]]
-    PanelsUpdated[["`panels_updated` event"]]
+    DashboardSummary["dashboard_summary payload"]
+    Accounts["accounts payload"]
+    PortfolioValues["portfolio_values payload"]
+    PortfolioPositions["portfolio_positions payload"]
+    LastFileUpdate["last_file_update payload"]
+    PanelsUpdated["panels_updated event"]
 
     DashboardSummary --> HeaderCard["Header card (total wealth & FX note)"]
     Accounts --> EurTable["Liquidity table (EUR accounts)"]
@@ -28,9 +28,9 @@ flowchart LR
   end
 
   subgraph SecurityTab["Security detail tabs"]
-    SecuritySnapshot[["`security_snapshot` payload"]]
-    SecurityHistory[["`security_history` payload"]]
-    PanelsUpdatedDetail[["panels_updated (portfolio_positions)"]]
+    SecuritySnapshot["security_snapshot payload"]
+    SecurityHistory["security_history payload"]
+    PanelsUpdatedDetail["panels_updated (portfolio_positions)"]
 
     SecuritySnapshot --> DetailHeader["Meta grid (price, holdings, gains)"]
     SecuritySnapshot --> DetailInfoBar["Info bar (range context)"]
