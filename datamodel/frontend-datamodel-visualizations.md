@@ -173,10 +173,12 @@ flowchart TD
 | Holdings & valuations (`positions[].quantity`, `positions[].current_value_eur`, `positions[].purchase_value_eur`) | `positions[].quantity`: 4 – Calculate and stored inside the database. `positions[].current_value_eur`: 4 – Calculate and stored inside the database. `positions[].purchase_value_eur`: 4 – Calculate and stored inside the database. | `portfolio_securities.share_count`, `current_value_eur`, and `purchase_value_eur` persist the post-aggregation holdings so the websocket layer can forward them without recomputing. |
 | Average cost & FX (`positions[].average_cost.*`, `positions[].average_cost.fx_rate_timestamp`) | `average_cost.primary.value`: 4 – Calculate and stored inside the database. `average_cost.primary.currency`: 1 – Passed from portfolio file and stored in database. `average_cost.secondary.value`: 4 – Calculate and stored inside the database. `average_cost.secondary.currency`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `average_cost.fx_rate_timestamp`: 3 – Frankfurt, APIFX fetch store and database. | `portfolio_securities.avg_price_native` and `avg_price_eur` persist the native and EUR share prices; ensure the websocket formatter tags the EUR slot explicitly and forwards the saved FX timestamp sourced from `fx_rates`. |
 | Performance & state (`positions[].performance.gain_eur`, `positions[].performance.gain_pct`, `positions[].valuation_state.*`, `positions[].data_state.*`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Use the persisted holdings, rollups rebuilt from the canonical `transactions` table, and Frankfurter/Yahoo context to derive valuation enums before responding. Follow-up: the normalization layer still needs to translate loader errors into the documented `data_state.*` fields and attach valuation reasons per row. |
+| Day change metrics (`positions[].performance.day_change.value_native`, `positions[].performance.day_change.value_eur`) | 4 – Calculate and stored inside the database. | Join `securities.day_change_native` and `securities.day_change_eur` so the positions table shares the same persisted deltas as the security snapshot, avoiding per-request recomputation. |
 | Historical valuation series | 4 – Calculate and stored inside the database. | `portfolio_securities_performance` persists daily native and EUR valuations so the frontend can chart position history without recomputing. |
 
 **Implementation cues**
 - Extend `custom_components/pp_reader/data/db_access.py::get_portfolio_positions` to persist `position_id`, expose the security currency code, and surface FX timestamps pulled from `fx_rates` joins.
+- Join `securities.day_change_*` inside `custom_components/pp_reader/data/db_access.py::get_portfolio_positions` so the websocket payload can forward the stored day-change deltas without recalculating them.
 - Update `custom_components/pp_reader/data/websocket.py::_normalize_portfolio_positions` to translate loader errors into `data_state.*` and attach valuation enums and reasons.
 - Keep `custom_components/pp_reader/data/aggregations.py::compute_holdings_aggregation` as the central place for cent-to-EUR conversions to avoid duplicate rounding logic.
 
@@ -184,7 +186,6 @@ flowchart TD
 
 **Scope**
 - Communicates when the backend last processed a portfolio import for footer messaging.
-- Provides provenance for the import source to support future multi-source scenarios.
 - Offers a lightweight heartbeat payload that can be polled or pushed without heavy computation.
 
 **Mermaid visualization**
@@ -192,22 +193,18 @@ flowchart TD
 flowchart TD
   Import[`Portfolio import`] --> Store[[`_SyncRunner._store_last_file_update`]]
   Store --> Meta[(SQLite `metadata` key `last_file_update`)]
-  SourceMeta[Import metadata] --> Store
   Meta --> Loader[[`get_last_file_update`]]
   Loader --> Payload[`last_file_update` payload`]
-  Payload -->|`ingested_at`, `source`| UI
+  Payload -->|`ingested_at`| UI
 ```
 
 **Data contract table**
 | Field / Subgroup | Source category | Notes / follow-up |
 | --- | --- | --- |
 | Timestamps (`last_file_update.ingested_at`) | 4 – Calculate and stored inside the database. | No outstanding follow-ups; ensure truncated ISO persists. |
-| Provenance (`last_file_update.source`) | 1 – Passed from portfolio file and stored in database. | Metadata sync today only upserts the ISO timestamp into the two-column `metadata` table and the websocket handler formats that string, so we still need to extend the schema/command pipeline to persist and emit the source flag alongside it. |
 
 **Implementation cues**
-- Extend `custom_components/pp_reader/data/db_access.py::get_last_file_update` and the metadata schema to store and return the source string alongside the timestamp.
-- Update `custom_components/pp_reader/data/websocket.py` handlers to forward the augmented metadata without additional processing.
-- Ensure `_SyncRunner._store_last_file_update` writes both timestamp and source atomically to keep push/poll parity.
+- Ensure `custom_components/pp_reader/data/db_access.py::get_last_file_update` continues to return the persisted timestamp verbatim for the websocket payload.
 
 ### Security snapshot (`pp_reader/get_security_snapshot` command, `security_snapshot` push)
 
@@ -230,8 +227,10 @@ flowchart TD
   TxDB --> TxRollup[[`rebuild_portfolio_security_transactions`]]
   TxRollup --> PSTxDB[(SQLite `portfolio_securities_transactions`)]
   Yahoo[`Yahoo price fetch`] --> PriceSvc[[`_run_price_cycle`]] --> SecDB
+  Yahoo --> HistIngest[[`historical price ingest`]] --> HistDB[(SQLite `historical_prices`)]
   Frankfurter[`Frankfurter FX`] --> FXDB[(SQLite `fx_rates`)]
   SecDB --> Snapshot[[`get_security_snapshot`]]
+  HistDB --> Snapshot
   PSDB --> Snapshot
   PSTxDB --> Snapshot
   TxDB --> Snapshot
@@ -253,15 +252,15 @@ flowchart TD
 | Identity & currencies (`security_id`, `name`, `currency_code`, `account_currency_code`) | 1 – Passed from portfolio file and stored in database. | No outstanding follow-ups; ensure routing uses stored UUIDs. |
 | Snapshot metadata (`snapshot_timestamp`, `data_source`, `last_transaction_at`) | `snapshot_timestamp`: 4 – Calculate and stored inside the database. `data_source`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `last_transaction_at`: 4 – Calculate and stored inside the database. | `snapshot_timestamp`: persist the snapshot instant (for example by mirroring `metadata.last_file_update`) so the payload can expose it. `data_source`: classify the payload based on whether the stored price originated from Yahoo live data or historical files before sending. `last_transaction_at`: surface the most recent `portfolio_securities_transactions.transaction_date` captured for the requested security. |
 | Holdings & valuation (`holdings.total_units`, `holdings.precise_units`, `market_value_eur`, `purchase_value_eur`) | `holdings.total_units`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `holdings.precise_units`: 4 – Calculate and stored inside the database. `market_value_eur`: 4 – Calculate and stored inside the database. `purchase_value_eur`: 4 – Calculate and stored inside the database. | `portfolio_securities.share_count` stores the precise units; expose that value directly and derive `total_units` from it for display. Persisted `current_value_eur`/`purchase_value_eur` remove the need for per-request recomputation. |
-| Pricing (`last_price.native_value`, `last_price.account_value`, `last_price.fetched_at`) | `native_value`: 2 – Yahoo query life fetch store in database. `account_value`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `fetched_at`: 2 – Yahoo query life fetch store in database. | Convert the persisted native quote to account currency on demand so the payload exposes `last_price.account_value` alongside the stored quote and fetch timestamp. |
+| Pricing (`last_price.native_value`, `last_price.account_value`, `last_price.market_time`, `last_price.fetched_at`) | `native_value`: 2 – Yahoo query life fetch store in database. `account_value`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `market_time`: 2 – Yahoo query life fetch store in database. `fetched_at`: 2 – Yahoo query life fetch store in database. | Convert the persisted native quote to account currency on demand, forward the stored `securities.last_price_time` so the UI can annotate the price with its market timestamp, and include `securities.last_price_fetched_at` for the detail footer freshness row. |
 | Average cost (`average_cost.primary.*`, `average_cost.secondary.*`, `average_cost.fx_rate_timestamp`) | `primary.value`: 4 – Calculate and stored inside the database. `primary.currency`: 1 – Passed from portfolio file and stored in database. `secondary.value`: 4 – Calculate and stored inside the database. `secondary.currency`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `fx_rate_timestamp`: 3 – Frankfurt, APIFX fetch store and database. | `portfolio_securities.avg_price_native` and `avg_price_eur` now persist the calculated costs; ensure the serializer tags the EUR slot explicitly and forwards the FX timestamp sourced from `fx_rates`. |
-| Performance (`performance.total.*`, `performance.day_change.*`) | `performance.total.*`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `performance.day_change.value_native`: 2 – Yahoo query life fetch store in database. `performance.day_change.value_eur`, `performance.day_change.pct`, `performance.day_change.coverage_ratio`, `performance.day_change.source`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | `performance.day_change.value_native`: we still need the Yahoo history ingest to persist the sampled `regularMarketPreviousClose` into `historical_prices`. |
+| Performance (`performance.total.*`, `performance.day_change.*`) | `performance.total.*`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. `performance.day_change.value_native`: 4 – Calculate and stored inside the database. `performance.day_change.value_eur`: 4 – Calculate and stored inside the database. `performance.day_change.pct`, `performance.day_change.coverage_ratio`, `performance.day_change.source`: 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Price updates persist `securities.day_change_native` by comparing the stored quote with the latest `historical_prices.close`, and persist `securities.day_change_eur` by applying the freshest Frankfurter FX rate. The serializer reuses those columns so positions and the detail view share identical day-change deltas. |
 | Purchase context (`purchase_totals.*`, `purchase_fx.*`) | `purchase_totals.security_currency`: 4 – Calculate and stored inside the database. `purchase_totals.account_currency`: 4 – Calculate and stored inside the database. `purchase_fx.*`: 3 – Frankfurt, APIFX fetch store and database. | `portfolio_securities.purchase_value_native` and `purchase_value_eur` persist the aggregated purchase totals, while `portfolio_securities_transactions` (rebuilt from canonical `transactions`) plus Frankfurter rates surface the FX metadata required for the payload. |
 
 **Implementation cues**
-- Expand `custom_components/pp_reader/data/db_access.py::get_security_snapshot` to load transaction-derived timestamps, Frankfurter rate metadata, and Yahoo history prerequisites before serialization.
-- Update `custom_components/pp_reader/data/websocket.py::_serialise_security_snapshot` to rename existing EUR price outputs to the documented keys and attach the `data_source` classification.
-- Coordinate the Yahoo ingest addition in `custom_components/pp_reader/prices/price_service.py::_run_price_cycle` with history persistence so day-change metrics have consistent inputs.
+- Expand `custom_components/pp_reader/data/db_access.py::get_security_snapshot` to load transaction-derived timestamps, Frankfurter rate metadata, day-change deltas from `securities.day_change_*`, and Yahoo history prerequisites before serialization.
+- Update `custom_components/pp_reader/data/websocket.py::_serialise_security_snapshot` to rename existing EUR price outputs to the documented keys, attach the `data_source` classification, and surface `last_price.market_time` / `last_price.fetched_at` in their new UI slots.
+- Ensure `custom_components/pp_reader/prices/price_service.py::_run_price_cycle` (or associated helpers) persists `securities.day_change_*` by comparing the stored quote with the latest `historical_prices.close` and applying the freshest Frankfurter FX rate so both the snapshot and portfolio positions share the same deltas.
 
 ### Security history (`pp_reader/get_security_history` command, `security_history` push)
 
