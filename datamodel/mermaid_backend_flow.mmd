@@ -1,8 +1,3 @@
-# Consolidated Backend-to-UI Data Flow
-
-The diagram below combines the previously separate backend flowcharts into a single view with the Portfolio Performance UI at the center. Each surrounding cluster represents a websocket payload or bus event that delivers data to the dashboard.
-
-```mermaid
 ---
 id: 3352fa75-eea8-43f1-acf3-9faffdbd6a55
 ---
@@ -127,32 +122,3 @@ flowchart TB
     EventBus --> PanelsUpdated[["panels_updated event"]]
   end
   PanelsUpdated --> UI
-```
-
-## Payload Highlights
-
-| Payload / Event | Primary Purpose | Key Outputs delivered to the UI |
-| --- | --- | --- |
-| `dashboard_summary` | Aggregates totals, FX coverage, and timestamps for the wealth banner. | `summary.total_wealth_eur`, `summary.fx_status`, `summary.calculated_at`, plus history caches for charts. |
-| `accounts` | Provides canonical account listings, balances, and FX metadata. | `accounts[].balance_eur`, `accounts[].balance_native`, `accounts[].fx_rate_updated_at`, `accounts[].fx_status`. |
-| `portfolio_values` | Supplies aggregated holdings metrics and health flags per portfolio. | `current_value_eur`, `purchase_value_eur`, `position_count`, `performance.*`, `valuation_state.*`. |
-| `portfolio_positions` | Delivers per-position holdings, valuation, and state data. | Position identity fields, holdings totals, average cost details, `valuation_state.*`, `data_state.*`. |
-| `last_file_update` | Communicates the most recent portfolio import timestamp and source. | `last_file_update.ingested_at`, `last_file_update.source`. |
-| `security_snapshot` | Combines holdings, pricing, performance, and FX context for a single security. | `holdings.*`, `market_value_eur`, `average_cost.*`, `performance.*`, `purchase_totals.*`. |
-| `security_history` | Streams chart-ready price history with native and EUR closes. | `series_source`, `prices[].close_native`, `prices[].close_eur`, `prices[].date`. |
-| `panels_updated` | Notifies the UI which payload has fresh data. | `data_type`, `data`, `synced_at` routing metadata. |
-
-## Persistent Stores and Services
-
-| Store / Service | Feeds | Notes |
-| --- | --- | --- |
-| `SQLite accounts`, `account_balances_performance` | Dashboard summary, accounts payload, history queries | Persist synchronized account state, balances, and historical rollups for reuse across payloads. |
-| `SQLite portfolio_securities`, `portfolio_securities_performance`, `portfolio_securities_transactions` | Dashboard summary, portfolio values, portfolio positions, security snapshot | Hold consolidated holdings, performance snapshots, and transaction rollups to avoid recalculation during websocket requests. |
-| `SQLite portfolios` | Portfolio values | Provides portfolio identity and metadata required during aggregation. |
-| `SQLite transactions` | Portfolio positions, security snapshot | Serves as the canonical transaction source for rebuilding rollups and timestamps. |
-| `SQLite fx_rates` | Dashboard summary, accounts payload, portfolio positions, security snapshot, security history | Supplies Frankfurter rates and timestamps for EUR normalization and FX metadata. |
-| `SQLite metadata` | Last file update | Stores the latest import timestamp and provenance for UI display. |
-| `SQLite historical_prices` | Security history | Contains consolidated historical quotes from Portfolio Performance and Yahoo for range queries. |
-| Yahoo price services | Security snapshot, security history | Provide live and historical market inputs used to enrich holdings and price series. |
-| Frankfurter FX ingest | Dashboard summary, accounts payload, security snapshot, security history | Updates conversion rates that inform balances, valuations, and FX timestamps. |
-```
