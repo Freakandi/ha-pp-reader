@@ -1,0 +1,43 @@
+---
+id: c78b0042-baf3-4090-9ba4-ef5b5e9df95d
+---
+flowchart LR
+  subgraph OverviewTab["Overview tab"]
+    DashboardSummary["dashboard_summary payload"]
+    Accounts["accounts payload"]
+    PortfolioValues["portfolio_values payload"]
+    PortfolioPositions["portfolio_positions payload"]
+    LastFileUpdate["last_file_update payload"]
+    PanelsUpdated["panels_updated event"]
+
+    DashboardSummary --> HeaderCard["Header card (total wealth & FX note)"]
+    Accounts --> EurTable["Liquidity table (EUR accounts)"]
+    Accounts --> FxTable["FX accounts table & warning"]
+    PortfolioValues --> PortfolioTable["Investment table (per portfolio)"]
+    PortfolioPositions --> ExpandableRows["Expandable holdings rows"]
+    PortfolioPositions --> DetailLaunchers["Security detail openers"]
+    LastFileUpdate --> FooterCard["Footer metadata card"]
+
+    PanelsUpdated -.routes.-> HeaderCard
+    PanelsUpdated -.routes.-> EurTable
+    PanelsUpdated -.routes.-> FxTable
+    PanelsUpdated -.routes.-> PortfolioTable
+    PanelsUpdated -.routes.-> ExpandableRows
+  end
+
+  subgraph SecurityTab["Security detail tabs"]
+    SecuritySnapshot["security_snapshot payload"]
+    SecurityHistory["security_history payload"]
+    PanelsUpdatedDetail["panels_updated (portfolio_positions)"]
+
+    SecuritySnapshot --> DetailHeader["Meta grid (price, holdings, gains)"]
+    SecuritySnapshot --> DetailInfoBar["Info bar (range context)"]
+    SecuritySnapshot --> AverageTooltips["Average cost tooltips"]
+    SecurityHistory --> HistoryChart["History chart & placeholder"]
+
+    PanelsUpdatedDetail -.invalidates.-> SecuritySnapshot
+    PanelsUpdatedDetail -.invalidates.-> SecurityHistory
+  end
+
+  PanelsUpdatedDetailNote["panels_updated carries the portfolio_positions refresh event"]
+  PanelsUpdatedDetail -.-> PanelsUpdatedDetailNote
