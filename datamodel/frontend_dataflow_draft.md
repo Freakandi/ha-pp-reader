@@ -3,6 +3,9 @@
 This draft consolidates how the Home Assistant dashboard renders backend payloads across all frontend tabs. The mermaid diagram summarises which websocket responses and events supply each UI surface, followed by tables outlining the rendered widgets, primary data, and notable behaviours.
 
 ```mermaid
+---
+id: c78b0042-baf3-4090-9ba4-ef5b5e9df95d
+---
 flowchart LR
   subgraph OverviewTab["Overview tab"]
     DashboardSummary["dashboard_summary payload"]
