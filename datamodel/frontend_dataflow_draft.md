@@ -41,7 +41,7 @@ flowchart LR
     PanelsUpdatedDetail -.invalidates.-> SecurityHistory
   end
 
-  Note right of PanelsUpdatedDetail: panels_updated carries the portfolio_positions refresh event.
+  note right of PanelsUpdatedDetail: panels_updated carries the portfolio_positions refresh event.
 ```
 
 ## Overview tab surfaces
