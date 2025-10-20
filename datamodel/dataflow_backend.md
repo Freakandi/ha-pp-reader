@@ -9,7 +9,7 @@ id: 3352fa75-eea8-43f1-acf3-9faffdbd6a55
 flowchart TB
   UI[[Portfolio Performance UI]]
 
-  subgraph DashboardSummary["Dashboard Summary"]
+  subgraph FullOverview["Full Overview"]
     AccountsProto[["PAccount stream"]] --> SyncAccounts[["_sync_accounts"]]
     SyncAccounts --> AccountsDB[("SQLite accounts")]
     SyncAccounts --> AccountPerfDB[("SQLite account_balances_performance")]
@@ -20,14 +20,14 @@ flowchart TB
     AccountsDB --> LoadAccounts[["_load_accounts_payload"]]
     FxRates --> LoadAccounts
     PortfolioSecDB --> FetchLivePortfolios[["fetch_live_portfolios"]]
-    LoadAccounts --> DashboardAgg[["ws_get_dashboard_data aggregation"]]
+    LoadAccounts --> DashboardAgg[["ws_get_full_overview aggregation"]]
     FetchLivePortfolios --> DashboardAgg
-    DashboardAgg --> DashboardSummaryPayload[["dashboard_summary payload"]]
+    DashboardAgg --> FullOverviewPayload[["full_overview payload"]]
     Clock[["UTC timestamp helper"]] --> DashboardSummaryPayload
     PortfolioPerfDB --> PortfolioHistoryCache[["portfolio time-series cache"]]
     AccountPerfDB --> AccountHistoryCache[["account balance time-series cache"]]
   end
-  DashboardSummaryPayload --> UI
+  FullOverviewPayload --> UI
   PortfolioHistoryCache --> UI
   AccountHistoryCache --> UI
 
@@ -133,7 +133,7 @@ flowchart TB
 
 | Payload / Event | Primary Purpose | Key Outputs delivered to the UI |
 | --- | --- | --- |
-| `dashboard_summary` | Aggregates totals, FX coverage, and timestamps for the wealth banner. | `summary.total_wealth_eur`, `summary.fx_status`, `summary.calculated_at`, plus history caches for charts. |
+| `full_overview` | Aggregates totals, FX coverage, portfolio listings, and timestamps for the wealth banner. | `summary.total_wealth_eur`, `summary.fx_status`, `summary.calculated_at`, `accounts[]`, `portfolios[]`, and `last_file_update`. |
 | `accounts` | Provides canonical account listings, balances, and FX metadata. | `accounts[].balance_eur`, `accounts[].balance_native`, `accounts[].fx_rate_updated_at`, `accounts[].fx_status`. |
 | `portfolio_values` | Supplies aggregated holdings metrics and health flags per portfolio. | `current_value_eur`, `purchase_value_eur`, `position_count`, `performance.*`, `valuation_state.*`. |
 | `portfolio_positions` | Delivers per-position holdings, valuation, and state data. | Position identity fields, holdings totals, average cost details, `valuation_state.*`, `data_state.*`. |
