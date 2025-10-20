@@ -21,10 +21,10 @@ flowchart TD
   AccountsLoader --> SnapshotAgg[[ws_get_dashboard_data aggregation]]
   LivePortfolios --> SnapshotAgg
   SnapshotAgg --> SnapshotPayload[["get_dashboard_data snapshot"]]
-  SnapshotPayload -->|accounts[] (legacy extras)| OverviewUI
-  SnapshotPayload -->|portfolios[]| OverviewUI
-  SnapshotPayload -->|last_file_update| OverviewUI
-  SnapshotPayload -->|transactions[]| OverviewUI
+  SnapshotPayload -->|"accounts[] (legacy extras)"| OverviewUI
+  SnapshotPayload -->|"portfolios[]"| OverviewUI
+  SnapshotPayload -->|"last_file_update"| OverviewUI
+  SnapshotPayload -->|"transactions[]"| OverviewUI
 ```
 
 **Data contract table**
@@ -55,7 +55,7 @@ flowchart TD
   AccountsDB --> Loader
   Loader --> PushHelper[[`_emit_account_updates`]]
   PushHelper --> EventBus["EVENT_PANELS_UPDATED (accounts)"]
-  EventBus -->|accounts[]| OverviewUI
+  EventBus -->|"accounts[]"| OverviewUI
 ```
 
 **Data contract table**
@@ -87,7 +87,7 @@ flowchart TD
   SecDB --> Live[[fetch_live_portfolios]]
   PortDB --> Live
   Live --> PushNormalizer[[`_normalize_portfolio_value_entry`]]
-  PushNormalizer --> PushEvent[[`_emit_portfolio_updates` (values)]]
+  PushNormalizer --> PushEvent[[`_emit_portfolio_updates` values]]
   PushEvent --> EventBus
   EventBus -->|portfolio_values| OverviewUI
 ```
@@ -124,7 +124,7 @@ flowchart TD
   TxDB --> Positions
   SecDB --> Positions
   Positions --> PushFormatter[[`_compact_portfolio_positions_payload`]]
-  PushFormatter --> PushEvent[[`_emit_portfolio_updates` (positions)]]
+  PushFormatter --> PushEvent[[`_emit_portfolio_updates` positions]]
   PushEvent --> EventBus
   EventBus -->|portfolio_positions| OverviewUI
 ```
