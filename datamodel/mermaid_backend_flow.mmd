@@ -4,7 +4,7 @@ id: 3352fa75-eea8-43f1-acf3-9faffdbd6a55
 flowchart TB
   UI[[Portfolio Performance UI]]
 
-  subgraph DashboardSummary["Dashboard Summary"]
+  subgraph DashboardSummary["Dashboard snapshot"]
     AccountsProto[["PAccount stream"]] --> SyncAccounts[["_sync_accounts"]]
     SyncAccounts --> AccountsDB[("SQLite accounts")]
     SyncAccounts --> AccountPerfDB[("SQLite account_balances_performance")]
@@ -17,7 +17,7 @@ flowchart TB
     PortfolioSecDB --> FetchLivePortfolios[["fetch_live_portfolios"]]
     LoadAccounts --> DashboardAgg[["ws_get_dashboard_data aggregation"]]
     FetchLivePortfolios --> DashboardAgg
-    DashboardAgg --> DashboardSummaryPayload[["dashboard_summary payload"]]
+    DashboardAgg --> DashboardSummaryPayload[["get_dashboard_data snapshot"]]
     Clock[["UTC timestamp helper"]] --> DashboardSummaryPayload
     PortfolioPerfDB --> PortfolioHistoryCache[["portfolio time-series cache"]]
     AccountPerfDB --> AccountHistoryCache[["account balance time-series cache"]]
@@ -26,17 +26,17 @@ flowchart TB
   PortfolioHistoryCache --> UI
   AccountHistoryCache --> UI
 
-  subgraph AccountSummaries["Account Summaries"]
+  subgraph AccountSummaries["accounts push"]
     AccountsProto --> SyncAccounts
     AccountsDB --> LoadAccountsPayload[["_load_accounts_payload"]]
     FxRates --> LoadAccountsPayload
-    LoadAccountsPayload --> AccountsPayload[["accounts payload"]]
+    LoadAccountsPayload --> AccountsPayload[["accounts push payload"]]
     AccountPerfDB --> AccountTrendQuery[["load_account_balance_series"]]
   end
   AccountsPayload --> UI
   AccountTrendQuery --> UI
 
-  subgraph PortfolioSummaries["Portfolio Summaries"]
+  subgraph PortfolioSummaries["portfolio_values push"]
     PortfolioProto[["PPortfolio + transactions"]] --> SyncPortfolios[["_sync_portfolios"]]
     PortfolioProto --> SyncHoldings
     SyncPortfolios --> PortfoliosDB[("SQLite portfolios")]
@@ -45,11 +45,11 @@ flowchart TB
     LivePortfolios --> PerformanceMetrics[["select_performance_metrics"]]
     PerformanceMetrics --> PortfolioNormalize[["_live_portfolios_payload"]]
     LivePortfolios --> PortfolioNormalize
-    PortfolioNormalize --> PortfolioValuesPayload[["portfolio_values payload"]]
+    PortfolioNormalize --> PortfolioValuesPayload[["portfolio_values push payload"]]
   end
   PortfolioValuesPayload --> UI
 
-  subgraph PortfolioPositions["Portfolio Positions"]
+  subgraph PortfolioPositions["portfolio_positions push"]
     PositionProto[["PPortfolio + PTransaction + PSecurity"]] --> SyncTransactions[["_sync_transactions"]]
     PositionProto --> SyncPortSec[["_sync_portfolio_securities"]]
     PositionProto --> SyncPerf[["rebuild_portfolio_security_performance"]]

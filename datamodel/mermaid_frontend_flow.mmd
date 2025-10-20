@@ -3,22 +3,25 @@ id: 42839b89-6c94-40be-8a54-e17296222dfa
 ---
 flowchart LR
   subgraph OverviewTab["Overview tab"]
-    DashboardSummary["dashboard_summary payload"]
-    Accounts["accounts payload"]
-    PortfolioValues["portfolio_values payload"]
-    PortfolioPositions["portfolio_positions payload"]
-    LastFileUpdate["last_file_update payload"]
+    Snapshot["get_dashboard_data snapshot"]
+    Accounts["accounts push"]
+    PortfolioValues["portfolio_values push"]
+    PortfolioPositions["portfolio_positions push"]
+    LastFileUpdate["last_file_update push"]
     PanelsUpdated["panels_updated event"]
 
-    DashboardSummary --> HeaderCard["Header card (total wealth & FX note)"]
-    Accounts --> EurTable["Liquidity table (EUR accounts)"]
-    Accounts --> FxTable["FX accounts table & warning"]
-    PortfolioValues --> PortfolioTable["Investment table (per portfolio)"]
+    Snapshot --> HeaderCard["Header card (legacy fields + push mirror)"]
+    Snapshot --> EurTable["Liquidity table (initial render)"]
+    Snapshot --> FxTable["FX accounts table (initial render)"]
+    Snapshot --> PortfolioTable["Investment table (initial render)"]
+    Snapshot --> FooterCard["Footer metadata card"]
+    Accounts --> EurTable
+    Accounts --> FxTable
+    PortfolioValues --> PortfolioTable
     PortfolioPositions --> ExpandableRows["Expandable holdings rows"]
     PortfolioPositions --> DetailLaunchers["Security detail openers"]
-    LastFileUpdate --> FooterCard["Footer metadata card"]
+    LastFileUpdate --> FooterCard
 
-    PanelsUpdated -.routes.-> HeaderCard
     PanelsUpdated -.routes.-> EurTable
     PanelsUpdated -.routes.-> FxTable
     PanelsUpdated -.routes.-> PortfolioTable
