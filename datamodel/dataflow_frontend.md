@@ -8,23 +8,29 @@ id: 42839b89-6c94-40be-8a54-e17296222dfa
 ---
 flowchart LR
   subgraph OverviewTab["Overview tab"]
-    FullOverview["full_overview payload"]
-    PortfolioPositions["portfolio_positions payload"]
-    PanelsUpdated["panels_updated event"]
+    Snapshot["get_dashboard_data snapshot"]
+    AccountsPush["accounts push"]
+    PortfolioPush["portfolio_values push"]
+    PositionsPush["portfolio_positions push"]
+    LastFilePush["last_file_update push"]
+    PanelsUpdated["panels_updated (overview)"]
 
-    FullOverview -- "summary.*" --> HeaderCard["Header card (total wealth & FX note)"]
-    FullOverview -- "accounts[] (EUR)" --> EurTable["Liquidity table (EUR accounts)"]
-    FullOverview -- "accounts[] (FX)" --> FxTable["FX accounts table & warning"]
-    FullOverview -- "portfolios[]" --> PortfolioTable["Investment table (per portfolio)"]
-    FullOverview -- "last_file_update" --> FooterCard["Footer metadata card"]
-    PortfolioPositions --> ExpandableRows["Expandable holdings rows"]
-    PortfolioPositions --> DetailLaunchers["Security detail openers"]
+    Snapshot -- "accounts[] (legacy extras: has_current_value)" --> EurTable["Liquidity table (EUR accounts)"]
+    Snapshot -- "accounts[]" --> FxTable["FX accounts table & warning"]
+    Snapshot -- "portfolios[]" --> PortfolioTable["Investment table (per portfolio)"]
+    Snapshot -- "last_file_update" --> FooterCard["Footer metadata card"]
+    PortfolioPush --> PortfolioTable
+    AccountsPush --> EurTable
+    AccountsPush --> FxTable
+    LastFilePush --> FooterCard
+    PositionsPush --> ExpandableRows["Expandable holdings rows"]
+    PositionsPush --> DetailLaunchers["Security detail openers"]
 
-    PanelsUpdated -.routes.-> HeaderCard
     PanelsUpdated -.routes.-> EurTable
     PanelsUpdated -.routes.-> FxTable
     PanelsUpdated -.routes.-> PortfolioTable
     PanelsUpdated -.routes.-> ExpandableRows
+    PanelsUpdated -.routes.-> FooterCard
   end
 
   subgraph SecurityTab["Security detail tabs"]
@@ -49,13 +55,13 @@ flowchart LR
 
 | UI surface | Consumed data | Key fields | Notes |
 | --- | --- | --- | --- |
-| Header card ("Übersicht") | `full_overview.summary`, plus local totals | `summary.total_wealth_eur`, `summary.fx_status`, `summary.calculated_at` | `renderDashboard` composes the header card after calling `fetchFullOverviewWS`, combining backend totals with computed warnings for missing FX data.【F:src/tabs/overview.ts†L1335-L1387】【F:src/tabs/overview.ts†L1406-L1451】 |
-| Investment table | `full_overview.portfolios[]` | `portfolios[].name`, `current_value`, `purchase_sum`, `performance.*`, `missing_value_positions` | Portfolio aggregates are normalised into expandable table rows, with valuation and performance copied directly from the payload.【F:src/tabs/overview.ts†L1357-L1397】【F:src/tabs/overview.ts†L1471-L1521】 |
-| Expandable holdings rows | `portfolio_positions` (lazy loaded per portfolio) | `positions[].security_uuid`, `aggregation.*`, `performance.*`, `average_cost.*` | When a depot expands, the tab fetches positions and injects sortable rows, then wires security-detail launchers for each security UUID. The table reuses `positions[].performance.day_change.*` so the dashboard shows the same deltas as the security snapshot.【F:src/tabs/overview.ts†L1522-L1560】【F:src/tabs/overview.ts†L1561-L1613】【F:src/data/updateConfigsWS.ts†L188-L246】 |
-| Liquidity table (EUR accounts) | `full_overview.accounts[]` | `accounts[].name`, `accounts[].balance`, `accounts[].currency_code` | The renderer splits EUR accounts, renders balances in EUR, and contributes to the total wealth sum before display.【F:src/tabs/overview.ts†L1335-L1392】【F:src/tabs/overview.ts†L1433-L1488】 |
-| FX accounts table | `full_overview.accounts[]` | `accounts[].orig_balance`, `accounts[].balance`, `accounts[].currency_code`, `accounts[].fx_unavailable` | Non-EUR accounts render a two-column table with native and EUR balances and optional FX warning text when rates are missing.【F:src/tabs/overview.ts†L1433-L1488】 |
-| Footer metadata card | `full_overview.last_file_update` | `last_file_update.ingested_at` | The footer pulls the latest import timestamp and shows a fallback label when the fetch fails.【F:src/tabs/overview.ts†L1399-L1425】 |
-| Live updates queue | `panels_updated` (`accounts`, `portfolio_values`, `portfolio_positions`, `last_file_update`) | `data_type`, `data`, `portfolio_uuid` | `dashboard.ts` routes websocket events into update handlers that refresh the DOM sections without a full re-render.【F:src/dashboard.ts†L1-L120】【F:src/dashboard.ts†L232-L311】 |
+| Header card ("Übersicht") | `accounts[]` + `portfolio_values[]` push payloads (snapshot mirrors the same fields) | Accounts contribute `name`, `currency_code`, `balance`, `orig_balance`, `(fx_unavailable)`; portfolio entries supply `current_value`, `purchase_sum`, `position_count`, `missing_value_positions`, and `performance.*` (`gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`, `source`, `coverage_ratio`). | `renderDashboard` totals the EUR balances and portfolio aggregates that arrive via push events; first paint still depends on `fetchDashboardDataWS`, whose snapshot currently includes the legacy extras until harmonisation is completed.【F:src/tabs/overview.ts†L1335-L1387】【F:src/tabs/overview.ts†L1406-L1451】【F:src/data/api.ts†L174-L199】 |
+| Investment table | `portfolio_values.portfolios[]` push payload (snapshot keeps identical keys) | `uuid`, `name`, `current_value`, `purchase_sum`, `position_count`, `missing_value_positions`, and `performance.*` (`gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`, `source`, `coverage_ratio`). | Portfolio aggregates are normalised into expandable table rows, with valuation and performance copied directly from the push payload; websocket responses still surface `has_current_value` until the backend trims it away.【F:src/tabs/overview.ts†L1357-L1397】【F:src/tabs/overview.ts†L1471-L1521】 |
+| Expandable holdings rows | `portfolio_positions` push payload | `positions[].security_uuid`, `aggregation.*`, `performance.*`, `average_cost.*` | When a depot expands, the tab fetches positions and injects sortable rows, then wires security-detail launchers for each security UUID. The table reuses backend-provided performance values for consistency across tabs.【F:src/tabs/overview.ts†L1522-L1560】【F:src/tabs/overview.ts†L1561-L1613】【F:src/data/updateConfigsWS.ts†L188-L246】 |
+| Liquidity table (EUR accounts) | `accounts[]` push payload | `name`, `currency_code`, `balance` | The renderer splits EUR accounts, renders balances in EUR, and contributes to the total wealth sum before display; the snapshot mirrors the same canonical fields on initial load.【F:src/tabs/overview.ts†L1335-L1392】【F:src/tabs/overview.ts†L1433-L1488】 |
+| FX accounts table | `accounts[]` push payload | `name`, `currency_code`, `orig_balance`, `balance`, `(fx_unavailable)` | Non-EUR accounts render a two-column table with native and EUR balances and optional FX warning text when rates are missing; the snapshot bootstrap still includes the same fields plus `has_current_value` until backend alignment finishes.【F:src/tabs/overview.ts†L1433-L1488】 |
+| Footer metadata card | `last_file_update` push payload | ISO 8601 timestamp string | The footer pulls the latest import timestamp and shows a fallback label when the fetch fails; the snapshot returns the identical string so first paint matches incremental updates.【F:src/tabs/overview.ts†L1399-L1425】 |
+| Live updates queue | `panels_updated` (`accounts`, `portfolio_values`, `portfolio_positions`, `last_file_update`) | `data_type`, `data`, `portfolio_uuid` | `dashboard.ts` routes websocket events into update handlers that refresh the DOM sections without a full re-render. The documented schemas match the push payloads; `ws_get_dashboard_data` remains unchanged until backend work aligns the snapshot.【F:src/dashboard.ts†L1-L120】【F:src/dashboard.ts†L232-L311】 |
 
 ## Security detail tabs
 
@@ -71,6 +77,6 @@ flowchart LR
 
 | Behaviour | Consumed data | Notes |
 | --- | --- | --- |
-| Initial data fetch | Websocket commands per payload group | The overview tab issues `fetchFullOverviewWS` before rendering, while detail views call the dedicated helpers in `src/data/api.ts`; both wait for fresh data prior to painting markup.【F:src/tabs/overview.ts†L1331-L1399】【F:src/tabs/security_detail.ts†L1710-L1770】【F:src/data/api.ts†L1-L210】 |
+| Initial data fetch | Websocket commands per payload group | The overview tab issues `fetchDashboardDataWS` before rendering, while detail views call the dedicated helpers in `src/data/api.ts`; both wait for fresh data prior to painting markup.【F:src/tabs/overview.ts†L1331-L1399】【F:src/tabs/security_detail.ts†L1710-L1770】【F:src/data/api.ts†L174-L205】 |
 | Lazy loading & caching | `portfolio_positions`, `security_snapshot`, `security_history` | Expandable portfolios and security tabs cache data locally, reusing previous responses until a live update invalidates the caches for the relevant portfolio or security.【F:src/tabs/overview.ts†L1490-L1560】【F:src/data/positionsCache.ts†L1-L120】【F:src/tabs/security_detail.ts†L300-L384】 |
 | Range selection | `security_history` | Range buttons call `fetchSecurityHistoryWS` with pre-defined windows, update the info bar, and refresh the chart in place without leaving the tab.【F:src/tabs/security_detail.ts†L1554-L1698】 |
