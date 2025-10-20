@@ -1,6 +1,6 @@
 # Portfolio Performance Reader – Future Data Model Visualizations
 
-### Dashboard summary (`pp_reader/get_dashboard_summary` command, `dashboard_summary` push)
+### Full overview snapshot (`pp_reader/get_full_overview` command; push updates: `accounts`, `portfolio_values`, `last_file_update`)
 
 **Scope**
 - Provides the pre-aggregated wealth headline so the dashboard can render totals without client recomputation.
@@ -20,14 +20,14 @@ flowchart TD
   A1 -->|stored balances + fx flags| L1[[_load_accounts_payload]]
   A2 -->|rate freshness| L1
   P1 -->|stored EUR valuations| L2[[fetch_live_portfolios]]
-  L1 --> Agg[[ws_get_dashboard_data aggregation]]
+  L1 --> Agg[[ws_get_full_overview aggregation]]
   L2 --> Agg
   Agg --> Total[summary.total_wealth_eur]
   L1 --> FX[summary.fx_status]
   PPerf -->|historical valuations| Hist[[portfolio time-series cache]]
   ABPerf -->|historical balances| AccHist[[account balance time-series cache]]
   Clock[[UTC timestamp helper]] --> Stamp[summary.calculated_at]
-  Total --> Payload[[dashboard_summary payload]]
+  Total --> Payload[[full_overview payload]]
   FX --> Payload
   Stamp --> Payload
 ```
@@ -42,11 +42,11 @@ flowchart TD
 | Account balance history cache | 4 – Calculate and stored inside the database. | `account_balances_performance` stores daily native and EUR balances so cash trend charts can load without recomputing transactions. |
 
 **Implementation cues**
-- Extend `custom_components/pp_reader/data/websocket.py::ws_get_dashboard_data` to consolidate `_load_accounts_payload` and `fetch_live_portfolios` outputs, emit the enum-mapped FX status, and stamp `datetime.now(tz=UTC)`.
+- Extend `custom_components/pp_reader/data/websocket.py::ws_get_full_overview` to consolidate `_load_accounts_payload` and `fetch_live_portfolios` outputs, emit the enum-mapped FX status, and stamp `datetime.now(tz=UTC)`.
 - Ensure `custom_components/pp_reader/data/db_access.py::fetch_live_portfolios` continues supplying EUR totals so aggregation avoids per-request recomputation.
 - Cache the composed summary within the websocket request scope only; no long-lived cache is required because the payload depends on current FX and holdings state.
 
-### Account summaries (`pp_reader/get_accounts` command, `accounts` push)
+### Account summaries (slice of `pp_reader/get_full_overview` command, `accounts` push)
 
 **Scope**
 - Delivers the canonical list of accounts for liquidity tables, preserving proto ordering and identifiers.
@@ -67,7 +67,7 @@ flowchart TD
   Loader --> FXDate["accounts[].fx_rate_updated_at"]
   Loader --> FXStatus["accounts[].fx_status"]
   Loader --> Identity["accounts array with ids, names, currency"]
-  subgraph Payload
+  subgraph FullOverview
     Balance --> Out
     Native --> Out
     FXDate --> Out
@@ -90,7 +90,7 @@ flowchart TD
 - Update `custom_components/pp_reader/data/websocket.py::_load_accounts_payload` to emit the enum status and expose the stored Frankfurter timestamp.
 - When aligning `accounts[].balance_native`, audit `db_calc_account_balance` to ensure the stored cent totals match the documented data source path.
 
-### Portfolio summaries (`pp_reader/get_portfolios` command, `portfolio_values` push)
+### Portfolio summaries (slice of `pp_reader/get_full_overview` command, `portfolio_values` push)
 
 **Scope**
 - Provides pre-aggregated portfolio metrics for the overview table without requiring client aggregation.
@@ -182,7 +182,7 @@ flowchart TD
 - Update `custom_components/pp_reader/data/websocket.py::_normalize_portfolio_positions` to translate loader errors into `data_state.*` and attach valuation enums and reasons.
 - Keep `custom_components/pp_reader/data/aggregations.py::compute_holdings_aggregation` as the central place for cent-to-EUR conversions to avoid duplicate rounding logic.
 
-### Last file update (`pp_reader/get_last_file_update` command, `last_file_update` push)
+### Last file update (slice of `pp_reader/get_full_overview` command, `last_file_update` push)
 
 **Scope**
 - Communicates when the backend last processed a portfolio import for footer messaging.
