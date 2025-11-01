@@ -40,6 +40,7 @@ Additional platform-specific hints (Windows, devcontainers, Codex) live in [TEST
 - Gains, day-change deltas, and coverage metadata flow through `custom_components/pp_reader/data/performance.py`. Call `select_performance_metrics` (and its helpers) so sensors, WebSocket commands, and events all emit the same structured `performance` payload.
 - Holdings calculations return structured `aggregation` and `average_cost` data (including native currency and EUR totals). Legacy flat fields such as `gain_abs`, `gain_pct`, and `avg_price_*` must not reappear in new payloads.
 - Canonical currency edge cases (SSR Mining CAD vs. EUR, Harmonic Drive JPY) are documented in `.docs/fix_native_purchase.md` and mirrored by unit tests; keep them intact when adjusting purchase logic.
+- The end-to-end ingestion, aggregation, and payload contracts live in [`.docs/portfolio-data-spec.md`](.docs/portfolio-data-spec.md); update that spec alongside schema or API changes.
 
 ## Frontend workflow
 The dashboard is authored in TypeScript and bundled with Vite. Assets live under `custom_components/pp_reader/www/pp_reader_dashboard/js/` and are referenced by `dashboard.module.js`.
