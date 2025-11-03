@@ -1,0 +1,43 @@
+# Legacy Cleanup Strategy for the Datamodel Refactor
+
+## Objectives
+
+This strategy governs how the integration will remove superseded assets once the canonical ingestion → normalization → delivery flow is in place, ensuring the portfolio pipeline remains aligned with the backend data model and dashboard contracts documented in the canonical specs.【F:datamodel/backend-datamodel-final.md†L1-L133】【F:datamodel/dataflow_backend.md†L1-L138】【F:datamodel/dataflow_frontend.md†L1-L118】
+
+Key goals:
+
+- Decommission legacy helpers in lockstep with the new parser, enrichment, normalization, and frontend adapters so every removal is gated by observable parity checks.【F:custom_components/pp_reader/data/coordinator.py†L49-L199】【F:tests/test_event_push.py†L1-L160】
+- Preserve a verifiable audit trail through fixtures, dashboards, and Home Assistant configuration artifacts while trimming obsolete resources.【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】【F:README.md†L41-L68】
+- Track cleanup readiness alongside the roadmap and workstream plans to keep backend and frontend stakeholders synchronized.【F:.docs/refactor_roadmap.md†L1-L72】【F:.docs/backend_workstreams.md†L1-L83】【F:.docs/frontend_alignment.md†L1-L36】
+
+## Governance Principles
+
+1. **Evidence-first removals.** No module, schema, or UI asset is deleted until fixtures, automated tests, and manual runbooks show the canonical data still satisfies the dashboard contract matrix and websocket behaviors.【F:datamodel/panel_connectors.md†L1-L94】【F:tests/test_ws_portfolio_positions.py†L1-L198】
+2. **Shared verification.** Backend and frontend contributors jointly sign off on contract compatibility by replaying representative database snapshots before removals ship.【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】【F:tests/test_coordinator_contract.py†L1-L120】
+3. **Configuration parity.** Cleanup never strands user configuration; database paths, backups, and service bindings remain intact and documented for users during each milestone.【F:README.md†L41-L77】【F:tests/test_backup_cleanup.py†L1-L36】
+4. **Rolling checkpoints.** Every removal candidate ties back to roadmap milestones so coordination notes and release messaging stay current.【F:.docs/refactor_roadmap.md†L45-L73】【F:.docs/frontend_alignment.md†L15-L34】
+
+## Cleanup Tracker
+
+| Status | Area | Legacy asset(s) | Preconditions | Validation & Evidence | Notes |
+| --- | --- | --- | --- | --- | --- |
+| [ ] | Parser ingestion | `custom_components/pp_reader/data/coordinator.py::_sync_data_to_db`, `_SyncRunner` utilities inside `data/sync_from_pclient.py` | Streaming parser pipeline and normalization writer replace legacy sync path (Roadmap M1–M4).【F:custom_components/pp_reader/data/coordinator.py†L49-L196】【F:.docs/backend_workstreams.md†L5-L34】 | Green runs for `tests/test_sync_from_pclient.py`, `tests/test_coordinator_contract.py`, and dashboard websocket suites confirm canonical payloads still match protobuf imports.【F:tests/test_sync_from_pclient.py†L1-L200】【F:tests/test_coordinator_contract.py†L1-L120】【F:tests/test_ws_portfolio_positions.py†L1-L198】 | Archive legacy helpers alongside migration notes; preserve protobuf fixtures for regression replay. |
+| [ ] | Enrichment jobs | Synchronous history/FX helpers in `prices/history.py`, `_ensure_exchange_rates_for_dates_sync` | Async enrichment cycle landed with persisted provenance metadata (Roadmap M2, Backend workstream enrichment section).【F:.docs/backend_workstreams.md†L20-L33】 | `tests/test_price_service.py`, `tests/test_yahooquery_provider.py`, and FX regression suites cover async ingest with WAL enabled before deleting sync paths.【F:tests/test_price_service.py†L1-L160】【F:tests/test_yahooquery_provider.py†L1-L99】【F:tests/test_currencies_fx.py†L1-L158】 | Move decommissioned helpers to release notes, flag dependent automations before removal. |
+| [ ] | Metrics + normalization | Legacy aggregation logic in `helpers/performance_legacy.py`, `_compact_event_data` fallbacks, manual coordinator caches | Metrics engine writes canonical tables and websocket serializers read normalized rows only (Roadmap M3–M4).【F:.docs/backend_workstreams.md†L35-L63】【F:custom_components/pp_reader/data/event_push.py†L1-L134】 | Snapshot + push parity verified via `tests/test_event_push.py`, `tests/test_aggregations.py`, and websocket smoke tests (`tests/test_ws_portfolios_live.py`, `tests/test_ws_portfolio_positions.py`).【F:tests/test_event_push.py†L1-L143】【F:tests/test_aggregations.py†L1-L160】【F:tests/test_ws_portfolios_live.py†L1-L142】 | Capture coordinator telemetry before pruning caches so diagnostics stay traceable. |
+| [ ] | Storage + backups | `config/pp_reader_data` flat backups, ad-hoc WAL toggles, manual repair scripts | Migration framework with idempotent schema upgrades and managed backups shipped (Roadmap M4, Storage workstream).【F:.docs/backend_workstreams.md†L65-L83】【F:README.md†L41-L68】 | `tests/test_backup_cleanup.py`, `tests/test_migration.py`, and cold-start restores from `datamodel/db_entries/*` snapshots prove recoverability without legacy scripts.【F:tests/test_backup_cleanup.py†L1-L36】【F:tests/test_migration.py†L1-L200】【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】 | Communicate backup rotation change in release notes and README troubleshooting. |
+| [ ] | Frontend fallbacks | Legacy adapters under `src/lib/api/portfolio/legacy_*`, dashboard map bundles referencing deprecated fields | Canonical payload feature branch validated; stores/components migrated (Roadmap M5, Frontend alignment).【F:.docs/frontend_alignment.md†L5-L34】 | `tests/frontend/*`, dashboard snapshot assertions, and manual regression via websocket panel matrix pass without legacy selectors.【F:tests/frontend/test_dashboard_smoke.py†L1-L63】【F:datamodel/panel_connectors.md†L1-L94】 | Remove minified bundles after `npm run build` refresh; coordinate with documentation updates. |
+| [ ] | Documentation & comms | Outdated references in `README.md`, `.docs/*` strategies superseded by canonical pipeline | QA/docs milestone complete with updated architecture + dashboard guides (Roadmap M6).【F:.docs/refactor_roadmap.md†L125-L150】【F:README.md†L1-L84】 | `README.md`, `README-dev.md`, and changelog diffs reviewed alongside release announcement notes; internal rollouts confirm messaging.【F:README.md†L1-L84】【F:README-dev.md†L1-L120】【F:CHANGELOG.md†L1-L120】 | Archive historical strategy docs into `/zz_Drafts/` once superseded. |
+
+## Execution Checklist
+
+1. **Baseline audit.** Snapshot the current database and dashboard state using representative fixtures from `datamodel/db_entries/` before cutting any removals; attach evidence to the roadmap milestone notes.【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】【F:.docs/refactor_roadmap.md†L59-L73】
+2. **Milestone gating.** During each roadmap milestone review, copy the relevant tracker row into the status note and capture blocking tasks for backend/frontend owners.【F:.docs/refactor_roadmap.md†L45-L73】【F:.docs/frontend_alignment.md†L15-L34】
+3. **Test matrix.** Run the targeted pytest modules listed above plus websocket suites (`tests/test_ws_*`) and dashboard tests after every removal PR; store links to the CI runs in the tracker table notes.【F:tests/test_ws_portfolio_positions.py†L1-L198】【F:tests/test_ws_security_history.py†L1-L200】【F:tests/frontend/test_dashboard_smoke.py†L1-L63】
+4. **Configuration verification.** Validate that Home Assistant configuration paths (`/config/pp_reader_data`) continue to be honored for imports, backups, and services, documenting any migration steps for users.【F:README.md†L41-L68】【F:tests/test_backup_cleanup.py†L1-L36】
+5. **Release coordination.** Fold cleanup updates into release notes and docs refresh so decommissioned assets are communicated with upgrade steps, referencing the frontend/back-end alignment documents for contract summaries.【F:.docs/frontend_alignment.md†L15-L34】【F:CHANGELOG.md†L1-L120】
+
+## Reporting & Ownership
+
+- **Status reviews.** Add tracker updates to the weekly refactor sync so owners can surface blockers early; include links to roadmap notes and test evidence for each row.【F:.docs/refactor_roadmap.md†L59-L73】
+- **Documentation log.** Annotate `.docs/live_aggregation/` and related directories with cleanup outcomes; move superseded notes into `datamodel/zz_Drafts/` with a tombstone entry referencing the tracker row.【F:.docs/backend_workstreams.md†L65-L83】【F:datamodel/zz_Drafts/frontend-backend-data.md†L1-L24】
+- **Escalations.** If removal readiness cannot be demonstrated with the listed fixtures or tests, raise a dedicated issue linking to the blocker and keep the tracker row open until resolved.【F:tests/test_migration.py†L1-L200】【F:tests/test_coordinator_contract.py†L1-L120】
