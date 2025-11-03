@@ -1,9 +1,9 @@
 1. [ ] Phase 0 – Modul- und Modell-Scaffolding
-   a) [ ] Lege das Paket `custom_components/pp_reader/models` an und exportiere die Parser-Datamodelle über `__all__`.
+   a) [x] Lege das Paket `custom_components/pp_reader/models` an und exportiere die Parser-Datamodelle über `__all__`.
       - Dateipfad(e): custom_components/pp_reader/models/__init__.py
       - Betroffene Funktion(en)/Abschnitt(e): Modulinitialisierung, `__all__`
       - Ziel/Ergebnis der Änderung: Einheitlicher Import-Pfad für alle Parser-Dataclasses (z.B. `from custom_components.pp_reader.models import parsed`)
-   b) [ ] Implementiere in `custom_components/pp_reader/models/parsed.py` dataclasses für Accounts, Portfolios, Securities, Transactions, TransactionUnits, HistoricalPrices und einen Container `ParsedClient` inkl. `from_proto`-Klassenmethoden.
+   b) [x] Implementiere in `custom_components/pp_reader/models/parsed.py` dataclasses für Accounts, Portfolios, Securities, Transactions, TransactionUnits, HistoricalPrices und einen Container `ParsedClient` inkl. `from_proto`-Klassenmethoden.
       - Dateipfad(e): custom_components/pp_reader/models/parsed.py
       - Betroffene Funktion(en)/Abschnitt(e): Dataclasses `ParsedAccount`, `ParsedPortfolio`, `ParsedSecurity`, `ParsedTransaction`, `ParsedTransactionUnit`, `ParsedHistoricalPrice`, `ParsedClient`
       - Ziel/Ergebnis der Änderung: Typisierte Repräsentation der Portfolio-Performance-Payloads gemäss `.docs/backend_workstreams.md` (Abschnitt „Parser Modernization“) als Basis für Staging-Writes
