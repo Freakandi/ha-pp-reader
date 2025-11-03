@@ -7,7 +7,7 @@
       - Dateipfad(e): custom_components/pp_reader/models/parsed.py
       - Betroffene Funktion(en)/Abschnitt(e): Dataclasses `ParsedAccount`, `ParsedPortfolio`, `ParsedSecurity`, `ParsedTransaction`, `ParsedTransactionUnit`, `ParsedHistoricalPrice`, `ParsedClient`
       - Ziel/Ergebnis der Änderung: Typisierte Repräsentation der Portfolio-Performance-Payloads gemäss `.docs/backend_workstreams.md` (Abschnitt „Parser Modernization“) als Basis für Staging-Writes
-   c) [ ] Ergänze zugehörige Unit-Tests, die Beispiel-`PClient`-Fixtures aus `datamodel/parsed_pp_data.md` in die neuen Dataclasses überführen und Feldwerte verifizieren.
+   c) [x] Ergänze zugehörige Unit-Tests, die Beispiel-`PClient`-Fixtures aus `datamodel/parsed_pp_data.md` in die neuen Dataclasses überführen und Feldwerte verifizieren.
       - Dateipfad(e): tests/models/test_parsed_models.py (neu); ggf. tests/fixtures/portfolio/
       - Betroffene Funktion(en)/Abschnitt(e): Testfälle `test_parsed_client_from_proto_accounts`, `test_parsed_client_from_proto_securities`, `test_parsed_client_from_proto_transactions`
       - Ziel/Ergebnis der Änderung: Sicherstellung, dass `from_proto` alle Pflichtfelder und optionale Strukturen korrekt mappt

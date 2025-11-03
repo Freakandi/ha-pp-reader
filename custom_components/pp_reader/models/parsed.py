@@ -73,7 +73,7 @@ def _parse_decimal_value(pdecimal: client_pb2.PDecimalValue | None) -> float | N
         return None
 
     value = int.from_bytes(pdecimal.value, byteorder="little", signed=True)
-    return abs(value / (10 ** pdecimal.scale))
+    return value / (10 ** pdecimal.scale)
 
 
 def _parse_any_value(value: client_pb2.PAnyValue | None) -> Any:
