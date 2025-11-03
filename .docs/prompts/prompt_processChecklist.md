@@ -6,8 +6,11 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/uniform_precision_migration.md
-- .docs/TODO_uniform_precision_migration.md
+- .docs/refactor_roadmap.md
+- .docs/backend_workstreams.md
+- .docs/legacy_cleanup_strategy.md
+- .docs/qa_docs_comms.md
+- .docs/TODO_datamodel_parser_modernization.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -22,7 +25,7 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_uniform_precision_migration.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - TODO_datamodel_parser_modernization.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
    - Alle lint-Prüfungen müssen erfolgreich durchlaufen (ESLint für TypeScript, ruff für Python)
@@ -58,7 +61,7 @@ Regeln:
 
 Explizite Qualitätskriterien:
 - Einhaltung Zeit-/Formatangaben
-- Rounding & Skalierung unverändert
+- Streaming-Parser und zugehörige Helper dürfen keine neuen blockierenden IO-Pfade einführen
 - Jeglicher neue oder geänderte Code muss ruff-compliant sein
 - Keine Mutationen bestehender Coordinator Keys
 - Konsistente Nutzung vorhandener Logger-Namespace-Konvention: custom_components.pp_reader.[submodule]
