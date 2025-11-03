@@ -12,7 +12,7 @@ This document enumerates the five preparation tasks required to execute the new 
 - For each milestone, record entry and exit criteria, affected code areas (e.g., `custom_components/pp_reader/services/*`, `src/lib/`), and deliverables.
 - Describe sequencing logic and inter-milestone dependencies, including prerequisite infrastructure or data contracts.
 
-**Artifacts.** A new roadmap document under `.docs/roadmap/README.md` (or equivalent) capturing milestones, dependencies, and timeline rationale.
+**Artifacts.** A new roadmap document under `.docs/refactor_roadmap.md` capturing milestones, dependencies, and timeline rationale.
 
 **Suggested prompt for concept document.**
 ```
