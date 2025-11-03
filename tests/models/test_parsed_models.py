@@ -161,4 +161,4 @@ def test_parsed_client_from_proto_transactions() -> None:
     assert parsed_unit.amount == 25000
     assert parsed_unit.fx_amount == 27000
     assert parsed_unit.fx_currency_code == "USD"
-    assert parsed_unit.fx_rate_to_base == (-13500) / (10 ** 4)
+    assert parsed_unit.fx_rate_to_base == (-13500) / (10**4)

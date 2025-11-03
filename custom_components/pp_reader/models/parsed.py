@@ -73,7 +73,7 @@ def _parse_decimal_value(pdecimal: client_pb2.PDecimalValue | None) -> float | N
         return None
 
     value = int.from_bytes(pdecimal.value, byteorder="little", signed=True)
-    return value / (10 ** pdecimal.scale)
+    return value / (10**pdecimal.scale)
 
 
 def _parse_any_value(value: client_pb2.PAnyValue | None) -> Any:
@@ -262,8 +262,7 @@ class ParsedSecurity:
             attributes=_parse_key_value_entries(security.attributes),
             properties=_parse_key_value_entries(security.properties),
             prices=[
-                ParsedHistoricalPrice.from_proto(price)
-                for price in security.prices
+                ParsedHistoricalPrice.from_proto(price) for price in security.prices
             ],
             latest=latest_price,
             updated_at=_timestamp_to_datetime(_maybe_field(security, "updatedAt")),
@@ -315,8 +314,7 @@ class ParsedTransaction:
             source=_maybe_field(transaction, "source"),
             updated_at=_timestamp_to_datetime(_maybe_field(transaction, "updatedAt")),
             units=[
-                ParsedTransactionUnit.from_proto(unit)
-                for unit in transaction.units
+                ParsedTransactionUnit.from_proto(unit) for unit in transaction.units
             ],
         )
 
@@ -345,17 +343,12 @@ class ParsedClient:
         return cls(
             version=int(client.version),
             base_currency=client.baseCurrency or None,
-            accounts=[
-                ParsedAccount.from_proto(account)
-                for account in client.accounts
-            ],
+            accounts=[ParsedAccount.from_proto(account) for account in client.accounts],
             portfolios=[
-                ParsedPortfolio.from_proto(portfolio)
-                for portfolio in client.portfolios
+                ParsedPortfolio.from_proto(portfolio) for portfolio in client.portfolios
             ],
             securities=[
-                ParsedSecurity.from_proto(security)
-                for security in client.securities
+                ParsedSecurity.from_proto(security) for security in client.securities
             ],
             transactions=[
                 ParsedTransaction.from_proto(transaction)
