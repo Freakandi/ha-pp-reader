@@ -19,6 +19,14 @@ except ModuleNotFoundError as err:  # pragma: no cover - protobuf dependency mis
     _TIMESTAMP_IMPORT_ERROR = err
 else:
     _TIMESTAMP_IMPORT_ERROR = None
+
+try:  # pragma: no cover - optional dependency
+    from custom_components.pp_reader.name.abuchen.portfolio import (
+        client_pb2 as _client_pb2_module,
+    )
+except ModuleNotFoundError:  # pragma: no cover - fallback for tests without protobuf
+    _client_pb2_module = None
+
 from pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
     load_latest_rates_sync,
@@ -42,6 +50,7 @@ from .db_access import (
     get_transactions,
 )
 from .event_push import _compact_event_data, _push_update  # noqa: F401
+from .ingestion_reader import load_proto_snapshot
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -370,7 +379,8 @@ class _SyncRunner:
         last_file_update: str | None,
         db_path: Path | None,
     ) -> None:
-        self.client = client
+        ingestion_client = load_proto_snapshot(conn)
+        self.client = ingestion_client or client
         self.conn = conn
         self.hass = hass
         self.entry_id = entry_id
@@ -1656,3 +1666,4 @@ def fetch_positions_for_portfolios(
             )
             result[pid] = []
     return result
+

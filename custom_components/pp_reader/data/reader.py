@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import logging
-import zipfile
+import warnings
 from importlib import import_module
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from custom_components.pp_reader.services import (
+    PortfolioParseError,
+    PortfolioValidationError,
+)
+from custom_components.pp_reader.services.portfolio_file import LOGGER as PARSER_LOGGER
+from custom_components.pp_reader.services.portfolio_file import read_portfolio_bytes
+
 _LOGGER = logging.getLogger(__name__)
+_DEPRECATION_STATE = {"logged": False}
 
 try:  # pragma: no cover - exercised indirectly via tests
     _client_pb2 = import_module(
@@ -41,52 +48,54 @@ def parse_data_portfolio(path: str) -> client_pb2.PClient | None:  # type: ignor
     :param path: Pfad zur .portfolio-Datei
     :return: Instanz von PClient oder None bei Fehler.
     """
-    if not Path(path).exists():
-        _LOGGER.error("❌ Datei existiert nicht: %s", path)
-        return None
+    warning_msg = (
+        "parse_data_portfolio is deprecated; use "
+        "custom_components.pp_reader.services.parser_pipeline."
+        "async_parse_portfolio instead"
+    )
+    warnings.warn(warning_msg, DeprecationWarning, stacklevel=2)
+    if not _DEPRECATION_STATE["logged"]:
+        _LOGGER.warning(warning_msg)
+        _DEPRECATION_STATE["logged"] = True
 
     if _client_pb2 is None or _protobuf_message is None:
         missing = _CLIENT_PROTO_IMPORT_ERROR or _PROTOBUF_IMPORT_ERROR
-        error_msg = "google protobuf runtime fehlt" if missing else "Unbekannter Fehler"
-        _LOGGER.warning(
-            "❌ Portfolioparser deaktiviert (%s): %s",
-            error_msg,
-            missing,
+        PARSER_LOGGER.error(
+            "protobuf runtime for Portfolio Performance not available: %s",
+            missing or "unknown import error",
         )
         return None
 
     try:
-        with zipfile.ZipFile(path, "r") as archive:
-            if "data.portfolio" not in archive.namelist():
-                _LOGGER.error("❌ ZIP-Datei enthält keine 'data.portfolio'")
-                return None
+        raw_data = read_portfolio_bytes(path)
+    except PortfolioValidationError as err:
+        PARSER_LOGGER.error(
+            "validation error while reading portfolio '%s': %s",
+            path,
+            err.message or "validation error",
+        )
+        return None
+    except PortfolioParseError as err:
+        PARSER_LOGGER.error(
+            "unable to read portfolio '%s': %s",
+            path,
+            err.message or "parse error",
+        )
+        return None
 
-            with archive.open("data.portfolio") as f:
-                raw_data = f.read()
-
-        # Entferne Prefix (PPPBV1), falls vorhanden
-        if raw_data.startswith(b"PPPBV1"):
-            prefix_end = 8  # 'PPPBV1' + 1 Byte für Version/Flag
-            raw_data = raw_data[prefix_end:]
-            # _LOGGER.debug("i PPPBV1-Header erkannt und entfernt")  # noqa: ERA001
-
-        # Direktes Parsen als PClient
-        try:
-            client = _client_pb2.PClient()  # type: ignore[attr-defined]
-            client.ParseFromString(raw_data)
-            _LOGGER.info(
-                "✅ Parsen erfolgreich - Version %s mit %d Wertpapieren",
-                client.version,
-                len(client.securities),
-            )
-        except _protobuf_message.DecodeError:  # type: ignore[union-attr]
-            _LOGGER.exception("❌ Fehler beim Parsen der Datei")
-        else:
-            return client
-
-    except zipfile.BadZipFile:
-        _LOGGER.exception("❌ Ungültige ZIP-Datei: %s", path)
-    except Exception:
-        _LOGGER.exception("❌ Unerwarteter Fehler beim Parsen")
+    try:
+        client = _client_pb2.PClient()  # type: ignore[attr-defined]
+        client.ParseFromString(raw_data)
+        _LOGGER.info(
+            "✅ Parsen erfolgreich - Version %s mit %d Wertpapieren",
+            client.version,
+            len(client.securities),
+        )
+    except _protobuf_message.DecodeError:  # type: ignore[union-attr]
+        PARSER_LOGGER.exception("decoder error while parsing portfolio '%s'", path)
+    except Exception:  # noqa: BLE001 - catch-all keeps legacy callers tolerant
+        PARSER_LOGGER.exception("unexpected error while parsing portfolio '%s'", path)
+    else:
+        return client
 
     return None

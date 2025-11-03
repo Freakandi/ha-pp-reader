@@ -381,6 +381,116 @@ METADATA_SCHEMA = [
     """
 ]
 
+INGESTION_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_metadata (
+        run_id TEXT PRIMARY KEY,
+        file_path TEXT,
+        parsed_at TEXT,
+        pp_version INTEGER,
+        base_currency TEXT,
+        properties TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_accounts (
+        uuid TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        currency_code TEXT,
+        note TEXT,
+        is_retired INTEGER,
+        attributes TEXT,
+        updated_at TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_portfolios (
+        uuid TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        note TEXT,
+        reference_account TEXT,
+        is_retired INTEGER,
+        attributes TEXT,
+        updated_at TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_securities (
+        uuid TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        currency_code TEXT,
+        target_currency_code TEXT,
+        isin TEXT,
+        ticker_symbol TEXT,
+        wkn TEXT,
+        note TEXT,
+        online_id TEXT,
+        feed TEXT,
+        feed_url TEXT,
+        latest_feed TEXT,
+        latest_feed_url TEXT,
+        latest_date INTEGER,
+        latest_close INTEGER,
+        latest_high INTEGER,
+        latest_low INTEGER,
+        latest_volume INTEGER,
+        is_retired INTEGER,
+        attributes TEXT,
+        properties TEXT,
+        updated_at TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_transactions (
+        uuid TEXT PRIMARY KEY,
+        type INTEGER NOT NULL,
+        account TEXT,
+        portfolio TEXT,
+        other_account TEXT,
+        other_portfolio TEXT,
+        other_uuid TEXT,
+        other_updated_at TEXT,
+        date TEXT,
+        currency_code TEXT,
+        amount INTEGER,
+        shares INTEGER,
+        note TEXT,
+        security TEXT,
+        source TEXT,
+        updated_at TEXT,
+        FOREIGN KEY (account) REFERENCES ingestion_accounts(uuid),
+        FOREIGN KEY (portfolio) REFERENCES ingestion_portfolios(uuid),
+        FOREIGN KEY (security) REFERENCES ingestion_securities(uuid)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_transaction_units (
+        transaction_uuid TEXT NOT NULL,
+        unit_index INTEGER NOT NULL,
+        type INTEGER NOT NULL,
+        amount INTEGER,
+        currency_code TEXT,
+        fx_amount INTEGER,
+        fx_currency_code TEXT,
+        fx_rate_to_base REAL,
+        PRIMARY KEY (transaction_uuid, unit_index),
+        FOREIGN KEY (transaction_uuid) REFERENCES ingestion_transactions(uuid)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ingestion_historical_prices (
+        security_uuid TEXT NOT NULL,
+        date INTEGER NOT NULL,
+        close INTEGER,
+        high INTEGER,
+        low INTEGER,
+        volume INTEGER,
+        PRIMARY KEY (security_uuid, date),
+        FOREIGN KEY (security_uuid) REFERENCES ingestion_securities(uuid)
+    );
+    """,
+]
+
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
     *SECURITY_SCHEMA,
@@ -389,6 +499,7 @@ ALL_SCHEMAS = [
     *TRANSACTION_SCHEMA,
     *FX_SCHEMA,
     *METADATA_SCHEMA,
+    *INGESTION_SCHEMA,
 ]
 
 # Performance Index für On-Demand Portfolio Aggregation:

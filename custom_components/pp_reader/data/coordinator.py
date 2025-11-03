@@ -12,19 +12,30 @@ It includes functionality to:
 import logging
 import sqlite3
 from collections.abc import Iterable, Mapping
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from custom_components.pp_reader.const import (
+    SIGNAL_PARSER_COMPLETED,
+    SIGNAL_PARSER_PROGRESS,
+)
 from custom_components.pp_reader.logic import accounting as _accounting_module
+from custom_components.pp_reader.services import (
+    PortfolioParseError,
+    PortfolioValidationError,
+    parser_pipeline,
+)
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
+from .ingestion_writer import async_ingestion_session
 from .performance import compose_performance_payload, select_performance_metrics
 
 try:
@@ -46,7 +57,7 @@ def _get_last_db_update(db_path: Path) -> datetime | None:
     return None
 
 
-def _sync_data_to_db(
+def _legacy_sync_to_db(
     data: Mapping[str, Any],
     hass: HomeAssistant,
     entry_id: str,
@@ -243,6 +254,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             "last_update": None,
         }
         self.last_file_update = None  # Initialisierung des Attributs
+        self._last_parser_progress: tuple[str, int, int] | None = None
+        self._last_ingestion_run_id: str | None = None
 
     async def _async_update_data(self) -> dict:
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
@@ -307,25 +320,50 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         """Parse and persist the portfolio when the file has changed."""
         _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")
 
+        self._last_parser_progress = None
+        self._last_ingestion_run_id = None
+        try:
+            async with async_ingestion_session(self.db_path) as writer:
+                parsed_client = await parser_pipeline.async_parse_portfolio(
+                    hass=self.hass,
+                    path=str(self.file_path),
+                    writer=writer,
+                    progress_cb=self._handle_parser_progress,
+                )
+                self._last_ingestion_run_id = writer.finalize_ingestion(
+                    file_path=str(self.file_path),
+                    parsed_at=datetime.now(UTC),
+                    pp_version=parsed_client.version,
+                    base_currency=parsed_client.base_currency,
+                    properties=parsed_client.properties,
+                )
+        except (PortfolioParseError, PortfolioValidationError) as err:
+            msg = f"Parserlauf fehlgeschlagen: {err}"
+            raise UpdateFailed(msg) from err
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            _LOGGER.exception("Unerwarteter Fehler im Parserlauf")
+            msg = "Parserlauf fehlgeschlagen"
+            raise UpdateFailed(msg) from exc
+
         if _reader_module is None:  # pragma: no cover - optional dep for tests
             msg = "protobuf runtime is required to parse Portfolio Performance files"
             raise UpdateFailed(msg)
 
-        parse_data_portfolio = _reader_module.parse_data_portfolio
-
-        data = await async_run_executor_job(
-            self.hass, parse_data_portfolio, str(self.file_path)
+        legacy_client = await async_run_executor_job(
+            self.hass,
+            _reader_module.parse_data_portfolio,
+            str(self.file_path),
         )
-        if not data:
+        if not legacy_client:
             msg = "Portfolio-Daten konnten nicht geladen werden"
             raise UpdateFailed(msg)
 
         try:
-            _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB...")
+            _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB (Legacy-Pfad)...")
             await async_run_executor_job(
                 self.hass,
-                _sync_data_to_db,
-                data,
+                _legacy_sync_to_db,
+                legacy_client,
                 self.hass,
                 self.entry_id,
                 last_update_truncated.isoformat(),
@@ -336,7 +374,44 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(msg) from exc
 
         self.last_file_update = last_update_truncated
+        self._notify_parser_completed()
         _LOGGER.info("Daten erfolgreich aktualisiert.")
+
+    async def _handle_parser_progress(
+        self, progress: parser_pipeline.ParseProgress
+    ) -> None:
+        """Store progress updates for later telemetry dispatch."""
+        self._last_parser_progress = (
+            progress.stage,
+            progress.processed,
+            progress.total,
+        )
+        payload = {
+            "entry_id": self.entry_id,
+            "stage": progress.stage,
+            "processed": progress.processed,
+            "total": progress.total,
+        }
+        async_dispatcher_send(self.hass, SIGNAL_PARSER_PROGRESS, payload)
+        self.async_set_updated_data(self.data)
+
+    def _notify_parser_completed(self) -> None:
+        """Publish completion telemetry once processing finished."""
+        stage = processed = total = None
+        if self._last_parser_progress is not None:
+            stage, processed, total = self._last_parser_progress
+
+        payload = {
+            "entry_id": self.entry_id,
+            "run_id": self._last_ingestion_run_id,
+            "file_path": str(self.file_path),
+            "stage": stage,
+            "processed": processed,
+            "total": total,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        async_dispatcher_send(self.hass, SIGNAL_PARSER_COMPLETED, payload)
+        self.async_set_updated_data(self.data)
 
     def _calculate_account_balances(
         self, accounts: Iterable[Any], transactions: Iterable[Any]

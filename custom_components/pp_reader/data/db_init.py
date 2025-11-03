@@ -2,9 +2,10 @@
 
 import logging
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
 
-from .db_schema import ALL_SCHEMAS
+from .db_schema import ALL_SCHEMAS, INGESTION_SCHEMA
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -305,6 +306,7 @@ def initialize_database_schema(db_path: Path) -> None:
             _ensure_portfolio_securities_native_column(conn)
             _ensure_portfolio_purchase_extensions(conn)
             _ensure_historical_price_index(conn)
+            ensure_ingestion_tables(conn)
 
             conn.commit()
 
@@ -321,3 +323,40 @@ def initialize_database_schema(db_path: Path) -> None:
     except Exception:
         _LOGGER.exception("❌ Kritischer Fehler bei DB-Initialisierung")
         raise
+INGESTION_TABLES: tuple[str, ...] = (
+    "ingestion_historical_prices",
+    "ingestion_transaction_units",
+    "ingestion_transactions",
+    "ingestion_securities",
+    "ingestion_portfolios",
+    "ingestion_accounts",
+    "ingestion_metadata",
+)
+
+
+def ensure_ingestion_tables(conn: sqlite3.Connection) -> None:
+    """Create ingestion staging tables if they are missing."""
+    for stmt in _iter_ingestion_ddl():
+        conn.execute(stmt)
+
+
+def clear_ingestion_stage(conn: sqlite3.Connection) -> None:
+    """Remove all rows from ingestion staging tables respecting FK order."""
+    for table in INGESTION_TABLES:
+        conn.execute(f'DELETE FROM "{table}"')  # noqa: S608 - table names are trusted
+
+
+def reset_ingestion_stage(conn: sqlite3.Connection) -> None:
+    """Ensure staging tables exist and wipe their content."""
+    ensure_ingestion_tables(conn)
+    clear_ingestion_stage(conn)
+
+
+def _iter_ingestion_ddl() -> Iterable[str]:
+    """Yield individual DDL statements from the ingestion schema bundle."""
+    for ddl in INGESTION_SCHEMA:
+        if isinstance(ddl, str):
+            yield ddl
+        else:
+            # Defensive: handle nested lists in case of future expansions.
+            yield from ddl
