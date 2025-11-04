@@ -1,11 +1,11 @@
 1. [ ] Phase 0 – Schema & Migration Foundations
-   a) [ ] Extend `custom_components/pp_reader/data/db_schema.py` with enrichment tables (`fx_rates`, `price_history_queue`, provenance columns) aligned with `.docs/backend_workstreams.md` M2 requirements.
+   a) [x] Extend `custom_components/pp_reader/data/db_schema.py` with enrichment tables (`fx_rates`, `price_history_queue`, provenance columns) aligned with `.docs/backend_workstreams.md` M2 requirements.
       - Ziel: Persistente Ablage für Frankfurter/Yahoo Daten mit Zeitstempeln & Datenquelle.
-   b) [ ] Aktualisiere `custom_components/pp_reader/data/db_init.py` und Migration-Helper, damit Neuinstallationen und Upgrades die neuen Tabellen erstellen sowie bestehende Datenbanken sicher migrieren.
+   b) [x] Aktualisiere `custom_components/pp_reader/data/db_init.py` und Migration-Helper, damit Neuinstallationen und Upgrades die neuen Tabellen erstellen sowie bestehende Datenbanken sicher migrieren.
       - Ziel: Idempotente Migration mit WAL-Kompatibilität.
-   c) [ ] Ergänze `custom_components/pp_reader/data/db_access.py` um Helper zum Schreiben/Lesen der neuen Tabellen (z.B. `upsert_fx_rate`, `enqueue_price_job`).
+   c) [x] Ergänze `custom_components/pp_reader/data/db_access.py` um Helper zum Schreiben/Lesen der neuen Tabellen (z.B. `upsert_fx_rate`, `enqueue_price_job`).
       - Ziel: Einheitliche Zugriffsschicht für spätere Jobs.
-   d) [ ] Tests: Aktualisiere/erzeuge Pytests (`tests/unit/test_db_schema_enrichment.py`) zur Validierung der Migration und Basis-CRUD-Operationen.
+   d) [x] Tests: Aktualisiere/erzeuge Pytests (`tests/unit/test_db_schema_enrichment.py`) zur Validierung der Migration und Basis-CRUD-Operationen.
 
 2. [ ] Phase 1 – FX Ingestion (Frankfurter API)
    a) [ ] Implementiere asynchrone FX-Fetcher (`custom_components/pp_reader/currencies/fx_async.py` oder Erweiterung der bestehenden Module) mit Retry/Timeout-Strategie.
@@ -39,4 +39,3 @@
    a) [ ] Aktualisiere `.docs/backend_workstreams.md` (Enrichment Services) mit tatsächlichen Modulen/Artefakten nach Implementierung.
    b) [ ] Ergänze `.docs/legacy_cleanup_strategy.md` um Kriterien zum Entfernen synchroner FX-/History-Helfer sobald neue Pfade aktiv sind.
    c) [ ] Nutzer-Dokumentation (`README.md`, `README-dev.md`): Hinweise zu neuen Abhängigkeiten, Fehlerdiagnose und CLI-Bedienung.
-

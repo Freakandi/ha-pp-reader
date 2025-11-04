@@ -117,6 +117,52 @@ class PortfolioSecurity:
     current_value: float | None = None  # Aktueller Wert des Bestands in Cent
 
 
+@dataclass
+class FxRateRecord:
+    """Persisted FX rate metadata."""
+
+    date: str
+    currency: str
+    rate: int
+    fetched_at: str | None = None
+    data_source: str | None = None
+    provider: str | None = None
+    provenance: str | None = None
+
+
+@dataclass
+class PriceHistoryJob:
+    """Persisted job entry in the price history queue."""
+
+    id: int
+    security_uuid: str
+    requested_date: int | None
+    status: str
+    priority: int
+    attempts: int
+    scheduled_at: str | None
+    started_at: str | None
+    finished_at: str | None
+    last_error: str | None
+    data_source: str | None
+    provenance: str | None
+    created_at: str
+    updated_at: str | None
+
+
+@dataclass
+class NewPriceHistoryJob:
+    """Payload for enqueuing a new price history job."""
+
+    security_uuid: str
+    requested_date: int | None
+    status: str = "pending"
+    priority: int = 0
+    scheduled_at: str | None = None
+    data_source: str | None = None
+    provenance: str | None = None
+
+
 def _resolve_average_cost_totals(
     aggregation: HoldingsAggregation,
     *,
@@ -667,6 +713,258 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
         }
     finally:
         conn.close()
+
+
+def _utc_now_isoformat() -> str:
+    """Return the current UTC timestamp in ISO8601 notation."""
+    return datetime.now(tz=datetime.UTC).replace(microsecond=0).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+
+def upsert_fx_rate(
+    db_path: Path,
+    rate: FxRateRecord,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update an FX rate entry."""
+    if not rate.date:
+        message = "date darf nicht leer sein"
+        raise ValueError(message)
+    if not rate.currency:
+        message = "currency darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            local_conn.execute(
+                """
+                INSERT OR REPLACE INTO fx_rates (
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    rate.date,
+                    rate.currency,
+                    rate.rate,
+                    rate.fetched_at,
+                    rate.data_source,
+                    rate.provider,
+                    rate.provenance,
+                ),
+            )
+            if conn is None:
+                local_conn.commit()
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Speichern des Wechselkurses (date=%s, currency=%s)",
+                rate.date,
+                rate.currency,
+            )
+            raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def load_fx_rates_for_date(
+    db_path: Path,
+    date: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> list[FxRateRecord]:
+    """Load all FX rates stored for a specific date."""
+    if not date:
+        message = "date darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                SELECT
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                FROM fx_rates
+                WHERE date = ?
+                """,
+                (date,),
+            )
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Laden der Wechselkurse (date=%s)",
+                date,
+            )
+            raise
+
+        rows = cursor.fetchall()
+        return [
+            FxRateRecord(
+                date=row[0],
+                currency=row[1],
+                rate=row[2],
+                fetched_at=row[3],
+                data_source=row[4],
+                provider=row[5],
+                provenance=row[6],
+            )
+            for row in rows
+        ]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def enqueue_price_history_job(
+    db_path: Path,
+    job: NewPriceHistoryJob,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> int:
+    """Insert a job into the price history queue and return its identifier."""
+    if not job.security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+    if not job.status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                INSERT INTO price_history_queue (
+                    security_uuid,
+                    requested_date,
+                    status,
+                    priority,
+                    scheduled_at,
+                    data_source,
+                    provenance,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.security_uuid,
+                    job.requested_date,
+                    job.status,
+                    job.priority,
+                    job.scheduled_at,
+                    job.data_source,
+                    job.provenance,
+                    timestamp,
+                ),
+            )
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Anlegen eines Price-History-Jobs (security_uuid=%s)",
+                job.security_uuid,
+            )
+            raise
+        else:
+            job_id = int(cursor.lastrowid)
+            if conn is None:
+                local_conn.commit()
+            return job_id
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def get_price_history_jobs_by_status(
+    db_path: Path,
+    status: str,
+    *,
+    limit: int | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> list[PriceHistoryJob]:
+    """Return queue entries filtered by status ordered by priority descending."""
+    if not status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        query = """
+            SELECT
+                id,
+                security_uuid,
+                requested_date,
+                status,
+                priority,
+                attempts,
+                scheduled_at,
+                started_at,
+                finished_at,
+                last_error,
+                data_source,
+                provenance,
+                created_at,
+                updated_at
+            FROM price_history_queue
+            WHERE status = ?
+            ORDER BY priority DESC, scheduled_at ASC, id ASC
+        """
+        params: list[Any] = [status]
+        if limit is not None:
+            if limit <= 0:
+                message = "limit muss größer als 0 sein"
+                raise ValueError(message)
+            query += " LIMIT ?"
+            params.append(limit)
+
+        try:
+            cursor = local_conn.execute(query, params)
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Lesen der Price-History-Jobs mit Status '%s'",
+                status,
+            )
+            raise
+
+        rows = cursor.fetchall()
+        return [
+            PriceHistoryJob(
+                id=row[0],
+                security_uuid=row[1],
+                requested_date=row[2],
+                status=row[3],
+                priority=row[4],
+                attempts=row[5],
+                scheduled_at=row[6],
+                started_at=row[7],
+                finished_at=row[8],
+                last_error=row[9],
+                data_source=row[10],
+                provenance=row[11],
+                created_at=row[12],
+                updated_at=row[13],
+            )
+            for row in rows
+        ]
+    finally:
+        if conn is None:
+            local_conn.close()
 
 
 def fetch_previous_close(

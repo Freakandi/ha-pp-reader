@@ -191,6 +191,91 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
     _backfill_portfolio_purchase_extension_defaults(conn)
 
 
+def _ensure_table_columns(
+    conn: sqlite3.Connection,
+    table: str,
+    columns: list[tuple[str, str]],
+) -> None:
+    """Add missing columns to a table if required."""
+    try:
+        cur = conn.execute(f"PRAGMA table_info({table})")
+        existing_cols = {row[1] for row in cur.fetchall()}
+    except sqlite3.Error:
+        _LOGGER.warning(
+            "Konnte PRAGMA table_info(%s) nicht ausführen - Migration übersprungen",
+            table,
+            exc_info=True,
+        )
+        return
+
+    for column_name, column_ddl in columns:
+        if column_name in existing_cols:
+            _LOGGER.debug(
+                "Runtime-Migration: Spalte '%s' in '%s' bereits vorhanden - "
+                "nichts zu tun",
+                column_name,
+                table,
+            )
+            continue
+
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_ddl}")
+            _LOGGER.info(
+                "Runtime-Migration: Spalte '%s' zu '%s' hinzugefügt",
+                column_name,
+                table,
+            )
+        except sqlite3.Error:
+            _LOGGER.warning(
+                "Runtime-Migration: Konnte Spalte '%s' in '%s' nicht hinzufügen",
+                column_name,
+                table,
+                exc_info=True,
+            )
+
+
+def _ensure_historical_price_metadata_columns(conn: sqlite3.Connection) -> None:
+    """Ensure metadata/provenance columns on historical price tables exist."""
+    _ensure_table_columns(
+        conn,
+        "historical_prices",
+        [
+            ("fetched_at", "fetched_at TEXT"),
+            ("data_source", "data_source TEXT"),
+            ("provider", "provider TEXT"),
+            ("provenance", "provenance TEXT"),
+        ],
+    )
+
+
+def _ensure_fx_rate_metadata_columns(conn: sqlite3.Connection) -> None:
+    """Ensure metadata/provenance columns on fx_rates exist."""
+    _ensure_table_columns(
+        conn,
+        "fx_rates",
+        [
+            ("fetched_at", "fetched_at TEXT"),
+            ("data_source", "data_source TEXT"),
+            ("provider", "provider TEXT"),
+            ("provenance", "provenance TEXT"),
+        ],
+    )
+
+
+def _ensure_ingestion_history_metadata_columns(conn: sqlite3.Connection) -> None:
+    """Ensure metadata columns on ingestion historical prices exist."""
+    _ensure_table_columns(
+        conn,
+        "ingestion_historical_prices",
+        [
+            ("fetched_at", "fetched_at TEXT"),
+            ("data_source", "data_source TEXT"),
+            ("provider", "provider TEXT"),
+            ("provenance", "provenance TEXT"),
+        ],
+    )
+
+
 def _backfill_portfolio_purchase_extension_defaults(
     conn: sqlite3.Connection,
 ) -> None:
@@ -301,12 +386,15 @@ def initialize_database_schema(db_path: Path) -> None:
                 """
             )
 
-            # --- NEU: Best-effort Runtime-Migration für Preis-Spalten ---
+            # Best-effort Runtime-Migration für Preis- und Enrichment-Spalten
             _ensure_runtime_price_columns(conn)
             _ensure_portfolio_securities_native_column(conn)
             _ensure_portfolio_purchase_extensions(conn)
+            _ensure_historical_price_metadata_columns(conn)
+            _ensure_fx_rate_metadata_columns(conn)
             _ensure_historical_price_index(conn)
             ensure_ingestion_tables(conn)
+            _ensure_ingestion_history_metadata_columns(conn)
 
             conn.commit()
 

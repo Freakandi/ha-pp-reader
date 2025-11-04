@@ -64,6 +64,10 @@ SECURITY_SCHEMA = [
         high INTEGER,                 -- Höchstkurs in 10^-8 Einheiten
         low INTEGER,                  -- Tiefstkurs in 10^-8 Einheiten
         volume INTEGER,               -- Handelsvolumen
+        fetched_at TEXT,              -- ISO8601 Zeitpunkt des Abrufs
+        data_source TEXT,             -- Quelle der Historien-Daten (z.B. 'yahoo')
+        provider TEXT,                -- Upstream-Providerkennung
+        provenance TEXT,              -- Optionale JSON-Metadaten
         PRIMARY KEY (security_uuid, date),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
@@ -363,13 +367,47 @@ EXCHANGE_SCHEMA = [
 
 FX_SCHEMA = [
     """
-CREATE TABLE IF NOT EXISTS fx_rates (
-    date TEXT NOT NULL,
-    currency TEXT NOT NULL,
-    rate INTEGER NOT NULL,  -- Wechselkurs in 10^-8 Einheiten
-    PRIMARY KEY (date, currency)
-);
-"""
+    CREATE TABLE IF NOT EXISTS fx_rates (
+        date TEXT NOT NULL,
+        currency TEXT NOT NULL,
+        rate INTEGER NOT NULL,       -- Wechselkurs in 10^-8 Einheiten
+        fetched_at TEXT,             -- ISO8601 Zeitpunkt des Abrufs
+        data_source TEXT,            -- Datenquelle (z.B. 'frankfurter', 'cache')
+        provider TEXT,               -- Upstream-Providerkennung
+        provenance TEXT,             -- Optionale JSON-Metadaten
+        PRIMARY KEY (date, currency)
+    );
+    """,
+]
+
+PRICE_HISTORY_QUEUE_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS price_history_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        security_uuid TEXT NOT NULL,     -- UUID des Wertpapiers
+        requested_date INTEGER,          -- Gewünschtes Datum (epoch day)
+        status TEXT NOT NULL DEFAULT 'pending',
+        priority INTEGER NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        scheduled_at TEXT,               -- ISO8601 Zeitpunkt der Planung
+        started_at TEXT,                 -- ISO8601 Beginn der Verarbeitung
+        finished_at TEXT,                -- ISO8601 Abschluss der Verarbeitung
+        last_error TEXT,                 -- Letzte Fehlermeldung für Debugging
+        data_source TEXT,                -- Zielquelle der Historien-Daten
+        provenance TEXT,                 -- Optionale JSON-Metadaten
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT,
+        FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_price_history_queue_status
+    ON price_history_queue (status, priority, scheduled_at);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_price_history_queue_security_date
+    ON price_history_queue (security_uuid, requested_date);
+    """,
 ]
 
 METADATA_SCHEMA = [
@@ -485,6 +523,10 @@ INGESTION_SCHEMA = [
         high INTEGER,
         low INTEGER,
         volume INTEGER,
+        fetched_at TEXT,
+        data_source TEXT,
+        provider TEXT,
+        provenance TEXT,
         PRIMARY KEY (security_uuid, date),
         FOREIGN KEY (security_uuid) REFERENCES ingestion_securities(uuid)
     );
@@ -498,6 +540,7 @@ ALL_SCHEMAS = [
     *PORTFOLIO_SECURITIES_SCHEMA,
     *TRANSACTION_SCHEMA,
     *FX_SCHEMA,
+    *PRICE_HISTORY_QUEUE_SCHEMA,
     *METADATA_SCHEMA,
     *INGESTION_SCHEMA,
 ]
