@@ -11,6 +11,7 @@ Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gem�
 - .docs/legacy_cleanup_strategy.md
 - .docs/qa_docs_comms.md
 - .docs/TODO_datamodel_parser_modernization.md
+- .docs/TODO_enrichment_pipeline.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
