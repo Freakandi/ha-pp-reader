@@ -3,19 +3,22 @@
 This concept document enumerates the backend workstreams required to deliver the canonical ingestion → normalization → delivery pipeline described in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md), [`datamodel/parsed_pp_data.md`](../datamodel/parsed_pp_data.md), and the backend flow chart in [`datamodel/mermaid_backend_flow.mmd`](../datamodel/mermaid_backend_flow.mmd).
 
 ## Parser Modernization
-- **Target implementation.** Replace the legacy protobuf loader with a streaming parser centred around `custom_components/pp_reader/services/portfolio_file.py` and its helpers so Portfolio Performance payloads hydrate typed models before persistence. Parser domain logic continues to live under `custom_components/pp_reader/services/` and `custom_components/pp_reader/models/parsed/`.
+- **Target implementation.** Replace the legacy protobuf loader with a streaming parser centred around `custom_components/pp_reader/services/parser_pipeline.py` so Portfolio Performance payloads hydrate typed models and persist into dedicated ingestion tables prior to normalization. Parser domain logic continues to live under `custom_components/pp_reader/services/` and `custom_components/pp_reader/models/parsed.py`, exposing ingestion metadata for diagnostics and CLI workflows.
 - **Behaviour updates.**
   - Convert blocking file IO into asynchronous coroutine entry points invoked by the integration setup coordinator.
   - Validate protobuf invariants (missing UUIDs, unsupported security types) inline and raise descriptive Home Assistant errors for logging.
-  - Emit structured parse events so downstream enrichment steps can detect partial imports.
+  - Emit structured progress/telemetry events (dispatcher + HA bus) and populate staging metadata so downstream enrichment, diagnostics, and CLI tooling can inspect parser runs.
+  - Reset and refill ingestion staging tables on every import to guarantee idempotent persistence before legacy normalization executes.
 - **New/updated modules.**
-  - Introduce `custom_components/pp_reader/services/parser_pipeline.py` to orchestrate chunked protobuf parsing and staged writes into the coordinator queue.
+  - Introduce `custom_components/pp_reader/services/parser_pipeline.py` to orchestrate streaming protobuf parsing, validation, and progress callbacks while batching writes.
   - Extend `custom_components/pp_reader/models/parsed.py` with dataclasses mirroring the canonical ingestion schema prior to normalization.
-  - Update `custom_components/pp_reader/coordinators/__init__.py` to schedule the parser coroutine and surface progress telemetry to Home Assistant.
+  - Add `custom_components/pp_reader/data/ingestion_writer.py` and `custom_components/pp_reader/data/ingestion_reader.py` as the staging persistence/loader layer consumed by legacy sync and diagnostics.
+  - Update `custom_components/pp_reader/data/coordinator.py` to execute the streaming parser, manage staging lifecycle, and propagate dispatcher progress alongside diagnostics from `custom_components/pp_reader/util/diagnostics.py`.
+  - Provide CLI parity via `custom_components/pp_reader/cli/import_portfolio.py` (and `__main__.py`) so local imports share the Home Assistant pipeline (`scripts/import_portfolio.py` wrapper).
 - **Legacy retirement.** Decommission `custom_components/pp_reader/pclient/__init__.py` and related synchronous import helpers once the streaming parser reaches parity. Removal is gated on:
-  - Passing regression tests in `tests/integration/test_portfolio_file.py`.
-  - Successful end-to-end import dry runs using sample archives in `datamodel/parsed_pp_data.md`.
-  - Observing parity on snapshot payloads during manual verification sessions recorded under `.docs/live_aggregation/notes.md`.
+  - Passing regression suites in `tests/services/test_parser_pipeline.py`, `tests/integration/test_ingestion_writer.py`, and `tests/integration/test_sync_from_staging.py`.
+  - Successful end-to-end import dry runs using sample archives in `datamodel/parsed_pp_data.md` via both coordinator and CLI flows.
+  - Observing payload parity and staging metrics through the diagnostics surface and dispatcher telemetry during manual verification sessions recorded under `.docs/live_aggregation/notes.md`.
 
 ## Enrichment Services
 - **Target implementation.** Expand enrichment flows so all persisted rows are hydrated with market, FX, and metadata before metric computation. Service orchestration belongs under `custom_components/pp_reader/prices/price_service.py` and `custom_components/pp_reader/currencies/fx.py`.

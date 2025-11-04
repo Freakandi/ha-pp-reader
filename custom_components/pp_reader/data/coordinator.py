@@ -25,6 +25,7 @@ from custom_components.pp_reader.const import (
     SIGNAL_PARSER_COMPLETED,
     SIGNAL_PARSER_PROGRESS,
 )
+from custom_components.pp_reader.feature_flags import is_enabled
 from custom_components.pp_reader.logic import accounting as _accounting_module
 from custom_components.pp_reader.services import (
     PortfolioParseError,
@@ -33,8 +34,10 @@ from custom_components.pp_reader.services import (
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util import diagnostics as diagnostics_util
+from custom_components.pp_reader.util import notifications as notifications_util
 from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
+from . import ingestion_reader
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
 from .ingestion_writer import async_ingestion_session
 from .performance import compose_performance_payload, select_performance_metrics
@@ -56,6 +59,12 @@ def _get_last_db_update(db_path: Path) -> datetime | None:
     if result and result[0]:
         return datetime.fromisoformat(result[0])
     return None
+
+
+def _load_staging_proto_snapshot(db_path: Path) -> Any | None:
+    """Return a protobuf client reconstructed from staging tables."""
+    with sqlite3.connect(str(db_path)) as conn:
+        return ingestion_reader.load_proto_snapshot(conn)
 
 
 def _legacy_sync_to_db(
@@ -330,6 +339,12 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         self._last_parser_progress = None
         self._last_ingestion_run_id = None
+        notify_parser_failures = is_enabled(
+            "notify_parser_failures",
+            self.hass,
+            entry_id=self.entry_id,
+            default=False,
+        )
         try:
             async with async_ingestion_session(self.db_path) as writer:
                 parsed_client = await parser_pipeline.async_parse_portfolio(
@@ -346,6 +361,18 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     properties=parsed_client.properties,
                 )
         except (PortfolioParseError, PortfolioValidationError) as err:
+            if notify_parser_failures:
+                self.hass.async_create_task(
+                    notifications_util.async_create_parser_failure_notification(
+                        self.hass,
+                        entry_id=self.entry_id,
+                        title="Portfolio Performance Import fehlgeschlagen",
+                        message=(
+                            f"Fehler: {err}\n"
+                            f"Quelle: {self.file_path}"
+                        ),
+                    )
+                )
             msg = f"Parserlauf fehlgeschlagen: {err}"
             raise UpdateFailed(msg) from err
         except Exception as exc:  # pragma: no cover - defensive fallback
@@ -353,18 +380,46 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             msg = "Parserlauf fehlgeschlagen"
             raise UpdateFailed(msg) from exc
 
-        if _reader_module is None:  # pragma: no cover - optional dep for tests
-            msg = "protobuf runtime is required to parse Portfolio Performance files"
-            raise UpdateFailed(msg)
-
-        legacy_client = await async_run_executor_job(
+        use_staging_importer = is_enabled(
+            "use_staging_importer",
             self.hass,
-            _reader_module.parse_data_portfolio,
-            str(self.file_path),
+            entry_id=self.entry_id,
+            default=False,
         )
-        if not legacy_client:
-            msg = "Portfolio-Daten konnten nicht geladen werden"
-            raise UpdateFailed(msg)
+
+        legacy_client: Any | None = None
+        if use_staging_importer:
+            staging_client = await async_run_executor_job(
+                self.hass,
+                _load_staging_proto_snapshot,
+                self.db_path,
+            )
+            if staging_client is not None:
+                legacy_client = staging_client
+                _LOGGER.info(
+                    "Nutze Staging-Snapshot für Synchronisation (USE_STAGING_IMPORTER)"
+                )
+            else:
+                _LOGGER.warning(
+                    "USE_STAGING_IMPORTER aktiv, aber kein Staging-Snapshot vorhanden;"
+                    " falle auf Legacy-Protopfad zurück."
+                )
+
+        if legacy_client is None:
+            if _reader_module is None:  # pragma: no cover - optional dep for tests
+                msg = (
+                    "protobuf runtime is required to parse Portfolio Performance files"
+                )
+                raise UpdateFailed(msg)
+
+            legacy_client = await async_run_executor_job(
+                self.hass,
+                _reader_module.parse_data_portfolio,
+                str(self.file_path),
+            )
+            if not legacy_client:
+                msg = "Portfolio-Daten konnten nicht geladen werden"
+                raise UpdateFailed(msg)
 
         try:
             _LOGGER.info("📥 Synchronisiere Daten mit SQLite DB (Legacy-Pfad)...")

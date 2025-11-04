@@ -16,10 +16,10 @@ Each milestone lists entry prerequisites, exit criteria, impacted components, de
 
 ### M1 — Parser & Ingestion Rewrite
 - **Entry criteria:** Legacy importer still stages Portfolio Performance protobuf payloads directly into coordinators; enrichment and metrics rely on on-the-fly calculations.
-- **Exit criteria:** New parser module streams portfolio files into structured domain objects and persists raw entities into staging tables ready for normalization.
-- **Impacted areas:** `custom_components/pp_reader/services/parser.py`, `custom_components/pp_reader/data/sync_from_pclient.py`, `custom_components/pp_reader/data/db_schema.py`, ingestion CLI utilities under `custom_components/pp_reader/cli/`.
-- **Deliverables:** Parser design aligned with canonical entities, staging schema updates, importer unit tests and fixture refresh, documentation updates describing ingestion lifecycle.
-- **Dependencies:** None upstream; unlocks downstream enrichment because raw entities become consistently persisted.
+- **Exit criteria:** Streaming parser pipeline converts portfolio archives into typed domain objects, persists them in staging tables, and exposes ingestion metadata through diagnostics and CLI workflows.
+- **Impacted areas:** `custom_components/pp_reader/services/parser_pipeline.py`, `custom_components/pp_reader/services/portfolio_file.py`, `custom_components/pp_reader/data/ingestion_writer.py`, `custom_components/pp_reader/data/ingestion_reader.py`, `custom_components/pp_reader/data/sync_from_pclient.py`, staging schema in `custom_components/pp_reader/data/db_schema.py`, CLI entry points under `custom_components/pp_reader/cli/`, coordinator telemetry in `custom_components/pp_reader/data/coordinator.py`.
+- **Deliverables:** Typed parser pipeline with progress events, staging schema and writer/reader helpers, legacy sync parity via regression tests, ingestion diagnostics surface, CLI import parity with Home Assistant flow, documentation updates describing ingestion lifecycle.
+- **Dependencies:** None upstream; unlocks downstream enrichment because raw entities become consistently persisted and discoverable through diagnostics/CLI tooling.
 
 ### M2 — Enrichment Integration (FX & Market Data)
 - **Entry criteria:** Parser rewrite landed with staging schema and import flow stabilized; staging data available via coordinators.

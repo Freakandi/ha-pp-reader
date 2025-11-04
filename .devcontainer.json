@@ -24,6 +24,7 @@
                 "ms-python.vscode-pylance",
                 "ryanluker.vscode-coverage-gutters",
                 "openai.chatgpt",
+                "anthropic.claude-code",
                 "ms-azuretools.vscode-containers",
                 "github.vscode-github-actions",
                 "pamaron.pytest-runner",

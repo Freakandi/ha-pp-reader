@@ -4,18 +4,19 @@ This concept document outlines how testing, documentation, and stakeholder commu
 
 ## Quality Assurance Strategy
 - **Automated regression coverage.**
-  - Backend: Extend pytest suites under `tests/integration/` and `tests/unit/` to exercise the streaming parser, enrichment jobs, normalization pipeline, and metric emitters using canonical fixtures in `datamodel/db_entries/`.
+  - Backend: Extend pytest suites under `tests/integration/` and `tests/unit/` to exercise the streaming parser (`tests/services/test_parser_pipeline.py`), staging writer/reader (`tests/integration/test_ingestion_writer.py`), and the staging-backed legacy sync regression (`tests/integration/test_sync_from_staging.py`) alongside enrichment, normalization, and metrics using canonical fixtures in `datamodel/db_entries/`.
   - Frontend: Refresh dashboard tests in `tests/dashboard/` (component snapshots, Zustand store behaviours) to assert normalized payloads (`accounts`, `portfolio_positions`, `portfolio_values`, histories) render consistently.
   - Contract checks: Maintain schema assertions in `tests/schema/test_payload_contracts.py` (to be added) and TypeScript contract tests under `src/lib/api/portfolio/__tests__/` so backend/frontend payloads stay aligned after refactors.
 - **Fixture & dataset management.**
   - Leverage `scripts/generate_fixtures.py` (new helper) to transform Portfolio Performance exports plus Yahoo/Frankfurter datasets from `datamodel/yq_datasets/` into reproducible Home Assistant fixture bundles consumed by both pytest and dashboard tests.
   - Version fixtures alongside roadmap milestones, tagging releases under `datamodel/db_entries/` for quick rollback during QA sign-off.
 - **Manual verification.**
-  - Execute Home Assistant smoke scenarios (fresh import, enrichment replay, dashboard navigation) at the end of each milestone, recording observations in `.docs/live_aggregation/qa_runs.md` and attaching database snapshots.
+  - Execute Home Assistant smoke scenarios (fresh import via coordinator, CLI import with `python -m custom_components.pp_reader.cli`, enrichment replay, dashboard navigation) at the end of each milestone, recording observations in `.docs/live_aggregation/qa_runs.md` and attaching database snapshots.
+  - Capture ingestion diagnostics (`custom_components/pp_reader/util/diagnostics.async_get_parser_diagnostics`) and dispatcher progress telemetry during manual runs to confirm staging counters and metadata match expectations.
   - Maintain a regression matrix covering critical panels (portfolio overview, accounts, history charts) with expected telemetry fields and parity checks against the canonical specs.
 - **Tooling & observability.**
-  - Enhance `scripts/diagnostics_dump.py` to capture normalization telemetry, enrichment provenance, and websocket payload samples, feeding artefacts into QA reports.
-  - Introduce lightweight CLI under `custom_components/pp_reader/cli/qa.py` to trigger coordinated parser→enrichment→metrics replays for repeatable manual validation.
+  - Enhance `scripts/diagnostics_dump.py` (or extend new CLI tooling) to capture ingestion metadata, normalization telemetry, enrichment provenance, and websocket payload samples, feeding artefacts into QA reports.
+  - Leverage `custom_components/pp_reader/cli/import_portfolio.py` for scripted parser→staging import validation; add optional QA wrapper script if coordinated parser→enrichment→metrics replays are required.
 
 ## Documentation Plan
 - **Architecture refresh.** Update `README-dev.md`, `.docs/ARCHITECTURE.md`, and `.docs/live_aggregation/` notes with diagrams referencing the canonical pipeline, replacing legacy flow explanations.

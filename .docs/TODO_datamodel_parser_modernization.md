@@ -97,29 +97,29 @@
       - Ziel/Ergebnis der Änderung: Anwender können Parserstatus über das HA-Diagnosepanel prüfen
 
 8. [ ] Phase 7 – Dokumentation & Governance
-   a) [ ] Aktualisiere `.docs/refactor_roadmap.md` (Milestone M1) mit konkreten Implementierungsschritten, Status-Checkboxen und Verweisen auf neue Module.
+   a) [x] Aktualisiere `.docs/refactor_roadmap.md` (Milestone M1) mit konkreten Implementierungsschritten, Status-Checkboxen und Verweisen auf neue Module.
       - Dateipfad(e): .docs/refactor_roadmap.md
       - Betroffene Funktion(en)/Abschnitt(e): Abschnitt „M1 — Parser & Ingestion Rewrite“, Deliverables
       - Ziel/Ergebnis der Änderung: Roadmap spiegelt den implementierten Parserpfad wider
-   b) [ ] Ergänze `.docs/backend_workstreams.md` im Abschnitt „Parser Modernization“ um kurze Hinweise zur tatsächlichen Modulstruktur (services/, models/, ingestion_writer).
+   b) [x] Ergänze `.docs/backend_workstreams.md` im Abschnitt „Parser Modernization“ um kurze Hinweise zur tatsächlichen Modulstruktur (services/, models/, ingestion_writer).
       - Dateipfad(e): .docs/backend_workstreams.md
       - Betroffene Funktion(en)/Abschnitt(e): Abschnitt „Parser Modernization“ (New/updated modules, Behaviour updates)
       - Ziel/Ergebnis der Änderung: Konzeptdokument dokumentiert die Umsetzung und Referenzen
-   c) [ ] Dokumentiere in `.docs/legacy_cleanup_strategy.md` unter „Cleanup Tracker“, dass `custom_components/pp_reader/pclient/*` erst nach Abschluss der Staging-Verbraucher entfernt werden darf; ergänze Nachweise/Tests.
+   c) [x] Dokumentiere in `.docs/legacy_cleanup_strategy.md` unter „Cleanup Tracker“, dass `custom_components/pp_reader/pclient/*` erst nach Abschluss der Staging-Verbraucher entfernt werden darf; ergänze Nachweise/Tests.
       - Dateipfad(e): .docs/legacy_cleanup_strategy.md
       - Betroffene Funktion(en)/Abschnitt(e): Tabelle „Cleanup Tracker“ (Zeile Parser ingestion)
       - Ziel/Ergebnis der Änderung: Gating-Kriterien für das Entfernen der Legacy-Pfade explizit festgehalten
-   d) [ ] Aktualisiere `.docs/qa_docs_comms.md` um QA-Schritte für den Parser (z.B. Regression mit Beispiel-`.portfolio`, Dokumentations-Update für Diagnosepanel).
+   d) [x] Aktualisiere `.docs/qa_docs_comms.md` um QA-Schritte für den Parser (z.B. Regression mit Beispiel-`.portfolio`, Dokumentations-Update für Diagnosepanel).
       - Dateipfad(e): .docs/qa_docs_comms.md
       - Betroffene Funktion(en)/Abschnitt(e): QA-Backlog, Dokumentationsmaßnahmen
       - Ziel/Ergebnis der Änderung: QA- und Kommunikationsplan deckt Parser-Neuerungen ab
 
 9. [ ] Phase 8 – Legacy-Rückbau vorbereiten
-   a) [ ] Ergänze Feature-Flag oder Config-Option (`feature_flags.py`), um den Legacy-Importer testweise abzuschalten und nur die Staging-Pipeline zu verwenden.
+   a) [x] Ergänze Feature-Flag oder Config-Option (`feature_flags.py`), um den Legacy-Importer testweise abzuschalten und nur die Staging-Pipeline zu verwenden.
       - Dateipfad(e): custom_components/pp_reader/feature_flags.py
       - Betroffene Funktion(en)/Abschnitt(e): Flag-Definition `USE_STAGING_IMPORTER` (neu)
       - Ziel/Ergebnis der Änderung: Kontrollierter Rollout der neuen Pipeline für Testnutzer
-   b) [ ] Plane (Optional) Telemetrie, die Warndialoge im Frontend auslöst, falls Parser-Validierungen fehlschlagen (z.B. über persistent_notifications).
+   b) [x] Plane Telemetrie, die Warndialoge im Frontend auslöst, falls Parser-Validierungen fehlschlagen (z.B. über persistent_notifications).
       - Dateipfad(e): custom_components/pp_reader/data/coordinator.py; custom_components/pp_reader/util/notifications.py (neu)
       - Betroffene Funktion(en)/Abschnitt(e): Fehler-Handling im Fortschritts-Callback, Notification-Hilfen
       - Ziel/Ergebnis der Änderung: Nutzer erhalten klare Hinweise bei Parserproblemen (optional, wenn vom Release-Plan gewünscht)

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar
 
+from custom_components.pp_reader.const import EVENT_PARSER_PROGRESS
 from custom_components.pp_reader.models import parsed
 
 from . import PortfolioParseError, PortfolioValidationError
@@ -305,7 +306,7 @@ async def _notify_progress(
             await callback_result
 
     hass.bus.async_fire(
-        "pp_reader_parser_progress",
+        EVENT_PARSER_PROGRESS,
         {
             "stage": progress.stage,
             "processed": progress.processed,

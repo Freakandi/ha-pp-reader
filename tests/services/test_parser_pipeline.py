@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from custom_components.pp_reader.const import EVENT_PARSER_PROGRESS
 from custom_components.pp_reader.services import parser_pipeline
 
 
@@ -168,7 +169,7 @@ async def test_async_parse_portfolio_emits_progress(hass, monkeypatch) -> None:
     )
 
     events: list[Any] = []
-    hass.bus.async_listen("pp_reader_parser_progress", events.append)
+    hass.bus.async_listen(EVENT_PARSER_PROGRESS, events.append)
 
     progress_updates: list[parser_pipeline.ParseProgress] = []
 
