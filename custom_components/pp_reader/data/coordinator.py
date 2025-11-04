@@ -32,6 +32,7 @@ from custom_components.pp_reader.services import (
     parser_pipeline,
 )
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util import diagnostics as diagnostics_util
 from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
@@ -315,6 +316,13 @@ class PPReaderCoordinator(DataUpdateCoordinator):
     def _should_sync(last_db_update: datetime | None, file_update: datetime) -> bool:
         """Return True when the DB snapshot is older than the file on disk."""
         return not last_db_update or file_update > last_db_update
+
+    async def async_get_diagnostics(self) -> dict[str, Any]:
+        """Return diagnostics including staging parser metadata."""
+        return await diagnostics_util.async_get_parser_diagnostics(
+            self.hass,
+            self.db_path,
+        )
 
     async def _sync_portfolio_file(self, last_update_truncated: datetime) -> None:
         """Parse and persist the portfolio when the file has changed."""

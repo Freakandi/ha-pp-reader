@@ -31,7 +31,7 @@
       - Dateipfad(e): custom_components/pp_reader/services/parser_pipeline.py
       - Betroffene Funktion(en)/Abschnitt(e): Funktion `async_parse_portfolio`, Hilfsfunktionen `_iter_accounts`, `_iter_securities`, `_iter_transactions`, Progress-Dataclass `ParseProgress`
       - Ziel/Ergebnis der Änderung: Streaming-Parser, der `ParsedClient` aus Bytes erzeugt, Validierungen durchführt (UUID-Pflicht, unterstützte Security-Typen) und Fortschritt via Callback meldet
-   b) [ ] Ergänze Emission strukturierter Fortschrittsereignisse (`ParseProgress` mit Feldern `stage`, `processed`, `total`) auf dem Home-Assistant-Bus (`hass.bus.async_fire("pp_reader_parser_progress", {...})`).
+   b) [x] Ergänze Emission strukturierter Fortschrittsereignisse (`ParseProgress` mit Feldern `stage`, `processed`, `total`) auf dem Home-Assistant-Bus (`hass.bus.async_fire("pp_reader_parser_progress", {...})`).
       - Dateipfad(e): custom_components/pp_reader/services/parser_pipeline.py
       - Betroffene Funktion(en)/Abschnitt(e): Fortschritts-Callback, Bus-Event-Dispatch
       - Ziel/Ergebnis der Änderung: Sichtbarkeit für UI/Diagnose wie in `.docs/refactor_roadmap.md` Milestone M1 gefordert
@@ -87,11 +87,11 @@
       - Ziel/Ergebnis der Änderung: Nachweis, dass der Zwischenzustand funktional gleichwertig zum Legacy-Pfad bleibt
 
 7. [ ] Phase 6 – Tooling & CLI-Anpassungen
-   a) [ ] Aktualisiere CLI-/Skript-Unterstützung (`custom_components/pp_reader/cli/import_portfolio.py` bzw. `scripts/`), damit lokale Imports ebenfalls `async_parse_portfolio` nutzen und Fortschrittsmeldungen anzeigen.
+   a) [x] Aktualisiere CLI-/Skript-Unterstützung (`custom_components/pp_reader/cli/import_portfolio.py` bzw. `scripts/`), damit lokale Imports ebenfalls `async_parse_portfolio` nutzen und Fortschrittsmeldungen anzeigen.
       - Dateipfad(e): custom_components/pp_reader/cli/import_portfolio.py; scripts/import_portfolio.py (falls vorhanden)
       - Betroffene Funktion(en)/Abschnitt(e): CLI-Command `main`, Logging-Ausgaben, Argument-Parser
       - Ziel/Ergebnis der Änderung: Konsistentes Verhalten zwischen HA-Integration und manuellen Importen
-   b) [ ] Ergänze Telemetrie-/Debug-Ausgabe in `custom_components/pp_reader/util/diagnostics.py` (oder neuem Modul), die den letzten Parserlauf (`parsed_at`, `processed_entities`) aus den Staging-Metadaten anzeigt.
+   b) [x] Ergänze Telemetrie-/Debug-Ausgabe in `custom_components/pp_reader/util/diagnostics.py` (oder neuem Modul), die den letzten Parserlauf (`parsed_at`, `processed_entities`) aus den Staging-Metadaten anzeigt.
       - Dateipfad(e): custom_components/pp_reader/util/diagnostics.py (neu oder erweitert)
       - Betroffene Funktion(en)/Abschnitt(e): Funktion `async_get_diagnostics`
       - Ziel/Ergebnis der Änderung: Anwender können Parserstatus über das HA-Diagnosepanel prüfen
