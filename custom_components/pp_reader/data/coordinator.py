@@ -9,6 +9,7 @@ It includes functionality to:
 - Load and calculate account balances, portfolio values, and transactions.
 """
 
+import asyncio
 import logging
 import sqlite3
 from collections.abc import Iterable, Mapping
@@ -22,11 +23,19 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from custom_components.pp_reader.const import (
+    EVENT_ENRICHMENT_PROGRESS,
+    SIGNAL_ENRICHMENT_COMPLETED,
+    SIGNAL_ENRICHMENT_PROGRESS,
     SIGNAL_PARSER_COMPLETED,
     SIGNAL_PARSER_PROGRESS,
 )
+from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.feature_flags import is_enabled
 from custom_components.pp_reader.logic import accounting as _accounting_module
+from custom_components.pp_reader.prices.history_queue import (
+    HistoryQueueManager,
+    build_history_targets_from_parsed,
+)
 from custom_components.pp_reader.services import (
     PortfolioParseError,
     PortfolioValidationError,
@@ -48,6 +57,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dep for tests
     _reader_module = None
 
 _LOGGER = logging.getLogger(__name__)
+_ENRICHMENT_FAILURE_THRESHOLD = 2
 
 
 def _get_last_db_update(db_path: Path) -> datetime | None:
@@ -266,6 +276,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self.last_file_update = None  # Initialisierung des Attributs
         self._last_parser_progress: tuple[str, int, int] | None = None
         self._last_ingestion_run_id: str | None = None
+        self._enrichment_failure_streak = 0
+        self._enrichment_failure_notified = False
 
     async def _async_update_data(self) -> dict:
         """Daten aus der SQLite-Datenbank laden und aktualisieren."""
@@ -331,6 +343,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         return await diagnostics_util.async_get_parser_diagnostics(
             self.hass,
             self.db_path,
+            entry_id=self.entry_id,
         )
 
     async def _sync_portfolio_file(self, last_update_truncated: datetime) -> None:
@@ -437,6 +450,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(msg) from exc
 
         self.last_file_update = last_update_truncated
+        await self._schedule_enrichment_jobs(parsed_client)
         self._notify_parser_completed()
         _LOGGER.info("Daten erfolgreich aktualisiert.")
 
@@ -475,6 +489,318 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         }
         async_dispatcher_send(self.hass, SIGNAL_PARSER_COMPLETED, payload)
         self.async_set_updated_data(self.data)
+
+    def _emit_enrichment_progress(self, stage: str, **details: Any) -> None:
+        """Emit enrichment progress payload over dispatcher and event bus."""
+        payload: dict[str, Any] = {
+            "entry_id": self.entry_id,
+            "stage": stage,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if details:
+            payload.update(details)
+        async_dispatcher_send(self.hass, SIGNAL_ENRICHMENT_PROGRESS, payload)
+        self.hass.bus.async_fire(EVENT_ENRICHMENT_PROGRESS, payload)
+
+    def _emit_enrichment_completed(
+        self, summary: Mapping[str, Any] | None = None
+    ) -> None:
+        """Emit enrichment completion payload."""
+        payload: dict[str, Any] = {
+            "entry_id": self.entry_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if summary:
+            payload["summary"] = dict(summary)
+        async_dispatcher_send(self.hass, SIGNAL_ENRICHMENT_COMPLETED, payload)
+        completed_event = dict(payload)
+        completed_event["stage"] = "completed"
+        self.hass.bus.async_fire(EVENT_ENRICHMENT_PROGRESS, completed_event)
+
+    async def _schedule_enrichment_jobs(self, parsed_client: Any) -> None:
+        """Plan FX refresh and price history jobs after imports."""
+        enriched_enabled = is_enabled(
+            "enrichment_pipeline",
+            self.hass,
+            entry_id=self.entry_id,
+            default=False,
+        )
+        if not enriched_enabled:
+            _LOGGER.debug(
+                "Enrichment-Pipeline deaktiviert, überspringe Planung (entry_id=%s)",
+                self.entry_id,
+            )
+            return
+
+        self._emit_enrichment_progress("start")
+
+        summary: dict[str, Any] = {}
+        errors: list[str] = []
+
+        fx_enabled = is_enabled(
+            "enrichment_fx_refresh",
+            self.hass,
+            entry_id=self.entry_id,
+            default=True,
+        )
+        history_enabled = is_enabled(
+            "enrichment_history_jobs",
+            self.hass,
+            entry_id=self.entry_id,
+            default=True,
+        )
+
+        if fx_enabled:
+            try:
+                fx_result = await self._schedule_fx_refresh()
+            except Exception as err:  # pragma: no cover - defensive
+                _LOGGER.exception(
+                    "Enrichment-Pipeline: FX-Planung fehlgeschlagen (entry_id=%s)",
+                    self.entry_id,
+                )
+                errors.append(str(err))
+                self._emit_enrichment_progress(
+                    "fx_refresh_exception",
+                    error=str(err),
+                )
+            else:
+                if isinstance(fx_result, Mapping):
+                    summary.update(fx_result)
+        else:
+            summary["fx_status"] = "disabled"
+            self._emit_enrichment_progress("fx_skipped_disabled")
+
+        if history_enabled:
+            try:
+                history_result = await self._schedule_price_history_jobs(parsed_client)
+            except Exception as err:  # pragma: no cover - defensive
+                _LOGGER.exception(
+                    "Enrichment-Pipeline: History-Planung fehlgeschlagen (entry_id=%s)",
+                    self.entry_id,
+                )
+                errors.append(str(err))
+                self._emit_enrichment_progress(
+                    "history_jobs_exception",
+                    error=str(err),
+                )
+            else:
+                if isinstance(history_result, Mapping):
+                    summary.update(history_result)
+        else:
+            summary["history_status"] = "disabled"
+            summary["history_jobs_enqueued"] = 0
+            self._emit_enrichment_progress("history_skipped_disabled")
+
+        if errors:
+            summary["errors"] = errors
+
+        self._process_enrichment_outcome(summary, errors)
+
+        self._emit_enrichment_completed(summary)
+
+    async def _schedule_fx_refresh(self) -> dict[str, Any] | None:
+        """Schedule an FX refresh for active non-EUR currencies."""
+        try:
+            currencies = await async_run_executor_job(
+                self.hass,
+                fx_module.discover_active_currencies,
+                self.db_path,
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Enrichment-Pipeline: Fehler beim Ermitteln aktiver FX-Währungen "
+                "(entry_id=%s)",
+                self.entry_id,
+            )
+            self._emit_enrichment_progress(
+                "fx_discovery_failed",
+                error="discover_active_currencies_failed",
+            )
+            return {"fx_status": "discovery_failed"}
+
+        if not currencies:
+            _LOGGER.debug(
+                "Enrichment-Pipeline: Keine FX-Währungen zu aktualisieren "
+                "(entry_id=%s)",
+                self.entry_id,
+            )
+            self._emit_enrichment_progress("fx_skipped_no_currencies")
+            return {"fx_status": "skipped"}
+
+        reference = datetime.now(UTC)
+        sorted_currencies = sorted(currencies)
+        self._emit_enrichment_progress(
+            "fx_refresh_scheduled",
+            currency_count=len(sorted_currencies),
+            currencies=sorted_currencies,
+        )
+
+        async def _execute_fx_refresh() -> None:
+            try:
+                await fx_module.ensure_exchange_rates_for_dates(
+                    [reference],
+                    currencies,
+                    self.db_path,
+                )
+            except Exception:
+                _LOGGER.exception(
+                    "Enrichment-Pipeline: FX-Aktualisierung fehlgeschlagen "
+                    "(entry_id=%s)",
+                    self.entry_id,
+                )
+                self._emit_enrichment_progress(
+                    "fx_refresh_failed",
+                    currency_count=len(sorted_currencies),
+                )
+            else:
+                _LOGGER.debug(
+                    "Enrichment-Pipeline: FX-Refresh durchgeführt für %s (entry_id=%s)",
+                    sorted(currencies),
+                    self.entry_id,
+                )
+                self._emit_enrichment_progress(
+                    "fx_refresh_completed",
+                    currency_count=len(sorted_currencies),
+                )
+
+        self.hass.async_create_task(_execute_fx_refresh())
+        return {
+            "fx_status": "scheduled",
+            "fx_currency_count": len(sorted_currencies),
+        }
+
+    async def _schedule_price_history_jobs(
+        self, parsed_client: Any
+    ) -> dict[str, Any] | None:
+        """Enqueue price history jobs for Yahoo-backed securities."""
+        securities = getattr(parsed_client, "securities", None)
+        if not securities:
+            _LOGGER.debug(
+                "Enrichment-Pipeline: Keine Wertpapiere für Preis-Historienplanung "
+                "(entry_id=%s)",
+                self.entry_id,
+            )
+            self._emit_enrichment_progress("history_skipped_no_securities")
+            return {"history_status": "no_securities"}
+
+        targets = build_history_targets_from_parsed(securities)
+        self._emit_enrichment_progress(
+            "history_targets_resolved",
+            target_count=len(targets),
+        )
+        if not targets:
+            _LOGGER.debug(
+                "Enrichment-Pipeline: Keine passenden Wertpapiere für Yahoo-Historie "
+                "(entry_id=%s)",
+                self.entry_id,
+            )
+            self._emit_enrichment_progress("history_skipped_no_targets")
+            return {"history_status": "no_targets"}
+
+        def _plan_jobs_sync() -> int:
+            manager = HistoryQueueManager(self.db_path)
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                return loop.run_until_complete(manager.plan_jobs(targets))
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+
+        try:
+            enqueued = await asyncio.to_thread(_plan_jobs_sync)
+        except Exception:
+            _LOGGER.exception(
+                "Enrichment-Pipeline: Planung der Price-History-Jobs fehlgeschlagen "
+                "(entry_id=%s)",
+                self.entry_id,
+            )
+            self._emit_enrichment_progress("history_jobs_failed")
+            return {"history_status": "failed"}
+
+        if enqueued:
+            _LOGGER.info(
+                "Enrichment-Pipeline: %s Price-History-Jobs eingeplant (entry_id=%s)",
+                enqueued,
+                self.entry_id,
+            )
+            self._emit_enrichment_progress(
+                "history_jobs_enqueued",
+                jobs_enqueued=enqueued,
+            )
+            return {
+                "history_status": "jobs_enqueued",
+                "history_jobs_enqueued": enqueued,
+            }
+        _LOGGER.debug(
+            "Enrichment-Pipeline: Keine zusätzlichen Price-History-Jobs "
+            "erforderlich (entry_id=%s)",
+            self.entry_id,
+        )
+        self._emit_enrichment_progress("history_jobs_not_required")
+        return {
+            "history_status": "up_to_date",
+            "history_jobs_enqueued": 0,
+        }
+
+    def _process_enrichment_outcome(
+        self,
+        summary: dict[str, Any],
+        errors: list[str],
+    ) -> None:
+        """Update failure bookkeeping and raise notifications when needed."""
+        failure_reasons: list[str] = []
+
+        fx_status = summary.get("fx_status")
+        history_status = summary.get("history_status")
+        if fx_status == "discovery_failed":
+            failure_reasons.append("FX refresh scheduling failed")
+        if history_status == "failed":
+            failure_reasons.append("Price history job scheduling failed")
+        failure_reasons.extend(errors)
+
+        if failure_reasons:
+            self._enrichment_failure_streak += 1
+            summary["failure_streak"] = self._enrichment_failure_streak
+            summary["failure_reasons"] = failure_reasons
+            _LOGGER.warning(
+                "Enrichment-Pipeline: Fehler erkannt (entry_id=%s, streak=%s): %s",
+                self.entry_id,
+                self._enrichment_failure_streak,
+                failure_reasons,
+            )
+            if (
+                self._enrichment_failure_streak >= _ENRICHMENT_FAILURE_THRESHOLD
+                and not self._enrichment_failure_notified
+            ):
+                reason_lines = "\n".join(f"- {reason}" for reason in failure_reasons)
+                message = (
+                    "Wiederholte Fehler in der Enrichment-Pipeline erkannt.\n"
+                    f"Aktuelle Gründe:\n{reason_lines}"
+                )
+                self.hass.async_create_task(
+                    notifications_util.async_create_enrichment_failure_notification(
+                        self.hass,
+                        entry_id=self.entry_id,
+                        title="PP Reader Enrichment-Pipeline fehlgeschlagen",
+                        message=message,
+                    )
+                )
+                self._enrichment_failure_notified = True
+        else:
+            if self._enrichment_failure_streak:
+                _LOGGER.info(
+                    (
+                        "Enrichment-Pipeline: Fehlerzähler zurückgesetzt "
+                        "(entry_id=%s, vorher=%s)"
+                    ),
+                    self.entry_id,
+                    self._enrichment_failure_streak,
+                )
+            self._enrichment_failure_streak = 0
+            self._enrichment_failure_notified = False
+            summary.pop("failure_streak", None)
+            summary.pop("failure_reasons", None)
 
     def _calculate_account_balances(
         self, accounts: Iterable[Any], transactions: Iterable[Any]

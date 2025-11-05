@@ -17,6 +17,11 @@ This concept document outlines how testing, documentation, and stakeholder commu
 - **Tooling & observability.**
   - Enhance `scripts/diagnostics_dump.py` (or extend new CLI tooling) to capture ingestion metadata, normalization telemetry, enrichment provenance, and websocket payload samples, feeding artefacts into QA reports.
   - Leverage `custom_components/pp_reader/cli/import_portfolio.py` for scripted parser→staging import validation; add optional QA wrapper script if coordinated parser→enrichment→metrics replays are required.
+- **Enrichment test matrix.**
+  - Document Frankfurter FX stub scenarios (healthy responses, delayed data, unavailable base currency) and Yahoo history replay cases (single symbol, batch fetch, backfill retry) with expected outcomes for `fx_rates` and `ingestion_historical_prices`.
+  - Track telemetry checkpoints per scenario, including dispatcher signals (`enrichment_fx_progress`, `enrichment_price_progress`) and diagnostics entries from `custom_components.pp_reader.util.diagnostics` so QA can assert matching timestamps, provenance tags, and pending queue counts.
+  - Capture prerequisites and tooling hooks for each path (CLI replay commands, scheduler feature flags, database fixture seeds) to keep smoke and regression runs reproducible across contributors.
+  - Map manual and automated coverage for the matrix into `.docs/live_aggregation/qa_runs.md`, noting gaps that require follow-up tests or observability enhancements.
 
 ## Documentation Plan
 - **Architecture refresh.** Update `README-dev.md`, `.docs/ARCHITECTURE.md`, and `.docs/live_aggregation/` notes with diagrams referencing the canonical pipeline, replacing legacy flow explanations.

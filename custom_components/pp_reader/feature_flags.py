@@ -13,6 +13,9 @@ from .const import DOMAIN
 _DEFAULT_FLAGS: dict[str, bool] = {
     "notify_parser_failures": False,
     "use_staging_importer": False,
+    "enrichment_pipeline": False,
+    "enrichment_fx_refresh": True,
+    "enrichment_history_jobs": True,
 }
 
 

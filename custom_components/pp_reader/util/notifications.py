@@ -30,3 +30,24 @@ async def async_create_parser_failure_notification(
         },
         blocking=False,
     )
+
+
+async def async_create_enrichment_failure_notification(
+    hass: HomeAssistant,
+    *,
+    entry_id: str,
+    title: str,
+    message: str,
+) -> None:
+    """Display a persistent notification for repeated enrichment failures."""
+    notification_id = f"pp_reader_enrichment_failure_{entry_id}"
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "title": title,
+            "message": message,
+            "notification_id": notification_id,
+        },
+        blocking=False,
+    )

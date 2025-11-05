@@ -28,12 +28,12 @@
 5. [ ] Phase 4 – Diagnostics & Observability
    a) [x] Erweitere `custom_components/pp_reader/util/diagnostics.py` um Enrichment-Metadaten (letzter FX-Refresh, offene Price-Jobs, Fehlermeldungen).
    b) [x] Ergänze Persistent Notifications/Logger-Erweiterungen für wiederholte Enrichment-Fehler (analog Parser).
-   c) [ ] Tests für Diagnostics/Notifications (`tests/util/test_diagnostics_enrichment.py`).
+   c) [x] Tests für Diagnostics/Notifications (`tests/util/test_diagnostics_enrichment.py`).
 
 6. [ ] Phase 5 – Tooling & QA
-   a) [ ] CLI-Erweiterung (`custom_components/pp_reader/cli/import_portfolio.py` oder neue Subcommands) zum optionalen Triggern von Enrichment-Replays nach einem Import.
-   b) [ ] Skript `scripts/enrichment_smoketest.py`: Führt Parser + Enrichment für Sample-Portfolio aus, schreibt Diagnostik-Log.
-   c) [ ] QA-Docs: Abschnitt in `.docs/qa_docs_comms.md` für Enrichment-Testmatrix (Frankfurter/Yahoo Stubs, Telemetrieprüfung).
+   a) [x] CLI-Erweiterung (`custom_components/pp_reader/cli/import_portfolio.py` oder neue Subcommands) zum optionalen Triggern von Enrichment-Replays nach einem Import.
+   b) [x] Skript `scripts/enrichment_smoketest.py`: Führt Parser + Enrichment für Sample-Portfolio aus, schreibt Diagnostik-Log.
+   c) [x] QA-Docs: Abschnitt in `.docs/qa_docs_comms.md` für Enrichment-Testmatrix (Frankfurter/Yahoo Stubs, Telemetrieprüfung).
 
 7. [ ] Phase 6 – Dokumentation & Cleanup Vorbereitung
    a) [ ] Aktualisiere `.docs/backend_workstreams.md` (Enrichment Services) mit tatsächlichen Modulen/Artefakten nach Implementierung.
