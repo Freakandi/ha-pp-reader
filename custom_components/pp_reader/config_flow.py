@@ -17,7 +17,14 @@ from homeassistant.config_entries import (
     OptionsFlow,  # NEU: OptionsFlow import
 )
 
-from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
+from .const import (
+    CONF_DB_PATH,
+    CONF_FILE_PATH,
+    CONF_FX_UPDATE_INTERVAL_SECONDS,
+    DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
+    DOMAIN,
+    MIN_FX_UPDATE_INTERVAL_SECONDS,
+)
 from .data.reader import parse_data_portfolio
 
 _LOGGER = logging.getLogger(__name__)
@@ -198,6 +205,21 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
         except (TypeError, ValueError):
             return False
 
+    def _current_fx_interval(self) -> int:
+        """Aktuell gesetztes FX-Intervall oder Default liefern."""
+        try:
+            val = int(
+                self._entry.options.get(
+                    CONF_FX_UPDATE_INTERVAL_SECONDS,
+                    DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
+                )
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+        if val < MIN_FX_UPDATE_INTERVAL_SECONDS:
+            return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+        return val
+
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Initialer Options-Schritt (Intervall + Debug)."""
         errors: dict[str, str] = {}
@@ -216,6 +238,18 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
             ):
                 errors["price_update_interval_seconds"] = "invalid_interval"
 
+            fx_interval = user_input.get(CONF_FX_UPDATE_INTERVAL_SECONDS)
+            if fx_interval is None:
+                user_input[CONF_FX_UPDATE_INTERVAL_SECONDS] = (
+                    DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+                )
+                fx_interval = DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+            if (
+                not isinstance(fx_interval, int)
+                or fx_interval < MIN_FX_UPDATE_INTERVAL_SECONDS
+            ):
+                errors[CONF_FX_UPDATE_INTERVAL_SECONDS] = "invalid_interval"
+
             # Debug Flag defensiv normieren
             user_input["enable_price_debug"] = bool(
                 user_input.get("enable_price_debug", False)
@@ -231,6 +265,10 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                     "price_update_interval_seconds",
                     default=self._current_interval(),
                 ): vol.All(int, vol.Range(min=MIN_OPTIONS_PRICE_UPDATE_INTERVAL)),
+                vol.Optional(
+                    CONF_FX_UPDATE_INTERVAL_SECONDS,
+                    default=self._current_fx_interval(),
+                ): vol.All(int, vol.Range(min=MIN_FX_UPDATE_INTERVAL_SECONDS)),
                 vol.Optional(
                     "enable_price_debug",
                     default=self._current_debug(),

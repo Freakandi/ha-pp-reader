@@ -30,8 +30,11 @@ from homeassistant.helpers.event import async_track_time_interval
 from .const import (
     CONF_DB_PATH,
     CONF_FILE_PATH,
+    CONF_FX_UPDATE_INTERVAL_SECONDS,
     CONF_HISTORY_RETENTION_YEARS,
+    DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
     DOMAIN,
+    MIN_FX_UPDATE_INTERVAL_SECONDS,
 )
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
@@ -80,6 +83,13 @@ def _get_price_service_module() -> ModuleType:
     from .prices import price_service as price_service_module
 
     return price_service_module
+
+
+def _get_fx_module() -> ModuleType:
+    """Return the FX helper module on demand."""
+    from .currencies import fx as fx_module
+
+    return fx_module
 
 
 def _build_panel_config(
@@ -194,6 +204,20 @@ def _get_price_interval_seconds(options: Mapping[str, Any]) -> int:
     return interval
 
 
+def _get_fx_interval_seconds(options: Mapping[str, Any]) -> int:
+    """Normalize the configured FX refresh interval with sane defaults."""
+    raw_interval = options.get(
+        CONF_FX_UPDATE_INTERVAL_SECONDS, DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+    )
+    try:
+        interval = int(raw_interval)
+    except (TypeError, ValueError):
+        return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+    if interval < MIN_FX_UPDATE_INTERVAL_SECONDS:
+        return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+    return interval
+
+
 def _schedule_price_interval(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -216,6 +240,106 @@ def _schedule_price_interval(
     store["price_interval_applied"] = interval
     _LOGGER.debug(
         "Preis-Service Intervall-Task geplant: every %ss (entry_id=%s)",
+        interval,
+        entry.entry_id,
+    )
+    return remove_listener
+
+
+async def _run_fx_refresh_once(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+) -> None:
+    """Ensure current FX rates are cached for active currencies."""
+    fx_module = _get_fx_module()
+    db_path = store.get("db_path")
+    if db_path is None:
+        _LOGGER.debug(
+            "FX-Refresh: Kein db_path im Store gefunden (entry_id=%s)",
+            entry.entry_id,
+        )
+        return
+    if not isinstance(db_path, Path):
+        db_path = Path(db_path)
+        store["db_path"] = db_path
+
+    fx_lock = store.get("fx_lock")
+    if not isinstance(fx_lock, asyncio.Lock):
+        fx_lock = asyncio.Lock()
+        store["fx_lock"] = fx_lock
+
+    if fx_lock.locked():
+        _LOGGER.debug(
+            "FX-Refresh: Vorheriger Lauf noch aktiv, Skip (entry_id=%s)",
+            entry.entry_id,
+        )
+        return
+
+    async with fx_lock:
+        try:
+            currencies = await hass.async_add_executor_job(
+                fx_module.discover_active_currencies,
+                db_path,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Refresh: Fehler beim Ermitteln aktiver Währungen (entry_id=%s)",
+                entry.entry_id,
+                exc_info=True,
+            )
+            return
+
+        if not currencies:
+            _LOGGER.debug(
+                "FX-Refresh: Keine Nicht-EUR Währungen aktiv (entry_id=%s)",
+                entry.entry_id,
+            )
+            store["fx_last_refresh"] = datetime.now(UTC)
+            return
+
+        reference = datetime.now(UTC)
+        try:
+            await fx_module.ensure_exchange_rates_for_dates(
+                [reference],
+                currencies,
+                db_path,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Refresh: Fehler beim Aktualisieren der Wechselkurse (entry_id=%s)",
+                entry.entry_id,
+                exc_info=True,
+            )
+        else:
+            store["fx_last_refresh"] = reference
+            _LOGGER.debug(
+                "FX-Refresh: Aktualisiert für %s (entry_id=%s)",
+                sorted(currencies),
+                entry.entry_id,
+            )
+
+
+def _schedule_fx_interval(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+    interval: int,
+) -> Callable[[], None]:
+    """Schedule recurring FX cache refresh."""
+
+    async def _scheduled_fx_cycle(_now: datetime) -> None:
+        await _run_fx_refresh_once(hass, entry, store)
+
+    remove_listener = async_track_time_interval(
+        hass,
+        _scheduled_fx_cycle,
+        timedelta(seconds=interval),
+    )
+    store["fx_task_cancel"] = remove_listener
+    store["fx_interval_applied"] = interval
+    _LOGGER.debug(
+        "FX-Service Intervall-Task geplant: every %ss (entry_id=%s)",
         interval,
         entry.entry_id,
     )
@@ -342,6 +466,25 @@ def _initialize_price_tasks(
         _schedule_price_interval(hass, entry, store, interval)
 
 
+def _initialize_fx_tasks(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+    options: Mapping[str, Any],
+) -> None:
+    """Ensure FX refresh scheduling is active."""
+    store.setdefault("fx_task_cancel", None)
+    store.setdefault("fx_interval_applied", None)
+    if not isinstance(store.get("fx_lock"), asyncio.Lock):
+        store["fx_lock"] = asyncio.Lock()
+
+    if not store.get("fx_task_cancel"):
+        interval = _get_fx_interval_seconds(options)
+        _schedule_fx_interval(hass, entry, store, interval)
+
+    hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
     """Set up your component."""
     # Dashboard-Dateien registrieren
@@ -435,6 +578,20 @@ async def _async_reload_entry_on_update(
                 exc_info=True,
             )
 
+    fx_cancel = store.get("fx_task_cancel")
+    fx_interval = store.get("fx_interval_applied")
+    if fx_cancel:
+        try:
+            fx_cancel()
+        except CANCEL_EXCEPTIONS:  # pragma: no cover (defensiv)
+            _LOGGER.warning(
+                "FX-Service: Fehler beim Cancel des alten Intervall-Tasks (Reload)",
+                exc_info=True,
+            )
+
+    if not isinstance(store.get("fx_lock"), asyncio.Lock):
+        store["fx_lock"] = asyncio.Lock()
+
     price_service.initialize_price_state(hass, entry.entry_id)
 
     new_interval = _get_price_interval_seconds(options)
@@ -460,6 +617,25 @@ async def _async_reload_entry_on_update(
     _LOGGER.debug(
         "Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id
     )
+
+    new_fx_interval = _get_fx_interval_seconds(options)
+    _schedule_fx_interval(hass, entry, store, new_fx_interval)
+
+    if fx_interval is not None and fx_interval != new_fx_interval:
+        _LOGGER.info(
+            "FX-Service: Intervall geändert alt=%ss neu=%ss (entry_id=%s)",
+            fx_interval,
+            new_fx_interval,
+            entry.entry_id,
+        )
+    else:
+        _LOGGER.debug(
+            "FX-Service: Intervall (re)gesetzt=%ss (entry_id=%s)",
+            new_fx_interval,
+            entry.entry_id,
+        )
+
+    hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -513,6 +689,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
         _initialize_price_tasks(hass, entry, store, options)
+        _initialize_fx_tasks(hass, entry, store, options)
 
         entry.async_on_unload(entry.add_update_listener(_async_reload_entry_on_update))
 
@@ -570,6 +747,37 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 exc_info=True,
             )
         # ----------------------------------------------------------------------
+        try:
+            fx_cancel = store.get("fx_task_cancel")
+            if fx_cancel:
+                try:
+                    fx_cancel()
+                    _LOGGER.debug(
+                        "FX-Service: Intervall-Task gecancelt (entry_id=%s)",
+                        entry.entry_id,
+                    )
+                except CANCEL_EXCEPTIONS:
+                    _LOGGER.warning(
+                        "FX-Service: Fehler beim Cancel des Intervall-Tasks",
+                        exc_info=True,
+                    )
+            fx_keys = [k for k in list(store.keys()) if k.startswith("fx_")]
+            for key in fx_keys:
+                store.pop(key, None)
+            if fx_keys:
+                _LOGGER.debug(
+                    (
+                        "FX-Service: State-Cleanup abgeschlossen "
+                        "removed_keys=%s entry_id=%s"
+                    ),
+                    fx_keys,
+                    entry.entry_id,
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Service: Unerwarteter Fehler beim Unload-Cleanup",
+                exc_info=True,
+            )
 
     # Gesamten Entry-State löschen wenn Plattformen entladen
     if unload_ok:

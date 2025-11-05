@@ -5,9 +5,10 @@ Handle transactions, securities, accounts, portfolios,
 and related data in a SQLite database.
 """
 
+import json
 import logging
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -123,7 +124,7 @@ class FxRateRecord:
 
     date: str
     currency: str
-    rate: int
+    rate: float
     fetched_at: str | None = None
     data_source: str | None = None
     provider: str | None = None
@@ -888,6 +889,93 @@ def enqueue_price_history_job(
     finally:
         if conn is None:
             local_conn.close()
+
+
+def price_history_job_exists(
+    db_path: Path,
+    security_uuid: str,
+    *,
+    statuses: Sequence[str] = ("pending", "running"),
+) -> bool:
+    """Return True when a job for the security exists in one of the statuses."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+    statuses_tuple = tuple(statuses)
+    if not statuses_tuple:
+        return False
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.execute(
+            """
+            SELECT status
+            FROM price_history_queue
+            WHERE security_uuid = ?
+            """,
+            (security_uuid,),
+        )
+        return any(row[0] in statuses_tuple for row in cursor.fetchall())
+    finally:
+        conn.close()
+
+
+def mark_price_history_job_started(db_path: Path, job_id: int) -> None:
+    """Transition a job into running status and increment attempts."""
+    timestamp = _utc_now_isoformat()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            UPDATE price_history_queue
+            SET status = 'running',
+                attempts = attempts + 1,
+                started_at = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (timestamp, timestamp, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def complete_price_history_job(
+    db_path: Path,
+    job_id: int,
+    *,
+    status: str,
+    last_error: str | None = None,
+    provenance_updates: dict[str, Any] | None = None,
+) -> None:
+    """Complete a job, updating optional error/provenance metadata."""
+    if not status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    timestamp = _utc_now_isoformat()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        provenance_fragment = None
+        if provenance_updates:
+            provenance_fragment = json.dumps(provenance_updates)
+
+        conn.execute(
+            """
+            UPDATE price_history_queue
+            SET status = ?,
+                finished_at = ?,
+                last_error = ?,
+                updated_at = ?,
+                provenance = COALESCE(?, provenance)
+            WHERE id = ?
+            """,
+            (status, timestamp, last_error, timestamp, provenance_fragment, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_price_history_jobs_by_status(

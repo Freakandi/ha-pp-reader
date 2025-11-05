@@ -174,7 +174,7 @@ def test_runtime_migration_adds_enrichment_columns(tmp_path):
     new_rate = FxRateRecord(
         date="2024-03-01",
         currency="USD",
-        rate=109000000,
+        rate=109000000.0,
         fetched_at="2024-03-01T10:00:00Z",
         data_source="frankfurter",
         provider="frankfurter.app",

@@ -8,3 +8,6 @@ DEFAULT_NAME = "Portfolio Performance"
 EVENT_PARSER_PROGRESS = "pp_reader_parser_progress"
 SIGNAL_PARSER_PROGRESS = "pp_reader_parser_progress_signal"
 SIGNAL_PARSER_COMPLETED = "pp_reader_parser_completed_signal"
+CONF_FX_UPDATE_INTERVAL_SECONDS = "fx_update_interval_seconds"
+DEFAULT_FX_UPDATE_INTERVAL_SECONDS = 6 * 3600  # 6 hours
+MIN_FX_UPDATE_INTERVAL_SECONDS = 900  # 15 minutes

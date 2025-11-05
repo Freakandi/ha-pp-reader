@@ -8,16 +8,16 @@
    d) [x] Tests: Aktualisiere/erzeuge Pytests (`tests/unit/test_db_schema_enrichment.py`) zur Validierung der Migration und Basis-CRUD-Operationen.
 
 2. [ ] Phase 1 – FX Ingestion (Frankfurter API)
-   a) [ ] Implementiere asynchrone FX-Fetcher (`custom_components/pp_reader/currencies/fx_async.py` oder Erweiterung der bestehenden Module) mit Retry/Timeout-Strategie.
-   b) [ ] Integriere Cache-Schicht: schreibe aktualisierte Raten mit Zeitstempel in `fx_rates`, stelle Loader für normalization/metrics bereit.
-   c) [ ] Ergänze Konfiguration/Flags (falls nötig) zur Steuerung des Aktualisierungsintervalls; dokumentiere Standardwerte.
-   d) [ ] Tests: `tests/currencies/test_fx_async.py` (API-Stubs, Cache-Verhalten, Fehlerpfade).
+   a) [x] Implementiere asynchrone FX-Fetcher (`custom_components/pp_reader/currencies/fx_async.py` oder Erweiterung der bestehenden Module) mit Retry/Timeout-Strategie.
+   b) [x] Integriere Cache-Schicht: schreibe aktualisierte Raten mit Zeitstempel in `fx_rates`, stelle Loader für normalization/metrics bereit.
+   c) [x] Ergänze Konfiguration/Flags (falls nötig) zur Steuerung des Aktualisierungsintervalls; dokumentiere Standardwerte.
+   d) [x] Tests: `tests/currencies/test_fx_async.py` (API-Stubs, Cache-Verhalten, Fehlerpfade).
 
 3. [ ] Phase 2 – Yahoo Price History Ingestion
-   a) [ ] Baue `custom_components/pp_reader/prices/history_ingest.py` (oder erweitere vorhandene Services) für asynchrone Candle-Fetches inkl. Batch-Planer.
-   b) [ ] Ergänze Queue-Management: schreibe Jobs in `price_history_queue` (oder analog) und persistiere Ergebnisse nach `ingestion_historical_prices`.
-   c) [ ] Verwende bestehende Parser-Properties (z.B. `ParsedSecurity.properties`) für Feed-Typen/IDs; definiere Fallback-Strategien.
-   d) [ ] Tests: `tests/prices/test_history_ingest.py` (Mock-Yahoo Client, Persistenz, Fehlerhandling).
+   a) [x] Baue `custom_components/pp_reader/prices/history_ingest.py` (oder erweitere vorhandene Services) für asynchrone Candle-Fetches inkl. Batch-Planer.
+   b) [x] Ergänze Queue-Management: schreibe Jobs in `price_history_queue` (oder analog) und persistiere Ergebnisse nach `ingestion_historical_prices`.
+   c) [x] Verwende bestehende Parser-Properties (z.B. `ParsedSecurity.properties`) für Feed-Typen/IDs; definiere Fallback-Strategien.
+   d) [x] Tests: `tests/prices/test_history_ingest.py` (Mock-Yahoo Client, Persistenz, Fehlerhandling).
 
 4. [ ] Phase 3 – Coordinator & Pipeline Integration
    a) [ ] Aktualisiere `custom_components/pp_reader/data/coordinator.py`, um nach erfolgreichem Import Enrichment-Jobs zu planen (FX + Preise) – Feature-Flag-gestützt.

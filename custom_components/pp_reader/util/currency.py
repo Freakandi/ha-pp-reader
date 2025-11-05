@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 from math import isfinite
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
-    load_latest_rates_sync,
+    load_cached_rate_records_sync,
 )
 
 if TYPE_CHECKING:
@@ -153,13 +153,13 @@ def normalize_price_to_eur_sync(
         ensure_exchange_rates_for_dates_sync(
             [reference_date], {normalized_currency}, db_path
         )
-        fx_rates: dict[str, Any] = load_latest_rates_sync(reference_date, db_path)
+        fx_records = load_cached_rate_records_sync(reference_date, db_path)
     except Exception:  # pragma: no cover - defensive
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
         return None
 
-    rate = fx_rates.get(normalized_currency)
-    if not rate:
+    record = fx_records.get(normalized_currency)
+    if record is None:
         _LOGGER.warning(
             "⚠️ Kein Wechselkurs für %s (%s)",
             normalized_currency,
@@ -168,7 +168,7 @@ def normalize_price_to_eur_sync(
         return None
 
     try:
-        normalized = price_native / float(rate)
+        normalized = price_native / float(record.rate)
     except (TypeError, ValueError, ZeroDivisionError):
         _LOGGER.warning(
             "⚠️ Ungültiger Wechselkurs für %s (%s)",
