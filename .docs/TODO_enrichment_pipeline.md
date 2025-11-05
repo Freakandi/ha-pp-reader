@@ -20,14 +20,14 @@
    d) [x] Tests: `tests/prices/test_history_ingest.py` (Mock-Yahoo Client, Persistenz, Fehlerhandling).
 
 4. [ ] Phase 3 – Coordinator & Pipeline Integration
-   a) [ ] Aktualisiere `custom_components/pp_reader/data/coordinator.py`, um nach erfolgreichem Import Enrichment-Jobs zu planen (FX + Preise) – Feature-Flag-gestützt.
-   b) [ ] Ergänze Telemetrie (Dispatcher/Event-Bus) für Enrichment-Fortschritt analog Parser-Progress.
-   c) [ ] Sicherstellen, dass Legacy Sync und neue Pipelines gemeinsam arbeiten (Feature-Flag/Toggles für schrittweise Aktivierung).
-   d) [ ] Integrationstests: `tests/integration/test_enrichment_pipeline.py` (Mock-Netzwerk, Job Scheduling, Telemetrie).
+   a) [x] Aktualisiere `custom_components/pp_reader/data/coordinator.py`, um nach erfolgreichem Import Enrichment-Jobs zu planen (FX + Preise) – Feature-Flag-gestützt.
+   b) [x] Ergänze Telemetrie (Dispatcher/Event-Bus) für Enrichment-Fortschritt analog Parser-Progress.
+   c) [x] Sicherstellen, dass Legacy Sync und neue Pipelines gemeinsam arbeiten (Feature-Flag/Toggles für schrittweise Aktivierung).
+   d) [x] Integrationstests: `tests/integration/test_enrichment_pipeline.py` (Mock-Netzwerk, Job Scheduling, Telemetrie).
 
 5. [ ] Phase 4 – Diagnostics & Observability
-   a) [ ] Erweitere `custom_components/pp_reader/util/diagnostics.py` um Enrichment-Metadaten (letzter FX-Refresh, offene Price-Jobs, Fehlermeldungen).
-   b) [ ] Ergänze Persistent Notifications/Logger-Erweiterungen für wiederholte Enrichment-Fehler (analog Parser).
+   a) [x] Erweitere `custom_components/pp_reader/util/diagnostics.py` um Enrichment-Metadaten (letzter FX-Refresh, offene Price-Jobs, Fehlermeldungen).
+   b) [x] Ergänze Persistent Notifications/Logger-Erweiterungen für wiederholte Enrichment-Fehler (analog Parser).
    c) [ ] Tests für Diagnostics/Notifications (`tests/util/test_diagnostics_enrichment.py`).
 
 6. [ ] Phase 5 – Tooling & QA
