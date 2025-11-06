@@ -21,19 +21,19 @@ This concept document enumerates the backend workstreams required to deliver the
   - Observing payload parity and staging metrics through the diagnostics surface and dispatcher telemetry during manual verification sessions recorded under `.docs/live_aggregation/notes.md`.
 
 ## Enrichment Services
-- **Target implementation.** Expand enrichment flows so all persisted rows are hydrated with market, FX, and metadata before metric computation. Service orchestration belongs under `custom_components/pp_reader/prices/price_service.py` and `custom_components/pp_reader/currencies/fx.py`.
-- **Behaviour updates.**
-  - Run Yahoo price fetches asynchronously with retry policies bounded by Home Assistant’s update coordinator to avoid blocking other refresh cycles.
-  - Cache Frankfurter FX results in SQLite (`fx_rates` table) and expose cache invalidation hooks to the coordinator for forced refreshes during testing.
-  - Validate upstream data freshness before persisting; mark stale inputs with `data_source=cache` for downstream payload tagging.
-- **New/updated modules.**
-  - Add `custom_components/pp_reader/prices/history_ingest.py` to map Yahoo candles into `historical_prices` using the schema outlined in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md#security-history-pp_readerget_security_history-command-security_history-push).
-  - Extend `custom_components/pp_reader/util/currency.py` with async helpers (`normalize_price_to_eur_async`) consumed by both the parser and history ingest.
-  - Update `custom_components/pp_reader/data/sync_from_pclient.py` to trigger enrichment cycles immediately after each import batch.
-- **Legacy retirement.** Remove `custom_components/pp_reader/prices/history.py` and the synchronous `_ensure_exchange_rates_for_dates_sync` helpers when the async ingest path satisfies:
-  - FX/unit coverage validation scripts under `tests/unit/test_currency_utils.py`.
-  - QA checklist confirming Yahoo and Frankfurter responses stored per [`datamodel/mermaid_backend_flow.mmd`](../datamodel/mermaid_backend_flow.mmd).
-  - Dashboard smoke tests showing FX warning badges clear on first load.
+- **Current implementation.** Enrichment now runs end-to-end: asynchronous FX retrieval in `custom_components/pp_reader/currencies/fx.py` hydrates the `fx_rates` cache with provenance metadata, while Yahoo history ingestion flows through `custom_components/pp_reader/prices/history_queue.py` and `custom_components/pp_reader/prices/history_ingest.py` before persisting into `historical_prices`.
+- **Operational behaviour.**
+  - `ensure_exchange_rates_for_dates` fetches Frankfurter data with retry/backoff, persists via `FxRateRecord` upserts, and deduplicates warning logs when rates remain unavailable.
+  - `HistoryQueueManager` derives symbols from parsed securities, plans jobs into `price_history_queue`, and coordinates executor-backed fetches plus persistence through `fetch_history_for_jobs`.
+  - `price_service.initialize_price_state` and the surrounding task orchestration in `price_service` schedule enrichment cycles, push dispatcher telemetry via `data/event_push.py`, and trigger `revaluation.revalue_after_price_updates` once prices land.
+- **Primary modules.**
+  - `custom_components/pp_reader/currencies/fx.py` – discovery of active currencies, async Frankfurter client, cache loaders (`load_cached_rate_records`), and sync fallbacks for legacy code paths.
+  - `custom_components/pp_reader/prices/history_queue.py` – queue lifecycle (`plan_jobs`, `run_queue_once`), job status transitions, and candle scaling before writes.
+  - `custom_components/pp_reader/prices/history_ingest.py` – Yahoo history job model, batching helpers, and executor bridge used by the queue manager.
+  - `custom_components/pp_reader/prices/yahooquery_provider.py` & `prices/provider_base.py` – shared fetch interface, chunk sizing, and provider health flags.
+  - `custom_components/pp_reader/prices/price_service.py` – Home Assistant integration surface (locking, scheduling, diagnostics) that ties enrichment output back into coordinator consumers.
+- **Validation.** Regression coverage spans `tests/currencies/test_fx_async.py` (Frankfurter fetch/cache), `tests/prices/test_history_ingest.py` and `tests/prices/test_history_queue.py` (queue planning, candle persistence), plus `tests/integration/test_enrichment_pipeline.py` for coordinator wiring.
+- **Remaining cleanup.** Decommission synchronous currency normalization once all consumers move to the async FX helpers, and prune stubbed fallbacks that currently guard Yahoo provider imports.
 
 ## Metrics Engine
 - **Target implementation.** Consolidate portfolio, account, and security metrics inside `custom_components/pp_reader/data/performance.py` and supporting aggregators so all calculations read from normalized tables.

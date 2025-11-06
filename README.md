@@ -7,6 +7,7 @@ Portfolio Performance Reader keeps your Home Assistant instance in sync with the
 - Stores the latest quote per security and recalculates portfolio totals from SQLite so sensors, WebSocket clients, and the dashboard all see the same figures.
 - Exposes structured payloads for holdings (`aggregation`/`average_cost`) and performance metrics that power sensors, WebSocket responses, and dashboard tables.
 - Runs entirely on your Home Assistant host; the only outbound traffic comes from optional pricing providers such as Yahoo Finance or the Frankfurter FX API.
+- Queues enrichment jobs after each import: FX rates are cached in SQLite, and Yahoo history fetches populate the `historical_prices` table for offline dashboards.
 
 ## Features
 - **Automatic portfolio sync:** Watches the configured `.portfolio` file, normalises identifiers, and mirrors portfolio/account balances as Home Assistant entities.
@@ -14,6 +15,7 @@ Portfolio Performance Reader keeps your Home Assistant instance in sync with the
 - **Security drilldowns:** Dashboard tabs provide daily close charts, performance breakdowns, and snapshot metrics for every security with stored history.
 - **Built-in dashboard panel:** Adds a persistent "Portfolio Dashboard" sidebar entry with live updates, expandable tables, and navigation to per-security details.
 - **Resilient storage:** Maintains six-hour rolling backups of the integration database and exposes a manual service for on-demand snapshots.
+- **Asynchronous enrichment pipeline:** Refreshes Frankfurter FX rates and Yahoo price history in the background, persisting provenance metadata so charts and metrics keep working when the upstream APIs are temporarily unavailable.
 
 ## Requirements
 - Home Assistant **2025.4.1** or newer when installed via HACS (matches the integration manifest).
@@ -43,6 +45,7 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 2. Accept the default database path (`/config/pp_reader_data/<portfolio>.db`) or choose a custom directory.
 3. Finish the setup and review the options (accessible after onboarding):
    - **Live price interval** – `price_update_interval_seconds` (default 900 seconds, minimum 300 seconds).
+   - **FX refresh interval** – `fx_update_interval_seconds` (default 6 hours, minimum 15 minutes) controls how often cached FX rates are refreshed for non-EUR accounts and purchases.
    - **Price debug logging** – `enable_price_debug` narrows verbose logs to the pricing namespace.
 
 ### Services
@@ -62,6 +65,11 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) deliver the same structured payloads used by the dashboard. Custom cards or automations can subscribe to identical gain, day-change, and average-cost metrics without reimplementing calculations.
 - Legacy flat fields (`avg_price_security`, `avg_price_account`, `gain_abs`, `gain_pct`, `day_price_change_*`) were removed in v0.14.0. Update custom automations to rely on the `average_cost` and `performance` blocks instead.
 
+### FX & price enrichment
+- After every import the coordinator schedules an FX refresh (Frankfurter) and queues Yahoo price-history jobs. Rates are persisted in the `fx_rates` table with provenance metadata; completed candles land in `historical_prices` and surface on the dashboard without additional API calls.
+- Enrichment telemetry is exposed under **Settings → Devices & Services → Portfolio Performance Reader → Diagnostics**. The JSON download lists the latest FX fetch, queued jobs, and recent failures to aid troubleshooting.
+- Adjust the FX cadence from the options flow if you need more frequent updates during trading hours or slower refreshes for offline environments.
+
 ### Historical data & backups
 - Daily close prices for tracked securities are persisted on every import so charts and WebSocket consumers work offline once data is captured.
 - The integration keeps rolling backups of the SQLite database in `/config/pp_reader_data/backups`; trigger `pp_reader.trigger_backup_debug` before risky maintenance to capture an additional snapshot.
@@ -74,6 +82,8 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 | Dashboard totals or charts look stale | Ensure Home Assistant is running (price tasks trigger on schedule) and review the logs for database errors or WebSocket warnings. Restarting Home Assistant reschedules the price coordinator. |
 | Security detail tab shows empty charts | Verify that the integration has completed at least one import since upgrading and that the Portfolio Performance file contains securities with historical data. |
 | Automations no longer see `gain_abs` or `avg_price_*` fields | Update automations to consume the structured `performance` and `average_cost` payloads exposed by sensors, WebSocket responses, and events. |
+| FX diagnostics show no recent refresh | Download the integration diagnostics and confirm `fx.last_refresh` updates after the scheduled interval. Reduce the FX interval or check network access to `api.frankfurter.app` if the timestamp stays `null`. |
+| Price history queue reports failures | Diagnostics include the last five failed jobs. Clean up invalid symbols in Portfolio Performance or temporarily disable Yahoo updates until the upstream responds again. |
 
 ## Further documentation & support
 - [Developer guide](README-dev.md) — environment setup, contribution workflow, and release process.

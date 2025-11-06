@@ -36,6 +36,6 @@
    c) [x] QA-Docs: Abschnitt in `.docs/qa_docs_comms.md` für Enrichment-Testmatrix (Frankfurter/Yahoo Stubs, Telemetrieprüfung).
 
 7. [ ] Phase 6 – Dokumentation & Cleanup Vorbereitung
-   a) [ ] Aktualisiere `.docs/backend_workstreams.md` (Enrichment Services) mit tatsächlichen Modulen/Artefakten nach Implementierung.
-   b) [ ] Ergänze `.docs/legacy_cleanup_strategy.md` um Kriterien zum Entfernen synchroner FX-/History-Helfer sobald neue Pfade aktiv sind.
-   c) [ ] Nutzer-Dokumentation (`README.md`, `README-dev.md`): Hinweise zu neuen Abhängigkeiten, Fehlerdiagnose und CLI-Bedienung.
+   a) [x] Aktualisiere `.docs/backend_workstreams.md` (Enrichment Services) mit tatsächlichen Modulen/Artefakten nach Implementierung.
+   b) [x] Ergänze `.docs/legacy_cleanup_strategy.md` um Kriterien zum Entfernen synchroner FX-/History-Helfer sobald neue Pfade aktiv sind.
+   c) [x] Nutzer-Dokumentation (`README.md`, `README-dev.md`): Hinweise zu neuen Abhängigkeiten, Fehlerdiagnose und CLI-Bedienung.
