@@ -1,4 +1,4 @@
-"""Diagnostics helpers exposing ingestion and enrichment metadata."""
+"""Diagnostics helpers exposing ingestion, enrichment, and metrics metadata."""
 
 from __future__ import annotations
 
@@ -162,7 +162,7 @@ def _collect_enrichment_payload(
     except sqlite3.Error:
         queue_available = False
 
-    return {
+    payload = {
         "available": queue_available,
         "feature_flags": dict(flag_snapshot),
         "fx": {
@@ -174,6 +174,153 @@ def _collect_enrichment_payload(
             "recent_failures": recent_failures if recent_failures else None,
         },
     }
+
+    if not queue_available:
+        payload["reason"] = "price_history_queue table not accessible"
+
+    return payload
+
+
+def _coverage_for_table(
+    conn: sqlite3.Connection,
+    table: str,
+) -> dict[str, Any]:
+    coverage_query = {
+        "portfolio_metrics": """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN coverage_ratio IS NOT NULL THEN 1 ELSE 0 END)
+                    AS with_coverage,
+                AVG(coverage_ratio) AS avg_coverage
+            FROM portfolio_metrics
+        """,
+        "account_metrics": """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN coverage_ratio IS NOT NULL THEN 1 ELSE 0 END)
+                    AS with_coverage,
+                AVG(coverage_ratio) AS avg_coverage
+            FROM account_metrics
+        """,
+        "security_metrics": """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN coverage_ratio IS NOT NULL THEN 1 ELSE 0 END)
+                    AS with_coverage,
+                AVG(coverage_ratio) AS avg_coverage
+            FROM security_metrics
+        """,
+    }.get(table)
+
+    if coverage_query is None:
+        return {
+            "available": False,
+            "total": None,
+            "with_coverage": None,
+            "avg_coverage": None,
+        }
+
+    try:
+        cursor = conn.execute(coverage_query)
+        row = cursor.fetchone()
+    except sqlite3.Error:
+        return {
+            "available": False,
+            "total": None,
+            "with_coverage": None,
+            "avg_coverage": None,
+        }
+
+    if row is None:
+        return {
+            "available": True,
+            "total": 0,
+            "with_coverage": 0,
+            "avg_coverage": None,
+        }
+
+    avg_coverage = row["avg_coverage"]
+    normalized_avg = (
+        round(float(avg_coverage), 4) if avg_coverage not in (None, "") else None
+    )
+
+    return {
+        "available": True,
+        "total": int(row["total"] or 0),
+        "with_coverage": int(row["with_coverage"] or 0),
+        "avg_coverage": normalized_avg,
+    }
+
+
+def _serialize_metric_run(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "run_uuid": row["run_uuid"],
+        "status": row["status"],
+        "trigger": row["trigger"],
+        "started_at": row["started_at"],
+        "finished_at": row["finished_at"],
+        "duration_ms": row["duration_ms"],
+        "total_entities": row["total_entities"],
+        "processed_portfolios": row["processed_portfolios"],
+        "processed_accounts": row["processed_accounts"],
+        "processed_securities": row["processed_securities"],
+        "error_message": row["error_message"],
+        "provenance": row["provenance"],
+    }
+
+
+def _collect_metrics_payload(conn: sqlite3.Connection) -> dict[str, Any]:
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                run_uuid,
+                status,
+                trigger,
+                started_at,
+                finished_at,
+                duration_ms,
+                total_entities,
+                processed_portfolios,
+                processed_accounts,
+                processed_securities,
+                error_message,
+                provenance
+            FROM metric_runs
+            ORDER BY started_at DESC
+            LIMIT 10
+            """
+        )
+        run_rows = cursor.fetchall()
+    except sqlite3.Error:
+        return {
+            "available": False,
+            "reason": "metric_runs table not accessible",
+            "latest_run": None,
+            "recent_runs": [],
+            "coverage": None,
+        }
+
+    recent_runs = [_serialize_metric_run(row) for row in run_rows]
+    latest_run = recent_runs[0] if recent_runs else None
+
+    coverage_summary = {
+        "portfolios": _coverage_for_table(conn, "portfolio_metrics"),
+        "accounts": _coverage_for_table(conn, "account_metrics"),
+        "securities": _coverage_for_table(conn, "security_metrics"),
+    }
+
+    payload: dict[str, Any] = {
+        "available": bool(latest_run),
+        "latest_run": latest_run,
+        "recent_runs": recent_runs,
+        "coverage": coverage_summary,
+    }
+
+    if latest_run is None:
+        payload["reason"] = "no metric runs recorded"
+
+    return payload
 
 
 async def async_get_parser_diagnostics(
@@ -210,7 +357,7 @@ async def async_get_parser_diagnostics(
         flag_snapshot = feature_flag_snapshot(hass, entry_id=entry_id)
 
     if not path.exists():
-        return {
+        base_payload = {
             "ingestion": {
                 "available": False,
                 "reason": f"database not found at {path}",
@@ -224,6 +371,15 @@ async def async_get_parser_diagnostics(
                 },
             },
         }
+        base_payload["metrics"] = {
+            "available": False,
+            "reason": "database not accessible",
+            "latest_run": None,
+            "recent_runs": [],
+            "coverage": None,
+        }
+
+        return base_payload
 
     def _collect() -> dict[str, Any]:
         conn = sqlite3.connect(str(path))
@@ -235,6 +391,7 @@ async def async_get_parser_diagnostics(
                 flag_snapshot=flag_snapshot,
                 fx_last_refresh=fx_last_refresh,
             )
+            metrics_payload = _collect_metrics_payload(conn)
 
         finally:
             conn.close()
@@ -242,6 +399,7 @@ async def async_get_parser_diagnostics(
         return {
             "ingestion": ingestion_payload,
             "enrichment": enrichment_payload,
+            "metrics": metrics_payload,
         }
 
     return await hass.async_add_executor_job(_collect)

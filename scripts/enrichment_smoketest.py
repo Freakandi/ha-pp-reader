@@ -1,5 +1,5 @@
 """
-Run parser and enrichment smoke test for the pp_reader integration.
+Run parser, enrichment, and metrics smoke test for the pp_reader integration.
 
 This helper imports a sample Portfolio Performance archive into the staging
 database, refreshes FX rates and price history data, and prints a concise
@@ -24,6 +24,7 @@ from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.currencies import fx
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.ingestion_writer import async_ingestion_session
+from custom_components.pp_reader.metrics import pipeline as metrics_pipeline
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
     build_history_targets_from_parsed,
@@ -245,9 +246,53 @@ async def _run_price_history_jobs(
     }
 
 
+async def _run_metrics(
+    hass: _SmoketestHass,
+    db_path: Path,
+) -> dict[str, Any]:
+    """Execute the metrics pipeline and capture progress output."""
+    progress_events: list[dict[str, Any]] = []
+
+    def _emit(stage: str, payload: dict[str, Any]) -> None:
+        LOGGER.info("metrics stage %-22s %s", stage, payload)
+        progress_events.append({"stage": stage, **payload})
+
+    try:
+        run = await metrics_pipeline.async_refresh_all(
+            hass,
+            db_path,
+            trigger="smoketest",
+            provenance="cli",
+            emit_progress=_emit,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        LOGGER.exception("Metrics pipeline failed")
+        return {
+            "status": "failed",
+            "error": str(exc),
+            "progress": progress_events,
+        }
+
+    return {
+        "status": run.status,
+        "run_uuid": run.run_uuid,
+        "started_at": run.started_at,
+        "finished_at": run.finished_at,
+        "duration_ms": run.duration_ms,
+        "total_entities": run.total_entities,
+        "processed": {
+            "portfolios": run.processed_portfolios or 0,
+            "accounts": run.processed_accounts or 0,
+            "securities": run.processed_securities or 0,
+        },
+        "error": run.error_message,
+        "progress": progress_events,
+    }
+
+
 def _collect_diagnostics(db_path: Path) -> dict[str, Any]:
     """Gather counts and timestamps for ingestion/enrichment artifacts."""
-    payload: dict[str, Any] = {"ingestion": {}, "enrichment": {}}
+    payload: dict[str, Any] = {"ingestion": {}, "enrichment": {}, "metrics": {}}
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
@@ -293,6 +338,93 @@ def _collect_diagnostics(db_path: Path) -> dict[str, Any]:
         payload["enrichment"]["price_history_queue"] = {
             row["status"]: row["count"] for row in queue_rows
         }
+
+        runs_overview = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total_runs,
+                MAX(started_at) AS latest_started_at
+            FROM metric_runs
+            """
+        ).fetchone()
+        latest_run_row = conn.execute(
+            """
+            SELECT
+                run_uuid,
+                status,
+                trigger,
+                started_at,
+                finished_at,
+                duration_ms,
+                total_entities,
+                processed_portfolios,
+                processed_accounts,
+                processed_securities,
+                error_message
+            FROM metric_runs
+            ORDER BY started_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+        metrics_counts: dict[str, int | None] = {}
+        try:
+            portfolio_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM portfolio_metrics"
+            ).fetchone()
+            metrics_counts["portfolio_metrics"] = (
+                int(portfolio_count["total"]) if portfolio_count else 0
+            )
+        except sqlite3.Error:  # pragma: no cover - defensive logging
+            metrics_counts["portfolio_metrics"] = None
+
+        try:
+            account_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM account_metrics"
+            ).fetchone()
+            metrics_counts["account_metrics"] = (
+                int(account_count["total"]) if account_count else 0
+            )
+        except sqlite3.Error:  # pragma: no cover - defensive logging
+            metrics_counts["account_metrics"] = None
+
+        try:
+            security_count = conn.execute(
+                "SELECT COUNT(*) AS total FROM security_metrics"
+            ).fetchone()
+            metrics_counts["security_metrics"] = (
+                int(security_count["total"]) if security_count else 0
+            )
+        except sqlite3.Error:  # pragma: no cover - defensive logging
+            metrics_counts["security_metrics"] = None
+
+        payload["metrics"] = {
+            "runs": {
+                "count": int(runs_overview["total_runs"]) if runs_overview else 0,
+                "latest_started_at": (
+                    runs_overview["latest_started_at"] if runs_overview else None
+                ),
+                "latest": {
+                    key: latest_run_row[key]
+                    for key in (
+                        "run_uuid",
+                        "status",
+                        "trigger",
+                        "started_at",
+                        "finished_at",
+                        "duration_ms",
+                        "total_entities",
+                        "processed_portfolios",
+                        "processed_accounts",
+                        "processed_securities",
+                        "error_message",
+                    )
+                }
+                if latest_run_row
+                else None,
+            },
+            "records": metrics_counts,
+        }
     finally:
         conn.close()
 
@@ -302,7 +434,7 @@ def _collect_diagnostics(db_path: Path) -> dict[str, Any]:
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Construct argument parser for the smoke test script."""
     parser = argparse.ArgumentParser(
-        description="Run parser and enrichment smoke test.",
+        description="Run parser, enrichment, and metrics smoke test.",
     )
     parser.add_argument(
         "--portfolio",
@@ -382,12 +514,16 @@ async def _async_main(args: argparse.Namespace) -> int:
         limit=history_limit,
     )
 
+    LOGGER.info("Running metrics pipeline...")
+    metrics_summary = await _run_metrics(hass, db_path)
+
     diag = _collect_diagnostics(db_path)
     summary = {
         "run_id": run_id,
         "database": str(db_path),
         "fx": fx_summary,
         "history": history_summary,
+        "metrics": metrics_summary,
         "diagnostics": diag,
     }
     LOGGER.info(
@@ -400,6 +536,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         return 2
     if history_summary.get("status") in {"failed", "error"}:
         return 3
+    if metrics_summary.get("status") not in {"completed"}:
+        return 4
     return 0
 
 

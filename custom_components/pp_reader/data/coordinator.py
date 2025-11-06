@@ -22,10 +22,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from custom_components.pp_reader import metrics
 from custom_components.pp_reader.const import (
     EVENT_ENRICHMENT_PROGRESS,
+    EVENT_METRICS_PROGRESS,
     SIGNAL_ENRICHMENT_COMPLETED,
     SIGNAL_ENRICHMENT_PROGRESS,
+    SIGNAL_METRICS_PROGRESS,
     SIGNAL_PARSER_COMPLETED,
     SIGNAL_PARSER_PROGRESS,
 )
@@ -276,6 +279,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self.last_file_update = None  # Initialisierung des Attributs
         self._last_parser_progress: tuple[str, int, int] | None = None
         self._last_ingestion_run_id: str | None = None
+        self._last_metric_run_id: str | None = None
         self._enrichment_failure_streak = 0
         self._enrichment_failure_notified = False
 
@@ -517,6 +521,22 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         completed_event["stage"] = "completed"
         self.hass.bus.async_fire(EVENT_ENRICHMENT_PROGRESS, completed_event)
 
+    def _emit_metrics_progress(
+        self,
+        stage: str,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Emit metrics pipeline progress over dispatcher and event bus."""
+        payload: dict[str, Any] = {
+            "entry_id": self.entry_id,
+            "stage": stage,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if details:
+            payload.update(details)
+        async_dispatcher_send(self.hass, SIGNAL_METRICS_PROGRESS, payload)
+        self.hass.bus.async_fire(EVENT_METRICS_PROGRESS, payload)
+
     async def _schedule_enrichment_jobs(self, parsed_client: Any) -> None:
         """Plan FX refresh and price history jobs after imports."""
         enriched_enabled = is_enabled(
@@ -596,7 +616,83 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         self._process_enrichment_outcome(summary, errors)
 
+        await self._schedule_metrics_refresh(summary, errors=errors)
+
         self._emit_enrichment_completed(summary)
+
+    async def _schedule_metrics_refresh(
+        self,
+        summary: dict[str, Any],
+        *,
+        errors: Iterable[str],
+    ) -> None:
+        """Trigger the metrics engine when the feature flag is enabled."""
+        metrics_enabled = is_enabled(
+            "metrics_pipeline",
+            self.hass,
+            entry_id=self.entry_id,
+            default=False,
+        )
+        if not metrics_enabled:
+            summary["metrics_status"] = "disabled"
+            self._emit_metrics_progress(
+                "disabled",
+                {"reason": "feature_flag_disabled"},
+            )
+            return
+
+        error_list = list(errors)
+        failure_reasons = summary.get("failure_reasons") or ()
+        if error_list or failure_reasons:
+            summary["metrics_status"] = "skipped"
+            summary["metrics_reason"] = "enrichment_failed"
+            self._emit_metrics_progress(
+                "skipped",
+                {
+                    "reason": "enrichment_failed",
+                    "error_count": len(error_list),
+                },
+            )
+            return
+
+        summary["metrics_status"] = "running"
+        self._emit_metrics_progress(
+            "scheduled",
+            {
+                "ingestion_run_uuid": self._last_ingestion_run_id,
+            },
+        )
+
+        try:
+            run = await metrics.async_refresh_all(
+                self.hass,
+                self.db_path,
+                trigger="coordinator",
+                provenance=self._last_ingestion_run_id,
+                emit_progress=self._emit_metrics_progress,
+            )
+        except Exception as err:  # pragma: no cover - defensive fallback
+            summary["metrics_status"] = "failed"
+            summary["metrics_error"] = str(err)
+            _LOGGER.exception(
+                "Metric-Engine: Fehler bei der Aktualisierung (entry_id=%s)",
+                self.entry_id,
+            )
+            return
+
+        self._last_metric_run_id = run.run_uuid
+        summary["metrics_status"] = run.status or "completed"
+        summary.pop("metrics_reason", None)
+        summary["metrics_run_uuid"] = run.run_uuid
+        summary["metrics_processed_portfolios"] = run.processed_portfolios or 0
+        summary["metrics_processed_accounts"] = run.processed_accounts or 0
+        summary["metrics_processed_securities"] = run.processed_securities or 0
+        summary["metrics_total_entities"] = run.total_entities
+        summary["metrics_duration_ms"] = run.duration_ms
+        if run.error_message:
+            summary["metrics_error"] = run.error_message
+        else:
+            summary.pop("metrics_error", None)
 
     async def _schedule_fx_refresh(self) -> dict[str, Any] | None:
         """Schedule an FX refresh for active non-EUR currencies."""

@@ -10,6 +10,7 @@ from typing import Any
 
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.util import dt as dt_util
 
 from custom_components.pp_reader.const import DOMAIN
 
@@ -43,21 +44,37 @@ def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] 
 
     normalized: dict[str, Any] = {"uuid": str(uuid)}
 
+    for key in ("name", "current_value", "purchase_sum", "missing_value_positions"):
+        if key in item:
+            normalized[key] = item[key]
+
     position_count = item.get("position_count")
     if position_count is None and "count" in item:
         position_count = item.get("count")
     if position_count is not None:
         normalized["position_count"] = position_count
 
-    for key in (
-        "name",
-        "current_value",
-        "purchase_sum",
-        "performance",
-        "missing_value_positions",
-    ):
-        if key in item:
-            normalized[key] = item[key]
+    has_current_value = item.get("has_current_value")
+    if has_current_value is not None:
+        normalized["has_current_value"] = has_current_value
+
+    metric_run_uuid = item.get("metric_run_uuid")
+    if metric_run_uuid:
+        normalized["metric_run_uuid"] = metric_run_uuid
+
+    coverage_ratio = item.get("coverage_ratio")
+    if coverage_ratio is not None:
+        normalized["coverage_ratio"] = coverage_ratio
+
+    provenance = item.get("provenance")
+    if provenance:
+        normalized["provenance"] = provenance
+
+    performance = item.get("performance")
+    if isinstance(performance, Mapping):
+        normalized["performance"] = dict(performance)
+    elif is_dataclass(performance):
+        normalized["performance"] = asdict(performance)
 
     return normalized
 
@@ -95,7 +112,7 @@ def _compact_portfolio_values_payload(data: Any) -> Any:
     return data
 
 
-def _normalize_position_entry(  # noqa: PLR0912
+def _normalize_position_entry(  # noqa: PLR0912, PLR0915
     item: Mapping[str, Any],
 ) -> dict[str, Any] | None:
     """Keep only the fields required for position updates."""
@@ -154,6 +171,18 @@ def _normalize_position_entry(  # noqa: PLR0912
     }
 
     normalized = {key: value for key, value in normalized.items() if value is not None}
+
+    metric_run_uuid = item.get("metric_run_uuid")
+    if metric_run_uuid:
+        normalized["metric_run_uuid"] = metric_run_uuid
+
+    coverage_ratio = item.get("coverage_ratio")
+    if coverage_ratio is not None:
+        normalized["coverage_ratio"] = coverage_ratio
+
+    provenance = item.get("provenance")
+    if provenance:
+        normalized["provenance"] = provenance
 
     if aggregation_payload:
         normalized["aggregation"] = aggregation_payload
@@ -227,6 +256,7 @@ def _push_update(
         "entry_id": entry_id,
         "data_type": data_type,
         "data": compact_data,
+        "synced_at": dt_util.utcnow().isoformat(timespec="seconds"),
     }
 
     payload_size = _estimate_event_size(payload)

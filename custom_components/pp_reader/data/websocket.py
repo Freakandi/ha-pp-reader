@@ -145,7 +145,7 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-def _serialise_security_snapshot(  # noqa: PLR0912, PLR0915
+def _serialise_security_snapshot(
     snapshot: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Normalise snapshot payload for websocket transmission."""
@@ -165,131 +165,111 @@ def _serialise_security_snapshot(  # noqa: PLR0912, PLR0915
             "performance": None,
         }
 
-    data = dict(snapshot)
-    data.pop("average_purchase_price_native", None)
-    data.pop("day_price_change_native", None)
-    data.pop("day_price_change_eur", None)
-    data.pop("day_change_pct", None)
-    purchase_total_security = data.pop("purchase_total_security", None)
-    purchase_total_account = data.pop("purchase_total_account", None)
-
-    raw_name = snapshot.get("name")
-    data["name"] = raw_name if isinstance(raw_name, str) else str(raw_name or "")
+    name_value = snapshot.get("name")
+    name_str = name_value if isinstance(name_value, str) else str(name_value or "")
 
     raw_currency = snapshot.get("currency_code")
-    if isinstance(raw_currency, str):
-        currency = raw_currency.strip().upper() or "EUR"
-    else:
+    currency = raw_currency.strip().upper() if isinstance(raw_currency, str) else "EUR"
+    if not currency:
         currency = "EUR"
-    data["currency_code"] = currency
 
-    data["total_holdings"] = (
+    total_holdings = (
         round_currency(snapshot.get("total_holdings"), decimals=6, default=0.0) or 0.0
     )
-    data["last_price_native"] = round_price(
-        snapshot.get("last_price_native"), decimals=6
-    )
-    data["last_price_eur"] = round_price(snapshot.get("last_price_eur"), decimals=6)
-    data["market_value_eur"] = round_currency(snapshot.get("market_value_eur"))
-    data["purchase_value_eur"] = (
-        round_currency(snapshot.get("purchase_value_eur"), default=0.0) or 0.0
-    )
-    raw_average_cost = snapshot.get("average_cost")
-    if isinstance(raw_average_cost, Mapping):
-        data["average_cost"] = dict(raw_average_cost)
-    else:
-        data["average_cost"] = None
-    raw_aggregation = snapshot.get("aggregation")
-    aggregation_payload: dict[str, Any] | None = None
-    if isinstance(raw_aggregation, Mapping):
-        aggregation_payload = dict(raw_aggregation)
-    elif is_dataclass(raw_aggregation):
-        aggregation_payload = asdict(raw_aggregation)
 
-    if aggregation_payload is None:
-        aggregation_payload = None
-    else:
-        aggregation_payload.pop("average_purchase_price_native", None)
-
-        security_total = aggregation_payload.get("security_currency_total")
-        if security_total in (None, "") and purchase_total_security not in (None, ""):
-            security_total = purchase_total_security
-            aggregation_payload["security_currency_total"] = security_total
-
-        account_total = aggregation_payload.get("account_currency_total")
-        if account_total in (None, "") and purchase_total_account not in (None, ""):
-            account_total = purchase_total_account
-            aggregation_payload["account_currency_total"] = account_total
-
-        aggregation_payload["total_holdings"] = (
-            round_currency(
-                aggregation_payload.get("total_holdings"),
+    average_cost_raw = snapshot.get("average_cost")
+    average_cost: dict[str, Any] | None
+    if isinstance(average_cost_raw, Mapping):
+        average_cost = {
+            "eur": round_currency(average_cost_raw.get("eur"), default=None),
+            "security": round_currency(
+                average_cost_raw.get("security"),
                 decimals=6,
-                default=0.0,
-            )
-            or 0.0
-        )
-        aggregation_payload["positive_holdings"] = (
-            round_currency(
-                aggregation_payload.get("positive_holdings"),
-                decimals=6,
-                default=0.0,
-            )
-            or 0.0
-        )
-        aggregation_payload["purchase_value_cents"] = int(
-            aggregation_payload.get("purchase_value_cents") or 0
-        )
-        aggregation_payload["purchase_value_eur"] = (
-            round_currency(aggregation_payload.get("purchase_value_eur"), default=0.0)
-            or 0.0
-        )
-        aggregation_payload["security_currency_total"] = (
-            round_currency(security_total, default=0.0) or 0.0
-        )
-        aggregation_payload["account_currency_total"] = (
-            round_currency(account_total, default=0.0) or 0.0
-        )
-        aggregation_payload["purchase_total_security"] = (
-            round_currency(
-                aggregation_payload.get("purchase_total_security"), default=0.0
-            )
-            or 0.0
-        )
-        aggregation_payload["purchase_total_account"] = (
-            round_currency(
-                aggregation_payload.get("purchase_total_account"), default=0.0
-            )
-            or 0.0
-        )
-
-    data["aggregation"] = aggregation_payload
-    data["last_close_native"] = round_price(
-        snapshot.get("last_close_native"),
-        decimals=6,
-    )
-    data["last_close_eur"] = round_price(
-        snapshot.get("last_close_eur"),
-        decimals=6,
-    )
-    raw_performance = snapshot.get("performance")
-    if isinstance(raw_performance, Mapping):
-        performance_payload = dict(raw_performance)
-        day_change_raw = performance_payload.get("day_change")
-        if isinstance(day_change_raw, Mapping):
-            performance_payload["day_change"] = dict(day_change_raw)
-        data["performance"] = performance_payload
-    else:
-        data["performance"] = None
-
-    last_price_raw = snapshot.get("last_price")
-    if isinstance(last_price_raw, Mapping):
-        data["last_price"] = {
-            "native": round_price(last_price_raw.get("native"), decimals=6),
-            "eur": round_price(last_price_raw.get("eur"), decimals=6),
+                default=None,
+            ),
+            "account": round_currency(
+                average_cost_raw.get("account"),
+                default=None,
+            ),
         }
+    else:
+        average_cost = None
 
-    return data
+    aggregation_raw = snapshot.get("aggregation")
+    aggregation: dict[str, Any] | None
+    if isinstance(aggregation_raw, Mapping):
+        aggregation = {
+            "total_holdings": round_currency(
+                aggregation_raw.get("total_holdings"),
+                decimals=6,
+                default=0.0,
+            )
+            or 0.0,
+            "purchase_value_eur": round_currency(
+                aggregation_raw.get("purchase_value_eur"),
+                default=0.0,
+            )
+            or 0.0,
+            "purchase_total_security": round_currency(
+                aggregation_raw.get("purchase_total_security"),
+                decimals=6,
+                default=None,
+            ),
+            "purchase_total_account": round_currency(
+                aggregation_raw.get("purchase_total_account"),
+                default=None,
+            ),
+            "coverage_ratio": aggregation_raw.get("coverage_ratio"),
+        }
+    else:
+        aggregation = None
+
+    performance_raw = snapshot.get("performance")
+    performance: dict[str, Any] | None
+    if isinstance(performance_raw, Mapping):
+        performance = dict(performance_raw)
+        day_change_raw = performance.get("day_change")
+        if isinstance(day_change_raw, Mapping):
+            performance["day_change"] = {
+                "price_change_native": round_price(
+                    day_change_raw.get("price_change_native"),
+                    decimals=6,
+                ),
+                "price_change_eur": round_price(
+                    day_change_raw.get("price_change_eur"),
+                    decimals=6,
+                ),
+                "change_pct": day_change_raw.get("change_pct"),
+                "source": day_change_raw.get("source"),
+                "coverage_ratio": day_change_raw.get("coverage_ratio"),
+            }
+    else:
+        performance = None
+
+    return {
+        "name": name_str,
+        "currency_code": currency,
+        "total_holdings": total_holdings,
+        "last_price_native": round_price(snapshot.get("last_price_native"), decimals=6),
+        "last_price_eur": round_price(snapshot.get("last_price_eur"), decimals=6),
+        "market_value_eur": (
+            round_currency(snapshot.get("market_value_eur"), default=0.0) or 0.0
+        ),
+        "purchase_value_eur": round_currency(
+            snapshot.get("purchase_value_eur"),
+            default=0.0,
+        )
+        or 0.0,
+        "average_cost": average_cost,
+        "aggregation": aggregation,
+        "last_close_native": round_price(
+            snapshot.get("last_close_native"),
+            decimals=6,
+        ),
+        "last_close_eur": round_price(snapshot.get("last_close_eur"), decimals=6),
+        "performance": performance,
+        "metric_run_uuid": snapshot.get("metric_run_uuid"),
+    }
 
 
 def _resolve_aggregation_value(

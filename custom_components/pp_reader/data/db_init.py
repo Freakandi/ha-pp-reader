@@ -5,9 +5,22 @@ import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
-from .db_schema import ALL_SCHEMAS, INGESTION_SCHEMA
+from .db_schema import (
+    ACCOUNT_METRICS_SCHEMA,
+    ALL_SCHEMAS,
+    INGESTION_SCHEMA,
+    METRIC_RUNS_SCHEMA,
+    PORTFOLIO_METRICS_SCHEMA,
+    SECURITY_METRICS_SCHEMA,
+)
 
 _LOGGER = logging.getLogger(__name__)
+_METRIC_SCHEMA_BUNDLES = (
+    METRIC_RUNS_SCHEMA,
+    PORTFOLIO_METRICS_SCHEMA,
+    ACCOUNT_METRICS_SCHEMA,
+    SECURITY_METRICS_SCHEMA,
+)
 
 
 def _ensure_runtime_price_columns(conn: sqlite3.Connection) -> None:
@@ -355,6 +368,81 @@ def _ensure_historical_price_index(conn: sqlite3.Connection) -> None:
         )
 
 
+def _iter_metric_ddl() -> Iterable[str]:
+    """Yield DDL statements for metric-related tables and indexes."""
+    for schema in _METRIC_SCHEMA_BUNDLES:
+        for ddl in schema:
+            if isinstance(ddl, str):
+                yield ddl
+            else:
+                yield from ddl
+
+
+def ensure_metric_tables(conn: sqlite3.Connection) -> None:
+    """Create metric tables when missing to support persisted calculations."""
+    for ddl in _iter_metric_ddl():
+        conn.execute(ddl)
+
+
+def _clear_table_columns_if_present(
+    conn: sqlite3.Connection,
+    table: str,
+    columns: Iterable[str],
+) -> None:
+    """Set legacy columns to NULL when they exist to avoid stale metrics."""
+    try:
+        cur = conn.execute(f"PRAGMA table_info({table})")
+        existing_cols = {row[1] for row in cur.fetchall()}
+    except sqlite3.Error:
+        _LOGGER.debug(
+            "Überspringe optionales Leeren flacher Metrikspalten: "
+            "PRAGMA table_info(%s) fehlgeschlagen",
+            table,
+            exc_info=True,
+        )
+        return
+
+    for column in columns:
+        if column not in existing_cols:
+            continue
+        try:
+            sql = f'UPDATE "{table}" SET "{column}" = NULL'  # noqa: S608
+            conn.execute(sql)
+            _LOGGER.info(
+                "Legacy-Metrikspalte '%s.%s' zurückgesetzt",
+                table,
+                column,
+            )
+        except sqlite3.Error:
+            _LOGGER.warning(
+                "Konnte Legacy-Metrikspalte '%s.%s' nicht zurücksetzen",
+                table,
+                column,
+                exc_info=True,
+            )
+
+
+def clear_legacy_metric_columns(conn: sqlite3.Connection) -> None:
+    """Perform optional cleanup of historic flattened metric columns."""
+    legacy_columns_map: dict[str, tuple[str, ...]] = {
+        "portfolios": (
+            "gain_abs",
+            "gain_pct",
+            "total_change_eur",
+            "total_change_pct",
+        ),
+        "portfolio_securities": (
+            "gain_abs",
+            "gain_pct",
+            "gain_abs_eur",
+            "gain_pct_eur",
+        ),
+    }
+
+    for table, columns in legacy_columns_map.items():
+        _clear_table_columns_if_present(conn, table, columns)
+
+
 def initialize_database_schema(db_path: Path) -> None:
     """Initialisiert die SQLite Datenbank mit dem definierten Schema."""
     try:
@@ -395,6 +483,8 @@ def initialize_database_schema(db_path: Path) -> None:
             _ensure_historical_price_index(conn)
             ensure_ingestion_tables(conn)
             _ensure_ingestion_history_metadata_columns(conn)
+            ensure_metric_tables(conn)
+            clear_legacy_metric_columns(conn)
 
             conn.commit()
 

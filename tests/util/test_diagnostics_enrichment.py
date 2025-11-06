@@ -176,6 +176,10 @@ async def test_diagnostics_missing_database_returns_unavailable() -> None:
     assert enrichment["feature_flags"] == {}
     assert enrichment["fx"]["last_refresh"] is None
 
+    metrics = result["metrics"]
+    assert metrics["available"] is False
+    assert metrics["latest_run"] is None
+
 
 @pytest.mark.asyncio
 async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatch: Any) -> None:
@@ -227,6 +231,10 @@ async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatc
     assert len(failures) == 1
     assert failures[0]["security_uuid"] == "sec-failed"
     assert failures[0]["last_error"] == "network down"
+
+    metrics = result["metrics"]
+    assert metrics["available"] is False
+    assert metrics["latest_run"] is None
 
 
 def test_collect_enrichment_payload_without_tables(tmp_path) -> None:

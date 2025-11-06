@@ -533,6 +533,166 @@ INGESTION_SCHEMA = [
     """,
 ]
 
+METRIC_RUNS_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS metric_runs (
+        run_uuid TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        trigger TEXT,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        duration_ms INTEGER,
+        total_entities INTEGER,
+        processed_portfolios INTEGER,
+        processed_accounts INTEGER,
+        processed_securities INTEGER,
+        error_message TEXT,
+        provenance TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_metric_runs_status
+    ON metric_runs (status);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_metric_runs_started_at
+    ON metric_runs (started_at);
+    """,
+]
+
+PORTFOLIO_METRICS_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS portfolio_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_run_uuid TEXT NOT NULL,
+        portfolio_uuid TEXT NOT NULL,
+        valuation_currency TEXT NOT NULL DEFAULT 'EUR',
+        current_value_cents INTEGER NOT NULL DEFAULT 0,
+        purchase_value_cents INTEGER NOT NULL DEFAULT 0,
+        gain_abs_cents INTEGER NOT NULL DEFAULT 0,
+        gain_pct REAL,
+        total_change_eur_cents INTEGER NOT NULL DEFAULT 0,
+        total_change_pct REAL,
+        source TEXT,
+        coverage_ratio REAL,
+        position_count INTEGER DEFAULT 0,
+        missing_value_positions INTEGER DEFAULT 0,
+        provenance TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT,
+        UNIQUE(metric_run_uuid, portfolio_uuid),
+        FOREIGN KEY (metric_run_uuid)
+            REFERENCES metric_runs(run_uuid)
+            ON DELETE CASCADE,
+        FOREIGN KEY (portfolio_uuid)
+            REFERENCES portfolios(uuid)
+            ON DELETE CASCADE
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_portfolio_metrics_portfolio
+    ON portfolio_metrics (portfolio_uuid);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_portfolio_metrics_run
+    ON portfolio_metrics (metric_run_uuid);
+    """,
+]
+
+ACCOUNT_METRICS_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS account_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_run_uuid TEXT NOT NULL,
+        account_uuid TEXT NOT NULL,
+        currency_code TEXT NOT NULL,
+        valuation_currency TEXT NOT NULL DEFAULT 'EUR',
+        balance_native_cents INTEGER NOT NULL DEFAULT 0,
+        balance_eur_cents INTEGER,
+        fx_rate REAL,
+        fx_rate_source TEXT,
+        fx_rate_timestamp TEXT,
+        coverage_ratio REAL,
+        provenance TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT,
+        UNIQUE(metric_run_uuid, account_uuid),
+        FOREIGN KEY (metric_run_uuid)
+            REFERENCES metric_runs(run_uuid)
+            ON DELETE CASCADE,
+        FOREIGN KEY (account_uuid)
+            REFERENCES accounts(uuid)
+            ON DELETE CASCADE
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_account_metrics_account
+    ON account_metrics (account_uuid);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_account_metrics_run
+    ON account_metrics (metric_run_uuid);
+    """,
+]
+
+SECURITY_METRICS_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS security_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_run_uuid TEXT NOT NULL,
+        portfolio_uuid TEXT NOT NULL,
+        security_uuid TEXT NOT NULL,
+        valuation_currency TEXT NOT NULL DEFAULT 'EUR',
+        security_currency_code TEXT NOT NULL,
+        holdings_raw INTEGER NOT NULL DEFAULT 0,
+        current_value_cents INTEGER NOT NULL DEFAULT 0,
+        purchase_value_cents INTEGER NOT NULL DEFAULT 0,
+        purchase_security_value_raw INTEGER,
+        purchase_account_value_cents INTEGER,
+        gain_abs_cents INTEGER NOT NULL DEFAULT 0,
+        gain_pct REAL,
+        total_change_eur_cents INTEGER NOT NULL DEFAULT 0,
+        total_change_pct REAL,
+        source TEXT,
+        coverage_ratio REAL,
+        day_change_native REAL,
+        day_change_eur REAL,
+        day_change_pct REAL,
+        day_change_source TEXT,
+        day_change_coverage REAL,
+        last_price_native_raw INTEGER,
+        last_close_native_raw INTEGER,
+        provenance TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT,
+        UNIQUE(metric_run_uuid, portfolio_uuid, security_uuid),
+        FOREIGN KEY (metric_run_uuid)
+            REFERENCES metric_runs(run_uuid)
+            ON DELETE CASCADE,
+        FOREIGN KEY (portfolio_uuid)
+            REFERENCES portfolios(uuid)
+            ON DELETE CASCADE,
+        FOREIGN KEY (security_uuid)
+            REFERENCES securities(uuid)
+            ON DELETE CASCADE
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_security_metrics_security
+    ON security_metrics (security_uuid);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_security_metrics_portfolio
+    ON security_metrics (portfolio_uuid);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_security_metrics_run
+    ON security_metrics (metric_run_uuid);
+    """,
+]
+
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
     *SECURITY_SCHEMA,
@@ -543,6 +703,10 @@ ALL_SCHEMAS = [
     *PRICE_HISTORY_QUEUE_SCHEMA,
     *METADATA_SCHEMA,
     *INGESTION_SCHEMA,
+    *METRIC_RUNS_SCHEMA,
+    *PORTFOLIO_METRICS_SCHEMA,
+    *ACCOUNT_METRICS_SCHEMA,
+    *SECURITY_METRICS_SCHEMA,
 ]
 
 # Performance Index für On-Demand Portfolio Aggregation:

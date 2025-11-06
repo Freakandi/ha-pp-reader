@@ -6,7 +6,7 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/TODO_enrichment_pipeline.md
+- .docs/TODO_metric_engine.md
 
 Unterstützende Ressourcen und bisherige Arbeit:
 - .docs/refactor_roadmap.md
@@ -14,6 +14,7 @@ Unterstützende Ressourcen und bisherige Arbeit:
 - .docs/legacy_cleanup_strategy.md
 - .docs/qa_docs_comms.md
 - .docs/TODO_datamodel_parser_modernization.md
+- .docs/TODO_enrichment_pipeline.md
 
 
 Vorgehensweise (strikt einhalten):
@@ -29,7 +30,7 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - TODO_enrichment_pipeline.md: markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - Relevante TODO-Datei (`TODO_metric_engine.md`): markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
    - Alle lint-Prüfungen müssen erfolgreich durchlaufen (ESLint für TypeScript, ruff für Python)
@@ -62,6 +63,7 @@ Regeln:
 - Bei neuen Files sofort sinnvolle Modulebene-Dokumentation hinzufügen (kurzer Header-Kommentar).
 - Tests erst implementieren, wenn zugehörige produktive Module vorhanden (Provider vor Tests!). Wenn ein Test-Item vorzeitig gewählt würde, aber abhängiger Code fehlt → zurückweisen.
 - Durchführen von Tests nur in virtueller Python-Umgebung (source .venv/bin/activate), da nur dort HomeAssistant installiert wird
+- Keine Rückwärtskompatibilität erforderlich – Legacy-Pfade dürfen entfernt oder hart umgestellt werden, sofern in den Checklisten vorgesehen.
 
 Explizite Qualitätskriterien:
 - Einhaltung Zeit-/Formatangaben
