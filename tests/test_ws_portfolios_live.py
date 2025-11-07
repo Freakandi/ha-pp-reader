@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
+from custom_components.pp_reader.metrics.common import select_performance_metrics
+from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
+
 pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for module imports"
 )
-
-from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.data.performance import select_performance_metrics
-from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
-from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 
 @pytest.fixture

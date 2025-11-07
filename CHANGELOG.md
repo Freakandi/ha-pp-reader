@@ -6,14 +6,18 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
-- Noch keine Einträge.
+### Added
+- Documented the persisted metrics engine, diagnostics surface, and CLI smoke test so operators and contributors can inspect `metric_runs` snapshots and replay the parser → enrichment → metrics pipeline outside Home Assistant.【F:README.md†L34-L120】【F:README-dev.md†L16-L120】【F:.docs/qa_docs_comms.md†L1-L72】
+
+### Removed
+- Dropped the temporary `custom_components/pp_reader/data/performance.py` shim in favour of importing helpers directly from `custom_components/pp_reader/metrics/common.py`, completing the metric-engine cleanup.
 
 ## [0.14.0] - 2025-10-15
 
 ### Added
 - Centralised performance metric helpers, including `select_performance_metrics` and
   `compose_performance_payload`, to compute rounded gain and day-change data with
-  coverage metadata plus dedicated unit tests covering edge cases.【F:custom_components/pp_reader/data/performance.py†L1-L200】【F:tests/test_performance.py†L1-L116】
+  coverage metadata plus dedicated unit tests covering edge cases.【F:custom_components/pp_reader/metrics/common.py†L1-L200】【F:tests/test_performance.py†L1-L116】
 
 ### Changed
 - Portfolio snapshots, WebSocket responses, coordinator events, sensors, and price-cycle

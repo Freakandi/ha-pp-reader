@@ -8,18 +8,18 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip(
-    "google.protobuf", reason="protobuf runtime required for websocket module"
-)
-
 from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_access import get_portfolio_positions
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.data.performance import select_performance_metrics
+from custom_components.pp_reader.metrics.common import select_performance_metrics
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     round_currency,
     round_price,
+)
+
+pytest.importorskip(
+    "google.protobuf", reason="protobuf runtime required for websocket module"
 )
 
 WS_GET_PORTFOLIO_POSITIONS = getattr(

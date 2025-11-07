@@ -55,12 +55,12 @@
       - Ziel/Ergebnis der Änderung: Manuelle Smoketests decken neue Pipeline ab.
 
 5. [ ] Phase 4 – Documentation & Cleanup
-   a) [ ] Aktualisiere `.docs/backend_workstreams.md` (Abschnitt „Metrics Engine“) mit konkreten Modulen/Tabellen; pflege `.docs/legacy_cleanup_strategy.md` um Schritte zum Entfernen alter Performance-Helfer.
+   a) [x] Aktualisiere `.docs/backend_workstreams.md` (Abschnitt „Metrics Engine“) mit konkreten Modulen/Tabellen; pflege `.docs/legacy_cleanup_strategy.md` um Schritte zum Entfernen alter Performance-Helfer.
       - Dateipfad(e): .docs/backend_workstreams.md, .docs/legacy_cleanup_strategy.md
       - Ziel/Ergebnis der Änderung: Dokumentation reflektiert neuen Stand, Cleanup-Tracker erhält Metric-Tasks.
-   b) [ ] Überarbeite Nutzer- und Entwickler-Dokumentation (`README.md`, `README-dev.md`, `.docs/qa_docs_comms.md`, `CHANGELOG.md`) mit Hinweisen zur persistierten Metric-Schicht, neuen Diagnostikfeldern, CLI-Erweiterungen.
+   b) [x] Überarbeite Nutzer- und Entwickler-Dokumentation (`README.md`, `README-dev.md`, `.docs/qa_docs_comms.md`, `CHANGELOG.md`) mit Hinweisen zur persistierten Metric-Schicht, neuen Diagnostikfeldern, CLI-Erweiterungen.
       - Dateipfad(e): README.md, README-dev.md, .docs/qa_docs_comms.md, CHANGELOG.md
       - Ziel/Ergebnis der Änderung: Kommunikation der Änderungen ohne BC-Anforderungen, QA-Plan aktualisiert.
-   c) [ ] Entferne obsoletes Metric-bezogenes Legacy-Material (`custom_components/pp_reader/data/performance.py` Alt-Funktionen, release-notes) und archiviere ggf. alte Docs unter `.docs/cleanup/`.
+   c) [x] Entferne obsoletes Metric-bezogenes Legacy-Material (`custom_components/pp_reader/data/performance.py` Alt-Funktionen, release-notes) und archiviere ggf. alte Docs unter `.docs/cleanup/`.
       - Dateipfad(e): custom_components/pp_reader/data/performance.py, .docs/cleanup/*
       - Ziel/Ergebnis der Änderung: Reduzierter Legacy-Footprint, klarer Fokus auf neue Pipeline.

@@ -11,7 +11,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from custom_components.pp_reader.data.performance import select_performance_metrics
+from custom_components.pp_reader.metrics.common import select_performance_metrics
 
 if TYPE_CHECKING:
     from custom_components.pp_reader.sensors.depot_sensors import (

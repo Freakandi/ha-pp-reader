@@ -36,19 +36,22 @@ This concept document enumerates the backend workstreams required to deliver the
 - **Remaining cleanup.** Decommission synchronous currency normalization once all consumers move to the async FX helpers, and prune stubbed fallbacks that currently guard Yahoo provider imports.
 
 ## Metrics Engine
-- **Target implementation.** Consolidate portfolio, account, and security metrics inside `custom_components/pp_reader/data/performance.py` and supporting aggregators so all calculations read from normalized tables.
+- **Target implementation.** The metric engine now persists every computation inside `metric_runs`, `portfolio_metrics`, `account_metrics`, and `security_metrics` so downstream consumers only read structured rows that describe gain, coverage, and provenance metadata.
 - **Behaviour updates.**
-  - Ensure metric computations operate on persisted cent values, converting to floats only during serialization.
-  - Adopt cooperative scheduling for heavy aggregations via `hass.async_add_executor_job` where synchronous SQLite queries remain necessary.
-  - Emit coverage metadata (e.g., `coverage_ratio`, `data_source`) consistently for tooltips, aligning with the canonical payload contract.
+  - `custom_components/pp_reader/metrics/pipeline.py` orchestrates end-to-end runs via `async_refresh_all`, emitting progress callbacks while delegating to scope-specific calculators.
+  - `custom_components/pp_reader/metrics/{portfolio,accounts,securities}.py` aggregate normalized tables, apply FX data, and reuse rounding helpers from `metrics/common.py` to keep payload math deterministic.
+  - `custom_components/pp_reader/metrics/storage.py` batches inserts through `MetricBatch`, writing all three metric tables plus `metric_runs` within a single transaction before the coordinator or CLI emits dispatcher events.
+  - Loader APIs in `custom_components/pp_reader/data/db_access.py` expose typed `*MetricRecord` dataclasses that websocket handlers and diagnostics rely on instead of recomputing values ad hoc.
+  - `custom_components/pp_reader/data/event_push.py` and `custom_components/pp_reader/data/websocket.py` retrieve persisted metrics (including coverage/provenance fields) to populate Home Assistant payloads without touching legacy helpers.
 - **New/updated modules.**
-  - Introduce `custom_components/pp_reader/metrics/portfolio_metrics.py` to encapsulate reusable metric assemblers referenced by both websocket handlers and push emitters.
-  - Extend `custom_components/pp_reader/data/aggregations.py` to expose typed return objects matching the metric dataclasses defined above.
-  - Update `custom_components/pp_reader/data/event_push.py` to annotate payloads with metric provenance fields before emission.
-- **Legacy retirement.** Retire ad-hoc calculations in `custom_components/pp_reader/helpers/performance_legacy.py` once:
-  - All tests in `tests/integration/test_websocket_payloads.py` pass using the new metric assemblers.
-  - Manual totals in `datamodel/backend-datamodel-final.md` remain unchanged during acceptance verification.
-  - Documentation under `.docs/live_aggregation/metrics.md` reflects the new call graph.
+  - `custom_components/pp_reader/metrics/pipeline.py`, `metrics/storage.py`, and the metric calculators (`metrics/portfolio.py`, `metrics/accounts.py`, `metrics/securities.py`) that encapsulate orchestration, persistence, and computation responsibilities.
+  - Schema definitions for `metric_runs`, `portfolio_metrics`, `account_metrics`, and `security_metrics` inside `custom_components/pp_reader/data/db_schema.py`, plus CRUD helpers/dataclasses in `custom_components/pp_reader/data/db_access.py`.
+  - Shared rounding/coverage helpers in `custom_components/pp_reader/metrics/common.py`, which supersede the previous `data/performance.py` implementation.
+  - Coordinator hooks (`custom_components/pp_reader/data/coordinator.py`) trigger the metric pipeline once enrichment finishes, while diagnostics (`custom_components/pp_reader/util/diagnostics.py`) surface the latest `metric_runs` metadata.
+- **Legacy retirement.** Remove the shim in `custom_components/pp_reader/data/performance.py` and any direct Coordinator/WebSocket calls to the deprecated performance helpers after:
+  - All websocket/event payload suites read from the persisted metric tables without fallback branches.
+  - Manual acceptance against `datamodel/backend-datamodel-final.md` confirms parity with the stored metrics.
+  - Documentation in `.docs/live_aggregation/metrics.md` highlights the pipeline (`metrics/pipeline.py` → `metrics/storage.py`) as the only supported computation path.
 
 ## Normalization Layer
 - **Target implementation.** Centralize normalization logic to translate parsed protobuf objects into the relational schema defined in `custom_components/pp_reader/data/db_schema.py` and outlined in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md#dashboard-snapshot-pp_readerget_dashboard_data-command-push-updates-accounts-portfolio_values-portfolio_positions-last_file_update).

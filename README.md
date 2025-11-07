@@ -6,12 +6,13 @@ Portfolio Performance Reader keeps your Home Assistant instance in sync with the
 - Imports accounts, portfolios, transactions, and historic closes whenever the `.portfolio` file changes.
 - Stores the latest quote per security and recalculates portfolio totals from SQLite so sensors, WebSocket clients, and the dashboard all see the same figures.
 - Exposes structured payloads for holdings (`aggregation`/`average_cost`) and performance metrics that power sensors, WebSocket responses, and dashboard tables.
+- Persists aggregated portfolio, account, and security metrics (plus run metadata) in dedicated SQLite tables so diagnostics, events, and WebSocket consumers reuse a single source of truth.
 - Runs entirely on your Home Assistant host; the only outbound traffic comes from optional pricing providers such as Yahoo Finance or the Frankfurter FX API.
 - Queues enrichment jobs after each import: FX rates are cached in SQLite, and Yahoo history fetches populate the `historical_prices` table for offline dashboards.
 
 ## Features
 - **Automatic portfolio sync:** Watches the configured `.portfolio` file, normalises identifiers, and mirrors portfolio/account balances as Home Assistant entities.
-- **Shared performance metrics:** Centralises gain and day-change calculations in the backend and distributes them through a structured `performance` payload so automations, events, and the dashboard all stay aligned.
+- **Shared performance metrics:** An asynchronous metrics pipeline (under `custom_components/pp_reader/metrics/`) aggregates gains, day-change deltas, coverage, and provenance into dedicated tables so automations, events, and the dashboard all read the exact snapshot that was persisted.
 - **Security drilldowns:** Dashboard tabs provide daily close charts, performance breakdowns, and snapshot metrics for every security with stored history.
 - **Built-in dashboard panel:** Adds a persistent "Portfolio Dashboard" sidebar entry with live updates, expandable tables, and navigation to per-security details.
 - **Resilient storage:** Maintains six-hour rolling backups of the integration database and exposes a manual service for on-demand snapshots.
@@ -53,7 +54,7 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 
 ## Usage
 ### Sensors and entities
-- Portfolio sensors expose current value, purchase sums, unrealised gains, and day-change metrics sourced from the shared `performance` payload.
+- Portfolio sensors expose current value, purchase sums, unrealised gains, and day-change metrics sourced from the persisted `portfolio_metrics` rows referenced by the shared `performance` payload.
 - Account sensors mirror account balances from the `.portfolio` file.
 - Status sensors surface the last successful import, last backup timestamp, and database path for automations.
 
@@ -67,8 +68,12 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 
 ### FX & price enrichment
 - After every import the coordinator schedules an FX refresh (Frankfurter) and queues Yahoo price-history jobs. Rates are persisted in the `fx_rates` table with provenance metadata; completed candles land in `historical_prices` and surface on the dashboard without additional API calls.
-- Enrichment telemetry is exposed under **Settings → Devices & Services → Portfolio Performance Reader → Diagnostics**. The JSON download lists the latest FX fetch, queued jobs, and recent failures to aid troubleshooting.
+- Enrichment telemetry is exposed under **Settings → Devices & Services → Portfolio Performance Reader → Diagnostics**. The JSON download lists the latest FX fetch, queued jobs, recent failures, and the most recent metrics run (including processed counts and coverage summaries) to aid troubleshooting.
 - Adjust the FX cadence from the options flow if you need more frequent updates during trading hours or slower refreshes for offline environments.
+
+### Metrics diagnostics & CLI tooling
+- Download diagnostics after an import to inspect `metrics.latest_run`, `metrics.recent_runs`, and coverage summaries for `portfolio_metrics`, `account_metrics`, and `security_metrics`. Use this data to verify that dashboard totals match the stored snapshot before debugging automations or UI regressions.
+- `python scripts/enrichment_smoketest.py --portfolio <path> --database <path>` replays the parser → enrichment → metrics pipeline outside of Home Assistant. The script prints progress per stage, stores the resulting metrics tables, and dumps diagnostics so you can spot ingestion or coverage issues quickly.
 
 ### Historical data & backups
 - Daily close prices for tracked securities are persisted on every import so charts and WebSocket consumers work offline once data is captured.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.pp_reader.data.performance import (
+from custom_components.pp_reader.metrics.common import (
     DayChangeMetrics,
     PerformanceMetrics,
     select_performance_metrics,

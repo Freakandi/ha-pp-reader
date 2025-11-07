@@ -28,7 +28,7 @@ Additional platform-specific hints (Windows, devcontainers, Codex) live in [TEST
 | `./scripts/develop` | Starts Home Assistant against the local integration, ensures `/config` is linked, and streams dashboard assets for live reload. |
 | `./scripts/develop_VSC` / `./scripts/codex_develop` | Variants that wrap the launcher for VSCode or Codex shells where activating `.venv` is inconvenient. |
 | `./scripts/lint` | Runs `ruff format .` followed by `ruff check . --fix`. |
-| `./scripts/enrichment_smoketest.py` | Runs parser + enrichment against a sample archive, refreshing FX rates and Yahoo history before dumping diagnostics to stdout/logs. |
+| `./scripts/enrichment_smoketest.py` | Replays parser → enrichment → metrics against a sample archive, refreshing FX/Yahoo data before dumping diagnostics (including `metric_runs`) to stdout/logs. |
 | `npm run dev` | Launches Vite (`http://127.0.0.1:5173`) for hot-module dashboard development alongside Home Assistant. |
 | `npm run build` | Builds production bundles and refreshes `dashboard.module.js` via `scripts/update_dashboard_module.mjs`. |
 | `npm test` | Executes the TypeScript smoke tests through `scripts/run_ts_tests.mjs`. |
@@ -41,8 +41,8 @@ Additional platform-specific hints (Windows, devcontainers, Codex) live in [TEST
 - Feature flags (`feature_flags.snapshot` / `feature_flags.is_enabled`) store per-entry overrides pulled from config-entry options; use them to gate experimental enrichment stages.
 - FX refresh cadence is configurable via the options flow (`fx_update_interval_seconds`, default six hours, minimum 15 minutes). Update `tests/integration/test_enrichment_pipeline.py` if you adjust the defaults or scheduling semantics.
 - SQLite persists mirrored portfolios, holdings, and daily closes. Imports are diff-based, and automatic backups create snapshots every six hours; the `pp_reader.trigger_backup_debug` service exposes manual backups for testing.
-- Diagnostics for parser/enrichment live in `custom_components.pp_reader.util.diagnostics`; adjust `tests/util/test_diagnostics_enrichment.py` alongside payload changes so the Home Assistant "Download diagnostics" output stays stable.
-- Gains, day-change deltas, and coverage metadata flow through `custom_components/pp_reader/data/performance.py`. Call `select_performance_metrics` (and its helpers) so sensors, WebSocket commands, and events all emit the same structured `performance` payload.
+- Diagnostics for parser, enrichment, and metrics live in `custom_components.pp_reader.util.diagnostics`; adjust `tests/util/test_diagnostics_enrichment.py` / `tests/util/test_diagnostics_metrics.py` alongside payload changes so the Home Assistant "Download diagnostics" output stays stable.
+- The metric engine resides under `custom_components/pp_reader/metrics/`: `metrics/pipeline.async_refresh_all` orchestrates runs, `metrics/storage` persists `metric_runs` plus `{portfolio,account,security}_metrics`, and `metrics/common` exposes rounding helpers (`select_performance_metrics`, `compose_performance_payload`). Sensors, WebSocket handlers, and diagnostics should load the typed records from `data.db_access` instead of recomputing values.
 - Holdings calculations return structured `aggregation` and `average_cost` data (including native currency and EUR totals). Legacy flat fields such as `gain_abs`, `gain_pct`, and `avg_price_*` must not reappear in new payloads.
 - Canonical currency edge cases (SSR Mining CAD vs. EUR, Harmonic Drive JPY) are documented in `.docs/fix_native_purchase.md` and mirrored by unit tests; keep them intact when adjusting purchase logic.
 - The end-to-end ingestion, aggregation, and payload contracts live in [`.docs/portfolio-data-spec.md`](.docs/portfolio-data-spec.md); update that spec alongside schema or API changes.
@@ -98,7 +98,7 @@ See [TESTING.md](TESTING.md) for expanded instructions, fixture details, and CI 
 - `fetch_live_portfolios` is the single source of truth for aggregated totals; sensors, WebSocket responses, coordinator events, and dashboard footers reuse its output.
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) must handle coordinator fallbacks and return data sourced from SQLite.
 - Daily close history stored during sync powers security charts. Database migrations must keep historic data and backups restorable.
-- The shared `performance` payload (gain, percentage, and optional `day_change` details) travels unchanged from the performance helpers through database serializers, events, and frontend caches. Update all consumers together if the structure evolves.
+- The shared `performance` payload (gain, percentage, and optional `day_change` details) now originates from the persisted metric tables; it travels unchanged from the metric engine (`metrics/common`, `metrics/storage`) through database serializers, events, and frontend caches. Update all consumers together if the structure evolves.
 
 ## Additional resources
 - [ARCHITECTURE.md](ARCHITECTURE.md) — module responsibilities and data flow diagrams.
