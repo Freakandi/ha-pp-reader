@@ -11,7 +11,10 @@ const TEST_SUFFIXES = ['.test.ts', '.test.tsx'];
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
-const srcDir = path.join(projectRoot, 'src');
+const testRoots = [
+  path.join(projectRoot, 'src'),
+  path.join(projectRoot, 'tests', 'dashboard'),
+];
 
 function collectTestFiles(currentDir) {
   const entries = readdirSync(currentDir, { withFileTypes: true });
@@ -38,16 +41,19 @@ function collectTestFiles(currentDir) {
 }
 
 let testFiles = [];
-try {
-  if (statSync(srcDir).isDirectory()) {
-    testFiles = collectTestFiles(srcDir);
-  }
-} catch (error) {
-  if (error.code !== 'ENOENT') {
-    console.error('Failed to scan TypeScript sources for tests');
-    console.error(error);
-    process.exitCode = 1;
-    process.exit();
+
+for (const root of testRoots) {
+  try {
+    if (statSync(root).isDirectory()) {
+      testFiles = testFiles.concat(collectTestFiles(root));
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error(`Failed to scan ${root} for TypeScript tests`);
+      console.error(error);
+      process.exitCode = 1;
+      process.exit();
+    }
   }
 }
 

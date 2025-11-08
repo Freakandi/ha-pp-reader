@@ -21,6 +21,10 @@ import {
   fetchSecuritySnapshotWS,
   fetchSecurityHistoryWS,
 } from '../data/api';
+import {
+  normalizeAverageCostPayload,
+  normalizeAggregationPayload,
+} from '../data/positionsCache';
 import type {
   SecuritySnapshotResponse,
   SecurityHistoryResponse,
@@ -34,8 +38,6 @@ import type {
   SecurityHistoryRangeKey,
   SecurityHistoryRangeState,
   SecuritySnapshotLike,
-  HoldingsAggregationPayload,
-  AverageCostPayload,
   AverageCostSource,
 } from './types';
 import { isPortfolioPositionsUpdatedEvent } from './types';
@@ -118,114 +120,6 @@ const RANGE_STATE_REGISTRY: RangeStateRegistry = new Map();
 const SNAPSHOT_DETAIL_REGISTRY: SnapshotDetailRegistry = new Map();
 const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
 const LIVE_UPDATE_HANDLERS = new Map<string, LiveUpdateHandler>();
-
-function extractAverageCostPayload(
-  snapshot: SecuritySnapshotDetail | null | undefined,
-): AverageCostPayload | null {
-  if (!snapshot) {
-    return null;
-  }
-
-  const rawAverageCost = snapshot.average_cost;
-  if (!rawAverageCost || typeof rawAverageCost !== 'object') {
-    return null;
-  }
-
-  const candidate = rawAverageCost as Partial<AverageCostPayload> & {
-    coverage_ratio?: unknown;
-    source?: unknown;
-  };
-
-  const native = toFiniteNumber(candidate.native);
-  const security = toFiniteNumber(candidate.security);
-  const account = toFiniteNumber(candidate.account);
-  const eur = toFiniteNumber(candidate.eur);
-  const coverageRatio = toFiniteNumber(candidate.coverage_ratio);
-
-  if (
-    native == null &&
-    security == null &&
-    account == null &&
-    eur == null &&
-    coverageRatio == null
-  ) {
-    return null;
-  }
-
-  const source = candidate.source;
-  const normalizedSource: AverageCostSource =
-    source === 'totals' || source === 'eur_total' ? source : 'aggregation';
-
-  return {
-    native,
-    security,
-    account,
-    eur,
-    source: normalizedSource,
-    coverage_ratio: coverageRatio,
-  };
-}
-
-function extractAggregationPayload(
-  snapshot: SecuritySnapshotDetail | null | undefined,
-): HoldingsAggregationPayload | null {
-  if (!snapshot) {
-    return null;
-  }
-
-  const rawAggregation = snapshot.aggregation;
-  if (!rawAggregation || typeof rawAggregation !== 'object') {
-    return null;
-  }
-
-  const candidate = rawAggregation as Partial<HoldingsAggregationPayload> & {
-    purchase_value_cents?: unknown;
-  };
-
-  const totalHoldings = toFiniteNumber(candidate.total_holdings);
-  const positiveHoldings = toFiniteNumber(candidate.positive_holdings);
-  const purchaseValueEur = toFiniteNumber(candidate.purchase_value_eur);
-  const securityTotal =
-    toFiniteNumber(candidate.purchase_total_security) ??
-    toFiniteNumber(candidate.security_currency_total);
-  const accountTotal =
-    toFiniteNumber(candidate.purchase_total_account) ??
-    toFiniteNumber(candidate.account_currency_total);
-
-  const rawPurchaseValueCents = candidate.purchase_value_cents;
-  let purchaseValueCents = 0;
-  if (typeof rawPurchaseValueCents === 'number' && Number.isFinite(rawPurchaseValueCents)) {
-    purchaseValueCents = Math.trunc(rawPurchaseValueCents);
-  } else if (typeof rawPurchaseValueCents === 'string') {
-    const parsed = Number.parseInt(rawPurchaseValueCents, 10);
-    if (Number.isFinite(parsed)) {
-      purchaseValueCents = parsed;
-    }
-  }
-
-  const hasAnyValue =
-    totalHoldings != null ||
-    positiveHoldings != null ||
-    purchaseValueEur != null ||
-    securityTotal != null ||
-    accountTotal != null ||
-    purchaseValueCents !== 0;
-
-  if (!hasAnyValue) {
-    return null;
-  }
-
-  return {
-    total_holdings: totalHoldings ?? 0,
-    positive_holdings: positiveHoldings ?? 0,
-    purchase_value_cents: purchaseValueCents,
-    purchase_value_eur: purchaseValueEur ?? 0,
-    security_currency_total: securityTotal ?? 0,
-    account_currency_total: accountTotal ?? 0,
-    purchase_total_security: securityTotal ?? 0,
-    purchase_total_account: accountTotal ?? 0,
-  };
-}
 
 export const __TEST_ONLY__ = {
   getHistoryChartOptionsForTest: getHistoryChartOptions,
@@ -956,7 +850,7 @@ function resolveAccountCurrencyCode(
   accountAverage: number | null | undefined,
   securityAverage: number | null | undefined,
 ): string | null {
-  const normalizedAverageCost = extractAverageCostPayload(snapshot);
+  const normalizedAverageCost = normalizeAverageCostPayload(snapshot?.average_cost);
   const accountAverageNumeric =
     normalizedAverageCost?.account ??
     (isFiniteNumber(accountAverage) ? accountAverage : toFiniteNumber(accountAverage));
@@ -978,7 +872,7 @@ function resolveAccountCurrencyCode(
     normalizedAverageCost?.native ??
     (isFiniteNumber(securityAverage) ? securityAverage : toFiniteNumber(securityAverage));
 
-  const aggregation = extractAggregationPayload(snapshot);
+  const aggregation = normalizeAggregationPayload(snapshot?.aggregation);
   if (
     securityCurrency &&
     isFiniteNumber(securityAverageNumeric) &&
@@ -1114,7 +1008,7 @@ function composeAveragePurchaseTooltip(
     return null;
   }
 
-  const averageCost = extractAverageCostPayload(snapshot);
+  const averageCost = normalizeAverageCostPayload(snapshot.average_cost);
   if (!averageCost) {
     return null;
   }
@@ -1181,7 +1075,7 @@ function composeAveragePurchaseTooltip(
 function selectAveragePurchaseBaseline(
   snapshot: SecuritySnapshotDetail | null | undefined,
 ): number | null {
-  const averageCost = extractAverageCostPayload(snapshot);
+  const averageCost = normalizeAverageCostPayload(snapshot.average_cost);
   const baseline = averageCost?.native ?? averageCost?.security ?? null;
   return isFiniteNumber(baseline) ? baseline : null;
 }
@@ -1205,7 +1099,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur) ??
     null;
-  const averageCost = extractAverageCostPayload(snapshot);
+  const averageCost = normalizeAverageCostPayload(snapshot.average_cost);
   const averagePurchaseNativeRaw =
     averageCost?.native ??
     averageCost?.security ??

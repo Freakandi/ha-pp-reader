@@ -7,48 +7,70 @@ import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-
 import { formatValue } from '../content/elements';
 import type { SortDirection } from '../content/elements';
 import { getOverviewHelpers } from '../dashboard/registry';
+import { deserializePortfolioSnapshot } from '../lib/api/portfolio';
 import type {
-  AverageCostPayload,
-  HoldingsAggregationPayload,
   PerformanceMetricsPayload,
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
-import { normalizeCurrencyValue, roundCurrency, toFiniteCurrency } from '../utils/currency';
+import { roundCurrency } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
-import type { AccountSummary, PortfolioSummary } from './api';
+import type {
+  AccountSummary,
+  PortfolioPositionsUpdatePayload,
+  PortfolioSummary,
+  PortfolioValuesUpdateEntry,
+} from './api';
 import {
   clearAllPortfolioPositions,
   getPortfolioPositionsSnapshot,
+  normalizePositionRecords,
   setPortfolioPositions,
+  type PortfolioPositionRecord,
 } from './positionsCache';
-import type { PortfolioPositionRecord } from './positionsCache';
+import {
+  mergePortfolioSnapshots,
+  setAccountSnapshots,
+  setPortfolioPositionsSnapshot,
+} from '../lib/store/portfolioStore';
+import {
+  selectAccountOverviewRows,
+  type AccountOverviewRow,
+} from '../lib/store/selectors/portfolio';
+import { renderNameWithBadges } from '../lib/ui/badges';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 
+type DiagnosticSnapshotKind = 'account' | 'portfolio' | 'portfolio_positions';
+
+interface SnapshotDiagnosticsState {
+  coverage_ratio?: number | null;
+  provenance?: string | null;
+  metric_run_uuid?: string | null;
+  generated_at?: string | null;
+}
+
+interface DiagnosticChange<T> {
+  previous: T | undefined;
+  current: T | undefined;
+}
+
+type DiagnosticChanges = Partial<{
+  [K in keyof SnapshotDiagnosticsState]: DiagnosticChange<SnapshotDiagnosticsState[K]>;
+}>;
+
+export interface DashboardDiagnosticsEventDetail {
+  kind: DiagnosticSnapshotKind;
+  uuid: string;
+  source: string;
+  changed: DiagnosticChanges;
+  snapshot: SnapshotDiagnosticsState;
+  timestamp: string;
+}
+
 type QueryRoot = HTMLElement | Document;
 
-interface PortfolioPositionData {
-  security_uuid?: string | null;
-  name?: string | null;
-  current_holdings?: number | null;
-  purchase_value?: number | null;
-  current_value?: number | null;
-  average_cost?: AverageCostPayload | null;
-  performance?: PerformanceMetricsPayload | null;
-  aggregation?: HoldingsAggregationPayload | null;
-  [key: string]: unknown;
-}
-
-interface PortfolioPositionsUpdatePayload {
-  portfolio_uuid?: string | null;
-  portfolioUuid?: string | null;
-  positions?: PortfolioPositionData[] | null;
-  error?: unknown;
-  [key: string]: unknown;
-}
-
 interface PendingPortfolioUpdate {
-  positions: PortfolioPositionData[];
+  positions: PortfolioPositionRecord[];
   error?: unknown;
 }
 
@@ -95,96 +117,253 @@ function toNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function toNullableNumber(value: unknown): number | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  return toFiniteNumber(value);
+}
+
+function toNullableString(value: unknown): string | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  return toNonEmptyString(value);
+}
+
 function normalizePerformanceMetrics(
-  position: PortfolioPositionData,
+  position: PortfolioPositionRecord,
 ): PerformanceMetricsPayload | null {
   return normalizePerformancePayload(position.performance);
 }
 
-function cloneAggregationPayload(
-  value: PortfolioPositionData['aggregation'],
-): HoldingsAggregationPayload | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const clone: HoldingsAggregationPayload = { ...value };
-  return clone;
-}
-
-function cloneAverageCostPayload(
-  value: PortfolioPositionData['average_cost'],
-): AverageCostPayload | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const clone: AverageCostPayload = { ...value };
-  return clone;
-}
-
-function sanitizePosition(position: PortfolioPositionData): PortfolioPositionRecord | null {
-  const securityUuid = toNonEmptyString(position.security_uuid);
-  const name = toNonEmptyString(position.name);
-  const currentHoldings = toFiniteCurrency(position.current_holdings);
-  const purchaseValue = normalizeCurrencyValue(position.purchase_value);
-  const currentValue = normalizeCurrencyValue(position.current_value);
-  if (
-    !securityUuid ||
-    !name ||
-    currentHoldings == null ||
-    purchaseValue == null ||
-    currentValue == null
-  ) {
-    return null;
-  }
-
-  const aggregation = cloneAggregationPayload(position.aggregation);
-  const averageCost = cloneAverageCostPayload(position.average_cost);
-  const performance = normalizePerformanceMetrics(position);
-
-  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
-
-  return {
-    ...position,
-    security_uuid: securityUuid,
-    name,
-    current_holdings: currentHoldings,
-    purchase_value: purchaseValue,
-    current_value: currentValue,
-    average_cost: averageCost,
-    aggregation,
-    performance,
-    gain_abs: gainAbs,
-    gain_pct: gainPct,
-  } as PortfolioPositionRecord;
-}
-
-function sanitizePositions(positions: PortfolioPositionData[]): PortfolioPositionRecord[] {
-  const sanitized: PortfolioPositionRecord[] = [];
-  for (const position of positions) {
-    const normalized = sanitizePosition(position);
-    if (normalized) {
-      sanitized.push(normalized);
-    }
-  }
-  return sanitized;
-}
-
-interface PortfolioUpdatePayload extends Partial<PortfolioSummary> {
-  uuid?: string | null;
-  value?: number | null;
-  purchaseSum?: number | null;
-  count?: number | null;
-  position_count?: number | null;
-  [key: string]: unknown;
-}
+type PortfolioUpdatePayload = PortfolioValuesUpdateEntry;
 
 const PENDING_RETRY_INTERVAL = 500;
 const PENDING_MAX_ATTEMPTS = 10;
 export const PORTFOLIO_POSITIONS_UPDATED_EVENT = 'pp-reader:portfolio-positions-updated';
+export const DASHBOARD_DIAGNOSTICS_EVENT = 'pp-reader:diagnostics';
 
+const diagnosticSnapshotMap = new Map<string, SnapshotDiagnosticsState>();
+const DIAGNOSTIC_FIELDS: readonly (keyof SnapshotDiagnosticsState)[] = [
+  'coverage_ratio',
+  'provenance',
+  'metric_run_uuid',
+  'generated_at',
+];
+
+function getDiagnosticKey(kind: DiagnosticSnapshotKind, uuid: string): string {
+  return `${kind}:${uuid}`;
+}
+
+function normalizeCoverageValue(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  const numeric = toNullableNumber(value);
+  if (numeric === null) {
+    return null;
+  }
+  if (typeof numeric === 'number' && Number.isFinite(numeric)) {
+    return numeric;
+  }
+  return undefined;
+}
+
+function normalizeMetadataString(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return toNullableString(value);
+}
+
+function buildSnapshotDiagnostics(
+  coverageRatio: unknown,
+  provenance: unknown,
+  metricRunUuid: unknown,
+  generatedAt: unknown,
+): SnapshotDiagnosticsState | null {
+  const snapshot: SnapshotDiagnosticsState = {};
+  const normalizedCoverage = normalizeCoverageValue(coverageRatio);
+  if (normalizedCoverage !== undefined) {
+    snapshot.coverage_ratio = normalizedCoverage;
+  }
+  const normalizedProvenance = normalizeMetadataString(provenance);
+  if (normalizedProvenance !== undefined) {
+    snapshot.provenance = normalizedProvenance;
+  }
+  const normalizedMetricRunUuid = normalizeMetadataString(metricRunUuid);
+  if (normalizedMetricRunUuid !== undefined) {
+    snapshot.metric_run_uuid = normalizedMetricRunUuid;
+  }
+  const normalizedGeneratedAt = normalizeMetadataString(generatedAt);
+  if (normalizedGeneratedAt !== undefined) {
+    snapshot.generated_at = normalizedGeneratedAt;
+  }
+  return Object.keys(snapshot).length > 0 ? snapshot : null;
+}
+
+function diffDiagnostics(
+  previous: SnapshotDiagnosticsState | undefined,
+  next: SnapshotDiagnosticsState,
+): DiagnosticChanges | null {
+  const changes: DiagnosticChanges = {};
+  let hasChanges = false;
+  for (const field of DIAGNOSTIC_FIELDS) {
+    if (previous?.[field] === next[field]) {
+      continue;
+    }
+    changes[field] = {
+      previous: previous?.[field],
+      current: next[field],
+    };
+    hasChanges = true;
+  }
+  return hasChanges ? changes : null;
+}
+
+function buildRemovalChanges(previous: SnapshotDiagnosticsState): DiagnosticChanges | null {
+  const changes: DiagnosticChanges = {};
+  let hasChanges = false;
+  for (const field of DIAGNOSTIC_FIELDS) {
+    if (previous[field] === undefined) {
+      continue;
+    }
+    changes[field] = {
+      previous: previous[field],
+      current: undefined,
+    };
+    hasChanges = true;
+  }
+  return hasChanges ? changes : null;
+}
+
+function dispatchDiagnosticsEvent(detail: DashboardDiagnosticsEventDetail): void {
+  if (!Object.keys(detail.changed).length) {
+    return;
+  }
+  try {
+    console.debug('pp-reader:diagnostics', detail);
+  } catch {
+    // ignore console access issues
+  }
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return;
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_DIAGNOSTICS_EVENT, { detail }));
+  } catch (error) {
+    console.warn('updateConfigsWS: Diagnostics-Event konnte nicht gesendet werden', error);
+  }
+}
+
+function emitDiagnosticsSnapshot(
+  kind: DiagnosticSnapshotKind,
+  source: string,
+  uuid: string,
+  snapshot: SnapshotDiagnosticsState | null,
+): void {
+  const key = getDiagnosticKey(kind, uuid);
+  const previous = diagnosticSnapshotMap.get(key);
+  if (!snapshot) {
+    if (!previous) {
+      return;
+    }
+    diagnosticSnapshotMap.delete(key);
+    const removalChanges = buildRemovalChanges(previous);
+    if (!removalChanges) {
+      return;
+    }
+    dispatchDiagnosticsEvent({
+      kind,
+      uuid,
+      source,
+      changed: removalChanges,
+      snapshot: {},
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+  const changes = diffDiagnostics(previous, snapshot);
+  if (!changes) {
+    return;
+  }
+  diagnosticSnapshotMap.set(key, { ...snapshot });
+  dispatchDiagnosticsEvent({
+    kind,
+    uuid,
+    source,
+    changed: changes,
+    snapshot: { ...snapshot },
+    timestamp: new Date().toISOString(),
+  });
+}
+
+function emitAccountDiagnostics(accounts: AccountSummary[] | null | undefined): void {
+  if (!accounts || accounts.length === 0) {
+    return;
+  }
+  for (const account of accounts) {
+    const uuid = toNonEmptyString(account.uuid);
+    if (!uuid) {
+      continue;
+    }
+    const snapshot = buildSnapshotDiagnostics(
+      account.coverage_ratio,
+      account.provenance,
+      account.metric_run_uuid,
+      undefined,
+    );
+    emitDiagnosticsSnapshot('account', 'accounts', uuid, snapshot);
+  }
+}
+
+function emitPortfolioDiagnostics(
+  portfolios: readonly PortfolioSummary[] | null | undefined,
+): void {
+  if (!portfolios || portfolios.length === 0) {
+    return;
+  }
+  for (const portfolio of portfolios) {
+    const uuid = toNonEmptyString(portfolio.uuid);
+    if (!uuid) {
+      continue;
+    }
+    const snapshot = buildSnapshotDiagnostics(
+      portfolio.coverage_ratio,
+      portfolio.provenance,
+      portfolio.metric_run_uuid,
+      undefined,
+    );
+    emitDiagnosticsSnapshot('portfolio', 'portfolio_values', uuid, snapshot);
+  }
+}
+
+function emitPortfolioPositionsDiagnostics(
+  portfolioUuid: string,
+  update: PortfolioPositionsUpdatePayload | null | undefined,
+): void {
+  if (!update) {
+    return;
+  }
+  const snapshot = buildSnapshotDiagnostics(
+    update.coverage_ratio ?? update.normalized_payload?.coverage_ratio,
+    update.provenance ?? update.normalized_payload?.provenance,
+    update.metric_run_uuid ?? update.normalized_payload?.metric_run_uuid,
+    update.normalized_payload?.generated_at,
+  );
+  emitDiagnosticsSnapshot('portfolio_positions', 'portfolio_positions', portfolioUuid, snapshot);
+}
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
   const safeError = formatErrorMessage(error);
   return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
@@ -228,7 +407,7 @@ function restoreSortAndInit(containerEl: HTMLElement, rootEl: QueryRoot, pid: st
 function applyPortfolioPositionsToDom(
   root: QueryRoot | null | undefined,
   portfolioUuid: string | null | undefined,
-  positions: PortfolioPositionData[],
+  positions: PortfolioPositionRecord[],
   error?: unknown,
 ): ApplyPositionsResult {
   if (!root || !portfolioUuid) {
@@ -333,13 +512,17 @@ export function handleAccountUpdate(
 ): void {
   console.log('updateConfigsWS: Kontodaten-Update erhalten:', update);
   const updatedAccounts = Array.isArray(update) ? update : [];
+  setAccountSnapshots(updatedAccounts);
+  emitAccountDiagnostics(updatedAccounts);
 
   if (!root) {
     return;
   }
 
+  const accountRows = selectAccountOverviewRows();
+
   // Tabellen aktualisieren (EUR + FX)
-  updateAccountTable(updatedAccounts, root);
+  updateAccountTable(accountRows, root);
 
   // Portfolios aus aktueller Tabelle lesen (für Total-Neuberechnung)
   const portfolioTable = root.querySelector<HTMLTableElement>('.portfolio-table table');
@@ -359,7 +542,7 @@ export function handleAccountUpdate(
       })
     : [];
 
-  updateTotalWealth(updatedAccounts, portfolios, root);
+  updateTotalWealth(accountRows, portfolios, root);
 }
 
 /**
@@ -367,7 +550,7 @@ export function handleAccountUpdate(
  * @param {Array} accounts - Alle Kontodaten.
  * @param {HTMLElement} root - Root-Element.
  */
-function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
+function updateAccountTable(accounts: AccountOverviewRow[], root: QueryRoot): void {
   const eurContainer = root.querySelector<HTMLElement>('.account-table');
   const fxContainer = root.querySelector<HTMLElement>('.fx-account-table');
 
@@ -375,8 +558,15 @@ function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
   const fxAccounts = accounts.filter(account => (account.currency_code || 'EUR') !== 'EUR');
 
   if (eurContainer) {
+    const eurRows = eurAccounts.map(account => ({
+      name: renderNameWithBadges(account.name, account.badges, {
+        containerClass: 'account-name',
+        labelClass: 'account-name__label',
+      }),
+      balance: account.balance ?? null,
+    }));
     eurContainer.innerHTML = makeTable(
-      eurAccounts,
+      eurRows,
       [
         { key: 'name', label: 'Name' },
         { key: 'balance', label: 'Kontostand (EUR)', align: 'right' },
@@ -388,28 +578,33 @@ function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
   }
 
   if (fxContainer) {
-    fxContainer.innerHTML = makeTable(
-      fxAccounts.map(account => {
-        const origBalance = account.orig_balance;
-        const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
-        const currencyCode = toNonEmptyString(account.currency_code);
-        const amountLabel = hasOrigBalance
-          ? origBalance.toLocaleString('de-DE', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-          : null;
-        const fxDisplay = amountLabel
-          ? currencyCode
-            ? `${amountLabel}\u00A0${currencyCode}`
-            : amountLabel
-          : '';
+    const fxRows = fxAccounts.map(account => {
+      const origBalance = account.orig_balance;
+      const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
+      const currencyCode = toNonEmptyString(account.currency_code);
+      const amountLabel = hasOrigBalance
+        ? origBalance.toLocaleString('de-DE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        : null;
+      const fxDisplay = amountLabel
+        ? currencyCode
+          ? `${amountLabel}\u00A0${currencyCode}`
+          : amountLabel
+        : '';
 
-        return {
-          ...account,
-          fx_display: fxDisplay,
-        };
-      }),
+      return {
+        name: renderNameWithBadges(account.name, account.badges, {
+          containerClass: 'account-name',
+          labelClass: 'account-name__label',
+        }),
+        fx_display: fxDisplay,
+        balance: account.balance ?? null,
+      };
+    });
+    fxContainer.innerHTML = makeTable(
+      fxRows,
       [
         { key: 'name', label: 'Name' },
         { key: 'fx_display', label: 'Betrag (FX)' },
@@ -420,6 +615,23 @@ function updateAccountTable(accounts: AccountSummary[], root: QueryRoot): void {
   } else if (fxAccounts.length) {
     console.warn('updateAccountTable: .fx-account-table nicht gefunden, obwohl FX-Konten vorhanden sind.');
   }
+}
+
+function normalizePortfolioUpdateEntries(
+  update: PortfolioUpdatePayload[] | null | undefined,
+): PortfolioSummary[] {
+  if (!Array.isArray(update)) {
+    return [];
+  }
+  const normalized: PortfolioSummary[] = [];
+  for (const entry of update) {
+    const snapshot = deserializePortfolioSnapshot(entry);
+    if (!snapshot) {
+      continue;
+    }
+    normalized.push(snapshot);
+  }
+  return normalized;
 }
 
 /**
@@ -441,6 +653,12 @@ export function handlePortfolioUpdate(
   } catch {
     // no-op for browsers without console.debug
   }
+
+  const normalizedPatches = normalizePortfolioUpdateEntries(update);
+  if (normalizedPatches.length) {
+    mergePortfolioSnapshots(normalizedPatches);
+  }
+  emitPortfolioDiagnostics(normalizedPatches);
 
   if (!root) {
     return;
@@ -513,11 +731,16 @@ export function handlePortfolioUpdate(
     }
   };
 
-  for (const entry of update) {
-    const uuid = entry.uuid;
-    if (typeof uuid !== 'string' || !uuid) {
+  const normalizedByUuid = new Map<string, PortfolioSummary>();
+  for (const snapshot of normalizedPatches) {
+    const uuid = toNonEmptyString(snapshot.uuid);
+    if (!uuid) {
       continue;
     }
+    normalizedByUuid.set(uuid, snapshot);
+  }
+
+  for (const [uuid, snapshot] of normalizedByUuid.entries()) {
     const row = rowMap.get(uuid);
     if (!row) {
       continue;
@@ -537,16 +760,23 @@ export function handlePortfolioUpdate(
     }
 
     // Normalisierung (Full Sync nutzt value/purchase_sum; Price Events current_value/purchase_sum)
-    const posCount = toFiniteNumber(entry.position_count ?? entry.count);
-    const curVal = toFiniteNumber(entry.current_value ?? entry.value);
-    const entryRecord = entry as Record<string, unknown>;
-    const performance = normalizePerformancePayload(entryRecord['performance']);
+    const posCount =
+      typeof snapshot.position_count === 'number' && Number.isFinite(snapshot.position_count)
+        ? snapshot.position_count
+        : 0;
+    const currentValue =
+      typeof snapshot.current_value === 'number' && Number.isFinite(snapshot.current_value)
+        ? snapshot.current_value
+        : null;
+    const performance = normalizePerformancePayload(snapshot.performance);
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
     const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
-    const purchaseRaw = entry.purchase_sum ?? entry.purchaseSum ?? null;
-    const purchase = typeof purchaseRaw === 'number' && Number.isFinite(purchaseRaw)
-      ? purchaseRaw
-      : null;
+    const purchase =
+      typeof snapshot.purchase_sum === 'number' && Number.isFinite(snapshot.purchase_sum)
+        ? snapshot.purchase_sum
+        : typeof snapshot.purchase_value === 'number' && Number.isFinite(snapshot.purchase_value)
+          ? snapshot.purchase_value
+          : null;
 
     const oldCur = parseNumLoose(curValCell.textContent);
     const oldCnt = parseNumLoose(posCountCell.textContent);
@@ -554,15 +784,16 @@ export function handlePortfolioUpdate(
     if (oldCnt !== posCount) {
       posCountCell.textContent = formatPositionCount(posCount);
     }
-    const hasValue = Number.isFinite(curVal);
+    const hasValue = currentValue !== null;
     const rowData = {
-      fx_unavailable: Boolean(entryRecord['fx_unavailable']),
-      current_value: hasValue ? curVal : null,
+      fx_unavailable: row.dataset.fxUnavailable === 'true',
+      current_value: currentValue,
       performance,
     };
     const rowContext = { hasValue };
     const currentMarkup = formatValue('current_value', rowData.current_value, rowData, rowContext);
-    if (Math.abs(oldCur - curVal) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
+    const curValNumeric = currentValue ?? 0;
+    if (Math.abs(oldCur - curValNumeric) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
       curValCell.innerHTML = currentMarkup;
       row.classList.add('flash-update');
       setTimeout(() => {
@@ -590,7 +821,7 @@ export function handlePortfolioUpdate(
     }
 
     row.dataset.positionCount = posCount.toString();
-    row.dataset.currentValue = hasValue ? curVal.toString() : '';
+    row.dataset.currentValue = hasValue ? curValNumeric.toString() : '';
     row.dataset.purchaseSum = purchase != null ? purchase.toString() : '';
     row.dataset.gainAbs = gainAbs != null ? gainAbs.toString() : '';
     row.dataset.gainPct = gainPct != null ? gainPct.toString() : '';
@@ -699,13 +930,12 @@ function processPortfolioPositionsUpdate(
   }
 
   const error = update?.error;
-  const positions = Array.isArray(update?.positions)
-    ? update.positions.filter((pos): pos is PortfolioPositionData => Boolean(pos))
-    : [];
-  const normalizedPositions = sanitizePositions(positions);
+  const normalizedPositions = normalizePositionRecords(update?.positions ?? []);
+  emitPortfolioPositionsDiagnostics(portfolioUuid, update);
 
   if (!error) {
     setPortfolioPositions(portfolioUuid, normalizedPositions);
+    setPortfolioPositionsSnapshot(portfolioUuid, normalizedPositions);
   }
 
   const result = applyPortfolioPositionsToDom(root, portfolioUuid, normalizedPositions, error);
@@ -775,7 +1005,7 @@ export function handlePortfolioPositionsUpdate(
 
 /* ------------------ Hilfsfunktionen (lokal) ------------------ */
 
-function renderPositionsTableInline(positions: PortfolioPositionData[]): string {
+function renderPositionsTableInline(positions: PortfolioPositionRecord[]): string {
   // Konsistenz Push vs Lazy:
   const { renderPositionsTable, applyGainPctMetadata } = getOverviewHelpers();
   try {
@@ -1020,7 +1250,7 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
   footer.dataset.fxUnavailable = metrics.fxUnavailable || !totalsComplete ? 'true' : 'false';
 }
 
-function toFiniteNumber(value: unknown): number {
+function toFiniteNumberOrZero(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
@@ -1048,14 +1278,16 @@ function updateTotalWealth(
 
   const accountEntries = Array.isArray(accounts) ? accounts : [];
   const accountSum = accountEntries.reduce((acc, entry) => {
-    const candidate = entry.balance ?? entry.current_value ?? entry.value ?? 0;
-    return acc + toFiniteNumber(candidate);
+    const candidate = entry.balance ?? entry.current_value ?? entry.value;
+    const numeric = toFiniteNumberOrZero(candidate);
+    return acc + numeric;
   }, 0);
 
   const portfolioEntries = Array.isArray(portfolios) ? portfolios : [];
   const portfolioSum = portfolioEntries.reduce((acc, entry) => {
-    const candidate = entry.current_value ?? entry.value ?? 0;
-    return acc + toFiniteNumber(candidate);
+    const candidate = entry.current_value ?? entry.value;
+    const numeric = toFiniteNumberOrZero(candidate);
+    return acc + numeric;
   }, 0);
 
   const totalWealth = accountSum + portfolioSum;
@@ -1172,7 +1404,7 @@ export const __TEST_ONLY__ = {
   },
   queuePendingUpdate(
     portfolioUuid: string,
-    positions: PortfolioPositionData[],
+    positions: PortfolioPositionRecord[],
     error?: unknown,
   ): void {
     pendingPortfolioUpdates.set(portfolioUuid, { positions, error });

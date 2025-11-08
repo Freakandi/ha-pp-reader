@@ -27,6 +27,11 @@ Portfolio Performance Reader now delivers sensor, WebSocket, and dashboard paylo
 - Event push helpers (`custom_components/pp_reader/data/event_push.py`) broadcast incremental updates over Home Assistant's `EVENT_PANELS_UPDATED` bus topic with a `data_type` discriminator (`accounts`, `portfolio_values`, `portfolio_positions`, `security_snapshot`, or `security_history`). The dashboard subscribes to those events and patches tables without polling.
 - Diagnostics now include a `normalized_payload` entry that mirrors the serialized normalization result for the last metric run, making it easy to compare backend payloads with what the UI renders or what CLI tools fetch.
 
+### Normalized frontend adapter
+- The bundled dashboard consumes the canonical snapshots directly. `src/data/api.ts` deserializes the WebSocket responses into `NormalizedAccountSnapshot` / `NormalizedPortfolioSnapshot` records (see `src/lib/api/portfolio/`) and seeds the in-memory store implemented in `src/lib/store/portfolioStore.ts`. The store clones nested payloads and coerces optional fields so selectors always see the contract defined in `pp_reader_dom_reference.md`.
+- All views subscribe to selectors under `src/lib/store/selectors/portfolio.ts`, which compute overview cards, account badges, coverage/provenance chips, and security drilldown rows from the normalized store. This removes the legacy `window.__ppReader*` overrides: the UI renders the payload persisted by the backend, including `metric_run_uuid`, provenance, and coverage metadata for every table and badge.
+- Live updates arrive through `EVENT_PANELS_UPDATED`. `src/data/updateConfigsWS.ts` listens for the push payloads emitted by `custom_components/pp_reader/data/event_push.py`, applies the same deserializers, and merges the results back into the store (plus diagnostics via `DASHBOARD_DIAGNOSTICS_EVENT`). Because WebSocket push and the initial fetch share one adapter, overview, accounts, and per-security tabs stay in sync even after Home Assistant restarts or the dashboard reloads.
+
 ## Requirements
 - Home Assistant **2025.4.1** or newer when installed via HACS (matches the integration manifest).
 - Portfolio Performance Reader **0.14.0** or later.

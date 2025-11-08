@@ -5,6 +5,7 @@ Handles user configuration steps for setting up portfolio file and database path
 """
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -220,6 +221,37 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
             return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
         return val
 
+    def _current_feature_flag(self, name: str, *, default: bool = False) -> bool:
+        """Aktuellen Feature-Flag Wert liefern (oder Default)."""
+        flags = self._entry.options.get("feature_flags")
+        if isinstance(flags, Mapping):
+            value = flags.get(name)
+            if value is not None:
+                return bool(value)
+        return default
+
+    def _merge_feature_flags(self, overrides: Mapping[str, Any]) -> dict[str, bool]:
+        """Feature-Flag-Overrides mit bestehenden Optionen zusammenführen."""
+        merged: dict[str, bool] = {}
+        current = self._entry.options.get("feature_flags")
+        if isinstance(current, Mapping):
+            for key, value in current.items():
+                if not isinstance(key, str):
+                    continue
+                normalized = key.strip().lower()
+                if not normalized:
+                    continue
+                merged[normalized] = bool(value)
+
+        for key, value in overrides.items():
+            if not isinstance(key, str):
+                continue
+            normalized = key.strip().lower()
+            if not normalized:
+                continue
+            merged[normalized] = bool(value)
+        return merged
+
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Initialer Options-Schritt (Intervall + Debug)."""
         errors: dict[str, str] = {}
@@ -255,7 +287,16 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                 user_input.get("enable_price_debug", False)
             )
 
+            normalized_dashboard_adapter = bool(
+                user_input.pop("normalized_dashboard_adapter", False)
+            )
+
             if not errors:
+                user_input["feature_flags"] = self._merge_feature_flags(
+                    {
+                        "normalized_dashboard_adapter": normalized_dashboard_adapter,
+                    }
+                )
                 self._logger.debug("OptionsFlow: Speichere Optionen %s", user_input)
                 return self.async_create_entry(title="", data=user_input)
 
@@ -272,6 +313,10 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                 vol.Optional(
                     "enable_price_debug",
                     default=self._current_debug(),
+                ): bool,
+                vol.Optional(
+                    "normalized_dashboard_adapter",
+                    default=self._current_feature_flag("normalized_dashboard_adapter"),
                 ): bool,
             }
         )

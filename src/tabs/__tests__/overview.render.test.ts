@@ -329,3 +329,47 @@ void test(
       assert.ok(trendSpan, 'gain percentage cell should display positive trend styling');
     }),
 );
+
+void test(
+  'renderPortfolioPositions surfaces placeholders when performance metrics missing',
+  async () =>
+    withOverviewModule(module => {
+      const html = module.renderPortfolioPositions([
+        {
+          security_uuid: 'performance-missing',
+          name: 'No Metrics Corp',
+          current_holdings: 5,
+          purchase_value: 500,
+          current_value: 525,
+          aggregation: {
+            total_holdings: 5,
+            positive_holdings: 5,
+            purchase_value_cents: 50000,
+            purchase_value_eur: 500,
+            security_currency_total: 525,
+            account_currency_total: 500,
+            purchase_total_security: 525,
+            purchase_total_account: 500,
+          },
+          average_cost: null,
+          performance: null,
+        },
+      ]);
+
+      const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+      const row = dom.window.document.querySelector<HTMLTableRowElement>('tbody tr.position-row');
+      assert.ok(row, 'expected rendered placeholder row');
+
+      const gainAbsCell = row.querySelector<HTMLTableCellElement>('td.align-right[data-gain-pct]');
+      assert.ok(gainAbsCell, 'expected gain absolute cell');
+      const gainAbsText = gainAbsCell.textContent.trim();
+      assert.strictEqual(gainAbsText, '—');
+      assert.strictEqual(gainAbsCell.dataset.gainPct, '—');
+      assert.strictEqual(gainAbsCell.dataset.gainSign, 'neutral');
+
+      const gainPctCell = row.querySelector<HTMLTableCellElement>('td.gain-pct-cell');
+      assert.ok(gainPctCell, 'expected gain percentage cell');
+      const gainPctText = gainPctCell.textContent.trim();
+      assert.strictEqual(gainPctText, '—');
+    }),
+);

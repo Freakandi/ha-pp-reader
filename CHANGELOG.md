@@ -9,6 +9,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ### Added
 - Documented the persisted metrics engine, diagnostics surface, and CLI smoke test so operators and contributors can inspect `metric_runs` snapshots and replay the parser → enrichment → metrics pipeline outside Home Assistant.【F:README.md†L34-L120】【F:README-dev.md†L16-L120】【F:.docs/qa_docs_comms.md†L1-L72】
 
+### Changed
+- Finalized the normalized frontend adapter rollout: dashboard API helpers (`src/data/api.ts`), stores (`src/lib/store/portfolioStore.ts` / `src/lib/store/selectors/portfolio.ts`), and live update handlers (`src/data/updateConfigsWS.ts`) now exclusively consume the canonical `Normalized*Snapshot` payloads emitted by `custom_components/pp_reader/data/event_push.py`. There is no fallback path to the legacy DOM adapters, so any custom dashboard builds must be rebuilt (`npm run build`) or refreshed via HACS after upgrading. The canonical payload contract lives in `pp_reader_dom_reference.md`, ensuring websocket pushes and UI stores stay aligned.
+
 ### Removed
 - Dropped the temporary `custom_components/pp_reader/data/performance.py` shim in favour of importing helpers directly from `custom_components/pp_reader/metrics/common.py`, completing the metric-engine cleanup.
 - Retired the bespoke `_normalize_portfolio_row` payload builders, websocket patches, and coordinator-managed portfolio caches; Home Assistant now serves dashboard/events from cached `NormalizationResult` snapshots via `data/normalization_pipeline.py`, `data/websocket.py`, and `data/coordinator.py`.【F:custom_components/pp_reader/data/normalization_pipeline.py†L1-L220】【F:custom_components/pp_reader/data/websocket.py†L243-L318】【F:custom_components/pp_reader/data/coordinator.py†L766-L868】

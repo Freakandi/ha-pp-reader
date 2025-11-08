@@ -1,0 +1,23 @@
+{
+  "ingestion": {
+    "ingestion_accounts": 1,
+    "ingestion_portfolios": 1,
+    "ingestion_transactions": 2
+  },
+  "metrics": {
+    "records": {
+      "portfolio_metrics": 1,
+      "account_metrics": 1,
+      "position_metrics": 1
+    },
+    "status": "completed"
+  },
+  "normalization": {
+    "counts": {
+      "accounts": 1,
+      "portfolios": 1,
+      "positions": 1
+    },
+    "status": "ok"
+  }
+}

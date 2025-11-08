@@ -76,11 +76,17 @@ function createCell({ text = '', html = null } = {}) {
   return cell;
 }
 
+function createCellCollection() {
+  const cells = [];
+  cells.item = (index) => cells[index] ?? null;
+  return cells;
+}
+
 function createRow() {
   const row = {
     tagName: 'TR',
     dataset: {},
-    cells: [],
+    cells: createCellCollection(),
   };
   const classList = createClassList(row);
   row.classList = classList;
@@ -114,7 +120,7 @@ function createRow() {
         .join('');
     },
     set(value) {
-      row.cells = [];
+      row.cells = createCellCollection();
       const matches = (value || '').match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [];
       for (const match of matches) {
         const classMatch = match.match(/class="([^"]*)"/i);
@@ -135,7 +141,8 @@ function createRow() {
       return row.cells.map((cell) => cell.textContent).join('');
     },
     set(value) {
-      row.cells = [createCell({ text: value ?? '' })];
+      row.cells = createCellCollection();
+      row.cells.push(createCell({ text: value ?? '' }));
     },
   });
 
@@ -181,11 +188,13 @@ function createTBody() {
 }
 
 function createTable(tbody) {
+  const tBodies = [tbody];
   const table = {
     tagName: 'TABLE',
     dataset: {},
-    tBodies: [tbody],
+    tBodies,
   };
+  tBodies.item = (index) => tBodies[index] ?? null;
   const classList = createClassList(table);
   table.classList = classList;
 
@@ -432,11 +441,17 @@ const windowObj = {
   navigator: { language: 'de-DE' },
   Intl,
 };
+windowObj.dispatchEvent = () => true;
 
 global.window = windowObj;
 windowObj.window = windowObj;
 global.document = document;
-global.navigator = windowObj.navigator;
+Object.defineProperty(global, 'navigator', {
+  configurable: true,
+  enumerable: true,
+  value: windowObj.navigator,
+});
+global.dispatchEvent = windowObj.dispatchEvent;
 
 class CustomEventImpl {
   constructor(type, detail = {}) {
@@ -497,7 +512,31 @@ async function importDashboardBundle() {
   const bundleUrl = new URL(bundleSpecifier, pathToFileURL(moduleFile));
   return import(bundleUrl.href);
 }
-const moduleApi = await importDashboardBundle();
+let moduleApi = await importDashboardBundle();
+
+const ensureDashboardModuleExports = async () => {
+  const hasExports = Object.keys(moduleApi ?? {}).length > 0 || typeof moduleApi?.default === 'object';
+  if (hasExports) {
+    return;
+  }
+
+  try {
+    await import('tsx/esm');
+    const tsDashboardUrl = new URL('../../src/dashboard/index.ts', import.meta.url);
+    moduleApi = await import(tsDashboardUrl.href);
+  } catch (error) {
+    console.warn('dashboard_smoke: failed to load TypeScript fallback bundle', error);
+  }
+};
+
+await ensureDashboardModuleExports();
+
+const fixturesDir = path.resolve('tests/dashboard/fixtures');
+const normalizationFixturePath = path.join(fixturesDir, 'normalization_smoketest_snapshot.json');
+const diagnosticsFixturePath = path.join(fixturesDir, 'diagnostics_smoketest.json');
+const normalizationSnapshot = JSON.parse(await readFile(normalizationFixturePath, 'utf-8'));
+const diagnosticsSummary = JSON.parse(await readFile(diagnosticsFixturePath, 'utf-8'));
+
 const testHelpers = moduleApi.__TEST_ONLY__ ?? {};
 const getCacheSnapshot =
   typeof testHelpers.getPortfolioPositionsCacheSnapshot === 'function'
@@ -554,85 +593,62 @@ if (typeof updateFooter !== 'function' || typeof flushPending !== 'function') {
 
 const canProcessUpdates = typeof handlePortfolioPositionsUpdate === 'function';
 
-portfolioRow.dataset.portfolio = 'portfolio-1';
-portfolioRow.dataset.positionCount = '0';
-portfolioRow.dataset.currentValue = '0';
-portfolioRow.dataset.purchaseSum = '0';
-portfolioRow.dataset.gainAbs = '0';
-portfolioRow.dataset.gainPct = '0';
-portfolioRow.dataset.hasValue = 'true';
+const smoketestPortfolio = normalizationSnapshot.portfolios?.find(
+  (entry) => entry?.uuid === 'port-smoke',
+);
+if (!smoketestPortfolio) {
+  throw new Error('normalization fixture missing port-smoke snapshot');
+}
+
+const portfolioUuid = smoketestPortfolio.uuid;
+portfolioRow.dataset.portfolio = portfolioUuid;
+const toggleButton = portfolioRow.querySelector('.portfolio-toggle');
+if (toggleButton) {
+  toggleButton.dataset.portfolio = portfolioUuid;
+}
+detailsRow.dataset.portfolio = portfolioUuid;
 
 const gainCell = portfolioRow.cells[3];
-if (gainCell) {
-  gainCell.innerHTML = '<span class="positive">0,00\u00A0€</span>';
-}
-
 const valueCell = portfolioRow.cells[2];
-if (valueCell) {
-  valueCell.innerHTML = '<span class="positive">0,00\u00A0€</span>';
-}
 
 const updatePayload = {
-  position_count: 2,
-  current_value: 1500,
-  purchase_sum: 0,
+  position_count: smoketestPortfolio.position_count ?? 0,
+  current_value: smoketestPortfolio.current_value ?? 0,
+  purchase_sum: smoketestPortfolio.purchase_sum ?? smoketestPortfolio.purchase_value ?? 0,
+  gain_abs: smoketestPortfolio.performance?.gain_abs ?? 0,
+  gain_pct: smoketestPortfolio.performance?.gain_pct ?? 0,
 };
+
+const formatEuro = (value) =>
+  new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 
 portfolioRow.dataset.positionCount = String(updatePayload.position_count);
 portfolioRow.dataset.currentValue = String(updatePayload.current_value);
 portfolioRow.dataset.purchaseSum = String(updatePayload.purchase_sum);
-portfolioRow.dataset.gainAbs = String(updatePayload.current_value - updatePayload.purchase_sum);
-portfolioRow.dataset.gainPct = '0';
+portfolioRow.dataset.gainAbs = String(updatePayload.gain_abs);
+portfolioRow.dataset.gainPct = String(updatePayload.gain_pct);
 portfolioRow.dataset.hasValue = 'true';
+portfolioRow.dataset.fxUnavailable = smoketestPortfolio.coverage_ratio === 1 ? 'false' : 'true';
 if (gainCell) {
-  gainCell.innerHTML = `<span class="positive">${new Intl.NumberFormat('de-DE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(updatePayload.current_value - updatePayload.purchase_sum)}\u00A0€</span>`;
+  const gainClass = updatePayload.gain_abs >= 0 ? 'positive' : 'negative';
+  gainCell.innerHTML = `<span class="${gainClass}">${formatEuro(updatePayload.gain_abs)}\u00A0€</span>`;
 }
 if (valueCell) {
-  valueCell.innerHTML = `<span class="positive">${new Intl.NumberFormat('de-DE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(updatePayload.current_value)}\u00A0€</span>`;
+  valueCell.innerHTML = `<span class="positive">${formatEuro(updatePayload.current_value)}\u00A0€</span>`;
 }
 
 updateFooter(table);
 
-queuePendingUpdate('portfolio-1', [
-  {
-    security_uuid: 'sec-1',
-    name: 'Test Security',
-    current_holdings: 10,
-    purchase_value: 500,
-    current_value: 1500,
-    gain_abs: 1000,
-    aggregation: {
-      total_holdings: 10,
-      positive_holdings: 10,
-      purchase_value_cents: 50000,
-      purchase_value_eur: 500,
-      security_currency_total: 500,
-      account_currency_total: 500,
-      purchase_total_security: 500,
-      purchase_total_account: 500,
-    },
-    average_cost: {
-      native: null,
-      security: null,
-      account: null,
-      eur: null,
-      source: 'aggregation',
-      coverage_ratio: null,
-    },
-  },
-]);
+queuePendingUpdate(portfolioUuid, Array.isArray(smoketestPortfolio.positions) ? smoketestPortfolio.positions : []);
 
 const pendingSizeBefore = getPendingUpdateCount();
 const detailsLookup = document.querySelector(
-  '.portfolio-table .portfolio-details[data-portfolio="portfolio-1"]',
+  `.portfolio-table .portfolio-details[data-portfolio="${portfolioUuid}"]`,
 );
-const applied = flushPending(document, 'portfolio-1');
+const applied = flushPending(document, portfolioUuid);
 const pendingSizeAfter = getPendingUpdateCount();
 if (typeof reapplySort === 'function') {
   reapplySort(positionsContainer);
@@ -656,49 +672,10 @@ const summary = {
 };
 
 const normalizationPayload = {
-  portfolioUuid: 'portfolio-struct',
-  positions: [
-    {
-      security_uuid: 'sec-struct-1',
-      name: 'Struct Validation',
-      purchase_value: 3400,
-      current_value: 3650,
-      gain_abs: 250,
-      aggregation: {
-        total_holdings: '7',
-        positive_holdings: undefined,
-        purchase_value_cents: '340000',
-      purchase_value_eur: 3400,
-      security_currency_total: 3500.25,
-      account_currency_total: 3600.5,
-      purchase_total_security: undefined,
-      purchase_total_account: null,
-    },
-      average_cost: {
-        native: 'invalid',
-        security: 45.67,
-        account: null,
-        eur: 'NaN',
-        source: 'legacy',
-        coverage_ratio: '0.42',
-      },
-      performance: {
-        gain_abs: '900',
-        gain_pct: 12.3456,
-      },
-    },
-    {
-      security_uuid: 'sec-struct-2',
-      name: 'Missing Structures',
-      current_holdings: 5,
-      purchase_value: 800,
-      current_value: 950,
-      gain_abs: 150,
-      aggregation: null,
-      average_cost: null,
-      performance: null,
-    },
-  ],
+  portfolioUuid,
+  positions: Array.isArray(smoketestPortfolio.positions)
+    ? smoketestPortfolio.positions
+    : [],
 };
 
 if (canProcessUpdates) {
@@ -706,17 +683,29 @@ if (canProcessUpdates) {
 }
 
 const cacheSnapshot = getCacheSnapshot();
-const cachedPositions = cacheSnapshot.get('portfolio-struct');
+const cachedPositions = cacheSnapshot.get(portfolioUuid);
 if (!Array.isArray(cachedPositions) || cachedPositions.length === 0) {
-  throw new Error('expected cached positions for portfolio-struct');
+  throw new Error(`expected cached positions for ${portfolioUuid}`);
 }
 
 const normalizedPositions = cachedPositions.map((position) => ({
+  security_uuid: position?.security_uuid ?? null,
+  name: position?.name ?? null,
+  current_value: position?.current_value ?? null,
   aggregation: position?.aggregation ?? null,
   average_cost: position?.average_cost ?? null,
   performance: position?.performance ?? null,
+  coverage_ratio: position?.coverage_ratio ?? null,
+  provenance: position?.provenance ?? null,
+  metric_run_uuid: position?.metric_run_uuid ?? null,
 }));
 
 summary.normalizedPositions = normalizedPositions;
+summary.diagnostics = {
+  ingestionAccounts: diagnosticsSummary.ingestion?.ingestion_accounts ?? 0,
+  ingestionPortfolios: diagnosticsSummary.ingestion?.ingestion_portfolios ?? 0,
+  normalizationAccounts: diagnosticsSummary.normalization?.counts?.accounts ?? 0,
+  normalizationPositions: diagnosticsSummary.normalization?.counts?.positions ?? 0,
+};
 
 console.log(JSON.stringify(summary));

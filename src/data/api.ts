@@ -2,6 +2,20 @@
  * Home Assistant websocket API helpers carried over for TypeScript migration.
  */
 
+import {
+  deserializeAccountSnapshots,
+  deserializeNormalizedDashboardSnapshot,
+  deserializeNormalizedPayloadMetadata,
+  deserializePortfolioSnapshots,
+  deserializePositionSnapshots,
+} from "../lib/api/portfolio";
+import type {
+  NormalizedAccountSnapshot,
+  NormalizedDashboardSnapshot,
+  NormalizedPayloadMetadata,
+  NormalizedPortfolioSnapshot,
+  NormalizedPositionSnapshot,
+} from "../lib/api/portfolio";
 import type {
   AverageCostPayload,
   HoldingsAggregationPayload,
@@ -11,40 +25,100 @@ import type {
 } from "../tabs/types";
 import type { HomeAssistant } from "../types/home-assistant";
 
-export interface AccountSummary {
-  name?: string | null;
-  currency_code?: string | null;
-  orig_balance?: number | null;
-  balance?: number | null;
-  fx_unavailable?: boolean;
-  [key: string]: unknown;
+type UnknownRecord = Record<string, unknown>;
+
+function toStringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
-export interface PortfolioSummary {
-  uuid?: string | null;
-  name?: string | null;
-  current_value?: number | null;
-  purchase_sum?: number | null;
-  position_count?: number | null;
-  performance?: PerformanceMetricsPayload | null;
-  [key: string]: unknown;
+function toArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
+
+function toMetricRunUuid(value: unknown): string | null | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null) {
+    return null;
+  }
+  return undefined;
+}
+
+function toFiniteNumberOrUndefined(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+function mapPositionSnapshotToRecord(snapshot: NormalizedPositionSnapshot): PortfolioPosition {
+  const position: PortfolioPosition = {
+    security_uuid: snapshot.security_uuid,
+    name: snapshot.name,
+    current_holdings: snapshot.current_holdings,
+    purchase_value: snapshot.purchase_value,
+    current_value: snapshot.current_value,
+    average_cost: (snapshot.average_cost as AverageCostPayload | null | undefined) ?? null,
+    performance: (snapshot.performance as PerformanceMetricsPayload | null | undefined) ?? null,
+    aggregation: (snapshot.aggregation as HoldingsAggregationPayload | null | undefined) ?? null,
+  };
+
+  if (snapshot.currency_code !== undefined) {
+    position.currency_code = snapshot.currency_code;
+  }
+  if (snapshot.coverage_ratio != null) {
+    position.coverage_ratio = snapshot.coverage_ratio;
+  }
+  if (snapshot.provenance) {
+    position.provenance = snapshot.provenance;
+  }
+  if (snapshot.metric_run_uuid !== undefined) {
+    position.metric_run_uuid = snapshot.metric_run_uuid;
+  }
+  if (snapshot.last_price_native != null) {
+    position.last_price_native = snapshot.last_price_native;
+  }
+  if (snapshot.last_price_eur != null) {
+    position.last_price_eur = snapshot.last_price_eur;
+  }
+  if (snapshot.last_close_native != null) {
+    position.last_close_native = snapshot.last_close_native;
+  }
+  if (snapshot.last_close_eur != null) {
+    position.last_close_eur = snapshot.last_close_eur;
+  }
+  if (snapshot.data_state) {
+    position.data_state = snapshot.data_state;
+  }
+  if (snapshot.portfolio_uuid) {
+    position.portfolio_uuid = snapshot.portfolio_uuid;
+  }
+
+  return position;
+}
+
+export type AccountSummary = NormalizedAccountSnapshot;
+
+export type PortfolioSummary = NormalizedPortfolioSnapshot;
 
 export interface DashboardDataResponse {
   accounts: AccountSummary[];
   portfolios: PortfolioSummary[];
   last_file_update?: string | null;
   transactions: unknown[];
-  [key: string]: unknown;
+  normalized_payload?: NormalizedDashboardSnapshot | null;
 }
 
 export interface AccountsResponse {
   accounts: AccountSummary[];
+  normalized_payload?: NormalizedDashboardSnapshot | null;
   [key: string]: unknown;
 }
 
 export interface PortfoliosResponse {
   portfolios: PortfolioSummary[];
+  normalized_payload?: NormalizedDashboardSnapshot | null;
   [key: string]: unknown;
 }
 
@@ -54,6 +128,10 @@ export interface PortfolioPositionsResponse {
   portfolio_uuid: string;
   positions: PortfolioPosition[];
   error?: string;
+  metric_run_uuid?: string | null;
+  coverage_ratio?: number | null;
+  provenance?: string | null;
+  normalized_payload?: NormalizedPayloadMetadata | null;
   [key: string]: unknown;
 }
 
@@ -119,6 +197,62 @@ interface SecurityHistoryRequestPayload {
   [key: string]: string | number | null | undefined;
 }
 
+export interface PortfolioValuesUpdateEntry extends Partial<PortfolioSummary> {
+  uuid?: string | null;
+  value?: number | null;
+  purchaseSum?: number | null;
+  count?: number | null;
+  position_count?: number | null;
+  hasValue?: boolean | null;
+  [key: string]: unknown;
+}
+
+export interface PortfolioPositionsUpdatePayload {
+  portfolio_uuid?: string | null;
+  portfolioUuid?: string | null;
+  positions?: NormalizedPositionSnapshot[] | null;
+  error?: string | null;
+  normalized_payload?: NormalizedPayloadMetadata | null;
+  coverage_ratio?: number | null;
+  provenance?: string | null;
+  metric_run_uuid?: string | null;
+  [key: string]: unknown;
+}
+
+export const DASHBOARD_DATA_TYPES = [
+  "accounts",
+  "portfolio_values",
+  "portfolio_positions",
+  "security_snapshot",
+  "security_history",
+] as const;
+
+export type DashboardDataType = (typeof DASHBOARD_DATA_TYPES)[number];
+
+export interface DashboardPushPayloadMap {
+  accounts: AccountSummary[] | null | undefined;
+  portfolio_values: PortfolioValuesUpdateEntry[] | null | undefined;
+  portfolio_positions:
+    | PortfolioPositionsUpdatePayload
+    | PortfolioPositionsUpdatePayload[]
+    | null
+    | undefined;
+  security_snapshot: SecuritySnapshotResponse | null | undefined;
+  security_history: SecurityHistoryResponse | null | undefined;
+}
+
+export interface DashboardPushEnvelope<T extends DashboardDataType = DashboardDataType> {
+  entry_id?: string | null;
+  data_type: T;
+  data: DashboardPushPayloadMap[T];
+  synced_at?: string | null;
+  [key: string]: unknown;
+}
+
+export function isDashboardDataType(value: unknown): value is DashboardDataType {
+  return typeof value === "string" && (DASHBOARD_DATA_TYPES as readonly string[]).includes(value);
+}
+
 function deriveEntryId(
   hass: HomeAssistant | null | undefined,
   panelConfig: PanelConfigLike | null | undefined,
@@ -170,10 +304,24 @@ export async function fetchDashboardDataWS(
     throw new Error("fetchDashboardDataWS: fehlendes entry_id");
   }
 
-  return hass.connection.sendMessagePromise<DashboardDataResponse>({
+  const raw = await hass.connection.sendMessagePromise<UnknownRecord>({
     type: "pp_reader/get_dashboard_data",
     entry_id: entryId,
   });
+
+  const accounts = deserializeAccountSnapshots(raw.accounts);
+  const portfolios = deserializePortfolioSnapshots(raw.portfolios);
+  const lastFileUpdate = toStringOrNull(raw.last_file_update);
+  const transactions = toArray(raw.transactions);
+  const normalizedPayload = deserializeNormalizedDashboardSnapshot(raw.normalized_payload);
+
+  return {
+    accounts,
+    portfolios,
+    last_file_update: lastFileUpdate,
+    transactions,
+    normalized_payload: normalizedPayload,
+  };
 }
 
 // Accounts
@@ -190,10 +338,18 @@ export async function fetchAccountsWS(
     throw new Error("fetchAccountsWS: fehlendes entry_id");
   }
 
-  return hass.connection.sendMessagePromise<AccountsResponse>({
+  const raw = await hass.connection.sendMessagePromise<UnknownRecord>({
     type: "pp_reader/get_accounts",
     entry_id: entryId,
   });
+
+  const accounts = deserializeAccountSnapshots(raw.accounts);
+  const normalizedPayload = deserializeNormalizedDashboardSnapshot(raw.normalized_payload);
+
+  return {
+    accounts,
+    normalized_payload: normalizedPayload,
+  };
 }
 
 // Last file update
@@ -239,10 +395,18 @@ export async function fetchPortfoliosWS(
     throw new Error("fetchPortfoliosWS: fehlendes entry_id");
   }
 
-  return hass.connection.sendMessagePromise<PortfoliosResponse>({
+  const raw = await hass.connection.sendMessagePromise<UnknownRecord>({
     type: "pp_reader/get_portfolio_data",
     entry_id: entryId,
   });
+
+  const portfolios = deserializePortfolioSnapshots(raw.portfolios);
+  const normalizedPayload = deserializeNormalizedDashboardSnapshot(raw.normalized_payload);
+
+  return {
+    portfolios,
+    normalized_payload: normalizedPayload,
+  };
 }
 
 // Positions (lazy)
@@ -264,11 +428,42 @@ export async function fetchPortfolioPositionsWS(
     throw new Error("fetchPortfolioPositionsWS: fehlendes portfolio_uuid");
   }
 
-  return hass.connection.sendMessagePromise<PortfolioPositionsResponse>({
+  const raw = await hass.connection.sendMessagePromise<UnknownRecord>({
     type: "pp_reader/get_portfolio_positions",
     entry_id: entryId,
     portfolio_uuid: portfolioUuid,
   });
+
+  const normalizedPositions = deserializePositionSnapshots(raw.positions);
+  const positions = normalizedPositions.map(mapPositionSnapshotToRecord);
+
+  const normalizedPayloadMeta = deserializeNormalizedPayloadMetadata(raw.normalized_payload);
+
+  const response: PortfolioPositionsResponse = {
+    portfolio_uuid: toStringOrNull(raw.portfolio_uuid) ?? portfolioUuid,
+    positions,
+  };
+
+  if (typeof raw.error === "string") {
+    response.error = raw.error;
+  }
+  const coverageRatio = toFiniteNumberOrUndefined(raw.coverage_ratio);
+  if (coverageRatio !== undefined) {
+    response.coverage_ratio = coverageRatio;
+  }
+  const provenance = toStringOrNull(raw.provenance);
+  if (provenance) {
+    response.provenance = provenance;
+  }
+  const metricRunUuid = toMetricRunUuid(raw.metric_run_uuid);
+  if (metricRunUuid !== undefined) {
+    response.metric_run_uuid = metricRunUuid;
+  }
+  if (normalizedPayloadMeta) {
+    response.normalized_payload = normalizedPayloadMeta;
+  }
+
+  return response;
 }
 
 // Security snapshot for detail tab

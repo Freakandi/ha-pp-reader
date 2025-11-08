@@ -23,6 +23,18 @@ This concept document outlines how testing, documentation, and stakeholder commu
   - Track telemetry checkpoints per scenario, including dispatcher signals (`enrichment_fx_progress`, `enrichment_price_progress`) and diagnostics entries from `custom_components/pp_reader/util/diagnostics.py` so QA can assert matching timestamps, provenance tags, and pending queue counts.
   - Capture prerequisites and tooling hooks for each path (CLI replay commands, scheduler feature flags, database fixture seeds) to keep smoke and regression runs reproducible across contributors.
   - Map manual and automated coverage for the matrix into `.docs/live_aggregation/qa_runs.md`, noting gaps that require follow-up tests or observability enhancements.
+- **Frontend adapter rollout checklist.**
+  1. **Automated gates (run on every PR + release branch cut):**
+     - `npm run lint:ts`, `npm test` → ensures TypeScript contract suites plus dashboard-specific fixtures (`tests/dashboard/fixtures/`) stay aligned with backend payloads.
+     - `source .venv/bin/activate && pytest tests/frontend/test_dashboard_smoke.py` → validates bundled dashboard helpers against the normalization smoketest snapshot and diagnostics summary.
+     - Optional but recommended before main promotion: `pytest tests/integration/test_normalization_smoketest.py --maxfail=1` to refresh the canonical fixtures referenced by the frontend suites.
+  2. **Manual Home Assistant checks (owners: frontend + QA pairing):**
+     - Launch `./scripts/develop`, import a portfolio with the normalized adapter enabled, and record screenshots of the Overview, Accounts, and Security Detail tabs showing coverage/provenance badges.
+     - Use browser devtools to capture one websocket payload per `data_type` (`portfolio_values`, `portfolio_positions`, `security_snapshot`) and compare fields against `pp_reader_dom_reference.md`.
+     - Trigger the CLI smoketest (`python -m scripts.enrichment_smoketest --output fixtures`) and store the resulting normalized snapshot under `tests/dashboard/fixtures/` when discrepancies are found; document diffs in `.docs/live_aggregation/qa_runs.md`.
+  3. **Sign-off + communications:**
+     - Update `.docs/live_aggregation/qa_runs.md` with run ID, HA build, adapter version, and links to collected diagnostics.
+     - Post status in `.docs/communications/status_updates.md`, tagging the frontend adapter owners and noting whether the toggle can move to default-on.
 
 ## Documentation Plan
 - **Architecture refresh.** Update `README-dev.md`, `.docs/ARCHITECTURE.md`, and `.docs/live_aggregation/` notes with diagrams referencing the canonical pipeline, replacing legacy flow explanations.

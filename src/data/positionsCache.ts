@@ -7,14 +7,76 @@
  * consumers from mutating the shared state.
  */
 
-import type { PortfolioPosition } from '../tabs/types';
+import type { NormalizedPositionSnapshot } from '../lib/api/portfolio';
+import type {
+  AverageCostPayload,
+  HoldingsAggregationPayload,
+  PerformanceMetricsPayload,
+} from '../tabs/types';
+import { normalizeCurrencyValue, toFiniteCurrency } from '../utils/currency';
+import { normalizePerformancePayload } from '../utils/performance';
 
-export type PortfolioPositionRecord = PortfolioPosition & { [key: string]: unknown };
+type BasePositionSnapshot = Omit<
+  NormalizedPositionSnapshot,
+  'average_cost' | 'aggregation' | 'performance'
+>;
+
+export type PortfolioPositionRecord = BasePositionSnapshot & {
+  average_cost?: AverageCostPayload | null;
+  aggregation?: HoldingsAggregationPayload | null;
+  performance?: PerformanceMetricsPayload | null;
+  gain_abs?: number | null;
+  gain_pct?: number | null;
+  [key: string]: unknown;
+};
 
 const portfolioPositionsCache = new Map<string, PortfolioPositionRecord[]>();
 
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (value === null) {
+    return null;
+  }
+  const numeric = toFiniteCurrency(value);
+  return Number.isFinite(numeric ?? NaN) ? (numeric as number) : null;
+}
+
+function isPortfolioPositionRecord(value: unknown): value is PortfolioPositionRecord {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.security_uuid === 'string' &&
+    typeof record.name === 'string' &&
+    typeof record.current_holdings === 'number' &&
+    typeof record.purchase_value === 'number' &&
+    typeof record.current_value === 'number'
+  );
+}
+
 function clonePosition(position: PortfolioPositionRecord): PortfolioPositionRecord {
-  return { ...position };
+  const clone: PortfolioPositionRecord = { ...position };
+  if (position.average_cost && typeof position.average_cost === 'object') {
+    clone.average_cost = { ...position.average_cost };
+  }
+  if (position.performance && typeof position.performance === 'object') {
+    clone.performance = { ...position.performance };
+  }
+  if (position.aggregation && typeof position.aggregation === 'object') {
+    clone.aggregation = { ...position.aggregation };
+  }
+  if (position.data_state && typeof position.data_state === 'object') {
+    clone.data_state = { ...position.data_state };
+  }
+  return clone;
 }
 
 export function setPortfolioPositions(
@@ -74,4 +136,208 @@ export function getPortfolioPositionsSnapshot(): ReadonlyMap<string, PortfolioPo
       positions.map(clonePosition),
     ]),
   );
+}
+
+export function normalizeAverageCostPayload(value: unknown): AverageCostPayload | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const native = toNullableNumber(record.native);
+  const security = toNullableNumber(record.security);
+  const account = toNullableNumber(record.account);
+  const eur = toNullableNumber(record.eur);
+  const coverageRatio = toNullableNumber(record.coverage_ratio);
+
+  if (
+    native == null &&
+    security == null &&
+    account == null &&
+    eur == null &&
+    coverageRatio == null
+  ) {
+    return null;
+  }
+
+  const source = toNonEmptyString(record.source);
+  const normalizedSource: AverageCostPayload['source'] =
+    source === 'totals' || source === 'eur_total' ? source : 'aggregation';
+
+  return {
+    native,
+    security,
+    account,
+    eur,
+    source: normalizedSource,
+    coverage_ratio: coverageRatio,
+  };
+}
+
+export function normalizeAggregationPayload(
+  value: unknown,
+): HoldingsAggregationPayload | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+
+  const totalHoldings = toNullableNumber(record.total_holdings);
+  const positiveHoldings = toNullableNumber(record.positive_holdings);
+  const purchaseValueEur = toNullableNumber(record.purchase_value_eur);
+  const securityTotal =
+    toNullableNumber(record.purchase_total_security) ??
+    toNullableNumber(record.security_currency_total);
+  const accountTotal =
+    toNullableNumber(record.purchase_total_account) ??
+    toNullableNumber(record.account_currency_total);
+
+  let purchaseValueCents = 0;
+  if (typeof record.purchase_value_cents === 'number') {
+    purchaseValueCents = Number.isFinite(record.purchase_value_cents)
+      ? Math.trunc(record.purchase_value_cents)
+      : 0;
+  } else if (typeof record.purchase_value_cents === 'string') {
+    const parsed = Number.parseInt(record.purchase_value_cents, 10);
+    if (Number.isFinite(parsed)) {
+      purchaseValueCents = parsed;
+    }
+  }
+
+  const hasValues =
+    totalHoldings != null ||
+    positiveHoldings != null ||
+    purchaseValueEur != null ||
+    securityTotal != null ||
+    accountTotal != null ||
+    purchaseValueCents !== 0;
+
+  if (!hasValues) {
+    return null;
+  }
+
+  return {
+    total_holdings: totalHoldings ?? 0,
+    positive_holdings: positiveHoldings ?? 0,
+    purchase_value_cents: purchaseValueCents,
+    purchase_value_eur: purchaseValueEur ?? 0,
+    security_currency_total: securityTotal ?? 0,
+    account_currency_total: accountTotal ?? 0,
+    purchase_total_security: securityTotal ?? 0,
+    purchase_total_account: accountTotal ?? 0,
+  };
+}
+
+export function normalizePositionRecord(value: unknown): PortfolioPositionRecord | null {
+  if (isPortfolioPositionRecord(value)) {
+    return clonePosition(value);
+  }
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const securityUuid = toNonEmptyString(record.security_uuid);
+  const name = toNonEmptyString(record.name);
+  const currentHoldings = toFiniteCurrency(record.current_holdings);
+  const purchaseValue = normalizeCurrencyValue(record.purchase_value);
+  const currentValue = normalizeCurrencyValue(record.current_value);
+
+  if (
+    !securityUuid ||
+    !name ||
+    currentHoldings == null ||
+    purchaseValue == null ||
+    currentValue == null
+  ) {
+    return null;
+  }
+
+  const normalized: PortfolioPositionRecord = {
+    security_uuid: securityUuid,
+    name,
+    portfolio_uuid:
+      toNonEmptyString(record.portfolio_uuid) ?? toNonEmptyString(record.portfolioUuid) ?? undefined,
+    currency_code: toNonEmptyString(record.currency_code),
+    current_holdings: currentHoldings,
+    purchase_value: purchaseValue,
+    current_value: currentValue,
+  };
+
+  const averageCost = normalizeAverageCostPayload(record.average_cost);
+  if (averageCost) {
+    normalized.average_cost = averageCost;
+  }
+  const aggregation = normalizeAggregationPayload(record.aggregation);
+  if (aggregation) {
+    normalized.aggregation = aggregation;
+  }
+  const performance = normalizePerformancePayload(record.performance);
+  if (performance) {
+    normalized.performance = performance;
+    normalized.gain_abs =
+      typeof performance.gain_abs === 'number' ? performance.gain_abs : null;
+    normalized.gain_pct =
+      typeof performance.gain_pct === 'number' ? performance.gain_pct : null;
+  } else {
+    const gainAbs = toNullableNumber(record.gain_abs);
+    const gainPct = toNullableNumber(record.gain_pct);
+    if (gainAbs !== null) {
+      normalized.gain_abs = gainAbs;
+    }
+    if (gainPct !== null) {
+      normalized.gain_pct = gainPct;
+    }
+  }
+
+  if ('coverage_ratio' in record) {
+    normalized.coverage_ratio = toNullableNumber(record.coverage_ratio);
+  }
+  const provenance = toNonEmptyString(record.provenance);
+  if (provenance) {
+    normalized.provenance = provenance;
+  }
+  const metricRunUuid = toNonEmptyString(record.metric_run_uuid);
+  if (metricRunUuid || record.metric_run_uuid === null) {
+    normalized.metric_run_uuid = metricRunUuid ?? null;
+  }
+
+  const lastPriceNative = toNullableNumber(record.last_price_native);
+  if (lastPriceNative !== null) {
+    normalized.last_price_native = lastPriceNative;
+  }
+  const lastPriceEur = toNullableNumber(record.last_price_eur);
+  if (lastPriceEur !== null) {
+    normalized.last_price_eur = lastPriceEur;
+  }
+  const lastCloseNative = toNullableNumber(record.last_close_native);
+  if (lastCloseNative !== null) {
+    normalized.last_close_native = lastCloseNative;
+  }
+  const lastCloseEur = toNullableNumber(record.last_close_eur);
+  if (lastCloseEur !== null) {
+    normalized.last_close_eur = lastCloseEur;
+  }
+
+  const dataState =
+    record.data_state && typeof record.data_state === 'object'
+      ? { ...(record.data_state as Record<string, unknown>) }
+      : undefined;
+  if (dataState) {
+    normalized.data_state = dataState;
+  }
+
+  return normalized;
+}
+
+export function normalizePositionRecords(positions: unknown): PortfolioPositionRecord[] {
+  if (!Array.isArray(positions)) {
+    return [];
+  }
+  const normalized: PortfolioPositionRecord[] = [];
+  for (const entry of positions) {
+    const record = normalizePositionRecord(entry);
+    if (record) {
+      normalized.push(record);
+    }
+  }
+  return normalized;
 }

@@ -18,6 +18,7 @@ _DEFAULT_FLAGS: dict[str, bool] = {
     "enrichment_history_jobs": True,
     "metrics_pipeline": False,
     "normalized_pipeline": False,
+    "normalized_dashboard_adapter": False,
 }
 
 

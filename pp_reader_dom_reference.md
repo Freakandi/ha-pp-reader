@@ -2,6 +2,77 @@
 
 ![Portfolio Dashboard overview](browser:/invocations/uwqyprkg/artifacts/artifacts/ppreader.png)
 
+## 0. Normalized Dashboard Payload Contract
+
+The dashboard UI renders a single canonical payload produced by `NormalizationResult` and serialized via `custom_components.pp_reader.data.normalization_pipeline.serialize_normalization_result`. The shape below mirrors the backend source-of-truth in `datamodel/backend-datamodel-final.md` so contributors can wire adapters without reverse-engineering websocket traffic.
+
+### 0.1 Snapshot wrapper
+
+| Field | Format | Notes |
+| --- | --- | --- |
+| `generated_at` | ISO 8601 datetime | Timestamp captured when the normalization snapshot is assembled. |
+| `metric_run_uuid` | string (UUID or `null`) | Links every snapshot to the metric batch it was derived from to keep stores and diagnostics in sync with backend calculations. |
+| `accounts[]` | array of `AccountSnapshot` | Pre-sorted account list containing both EUR and FX accounts; identical to `AccountSnapshot` rows loaded from SQLite metrics. |
+| `portfolios[]` | array of `PortfolioSnapshot` | Aggregated portfolio list (optionally with embedded positions) that replaces all bespoke frontend adapters. |
+| `diagnostics` | object (optional) | Frontend-visible diagnostics bag, currently populated by `get_missing_fx_diagnostics()` to surface FX gaps. |
+
+### 0.2 Account snapshot
+
+| Field | Format | Notes |
+| --- | --- | --- |
+| `uuid` | string (UUID) | Primary key shared with the backend `accounts` table. |
+| `name` | string | Display label rendered verbatim in the liquidity table. |
+| `currency_code` | string (ISO 4217) | Original account currency (uppercased). |
+| `orig_balance` | number (account currency) | Native balance, rounded to backend precision. |
+| `balance` | number or `null` (EUR) | EUR translation when an FX rate exists; `null` indicates missing coverage. |
+| `fx_rate` / `fx_rate_source` | number / enum (optional) | FX rate applied plus the source identifier (Frankfurter, Yahoo, etc.). |
+| `fx_rate_timestamp` | ISO 8601 datetime (optional) | When the applied FX quote was captured. |
+| `coverage_ratio` | number 0–1 (optional) | Share of required FX inputs present when computing the EUR balance. |
+| `provenance` | string (optional) | Free-form provenance marker from the metrics pipeline. |
+| `fx_unavailable` | boolean (optional) | Explicit flag when the backend could not provide an EUR balance for a non-EUR account. |
+
+### 0.3 Portfolio snapshot
+
+| Field | Format | Notes |
+| --- | --- | --- |
+| `uuid` / `name` | string | Identity and display label used by the overview table. |
+| `current_value` | number (EUR) | Canonical EUR market value already aggregated by the backend. |
+| `purchase_value` | number (EUR) | Total EUR purchase cost backing the gain calculation. |
+| `position_count` | integer | Persisted count of active holdings. |
+| `missing_value_positions` | integer | Number of holdings lacking current values; drives warning chips. |
+| `has_current_value` | boolean | Legacy helper retained until legacy adapters are removed. |
+| `performance` | object | Mirrors `metrics/common.compose_performance_payload` (`total.gain_eur`, `total.gain_pct`, `day_change.value_native`, `coverage_ratio`, etc.). |
+| `coverage_ratio` / `provenance` | number / string (optional) | Metric coverage share and provenance tag, bubbled up from the metric records. |
+| `metric_run_uuid` | string (UUID, optional) | Per-portfolio pointer to the metric batch in case multiple runs coexist. |
+| `data_state` | object `{status, message?}` (optional) | Emitted when the backend detected portfolio-specific errors. |
+| `positions[]` | array of `PositionSnapshot` (optional) | Present when the snapshot was requested with `include_positions=True`; see section 0.4. |
+
+### 0.4 Position snapshot
+
+| Field | Format | Notes |
+| --- | --- | --- |
+| `portfolio_uuid` / `security_uuid` | string (UUID) | Identify the owning portfolio and the security row; both come directly from the Portfolio Performance file. |
+| `name` | string | Security label used in the expandable positions table. |
+| `currency_code` | string (ISO 4217) | Trading currency badge shown in the UI. |
+| `current_holdings` | number | Persisted quantity with the backend’s fractional precision. |
+| `purchase_value` / `current_value` | number (EUR) | EUR purchase and market totals driving gain/coverage calculations. |
+| `average_cost` | object | Backend-computed structure with `primary` (`value`, `currency`) and optional `secondary` EUR conversions. |
+| `performance` | object | Same schema as the portfolio performance block (gain EUR/%, day change, coverage). |
+| `aggregation` | object | Backend-side helper that exposes aggregation choices (e.g., FIFO lots) for tooltips. |
+| `coverage_ratio` / `provenance` / `metric_run_uuid` | number / string / string (optional) | Optional metadata per holding, mirroring the metric rows that fed the payload. |
+| `data_state` | object `{status, message?}` (optional) | Declares backend errors for the specific position. |
+
+### 0.5 Diagnostics payload
+
+`NormalizationResult.diagnostics` currently exposes the FX health snapshot from `get_missing_fx_diagnostics()` so the frontend can render banners or developer overlays:
+
+| Field | Format | Notes |
+| --- | --- | --- |
+| `rate_lookup_failures[]` | array of `{currency, date, occurrences}` | List of FX pairs/dates that failed during the last metric run. |
+| `native_amount_missing[]` | array of `{portfolio_uuid, security_uuid, occurrences}` | Positions where native purchase totals could not be derived, signalling incomplete gain calculations. |
+
+When new diagnostic groups are added to the backend they must be documented here and in `datamodel/backend-datamodel-final.md` before adapters rely on them.
+
 ## 1. Host Integration inside Home Assistant
 - The custom panel is rendered inside Home Assistant's main drawer layout. The shadow DOM of `pp-reader-panel` is mounted under `home-assistant-main`, allowing the panel to dispatch `hass-toggle-menu` events to open or close the sidebar when the custom menu button is pressed.【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L9-L200】
 - The panel shadow imports the dashboard controller bundle and injects the wrapper markup (`.panel-root`, fixed header, scrollable wrapper, and the `<pp-reader-dashboard>` host element) that the rest of the UI relies on.【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L141-L195】
@@ -60,7 +131,7 @@
 
 ## 9. Edge Cases and Observed States
 - When fetches fail, `.positions-container` renders an error block with a retry button; the same container shows `Lade…`/`Neu laden…` placeholders while awaiting network responses.【F:src/tabs/overview.ts†L660-L760】
-- Pending WebSocket updates for collapsed portfolios are cached in `window.__ppReaderPendingPositions` and replayed once the row expands, preventing stale data when the dashboard receives background updates.【F:src/data/updateConfigsWS.ts†L40-L220】
+- Pending WebSocket updates for collapsed portfolios are cached in the module-scoped `pendingPortfolioUpdates` map and replayed once the row expands, preventing stale data when the dashboard receives background updates without relying on window globals.【F:src/data/updateConfigsWS.ts†L40-L220】
 - Footer totals rely on dataset values added to each portfolio row, allowing `updatePortfolioFooterFromDom` to recalculate sums even after manual DOM edits or partial live updates.【F:src/tabs/overview.ts†L360-L440】
 
 This reference should equip future contributors with a reliable map of the Portfolio Performance Reader panel's DOM, the components that manage it, and the data flows that keep it up to date.

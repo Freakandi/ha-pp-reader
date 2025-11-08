@@ -24,14 +24,12 @@ def test_dashboard_bundle_smoke() -> None:
 
     payload = json.loads(lines[-1])
 
-    assert payload["footerGain"] == "1.500,00\u00a0€"
+    assert payload["footerGain"] == "50,00\u00a0€"
     assert "positive" in payload["footerGainHtml"], (
         "footer gain markup should signal positive gains"
     )
-    assert payload["footerGainPct"] in ("", "0,00 %", "—"), (
-        "zero purchase should yield neutral gain pct"
-    )
-    assert payload["footerGainSign"] in ("", "positive", "neutral")
+    assert payload["footerGainPct"] == "10,00 %"
+    assert payload["footerGainSign"] == "positive"
     assert payload["flushApplied"] is True
     assert payload["positionsMarkupIncludesTable"] is True
     assert payload["positionsMarkupLength"] > 0
@@ -42,22 +40,19 @@ def test_dashboard_bundle_smoke() -> None:
 
     normalized_positions = payload["normalizedPositions"]
     assert isinstance(normalized_positions, list)
-    assert len(normalized_positions) >= 2
+    assert len(normalized_positions) == 1
 
     first_normalized = normalized_positions[0]
-    assert first_normalized["aggregation"]["total_holdings"] == 0
-    assert first_normalized["aggregation"]["purchase_value_eur"] == 3400
-    assert first_normalized["aggregation"]["purchase_total_security"] == 3500.25
-    assert "avg_price_account" not in first_normalized["aggregation"]
-    assert "avg_price_security" not in first_normalized["aggregation"]
-    assert first_normalized["average_cost"]["native"] is None
-    assert first_normalized["average_cost"]["security"] == 45.67
-    assert first_normalized["average_cost"]["eur"] is None
-    assert first_normalized["average_cost"]["source"] == "aggregation"
-    assert first_normalized["average_cost"]["coverage_ratio"] is None
-    assert first_normalized["performance"] is None
+    assert first_normalized["security_uuid"] == "sec-smoke"
+    assert first_normalized["aggregation"]["total_holdings"] == 5
+    assert first_normalized["aggregation"]["purchase_value_eur"] == 500
+    assert first_normalized["average_cost"]["security"] == 100
+    assert first_normalized["performance"]["gain_pct"] == 10
+    assert first_normalized["coverage_ratio"] == 1
+    assert first_normalized["metric_run_uuid"] == "run-normalization-smoke"
+    assert first_normalized["provenance"] == "snapshot"
 
-    second_normalized = normalized_positions[1]
-    assert second_normalized["aggregation"] is None
-    assert second_normalized["average_cost"] is None
-    assert second_normalized["performance"] is None
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["ingestionAccounts"] == 1
+    assert diagnostics["ingestionPortfolios"] == 1
+    assert diagnostics["normalizationPositions"] == 1

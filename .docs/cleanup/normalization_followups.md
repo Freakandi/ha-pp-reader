@@ -16,6 +16,19 @@ Both documents stay available under `./.docs/cleanup/live_aggregation/` for audi
 - Emit the normalization metadata (coverage/provenance, `metric_run_uuid`) through the frontend stores and document the adapter flow in `pp_reader_dom_reference.md`.
 - Update the dashboard tests (`tests/dashboard`, `tests/frontend`) to assert the normalized payload mirrors `tests/integration/test_normalization_smoketest.py` fixtures.
 
+#### Entry point & rollout guardrails
+1. Enable the `normalized_dashboard_adapter` feature flag per config entry via **Settings → Devices & Services → Portfolio Performance Reader → Configure** (Options flow stores the override in `config_entry.options["feature_flags"]`). Keep the flag off in stable deployments until all tabs consume the normalized stores.
+2. Backend gate: wire adapter code paths through `feature_flags.is_enabled("normalized_dashboard_adapter", hass, entry_id=...)` so the new selectors activate only when the flag is on. Avoid changing coordinator payload keys—frontend logic must branch locally.
+3. Frontend gate: derive store observers from the same `featureFlags` snapshot exposed by `src/data/api.ts` so tabs can toggle between legacy adapters and normalized selectors without reloading.
+
+#### Validation checklist
+- ☑ Feature flag flips without requiring a Home Assistant restart (options update + reload entry).  
+- ☑ Initial dashboard load pulls normalized payloads when the flag is on (verify via browser devtools: `pp_reader/get_dashboard_data` response includes `metric_run_uuid`, `provenance`, `coverage_ratio`).  
+- ☑ Live websocket pushes (`accounts`, `portfolio_values`, `portfolio_positions`, `security_snapshot`, `security_history`) continue to render both when the flag is on and off.  
+- ☑ Overview, Accounts, and Security Detail tabs show identical EUR totals and coverage/provenance badges to `tests/integration/test_normalization_smoketest.py` fixtures.  
+- ☑ Diagnostics download (`Settings → Devices & Services → … → Download diagnostics`) includes the `normalized_payload` bundle and matches the dashboard view under the same flag state.  
+- ☑ `npm run lint:ts`, `npm run typecheck`, `npm test`, and `pytest --maxfail=1 -q` stay green with the flag toggled on to catch wiring gaps before rollout.
+
 ### 2. Sensor and diagnostics alignment
 - Retire `_normalize_portfolio_row` and related helpers in `custom_components/pp_reader/data/db_access.py` once sensors (`custom_components/pp_reader/sensors/*.py`) and diagnostics (`custom_components/pp_reader/util/diagnostics.py`) hydrate directly from serialized `PortfolioSnapshot` / `AccountSnapshot` rows.
 - Expand the cleanup tracker entry in `.docs/legacy_cleanup_strategy.md` once the sensor adapter lands, and extend `tests/test_db_access.py` plus sensor regression suites to cover the new source of truth.

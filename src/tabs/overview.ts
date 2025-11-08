@@ -21,54 +21,29 @@ import { registerOverviewHelpers } from '../dashboard/registry';
 import {
   getPortfolioPositions,
   hasPortfolioPositions,
+  normalizePositionRecords,
   setPortfolioPositions,
 } from '../data/positionsCache';
 import type { PortfolioPositionRecord } from '../data/positionsCache';
 import type { HomeAssistant } from '../types/home-assistant';
 import type {
-  AverageCostPayload,
-  HoldingsAggregationPayload,
   PanelConfigLike,
-  PerformanceMetricsPayload,
 } from './types';
-import { normalizeCurrencyValue, toFiniteCurrency } from '../utils/currency';
+import { toFiniteCurrency } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
+import {
+  replacePortfolioSnapshots,
+  setAccountSnapshots,
+  setPortfolioPositionsSnapshot,
+} from '../lib/store/portfolioStore';
+import {
+  selectAccountOverviewRows,
+  selectPortfolioOverviewRows,
+  type AccountOverviewRow,
+  type PortfolioOverviewRow,
+} from '../lib/store/selectors/portfolio';
+import { escapeHtml, renderBadgeList, renderNameWithBadges } from '../lib/ui/badges';
 
-interface PortfolioPositionLike {
-  security_uuid?: unknown;
-  name?: unknown;
-  current_holdings?: unknown;
-  purchase_value?: unknown;
-  current_value?: unknown;
-  gain_abs?: unknown;
-  gain_pct?: unknown;
-  average_cost?: unknown;
-  performance?: unknown;
-  aggregation?: unknown;
-  [key: string]: unknown;
-}
-
-interface PortfolioOverviewDepot {
-  uuid: string;
-  name: string;
-  position_count: number;
-  current_value: number | null;
-  purchase_sum: number;
-  gain_abs: number | null;
-  gain_pct: number | null;
-  hasValue: boolean;
-  fx_unavailable: boolean;
-  missing_value_positions: number;
-  performance: PerformanceMetricsPayload | null;
-}
-
-interface NormalizedAccountRow {
-  name: string;
-  balance: number | null;
-  currency_code: string | null;
-  orig_balance: number | null;
-  fx_unavailable: boolean;
-}
 
 type PortfolioQueryRoot = Document | HTMLElement;
 
@@ -153,85 +128,17 @@ function normalizeCurrencyCode(value: unknown): string | null {
 }
 
 function resolveCurrencyFromPosition(
-  position: PortfolioPositionLike,
+  position: Record<string, unknown>,
   keys: readonly string[],
   fallback: string | null = null,
 ): string | null {
-  const record = position as Record<string, unknown>;
   for (const key of keys) {
-    const candidate = normalizeCurrencyCode(record[key]);
+    const candidate = normalizeCurrencyCode(position[key]);
     if (candidate) {
       return candidate;
     }
   }
   return fallback;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function hasAverageCostShape(value: Record<string, unknown>): boolean {
-  return (
-    ('native' in value && (typeof value.native === 'number' || value.native === null)) &&
-    ('security' in value && (typeof value.security === 'number' || value.security === null)) &&
-    ('account' in value && (typeof value.account === 'number' || value.account === null)) &&
-    ('eur' in value && (typeof value.eur === 'number' || value.eur === null)) &&
-    typeof value.source === 'string'
-  );
-}
-
-function toAverageCostPayload(value: unknown): AverageCostPayload | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  return hasAverageCostShape(value) ? (value as unknown as AverageCostPayload) : null;
-}
-
-function hasHoldingsAggregationShape(value: Record<string, unknown>): boolean {
-  return (
-    typeof value.total_holdings === 'number' &&
-    typeof value.positive_holdings === 'number' &&
-    typeof value.purchase_value_cents === 'number' &&
-    typeof value.purchase_value_eur === 'number' &&
-    typeof value.security_currency_total === 'number' &&
-    typeof value.account_currency_total === 'number' &&
-    typeof value.purchase_total_security === 'number' &&
-    typeof value.purchase_total_account === 'number'
-  );
-}
-
-function toHoldingsAggregationPayload(value: unknown): HoldingsAggregationPayload | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  return hasHoldingsAggregationShape(value)
-    ? (value as unknown as HoldingsAggregationPayload)
-    : null;
-}
-
-function sanitizePosition(position: PortfolioPositionLike): PortfolioPositionLike {
-  const record = position as Record<string, unknown>;
-
-  const averageCost = toAverageCostPayload(position.average_cost);
-
-  const aggregation = toHoldingsAggregationPayload(position.aggregation);
-
-  const performance = normalizePerformancePayload(record['performance']);
-  const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-  const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
-
-  return {
-    ...position,
-    current_holdings: toNullableNumber(record['current_holdings']),
-    purchase_value: normalizeCurrencyValue(record['purchase_value']),
-    current_value: normalizeCurrencyValue(record['current_value']),
-    gain_abs: gainAbs,
-    gain_pct: gainPct,
-    average_cost: averageCost,
-    aggregation,
-    performance,
-  };
 }
 
 function formatPriceWithCurrency(
@@ -250,25 +157,26 @@ function formatPriceWithCurrency(
 }
 
 function buildPurchasePriceDisplay(
-  position: PortfolioPositionLike,
+  position: PortfolioPositionRecord,
 ): { markup: string; sortValue: number; ariaLabel: string } {
-  const averageCost = toAverageCostPayload(position.average_cost);
-  const aggregation = toHoldingsAggregationPayload(position.aggregation);
+  const record = position as Record<string, unknown>;
+  const averageCost = position.average_cost ?? null;
+  const aggregation = position.aggregation ?? null;
 
-  const securityCurrency = resolveCurrencyFromPosition(position, [
+  const securityCurrency = resolveCurrencyFromPosition(record, [
     'security_currency_code',
     'security_currency',
     'native_currency_code',
     'native_currency',
-  ]);
+  ], position.currency_code ?? null);
 
   const accountCurrency =
-    resolveCurrencyFromPosition(position, [
+    resolveCurrencyFromPosition(record, [
       'account_currency_code',
       'account_currency',
       'purchase_currency_code',
       'currency_code',
-    ]) ?? (securityCurrency === 'EUR' ? 'EUR' : null) ?? 'EUR';
+    ], securityCurrency === 'EUR' ? 'EUR' : null) ?? (securityCurrency === 'EUR' ? 'EUR' : null) ?? 'EUR';
 
   const averageNative = toNullableNumber(averageCost?.native);
   const averageSecurity = toNullableNumber(averageCost?.security);
@@ -370,11 +278,10 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
     });
   }
 
-  function renderPositionsTable(positions: readonly PortfolioPositionLike[]): string {
-    if (positions.length === 0) {
-      return '<div class="no-positions">Keine Positionen vorhanden.</div>';
-    }
-  const sanitizedPositions = positions.map(sanitizePosition);
+function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): string {
+  if (positions.length === 0) {
+    return '<div class="no-positions">Keine Positionen vorhanden.</div>';
+  }
   // Mapping für makeTable
   const cols = [
     { key: 'name', label: 'Wertpapier' },
@@ -384,13 +291,13 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
     { key: 'gain_abs', label: '+/-', align: 'right' as const },
     { key: 'gain_pct', label: '%', align: 'right' as const }
   ];
-    const rows = sanitizedPositions.map(p => {
-      const performance = normalizePerformancePayload((p as Record<string, unknown>)['performance']);
-      const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-      const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+  const rows = positions.map((p) => {
+    const performance = normalizePerformancePayload(p.performance);
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
 
-      return {
-        name:
+    return {
+      name:
           typeof p.name === 'string'
             ? p.name
             : typeof p.name === 'number'
@@ -432,19 +339,19 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
           th.setAttribute('data-sort-key', col.key);
           th.classList.add('sortable-col');
         });
-        const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
-        bodyRows.forEach((tr, idx) => {
-          if (tr.classList.contains('footer-row')) {
-            return;
-          }
-          if (idx >= sanitizedPositions.length) {
-            return;
-          }
-          const pos = sanitizedPositions[idx];
-        const securityUuid = typeof pos.security_uuid === 'string' ? pos.security_uuid : null;
-        if (securityUuid) {
-          tr.dataset.security = securityUuid;
-        }
+    const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
+    bodyRows.forEach((tr, idx) => {
+      if (tr.classList.contains('footer-row')) {
+        return;
+      }
+      if (idx >= positions.length) {
+        return;
+      }
+      const pos = positions[idx];
+      const securityUuid = typeof pos.security_uuid === 'string' ? pos.security_uuid : null;
+      if (securityUuid) {
+        tr.dataset.security = securityUuid;
+      }
           tr.classList.add('position-row');
           const purchaseCell = tr.cells.item(2);
         if (purchaseCell) {
@@ -459,7 +366,7 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
         }
           const gainCell = tr.cells.item(4);
         if (gainCell) {
-          const performance = normalizePerformancePayload((pos as Record<string, unknown>)['performance']);
+          const performance = normalizePerformancePayload(pos.performance);
           const gainPctValue =
             typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
               ? performance.gain_pct
@@ -501,8 +408,11 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
 }
 
 // NEU: Export / Global bereitstellen für Push-Handler (Konsistenz Push vs Lazy)
-export function renderPortfolioPositions(positions: readonly PortfolioPositionLike[]): string {
-  return renderPositionsTable(positions);
+export function renderPortfolioPositions(
+  positions: readonly (PortfolioPositionRecord | Record<string, unknown>)[] | null | undefined,
+): string {
+  const normalized = normalizePositionRecords(positions ?? []);
+  return renderPositionsTable(normalized);
 }
 
 function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid: string): void {
@@ -554,7 +464,7 @@ export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolio
 }
 
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
-function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]): string {
+function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]): string {
   console.debug('buildExpandablePortfolioTable: render', depots.length, 'portfolios');
     const escapeAttribute = (value: unknown): string => {
       if (value == null) {
@@ -591,8 +501,18 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
           : null;
       const hasValue = currentValue !== null;
     const performance = d.performance;
-    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    const gainAbs =
+      typeof d.gain_abs === 'number'
+        ? d.gain_abs
+        : typeof performance?.gain_abs === 'number'
+          ? performance.gain_abs
+          : null;
+    const gainPct =
+      typeof d.gain_pct === 'number'
+        ? d.gain_pct
+        : typeof performance?.gain_pct === 'number'
+          ? performance.gain_pct
+          : null;
     const partialValue = d.fx_unavailable && hasValue;
 
     const expanded = expandedPortfolios.has(d.uuid);
@@ -640,6 +560,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
                 data-has-value="${hasValue ? 'true' : 'false'}"
                 data-fx-unavailable="${d.fx_unavailable ? 'true' : 'false'}">`;
+    const safeName = escapeHtml(d.name);
+    const badgeMarkup = renderBadgeList(d.badges, { containerClass: 'portfolio-badges' });
     html += `<td>
         <button type="button"
                 class="${toggleClass}"
@@ -647,7 +569,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewDepot[]
                 aria-expanded="${expanded ? 'true' : 'false'}"
                 aria-controls="${detailId}">
           <span class="caret">${expanded ? '▼' : '▶'}</span>
-          <span class="portfolio-name">${d.name}</span>
+          <span class="portfolio-name">${safeName}</span>${badgeMarkup}
         </button>
       </td>`;
       const positionCountDisplay = positionCount.toLocaleString('de-DE');
@@ -1095,9 +1017,12 @@ async function reloadPortfolioPositions(
       targetContainer.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
       return;
     }
-    const positions = Array.isArray(resp.positions) ? resp.positions : [];
-    setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
-    targetContainer.innerHTML = renderPositionsTable(positions);
+    const normalizedPositions = normalizePositionRecords(
+      Array.isArray(resp.positions) ? resp.positions : [],
+    );
+    setPortfolioPositions(portfolioUuid, normalizedPositions);
+    setPortfolioPositionsSnapshot(portfolioUuid, normalizedPositions);
+    targetContainer.innerHTML = renderPositionsTable(normalizedPositions);
     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
     try {
       attachPortfolioPositionsSorting(root, portfolioUuid);
@@ -1235,10 +1160,16 @@ async function waitForElement<T extends Element>(
                     }
                     return;
                   }
-                  const positions = Array.isArray(resp.positions) ? resp.positions : [];
-                  setPortfolioPositions(portfolioUuid, positions as PortfolioPositionRecord[]);
+                  const normalizedPositions = normalizePositionRecords(
+                    Array.isArray(resp.positions) ? resp.positions : [],
+                  );
+                  setPortfolioPositions(portfolioUuid, normalizedPositions);
+                  setPortfolioPositionsSnapshot(
+                    portfolioUuid,
+                    normalizedPositions,
+                  );
                   if (containerEl) {
-                    containerEl.innerHTML = renderPositionsTable(positions);
+                    containerEl.innerHTML = renderPositionsTable(normalizedPositions);
                     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
                     try {
                       attachPortfolioPositionsSorting(root, portfolioUuid);
@@ -1329,57 +1260,12 @@ export async function renderDashboard(
   );
 
   const accountsResp = await fetchAccountsWS(hass, panelConfig);
-  const accounts = accountsResp.accounts;
-  const normalizedAccounts: NormalizedAccountRow[] = accounts.map((account) => ({
-    name: account.name ?? '—',
-    balance: typeof account.balance === 'number' && Number.isFinite(account.balance)
-      ? account.balance
-      : null,
-    currency_code: account.currency_code ?? null,
-    orig_balance: typeof account.orig_balance === 'number' && Number.isFinite(account.orig_balance)
-      ? account.orig_balance
-      : null,
-    fx_unavailable: Boolean(account.fx_unavailable),
-  }));
+  setAccountSnapshots(accountsResp.accounts);
+  const accountRows: AccountOverviewRow[] = selectAccountOverviewRows();
 
   const portfoliosResp = await fetchPortfoliosWS(hass, panelConfig);
-  const depots: PortfolioOverviewDepot[] = portfoliosResp.portfolios
-    .map((p): PortfolioOverviewDepot | null => {
-      const record = p as Record<string, unknown>;
-      const uuid = typeof p.uuid === 'string' && p.uuid ? p.uuid : null;
-      if (!uuid) {
-        return null;
-      }
-      const missingPositions = typeof (p as Record<string, unknown>).missing_value_positions === 'number'
-        ? (p as Record<string, unknown>).missing_value_positions as number
-        : 0;
-      const rawCurrentValue = normalizeCurrencyValue(record.current_value);
-      const purchaseSum = normalizeCurrencyValue(record.purchase_sum) ?? 0;
-      const performance = normalizePerformancePayload(record['performance']);
-
-      const hasNumericCurrentValue = rawCurrentValue != null;
-      const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-      const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
-
-      const partialValue = missingPositions > 0;
-      const hasValue = hasNumericCurrentValue;
-      const fxUnavailable = partialValue || !hasValue;
-
-      return {
-        uuid,
-        name: p.name ?? 'Unbenanntes Depot',
-        position_count: typeof p.position_count === 'number' ? p.position_count : 0,
-        current_value: hasNumericCurrentValue ? rawCurrentValue : null,
-        purchase_sum: purchaseSum,
-        gain_abs: gainAbs,
-        gain_pct: gainPct,
-        hasValue,
-        missing_value_positions: missingPositions,
-        fx_unavailable: fxUnavailable,
-        performance: performance,
-      };
-    })
-    .filter((depot): depot is PortfolioOverviewDepot => depot !== null);
+  replacePortfolioSnapshots(portfoliosResp.portfolios);
+  const depots = selectPortfolioOverviewRows();
 
   // 3. Last file update (optional – falls bereits WS-Command vorhanden)
   let lastFileUpdate = '';
@@ -1390,12 +1276,12 @@ export async function renderDashboard(
   }
 
   // 4. Gesamtvermögen berechnen (nur Anzeige)
-  const totalAccounts = normalizedAccounts.reduce(
+  const totalAccounts = accountRows.reduce(
     (sum, account) => sum + (typeof account.balance === 'number' && Number.isFinite(account.balance) ? account.balance : 0),
     0,
   );
   const anyPortfolioMissing = depots.some(depot => depot.fx_unavailable);
-  const anyAccountMissing = normalizedAccounts.some(account => account.fx_unavailable && (account.balance == null || !Number.isFinite(account.balance)));
+  const anyAccountMissing = accountRows.some(account => account.fx_unavailable && (account.balance == null || !Number.isFinite(account.balance)));
   const totalDepots = depots.reduce((sum, depot) => {
     if (depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value)) {
       return sum + depot.current_value;
@@ -1405,7 +1291,7 @@ export async function renderDashboard(
   const totalWealth = totalAccounts + totalDepots;
   const missingWealthReason = 'Teilw. fehlende FX-Kurse – Gesamtvermögen abweichend';
   const wealthValueAvailable = depots.some(depot => depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value))
-    || normalizedAccounts.some(account => typeof account.balance === 'number' && Number.isFinite(account.balance));
+    || accountRows.some(account => typeof account.balance === 'number' && Number.isFinite(account.balance));
   const wealthValueMarkup = wealthValueAvailable
     ? `${formatNumber(totalWealth)}&nbsp;€`
     : `<span class="missing-value" role="note" aria-label="${missingWealthReason}" title="${missingWealthReason}">—</span>`;
@@ -1427,8 +1313,8 @@ export async function renderDashboard(
   const portfolioTableHtml = buildExpandablePortfolioTable(depots);
 
   // 7. Konten-Tabellen
-  const eurAccounts = normalizedAccounts.filter(a => (a.currency_code ?? 'EUR') === 'EUR');
-  const fxAccounts = normalizedAccounts.filter(a => (a.currency_code ?? 'EUR') !== 'EUR');
+  const eurAccounts = accountRows.filter(a => (a.currency_code ?? 'EUR') === 'EUR');
+  const fxAccounts = accountRows.filter(a => (a.currency_code ?? 'EUR') !== 'EUR');
 
   const fxWarningNeeded = fxAccounts.some(a => a.fx_unavailable);
   const fxWarning = fxWarningNeeded
@@ -1446,7 +1332,10 @@ export async function renderDashboard(
       <div class="scroll-container account-table">
         ${makeTable(
     eurAccounts.map(account => ({
-      name: account.name,
+      name: renderNameWithBadges(account.name, account.badges, {
+        containerClass: 'account-name',
+        labelClass: 'account-name__label',
+      }),
       balance: account.balance ?? null,
     })),
     [
@@ -1473,7 +1362,10 @@ export async function renderDashboard(
         : '';
 
       return {
-        name: account.name,
+        name: renderNameWithBadges(account.name, account.badges, {
+          containerClass: 'account-name',
+          labelClass: 'account-name__label',
+        }),
         fx_display: fxDisplay,
         balance: account.balance ?? null,
       };
@@ -1518,7 +1410,7 @@ export async function renderDashboard(
   return markup;
 }
 
-  function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonly PortfolioOverviewDepot[]): void {
+  function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonly PortfolioOverviewRow[]): void {
   if (!root) {
     return;
   }
@@ -1573,7 +1465,7 @@ export async function renderDashboard(
 
 registerOverviewHelpers({
   renderPositionsTable: (positions) =>
-    renderPortfolioPositions(positions as readonly PortfolioPositionLike[]),
+    renderPortfolioPositions(positions as readonly PortfolioPositionRecord[]),
   applyGainPctMetadata,
   attachSecurityDetailListener,
   attachPortfolioPositionsSorting,
