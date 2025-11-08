@@ -328,17 +328,7 @@ def test_compact_event_data_forwards_canonical_portfolio_values_list() -> None:
     compacted = _compact_event_data("portfolio_values", raw)
 
     assert isinstance(compacted, list)
-    assert compacted == [
-        {
-            "uuid": "pf-1",
-            "position_count": 3,
-            "name": "Long Portfolio Name",
-            "current_value": 1234.56,
-            "purchase_sum": 1100.0,
-            "performance": raw[0]["performance"],
-            "missing_value_positions": 0,
-        }
-    ]
+    assert compacted == raw
 
 
 def test_compact_event_data_forwards_portfolio_values_mapping() -> None:
@@ -375,17 +365,7 @@ def test_compact_event_data_forwards_portfolio_values_mapping() -> None:
 
     compacted = _compact_event_data("portfolio_values", raw)
 
-    assert set(compacted.keys()) == {"portfolios", "error"}
-    assert compacted["portfolios"] == [
-        {
-            "uuid": "pf-2",
-            "position_count": 1,
-            "name": "Unused",
-            "current_value": 200.98,
-            "purchase_sum": 199.0,
-            "performance": raw["portfolios"][0]["performance"],
-        }
-    ]
+    assert compacted == raw
 
 
 def test_compact_event_data_trims_portfolio_positions() -> None:
@@ -426,37 +406,7 @@ def test_compact_event_data_trims_portfolio_positions() -> None:
 
     compacted = _compact_event_data("portfolio_positions", raw)
 
-    assert compacted["portfolio_uuid"] == "pf-3"
-    assert len(compacted["positions"]) == 1
-
-    position_entry = compacted["positions"][0]
-    assert position_entry["security_uuid"] == "sec-1"
-    assert position_entry["name"] == "Security A"
-    assert position_entry["current_holdings"] == pytest.approx(5.0)
-    assert position_entry["purchase_value"] == pytest.approx(123.45)
-    assert position_entry["current_value"] == pytest.approx(150.99)
-    assert "gain_abs" not in position_entry
-    assert "gain_pct" not in position_entry
-
-    assert "aggregation" in position_entry
-    aggregation_entry = position_entry["aggregation"]
-    assert aggregation_entry["purchase_value_eur"] == pytest.approx(123.45)
-    assert aggregation_entry["purchase_total_security"] == pytest.approx(321.09)
-    assert aggregation_entry["purchase_total_account"] == pytest.approx(322.1)
-    assert "avg_price_account" not in aggregation_entry
-
-    assert "purchase_total_security" not in position_entry
-    assert "purchase_total_account" not in position_entry
-
-    assert "average_cost" in position_entry
-    average_cost_entry = position_entry["average_cost"]
-    assert average_cost_entry["native"] == pytest.approx(24.123456)
-    assert average_cost_entry["security"] == pytest.approx(25.654321)
-    assert average_cost_entry["account"] == pytest.approx(25.987654)
-    assert average_cost_entry["eur"] == pytest.approx(123.45)
-
-    assert "performance" not in position_entry
-    assert "avg_price_security" not in position_entry
+    assert compacted == raw
 
 
 def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> None:

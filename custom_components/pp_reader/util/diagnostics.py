@@ -1,7 +1,8 @@
-"""Diagnostics helpers exposing ingestion, enrichment, and metrics metadata."""
+"""Diagnostics helpers exposing ingestion, enrichment, metrics, & normalization."""
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Mapping
 from datetime import datetime
@@ -25,6 +26,75 @@ INGESTION_TABLES = (
 )
 
 __all__ = ["async_get_parser_diagnostics"]
+_LOGGER = logging.getLogger("custom_components.pp_reader.util.diagnostics")
+
+
+def _get_normalization_module() -> Any:
+    """Import the normalization pipeline lazily to avoid circular imports."""
+    from custom_components.pp_reader.data import normalization_pipeline as pipeline
+
+    return pipeline
+
+
+def _normalized_unavailable(reason: str, **extra: Any) -> dict[str, Any]:
+    """Return a standard unavailable payload for normalized diagnostics."""
+    payload = {
+        "available": False,
+        "reason": reason,
+        "generated_at": None,
+        "metric_run_uuid": None,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+async def _collect_normalized_payload(
+    hass: HomeAssistant,
+    db_path: Path,
+    *,
+    entry_id: str | None,
+    flag_snapshot: Mapping[str, bool],
+) -> dict[str, Any]:
+    """Resolve the serialized normalization result for diagnostics."""
+    if entry_id and not flag_snapshot.get("normalized_pipeline", False):
+        return _normalized_unavailable("feature_flag_disabled")
+
+    try:
+        pipeline = _get_normalization_module()
+        snapshot = await pipeline.async_normalize_snapshot(
+            hass,
+            db_path,
+            include_positions=False,
+        )
+    except FileNotFoundError:
+        return _normalized_unavailable("database_not_found")
+    except Exception:
+        _LOGGER.exception(
+            "Diagnostics: normalization snapshot failed (entry_id=%s)",
+            entry_id,
+        )
+        return _normalized_unavailable("normalization_failed")
+
+    if snapshot.metric_run_uuid is None:
+        return _normalized_unavailable(
+            "metric_run_missing",
+            generated_at=snapshot.generated_at,
+        )
+
+    serialized = pipeline.serialize_normalization_result(snapshot)
+    accounts = serialized.get("accounts", [])
+    portfolios = serialized.get("portfolios", [])
+    return {
+        "available": True,
+        "generated_at": snapshot.generated_at,
+        "metric_run_uuid": snapshot.metric_run_uuid,
+        "accounts": accounts,
+        "portfolios": portfolios,
+        "account_count": len(accounts),
+        "portfolio_count": len(portfolios),
+        "diagnostics": serialized.get("diagnostics"),
+    }
 
 
 def _serialize_datetime(value: datetime | None) -> str | None:
@@ -378,6 +448,9 @@ async def async_get_parser_diagnostics(
             "recent_runs": [],
             "coverage": None,
         }
+        base_payload["normalized_payload"] = _normalized_unavailable(
+            "database_not_found"
+        )
 
         return base_payload
 
@@ -402,4 +475,12 @@ async def async_get_parser_diagnostics(
             "metrics": metrics_payload,
         }
 
-    return await hass.async_add_executor_job(_collect)
+    payload = await hass.async_add_executor_job(_collect)
+    normalized_payload = await _collect_normalized_payload(
+        hass,
+        path,
+        entry_id=entry_id,
+        flag_snapshot=flag_snapshot,
+    )
+    payload["normalized_payload"] = normalized_payload
+    return payload

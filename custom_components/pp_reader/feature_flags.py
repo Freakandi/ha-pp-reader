@@ -17,6 +17,7 @@ _DEFAULT_FLAGS: dict[str, bool] = {
     "enrichment_fx_refresh": True,
     "enrichment_history_jobs": True,
     "metrics_pipeline": False,
+    "normalized_pipeline": False,
 }
 
 

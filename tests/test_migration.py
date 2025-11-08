@@ -196,10 +196,8 @@ def test_fresh_schema_contains_price_columns(tmp_path):
     ).upper() == "INTEGER"
     assert "account_currency_total" in portfolio_cols
     assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
-    assert "avg_price_security" in portfolio_cols
-    assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
-    assert "avg_price_account" in portfolio_cols
-    assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_security" not in portfolio_cols
+    assert "avg_price_account" not in portfolio_cols
     assert "current_value" in portfolio_cols
     assert (portfolio_cols["current_value"]["type"] or "").upper() == "INTEGER"
 
@@ -294,10 +292,7 @@ def test_legacy_schema_migrated(tmp_path):
     ).upper() == "INTEGER"
     assert "account_currency_total" in portfolio_cols
     assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
-    assert "avg_price_security" in portfolio_cols
-    assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
-    assert "avg_price_account" in portfolio_cols
-    assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_account" not in portfolio_cols
 
     # Datenintegrität prüfen
     conn2 = sqlite3.connect(str(db_path))
@@ -313,9 +308,7 @@ def test_legacy_schema_migrated(tmp_path):
             SELECT
                 security_currency_total,
                 account_currency_total,
-                avg_price_native,
-                avg_price_security,
-                avg_price_account
+                avg_price_native
             FROM portfolio_securities
             WHERE portfolio_uuid='p1' AND security_uuid='u1'
             """
@@ -324,8 +317,6 @@ def test_legacy_schema_migrated(tmp_path):
         assert portfolio_row[0] == 0, "security_currency_total muss 0 sein"
         assert portfolio_row[1] == 0, "account_currency_total muss 0 sein"
         assert portfolio_row[2] is None, "avg_price_native sollte NULL bleiben"
-        assert portfolio_row[3] is None, "avg_price_security sollte NULL bleiben"
-        assert portfolio_row[4] is None, "avg_price_account sollte NULL bleiben"
     finally:
         conn2.close()
 

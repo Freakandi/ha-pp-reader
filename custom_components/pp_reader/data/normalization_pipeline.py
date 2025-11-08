@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import functools
 import logging
-from collections.abc import Iterable
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from homeassistant.core import HomeAssistant
 else:  # pragma: no cover - runtime fallback for type hints
@@ -33,11 +33,14 @@ from .db_access import (
     AccountMetricRecord,
     Portfolio,
     PortfolioMetricRecord,
+    Security,
+    SecurityMetricRecord,
     fetch_account_metrics,
     fetch_portfolio_metrics,
+    fetch_security_metrics,
     get_accounts,
-    get_portfolio_positions,
     get_portfolios,
+    get_securities,
     get_security_snapshot,
     iter_security_close_prices,
     load_latest_completed_metric_run_uuid,
@@ -54,9 +57,11 @@ __all__ = [
     "async_fetch_security_history",
     "async_normalize_security_snapshot",
     "async_normalize_snapshot",
+    "load_portfolio_position_snapshots",
     "serialize_account_snapshot",
     "serialize_normalization_result",
     "serialize_portfolio_snapshot",
+    "serialize_position_snapshot",
 ]
 
 
@@ -143,6 +148,15 @@ class NormalizationResult:
     diagnostics: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class _PositionContext:
+    """Context bundle for loading position snapshots."""
+
+    db_path: Path
+    securities: Mapping[str, Security]
+    index: Mapping[str, tuple[SecurityMetricRecord, ...]]
+
+
 async def async_normalize_snapshot(
     hass: HomeAssistant,
     db_path: Path | str,
@@ -225,7 +239,7 @@ def serialize_portfolio_snapshot(snapshot: PortfolioSnapshot) -> dict[str, Any]:
 
     if snapshot.positions:
         data["positions"] = [
-            _serialize_position_snapshot(position) for position in snapshot.positions
+            serialize_position_snapshot(position) for position in snapshot.positions
         ]
 
     if snapshot.data_state.status != "ok" or snapshot.data_state.message:
@@ -236,7 +250,7 @@ def serialize_portfolio_snapshot(snapshot: PortfolioSnapshot) -> dict[str, Any]:
     return data
 
 
-def _serialize_position_snapshot(snapshot: PositionSnapshot) -> dict[str, Any]:
+def serialize_position_snapshot(snapshot: PositionSnapshot) -> dict[str, Any]:
     """Convert a PositionSnapshot dataclass into a dictionary."""
     data: dict[str, Any] = {
         "portfolio_uuid": snapshot.portfolio_uuid,
@@ -330,17 +344,29 @@ def _normalize_snapshot_sync(
 ) -> NormalizationResult:
     """Build the snapshot synchronously for executor execution."""
     run_uuid = load_latest_completed_metric_run_uuid(db_path)
-    metric_batch = _load_metric_batch(db_path, run_uuid)
+    metric_batch = _load_metric_batch(
+        db_path,
+        run_uuid,
+        include_positions=include_positions,
+    )
 
     accounts = _safe_load(get_accounts, db_path, "accounts")
     portfolios = _safe_load(get_portfolios, db_path, "portfolios")
+    position_context: _PositionContext | None = None
+    if include_positions:
+        securities = _load_securities(db_path)
+        position_context = _build_position_context(
+            db_path,
+            metric_batch.securities,
+            securities,
+        )
 
     account_snapshots = _compose_account_snapshots(accounts, metric_batch.accounts)
     portfolio_snapshots = _compose_portfolio_snapshots(
         portfolios,
         metric_batch.portfolios,
-        db_path,
-        include_positions,
+        include_positions=include_positions,
+        position_context=position_context,
     )
 
     return NormalizationResult(
@@ -352,7 +378,12 @@ def _normalize_snapshot_sync(
     )
 
 
-def _load_metric_batch(db_path: Path, run_uuid: str | None) -> MetricBatch:
+def _load_metric_batch(
+    db_path: Path,
+    run_uuid: str | None,
+    *,
+    include_positions: bool,
+) -> MetricBatch:
     """Load persisted metric records into a MetricBatch container."""
     if not run_uuid:
         return MetricBatch()
@@ -377,10 +408,22 @@ def _load_metric_batch(db_path: Path, run_uuid: str | None) -> MetricBatch:
         )
         account_metrics = []
 
+    security_metrics: Sequence[SecurityMetricRecord] | tuple[()] = ()
+    if include_positions:
+        try:
+            security_metrics = fetch_security_metrics(db_path, run_uuid)
+        except Exception:
+            _LOGGER.exception(
+                "normalization_pipeline: Fehler beim Laden der Wertpapier-Metriken "
+                "(run_uuid=%s)",
+                run_uuid,
+            )
+            security_metrics = []
+
     return MetricBatch(
         portfolios=tuple(portfolio_metrics),
         accounts=tuple(account_metrics),
-        securities=(),
+        securities=tuple(security_metrics),
     )
 
 
@@ -435,9 +478,9 @@ def _compose_account_snapshots(
 def _compose_portfolio_snapshots(
     portfolios: Sequence[Portfolio],
     portfolio_metrics: Sequence[PortfolioMetricRecord],
-    db_path: Path,
     *,
     include_positions: bool,
+    position_context: _PositionContext | None,
 ) -> list[PortfolioSnapshot]:
     """Combine staged portfolios with persisted aggregate metrics."""
     portfolio_index = {
@@ -450,6 +493,7 @@ def _compose_portfolio_snapshots(
         for record in portfolio_metrics
         if record.portfolio_uuid
     }
+    context = position_context if include_positions else None
 
     snapshots: list[PortfolioSnapshot] = []
     for uuid, portfolio in portfolio_index.items():
@@ -458,8 +502,8 @@ def _compose_portfolio_snapshots(
             _build_portfolio_snapshot(
                 portfolio=portfolio,
                 metric=metric,
-                db_path=db_path,
                 include_positions=include_positions,
+                position_context=context,
             )
         )
 
@@ -467,12 +511,27 @@ def _compose_portfolio_snapshots(
     return snapshots
 
 
+def _build_position_context(
+    db_path: Path,
+    security_metrics: Sequence[SecurityMetricRecord],
+    securities: Mapping[str, Security],
+) -> _PositionContext:
+    """Prepare the lookup tables required for loading position snapshots."""
+    index = {
+        portfolio_uuid: tuple(records)
+        for portfolio_uuid, records in _index_security_metrics_by_portfolio(
+            security_metrics
+        ).items()
+    }
+    return _PositionContext(db_path=db_path, securities=securities, index=index)
+
+
 def _build_portfolio_snapshot(
     portfolio: Portfolio,
     metric: PortfolioMetricRecord | None,
     *,
-    db_path: Path,
     include_positions: bool,
+    position_context: _PositionContext | None,
 ) -> PortfolioSnapshot:
     """Return a PortfolioSnapshot derived from metadata and metrics."""
     current_value = _metric_value(metric, "current_value_cents")
@@ -484,8 +543,16 @@ def _build_portfolio_snapshot(
     data_state = _portfolio_data_state(missing_value_positions)
 
     positions: tuple[PositionSnapshot, ...] = ()
-    if include_positions:
-        positions = tuple(_load_position_snapshots(db_path, portfolio.uuid))
+    if include_positions and position_context is not None:
+        metric_rows = position_context.index.get(portfolio.uuid, ())
+        positions = tuple(
+            _load_position_snapshots(
+                db_path=position_context.db_path,
+                portfolio_uuid=portfolio.uuid,
+                metric_rows=metric_rows,
+                securities=position_context.securities,
+            )
+        )
 
     return PortfolioSnapshot(
         uuid=portfolio.uuid,
@@ -554,40 +621,130 @@ def _portfolio_data_state(missing_value_positions: int) -> SnapshotDataState:
 
 
 def _load_position_snapshots(
+    *,
     db_path: Path,
     portfolio_uuid: str,
+    metric_rows: Sequence[SecurityMetricRecord] | tuple[()]
+    | None,
+    securities: Mapping[str, Security],
 ) -> Iterable[PositionSnapshot]:
-    """Load persisted position entries and convert them to dataclasses."""
-    try:
-        position_dicts = get_portfolio_positions(db_path, portfolio_uuid)
-    except Exception:
-        _LOGGER.exception(
-            "normalization_pipeline: Fehler beim Laden der Positionen "
-            "(portfolio_uuid=%s)",
-            portfolio_uuid,
-        )
+    """Convert persisted security metrics into PositionSnapshot dataclasses."""
+    if not metric_rows:
         return []
 
     snapshots: list[PositionSnapshot] = []
     reference_date = datetime.now(UTC)
-    for entry in position_dicts:
-        security_uuid = str(entry.get("security_uuid") or "")
+    for record in metric_rows:
+        security_uuid = getattr(record, "security_uuid", None)
         if not security_uuid:
             continue
 
-        currency_code = str(entry.get("currency_code") or "EUR").strip() or "EUR"
-        last_price_native_raw = entry.get("last_price_native_raw")
-        last_close_native_raw = entry.get("last_close_native_raw")
-        last_price_native = normalize_raw_price(last_price_native_raw, decimals=4)
-        last_close_native = normalize_raw_price(last_close_native_raw, decimals=4)
+        security_meta = securities.get(security_uuid)
+        raw_name = security_meta.name if security_meta and security_meta.name else ""
+        name = raw_name.strip() or security_uuid
+
+        currency_code = (
+            (record.security_currency_code or "").strip()
+            or (security_meta.currency_code if security_meta else None)
+            or "EUR"
+        ).upper()
+
+        holdings = _from_holdings_raw(record.holdings_raw)
+        current_value = cent_to_eur(record.current_value_cents, default=0.0) or 0.0
+        purchase_value = cent_to_eur(record.purchase_value_cents, default=0.0) or 0.0
+        purchase_total_account = cent_to_eur(
+            record.purchase_account_value_cents,
+            default=None,
+        )
+        purchase_total_security = _from_eight_decimal(
+            record.purchase_security_value_raw,
+            decimals=6,
+            default=None,
+        )
+
+        average_cost_payload = {
+            "eur": (
+                round_currency(purchase_value / holdings, default=None)
+                if holdings
+                else None
+            ),
+            "security": (
+                round_price(
+                    purchase_total_security / holdings,
+                    decimals=6,
+                    default=None,
+                )
+                if holdings and purchase_total_security not in (None, 0.0)
+                else None
+            ),
+            "account": (
+                round_currency(purchase_total_account / holdings, default=None)
+                if holdings and purchase_total_account not in (None, 0.0)
+                else None
+            ),
+        }
+
+        gain_abs = cent_to_eur(record.gain_abs_cents, default=0.0) or 0.0
+        total_change_eur = (
+            cent_to_eur(record.total_change_eur_cents, default=None)
+            or gain_abs
+            or 0.0
+        )
+        performance_payload: dict[str, Any] = {
+            "gain_abs": gain_abs,
+            "gain_pct": record.gain_pct,
+            "total_change_eur": total_change_eur,
+            "total_change_pct": record.total_change_pct,
+            "source": record.source or "metrics",
+            "coverage_ratio": record.coverage_ratio,
+        }
+        if record.provenance:
+            performance_payload["provenance"] = record.provenance
+
+        if any(
+            getattr(record, field) not in (None, "")
+            for field in ("day_change_native", "day_change_eur", "day_change_pct")
+        ):
+            performance_payload["day_change"] = {
+                "price_change_native": round_price(
+                    record.day_change_native,
+                    decimals=6,
+                    default=None,
+                ),
+                "price_change_eur": round_price(
+                    record.day_change_eur,
+                    decimals=6,
+                    default=None,
+                ),
+                "change_pct": record.day_change_pct,
+                "source": record.day_change_source or "metrics",
+                "coverage_ratio": record.day_change_coverage,
+            }
+
+        aggregation_payload: dict[str, Any] = {
+            "total_holdings": holdings,
+            "purchase_value_eur": purchase_value,
+            "purchase_total_account": purchase_total_account,
+            "purchase_total_security": purchase_total_security,
+            "coverage_ratio": record.coverage_ratio,
+        }
+
+        last_price_native = normalize_raw_price(
+            record.last_price_native_raw,
+            decimals=4,
+        )
+        last_close_native = normalize_raw_price(
+            record.last_close_native_raw,
+            decimals=4,
+        )
         last_price_eur = normalize_price_to_eur_sync(
-            last_price_native_raw,
+            record.last_price_native_raw,
             currency_code,
             reference_date,
             db_path,
         )
         last_close_eur = normalize_price_to_eur_sync(
-            last_close_native_raw,
+            record.last_close_native_raw,
             currency_code,
             reference_date,
             db_path,
@@ -597,17 +754,17 @@ def _load_position_snapshots(
             PositionSnapshot(
                 portfolio_uuid=portfolio_uuid,
                 security_uuid=security_uuid,
-                name=str(entry.get("name") or ""),
+                name=name,
                 currency_code=currency_code,
-                current_holdings=float(entry.get("current_holdings") or 0.0),
-                purchase_value=float(entry.get("purchase_value") or 0.0),
-                current_value=float(entry.get("current_value") or 0.0),
-                average_cost=dict(entry.get("average_cost") or {}),
-                performance=dict(entry.get("performance") or {}),
-                aggregation=dict(entry.get("aggregation") or {}),
-                coverage_ratio=entry.get("coverage_ratio"),
-                provenance=entry.get("provenance"),
-                metric_run_uuid=entry.get("metric_run_uuid"),
+                current_holdings=holdings,
+                purchase_value=purchase_value,
+                current_value=current_value,
+                average_cost=average_cost_payload,
+                performance=performance_payload,
+                aggregation=aggregation_payload,
+                coverage_ratio=record.coverage_ratio,
+                provenance=record.provenance,
+                metric_run_uuid=record.metric_run_uuid,
                 last_price_native=last_price_native,
                 last_price_eur=last_price_eur,
                 last_close_native=last_close_native,
@@ -615,6 +772,49 @@ def _load_position_snapshots(
             )
         )
 
+    snapshots.sort(key=lambda snapshot: snapshot.name.lower())
+    return snapshots
+
+
+def load_portfolio_position_snapshots(
+    db_path: Path | str,
+    portfolio_ids: Collection[str],
+) -> dict[str, tuple[PositionSnapshot, ...]]:
+    """Return position snapshots grouped by portfolio UUID."""
+    normalized_ids = tuple({pid for pid in portfolio_ids if pid})
+    if not normalized_ids:
+        return {}
+
+    resolved_path = Path(db_path)
+    run_uuid = load_latest_completed_metric_run_uuid(resolved_path)
+    if not run_uuid:
+        return dict.fromkeys(normalized_ids, ())
+
+    try:
+        security_metrics = fetch_security_metrics(resolved_path, run_uuid)
+    except Exception:
+        _LOGGER.exception(
+            "normalization_pipeline: Fehler beim Laden der Wertpapier-Metriken "
+            "für portfolio_positions (run_uuid=%s)",
+            run_uuid,
+        )
+        security_metrics = []
+
+    securities = _load_securities(resolved_path)
+    grouped_metrics = _index_security_metrics_by_portfolio(security_metrics)
+
+    snapshots: dict[str, tuple[PositionSnapshot, ...]] = {}
+    for portfolio_uuid in normalized_ids:
+        rows = grouped_metrics.get(portfolio_uuid, ())
+        entries = tuple(
+            _load_position_snapshots(
+                db_path=resolved_path,
+                portfolio_uuid=portfolio_uuid,
+                metric_rows=rows,
+                securities=securities,
+            )
+        )
+        snapshots[portfolio_uuid] = entries
     return snapshots
 
 
@@ -814,6 +1014,57 @@ def _sum_optional(values: Iterable[float | None]) -> float | None:
         total += float(value)
         seen = True
     return total if seen else None
+
+
+def _index_security_metrics_by_portfolio(
+    records: Sequence[SecurityMetricRecord],
+) -> dict[str, list[SecurityMetricRecord]]:
+    """Group security metrics by their portfolio UUID."""
+    index: dict[str, list[SecurityMetricRecord]] = defaultdict(list)
+    for record in records:
+        portfolio_uuid = getattr(record, "portfolio_uuid", None)
+        if portfolio_uuid:
+            index[portfolio_uuid].append(record)
+    return index
+
+
+def _load_securities(db_path: Path) -> dict[str, Security]:
+    """Load security metadata for downstream labeling."""
+    try:
+        return get_securities(db_path)
+    except Exception:
+        _LOGGER.exception(
+            "normalization_pipeline: Fehler beim Laden der securities (db_path=%s)",
+            db_path,
+        )
+        return {}
+
+
+_EIGHT_DECIMAL_SCALE = 10**8
+
+
+def _from_eight_decimal(
+    value: Any,
+    *,
+    decimals: int = 4,
+    default: float | None = None,
+) -> float | None:
+    """Convert a stored 10^-8 fixed-point value into a float."""
+    if value in (None, ""):
+        return default
+
+    try:
+        numeric = float(value) / _EIGHT_DECIMAL_SCALE
+    except (TypeError, ValueError):
+        return default
+
+    return round_currency(numeric, decimals=decimals, default=default)
+
+
+def _from_holdings_raw(value: Any) -> float:
+    """Convert stored holdings (10^-8 shares) to a float."""
+    normalized = _from_eight_decimal(value, decimals=8, default=0.0)
+    return normalized or 0.0
 
 
 def _safe_load(

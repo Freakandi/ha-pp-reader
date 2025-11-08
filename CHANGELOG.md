@@ -11,6 +11,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ### Removed
 - Dropped the temporary `custom_components/pp_reader/data/performance.py` shim in favour of importing helpers directly from `custom_components/pp_reader/metrics/common.py`, completing the metric-engine cleanup.
+- Retired the bespoke `_normalize_portfolio_row` payload builders, websocket patches, and coordinator-managed portfolio caches; Home Assistant now serves dashboard/events from cached `NormalizationResult` snapshots via `data/normalization_pipeline.py`, `data/websocket.py`, and `data/coordinator.py`.【F:custom_components/pp_reader/data/normalization_pipeline.py†L1-L220】【F:custom_components/pp_reader/data/websocket.py†L243-L318】【F:custom_components/pp_reader/data/coordinator.py†L766-L868】
 
 ## [0.14.0] - 2025-10-15
 

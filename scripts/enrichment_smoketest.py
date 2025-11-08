@@ -24,6 +24,10 @@ from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.currencies import fx
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.ingestion_writer import async_ingestion_session
+from custom_components.pp_reader.data.normalization_pipeline import (
+    async_normalize_snapshot,
+    serialize_normalization_result,
+)
 from custom_components.pp_reader.metrics import pipeline as metrics_pipeline
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
@@ -290,6 +294,48 @@ async def _run_metrics(
     }
 
 
+async def _run_normalization_snapshot(
+    hass: _SmoketestHass,
+    db_path: Path,
+    *,
+    include_positions: bool,
+) -> dict[str, Any]:
+    """Generate a normalization snapshot via the new pipeline."""
+    LOGGER.info(
+        "Generating normalization snapshot (include_positions=%s)...",
+        include_positions,
+    )
+    try:
+        snapshot = await async_normalize_snapshot(
+            hass,
+            db_path,
+            include_positions=include_positions,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        LOGGER.exception("Normalization snapshot failed")
+        return {
+            "status": "failed",
+            "error": str(exc),
+            "include_positions": include_positions,
+        }
+
+    serialized = serialize_normalization_result(snapshot)
+    accounts = serialized.get("accounts") or []
+    portfolios = serialized.get("portfolios") or []
+
+    return {
+        "status": "ok",
+        "include_positions": include_positions,
+        "counts": {
+            "accounts": len(accounts),
+            "portfolios": len(portfolios),
+        },
+        "metric_run_uuid": serialized.get("metric_run_uuid"),
+        "generated_at": serialized.get("generated_at"),
+        "payload": serialized,
+    }
+
+
 def _collect_diagnostics(db_path: Path) -> dict[str, Any]:
     """Gather counts and timestamps for ingestion/enrichment artifacts."""
     payload: dict[str, Any] = {"ingestion": {}, "enrichment": {}, "metrics": {}}
@@ -473,6 +519,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable verbose logging output.",
     )
+    parser.add_argument(
+        "--include-positions",
+        action="store_true",
+        help="Include per-position payloads when generating normalization snapshots.",
+    )
     return parser
 
 
@@ -480,6 +531,7 @@ async def _async_main(args: argparse.Namespace) -> int:
     """Run the async portion of the smoke test."""
     portfolio_path: Path = args.portfolio
     db_path: Path = args.db_path
+    include_positions: bool = bool(args.include_positions)
     history_limit: int = max(1, args.history_limit)
 
     if not portfolio_path.exists():
@@ -517,6 +569,12 @@ async def _async_main(args: argparse.Namespace) -> int:
     LOGGER.info("Running metrics pipeline...")
     metrics_summary = await _run_metrics(hass, db_path)
 
+    normalization_summary = await _run_normalization_snapshot(
+        hass,
+        db_path,
+        include_positions=include_positions,
+    )
+
     diag = _collect_diagnostics(db_path)
     summary = {
         "run_id": run_id,
@@ -524,6 +582,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         "fx": fx_summary,
         "history": history_summary,
         "metrics": metrics_summary,
+        "normalization": normalization_summary,
         "diagnostics": diag,
     }
     LOGGER.info(
@@ -531,14 +590,16 @@ async def _async_main(args: argparse.Namespace) -> int:
         json.dumps(summary, indent=2, sort_keys=True),
     )
 
-    # Return non-zero exit code when critical steps failed.
+    exit_code = 0
     if fx_summary.get("status") in {"failed", "error"}:
-        return 2
-    if history_summary.get("status") in {"failed", "error"}:
-        return 3
-    if metrics_summary.get("status") not in {"completed"}:
-        return 4
-    return 0
+        exit_code = 2
+    elif history_summary.get("status") in {"failed", "error"}:
+        exit_code = 3
+    elif metrics_summary.get("status") not in {"completed"}:
+        exit_code = 4
+    elif normalization_summary.get("status") not in {"ok"}:
+        exit_code = 5
+    return exit_code
 
 
 def main(argv: list[str] | None = None) -> int:

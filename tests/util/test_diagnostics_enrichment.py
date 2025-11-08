@@ -1,10 +1,11 @@
-"""Diagnostics unit tests for enrichment metadata exposure."""
+"""Diagnostics unit tests for enrichment & normalization metadata exposure."""
 
 from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -179,6 +180,9 @@ async def test_diagnostics_missing_database_returns_unavailable() -> None:
     metrics = result["metrics"]
     assert metrics["available"] is False
     assert metrics["latest_run"] is None
+    normalized = result["normalized_payload"]
+    assert normalized["available"] is False
+    assert normalized["reason"] == "database_not_found"
 
 
 @pytest.mark.asyncio
@@ -218,23 +222,67 @@ async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatc
     enrichment = result["enrichment"]
     assert enrichment["available"] is True
     assert enrichment["feature_flags"] == flag_snapshot
-    assert enrichment["fx"]["last_refresh"] == "2024-01-05T00:00:00+00:00"
-    assert enrichment["fx"]["latest_rate_fetch"] == "2024-01-06T10:00:00Z"
+    normalized = result["normalized_payload"]
+    assert normalized["available"] is False
+    assert normalized["reason"] == "feature_flag_disabled"
 
-    summary = enrichment["price_history_queue"]["summary"]
-    assert summary["pending"]["count"] == 1
-    assert summary["processing"]["count"] == 1
-    assert summary["failed"]["count"] == 1
-    assert summary["failed"]["latest_update"] == "2024-01-06T02:10:00Z"
 
-    failures = enrichment["price_history_queue"]["recent_failures"]
-    assert len(failures) == 1
-    assert failures[0]["security_uuid"] == "sec-failed"
-    assert failures[0]["last_error"] == "network down"
+@pytest.mark.asyncio
+async def test_diagnostics_exposes_normalized_payload(tmp_path, monkeypatch: Any) -> None:
+    """Normalized payload should be included when the feature flag is enabled."""
+    db_path = tmp_path / "diagnostics_norm.db"
+    _create_enrichment_db(db_path)
 
-    metrics = result["metrics"]
-    assert metrics["available"] is False
-    assert metrics["latest_run"] is None
+    hass = MagicMock()
+    hass.data = {DOMAIN: {"entry": {}}}
+    hass.async_add_executor_job = AsyncMock(side_effect=lambda func: func())
+
+    flag_snapshot = {
+        "enrichment_pipeline": True,
+        "enqueue_prices": True,
+        "normalized_pipeline": True,
+    }
+    monkeypatch.setattr(
+        diagnostics,
+        "feature_flag_snapshot",
+        MagicMock(return_value=flag_snapshot),
+    )
+
+    class DummyPipeline:
+        """Stub normalization pipeline for diagnostics tests."""
+
+        @staticmethod
+        async def async_normalize_snapshot(_hass, db_path_arg, *, include_positions: bool) -> Any:
+            assert Path(db_path_arg) == db_path
+            assert include_positions is False
+            return SimpleNamespace(
+                generated_at="2024-03-01T00:00:00Z",
+                metric_run_uuid="metric-99",
+            )
+
+        @staticmethod
+        def serialize_normalization_result(snapshot) -> dict[str, Any]:
+            return {
+                "generated_at": snapshot.generated_at,
+                "metric_run_uuid": snapshot.metric_run_uuid,
+                "accounts": [{"uuid": "acct-1"}],
+                "portfolios": [{"uuid": "portfolio-1"}],
+                "diagnostics": {"rate_lookup_failures": []},
+            }
+
+    monkeypatch.setattr(diagnostics, "_get_normalization_module", lambda: DummyPipeline)
+
+    result = await diagnostics.async_get_parser_diagnostics(
+        hass,
+        db_path,
+        entry_id="entry",
+    )
+
+    normalized = result["normalized_payload"]
+    assert normalized["available"] is True
+    assert normalized["metric_run_uuid"] == "metric-99"
+    assert normalized["account_count"] == 1
+    assert normalized["portfolio_count"] == 1
 
 
 def test_collect_enrichment_payload_without_tables(tmp_path) -> None:

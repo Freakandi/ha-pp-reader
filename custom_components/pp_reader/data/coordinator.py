@@ -9,16 +9,16 @@ It includes functionality to:
 - Load and calculate account balances, portfolio values, and transactions.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import sqlite3
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -26,9 +26,11 @@ from custom_components.pp_reader import metrics
 from custom_components.pp_reader.const import (
     EVENT_ENRICHMENT_PROGRESS,
     EVENT_METRICS_PROGRESS,
+    EVENT_NORMALIZATION_PROGRESS,
     SIGNAL_ENRICHMENT_COMPLETED,
     SIGNAL_ENRICHMENT_PROGRESS,
     SIGNAL_METRICS_PROGRESS,
+    SIGNAL_NORMALIZATION_PROGRESS,
     SIGNAL_PARSER_COMPLETED,
     SIGNAL_PARSER_PROGRESS,
 )
@@ -52,7 +54,19 @@ from custom_components.pp_reader.util.currency import cent_to_eur, round_currenc
 from . import ingestion_reader
 from .db_access import fetch_live_portfolios, get_accounts, get_transactions
 from .ingestion_writer import async_ingestion_session
+from .normalization_pipeline import (
+    NormalizationResult,
+    PortfolioSnapshot,
+    async_normalize_snapshot,
+)
 from .performance import compose_performance_payload, select_performance_metrics
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from homeassistant.core import HomeAssistant
+else:  # pragma: no cover - runtime fallback for typing only
+    HomeAssistant = Any  # type: ignore[assignment]
 
 try:
     from . import reader as _reader_module
@@ -223,6 +237,28 @@ def _build_portfolio_data(live_portfolios: Iterable[Any]) -> dict[str, dict[str,
     return portfolio_data
 
 
+def _build_portfolio_data_from_snapshot(
+    snapshot: NormalizationResult,
+) -> dict[str, dict[str, Any]]:
+    """Reuse normalized portfolio snapshots for the coordinator contract."""
+    portfolio_data: dict[str, dict[str, Any]] = {}
+    for portfolio in snapshot.portfolios:
+        payload = _portfolio_payload_from_snapshot(portfolio)
+        portfolio_data[portfolio.uuid] = payload
+    return portfolio_data
+
+
+def _portfolio_payload_from_snapshot(portfolio: PortfolioSnapshot) -> dict[str, Any]:
+    """Convert a PortfolioSnapshot into the coordinator payload format."""
+    return {
+        "name": portfolio.name,
+        "value": _normalize_portfolio_amount(portfolio.current_value),
+        "count": int(portfolio.position_count or 0),
+        "purchase_sum": _normalize_portfolio_amount(portfolio.purchase_value),
+        "performance": dict(portfolio.performance),
+    }
+
+
 # NOTE (On-Demand Aggregation Migration):
 # The dashboard / WebSocket layer now obtains live portfolio aggregates via the
 # on-demand helper (fetch_live_portfolios) to ensure a single source of truth
@@ -235,7 +271,7 @@ def _build_portfolio_data(live_portfolios: Iterable[Any]) -> dict[str, dict[str,
 #   required they must be implemented centrally in the shared DB helpers and/or
 #   fetch_live_portfolios to avoid drift between sensor and UI values.
 # Any refactor touching aggregation should reference this comment and the
-# migration checklist in .docs/TODO_updateGoals.md (section 4).
+# migration checklist in .docs/cleanup/live_aggregation/TODO_updateGoals.md (section 4).
 class PPReaderCoordinator(DataUpdateCoordinator):
     """
     A coordinator for data updates from a file, synching to an SQLite database.
@@ -280,6 +316,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._last_parser_progress: tuple[str, int, int] | None = None
         self._last_ingestion_run_id: str | None = None
         self._last_metric_run_id: str | None = None
+        self._normalized_snapshot: NormalizationResult | None = None
         self._enrichment_failure_streak = 0
         self._enrichment_failure_notified = False
 
@@ -302,8 +339,23 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             )
 
             account_balances = self._calculate_account_balances(accounts, transactions)
-            live_portfolios = await self._load_live_portfolios()
-            portfolio_data = _build_portfolio_data(live_portfolios)
+
+            portfolio_data = None
+            normalized_enabled = is_enabled(
+                "normalized_pipeline",
+                self.hass,
+                entry_id=self.entry_id,
+                default=False,
+            )
+            snapshot: NormalizationResult | None = None
+            if normalized_enabled:
+                snapshot = await self._ensure_normalized_snapshot()
+                if snapshot is not None:
+                    portfolio_data = _build_portfolio_data_from_snapshot(snapshot)
+
+            if portfolio_data is None:
+                live_portfolios = await self._load_live_portfolios()
+                portfolio_data = _build_portfolio_data(live_portfolios)
 
             self.data = {
                 "accounts": {
@@ -537,6 +589,22 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         async_dispatcher_send(self.hass, SIGNAL_METRICS_PROGRESS, payload)
         self.hass.bus.async_fire(EVENT_METRICS_PROGRESS, payload)
 
+    def _emit_normalization_progress(
+        self,
+        stage: str,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Emit normalization pipeline progress events."""
+        payload: dict[str, Any] = {
+            "entry_id": self.entry_id,
+            "stage": stage,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if details:
+            payload.update(details)
+        async_dispatcher_send(self.hass, SIGNAL_NORMALIZATION_PROGRESS, payload)
+        self.hass.bus.async_fire(EVENT_NORMALIZATION_PROGRESS, payload)
+
     async def _schedule_enrichment_jobs(self, parsed_client: Any) -> None:
         """Plan FX refresh and price history jobs after imports."""
         enriched_enabled = is_enabled(
@@ -617,6 +685,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._process_enrichment_outcome(summary, errors)
 
         await self._schedule_metrics_refresh(summary, errors=errors)
+        await self._schedule_normalization_refresh(summary)
 
         self._emit_enrichment_completed(summary)
 
@@ -693,6 +762,109 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             summary["metrics_error"] = run.error_message
         else:
             summary.pop("metrics_error", None)
+
+    async def _schedule_normalization_refresh(self, summary: dict[str, Any]) -> None:
+        """Run the normalization pipeline once metrics finished."""
+        normalized_enabled = is_enabled(
+            "normalized_pipeline",
+            self.hass,
+            entry_id=self.entry_id,
+            default=False,
+        )
+        if not normalized_enabled:
+            summary["normalized_status"] = "disabled"
+            self._emit_normalization_progress(
+                "disabled",
+                {"reason": "feature_flag_disabled"},
+            )
+            return
+
+        self._normalized_snapshot = None
+
+        metrics_status = summary.get("metrics_status")
+        if metrics_status != "completed" or not self._last_metric_run_id:
+            summary["normalized_status"] = "skipped"
+            summary["normalized_reason"] = "metrics_unavailable"
+            self._emit_normalization_progress(
+                "skipped",
+                {
+                    "reason": "metrics_unavailable",
+                    "metrics_status": metrics_status,
+                },
+            )
+            return
+
+        summary["normalized_status"] = "running"
+        self._emit_normalization_progress(
+            "scheduled",
+            {"metric_run_uuid": self._last_metric_run_id},
+        )
+
+        try:
+            snapshot = await async_normalize_snapshot(
+                self.hass,
+                self.db_path,
+                include_positions=False,
+            )
+        except Exception as err:  # noqa: BLE001 - defensive fallback
+            summary["normalized_status"] = "failed"
+            summary["normalized_error"] = str(err)
+            self._emit_normalization_progress(
+                "failed",
+                {"error": str(err)},
+            )
+            return
+
+        self._normalized_snapshot = snapshot
+        summary["normalized_status"] = "completed"
+        summary["normalized_metric_run_uuid"] = snapshot.metric_run_uuid
+        summary["normalized_generated_at"] = snapshot.generated_at
+        summary.pop("normalized_reason", None)
+        summary.pop("normalized_error", None)
+        self._emit_normalization_progress(
+            "completed",
+            {
+                "metric_run_uuid": snapshot.metric_run_uuid,
+                "generated_at": snapshot.generated_at,
+            },
+        )
+
+    async def _ensure_normalized_snapshot(self) -> NormalizationResult | None:
+        """Load and cache a normalization snapshot when the feature flag is on."""
+        if self._normalized_snapshot is not None:
+            return self._normalized_snapshot
+
+        self._emit_normalization_progress(
+            "refresh_requested",
+            {"reason": "coordinator_update"},
+        )
+
+        try:
+            snapshot = await async_normalize_snapshot(
+                self.hass,
+                self.db_path,
+                include_positions=False,
+            )
+        except Exception as err:  # pragma: no cover - defensive fallback
+            _LOGGER.exception(
+                "Normalization pipeline: Fehler beim Aktualisieren (entry_id=%s)",
+                self.entry_id,
+            )
+            self._emit_normalization_progress(
+                "refresh_failed",
+                {"error": str(err)},
+            )
+            return None
+
+        self._normalized_snapshot = snapshot
+        self._emit_normalization_progress(
+            "refresh_completed",
+            {
+                "metric_run_uuid": snapshot.metric_run_uuid,
+                "generated_at": snapshot.generated_at,
+            },
+        )
+        return snapshot
 
     async def _schedule_fx_refresh(self) -> dict[str, Any] | None:
         """Schedule an FX refresh for active non-EUR currencies."""

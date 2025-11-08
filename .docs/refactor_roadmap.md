@@ -47,6 +47,7 @@ Each milestone lists entry prerequisites, exit criteria, impacted components, de
 - **Exit criteria:** Frontend stores, views, and dashboard bindings read new payloads without legacy fallbacks; compatibility layer removed or feature-flagged off.
 - **Impacted areas:** `src/lib/api/portfolio/`, `src/lib/store/`, `src/views/portfolio/`, `custom_components/pp_reader/www/pp_reader_dashboard/js/`, associated TypeScript tests under `tests/dashboard/`.
 - **Deliverables:** Updated API client bindings, store selectors, view models, and UI components; migration guide for integrators; snapshot/test updates confirming UI parity.
+- **Tracking docs:** Implementation tasks are broken down in `.docs/TODO_frontend_adapter_rollout.md` (executed via `.docs/prompts/prompt_processChecklist.md`) with supporting follow-ups captured in `.docs/cleanup/normalization_followups.md` and contract details mirrored in `pp_reader_dom_reference.md`.
 - **Dependencies:** Requires normalized payloads from M4; informs QA and docs (M6) to schedule cross-cutting checks.
 
 ### M6 — QA, Documentation, and Release Enablement

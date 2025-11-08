@@ -46,11 +46,14 @@ from custom_components.pp_reader.util.currency import (
 
 from .db_access import (
     fetch_live_portfolios,  # NEU: Einheitliche Aggregationsquelle
-    get_portfolio_positions,  # Für Push der Positionsdaten (lazy + change push)
     get_transactions,
 )
 from .event_push import _compact_event_data, _push_update  # noqa: F401
 from .ingestion_reader import load_proto_snapshot
+from .normalization_pipeline import (
+    load_portfolio_position_snapshots,
+    serialize_position_snapshot,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -1642,28 +1645,24 @@ class _SyncRunner:
 
 def fetch_positions_for_portfolios(
     db_path: Path, portfolio_ids: set[str]
-) -> dict[str, list[dict]]:
-    """
-    Hilfsfunktion: Lädt Positionslisten für mehrere Portfolios.
+) -> dict[str, list[dict[str, Any]]]:
+    """Load position payloads for multiple portfolios via the normalization pipeline."""
+    if not portfolio_ids:
+        return {}
 
-    Gibt Dict { portfolio_uuid: [ {position...}, ... ] } zurück.
+    try:
+        snapshots = load_portfolio_position_snapshots(db_path, portfolio_ids)
+    except Exception:
+        _LOGGER.exception(
+            "fetch_positions_for_portfolios: Fehler beim Laden der Positionen "
+            "über normalization_pipeline",
+        )
+        snapshots = dict.fromkeys(portfolio_ids, ())
 
-    Hinweise:
-      - Reihenfolge der Positionen ist jetzt alphabetisch nach Name
-        (ORDER BY s.name ASC), siehe SQL in db_access.get_portfolio_positions
-        (früher: aktueller Wert DESC).
-      - Werte sind bereits in EUR normalisiert und auf 2 Nachkommastellen gerundet.
-    """
-    result: dict[str, list[dict]] = {}
+    result: dict[str, list[dict[str, Any]]] = {}
     for pid in portfolio_ids:
-        try:
-            result[pid] = get_portfolio_positions(db_path, pid)
-        except Exception:
-            _LOGGER.exception(
-                "fetch_positions_for_portfolios: Fehler beim Laden der "
-                "Positionen für %s",
-                pid,
-            )
-            result[pid] = []
+        position_snapshots = snapshots.get(pid, ())
+        result[pid] = [
+            serialize_position_snapshot(snapshot) for snapshot in position_snapshots
+        ]
     return result
-

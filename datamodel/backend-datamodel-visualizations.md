@@ -120,7 +120,7 @@ flowchart TD
   SyncHoldings --> HoldingsDB[("SQLite portfolio_securities")]
   SyncTransactions --> TxDB[("SQLite transactions")]
   SyncSecurities --> SecDB[("SQLite securities")]
-  HoldingsDB --> Positions[[get_portfolio_positions]]
+  HoldingsDB --> Positions[[Normalization Pipeline]]
   TxDB --> Positions
   SecDB --> Positions
   Positions --> PushFormatter[[`_compact_portfolio_positions_payload`]]
@@ -134,7 +134,7 @@ flowchart TD
 | --- | --- | --- |
 | Envelope (`portfolio_uuid`, `positions[]`, `error?`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Each push message targets one portfolio and may include an `error` string when loading failed. |
 | Position identity (`positions[].security_uuid`, `positions[].name`) | 1 – Passed from portfolio file and stored in database. | UUIDs tie rows back to cached security data; names render verbatim. |
-| Holdings & valuations (`positions[].current_holdings`, `positions[].purchase_value`, `positions[].current_value`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | `get_portfolio_positions` aggregates stored cent values and rounds them before serialising. |
+| Holdings & valuations (`positions[].current_holdings`, `positions[].purchase_value`, `positions[].current_value`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | The normalization pipeline aggregates stored cent values from `security_metrics` and rounds them before serialising. |
 | Average cost (`positions[].average_cost.*`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Dataclass exposes `native`, `security`, `account`, `eur`, `source`, and `coverage_ratio`; push formatter forwards the mapping unchanged. |
 | Aggregation metadata (`positions[].aggregation.*`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Contains totals for holdings, purchase value (cents & EUR), and currency totals needed for tooltips. |
 | Performance (`positions[].performance.*`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Shares the same `PerformanceMetrics` structure as portfolios (`gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`, `source`, `coverage_ratio`). |

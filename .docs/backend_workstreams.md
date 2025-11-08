@@ -54,19 +54,19 @@ This concept document enumerates the backend workstreams required to deliver the
   - Documentation in `.docs/live_aggregation/metrics.md` highlights the pipeline (`metrics/pipeline.py` → `metrics/storage.py`) as the only supported computation path.
 
 ## Normalization Layer
-- **Target implementation.** Centralize normalization logic to translate parsed protobuf objects into the relational schema defined in `custom_components/pp_reader/data/db_schema.py` and outlined in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md#dashboard-snapshot-pp_readerget_dashboard_data-command-push-updates-accounts-portfolio_values-portfolio_positions-last_file_update).
+- **Current implementation.** `custom_components/pp_reader/data/normalization_pipeline.py` now assembles canonical `NormalizationResult` payloads after every metrics run, serializes them through `serialize_*` helpers, and persists the JSON into the new `portfolio_snapshots` and `account_snapshots` tables defined in `data/db_schema.py`. These snapshots mirror the payload contract in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md#dashboard-snapshot-pp_readerget_dashboard_data-command-push-updates-accounts-portfolio_values-portfolio_positions-last_file_update) and are keyed by `metric_run_uuid`, making websocket/event replays deterministic after restarts.
 - **Behaviour updates.**
-  - Enforce deterministic ordering when inserting portfolios and securities to keep websocket payload diffing stable.
-  - Validate referential integrity before committing transactions, rolling back batches when foreign keys fail.
-  - Surface normalization telemetry (row counts, skipped entries) through Home Assistant diagnostics for troubleshooting.
+  - WebSocket handlers (`data/websocket.py`) and dispatcher/event publishers (`data/event_push.py`) read from the serialized snapshots, emitting consistent `data_type` values (`accounts`, `portfolio_values`, `portfolio_positions`, `security_snapshot`, `security_history`) over Home Assistant's `EVENT_PANELS_UPDATED` stream.
+  - CLI helpers (`scripts/enrichment_smoketest.py`, `custom_components/pp_reader/cli`) and diagnostics (`util/diagnostics.py`) reuse the same `async_normalize_snapshot` entry point; diagnostics expose the cached payload under `normalized_payload` so QA can diff backend vs. frontend.
+  - Coordinator orchestration (`data/coordinator.PPReaderCoordinator`) waits for metrics completion, hydrates the normalization cache (feature flag `normalized_pipeline`), and pushes incremental events so sensors and dashboard panels never fall back to legacy `_normalize_*` helpers.
 - **New/updated modules.**
-  - Create `custom_components/pp_reader/data/normalization_pipeline.py` coordinating parser output, enrichment hooks, and persistence writes.
-  - Extend `custom_components/pp_reader/data/db_access.py` with bulk upsert helpers that operate on normalized dataclasses.
-  - Update `custom_components/pp_reader/coordinators/portfolio_coordinator.py` to orchestrate normalization checkpoints and schedule downstream refreshes.
-- **Legacy retirement.** Remove `_sync_*` functions scattered through `custom_components/pp_reader/data/sync_from_pclient.py` after:
-  - Migration scripts backfill existing SQLite databases to the new schema (tracked under `.docs/native_price/migration.md`).
-  - Integration tests in `tests/integration/test_db_sync.py` validate end-to-end normalization.
-  - QA sign-off recorded in `.docs/cleanup/normalization_signoff.md`.
+  - Snapshot schema (`portfolio_snapshots`, `account_snapshots`) and migrations inside `custom_components/pp_reader/data/db_schema.py` plus loader helpers in `data/db_access.py`.
+  - `custom_components/pp_reader/data/normalization_pipeline.py` exporting dataclasses, serialization helpers, and async entry points for Home Assistant as well as CLI callers.
+  - Coordinator glue in `custom_components/pp_reader/data/coordinator.py` that caches the serialized result per entry_id and publishes updates through `_push_update`.
+- **Legacy retirement.** Remaining `_sync_*` vestiges inside `custom_components/pp_reader/data/sync_from_pclient.py` are now bypassed by snapshots, but keep the fallbacks until:
+  - Migration scripts confirm older databases are backfilled with snapshot rows (tracked in `.docs/native_price/migration.md`).
+  - Regression suites (`tests/integration/test_db_sync.py`, `tests/normalization/test_pipeline.py`, and websocket/event tests) keep parity across imports.
+  - QA sign-off is logged in `.docs/cleanup/normalization_signoff.md`, after which the legacy helpers can be dropped entirely.
 
 ## Storage & Persistence
 - **Target implementation.** Harden SQLite persistence to guarantee idempotent imports, resumable enrichment, and observable state transitions.

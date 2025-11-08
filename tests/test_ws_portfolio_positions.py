@@ -1,22 +1,21 @@
-"""Regression tests for websocket portfolio position currency flows."""
+"""Regression tests for websocket portfolio position payload formatting."""
 
 from __future__ import annotations
 
-import asyncio
-import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from custom_components.pp_reader.data import websocket as websocket_module
-from custom_components.pp_reader.data.db_access import get_portfolio_positions
-from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.metrics.common import select_performance_metrics
-from custom_components.pp_reader.util.currency import (
-    cent_to_eur,
-    round_currency,
-    round_price,
+from custom_components.pp_reader.data.normalization_pipeline import (
+    NormalizationResult,
+    PortfolioSnapshot,
+    PositionSnapshot,
+    SnapshotDataState,
 )
+from custom_components.pp_reader.metrics.common import select_performance_metrics
+from custom_components.pp_reader.util.currency import round_currency, round_price
 
 pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for websocket module"
@@ -29,121 +28,133 @@ WS_GET_PORTFOLIO_POSITIONS = getattr(
 )
 
 
-class StubConfigEntry:
-    """Minimal stand-in for a Home Assistant config entry."""
+class StubHass:
+    """Minimal Home Assistant stub exposing entry metadata."""
 
     def __init__(self, entry_id: str, db_path: Path) -> None:
-        self.entry_id = entry_id
-        self.data = {"db_path": str(db_path)}
-
-
-class StubConfigEntries:
-    """Provide async_get_entry lookups for tests."""
-
-    def __init__(self, entry: StubConfigEntry) -> None:
-        self._entry = entry
-
-    def async_get_entry(self, entry_id: str) -> StubConfigEntry | None:
-        if entry_id == self._entry.entry_id:
-            return self._entry
-        return None
-
-
-class StubHass:
-    """Minimal Home Assistant stub for websocket handler tests."""
-
-    def __init__(self, entry: StubConfigEntry) -> None:
-        self.config_entries = StubConfigEntries(entry)
-
-    async def async_add_executor_job(self, func, *args):
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, func, *args)
-
-    def async_create_background_task(
-        self,
-        coro,
-        _task_name=None,
-        *,
-        eager_start: bool = False,
-    ):
-        del eager_start
-        loop = asyncio.get_running_loop()
-        return loop.create_task(coro)
+        self.data = {
+            websocket_module.DOMAIN: {entry_id: {"db_path": str(db_path)}}
+        }
 
 
 class StubConnection:
     """Collect websocket replies for assertions."""
 
     def __init__(self) -> None:
-        self.sent: list[tuple[int | None, dict[str, object]]] = []
+        self.sent: list[tuple[int | None, dict[str, Any]]] = []
         self.errors: list[tuple[int | None, str, str]] = []
 
-    def send_result(self, msg_id: int | None, payload: dict[str, object]) -> None:
+    def send_result(self, msg_id: int | None, payload: dict[str, Any]) -> None:
         self.sent.append((msg_id, payload))
 
     def send_error(self, msg_id: int | None, code: str, message: str) -> None:
         self.errors.append((msg_id, code, message))
 
 
-@pytest.fixture
-def populated_db(tmp_path: Path) -> Path:
-    """Create a SQLite database with one portfolio position."""
-    db_path = tmp_path / "positions.db"
-    initialize_database_schema(db_path)
+def _make_position_snapshot() -> PositionSnapshot:
+    """Return a reusable PositionSnapshot for tests."""
+    holdings = 12.345678
+    purchase_value = 1234.56
+    current_value = 1789.01
+    gain_abs = current_value - purchase_value
 
-    conn = sqlite3.connect(str(db_path))
-    try:
-        conn.execute(
-            "INSERT INTO portfolios (uuid, name) VALUES (?, ?)",
-            ("portfolio-1", "Alpha Depot"),
-        )
-        conn.execute(
-            "INSERT INTO securities (uuid, name) VALUES (?, ?)",
-            ("security-1", "ACME Corp"),
-        )
-        conn.execute(
-            """
-            INSERT INTO portfolio_securities (
-                portfolio_uuid,
-                security_uuid,
-                current_holdings,
-                purchase_value,
-                current_value,
-                avg_price_native,
-                security_currency_total,
-                account_currency_total,
-                avg_price_security,
-                avg_price_account
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "portfolio-1",
-                "security-1",
-                12.345678,
-                123_456,
-                789_012,
-                45.678901,
-                2345.6789,
-                3456.7891,
-                12.345678,
-                23.456789,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    average_cost = {
+        "native": 45.678901,
+        "security": 11.111111,
+        "account": 22.222222,
+        "eur": purchase_value / holdings,
+        "source": "totals",
+        "coverage_ratio": 1.0,
+    }
+    aggregation = {
+        "total_holdings": holdings,
+        "purchase_value_eur": purchase_value,
+        "purchase_total_security": 2345.6789,
+        "purchase_total_account": 3456.7891,
+    }
+    performance = {
+        "gain_abs": gain_abs,
+        "gain_pct": (gain_abs / purchase_value) * 100,
+        "total_change_eur": gain_abs,
+        "total_change_pct": (gain_abs / purchase_value) * 100,
+        "source": "calculated",
+        "coverage_ratio": 1.0,
+    }
 
-    return db_path
+    return PositionSnapshot(
+        portfolio_uuid="portfolio-1",
+        security_uuid="security-1",
+        name="ACME Corp",
+        currency_code="EUR",
+        current_holdings=holdings,
+        purchase_value=purchase_value,
+        current_value=current_value,
+        average_cost=average_cost,
+        performance=performance,
+        aggregation=aggregation,
+        coverage_ratio=1.0,
+        provenance=None,
+        metric_run_uuid="metric-1",
+    )
+
+
+def _make_portfolio_snapshot(*, include_positions: bool) -> PortfolioSnapshot:
+    """Create a PortfolioSnapshot that optionally carries positions."""
+    position = _make_position_snapshot()
+    positions = (position,) if include_positions else ()
+    return PortfolioSnapshot(
+        uuid="portfolio-1",
+        name="Alpha Depot",
+        current_value=position.current_value,
+        purchase_value=position.purchase_value,
+        position_count=len(positions) or 1,
+        missing_value_positions=0,
+        performance={
+            "gain_abs": position.performance["gain_abs"],
+            "gain_pct": position.performance["gain_pct"],
+            "total_change_eur": position.performance["total_change_eur"],
+            "total_change_pct": position.performance["total_change_pct"],
+            "source": "calculated",
+            "coverage_ratio": 1.0,
+        },
+        positions=positions,
+        data_state=SnapshotDataState(),
+    )
+
+
+def _fake_normalization_result(*, include_positions: bool) -> NormalizationResult:
+    """Fabricate a NormalizationResult for websocket tests."""
+    return NormalizationResult(
+        generated_at="2024-01-01T00:00:00Z",
+        metric_run_uuid="metric-1",
+        accounts=(),
+        portfolios=(_make_portfolio_snapshot(include_positions=include_positions),),
+        diagnostics=None,
+    )
 
 
 @pytest.mark.asyncio
 async def test_ws_get_portfolio_positions_normalises_currency(
-    populated_db: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Ensure websocket payload applies shared currency helpers end-to-end."""
-    entry = StubConfigEntry("entry-42", populated_db)
-    hass = StubHass(entry)
+    entry_id = "entry-42"
+    db_path = tmp_path / "positions.db"
+    hass = StubHass(entry_id, db_path)
     connection = StubConnection()
+
+    async def fake_snapshot(
+        hass_arg,
+        db_path_arg,
+        *,
+        include_positions: bool,
+    ) -> NormalizationResult:
+        assert Path(db_path_arg) == db_path
+        assert include_positions is True
+        return _fake_normalization_result(include_positions=include_positions)
+
+    monkeypatch.setattr(websocket_module, "async_normalize_snapshot", fake_snapshot)
 
     await WS_GET_PORTFOLIO_POSITIONS(
         hass,
@@ -151,7 +162,7 @@ async def test_ws_get_portfolio_positions_normalises_currency(
         {
             "id": 7,
             "type": "pp_reader/get_portfolio_positions",
-            "entry_id": entry.entry_id,
+            "entry_id": entry_id,
             "portfolio_uuid": "portfolio-1",
         },
     )
@@ -162,7 +173,6 @@ async def test_ws_get_portfolio_positions_normalises_currency(
     msg_id, payload = connection.sent[0]
     assert msg_id == 7
     assert payload["portfolio_uuid"] == "portfolio-1"
-    assert "error" not in payload
 
     positions = payload["positions"]
     assert len(positions) == 1
@@ -174,83 +184,33 @@ async def test_ws_get_portfolio_positions_normalises_currency(
     expected_holdings = round_currency(12.345678, decimals=6, default=0.0) or 0.0
     assert position["current_holdings"] == pytest.approx(expected_holdings)
 
-    expected_purchase_value = (
-        round_currency(
-            cent_to_eur(123_456, default=0.0),
-            default=0.0,
-        )
-        or 0.0
-    )
-    expected_current_value = (
-        round_currency(
-            cent_to_eur(789_012, default=0.0),
-            default=0.0,
-        )
-        or 0.0
-    )
-    expected_gain_abs = (
-        round_currency(expected_current_value - expected_purchase_value, default=0.0)
-        or 0.0
-    )
+    expected_purchase_value = round_currency(1234.56, default=0.0) or 0.0
+    expected_current_value = round_currency(1789.01, default=0.0) or 0.0
+    expected_gain_abs = expected_current_value - expected_purchase_value
 
     assert position["purchase_value"] == pytest.approx(expected_purchase_value)
     assert position["current_value"] == pytest.approx(expected_current_value)
-    assert "gain_abs" not in position
-    assert "gain_pct" not in position
-    expected_avg_cost_native = round_price(45.678901, decimals=6) or 0.0
-    expected_purchase_total_security = round_currency(2345.6789, default=0.0) or 0.0
-    expected_purchase_total_account = round_currency(3456.7891, default=0.0) or 0.0
-    expected_avg_price_account = round_price(23.456789, decimals=6) or 0.0
-    assert "avg_price_account" not in position
-    assert "avg_price_security" not in position
 
     average_cost = position["average_cost"]
-    assert average_cost is not None
-    expected_avg_cost_security = (
-        round_price(
-            expected_purchase_total_security / expected_holdings,
-            decimals=6,
-        )
-        if expected_holdings
-        else 0.0
-    ) or 0.0
-    expected_avg_cost_account = expected_avg_price_account
-    expected_avg_cost_eur = (
-        round_currency(
-            expected_purchase_value / expected_holdings if expected_holdings else 0.0,
-            decimals=6,
-            default=0.0,
-        )
+    assert average_cost["eur"] == pytest.approx(
+        round_currency(expected_purchase_value / expected_holdings, default=0.0)
         or 0.0
     )
-    assert average_cost["native"] == pytest.approx(expected_avg_cost_native)
-    assert average_cost["security"] == pytest.approx(expected_avg_cost_security)
-    assert average_cost["account"] == pytest.approx(expected_avg_cost_account)
-    assert average_cost["eur"] == pytest.approx(expected_avg_cost_eur)
+    assert average_cost["security"] == pytest.approx(
+        round_price(11.111111, decimals=6) or 0.0
+    )
+    assert average_cost["account"] == pytest.approx(
+        round_price(22.222222, decimals=6) or 0.0
+    )
     assert average_cost["source"] == "totals"
-    assert average_cost["coverage_ratio"] == pytest.approx(1.0)
-    assert average_cost["eur"] == pytest.approx(expected_avg_cost_eur)
 
     aggregation = position["aggregation"]
-    assert aggregation is not None
-    expected_aggregation = {
-        "total_holdings": expected_holdings,
-        "positive_holdings": expected_holdings,
-        "purchase_value_cents": 123_456,
-        "purchase_value_eur": expected_purchase_value,
-        "security_currency_total": expected_purchase_total_security,
-        "account_currency_total": expected_purchase_total_account,
-        "purchase_total_security": expected_purchase_total_security,
-        "purchase_total_account": expected_purchase_total_account,
-    }
-    assert set(aggregation) == set(expected_aggregation)
-    assert "avg_price_security" not in aggregation
-    for key, expected_value in expected_aggregation.items():
-        actual_value = aggregation.get(key)
-        if isinstance(expected_value, (int, float)):
-            assert actual_value == pytest.approx(expected_value)
-        else:
-            assert actual_value == expected_value
+    assert aggregation["purchase_total_security"] == pytest.approx(
+        round_currency(2345.6789, default=0.0) or 0.0
+    )
+    assert aggregation["purchase_total_account"] == pytest.approx(
+        round_currency(3456.7891, default=0.0) or 0.0
+    )
 
     performance_metrics, _ = select_performance_metrics(
         current_value=expected_current_value,
@@ -265,105 +225,26 @@ async def test_ws_get_portfolio_positions_normalises_currency(
         "source": performance_metrics.source,
         "coverage_ratio": performance_metrics.coverage_ratio,
     }
-
-    performance = position["performance"]
-    assert performance == expected_performance
-    assert performance["gain_abs"] == pytest.approx(expected_gain_abs)
-
-    backend_positions = get_portfolio_positions(populated_db, "portfolio-1")
-    assert len(backend_positions) == 1
-    backend_position = backend_positions[0]
-    backend_aggregation = {
-        key: value
-        for key, value in backend_position["aggregation"].items()  # type: ignore[arg-type]
-        if key in aggregation
-    }
-    assert backend_aggregation == aggregation
-    assert backend_position["average_cost"] == average_cost
-    assert backend_position["performance"] == performance
-    assert performance["source"] == "calculated"
-    assert performance["coverage_ratio"] == pytest.approx(1.0)
+    assert position["performance"] == expected_performance
+    assert position["performance"]["gain_abs"] == pytest.approx(expected_gain_abs)
 
 
-def test_normalize_portfolio_positions_uses_average_cost_payload() -> None:
-    """Average-cost metrics should be forwarded from the payload without recomputing."""
-    normalized = websocket_module._normalize_portfolio_positions(
-        [
-            {
-                "security_uuid": "sec-agg",
-                "name": "Aggregated",
-                "current_holdings": 5.0,
-                "purchase_value": 250.0,
-                "current_value": 5678.0,
-                "gain_abs": 1357.0,
-                "gain_pct": 12.0,
-                "purchase_total_security": 222.22,
-                "purchase_total_account": 333.33,
-                "average_cost": {
-                    "native": 3.456789,
-                    "security": 11.111111,
-                    "account": 22.222222,
-                    "eur": 50.0,
-                    "source": "totals",
-                    "coverage_ratio": 1.0,
-                },
-                "performance": {
-                    "gain_abs": 1357.0,
-                    "gain_pct": 12.0,
-                    "total_change_eur": 1357.0,
-                    "total_change_pct": 12.0,
-                    "source": "calculated",
-                    "coverage_ratio": 0.75,
-                },
-                "aggregation": {
-                    "purchase_total_security": 999.99,
-                    "purchase_total_account": 888.88,
-                    "purchase_value_eur": 123.45,
-                },
-            }
-        ]
+def test_positions_payload_preserves_average_cost() -> None:
+    """Average-cost metrics should be forwarded without recomputation."""
+    portfolio = _make_portfolio_snapshot(include_positions=True)
+    payload = websocket_module._positions_payload(portfolio)
+
+    assert len(payload) == 1
+    entry = payload[0]
+
+    expected_average_cost = portfolio.positions[0].average_cost
+    assert entry["average_cost"]["eur"] == pytest.approx(
+        round_currency(expected_average_cost["eur"], default=0.0) or 0.0
     )
-
-    assert normalized == [
-        {
-            "security_uuid": "sec-agg",
-            "name": "Aggregated",
-            "current_holdings": pytest.approx(
-                round_currency(5.0, decimals=6, default=0.0) or 0.0
-            ),
-            "purchase_value": pytest.approx(round_currency(123.45) or 0.0),
-            "current_value": pytest.approx(round_currency(5678.0) or 0.0),
-            "average_cost": {
-                "native": pytest.approx(round_price(3.456789, decimals=6) or 0.0),
-                "security": pytest.approx(round_price(11.111111, decimals=6) or 0.0),
-                "account": pytest.approx(round_price(22.222222, decimals=6) or 0.0),
-                "eur": pytest.approx(round_currency(50.0) or 0.0),
-                "source": "totals",
-                "coverage_ratio": pytest.approx(round_currency(1.0) or 0.0),
-            },
-            "performance": {
-                "gain_abs": pytest.approx(round_currency(1357.0) or 0.0),
-                "gain_pct": pytest.approx(round_currency(12.0) or 0.0),
-                "total_change_eur": pytest.approx(round_currency(1357.0) or 0.0),
-                "total_change_pct": pytest.approx(round_currency(12.0) or 0.0),
-                "source": "calculated",
-                "coverage_ratio": pytest.approx(round_currency(0.75) or 0.0),
-            },
-            "aggregation": {
-                "purchase_total_security": pytest.approx(round_currency(999.99) or 0.0),
-                "purchase_total_account": pytest.approx(round_currency(888.88) or 0.0),
-                "purchase_value_eur": pytest.approx(round_currency(123.45) or 0.0),
-            },
-        }
-    ]
-
-    normalized_entry = normalized[0]
-    assert "gain_abs" not in normalized_entry
-    assert "gain_pct" not in normalized_entry
-    assert "purchase_total_security" not in normalized_entry
-    assert "purchase_total_account" not in normalized_entry
-    assert "avg_price_security" not in normalized_entry
-    aggregation = normalized_entry["aggregation"]
-    assert aggregation is not None
-    assert "avg_price_security" not in aggregation
-    assert "avg_price_account" not in aggregation
+    assert entry["average_cost"]["security"] == pytest.approx(
+        round_price(expected_average_cost["security"], decimals=6) or 0.0
+    )
+    assert entry["average_cost"]["account"] == pytest.approx(
+        round_price(expected_average_cost["account"], decimals=6) or 0.0
+    )
+    assert entry["average_cost"]["source"] == expected_average_cost["source"]

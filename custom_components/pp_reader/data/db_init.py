@@ -13,6 +13,10 @@ from .db_schema import (
     PORTFOLIO_METRICS_SCHEMA,
     SECURITY_METRICS_SCHEMA,
 )
+from .migrations import (
+    cleanup_portfolio_security_legacy_columns,
+    ensure_snapshot_tables,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _METRIC_SCHEMA_BUNDLES = (
@@ -156,26 +160,6 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
                 (
                     "ALTER TABLE portfolio_securities "
                     "ADD COLUMN account_currency_total INTEGER DEFAULT 0"
-                ),
-            )
-        )
-    if "avg_price_security" not in existing_cols:
-        migrations.append(
-            (
-                "avg_price_security",
-                (
-                    "ALTER TABLE portfolio_securities "
-                    "ADD COLUMN avg_price_security INTEGER"
-                ),
-            )
-        )
-    if "avg_price_account" not in existing_cols:
-        migrations.append(
-            (
-                "avg_price_account",
-                (
-                    "ALTER TABLE portfolio_securities "
-                    "ADD COLUMN avg_price_account INTEGER"
                 ),
             )
         )
@@ -484,6 +468,8 @@ def initialize_database_schema(db_path: Path) -> None:
             ensure_ingestion_tables(conn)
             _ensure_ingestion_history_metadata_columns(conn)
             ensure_metric_tables(conn)
+            ensure_snapshot_tables(conn)
+            cleanup_portfolio_security_legacy_columns(conn)
             clear_legacy_metric_columns(conn)
 
             conn.commit()

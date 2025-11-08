@@ -7,6 +7,7 @@ Portfolio Performance Reader keeps your Home Assistant instance in sync with the
 - Stores the latest quote per security and recalculates portfolio totals from SQLite so sensors, WebSocket clients, and the dashboard all see the same figures.
 - Exposes structured payloads for holdings (`aggregation`/`average_cost`) and performance metrics that power sensors, WebSocket responses, and dashboard tables.
 - Persists aggregated portfolio, account, and security metrics (plus run metadata) in dedicated SQLite tables so diagnostics, events, and WebSocket consumers reuse a single source of truth.
+- Normalises every metric run into canonical snapshots stored in the `portfolio_snapshots` and `account_snapshots` tables, so downstream consumers fetch a consistent structure even after Home Assistant restarts.
 - Runs entirely on your Home Assistant host; the only outbound traffic comes from optional pricing providers such as Yahoo Finance or the Frankfurter FX API.
 - Queues enrichment jobs after each import: FX rates are cached in SQLite, and Yahoo history fetches populate the `historical_prices` table for offline dashboards.
 
@@ -17,6 +18,14 @@ Portfolio Performance Reader keeps your Home Assistant instance in sync with the
 - **Built-in dashboard panel:** Adds a persistent "Portfolio Dashboard" sidebar entry with live updates, expandable tables, and navigation to per-security details.
 - **Resilient storage:** Maintains six-hour rolling backups of the integration database and exposes a manual service for on-demand snapshots.
 - **Asynchronous enrichment pipeline:** Refreshes Frankfurter FX rates and Yahoo price history in the background, persisting provenance metadata so charts and metrics keep working when the upstream APIs are temporarily unavailable.
+
+## Canonical snapshots & events
+Portfolio Performance Reader now delivers sensor, WebSocket, and dashboard payloads from a normalization layer housed in `custom_components/pp_reader/data/normalization_pipeline.py`.
+
+- Every metrics run persists canonical `PortfolioSnapshot` and `AccountSnapshot` payloads into `portfolio_snapshots` and `account_snapshots`, keyed by the originating `metric_run_uuid`. The snapshots contain the same rounded figures, coverage metadata, and provenance strings presented in the UI, which makes replays and diagnostics deterministic.
+- WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_accounts`, `pp_reader/get_portfolio_data`, `pp_reader/get_portfolio_positions`, `pp_reader/get_security_snapshot`, and `pp_reader/get_security_history`) hydrate their responses from these snapshots, so the dashboard always receives the same schema regardless of which backend module requested the data.
+- Event push helpers (`custom_components/pp_reader/data/event_push.py`) broadcast incremental updates over Home Assistant's `EVENT_PANELS_UPDATED` bus topic with a `data_type` discriminator (`accounts`, `portfolio_values`, `portfolio_positions`, `security_snapshot`, or `security_history`). The dashboard subscribes to those events and patches tables without polling.
+- Diagnostics now include a `normalized_payload` entry that mirrors the serialized normalization result for the last metric run, making it easy to compare backend payloads with what the UI renders or what CLI tools fetch.
 
 ## Requirements
 - Home Assistant **2025.4.1** or newer when installed via HACS (matches the integration manifest).

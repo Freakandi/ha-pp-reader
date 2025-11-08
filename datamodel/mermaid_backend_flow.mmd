@@ -61,14 +61,12 @@ flowchart TB
     SyncSecurities --> SecuritiesDB[("SQLite securities")]
     TransactionsDB --> TxRollup[["rebuild_portfolio_security_transactions"]]
     TxRollup --> PositionTxAggDB
-    FxRates --> GetPositions[["get_portfolio_positions"]]
-    PortfolioSecDB --> GetPositions
-    PositionTxAggDB --> GetPositions
-    TransactionsDB --> GetPositions
-    SecuritiesDB --> GetPositions
-    GetPositions --> HoldingsAgg[["compute_holdings_aggregation"]]
-    HoldingsAgg --> NormalizePositions[["_normalize_portfolio_positions"]]
-    NormalizePositions --> PortfolioPositionsPayload[["portfolio_positions payload"]]
+    FxRates --> PositionsPipeline[["normalization_pipeline"]]
+    PortfolioSecDB --> PositionsPipeline
+    PositionTxAggDB --> PositionsPipeline
+    TransactionsDB --> PositionsPipeline
+    SecuritiesDB --> PositionsPipeline
+    PositionsPipeline --> PortfolioPositionsPayload[["portfolio_positions payload"]]
     PortfolioPerfDB --> PositionTrendSeries[["load_position_performance_series"]]
   end
   PortfolioPositionsPayload --> UI
