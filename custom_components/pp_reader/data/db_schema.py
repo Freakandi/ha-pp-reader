@@ -117,8 +117,6 @@ PORTFOLIO_SECURITIES_SCHEMA = [
         avg_price_native INTEGER,          -- Kaufpreis in nativer Währung (10^-8)
         security_currency_total INTEGER DEFAULT 0, -- Kaufwert in WP-Währung (10^-8)
         account_currency_total INTEGER DEFAULT 0,  -- Kaufwert in Kontowährung (10^-8)
-        avg_price_security INTEGER,        -- Ø-Preis pro Aktie in WP-Währung (10^-8)
-        avg_price_account INTEGER,         -- Ø-Preis pro Aktie in Kontowährung (10^-8)
         current_value INTEGER DEFAULT 0,   -- Aktueller Wert in 10^-8 Einheiten
         PRIMARY KEY (portfolio_uuid, security_uuid),
         FOREIGN KEY (portfolio_uuid) REFERENCES portfolios(uuid),
@@ -693,6 +691,89 @@ SECURITY_METRICS_SCHEMA = [
     """,
 ]
 
+PORTFOLIO_SNAPSHOT_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_run_uuid TEXT NOT NULL,
+        portfolio_uuid TEXT NOT NULL,
+        snapshot_at TEXT NOT NULL,
+        name TEXT NOT NULL,
+        currency_code TEXT NOT NULL DEFAULT 'EUR',
+        current_value REAL NOT NULL DEFAULT 0.0,
+        purchase_sum REAL NOT NULL DEFAULT 0.0,
+        gain_abs REAL NOT NULL DEFAULT 0.0,
+        gain_pct REAL,
+        total_change_eur REAL,
+        total_change_pct REAL,
+        position_count INTEGER NOT NULL DEFAULT 0,
+        missing_value_positions INTEGER NOT NULL DEFAULT 0,
+        has_current_value INTEGER NOT NULL DEFAULT 1,
+        coverage_ratio REAL,
+        performance_source TEXT,
+        performance_provenance TEXT,
+        provenance TEXT,
+        payload TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT,
+        UNIQUE(metric_run_uuid, portfolio_uuid),
+        FOREIGN KEY (metric_run_uuid)
+            REFERENCES metric_runs(run_uuid)
+            ON DELETE CASCADE,
+        FOREIGN KEY (portfolio_uuid)
+            REFERENCES portfolios(uuid)
+            ON DELETE CASCADE
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_run
+    ON portfolio_snapshots (metric_run_uuid);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_portfolio
+    ON portfolio_snapshots (portfolio_uuid);
+    """,
+]
+
+ACCOUNT_SNAPSHOT_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS account_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_run_uuid TEXT NOT NULL,
+        account_uuid TEXT NOT NULL,
+        snapshot_at TEXT NOT NULL,
+        name TEXT NOT NULL,
+        currency_code TEXT NOT NULL,
+        orig_balance REAL NOT NULL DEFAULT 0.0,
+        balance REAL,
+        fx_unavailable INTEGER NOT NULL DEFAULT 0,
+        fx_rate REAL,
+        fx_rate_source TEXT,
+        fx_rate_timestamp TEXT,
+        coverage_ratio REAL,
+        provenance TEXT,
+        payload TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT,
+        UNIQUE(metric_run_uuid, account_uuid),
+        FOREIGN KEY (metric_run_uuid)
+            REFERENCES metric_runs(run_uuid)
+            ON DELETE CASCADE,
+        FOREIGN KEY (account_uuid)
+            REFERENCES accounts(uuid)
+            ON DELETE CASCADE
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_account_snapshots_run
+    ON account_snapshots (metric_run_uuid);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_account_snapshots_account
+    ON account_snapshots (account_uuid);
+    """,
+]
+
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
     *SECURITY_SCHEMA,
@@ -707,6 +788,8 @@ ALL_SCHEMAS = [
     *PORTFOLIO_METRICS_SCHEMA,
     *ACCOUNT_METRICS_SCHEMA,
     *SECURITY_METRICS_SCHEMA,
+    *PORTFOLIO_SNAPSHOT_SCHEMA,
+    *ACCOUNT_SNAPSHOT_SCHEMA,
 ]
 
 # Performance Index für On-Demand Portfolio Aggregation:

@@ -9,10 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sqlite3
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import asdict, is_dataclass
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -21,123 +18,20 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import (
-    cent_to_eur,
-    round_currency,
-    round_price,
+from custom_components.pp_reader.util.currency import round_currency
+
+from .db_access import get_last_file_update
+from .normalization_pipeline import (
+    async_fetch_security_history,
+    async_normalize_security_snapshot,
+    async_normalize_snapshot,
+    serialize_account_snapshot,
+    serialize_portfolio_snapshot,
 )
-
-from .db_access import (
-    fetch_live_portfolios,  # NEU: On-Demand Aggregation
-    get_accounts,
-    get_last_file_update,
-    get_portfolio_positions,
-    get_security_snapshot,
-    iter_security_close_prices,
-)
-
-
-def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
-    """Return all non-EUR currencies from active accounts."""
-    active_currencies: set[str] = set()
-    for account in accounts:
-        if getattr(account, "is_retired", False):
-            continue
-
-        raw_currency = getattr(account, "currency_code", "EUR")
-        if not isinstance(raw_currency, str):
-            continue
-
-        currency = raw_currency.strip().upper()
-        if not currency or currency == "EUR":
-            continue
-
-        active_currencies.add(currency)
-
-    return active_currencies
-
-
-async def _load_accounts_payload(
-    hass: HomeAssistant, db_path: Path
-) -> list[dict[str, Any]]:
-    """Return account details formatted for websocket responses."""
-    accounts = await async_run_executor_job(hass, get_accounts, db_path)
-
-    fx_rates: dict[str, float] = {}
-    try:
-        active_fx_currencies = _collect_active_fx_currencies(accounts)
-        if active_fx_currencies:
-            ensure_rates = ensure_exchange_rates_for_dates
-            load_rates = load_latest_rates
-            if ensure_rates is None or load_rates is None:
-                _LOGGER.warning(
-                    (
-                        "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
-                        "setze Fremdwährungswerte=0 EUR."
-                    ),
-                )
-            else:
-                today = datetime.now(UTC)
-                await ensure_rates([today], active_fx_currencies, db_path)
-                fx_rates = await load_rates(today, db_path)
-    except Exception:  # noqa: BLE001
-        _LOGGER.warning(
-            (
-                "FX-Modul nicht verfügbar oder Fehler beim Laden der Kurse - "
-                "setze Fremdwährungswerte=0 EUR."
-            ),
-        )
-        fx_rates = {}
-
-    account_data: list[dict[str, Any]] = []
-    for account in accounts:
-        if getattr(account, "is_retired", False):
-            continue
-
-        currency = getattr(account, "currency_code", "EUR") or "EUR"
-        orig_balance = (
-            cent_to_eur(getattr(account, "balance", None), default=0.0) or 0.0
-        )
-        fx_unavailable = False
-        if currency != "EUR":
-            rate = fx_rates.get(currency)
-            if rate:
-                eur_balance = orig_balance / rate
-            else:
-                eur_balance = None
-                fx_unavailable = True
-                _LOGGER.warning(
-                    "FX: Kein Kurs für %s - EUR-Wert nicht verfügbar",
-                    currency,
-                )
-        else:
-            eur_balance = orig_balance
-
-        account_entry = {
-            "name": account.name,
-            "currency_code": currency,
-            "orig_balance": round_currency(orig_balance) or 0.0,
-            "balance": (
-                round_currency(eur_balance) if eur_balance is not None else None
-            ),
-        }
-        if fx_unavailable:
-            account_entry["fx_unavailable"] = True
-        account_data.append(account_entry)
-
-    return account_data
-
-
-try:
-    from custom_components.pp_reader.currencies.fx import (
-        ensure_exchange_rates_for_dates,
-        load_latest_rates,
-    )
-except ImportError:  # pragma: no cover - optional FX module
-    ensure_exchange_rates_for_dates = None  # type: ignore[assignment]
-    load_latest_rates = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from homeassistant.components.websocket_api import ActiveConnection
     from homeassistant.core import HomeAssistant
 
@@ -145,245 +39,95 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-def _serialise_security_snapshot(
-    snapshot: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    """Normalise snapshot payload for websocket transmission."""
-    if not snapshot:
-        return {
-            "name": "",
-            "currency_code": "EUR",
-            "total_holdings": 0.0,
-            "last_price_native": None,
-            "last_price_eur": None,
-            "market_value_eur": None,
-            "purchase_value_eur": 0.0,
-            "average_cost": None,
-            "aggregation": None,
-            "last_close_native": None,
-            "last_close_eur": None,
-            "performance": None,
-        }
-
-    name_value = snapshot.get("name")
-    name_str = name_value if isinstance(name_value, str) else str(name_value or "")
-
-    raw_currency = snapshot.get("currency_code")
-    currency = raw_currency.strip().upper() if isinstance(raw_currency, str) else "EUR"
-    if not currency:
-        currency = "EUR"
-
-    total_holdings = (
-        round_currency(snapshot.get("total_holdings"), decimals=6, default=0.0) or 0.0
+def _get_entry_data(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:
+    """Return the hass.data entry payload or raise LookupError."""
+    domain_entries = hass.data.get(DOMAIN)
+    entry_data = (
+        domain_entries.get(entry_id) if isinstance(domain_entries, dict) else None
     )
+    if entry_data is None:
+        message = f"entry_id {entry_id} unknown"
+        raise LookupError(message)
 
-    average_cost_raw = snapshot.get("average_cost")
-    average_cost: dict[str, Any] | None
-    if isinstance(average_cost_raw, Mapping):
-        average_cost = {
-            "eur": round_currency(average_cost_raw.get("eur"), default=None),
-            "security": round_currency(
-                average_cost_raw.get("security"),
-                decimals=6,
-                default=None,
-            ),
-            "account": round_currency(
-                average_cost_raw.get("account"),
-                default=None,
-            ),
+    return entry_data
+
+
+def _resolve_db_path(entry_data: Mapping[str, Any]) -> Path:
+    """Extract the db_path from a config entry payload."""
+    db_path_raw = entry_data.get("db_path")
+    if not db_path_raw:
+        message = "db_path für den Config Entry fehlt"
+        raise ValueError(message)
+    return Path(db_path_raw)
+
+
+def _accounts_payload(result: Any) -> list[dict[str, Any]]:
+    """Convert AccountSnapshot dataclasses into the legacy payload format."""
+    payload: list[dict[str, Any]] = []
+    for account in result.accounts:
+        serialized = serialize_account_snapshot(account)
+        formatted: dict[str, Any] = {}
+        for key in ("name", "currency_code", "orig_balance", "balance"):
+            if key in serialized:
+                formatted[key] = serialized[key]
+        if serialized.get("fx_unavailable"):
+            formatted["fx_unavailable"] = True
+        payload.append(formatted)
+    return payload
+
+
+def _portfolio_summaries(result: Any) -> list[dict[str, Any]]:
+    """Return portfolio summary payloads with legacy purchase_sum key."""
+    payload: list[dict[str, Any]] = []
+    for snapshot in result.portfolios:
+        serialized = serialize_portfolio_snapshot(snapshot)
+        purchase_value = serialized.pop("purchase_value", 0.0) or 0.0
+        formatted: dict[str, Any] = {
+            "uuid": serialized.get("uuid"),
+            "name": serialized.get("name"),
+            "current_value": serialized.get("current_value"),
+            "purchase_sum": purchase_value,
+            "position_count": serialized.get("position_count"),
+            "missing_value_positions": serialized.get("missing_value_positions"),
+            "has_current_value": serialized.get("has_current_value"),
+            "performance": serialized.get("performance"),
         }
-    else:
-        average_cost = None
+        optional_keys = ("coverage_ratio", "provenance", "metric_run_uuid")
+        for key in optional_keys:
+            if key in serialized:
+                formatted[key] = serialized[key]
+        payload.append(formatted)
+    return payload
 
-    aggregation_raw = snapshot.get("aggregation")
-    aggregation: dict[str, Any] | None
-    if isinstance(aggregation_raw, Mapping):
-        aggregation = {
-            "total_holdings": round_currency(
-                aggregation_raw.get("total_holdings"),
+
+def _positions_payload(portfolio: Any) -> list[dict[str, Any]]:
+    """Convert PositionSnapshot dataclasses to websocket payload entries."""
+    return [
+        {
+            "security_uuid": position.security_uuid,
+            "name": position.name,
+            "current_holdings": round_currency(
+                position.current_holdings,
                 decimals=6,
                 default=0.0,
             )
             or 0.0,
-            "purchase_value_eur": round_currency(
-                aggregation_raw.get("purchase_value_eur"),
+            "purchase_value": round_currency(
+                position.purchase_value,
                 default=0.0,
             )
             or 0.0,
-            "purchase_total_security": round_currency(
-                aggregation_raw.get("purchase_total_security"),
-                decimals=6,
-                default=None,
-            ),
-            "purchase_total_account": round_currency(
-                aggregation_raw.get("purchase_total_account"),
-                default=None,
-            ),
-            "coverage_ratio": aggregation_raw.get("coverage_ratio"),
+            "current_value": round_currency(
+                position.current_value,
+                default=0.0,
+            )
+            or 0.0,
+            "average_cost": dict(position.average_cost),
+            "performance": dict(position.performance),
+            "aggregation": dict(position.aggregation),
         }
-    else:
-        aggregation = None
-
-    performance_raw = snapshot.get("performance")
-    performance: dict[str, Any] | None
-    if isinstance(performance_raw, Mapping):
-        performance = dict(performance_raw)
-        day_change_raw = performance.get("day_change")
-        if isinstance(day_change_raw, Mapping):
-            performance["day_change"] = {
-                "price_change_native": round_price(
-                    day_change_raw.get("price_change_native"),
-                    decimals=6,
-                ),
-                "price_change_eur": round_price(
-                    day_change_raw.get("price_change_eur"),
-                    decimals=6,
-                ),
-                "change_pct": day_change_raw.get("change_pct"),
-                "source": day_change_raw.get("source"),
-                "coverage_ratio": day_change_raw.get("coverage_ratio"),
-            }
-    else:
-        performance = None
-
-    return {
-        "name": name_str,
-        "currency_code": currency,
-        "total_holdings": total_holdings,
-        "last_price_native": round_price(snapshot.get("last_price_native"), decimals=6),
-        "last_price_eur": round_price(snapshot.get("last_price_eur"), decimals=6),
-        "market_value_eur": (
-            round_currency(snapshot.get("market_value_eur"), default=0.0) or 0.0
-        ),
-        "purchase_value_eur": round_currency(
-            snapshot.get("purchase_value_eur"),
-            default=0.0,
-        )
-        or 0.0,
-        "average_cost": average_cost,
-        "aggregation": aggregation,
-        "last_close_native": round_price(
-            snapshot.get("last_close_native"),
-            decimals=6,
-        ),
-        "last_close_eur": round_price(snapshot.get("last_close_eur"), decimals=6),
-        "performance": performance,
-        "metric_run_uuid": snapshot.get("metric_run_uuid"),
-    }
-
-
-def _resolve_aggregation_value(
-    payload: Mapping[str, Any] | None,
-    *keys: str,
-    default: Any | None = None,
-) -> Any | None:
-    """Return the first non-empty value for the provided keys."""
-    if payload is None:
-        return default
-
-    for key in keys:
-        value = payload.get(key)
-        if value not in (None, ""):
-            return value
-
-    return default
-
-
-def _normalize_portfolio_positions(  # noqa: PLR0912
-    positions: Iterable[Mapping[str, Any]] | None,
-) -> list[dict[str, Any]]:
-    """Return portfolio position payload including purchase metrics."""
-    if not positions:
-        return []
-
-    normalized: list[dict[str, Any]] = []
-    for item in positions:
-        if not isinstance(item, Mapping):
-            continue
-
-        security_uuid = item.get("security_uuid")
-        if security_uuid is not None:
-            security_uuid = str(security_uuid)
-
-        raw_aggregation = item.get("aggregation")
-        aggregation_payload: dict[str, Any] | None = None
-        if isinstance(raw_aggregation, Mapping):
-            aggregation_payload = dict(raw_aggregation)
-        elif is_dataclass(raw_aggregation):
-            aggregation_payload = asdict(raw_aggregation)
-
-        if aggregation_payload is not None:
-            aggregation_payload.pop("average_purchase_price_native", None)
-            security_total = aggregation_payload.get("security_currency_total")
-            if (
-                security_total not in (None, "")
-                and "purchase_total_security" not in aggregation_payload
-            ):
-                aggregation_payload["purchase_total_security"] = security_total
-
-            account_total = aggregation_payload.get("account_currency_total")
-            if (
-                account_total not in (None, "")
-                and "purchase_total_account" not in aggregation_payload
-            ):
-                aggregation_payload["purchase_total_account"] = account_total
-
-        raw_average_cost = item.get("average_cost")
-        average_cost: dict[str, Any] | None = None
-        if isinstance(raw_average_cost, Mapping):
-            average_cost = dict(raw_average_cost)
-        elif is_dataclass(raw_average_cost):
-            average_cost = asdict(raw_average_cost)
-
-        raw_performance = item.get("performance")
-        performance_payload: dict[str, Any] | None = None
-        if isinstance(raw_performance, Mapping):
-            performance_payload = dict(raw_performance)
-            day_change_raw = performance_payload.get("day_change")
-            if isinstance(day_change_raw, Mapping):
-                performance_payload["day_change"] = dict(day_change_raw)
-            elif is_dataclass(day_change_raw):
-                performance_payload["day_change"] = asdict(day_change_raw)
-        elif is_dataclass(raw_performance):
-            performance_payload = asdict(raw_performance)
-
-        purchase_value_source = _resolve_aggregation_value(
-            aggregation_payload,
-            "purchase_value_eur",
-            "purchase_value",
-            default=item.get("purchase_value"),
-        )
-        purchase_value = round_currency(purchase_value_source, default=0.0)
-
-        holdings_source = _resolve_aggregation_value(
-            aggregation_payload,
-            "total_holdings",
-            default=item.get("current_holdings"),
-        )
-
-        normalized.append(
-            {
-                "security_uuid": security_uuid,
-                "name": item.get("name"),
-                "current_holdings": round_currency(
-                    holdings_source,
-                    decimals=6,
-                    default=0.0,
-                ),
-                "purchase_value": purchase_value,
-                "current_value": round_currency(
-                    item.get("current_value"),
-                    default=0.0,
-                ),
-                "average_cost": average_cost,
-                "performance": performance_payload,
-                "aggregation": aggregation_payload,
-            }
-        )
-
-    return normalized
-
-
+        for position in portfolio.positions
+    ]
 def _wrap_with_loop_fallback(
     handler: Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any],
 ) -> Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any]:
@@ -453,82 +197,6 @@ def _wrap_with_loop_fallback(
     return wrapper
 
 
-async def _live_portfolios_payload(  # noqa: PLR0912
-    hass: HomeAssistant,
-    entry_id: str,
-    *,
-    entry_data: dict[str, Any] | None = None,
-    log_context: str = "",
-) -> list[dict[str, Any]]:
-    """Fetch live portfolio aggregates with coordinator fallback."""
-    domain_data = hass.data.get(DOMAIN, {})
-    data = entry_data or domain_data.get(entry_id)
-    if not data:
-        message = f"entry_id {entry_id} not registered"
-        raise LookupError(message)
-
-    db_path: Path = data["db_path"]
-    coordinator = data.get("coordinator")
-
-    result: list[dict[str, Any]] | None = None
-    try:
-        portfolios = await async_run_executor_job(hass, fetch_live_portfolios, db_path)
-    except Exception:  # noqa: BLE001 - broad catch keeps coordinator fallback intact
-        context_suffix = f" ({log_context})" if log_context else ""
-        _LOGGER.warning(
-            (
-                "On-Demand Portfolio Aggregation%s fehlgeschlagen - "
-                "Fallback auf Coordinator Daten"
-            ),
-            context_suffix,
-            exc_info=True,
-        )
-    else:
-        if isinstance(portfolios, list):
-            result = list(portfolios)
-        elif isinstance(portfolios, dict):
-            result = list(portfolios.values())
-        elif isinstance(portfolios, Iterable):
-            result = list(portfolios)
-
-    if result is not None:
-        normalized: list[dict[str, Any]] = []
-        for entry in result:
-            if not isinstance(entry, Mapping):
-                continue
-            normalized_entry = dict(entry)
-            normalized_entry.pop("gain_abs", None)
-            normalized_entry.pop("gain_pct", None)
-            normalized.append(normalized_entry)
-        return normalized
-
-    if not coordinator:
-        return []
-
-    snapshot = coordinator.data.get("portfolios", [])
-
-    if isinstance(snapshot, list):
-        return snapshot
-
-    if isinstance(snapshot, dict):
-        normalized: list[dict[str, Any]] = []
-        for portfolio_uuid, raw in snapshot.items():
-            if not isinstance(raw, dict):
-                continue
-            normalized.append(
-                {
-                    "uuid": portfolio_uuid,
-                    "name": raw.get("name"),
-                    "current_value": raw.get("current_value", raw.get("value", 0)),
-                    "purchase_sum": raw.get("purchase_sum", 0),
-                    "position_count": raw.get("position_count", raw.get("count", 0)),
-                }
-            )
-        return normalized
-
-    return []
-
-
 # === Dashboard Websocket Test-Command ===
 @websocket_api.websocket_command(
     {
@@ -553,11 +221,23 @@ async def ws_get_dashboard_data(
     - Payload-Shape bleibt unverändert (keine Mutation bestehender Keys).
     """
     entry_id = msg.get("entry_id")
-    domain_data = hass.data.get(DOMAIN, {})
-    entry_data = domain_data.get(entry_id)
+    if not entry_id:
+        connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
+        return
 
-    if not entry_data:
-        connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg["id"], "db_error", str(err))
+        return
+    except Exception:
+        _LOGGER.exception("WebSocket: Fehler beim Auflösen von entry_id %s", entry_id)
+        error_msg = "entry_id Auflösung fehlgeschlagen"
+        connection.send_error(msg["id"], "db_error", error_msg)
         return
 
     coordinator = entry_data.get("coordinator")
@@ -570,21 +250,19 @@ async def ws_get_dashboard_data(
         transactions = coordinator.data.get("transactions", [])
         last_file_update = coordinator.data.get("last_update")
 
-    db_path_raw = entry_data.get("db_path")
-    if db_path_raw:
-        try:
-            accounts = await _load_accounts_payload(hass, Path(db_path_raw))
-        except Exception:
-            _LOGGER.exception("Fehler beim Laden der Kontodaten für das Dashboard")
-            accounts = []
+    try:
+        snapshot = await async_normalize_snapshot(hass, db_path)
+    except Exception:
+        _LOGGER.exception("Fehler beim Laden der Normalisierung (dashboard)")
+        connection.send_error(
+            msg["id"],
+            "db_error",
+            "Fehler beim Laden der Normalisierung",
+        )
+        return
 
-    # NEU: Live Portfolios
-    portfolios = await _live_portfolios_payload(
-        hass,
-        entry_id,
-        entry_data=entry_data,
-        log_context="dashboard",
-    )
+    accounts = _accounts_payload(snapshot)
+    portfolios = _portfolio_summaries(snapshot)
 
     connection.send_result(
         msg["id"],
@@ -611,16 +289,33 @@ async def ws_get_accounts(
     """Return active accounts with original and EUR-converted balance (FX)."""
     try:
         entry_id = msg["entry_id"]
-        db_path = hass.data[DOMAIN][entry_id]["db_path"]
-        account_data = await _load_accounts_payload(hass, Path(db_path))
-        connection.send_result(msg["id"], {"accounts": account_data})
     except KeyError:
+        connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
+        return
+
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg["id"], "db_error", str(err))
+        return
+
+    try:
+        snapshot = await async_normalize_snapshot(hass, db_path)
+    except Exception:
+        _LOGGER.exception("Fehler beim Laden der Normalisierung (accounts)")
         connection.send_error(
-            msg["id"], "not_found", "Ungültiger entry_id oder fehlende Daten"
+            msg["id"],
+            "db_error",
+            "Fehler beim Laden der Normalisierung",
         )
-    except Exception as e:
-        _LOGGER.exception("Fehler beim Abrufen der Kontodaten (mit FX)")
-        connection.send_error(msg["id"], "db_error", str(e))
+        return
+
+    account_data = _accounts_payload(snapshot)
+    connection.send_result(msg["id"], {"accounts": account_data})
 
 
 # === Websocket FileUpdate-Timestamp ===
@@ -728,19 +423,40 @@ async def ws_get_portfolio_data(
       {name,value,count,purchase_sum}, ... }}.
     """
     entry_id = msg.get("entry_id")
-    domain_data = hass.data.get(DOMAIN, {})
-    entry_data = domain_data.get(entry_id)
-
-    if not entry_data:
-        connection.send_error(msg["id"], "not_found", f"entry_id {entry_id} unknown")
+    if not entry_id:
+        connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
         return
 
-    portfolios = await _live_portfolios_payload(
-        hass,
-        entry_id,
-        entry_data=entry_data,
-        log_context="portfolio",
-    )
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg["id"], "db_error", str(err))
+        return
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Auflösen des Config Entries (%s)",
+            entry_id,
+        )
+        error_msg = "entry_id Auflösung fehlgeschlagen"
+        connection.send_error(msg["id"], "db_error", error_msg)
+        return
+
+    try:
+        snapshot = await async_normalize_snapshot(hass, db_path)
+    except Exception:
+        _LOGGER.exception("Fehler beim Laden der Normalisierung (portfolio_data)")
+        connection.send_error(
+            msg["id"],
+            "db_error",
+            "Fehler beim Laden der Normalisierung",
+        )
+        return
+
+    portfolios = _portfolio_summaries(snapshot)
 
     connection.send_result(
         msg["id"],
@@ -796,45 +512,28 @@ async def ws_get_security_history(
         connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
         return
 
-    domain_entries = hass.data.get(DOMAIN)
-    if not isinstance(domain_entries, dict):
-        connection.send_error(
-            msg_id,
-            "not_found",
-            "Keine pp_reader Config Entries registriert",
-        )
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
         return
-
-    entry_data = domain_entries.get(entry_id)
-    if not isinstance(entry_data, dict):
-        connection.send_error(msg_id, "not_found", f"entry_id {entry_id} unknown")
-        return
-
-    db_path_raw = entry_data.get("db_path")
-    if db_path_raw is None:
-        connection.send_error(
-            msg_id,
-            "db_error",
-            "db_path für den Config Entry fehlt",
-        )
+    except ValueError as err:
+        connection.send_error(msg_id, "db_error", str(err))
         return
 
     security_uuid = msg.get("security_uuid")
     start_date = msg.get("start_date")
     end_date = msg.get("end_date")
 
-    def _collect_prices() -> list[tuple[int, int]]:
-        return list(
-            iter_security_close_prices(
-                db_path=Path(db_path_raw),
-                security_uuid=security_uuid,
-                start_date=start_date,
-                end_date=end_date,
-            )
-        )
-
     try:
-        prices = await async_run_executor_job(hass, _collect_prices)
+        payload = await async_fetch_security_history(
+            hass,
+            db_path,
+            security_uuid,
+            start_date=start_date,
+            end_date=end_date,
+        )
     except (TypeError, ValueError) as err:
         connection.send_error(msg_id, "invalid_format", str(err))
         return
@@ -849,15 +548,6 @@ async def ws_get_security_history(
             "Fehler beim Laden historischer Preise",
         )
         return
-
-    payload: list[dict[str, Any]] = []
-    for date_value, close_value, close_raw in prices:
-        entry: dict[str, Any] = {"date": date_value}
-        if close_value is not None:
-            entry["close"] = close_value
-        if close_raw is not None:
-            entry["close_raw"] = close_raw
-        payload.append(entry)
 
     response: dict[str, Any] = {
         "security_uuid": security_uuid,
@@ -904,35 +594,19 @@ async def ws_get_security_snapshot(  # noqa: PLR0911
         )
         return
 
-    domain_entries = hass.data.get(DOMAIN)
-    if not isinstance(domain_entries, dict):
-        connection.send_error(
-            msg_id,
-            "not_found",
-            "Keine pp_reader Config Entries registriert",
-        )
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
         return
-
-    entry_data = domain_entries.get(entry_id)
-    if not isinstance(entry_data, dict):
-        connection.send_error(msg_id, "not_found", f"entry_id {entry_id} unknown")
+    except ValueError as err:
+        connection.send_error(msg_id, "db_error", str(err))
         return
-
-    db_path_raw = entry_data.get("db_path")
-    if db_path_raw is None:
-        connection.send_error(
-            msg_id,
-            "db_error",
-            "db_path für den Config Entry fehlt",
-        )
-        return
-
-    db_path = Path(db_path_raw)
 
     try:
-        raw_snapshot = await async_run_executor_job(
+        snapshot = await async_normalize_security_snapshot(
             hass,
-            get_security_snapshot,
             db_path,
             security_uuid,
         )
@@ -953,12 +627,6 @@ async def ws_get_security_snapshot(  # noqa: PLR0911
             "Fehler beim Laden des Snapshots",
         )
         return
-
-    snapshot = (
-        _serialise_security_snapshot(raw_snapshot)
-        if isinstance(raw_snapshot, Mapping)
-        else _serialise_security_snapshot(None)
-    )
 
     connection.send_result(
         msg_id,
@@ -996,44 +664,32 @@ async def ws_get_portfolio_positions(
     entry_id = msg.get("entry_id")
     portfolio_uuid = msg.get("portfolio_uuid")
 
-    config_entry = hass.config_entries.async_get_entry(entry_id)
-    if not config_entry:
-        connection.send_error(
-            msg["id"], "not_found", f"Config entry {entry_id} nicht gefunden"
-        )
+    if not entry_id:
+        connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
         return
-
-    db_path = Path(config_entry.data.get("db_path"))
-
-    def _portfolio_exists() -> bool:
-        try:
-            conn = sqlite3.connect(str(db_path))
-            try:
-                cur = conn.execute(
-                    "SELECT 1 FROM portfolios WHERE uuid = ? LIMIT 1", (portfolio_uuid,)
-                )
-                return cur.fetchone() is not None
-            finally:
-                conn.close()
-        except Exception:  # noqa: BLE001
-            return False
-
-    exists = await async_run_executor_job(hass, _portfolio_exists)
-    if not exists:
-        # Explizite Fehlerrückgabe statt leerer Liste
-        connection.send_result(
+    if not portfolio_uuid:
+        connection.send_error(
             msg["id"],
-            {
-                "portfolio_uuid": portfolio_uuid,
-                "positions": [],
-                "error": "Unbekanntes Depot oder nicht (mehr) vorhanden.",
-            },
+            "invalid_format",
+            "portfolio_uuid erforderlich",
         )
         return
 
     try:
-        positions = await async_run_executor_job(
-            hass, get_portfolio_positions, db_path, portfolio_uuid
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg["id"], "db_error", str(err))
+        return
+
+    try:
+        snapshot = await async_normalize_snapshot(
+            hass,
+            db_path,
+            include_positions=True,
         )
     except Exception:
         _LOGGER.exception(
@@ -1050,11 +706,26 @@ async def ws_get_portfolio_positions(
         )
         return
 
+    portfolio = next(
+        (item for item in snapshot.portfolios if item.uuid == portfolio_uuid),
+        None,
+    )
+    if portfolio is None:
+        connection.send_result(
+            msg["id"],
+            {
+                "portfolio_uuid": portfolio_uuid,
+                "positions": [],
+                "error": "Unbekanntes Depot oder nicht (mehr) vorhanden.",
+            },
+        )
+        return
+
     connection.send_result(
         msg["id"],
         {
             "portfolio_uuid": portfolio_uuid,
-            "positions": _normalize_portfolio_positions(positions),
+            "positions": _positions_payload(portfolio),
         },
     )
 
