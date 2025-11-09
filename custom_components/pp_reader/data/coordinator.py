@@ -59,7 +59,6 @@ from .normalization_pipeline import (
     PortfolioSnapshot,
     async_normalize_snapshot,
 )
-from .performance import compose_performance_payload, select_performance_metrics
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -185,7 +184,7 @@ def _portfolio_contract_entry(
     current_value = _normalize_portfolio_amount(current_value_raw)
     purchase_sum = _normalize_portfolio_amount(purchase_sum_raw)
 
-    performance_metrics, day_change_metrics = select_performance_metrics(
+    performance_metrics, day_change_metrics = metrics.select_performance_metrics(
         current_value=current_value_raw,
         purchase_value=purchase_sum_raw,
         holdings=position_count,
@@ -193,13 +192,13 @@ def _portfolio_contract_entry(
 
     performance_mapping = entry.get("performance")
     if isinstance(performance_mapping, Mapping):
-        performance_payload = compose_performance_payload(
+        performance_payload = metrics.compose_performance_payload(
             performance_mapping,
             metrics=performance_metrics,
             day_change=day_change_metrics,
         )
     else:
-        performance_payload = compose_performance_payload(
+        performance_payload = metrics.compose_performance_payload(
             None,
             metrics=performance_metrics,
             day_change=day_change_metrics,
