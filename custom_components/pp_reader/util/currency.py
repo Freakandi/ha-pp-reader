@@ -4,14 +4,10 @@ from __future__ import annotations
 
 import logging
 from math import isfinite
-from typing import TYPE_CHECKING
-
-from custom_components.pp_reader.currencies.fx import (
-    ensure_exchange_rates_for_dates_sync,
-    load_cached_rate_records_sync,
-)
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
     from datetime import datetime
     from pathlib import Path
 
@@ -20,7 +16,9 @@ __all__ = [
     "CURRENCY_DECIMALS",
     "PRICE_DECIMALS",
     "cent_to_eur",
+    "ensure_exchange_rates_for_dates_sync",
     "eur_to_cent",
+    "load_cached_rate_records_sync",
     "normalize_price_to_eur_sync",
     "normalize_raw_price",
     "round_currency",
@@ -150,6 +148,11 @@ def normalize_price_to_eur_sync(
         return price_native
 
     try:
+        from custom_components.pp_reader.currencies.fx import (
+            ensure_exchange_rates_for_dates_sync,
+            load_cached_rate_records_sync,
+        )
+
         ensure_exchange_rates_for_dates_sync(
             [reference_date], {normalized_currency}, db_path
         )
@@ -178,3 +181,33 @@ def normalize_price_to_eur_sync(
         return None
 
     return round_price(normalized, decimals=decimals)
+
+
+CACHED_FX_HELPERS: dict[str, Any] = {}
+
+
+def _load_fx_helper(name: str) -> Any:
+    """Dynamically import FX helper functions on first access."""
+    if name not in CACHED_FX_HELPERS:
+        from custom_components.pp_reader.currencies import fx
+
+        CACHED_FX_HELPERS[name] = getattr(fx, name)
+    return CACHED_FX_HELPERS[name]
+
+
+def ensure_exchange_rates_for_dates_sync(
+    dates: Iterable[datetime],
+    currencies: set[str],
+    db_path: Path,
+) -> None:
+    """Proxy to the FX helper without importing it at module import time."""
+    helper = _load_fx_helper("ensure_exchange_rates_for_dates_sync")
+    helper(dates, currencies, db_path)
+
+
+def load_cached_rate_records_sync(
+    reference_date: datetime, db_path: Path
+) -> Mapping[str, Any]:
+    """Proxy to the FX cache reader while avoiding circular imports."""
+    helper = _load_fx_helper("load_cached_rate_records_sync")
+    return helper(reference_date, db_path)

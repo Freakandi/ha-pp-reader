@@ -30,7 +30,7 @@ from .normalization_pipeline import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from homeassistant.components.websocket_api import ActiveConnection
     from homeassistant.core import HomeAssistant
@@ -59,6 +59,49 @@ def _resolve_db_path(entry_data: Mapping[str, Any]) -> Path:
         message = "db_path für den Config Entry fehlt"
         raise ValueError(message)
     return Path(db_path_raw)
+
+
+def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
+    """Return active non-EUR currency codes from the given accounts."""
+    currencies: set[str] = set()
+    for account in accounts:
+        if getattr(account, "is_retired", False):
+            continue
+
+        currency = getattr(account, "currency_code", None)
+        if not isinstance(currency, str):
+            continue
+
+        normalized = currency.strip().upper()
+        if not normalized or normalized == "EUR":
+            continue
+
+        currencies.add(normalized)
+
+    return currencies
+
+
+def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:
+    """Coerce persisted security snapshots into JSON-serializable mappings."""
+    if snapshot is None:
+        return {}
+
+    if isinstance(snapshot, dict):
+        result = dict(snapshot)
+    elif hasattr(snapshot, "_asdict"):
+        result = dict(snapshot._asdict())  # type: ignore[attr-defined]
+    else:
+        try:
+            result = dict(snapshot)
+        except TypeError:
+            result = snapshot.__dict__.copy()  # type: ignore[attr-defined]
+
+    for key in ("average_cost", "aggregation", "performance"):
+        value = result.get(key)
+        if isinstance(value, dict):
+            result[key] = dict(value)
+
+    return result
 
 
 def _accounts_payload(result: Any) -> list[dict[str, Any]]:
