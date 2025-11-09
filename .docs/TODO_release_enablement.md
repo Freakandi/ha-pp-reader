@@ -1,6 +1,7 @@
 1. [ ] QA & Regression Validation
    a) [ ] Run full backend regression (`pytest -q` plus `pytest --cov=custom_components/pp_reader --cov-report=term-missing`) inside the project venv to confirm ingestion → enrichment → normalization passes with the normalized dashboard adapter enabled.
       - Ziel: Catch parser/db/schema regressions before release packaging and capture failing modules for remediation.
+      - 2025-02-14: Lauf `pytest -q` und `pytest --cov=custom_components/pp_reader --cov-report=term-missing` schlägt mit 48/49 Failures (u. a. fehlende `avg_price_*`-Spalten, fehlende `datetime.UTC`, Proto-Feldabweichungen, Node-Smoke-Tests) fehl → Blocker durch ausstehende Schema-/Datamodel-Migrationen.
    b) [ ] Execute enrichment + websocket smoke matrix (`pytest tests/test_event_push.py tests/test_ws_portfolios_live.py tests/test_ws_portfolio_positions.py tests/prices/test_history_queue.py tests/currencies/test_fx_async.py`) to ensure live updates stay aligned with the canonical payload contract.
       - Ziel: Validate the event bridge and FX/history helpers now that the frontend no longer tolerates legacy payloads.
    c) [ ] Rebuild frontend assets (`npm run lint:ts`, `npm run typecheck`, `npm test`, `npm run build`) after clearing `node_modules/.vite` to prove the normalized adapter builds cleanly for release bundles.
