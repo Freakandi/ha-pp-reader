@@ -218,12 +218,14 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
             avg_price_native: float,
             security_currency_total: float,
             account_currency_total: float,
+            avg_price_security: float,
             avg_price_account: float,
         ) -> None:
             self.purchase_value = purchase_value
             self.avg_price_native = avg_price_native
             self.security_currency_total = security_currency_total
             self.account_currency_total = account_currency_total
+            self.avg_price_security = avg_price_security
             self.avg_price_account = avg_price_account
 
     purchase_value = 123.4567
@@ -231,6 +233,7 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
     security_total = 200.9876
     account_total = 300.54321
     avg_price_native = 12.345678
+    avg_price_security = 98.765432
     avg_price_account = 150.654321
 
     db_path = tmp_path / "portfolio.db"
@@ -243,9 +246,10 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
             current_holdings INTEGER,
             purchase_value INTEGER,
             avg_price_native INTEGER,
+            avg_price_security INTEGER,
+            avg_price_account INTEGER,
             security_currency_total INTEGER,
             account_currency_total INTEGER,
-            avg_price_account INTEGER,
             current_value INTEGER
         )
         """
@@ -302,6 +306,7 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
         avg_price_native,
         security_total,
         account_total,
+        avg_price_security,
         avg_price_account,
     )
     current_holdings = 3.0
@@ -333,6 +338,8 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
                 "security_currency_total": security_total,
                 "account_currency_total": account_total,
                 "avg_price_native": avg_price_native,
+                "avg_price_security": avg_price_security,
+                "avg_price_account": avg_price_account,
             }
         }
 
@@ -351,6 +358,7 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
             current_holdings,
             purchase_value,
             avg_price_native,
+            avg_price_security,
             security_currency_total,
             account_currency_total,
             avg_price_account,
@@ -368,6 +376,7 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
         current_holdings_db,
         purchase_value_cents,
         avg_price_native_db,
+        avg_price_security_db,
         security_total_db,
         account_total_db,
         avg_price_account_db,
@@ -378,11 +387,12 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
     assert current_holdings_db == pytest.approx(current_holdings)
     assert purchase_value_cents == eur_to_cent(expected_purchase_eur, default=0)
     assert avg_price_native_db == pytest.approx(avg_price_native, abs=1e-6)
+    assert avg_price_security_db == pytest.approx(avg_price_security, abs=1e-6)
     assert security_total_db == pytest.approx(
         round_currency(security_total, default=0.0)
     )
     assert account_total_db == pytest.approx(round_currency(account_total, default=0.0))
-    assert avg_price_account_db is None
+    assert avg_price_account_db == pytest.approx(avg_price_account, abs=1e-6)
     expected_current_eur = round_currency(current_value, default=0.0)
     assert current_value_cents == eur_to_cent(expected_current_eur, default=0)
 

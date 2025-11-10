@@ -27,6 +27,7 @@ from custom_components.pp_reader.util.currency import (
     round_currency,
     round_price,
 )
+from custom_components.pp_reader.util.datetime import UTC
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
@@ -993,7 +994,7 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
 
 def _utc_now_isoformat() -> str:
     """Return the current UTC timestamp in ISO8601 notation."""
-    return datetime.now(tz=datetime.UTC).replace(microsecond=0).strftime(
+    return datetime.now(tz=UTC).replace(microsecond=0).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
 

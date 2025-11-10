@@ -130,24 +130,26 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 
 ## portfolio_securities
 
-| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Populated By | Source Format |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | PPortfolio.uuid | string |
-| 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | PSecurity.uuid | string |
-| 3 | share_count | real | yes | 0.0 | Current share quantity in portfolio. | db_calculate_current_holdings(transactions) | Float share total from `db_calculate_current_holdings` in `_SyncRunner._sync_portfolio_securities`. |
-| 4 | purchase_value_native | integer (10⁻⁸ units) | yes | 0 | Total purchase cost in the security's native currency. | db_calculate_sec_purchase_value(transactions, db_path, tx_units).security_currency_total (requires persistence update to store the native total). | int scaled representation of `security_currency_total` produced by `db_calculate_sec_purchase_value`. |
-| 5 | current_value_native | integer (10⁻⁸ units) | yes | 0 | Current market value in the security's native currency. | (New helper required; existing `db_calculate_holdings_value` only returns EUR totals.) | int scaled native-market valuation computed by the planned helper. |
-| 6 | avg_price_native | real (10⁻⁸ units) | yes | — | Average purchase price per share in the security's native currency. | db_calculate_sec_purchase_value(transactions, db_path, tx_units).avg_price_security | float derived from `avg_price_security` returned by `db_calculate_sec_purchase_value`. |
-| 7 | purchase_value_eur | integer (cents) | yes | 0 | Purchase value in EUR (only stored when native currency ≠ EUR; otherwise mirrors native). | db_calculate_sec_purchase_value(transactions, db_path, tx_units) → eur_to_cent(round_currency(purchase_value_eur)). | int cents converted from the EUR total returned by `db_calculate_sec_purchase_value`. |
-| 8 | current_value_eur | integer (cents) | yes | 0 | Current market value in EUR (only stored when native currency ≠ EUR). | db_calculate_holdings_value(db_path, conn, current_hold_pur) → eur_to_cent(round_currency(current_value_eur)). | int cents derived from `db_calculate_holdings_value` for each (portfolio, security). |
-| 9 | avg_price_eur | real (computed cents) | generated | — | Average purchase price per share in EUR (`purchase_value_eur / share_count`). | SQLite expression using `purchase_value_eur` and `share_count`. |
+| 1 | portfolio_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `portfolios.uuid`. | `_SyncRunner._sync_portfolio_securities`, `_refresh_impacted_portfolio_securities` | string |
+| 2 | security_uuid | string (TEXT) | no (part of PRIMARY KEY) | — | References `securities.uuid`. | `_SyncRunner._sync_portfolio_securities`, `_refresh_impacted_portfolio_securities` | string |
+| 3 | current_holdings | integer (10⁻⁸ share units) | yes | 0 | Running holdings per portfolio/security pair stored in fixed-point precision. | `db_calculate_current_holdings` via `_SyncRunner._sync_portfolio_securities` (and the price-cycle refresh helper). | integer (`shares * 1e8`) |
+| 4 | purchase_value | integer (cents) | yes | 0 | Aggregated EUR purchase value for the remaining holdings. | `db_calculate_sec_purchase_value(...).purchase_value` run through `eur_to_cent` before persistence. | integer |
+| 5 | avg_price | generated INTEGER (10⁻⁸) | yes | — | Stored expression mirroring `purchase_value / current_holdings` to preserve historic payloads. | SQLite `GENERATED ALWAYS AS` expression (no direct writes). | computed |
+| 6 | avg_price_native | real (6 decimals) | yes | NULL | Weighted average price per share in the security’s native currency (mirrors Portfolio Performance’s “native” cost). | `db_calculate_sec_purchase_value(...).avg_price_native`. | float |
+| 7 | avg_price_security | real (6 decimals) | yes | NULL | Same average cost but explicitly tied to the security currency (guards against native/account mismatches). | `db_calculate_sec_purchase_value(...).avg_price_security`. | float |
+| 8 | avg_price_account | real (6 decimals) | yes | NULL | Average cost per share measured in the portfolio account currency before FX conversion. | `db_calculate_sec_purchase_value(...).avg_price_account`. | float |
+| 9 | security_currency_total | real (2 decimals) | yes | 0 | Aggregate purchase value in the security currency used by the normalized websocket payloads. | `db_calculate_sec_purchase_value(...).security_currency_total`. | float |
+| 10 | account_currency_total | real (2 decimals) | yes | 0 | Aggregate purchase value in the account currency, enabling account-side cost displays. | `db_calculate_sec_purchase_value(...).account_currency_total`. | float |
+| 11 | current_value | integer (cents) | yes | 0 | Current EUR market value derived from the latest price refresh. | `db_calculate_holdings_value(...).current_value` inside `_SyncRunner._sync_portfolio_securities` and `_refresh_impacted_portfolio_securities`. | integer |
 
 **Indexes**
 
 | Index Name | Columns | Type | Notes |
 | --- | --- | --- | --- |
 | PRIMARY KEY | portfolio_uuid, security_uuid | unique | Backed by `sqlite_autoindex_portfolio_securities_1`. |
-| idx_portfolio_securities_portfolio | portfolio_uuid | non-unique | Speeds portfolio lookups. |
+| idx_portfolio_securities_portfolio | portfolio_uuid | non-unique | Speeds portfolio lookups and derived aggregations. |
 
 ### portfolio_securities → portfolio_securities_performance (subtable)
 

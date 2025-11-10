@@ -566,7 +566,14 @@ def test_sync_portfolio_securities_persists_native_average(
         runner._sync_portfolio_securities()
         cursor = conn.execute(
             """
-            SELECT current_holdings, purchase_value, avg_price_native
+            SELECT
+                current_holdings,
+                purchase_value,
+                avg_price_native,
+                avg_price_security,
+                avg_price_account,
+                security_currency_total,
+                account_currency_total
             FROM portfolio_securities
             WHERE portfolio_uuid = ? AND security_uuid = ?
             """,
@@ -578,10 +585,22 @@ def test_sync_portfolio_securities_persists_native_average(
         conn.close()
 
     assert row is not None
-    current_holdings, purchase_value_cents, avg_price_native = row
+    (
+        current_holdings,
+        purchase_value_cents,
+        avg_price_native,
+        avg_price_security,
+        avg_price_account,
+        security_currency_total,
+        account_currency_total,
+    ) = row
     assert current_holdings == pytest.approx(2.0)
     assert purchase_value_cents == 17_600
     assert avg_price_native == pytest.approx(110.0, rel=0, abs=1e-6)
+    assert avg_price_security == pytest.approx(110.0, rel=0, abs=1e-6)
+    assert avg_price_account == pytest.approx(110.0, rel=0, abs=1e-6)
+    assert security_currency_total == pytest.approx(220.0, rel=0, abs=1e-6)
+    assert account_currency_total == pytest.approx(220.0, rel=0, abs=1e-6)
 
 
 def test_sync_securities_persists_deduplicated_historical_prices(

@@ -7,14 +7,17 @@ import json
 import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from custom_components.pp_reader.util.datetime import UTC
+
 from .db_init import clear_ingestion_stage, ensure_ingestion_tables
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from custom_components.pp_reader.models import parsed as parsed_models
 else:
     parsed_models = None
@@ -25,7 +28,7 @@ def _to_iso(dt: datetime | None) -> str | None:
         return None
     if dt.tzinfo is None:
         return dt.isoformat()
-    return dt.astimezone(datetime.UTC).isoformat()
+    return dt.astimezone(UTC).isoformat()
 
 
 def _json_dump(value: Mapping[str, Any] | None) -> str | None:

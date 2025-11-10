@@ -115,6 +115,8 @@ PORTFOLIO_SECURITIES_SCHEMA = [
             END
         ) STORED,                          -- Durchschnittlicher Kaufpreis (10^-8)
         avg_price_native INTEGER,          -- Kaufpreis in nativer Währung (10^-8)
+        avg_price_security INTEGER,        -- Durchschnittspreis in WP-Währung (10^-8)
+        avg_price_account INTEGER,         -- Durchschnittspreis in Kontowährung (10^-8)
         security_currency_total INTEGER DEFAULT 0, -- Kaufwert in WP-Währung (10^-8)
         account_currency_total INTEGER DEFAULT 0,  -- Kaufwert in Kontowährung (10^-8)
         current_value INTEGER DEFAULT 0,   -- Aktueller Wert in 10^-8 Einheiten

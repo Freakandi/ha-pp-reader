@@ -1234,7 +1234,7 @@ class _SyncRunner:
         # (e.g. exchange rate updates during portfolio securities sync).
         self.conn.commit()
 
-    def _sync_portfolio_securities(self) -> None:
+    def _sync_portfolio_securities(self) -> None:  # noqa: PLR0912, PLR0915
         if self.cursor is None:
             return
         if not (self.changes.transactions or self.changes.securities):
@@ -1262,6 +1262,14 @@ class _SyncRunner:
                 "current_holdings": holdings,
                 "purchase_value": purchase_value,
                 "avg_price_native": avg_price_native,
+                "security_currency_total": (
+                    metrics.security_currency_total if metrics else None
+                ),
+                "account_currency_total": (
+                    metrics.account_currency_total if metrics else None
+                ),
+                "avg_price_security": metrics.avg_price_security if metrics else None,
+                "avg_price_account": metrics.avg_price_account if metrics else None,
             }
 
         current_holdings_values = db_calculate_holdings_value(
@@ -1284,21 +1292,113 @@ class _SyncRunner:
 
             self.cursor.execute(
                 """
-                SELECT current_holdings, purchase_value, avg_price_native, current_value
+                SELECT
+                    current_holdings,
+                    purchase_value,
+                    avg_price_native,
+                    avg_price_security,
+                    avg_price_account,
+                    security_currency_total,
+                    account_currency_total,
+                    current_value
                 FROM portfolio_securities
                 WHERE portfolio_uuid = ? AND security_uuid = ?
                 """,
                 (portfolio_uuid, security_uuid),
             )
-            existing_entry = self.cursor.fetchone()
+            row = self.cursor.fetchone()
+            existing_entry = (
+                {
+                    "current_holdings": float(row[0]) if row[0] is not None else 0.0,
+                    "purchase_value": int(row[1]) if row[1] is not None else 0,
+                    "avg_price_native": (
+                        float(row[2]) if row[2] is not None else None
+                    ),
+                    "avg_price_security": (
+                        float(row[3]) if row[3] is not None else None
+                    ),
+                    "avg_price_account": (
+                        float(row[4]) if row[4] is not None else None
+                    ),
+                    "security_currency_total": (
+                        float(row[5]) if row[5] is not None else 0.0
+                    ),
+                    "account_currency_total": (
+                        float(row[6]) if row[6] is not None else 0.0
+                    ),
+                    "current_value": int(row[7]) if row[7] is not None else None,
+                }
+                if row
+                else None
+            )
+
+            def _coerce_float(value: Any) -> float | None:
+                if isinstance(value, (int, float)):
+                    return float(value)
+                return None
+
+            avg_price_native_val = _coerce_float(data.get("avg_price_native"))
+            if avg_price_native_val is None and existing_entry:
+                avg_price_native_val = existing_entry["avg_price_native"]
+
+            avg_price_security_val = _coerce_float(data.get("avg_price_security"))
+            if avg_price_security_val is None and existing_entry:
+                avg_price_security_val = existing_entry["avg_price_security"]
+
+            avg_price_account_val = _coerce_float(data.get("avg_price_account"))
+            if avg_price_account_val is None and existing_entry:
+                avg_price_account_val = existing_entry["avg_price_account"]
+
+            security_total_val = round_currency(
+                data.get("security_currency_total"), default=None
+            )
+            if security_total_val is None:
+                security_total_val = (
+                    existing_entry["security_currency_total"]
+                    if existing_entry
+                    else 0.0
+                )
+
+            account_total_val = round_currency(
+                data.get("account_currency_total"), default=None
+            )
+            if account_total_val is None:
+                account_total_val = (
+                    existing_entry["account_currency_total"]
+                    if existing_entry
+                    else 0.0
+                )
+
+            if current_value_cent is None and existing_entry:
+                current_value_cent = existing_entry["current_value"]
 
             expected_values = (
                 current_holdings_val,
                 purchase_value_cent,
-                data.get("avg_price_native"),
+                avg_price_native_val,
+                avg_price_security_val,
+                avg_price_account_val,
+                security_total_val,
+                account_total_val,
                 current_value_cent,
             )
-            if not existing_entry or existing_entry != expected_values:
+
+            existing_tuple = (
+                (
+                    existing_entry["current_holdings"],
+                    existing_entry["purchase_value"],
+                    existing_entry["avg_price_native"],
+                    existing_entry["avg_price_security"],
+                    existing_entry["avg_price_account"],
+                    existing_entry["security_currency_total"],
+                    existing_entry["account_currency_total"],
+                    existing_entry["current_value"],
+                )
+                if existing_entry
+                else None
+            )
+
+            if not existing_entry or existing_tuple != expected_values:
                 self.changes.portfolio_securities = True
                 self.cursor.execute(
                     """
@@ -1308,16 +1408,24 @@ class _SyncRunner:
                         current_holdings,
                         purchase_value,
                         avg_price_native,
+                        avg_price_security,
+                        avg_price_account,
+                        security_currency_total,
+                        account_currency_total,
                         current_value
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         portfolio_uuid,
                         security_uuid,
                         current_holdings_val,
-                        expected_values[1],
-                        expected_values[2],
-                        expected_values[3],
+                        purchase_value_cent,
+                        avg_price_native_val,
+                        avg_price_security_val,
+                        avg_price_account_val,
+                        security_total_val,
+                        account_total_val,
+                        current_value_cent,
                     ),
                 )
                 portfolio_sec_processed += 1

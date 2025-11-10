@@ -11,7 +11,8 @@ from custom_components.pp_reader.data.db_schema import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-_LEGACY_PORTFOLIO_COLUMNS = ("avg_price_security", "avg_price_account")
+LEGACY_PORTFOLIO_COLUMNS: tuple[str, ...] = ()
+"""Names of deprecated portfolio columns that still require cleanup."""
 
 def _table_columns(conn: sqlite3.Connection, table: str) -> dict[str, tuple[int, str]]:
     """Return the column metadata for a given table."""
@@ -21,15 +22,17 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> dict[str, tuple[int,
 
 def _needs_portfolio_cleanup(conn: sqlite3.Connection) -> bool:
     """Return True when legacy avg_price columns are still present."""
+    if not LEGACY_PORTFOLIO_COLUMNS:
+        return False
     columns = _table_columns(conn, "portfolio_securities")
-    return any(col in columns for col in _LEGACY_PORTFOLIO_COLUMNS)
+    return any(col in columns for col in LEGACY_PORTFOLIO_COLUMNS)
 
 
 def _recreate_portfolio_table(conn: sqlite3.Connection) -> None:
     """Recreate portfolio_securities without the legacy columns."""
     _LOGGER.info(
         "Dropping legacy columns on portfolio_securities: removing %s",
-        ", ".join(_LEGACY_PORTFOLIO_COLUMNS),
+        ", ".join(LEGACY_PORTFOLIO_COLUMNS),
     )
     conn.execute("ALTER TABLE portfolio_securities RENAME TO portfolio_securities_tmp")
     conn.execute(PORTFOLIO_SECURITIES_SCHEMA[0])
@@ -41,6 +44,8 @@ def _recreate_portfolio_table(conn: sqlite3.Connection) -> None:
             current_holdings,
             purchase_value,
             avg_price_native,
+            avg_price_security,
+            avg_price_account,
             security_currency_total,
             account_currency_total,
             current_value
@@ -51,6 +56,8 @@ def _recreate_portfolio_table(conn: sqlite3.Connection) -> None:
             current_holdings,
             purchase_value,
             avg_price_native,
+            avg_price_security,
+            avg_price_account,
             security_currency_total,
             account_currency_total,
             current_value
@@ -64,12 +71,10 @@ def _recreate_portfolio_table(conn: sqlite3.Connection) -> None:
 
 def cleanup_portfolio_security_legacy_columns(conn: sqlite3.Connection) -> None:
     """
-    Remove deprecated portfolio security columns used before normalization.
+    Remove deprecated portfolio security columns when defined.
 
-    Older installations still carried per-share mirrors (avg_price_security,
-    avg_price_account) that are now obsolete because structured average_cost
-    payloads are persisted alongside canonical snapshots. This helper rebuilds
-    the table without those columns when necessary.
+    The current schema does not flag any legacy columns, but the helper remains
+    to allow future migrations to drop transient fields in a single place.
     """
     try:
         if not _needs_portfolio_cleanup(conn):

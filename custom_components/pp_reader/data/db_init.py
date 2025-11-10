@@ -17,6 +17,7 @@ from .migrations import (
     cleanup_portfolio_security_legacy_columns,
     ensure_snapshot_tables,
 )
+from .migrations.cleanup import LEGACY_PORTFOLIO_COLUMNS
 
 _LOGGER = logging.getLogger(__name__)
 _METRIC_SCHEMA_BUNDLES = (
@@ -186,6 +187,25 @@ def _ensure_portfolio_purchase_extensions(conn: sqlite3.Connection) -> None:
                 )
 
     _backfill_portfolio_purchase_extension_defaults(conn)
+
+
+def _ensure_portfolio_average_price_columns(conn: sqlite3.Connection) -> None:
+    """Ensure avg price mirrors exist when not flagged as legacy columns."""
+    if LEGACY_PORTFOLIO_COLUMNS:
+        _LOGGER.debug(
+            "Überspringe Runtime-Migration für avg_price_* solange Legacy-Columns=%s",
+            ", ".join(LEGACY_PORTFOLIO_COLUMNS),
+        )
+        return
+
+    _ensure_table_columns(
+        conn,
+        "portfolio_securities",
+        [
+            ("avg_price_security", "avg_price_security INTEGER"),
+            ("avg_price_account", "avg_price_account INTEGER"),
+        ],
+    )
 
 
 def _ensure_table_columns(
@@ -462,6 +482,7 @@ def initialize_database_schema(db_path: Path) -> None:
             _ensure_runtime_price_columns(conn)
             _ensure_portfolio_securities_native_column(conn)
             _ensure_portfolio_purchase_extensions(conn)
+            _ensure_portfolio_average_price_columns(conn)
             _ensure_historical_price_metadata_columns(conn)
             _ensure_fx_rate_metadata_columns(conn)
             _ensure_historical_price_index(conn)

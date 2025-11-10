@@ -4,19 +4,24 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from homeassistant.config_entries import ConfigEntries
-from homeassistant.core import HomeAssistant
-from homeassistant.loader import (
-    DATA_COMPONENTS,
-    DATA_CUSTOM_COMPONENTS,
-    DATA_INTEGRATIONS,
-    DATA_MISSING_PLATFORMS,
-    DATA_PRELOAD_PLATFORMS,
-    Integration,
-)
+
+HOMEASSISTANT_IMPORT_ERROR: ModuleNotFoundError | None = None
+try:  # pragma: no cover - importability validated by targeted smoke tests
+    import homeassistant as _homeassistant  # noqa: F401
+except ModuleNotFoundError as err:  # pragma: no cover - missing HA in CI smoke env
+    HOMEASSISTANT_IMPORT_ERROR = err
+else:  # pragma: no cover - import used in fixtures only
+    HOMEASSISTANT_IMPORT_ERROR = None
+
+if TYPE_CHECKING:  # pragma: no cover - typing helpers only
+    from homeassistant.config_entries import ConfigEntries
+    from homeassistant.core import HomeAssistant
+    from homeassistant.loader import Integration
+else:
+    ConfigEntries = HomeAssistant = Integration = Any  # type: ignore[assignment]
 
 pytest_plugins = ("pytest_asyncio",)
 
@@ -38,6 +43,24 @@ async def hass(
     event_loop: asyncio.AbstractEventLoop, tmp_path
 ) -> AsyncGenerator[HomeAssistant]:
     """Provide a running Home Assistant instance backed by a temp config dir."""
+    if HOMEASSISTANT_IMPORT_ERROR is not None:  # pragma: no cover - optional smoke path
+        pytest.skip(
+            "Home Assistant is required for hass fixture: "
+            f"{HOMEASSISTANT_IMPORT_ERROR}",
+            allow_module_level=False,
+        )
+
+    from homeassistant.config_entries import ConfigEntries
+    from homeassistant.core import HomeAssistant
+    from homeassistant.loader import (
+        DATA_COMPONENTS,
+        DATA_CUSTOM_COMPONENTS,
+        DATA_INTEGRATIONS,
+        DATA_MISSING_PLATFORMS,
+        DATA_PRELOAD_PLATFORMS,
+        Integration,
+    )
+
     asyncio.set_event_loop(event_loop)
     hass = HomeAssistant(str(tmp_path))
     hass.config_entries = ConfigEntries(hass, {})

@@ -196,8 +196,10 @@ def test_fresh_schema_contains_price_columns(tmp_path):
     ).upper() == "INTEGER"
     assert "account_currency_total" in portfolio_cols
     assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
-    assert "avg_price_security" not in portfolio_cols
-    assert "avg_price_account" not in portfolio_cols
+    assert "avg_price_security" in portfolio_cols
+    assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_account" in portfolio_cols
+    assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
     assert "current_value" in portfolio_cols
     assert (portfolio_cols["current_value"]["type"] or "").upper() == "INTEGER"
 
@@ -292,7 +294,10 @@ def test_legacy_schema_migrated(tmp_path):
     ).upper() == "INTEGER"
     assert "account_currency_total" in portfolio_cols
     assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
-    assert "avg_price_account" not in portfolio_cols
+    assert "avg_price_security" in portfolio_cols
+    assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
+    assert "avg_price_account" in portfolio_cols
+    assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
 
     # Datenintegrität prüfen
     conn2 = sqlite3.connect(str(db_path))

@@ -30,6 +30,7 @@ from custom_components.pp_reader.data.db_access import (
     load_fx_rates_for_date,
     upsert_fx_rate,
 )
+from custom_components.pp_reader.util.datetime import UTC
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
     with _WRITE_LOCK:
         conn = sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
         try:
-            fetched_at = datetime.now(tz=datetime.UTC).replace(microsecond=0).strftime(
+            fetched_at = datetime.now(tz=UTC).replace(microsecond=0).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"
             )
             provenance = json.dumps(

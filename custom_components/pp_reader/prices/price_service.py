@@ -370,6 +370,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                                    current_holdings,
                                    purchase_value,
                                    avg_price_native,
+                                   avg_price_security,
+                                   avg_price_account,
                                    current_value,
                                    security_currency_total,
                                    account_currency_total
@@ -384,6 +386,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         cur_hold,
                         purch_val,
                         avg_native,
+                        avg_security,
+                        avg_account,
                         cur_val,
                         sec_total,
                         acc_total,
@@ -396,6 +400,14 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                             "purchase_value": int(purch_val or 0),
                             "avg_price_native": (
                                 float(avg_native) if avg_native is not None else None
+                            ),
+                            "avg_price_security": (
+                                float(avg_security)
+                                if avg_security is not None
+                                else None
+                            ),
+                            "avg_price_account": (
+                                float(avg_account) if avg_account is not None else None
                             ),
                             "current_value": int(cur_val or 0),
                             "security_currency_total": (
@@ -517,6 +529,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                 avg_price_native = metrics.avg_price_native if metrics else None
                 security_total = metrics.security_currency_total if metrics else None
                 account_total = metrics.account_currency_total if metrics else None
+                avg_price_security = metrics.avg_price_security if metrics else None
+                avg_price_account = metrics.avg_price_account if metrics else None
 
                 existing_entry = existing_entries.get(key)
                 if holdings is None and existing_entry:
@@ -527,6 +541,10 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     )
                 if avg_price_native is None and existing_entry:
                     avg_price_native = existing_entry.get("avg_price_native")
+                if avg_price_security is None and existing_entry:
+                    avg_price_security = existing_entry.get("avg_price_security")
+                if avg_price_account is None and existing_entry:
+                    avg_price_account = existing_entry.get("avg_price_account")
                 if security_total is None and existing_entry:
                     security_total = existing_entry.get("security_currency_total", 0.0)
                 if account_total is None and existing_entry:
@@ -541,6 +559,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     "avg_price_native": avg_price_native,
                     "security_currency_total": security_total or 0.0,
                     "account_currency_total": account_total or 0.0,
+                    "avg_price_security": avg_price_security,
+                    "avg_price_account": avg_price_account,
                 }
 
             if not current_hold_pur:
@@ -570,6 +590,18 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     avg_price_native_val: float | None = float(avg_price_native)
                 else:
                     avg_price_native_val = None
+
+                avg_price_security = data.get("avg_price_security")
+                if isinstance(avg_price_security, (int, float)):
+                    avg_price_security_val: float | None = float(avg_price_security)
+                else:
+                    avg_price_security_val = None
+
+                avg_price_account = data.get("avg_price_account")
+                if isinstance(avg_price_account, (int, float)):
+                    avg_price_account_val: float | None = float(avg_price_account)
+                else:
+                    avg_price_account_val = None
 
                 security_total = (
                     round_currency(data.get("security_currency_total"), default=0.0)
@@ -618,6 +650,36 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         )
                     )
                     and current_value_matches
+                    and (
+                        (
+                            existing_entry.get("avg_price_security") is None
+                            and avg_price_security_val is None
+                        )
+                        or (
+                            existing_entry.get("avg_price_security") is not None
+                            and avg_price_security_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_security", 0.0))
+                                - avg_price_security_val
+                            )
+                            < TOTAL_VALUE_MATCH_EPSILON
+                        )
+                    )
+                    and (
+                        (
+                            existing_entry.get("avg_price_account") is None
+                            and avg_price_account_val is None
+                        )
+                        or (
+                            existing_entry.get("avg_price_account") is not None
+                            and avg_price_account_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_account", 0.0))
+                                - avg_price_account_val
+                            )
+                            < TOTAL_VALUE_MATCH_EPSILON
+                        )
+                    )
                     and abs(
                         float(existing_entry.get("security_currency_total", 0.0))
                         - security_total
@@ -638,6 +700,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         current_holdings_val,
                         purchase_value_cents,
                         avg_price_native_val,
+                        avg_price_security_val,
+                        avg_price_account_val,
                         security_total,
                         account_total,
                         current_value_cents,
@@ -657,10 +721,12 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                             current_holdings,
                             purchase_value,
                             avg_price_native,
+                            avg_price_security,
+                            avg_price_account,
                             security_currency_total,
                             account_currency_total,
                             current_value
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     upserts,
                 )
