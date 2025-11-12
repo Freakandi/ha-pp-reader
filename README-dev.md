@@ -15,6 +15,7 @@ This guide targets contributors working on the Portfolio Performance Reader inte
 ## Quick start
 1. Run `./scripts/setup_container` (preferred) to install system packages, create `.venv`, and install runtime dependencies from `requirements.txt`.
 2. Activate the virtual environment in every new shell: `source .venv/bin/activate`.
+   - On Andreas' Raspberry Pi 5 VS Code workspace a dedicated `venv-ha/` already exists; activate it via `source venv-ha/bin/activate`, then start Home Assistant with `hass --config ~/coding/repos/ha-pp-reader/config` to reuse the repo's bundled configuration.
 3. Install contributor extras before running tests: `pip install -r requirements-dev.txt`.
 4. Install Node.js **18.18+** / npm **10+**, then execute `npm install` for the frontend toolchain.
 5. For bare environments without virtualenv support, `./scripts/environment_setup` installs the Python dependencies globally.
@@ -38,8 +39,8 @@ Additional platform-specific hints (Windows, devcontainers, Codex) live in [TEST
 - Integration state is stored under `hass.data[DOMAIN][entry_id]`; `fetch_live_portfolios` is the authoritative aggregator for portfolio totals consumed by sensors, events, and WebSocket responses.
 - Live pricing uses `yahooquery` with a minimum polling interval of 300 seconds. Respect the coordinator locks and logging hooks when adjusting the price service.
 - The enrichment pipeline is orchestrated by `custom_components.pp_reader.data.coordinator.PPReaderCoordinator`: it calls `currencies.fx.ensure_exchange_rates_for_dates` to refresh cached rates and hands parsed securities to `prices.history_queue.HistoryQueueManager` for Yahoo history ingestion. Keep persisted provenance fields intact when touching `fx_rates` or `price_history_queue`.
-- Feature flags (`feature_flags.snapshot` / `feature_flags.is_enabled`) store per-entry overrides pulled from config-entry options; use them to gate experimental enrichment stages.
-- The `normalized_dashboard_adapter` flag is configurable via the integration options flow (`Settings → Devices & Services → Portfolio Performance Reader → Configure`). Use it to swap the dashboard between the legacy DOM adapters and the normalized snapshot pipeline while the rollout progresses.
+- Feature flags (`feature_flags.snapshot` / `feature_flags.is_enabled`) store per-entry overrides pulled from config-entry options. Starting with the normalized adapter GA, both `normalized_pipeline` and `normalized_dashboard_adapter` default to **True** for every entry (new and upgraded). Leave them enabled in all migrations—legacy coordinator payload shims and DOM adapters have been deleted, so disabling the flags will prevent the dashboard and WebSocket clients from rendering.
+- The options flow still exposes the normalized adapter switches for emergency overrides, but commits must assume they are on and should remove dead code guarded solely by the legacy adapters. When triaging user issues, instruct them to reload the config entry so the defaults reapply before debugging deeper layers.
 - FX refresh cadence is configurable via the options flow (`fx_update_interval_seconds`, default six hours, minimum 15 minutes). Update `tests/integration/test_enrichment_pipeline.py` if you adjust the defaults or scheduling semantics.
 - SQLite persists mirrored portfolios, holdings, and daily closes. Imports are diff-based, and automatic backups create snapshots every six hours; the `pp_reader.trigger_backup_debug` service exposes manual backups for testing.
 - Diagnostics for parser, enrichment, and metrics live in `custom_components.pp_reader.util.diagnostics`; adjust `tests/util/test_diagnostics_enrichment.py` / `tests/util/test_diagnostics_metrics.py` alongside payload changes so the Home Assistant "Download diagnostics" output stays stable.
@@ -63,7 +64,13 @@ The dashboard is authored in TypeScript and bundled with Vite. Assets live under
 - The dashboard no longer transforms coordinator payloads in-place. `src/data/api.ts` calls the canonical WebSocket commands, feeds the responses through the deserializers in `src/lib/api/portfolio/`, and seeds the `src/lib/store/portfolioStore.ts` singleton. That store clones nested payloads, enforces string/number normalization, and preserves `metric_run_uuid`, `coverage_ratio`, `provenance`, and `normalized_payload` metadata so selectors always receive the schema described in `pp_reader_dom_reference.md`.
 - `src/lib/store/selectors/portfolio.ts` exposes read-only selectors for overview tables, account badges, and drilldowns. Views subscribe to selectors instead of mutating DOM caches, which keeps the UI aligned with whatever was persisted in `portfolio_snapshots` / `account_snapshots`.
 - Push updates surface through `EVENT_PANELS_UPDATED` with `data_type` discriminators. `src/data/updateConfigsWS.ts` maps those events to adapter-specific handlers: it deserializes payloads with the same helpers, merges them into the store, clears stale positions when a `portfolio_positions` event arrives without holdings, and raises `DASHBOARD_DIAGNOSTICS_EVENT` for developer tooling. The backend counterpart lives in `custom_components/pp_reader/data/event_push.py`; updates there must keep the discriminators and payload shapes consistent.
-- The `normalized_dashboard_adapter` feature flag only guards the Home Assistant option flow; the TS implementation is the default and should remain stateless aside from the store. Do not revive legacy `window.__ppReader*` overrides or mutation-heavy tables—if a new view needs derived data, add a selector.
+- The TypeScript adapter is now mandatory. The options flow still shows the `normalized_dashboard_adapter` toggle to help diagnose misconfigured entries, but the default is `true` for everyone and no legacy `window.__ppReader*` overrides remain. If a feature requires derived state, add a selector rather than reintroducing DOM mutation helpers.
+
+### Release-ready dashboard bundles
+1. Remove stale caches (`rm -rf node_modules/.vite`) whenever `package-lock.json` changes or you pull fresh dependencies.
+2. Run `npm ci && npm run build && node scripts/update_dashboard_module.mjs` to regenerate the hashed bundles under `custom_components/pp_reader/www/pp_reader_dashboard/js/` plus the stable module entry.
+3. Copy the generated artefacts (including updated hashes) into release branches via `scripts/prepare_main_pr.sh dev main` so the bundle in `main` matches the one published to HACS.
+4. Reload the integration (or restart Home Assistant) after rebuilding to ensure the panel serves the latest hash; document the new filename in QA notes.
 
 ## Testing & QA
 Run the shared lint stack and automated tests before opening a pull request:

@@ -95,7 +95,16 @@ def _parse_any_value(value: client_pb2.PAnyValue | None) -> Any:
     if value is None:
         return None
 
-    kind = value.WhichOneof("value")
+    kind = None
+    for group in ("value", "kind"):
+        which = None
+        try:
+            which = value.WhichOneof(group)
+        except ValueError:
+            continue
+        if which is not None:
+            kind = which
+            break
     if kind is None or kind == "null":
         return None
     if kind == "map":

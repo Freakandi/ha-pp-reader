@@ -131,9 +131,19 @@ class YahooHistoryFetcher:
     async def fetch(self, job: HistoryJob) -> list[HistoryCandle]:
         """Fetch history for a single job."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._fetch_blocking, job)
+        history = await loop.run_in_executor(None, self._fetch_blocking, job)
+        candles = _normalize_history(job.symbol, history)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "YahooQuery History: %s rows for %s (%s-%s)",
+                len(candles),
+                job.symbol,
+                job.start.strftime("%Y-%m-%d"),
+                job.end.strftime("%Y-%m-%d"),
+            )
+        return candles
 
-    def _fetch_blocking(self, job: HistoryJob) -> list[HistoryCandle]:
+    def _fetch_blocking(self, job: HistoryJob) -> object:
         """Blocking portion executed in executor."""
         global _YAHOOQUERY_IMPORT_ERROR  # noqa: PLW0603
 
@@ -171,16 +181,7 @@ class YahooHistoryFetcher:
             )
             return []
 
-        candles = _normalize_history(job.symbol, history)
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.debug(
-                "YahooQuery History: %s rows for %s (%s-%s)",
-                len(candles),
-                job.symbol,
-                start_str,
-                end_str,
-            )
-        return candles
+        return history
 
 
 def _normalize_history(symbol: str, history: object) -> list[HistoryCandle]:

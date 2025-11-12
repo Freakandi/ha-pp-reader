@@ -57,7 +57,7 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 
 ## Configuration
 1. Start the config flow and supply the absolute path to your `.portfolio` file. The wizard validates the file before continuing.
-2. Accept the default database path (`/config/pp_reader_data/<portfolio>.db`) or choose a custom directory.
+2. Accept the default database path (`pp_reader_data/<portfolio>.db` inside your Home Assistant config directory, resolved via `hass.config.path(...)`) or choose a custom directory.
 3. Finish the setup and review the options (accessible after onboarding):
    - **Live price interval** – `price_update_interval_seconds` (default 900 seconds, minimum 300 seconds).
    - **FX refresh interval** – `fx_update_interval_seconds` (default 6 hours, minimum 15 minutes) controls how often cached FX rates are refreshed for non-EUR accounts and purchases.
@@ -76,6 +76,11 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 - The sidebar entry **Portfolio Dashboard** lists all portfolios with live updates, totals, and highlight effects when rows change.
 - Selecting a position opens a security detail tab with range selectors (`1W`…`ALL`), performance deltas, and SVG charts generated from the stored daily closes.
 
+### Normalized rollout defaults
+- `normalized_pipeline` and `normalized_dashboard_adapter` are enabled for every config entry starting with the normalized adapter GA release. New installs inherit both toggles automatically; upgrading entries will see the flags flipped to **On** the next time the integration reloads. Keep them enabled—legacy payload shims and DOM adapters have been removed, so sensors, WebSocket clients, and the bundled dashboard always consume the canonical normalization snapshot.
+- Confirm the defaults from **Settings → Devices & Services → Portfolio Performance Reader → Configure → Feature flags** after upgrading. If a local override is toggled off for troubleshooting, reloading the config entry reapplies the GA defaults.
+- Custom clients must deserialize the structured payloads documented in `pp_reader_dom_reference.md` and `src/lib/api/portfolio/types.ts`. Deprecated flat fields (`gain_abs`, `avg_price_*`, `day_price_change_*`) are no longer surfaced by sensors, events, or WebSocket responses.
+
 ### Automations & data consumers
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) deliver the same structured payloads used by the dashboard. Custom cards or automations can subscribe to identical gain, day-change, and average-cost metrics without reimplementing calculations.
 - Legacy flat fields (`avg_price_security`, `avg_price_account`, `gain_abs`, `gain_pct`, `day_price_change_*`) were removed in v0.14.0. Update custom automations to rely on the `average_cost` and `performance` blocks instead.
@@ -91,7 +96,12 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 
 ### Historical data & backups
 - Daily close prices for tracked securities are persisted on every import so charts and WebSocket consumers work offline once data is captured.
-- The integration keeps rolling backups of the SQLite database in `/config/pp_reader_data/backups`; trigger `pp_reader.trigger_backup_debug` before risky maintenance to capture an additional snapshot.
+- The integration keeps rolling backups of the SQLite database under `pp_reader_data/backups` inside the Home Assistant config directory (e.g., `/config/pp_reader_data/backups` in the official container). Trigger `pp_reader.trigger_backup_debug` before risky maintenance to capture an additional snapshot.
+
+### Dashboard asset rebuilds
+- Production builds ship hashed bundles under `custom_components/pp_reader/www/pp_reader_dashboard/js/` and a rewritten `dashboard.module.js`. When you edit the dashboard locally or maintain a fork, run `npm ci && npm run build && node scripts/update_dashboard_module.mjs` to regenerate those assets.
+- After rebuilding, reload the Portfolio Performance Reader integration (or restart Home Assistant) so the panel picks up the new bundle hash. Operators promoting the release to `main` must also run `scripts/prepare_main_pr.sh dev main` to copy the refreshed assets into the release worktree.
+- Clear `node_modules/.vite` before `npm run build` if Vite cached an older dependency set; the release checklist (`.docs/qa_docs_comms.md`) documents the expected sequence.
 
 ## Troubleshooting
 | Symptom | Suggested action |

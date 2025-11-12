@@ -22,6 +22,8 @@ def _create_metrics_db(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
+        # Create ingestion tables so diagnostics can query metadata counters.
+        _apply_schema(conn, db_schema.INGESTION_SCHEMA)
         _apply_schema(conn, db_schema.METRICS_SCHEMA)
 
         conn.execute(
@@ -154,6 +156,8 @@ def _create_metrics_db(db_path: Path) -> None:
                 metric_run_uuid,
                 portfolio_uuid,
                 security_uuid,
+                valuation_currency,
+                security_currency_code,
                 current_value_cents,
                 purchase_value_cents,
                 gain_abs_cents,
@@ -164,13 +168,15 @@ def _create_metrics_db(db_path: Path) -> None:
                 day_change_native,
                 day_change_eur,
                 day_change_pct
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     "run-complete",
                     "portfolio-main",
                     "sec-eur",
+                    "EUR",
+                    "EUR",
                     250_000,
                     200_000,
                     50_000,
@@ -186,6 +192,8 @@ def _create_metrics_db(db_path: Path) -> None:
                     "run-complete",
                     "portfolio-main",
                     "sec-usd",
+                    "EUR",
+                    "USD",
                     150_000,
                     100_000,
                     50_000,

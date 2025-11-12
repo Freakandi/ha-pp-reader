@@ -53,6 +53,7 @@ export interface PortfolioOverviewRow {
   performance: PerformanceMetricsPayload | null;
   coverage_ratio: number | null;
   provenance: string | null;
+  metric_run_uuid: string | null;
   badges: OverviewBadge[];
 }
 
@@ -181,11 +182,11 @@ function buildAccountRow(
       ? clampRatio(toFiniteNumber(snapshot.coverage_ratio))
       : null;
   const provenance = toNonEmptyString(snapshot.provenance);
+  const metricRunUuid: string | null = toNonEmptyString(snapshot.metric_run_uuid);
   const fxUnavailable = snapshot.fx_unavailable === true;
   const fxRate = toFiniteNumber(snapshot.fx_rate);
   const fxRateSource = toNonEmptyString(snapshot.fx_rate_source);
   const fxRateTimestamp = toNonEmptyString(snapshot.fx_rate_timestamp);
-  const metricRunUuid = toNonEmptyString(snapshot.metric_run_uuid);
 
   const badges: OverviewBadge[] = [];
   const coverageBadge = composeCoverageBadge(coverageRatio, "account");
@@ -197,7 +198,7 @@ function buildAccountRow(
     badges.push(provenanceBadge);
   }
 
-  return {
+  const row: AccountOverviewRow = {
     uuid,
     name,
     currency_code: currencyCode,
@@ -206,12 +207,18 @@ function buildAccountRow(
     fx_unavailable: fxUnavailable,
     coverage_ratio: coverageRatio,
     provenance,
-    metric_run_uuid: metricRunUuid,
+    metric_run_uuid: null,
     fx_rate: fxRate,
     fx_rate_source: fxRateSource,
     fx_rate_timestamp: fxRateTimestamp,
     badges,
   };
+
+  const normalizedMetricRunUuid: string | null =
+    typeof metricRunUuid === "string" ? metricRunUuid : null;
+  row.metric_run_uuid = normalizedMetricRunUuid;
+
+  return row;
 }
 
 function buildPortfolioRow(
@@ -244,6 +251,7 @@ function buildPortfolioRow(
       ? clampRatio(toFiniteNumber(snapshot.coverage_ratio))
       : null;
   const provenance = toNonEmptyString(snapshot.provenance);
+  const metricRunUuid = toNonEmptyString(snapshot.metric_run_uuid);
 
   const badges: OverviewBadge[] = [];
   const coverageBadge = composeCoverageBadge(coverageRatio, "portfolio");
@@ -255,7 +263,7 @@ function buildPortfolioRow(
     badges.push(provenanceBadge);
   }
 
-  return {
+  const row: PortfolioOverviewRow = {
     uuid,
     name,
     position_count: positionCount,
@@ -269,8 +277,15 @@ function buildPortfolioRow(
     performance,
     coverage_ratio: coverageRatio,
     provenance,
+    metric_run_uuid: null,
     badges,
   };
+
+  const normalizedMetricRunUuid: string | null =
+    typeof metricRunUuid === "string" ? metricRunUuid : null;
+  row.metric_run_uuid = normalizedMetricRunUuid;
+
+  return row;
 }
 
 export function selectAccountOverviewRows(): AccountOverviewRow[] {

@@ -37,6 +37,7 @@ async def test_interval_change_cancels_old_and_creates_new(
 
     # --- Patch: async_track_time_interval Recorder ---
     registrations = []
+    price_registrations = []
 
     def fake_async_track_time_interval(hass_inner, callback, delta):
         record = {
@@ -45,6 +46,8 @@ async def test_interval_change_cancels_old_and_creates_new(
             "canceled": False,
         }
         registrations.append(record)
+        if getattr(callback, "__name__", "").endswith("_price_cycle"):
+            price_registrations.append(record)
 
         def cancel():
             record["canceled"] = True
@@ -92,10 +95,10 @@ async def test_interval_change_cancels_old_and_creates_new(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert len(registrations) == 1, (
-        f"Erwartet 1 Registrierung, erhalten {len(registrations)}"
+    assert len(price_registrations) == 1, (
+        f"Erwartet 1 Preis-Registrierung, erhalten {len(price_registrations)}"
     )
-    first = registrations[0]
+    first = price_registrations[0]
     assert first["interval_seconds"] == 900
     assert first["canceled"] is False
 
@@ -109,12 +112,12 @@ async def test_interval_change_cancels_old_and_creates_new(
     )
     await hass.async_block_till_done()
 
-    assert len(registrations) == 2, (
-        f"Erwartet 2 Registrierungen, erhalten {len(registrations)}"
+    assert len(price_registrations) == 2, (
+        f"Erwartet 2 Preis-Registrierungen, erhalten {len(price_registrations)}"
     )
     assert first["canceled"] is True, "Alter Listener wurde nicht gecancelt"
 
-    second = registrations[1]
+    second = price_registrations[1]
     assert second["interval_seconds"] == 1200
     assert second["canceled"] is False
 

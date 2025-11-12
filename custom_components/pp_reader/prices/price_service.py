@@ -21,6 +21,7 @@ import sqlite3
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import HomeAssistantError
@@ -56,8 +57,6 @@ async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, An
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from homeassistant.core import HomeAssistant
 
     from custom_components.pp_reader.prices.provider_base import Quote
@@ -104,6 +103,7 @@ def initialize_price_state(hass: HomeAssistant, entry_id: str) -> None:
     # Optional: zuletzt verwendete Symbol-Mappings (Debug / Diagnose)
     store.setdefault("price_last_symbol_count", 0)
     store.setdefault("price_last_cycle_meta", {})
+    store.setdefault("price_zero_quotes_warn_ts", None)
 
 
 def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]]:
@@ -840,6 +840,100 @@ def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
     return payload
 
 
+def _round_currency_or_zero(value: float | None) -> float:
+    rounded = round_currency(value, default=0.0)
+    return float(rounded) if rounded is not None else 0.0
+
+
+def _cent_to_eur_or_zero(value: float | None) -> float:
+    euros = cent_to_eur(value, default=0.0)
+    return float(euros) if euros is not None else 0.0
+
+
+def _build_performance_snapshot(
+    current_value: float,
+    purchase_sum: float,
+) -> dict[str, Any]:
+    gain_abs = _round_currency_or_zero(current_value - purchase_sum)
+    gain_pct = (
+        _round_currency_or_zero((gain_abs / purchase_sum) * 100.0)
+        if purchase_sum
+        else 0.0
+    )
+    return {
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
+        "total_change_eur": gain_abs,
+        "total_change_pct": gain_pct,
+        "source": "calculated",
+        "coverage_ratio": 1.0,
+        "day_change": {
+            "price_change_native": None,
+            "price_change_eur": None,
+            "change_pct": None,
+            "source": "unavailable",
+            "coverage_ratio": 0.0,
+        },
+    }
+
+
+def _load_portfolio_values_snapshot(
+    db_path: Path | str,
+    security_uuids: set[str],
+) -> dict[str, dict[str, Any]]:
+    """Build portfolio aggregates from the latest portfolio_securities snapshot."""
+    if not security_uuids:
+        return {}
+
+    path = Path(db_path)
+    placeholders = ",".join("?" for _ in security_uuids)
+    query = f"""
+        SELECT
+            ps.portfolio_uuid AS portfolio_uuid,
+            p.name AS name,
+            SUM(COALESCE(ps.current_value, 0)) AS current_value_cents,
+            SUM(COALESCE(ps.purchase_value, 0)) AS purchase_value_cents,
+            COUNT(*) AS position_count,
+            SUM(
+                CASE
+                    WHEN ps.current_value IS NULL OR ps.purchase_value IS NULL THEN 1
+                    ELSE 0
+                END
+            ) AS missing_positions
+        FROM portfolio_securities ps
+        JOIN portfolios p ON p.uuid = ps.portfolio_uuid
+        WHERE ps.security_uuid IN ({placeholders})
+        GROUP BY ps.portfolio_uuid, p.name
+    """  # noqa: S608 - placeholders are parameterized via sqlite bindings
+
+    try:
+        with sqlite3.connect(str(path)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(query, tuple(security_uuids)).fetchall()
+    except sqlite3.Error:
+        _LOGGER.debug(
+            "prices_cycle: Snapshot Aggregation fehlgeschlagen", exc_info=True
+        )
+        return {}
+
+    snapshot: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        portfolio_uuid = row["portfolio_uuid"]
+        current_value = _cent_to_eur_or_zero(row["current_value_cents"])
+        purchase_sum = _cent_to_eur_or_zero(row["purchase_value_cents"])
+        entry = {
+            "uuid": portfolio_uuid,
+            "name": row["name"],
+            "current_value": current_value,
+            "purchase_sum": purchase_sum,
+            "performance": _build_performance_snapshot(current_value, purchase_sum),
+            "position_count": row["position_count"] or 0,
+            "missing_value_positions": row["missing_positions"] or 0,
+        }
+        snapshot[portfolio_uuid] = entry
+    return snapshot
+
+
 async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
     cycle_start_ts = time.time()
     store = hass.data[DOMAIN][entry_id]
@@ -926,7 +1020,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 )
                 try:
                     quotes_dict = await asyncio.wait_for(
-                        provider.fetch(batch_symbols), timeout=PRICE_FETCH_TIMEOUT
+                        provider.fetch(batch_symbols), PRICE_FETCH_TIMEOUT
                     )
                 except TimeoutError:
                     chunk_failure_count += 1
@@ -1107,6 +1201,23 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             "prices_cycle: Fehler bei partieller Revaluation",
                             exc_info=True,
                         )
+                    pv_dict_fallback = revaluation_result.get("portfolio_values")
+                    if not pv_dict_fallback:
+                        snapshot = await async_run_executor_job(
+                            hass,
+                            _load_portfolio_values_snapshot,
+                            db_path,
+                            updated_security_uuids_final,
+                        )
+                        if snapshot:
+                            _LOGGER.debug(
+                                (
+                                    "prices_cycle: Fallback portfolio_values "
+                                    "Snapshot genutzt (%s Portfolios)"
+                                ),
+                                len(snapshot),
+                            )
+                            revaluation_result["portfolio_values"] = snapshot
 
             # Events
             if changed_count > 0:

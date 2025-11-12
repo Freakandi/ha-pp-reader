@@ -95,6 +95,7 @@ async def test_load_ingestion_snapshot_returns_dataclasses(tmp_path: Path) -> No
             pp_version=42,
             base_currency="EUR",
             properties={"build": "test-suite"},
+            parsed_client=None,
         )
 
     conn = _open_connection(db_path)
@@ -172,6 +173,7 @@ async def test_load_proto_snapshot_builds_pclient(tmp_path: Path) -> None:
             pp_version=7,
             base_currency="EUR",
             properties={"build": "test-suite"},
+            parsed_client=None,
         )
 
     conn = _open_connection(db_path)

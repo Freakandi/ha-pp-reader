@@ -1,51 +1,153 @@
 # Legacy Cleanup Strategy for the Datamodel Refactor
 
-## Objectives
+## Intent
 
-This strategy governs how the integration will remove superseded assets once the canonical ingestion → normalization → delivery flow is in place, ensuring the portfolio pipeline remains aligned with the backend data model and dashboard contracts documented in the canonical specs.【F:datamodel/backend-datamodel-final.md†L1-L133】【F:datamodel/dataflow_backend.md†L1-L138】【F:datamodel/dataflow_frontend.md†L1-L118】
+The canonical ingestion → enrichment → metrics → normalization flow described in the backend and frontend datamodel specs is now the only supported architecture; all payloads delivered to Home Assistant sensors, websocket handlers, events, and the dashboard must originate from the normalized snapshot serializers.【F:datamodel/dataflow_backend.md†L12-L90】【F:datamodel/backend-datamodel-final.md†L1-L23】【F:datamodel/dataflow_frontend.md†L18-L64】 This document enumerates the remaining legacy assets that still linger inside the repository so each one can be split into a focused TODO checklist during the next planning pass.
 
-Key goals:
+## Non-Negotiable Rules
 
-- Decommission legacy helpers in lockstep with the new parser, enrichment, normalization, and frontend adapters so every removal is gated by observable parity checks.【F:custom_components/pp_reader/data/coordinator.py†L49-L199】【F:tests/test_event_push.py†L1-L160】
-- Preserve a verifiable audit trail through fixtures, dashboards, and Home Assistant configuration artifacts while trimming obsolete resources.【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】【F:README.md†L41-L68】
-- Track cleanup readiness alongside the roadmap and workstream plans to keep backend and frontend stakeholders synchronized.【F:.docs/refactor_roadmap.md†L1-L72】【F:.docs/backend_workstreams.md†L1-L83】【F:.docs/frontend_alignment.md†L1-L36】
+- Canonical contracts only: anything that bypasses `async_parse_portfolio` → ingestion staging → enrichment → metrics → `normalization_pipeline` must be removed instead of reworked.【F:custom_components/pp_reader/services/parser_pipeline.py†L1-L80】【F:custom_components/pp_reader/data/normalization_pipeline.py†L1-L150】
+- The normalized frontend adapter is GA and already consumes the canonical payloads everywhere (see `.docs/TODO_frontend_adapter_rollout.md`, `src/` stores/selectors, and the DOM reference). Any backend compatibility shim that only feeds the legacy adapter is now redundant.【F:.docs/TODO_frontend_adapter_rollout.md†L1-L90】【F:src/lib/api/portfolio/deserializers.ts†L212-L247】
+- No migration tooling: runtime schema patches, compatibility migrations, and test modules that exist solely to validate legacy database layouts or protobuf diff-sync helpers must be deleted together with the code they protect.【F:custom_components/pp_reader/data/db_init.py†L31-L125】【F:tests/test_migration.py†L224-L320】
 
-## Governance Principles
+## Cleanup Catalog
 
-1. **Evidence-first removals.** No module, schema, or UI asset is deleted until fixtures, automated tests, and manual runbooks show the canonical data still satisfies the dashboard contract matrix and websocket behaviors.【F:datamodel/panel_connectors.md†L1-L94】【F:tests/test_ws_portfolio_positions.py†L1-L198】
-2. **Shared verification.** Backend and frontend contributors jointly sign off on contract compatibility by replaying representative database snapshots before removals ship.【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】【F:tests/test_coordinator_contract.py†L1-L120】
-3. **Configuration parity.** Cleanup never strands user configuration; database paths, backups, and service bindings remain intact and documented for users during each milestone.【F:README.md†L41-L77】【F:tests/test_backup_cleanup.py†L1-L36】
-4. **Rolling checkpoints.** Every removal candidate ties back to roadmap milestones so coordination notes and release messaging stay current.【F:.docs/refactor_roadmap.md†L45-L73】【F:.docs/frontend_alignment.md†L15-L34】
+### 1. Retire protobuf diff sync (`sync_from_pclient`) and `_legacy_sync_to_db`
 
-## Cleanup Tracker
+**Scope.** The coordinator still re-parses `.portfolio` archives with the deprecated reader module and forwards them to `_legacy_sync_to_db`, which imports `data.sync_from_pclient` and replays the old `_SyncRunner` diff-sync pipeline.【F:custom_components/pp_reader/data/coordinator.py†L440-L542】【F:custom_components/pp_reader/data/reader.py†L1-L101】【F:custom_components/pp_reader/data/sync_from_pclient.py†L1-L200】
 
-| Status | Area | Legacy asset(s) | Preconditions | Validation & Evidence | Notes |
-| --- | --- | --- | --- | --- | --- |
-| [ ] | Parser ingestion | `custom_components/pp_reader/pclient/*`, coordinator fallback `_sync_data_to_db`, legacy `_SyncRunner` helpers | Streaming parser pipeline stages data via `ingestion_writer`/`ingestion_reader`, and normalization consumers rely solely on staging snapshots (Roadmap M1–M4).【F:custom_components/pp_reader/services/parser_pipeline.py†L1-L320】【F:.docs/backend_workstreams.md†L5-L38】 | Green runs for `tests/services/test_parser_pipeline.py`, `tests/integration/test_ingestion_writer.py`, `tests/integration/test_sync_from_staging.py`, plus coordinator/websocket suites confirm staging parity with protobuf imports.【F:tests/services/test_parser_pipeline.py†L1-L210】【F:tests/integration/test_ingestion_writer.py†L1-L220】【F:tests/integration/test_sync_from_staging.py†L1-L200】【F:tests/test_coordinator_contract.py†L1-L120】 | Remove legacy protobuf helpers only after migration notes capture staging snapshot coverage and CLI + coordinator imports documented as canonical path. |
-| [ ] | Enrichment jobs | Sync FX entry points (`ensure_exchange_rates_for_dates_sync`, `load_cached_rate_records_sync`, `util.currency.normalize_price_to_eur_sync`) plus dormant Yahoo history fallbacks | Async enrichment paths are the default: coordinator and CLI await `ensure_exchange_rates_for_dates`; websocket/account payloads rely on the async loader; `logic/securities.py` and `data/sync_from_pclient.py` are refactored to call the async helper via `async_run_executor_job`, leaving sync wrappers unused in production (Roadmap M2, backend workstream enrichment).【F:custom_components/pp_reader/data/coordinator.py†L601-L670】【F:custom_components/pp_reader/data/websocket.py†L60-L138】【F:custom_components/pp_reader/logic/securities.py†L376-L460】【F:custom_components/pp_reader/data/sync_from_pclient.py†L1363-L1439】 | `tests/prices/test_history_queue.py`, `tests/prices/test_history_ingest.py`, `tests/currencies/test_fx_async.py`, `tests/test_price_service.py`, and `tests/integration/test_enrichment_pipeline.py` run green with WAL enabled; targeted grep confirms no runtime imports of the sync helpers outside compatibility shims/tests.【F:tests/prices/test_history_queue.py†L1-L220】【F:tests/prices/test_history_ingest.py†L1-L320】【F:tests/currencies/test_fx_async.py†L1-L140】【F:tests/test_price_service.py†L1-L220】【F:tests/integration/test_enrichment_pipeline.py†L1-L240】 | Sequenced removal: (1) provide an async/await replacement for `normalize_price_to_eur_sync` and migrate call sites (logic, sync_from_pclient, diagnostics); (2) delete the sync FX/history helpers, update docs/release notes, and mark the cleanup tracker row complete. |
-| [x] | Normalization delivery | WebSocket `_normalize_*` helpers, dashboard patch functions, and coordinator-maintained portfolio caches | Canonical snapshots persist in `portfolio_snapshots`/`account_snapshots`, `data/normalization_pipeline.async_normalize_snapshot` hydrates payloads, and the coordinator emits normalization progress before caching the resulting `NormalizationResult` (Roadmap M3–M4).【F:custom_components/pp_reader/data/normalization_pipeline.py†L1-L220】【F:custom_components/pp_reader/data/coordinator.py†L766-L868】 | `tests/normalization/test_pipeline.py`, `tests/integration/test_normalization_smoketest.py`, `tests/test_ws_portfolio_positions.py`, and diagnostics harvesting (`util/diagnostics.normalized_payload`) confirm websocket/event payloads come straight from the cached snapshots with no bespoke patches.【F:tests/normalization/test_pipeline.py†L1-L200】【F:tests/integration/test_normalization_smoketest.py†L1-L220】【F:tests/test_ws_portfolio_positions.py†L1-L200】【F:custom_components/pp_reader/util/diagnostics.py†L39-L120】 | Remaining uses of `_normalize_portfolio_row` exist only for legacy sensor payloads; their retirement is tracked under the sensor refactor milestone so entity state remains stable until the dashboard-driven sensor adapter ships. |
-| [x] | Metrics engine | `custom_components/pp_reader/data/performance.py` shim plus dependent imports in sensors/tests that still reference legacy helpers (`custom_components/pp_reader/sensors/gain_sensors.py`, `tests/test_performance.py`).【F:custom_components/pp_reader/metrics/common.py†L1-L213】【F:custom_components/pp_reader/sensors/gain_sensors.py†L1-L145】【F:tests/test_performance.py†L1-L112】 | Persisted metric tables (`metric_runs`, `portfolio_metrics`, `account_metrics`, `security_metrics`) remain the authoritative source and the coordinator/diagnostics flows only call the new pipeline + storage helpers before removing the shim.【F:custom_components/pp_reader/data/db_schema.py†L538-L692】【F:custom_components/pp_reader/metrics/pipeline.py†L1-L170】【F:custom_components/pp_reader/metrics/storage.py†L1-L185】【F:custom_components/pp_reader/util/diagnostics.py†L255-L323】 | Metric computation, persistence, and diagnostics test suites (`tests/metrics/test_metric_engine.py`, `tests/integration/test_metrics_pipeline.py`, `tests/util/test_diagnostics_metrics.py`) stay green as regression evidence prior to deleting the legacy facade.【F:tests/metrics/test_metric_engine.py†L1-L131】【F:tests/integration/test_metrics_pipeline.py†L1-L132】【F:tests/util/test_diagnostics_metrics.py†L1-L200】 | Legacy helper removed, imports now point to `metrics.common`, and archival notes captured under `.docs/cleanup/metrics_legacy.md`. |
-| [ ] | Metrics + normalization | Legacy aggregation logic in `helpers/performance_legacy.py`, `_compact_event_data` fallbacks, manual coordinator caches | Metrics engine writes canonical tables and websocket serializers read normalized rows only (Roadmap M3–M4).【F:.docs/backend_workstreams.md†L35-L63】【F:custom_components/pp_reader/data/event_push.py†L1-L134】 | Snapshot + push parity verified via `tests/test_event_push.py`, `tests/test_aggregations.py`, and websocket smoke tests (`tests/test_ws_portfolios_live.py`, `tests/test_ws_portfolio_positions.py`).【F:tests/test_event_push.py†L1-L143】【F:tests/test_aggregations.py†L1-L160】【F:tests/test_ws_portfolios_live.py†L1-L142】 | Capture coordinator telemetry before pruning caches so diagnostics stay traceable. |
-| [ ] | Storage + backups | `config/pp_reader_data` flat backups, ad-hoc WAL toggles, manual repair scripts | Migration framework with idempotent schema upgrades and managed backups shipped (Roadmap M4, Storage workstream).【F:.docs/backend_workstreams.md†L65-L83】【F:README.md†L41-L68】 | `tests/test_backup_cleanup.py`, `tests/test_migration.py`, and cold-start restores from `datamodel/db_entries/*` snapshots prove recoverability without legacy scripts.【F:tests/test_backup_cleanup.py†L1-L36】【F:tests/test_migration.py†L1-L200】【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】 | Communicate backup rotation change in release notes and README troubleshooting. |
-| [ ] | Frontend fallbacks | Legacy adapters under `src/lib/api/portfolio/legacy_*`, dashboard map bundles referencing deprecated fields | Canonical payload feature branch validated; stores/components migrated (Roadmap M5, Frontend alignment).【F:.docs/frontend_alignment.md†L5-L34】 | `tests/frontend/*`, dashboard snapshot assertions, and manual regression via websocket panel matrix pass without legacy selectors.【F:tests/frontend/test_dashboard_smoke.py†L1-L63】【F:datamodel/panel_connectors.md†L1-L94】 | Remove minified bundles after `npm run build` refresh; coordinate with documentation updates. |
-| [ ] | Frontend adapter cleanup | `_normalize_portfolio_row` + `_build_portfolio_data` fallback in `data/db_access.py` / coordinator caches, legacy coordinator portfolio dicts, and TS overrides such as `window.__ppReader*` patches | Normalized dashboard adapter + normalized pipeline feature flags stay enabled by default, so websocket/event payloads originate exclusively from `NormalizationResult` snapshots and `src/lib/store/portfolioStore.ts` selectors (Roadmap M5→M6). Ensure `custom_components/pp_reader/data/websocket.py` and `data/event_push.py` no longer import `fetch_live_portfolios`, and the dashboard codepath only uses the normalized store helpers (`src/lib/store/portfolioStore.ts`, `src/lib/store/selectors/portfolio.ts`, `src/data/updateConfigsWS.ts`).【F:custom_components/pp_reader/data/db_access.py†L2134-L2212】【F:custom_components/pp_reader/data/coordinator.py†L320-L388】【F:src/lib/store/portfolioStore.ts†L1-L220】【F:src/data/updateConfigsWS.ts†L1-L220】 | `pytest tests/test_event_push.py tests/test_ws_portfolios_live.py tests/test_ws_portfolio_positions.py` plus `tests/frontend/test_dashboard_smoke.py`, `tests/dashboard/*`, and `npm test` validate parity while `rg "_normalize_portfolio_row"` / `rg "__ppReader"` return zero runtime hits (docs/changelog references exempt). Capture before/after metrics in `pp_reader_dom_reference.md` diff to prove schema stability. | Ship removal in the same release as the adapter GA: update `CHANGELOG.md`, remind operators to rebuild dashboard assets, and delete stale documentation describing override caches once the row is checked off. |
-| [ ] | Documentation & comms | Outdated references in `README.md`, `.docs/*` strategies superseded by canonical pipeline | QA/docs milestone complete with updated architecture + dashboard guides (Roadmap M6).【F:.docs/refactor_roadmap.md†L125-L150】【F:README.md†L1-L84】 | `README.md`, `README-dev.md`, and changelog diffs reviewed alongside release announcement notes; internal rollouts confirm messaging.【F:README.md†L1-L84】【F:README-dev.md†L1-L120】【F:CHANGELOG.md†L1-L120】 | Archive historical strategy docs into `/zz_Drafts/` once superseded. |
+**Canonical replacement.** The streaming parser plus ingestion writer already persist typed entities, and the normalization pipeline emits the payloads consumed by sensors, websocket commands, events, CLI tooling, and diagnostics.【F:custom_components/pp_reader/services/parser_pipeline.py†L1-L80】【F:custom_components/pp_reader/data/ingestion_writer.py†L1-L138】【F:custom_components/pp_reader/data/normalization_pipeline.py†L68-L194】
 
-### Enrichment sync helper retirement checklist
-- Migrate `logic/securities.py`, `data/sync_from_pclient.py`, and diagnostics helpers to await `ensure_exchange_rates_for_dates` via `async_run_executor_job`, dropping imports of `ensure_exchange_rates_for_dates_sync` and `load_cached_rate_records_sync`.【F:custom_components/pp_reader/logic/securities.py†L376-L460】【F:custom_components/pp_reader/data/sync_from_pclient.py†L1363-L1439】
-- Replace `normalize_price_to_eur_sync` usages with an async or executor-backed variant so price/FX conversions no longer depend on synchronous shims before removal.【F:custom_components/pp_reader/util/currency.py†L120-L182】
-- Confirm historical price ingestion exclusively flows through `prices/history_queue.py` + `history_ingest.py`; delete deprecated history helpers and update release notes once CI runs the enrichment suites listed above.【F:custom_components/pp_reader/prices/history_queue.py†L1-L320】【F:custom_components/pp_reader/prices/history_ingest.py†L1-L360】
+**Legacy assets to delete.**
+- `_legacy_sync_to_db` branch and its `use_staging_importer` flag in `data/coordinator.py`.【F:custom_components/pp_reader/data/coordinator.py†L483-L542】
+- `data/reader.py` and the protobuf alias plumbing in `custom_components/pp_reader/__init__.py` that only exists for diff-sync callers.【F:custom_components/pp_reader/data/reader.py†L1-L101】【F:custom_components/pp_reader/__init__.py†L62-L120】
+- `data/sync_from_pclient.py`, accompanying `_SyncRunner` helpers, and the `pp_reader.name.abuchen.portfolio` import path shims that are unused once staging snapshots are canonical.
+- Staging parity tests that compare ingestion snapshots with the legacy sync (`tests/test_sync_from_pclient.py`, `tests/integration/test_sync_from_staging.py`).【F:tests/test_sync_from_pclient.py†L1-L160】【F:tests/integration/test_sync_from_staging.py†L1-L120】
 
-## Execution Checklist
+**Prerequisites.**
+- Parser + ingestion coverage (`tests/services/test_parser_pipeline.py`, `tests/integration/test_ingestion_writer.py`) already prove staging writes are deterministic.【F:tests/services/test_parser_pipeline.py†L1-L40】【F:tests/integration/test_ingestion_writer.py†L1-L160】
+- End-to-end smoke tests (`tests/integration/test_normalization_smoketest.py`) drive parser → staging → enrichment → normalization without invoking diff-sync.【F:tests/integration/test_normalization_smoketest.py†L1-L200】
 
-1. **Baseline audit.** Snapshot the current database and dashboard state using representative fixtures from `datamodel/db_entries/` before cutting any removals; attach evidence to the roadmap milestone notes.【F:datamodel/db_entries/Aixtron_entries.md†L1-L48】【F:.docs/refactor_roadmap.md†L59-L73】
-2. **Milestone gating.** During each roadmap milestone review, copy the relevant tracker row into the status note and capture blocking tasks for backend/frontend owners.【F:.docs/refactor_roadmap.md†L45-L73】【F:.docs/frontend_alignment.md†L15-L34】
-3. **Test matrix.** Run the targeted pytest modules listed above plus websocket suites (`tests/test_ws_*`) and dashboard tests after every removal PR; store links to the CI runs in the tracker table notes.【F:tests/test_ws_portfolio_positions.py†L1-L198】【F:tests/test_ws_security_history.py†L1-L200】【F:tests/frontend/test_dashboard_smoke.py†L1-L63】
-4. **Configuration verification.** Validate that Home Assistant configuration paths (`/config/pp_reader_data`) continue to be honored for imports, backups, and services, documenting any migration steps for users.【F:README.md†L41-L68】【F:tests/test_backup_cleanup.py†L1-L36】
-5. **Release coordination.** Fold cleanup updates into release notes and docs refresh so decommissioned assets are communicated with upgrade steps, referencing the frontend/back-end alignment documents for contract summaries.【F:.docs/frontend_alignment.md†L15-L34】【F:CHANGELOG.md†L1-L120】
+**Validation.**
+- Run the parser/enrichment/normalization pytest suites plus `tests/test_coordinator_contract.py` after deleting the legacy modules.
+- Exercise `scripts/enrichment_smoketest.py` (used by QA) to confirm the CLI keeps working through the staging pipeline.
 
-## Reporting & Ownership
+**Notes.** Removing `sync_from_pclient` unlocks dropping the `pp_reader` namespace alias exported in `__init__.py`, because no runtime import relies on the old module layout once protobuf diff sync disappears.【F:ARCHITECTURE.md†L70-L120】
 
-- **Status reviews.** Add tracker updates to the weekly refactor sync so owners can surface blockers early; include links to roadmap notes and test evidence for each row.【F:.docs/refactor_roadmap.md†L59-L73】
-- **Documentation log.** Annotate `.docs/live_aggregation/` and related directories with cleanup outcomes; move superseded notes into `datamodel/zz_Drafts/` with a tombstone entry referencing the tracker row.【F:.docs/backend_workstreams.md†L65-L83】【F:datamodel/zz_Drafts/frontend-backend-data.md†L1-L24】
-- **Escalations.** If removal readiness cannot be demonstrated with the listed fixtures or tests, raise a dedicated issue linking to the blocker and keep the tracker row open until resolved.【F:tests/test_migration.py†L1-L200】【F:tests/test_coordinator_contract.py†L1-L120】
+### 2. Remove synchronous FX/price helpers and Yahoo history fallbacks
+
+**Scope.** The synchronous FX wrappers (`ensure_exchange_rates_for_dates_sync`, `load_cached_rate_records_sync`, `normalize_price_to_eur_sync`) are still imported throughout the legacy holdings math (`logic/securities.py`) and diff-sync path even though the async Frankfurter/Yahoo pipelines are authoritative.【F:custom_components/pp_reader/util/currency.py†L14-L179】【F:custom_components/pp_reader/logic/securities.py†L376-L460】
+
+**Canonical replacement.** The async FX module already exposes non-blocking helpers plus cached rate loading, and the history ingestion service writes Yahoo candles into SQLite before metrics consume them.【F:custom_components/pp_reader/currencies/fx.py†L320-L418】【F:tests/prices/test_history_ingest.py†L1-L105】
+
+**Legacy assets to delete.**
+- Sync wrappers in `util/currency.py` and their proxy exports once all call sites await the async helpers.
+- Sync code paths inside `currencies/fx.py` (`load_cached_rate_records_sync`, `_execute_db` wrappers that spin their own loop).
+- Any `_run_executor_job` dispatches in `logic/securities.py`, `data/sync_from_pclient.py`, and `prices/price_service.py` that exist purely to reach the sync FX helpers.
+- Guardian tests that only exercise the sync code paths (they can be removed or rewritten to hit the async helpers directly).
+
+**Prerequisites.**
+- Async FX tests already cover the Frankfurter fetch/retry behaviour (`tests/currencies/test_fx_async.py`).【F:tests/currencies/test_fx_async.py†L1-L128】
+- Enrichment orchestration runs via the coordinator and CLI (`tests/integration/test_enrichment_pipeline.py`, `tests/integration/test_normalization_smoketest.py`) so removing sync fallbacks no longer regresses coverage.【F:tests/integration/test_normalization_smoketest.py†L1-L200】
+
+**Validation.**
+- Execute `tests/currencies`, `tests/prices`, and the integration suites with WAL enabled.
+- Trigger enrichment via Home Assistant (or `scripts/enrichment_smoketest.py`) to ensure async FX/history jobs still populate diagnostics.
+
+**Notes.** While deleting the sync helpers, make `normalize_price_to_eur` a coroutine inside `normalization_pipeline` so `PositionSnapshot` conversions no longer jump across threads.【F:custom_components/pp_reader/data/normalization_pipeline.py†L20-L115】
+
+### 3. Drop normalization compatibility shims (`purchase_sum`, `has_current_value`, legacy serializer rewrites)
+
+**Scope.** Websocket handlers still reshape serialized snapshots back into the legacy coordinator schema (`purchase_sum`, camelCase fallbacks, `has_current_value` copies) even though the dashboard adapter now consumes the canonical dataclasses end to end.【F:custom_components/pp_reader/data/websocket.py†L242-L345】【F:custom_components/pp_reader/data/coordinator.py†L170-L213】
+
+**Canonical replacement.** The backend spec defines `purchase_value`, `position_count`, provenance, and data-state metadata directly on the serialized dataclasses, and the TypeScript deserializers already prioritise those fields while keeping the old keys only for backwards compatibility during the rollout.【F:datamodel/backend-datamodel-final.md†L7-L23】【F:src/lib/api/portfolio/deserializers.ts†L212-L247】
+
+**Legacy assets to delete.**
+- `_accounts_payload`, `_portfolio_summaries`, and `_positions_payload` transformations that rename fields or strip metadata before returning websocket responses.【F:custom_components/pp_reader/data/websocket.py†L242-L345】
+- Coordinator fallbacks that try to read both `purchase_sum` and `purchaseValue` from cached data structures.
+- TypeScript helpers (`src/data/updateConfigsWS.ts`, `src/tabs/overview.ts`) that still branch on `purchase_sum`/`purchaseSum` or legacy field names once the backend stops emitting them.
+
+**Prerequisites.**
+- Frontend rollout checklist is complete and the store/selectors normalize canonical snapshots by default.【F:.docs/TODO_frontend_adapter_rollout.md†L1-L120】
+- DOM reference and dataflow diagrams trace the canonical payloads; removing the compatibility shims just makes the implementation match the docs.【F:datamodel/dataflow_frontend.md†L18-L64】
+
+**Validation.**
+- Run `npm test`, `npm run lint:ts`, and `npm run typecheck` after dropping the compatibility keys, then rebuild the dashboard bundles.
+- Execute websocket pytest suites (`tests/test_ws_portfolio_positions.py`, `tests/test_ws_portfolios_live.py`, `tests/test_ws_accounts_fx.py`) to confirm serialized payloads align with the updated assertions.
+
+**Notes.** Update `README.md`, `README-dev.md`, and `pp_reader_dom_reference.md` to state unequivocally that `purchase_value` is the only field name exposed via backend payloads; any sensors that depended on `purchase_sum` must read the canonical snapshots instead.
+
+### 4. Remove feature flags and config options that toggle the normalized pipelines
+
+**Scope.** Feature flags (`use_staging_importer`, `enrichment_pipeline`, `metrics_pipeline`, `normalized_pipeline`, `normalized_dashboard_adapter`) still exist in `feature_flags.py`, the config-entry options flow, and diagnostics even though the GA announcement already mandated the normalized adapter for every install.【F:custom_components/pp_reader/feature_flags.py†L13-L24】【F:README-dev.md†L38-L50】
+
+**Legacy assets to delete.**
+- Flag defaults and option parsing in `feature_flags.py`, `__init__.py` (`NORMALIZED_FLAG_KEYS`), coordinator flag lookups, and diagnostics gating logic.【F:custom_components/pp_reader/__init__.py†L60-L136】【F:custom_components/pp_reader/util/diagnostics.py†L53-L99】
+- Options-flow UI elements and translations that surface the toggles.
+- Docs/communications that still instruct operators to flip normalization flags manually.
+
+**Prerequisites.**
+- Config-entry migrations already set the flags to `true` for every entry (see release enablement doc), so removing the options is a no-op for existing users.【F:.docs/TODO_release_enablement.md†L1-L80】
+- Diagnostics expose `normalized_payload` whenever the flag snapshot reports `normalized_pipeline=True`; once the flag disappears, diagnostics should unconditionally collect the payload (or error if normalization fails).
+
+**Validation.**
+- Reload an existing config entry and verify options migrate cleanly with no leftover `feature_flags` dict.
+- Run `tests/util/test_diagnostics_enrichment.py` and `tests/test_coordinator_contract.py` to ensure telemetry still surfaces the normalized payload.
+
+**Notes.** Removing `use_staging_importer` must happen alongside the diff-sync cleanup (item 1) so there is never a path back to the protobuf runner.
+
+### 5. Delete legacy database migrations and cleanup helpers
+
+**Scope.** `db_init.py` and `data/migrations/cleanup.py` still contain runtime schema patches for columns that only existed before the staging schema landed (e.g., `avg_price_native`, `security_currency_total`, legacy portfolio columns). They are invoked on every startup and guarded by tests that simulate the pre-refactor layouts.【F:custom_components/pp_reader/data/db_init.py†L31-L125】【F:custom_components/pp_reader/data/migrations/cleanup.py†L1-L88】【F:tests/test_migration.py†L224-L320】
+
+**Legacy assets to delete.**
+- `_ensure_runtime_price_columns`, `_ensure_portfolio_securities_native_column`, and `cleanup_portfolio_security_legacy_columns`, plus their imports from `data/migrations`.
+- Migration-specific fixtures/tests (`tests/test_migration.py`, `tests/test_price_persistence_fields.py`) that only assert the legacy schema upgrades.
+- Documentation sections that still instruct contributors to run the cleanup helpers.
+
+**Prerequisites.**
+- SQLite schema definitions in `data/db_schema.py` already include the canonical tables for ingestion, enrichment, metrics, and normalization; new installs do not require these runtime ALTER TABLE statements.
+- WAL-safe migrations for the canonical schema are covered by the existing init tests (`tests/unit/test_db_schema_enrichment.py`, `tests/normalization/test_pipeline.py`).
+
+**Validation.**
+- Run the full `tests/test_db_access.py`, `tests/normalization`, and `tests/metrics` suites against an empty database to ensure bootstrap works without the legacy patches.
+- Spot-check upgrades by opening an older database copy, running `initialize_database_schema`, and confirming no unexpected ALTER TABLE statements fire (the helper should become a no-op once removed).
+
+**Notes.** Announce in `CHANGELOG.md` that in-place upgrades now require reinstalling the integration if the database predates the staging schema (per the repository rules, we no longer provide migration tooling).
+
+### 6. Remove legacy-only tests, fixtures, and utilities
+
+**Scope.** Several pytest modules exist solely to exercise diff-sync, legacy schema migrations, or compatibility shims—keeping them blocks deletion of the corresponding runtime code.
+
+**Legacy assets to delete.**
+- `tests/test_sync_from_pclient.py`, `tests/integration/test_sync_from_staging.py`, and fixtures under `tests/fixtures/legacy_*`.
+- Migration guards (`tests/test_migration.py`, `tests/test_price_persistence_fields.py`) once the ALTER TABLE helpers disappear.
+- Any dashboard or frontend tests that still stub the legacy payload shapes instead of the normalized snapshots.
+
+**Prerequisites.**
+- Canonical test suites already cover parser/ingestion (`tests/services/test_parser_pipeline.py`), enrichment (`tests/integration/test_enrichment_pipeline.py`), metrics (`tests/metrics`), normalization (`tests/normalization/test_pipeline.py`), websocket handlers (`tests/test_ws_*`), and frontend adapters (TypeScript tests).
+- Database fixtures in `tests/common.py` now seed staging + normalized tables so no suite relies on legacy structures.
+
+**Validation.**
+- Run `pytest` with the legacy suites removed to ensure coverage stays green.
+- Execute `npm test` plus the backend websocket suites to confirm no test still references deleted payload shapes.
+
+**Notes.** Removing the test modules also shrinks CI runtime and makes it obvious that there is no supported downgrade path.
+
+### 7. Update documentation, release notes, and scaffolding that reference the legacy path
+
+**Scope.** `ARCHITECTURE.md`, `README-dev.md`, `.docs/backend_workstreams.md`, and several communications docs still describe `sync_from_pclient`, the `pp_reader` namespace alias, and the normalized feature flags as optional toggles.【F:ARCHITECTURE.md†L70-L150】【F:README-dev.md†L38-L55】
+
+**Legacy assets to delete or rewrite.**
+- Remove the `sync_from_pclient.py` entry from module overviews, feature flag discussions, and release announcements once the code is gone.
+- Eliminate mentions of `window.__ppReader*` or other frontend fallbacks in docs and QA checklists.
+- Update `CHANGELOG.md` and `.docs/qa_docs_comms.md` to highlight that no migration tooling exists and that dashboards/tests only operate on normalized payloads.
+
+**Prerequisites.**
+- Items 1–6 above ensure the documentation updates reflect reality instead of aspirational cleanup.
+
+**Validation.**
+- Cross-link docs to the datamodel specs after edits and run `markdownlint` (if configured) to keep formatting consistent.
+- Ask reviewers to sanity-check that no doc instructs contributors to toggle normalization flags or run legacy migrations.
+
+**Notes.** Once the documentation matches the new architecture, add a short “Legacy cleanup completed” section to `.docs/legacy_cleanup_strategy.md` (this file) that references the TODO breakdown created from each section above.

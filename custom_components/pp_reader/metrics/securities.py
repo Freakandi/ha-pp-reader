@@ -156,6 +156,11 @@ def _build_security_metric_record(
                 db_path,
             )
 
+        day_change_eur_override = _compute_day_change_eur(
+            last_price_eur_value,
+            last_close_eur,
+        )
+
         fx_rate = _determine_fx_rate(
             last_price_native,
             last_price_eur_value,
@@ -170,6 +175,12 @@ def _build_security_metric_record(
             last_price_native=last_price_native,
             last_close_native=last_close_native,
             fx_rate=fx_rate,
+        )
+
+        day_change_eur_value = (
+            day_change_eur_override
+            if day_change_eur_override is not None
+            else day_change_metrics.price_change_eur
         )
 
         gain_abs_cents = current_value_cents - purchase_value_cents
@@ -195,7 +206,7 @@ def _build_security_metric_record(
             source=performance_metrics.source,
             coverage_ratio=performance_metrics.coverage_ratio,
             day_change_native=day_change_metrics.price_change_native,
-            day_change_eur=day_change_metrics.price_change_eur,
+            day_change_eur=day_change_eur_value,
             day_change_pct=day_change_metrics.change_pct,
             day_change_source=day_change_metrics.source,
             day_change_coverage=day_change_metrics.coverage_ratio,
@@ -230,6 +241,17 @@ def _determine_fx_rate(
             return None
 
     return None
+
+
+def _compute_day_change_eur(
+    last_price_eur: float | None,
+    last_close_eur: float | None,
+) -> float | None:
+    """Return the EUR-denominated day change using canonical rounding."""
+    if last_price_eur is None or last_close_eur is None:
+        return None
+
+    return round_price(last_price_eur - last_close_eur, decimals=4)
 
 
 def _coerce_int(value: Any) -> int:

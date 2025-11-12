@@ -92,9 +92,6 @@ def test_parsed_client_from_proto_securities() -> None:
     price = security.prices.add()
     price.date = 20240301
     price.close = 12345
-    price.high = 13000
-    price.low = 12000
-    price.volume = 500
 
     latest = client_pb2.PFullHistoricalPrice()
     latest.date = 20240302
@@ -123,7 +120,7 @@ def test_parsed_client_from_proto_transactions() -> None:
 
     transaction = client.transactions.add()
     transaction.uuid = "txn-uuid"
-    transaction.type = client_pb2.PTransaction.Type.BUY
+    transaction.type = client_pb2.PTransaction.Type.PURCHASE
     transaction.account = "acct-uuid"
     transaction.currencyCode = "EUR"
     transaction.amount = 25000
@@ -162,3 +159,57 @@ def test_parsed_client_from_proto_transactions() -> None:
     assert parsed_unit.fx_amount == 27000
     assert parsed_unit.fx_currency_code == "USD"
     assert parsed_unit.fx_rate_to_base == (-13500) / (10**4)
+
+
+def test_parsed_client_handles_optional_sections() -> None:
+    client = client_pb2.PClient()
+
+    plan = client.plans.add()
+    plan.name = "Monthly ETF"
+    plan.note = "Auto investment"
+    plan.security = "sec-uuid"
+    plan.portfolio = "port-uuid"
+    plan.account = "acct-uuid"
+    plan.amount = 100_00
+    plan.transactions.extend(["txn-a", "txn-b"])
+
+    watchlist = client.watchlists.add()
+    watchlist.name = "Favorites"
+    watchlist.securities.append("sec-uuid")
+
+    taxonomy = client.taxonomies.add()
+    taxonomy.id = "allocation"
+    taxonomy.name = "Allocation"
+    classification = taxonomy.classifications.add()
+    classification.id = "equity"
+    classification.name = "Equity"
+    assignment = classification.assignments.add()
+    assignment.investmentVehicle = "sec-uuid"
+
+    dashboard = client.dashboards.add()
+    dashboard.name = "Main"
+    column = dashboard.columns.add()
+    column.weight = 50
+    widget = column.widgets.add()
+    widget.type = "chart"
+    widget.label = "Performance"
+
+    settings = client.settings
+    bookmark = settings.bookmarks.add()
+    bookmark.label = "ETF"
+    bookmark.pattern = "ETF"
+    attribute_type = settings.attributeTypes.add()
+    attribute_type.id = "rating"
+    attribute_type.name = "Rating"
+    config_set = settings.configurationSets.add()
+    config_set.key = "theme"
+    config_set.data = "dark"
+
+    parsed_client = parsed.ParsedClient.from_proto(client)
+
+    assert parsed_client.plans[0].name == "Monthly ETF"
+    assert parsed_client.watchlists[0].securities == ["sec-uuid"]
+    assert parsed_client.taxonomies[0].classifications[0].assignments[0].investment_vehicle == "sec-uuid"
+    assert parsed_client.dashboards[0].columns[0].widgets[0].type == "chart"
+    assert parsed_client.settings is not None
+    assert parsed_client.settings.bookmarks[0].label == "ETF"

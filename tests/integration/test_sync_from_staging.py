@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections import defaultdict
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,14 +28,16 @@ def _ts(dt: datetime) -> Timestamp:
     return ts
 
 
+def _epoch_day(year: int, month: int, day: int) -> int:
+    return (date(year, month, day) - date(1970, 1, 1)).days
+
+
 def _build_sample_client() -> client_pb2.PClient:
     client = client_pb2.PClient()
     client.version = 7
     client.baseCurrency = "EUR"
 
-    prop = client.properties.add()
-    prop.key = "build"
-    prop.value.string = "regression"
+    client.properties["build"] = "regression"
 
     account = client.accounts.add()
     account.uuid = "acc-001"
@@ -56,12 +58,12 @@ def _build_sample_client() -> client_pb2.PClient:
     security.updatedAt.CopyFrom(_ts(datetime(2024, 1, 3, tzinfo=UTC)))
 
     latest_price = client_pb2.PFullHistoricalPrice()
-    latest_price.date = 20240115
+    latest_price.date = _epoch_day(2024, 1, 15)
     latest_price.close = 102_00
     security.latest.CopyFrom(latest_price)
 
     price = security.prices.add()
-    price.date = 20240110
+    price.date = _epoch_day(2024, 1, 10)
     price.close = 101_00
 
     deposit = client.transactions.add()
@@ -79,7 +81,7 @@ def _build_sample_client() -> client_pb2.PClient:
 
     buy = client.transactions.add()
     buy.uuid = "txn-buy"
-    buy.type = client_pb2.PTransaction.Type.BUY
+    buy.type = client_pb2.PTransaction.Type.PURCHASE
     buy.account = "acc-001"
     buy.portfolio = "port-001"
     buy.currencyCode = "EUR"
@@ -92,6 +94,39 @@ def _build_sample_client() -> client_pb2.PClient:
     unit.type = client_pb2.PTransactionUnit.Type.GROSS_VALUE
     unit.amount = 50_00
     unit.currencyCode = "EUR"
+
+    plan = client.plans.add()
+    plan.name = "Plan Stage"
+    plan.security = "sec-001"
+    plan.portfolio = "port-001"
+    plan.account = "acc-001"
+    plan.amount = 100_00
+
+    watchlist = client.watchlists.add()
+    watchlist.name = "WL"
+    watchlist.securities.append("sec-001")
+
+    taxonomy = client.taxonomies.add()
+    taxonomy.id = "alloc"
+    taxonomy.name = "Allocation"
+    classification = taxonomy.classifications.add()
+    classification.id = "class-1"
+    classification.name = "Equity"
+    taxonomy_assignment = classification.assignments.add()
+    taxonomy_assignment.investmentVehicle = "sec-001"
+
+    dashboard = client.dashboards.add()
+    dashboard.name = "Main"
+    dash_column = dashboard.columns.add()
+    dash_column.weight = 50
+    dash_widget = dash_column.widgets.add()
+    dash_widget.type = "chart"
+    dash_widget.label = "Positions"
+
+    settings = client.settings
+    bookmark = settings.bookmarks.add()
+    bookmark.label = "Bookmark"
+    bookmark.pattern = "Pattern"
 
     return client
 
@@ -113,6 +148,7 @@ def _stage_parsed_client(db_path: Path, client: client_pb2.PClient) -> None:
             pp_version=parsed_client.version,
             base_currency=parsed_client.base_currency,
             properties=dict(parsed_client.properties),
+            parsed_client=parsed_client,
         )
         conn.commit()
     finally:
@@ -139,6 +175,34 @@ def _run_sync_capture(
         sync_module,
         "load_latest_rates_sync",
         lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        sync_module,
+        "fetch_live_portfolios",
+        lambda _db_path: [
+            {
+                "uuid": "port-001",
+                "name": "Retirement",
+                "current_value": 5000,
+                "purchase_value": 5000,
+                "gain_abs": 0,
+                "gain_pct": 0.0,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        sync_module,
+        "fetch_positions_for_portfolios",
+        lambda _db_path, portfolio_ids: {
+            portfolio_uuid: [
+                {
+                    "security_uuid": "sec-001",
+                    "name": "Global ETF",
+                    "current_value": 5000,
+                }
+            ]
+            for portfolio_uuid in portfolio_ids
+        },
     )
 
     conn = sqlite3.connect(str(db_path))

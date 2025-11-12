@@ -37,11 +37,11 @@ export interface NormalizedAccountSnapshot {
 }
 
 export interface NormalizedPortfolioSnapshot {
-  uuid?: string;
+  uuid?: string | null;
   name?: string;
-  current_value?: number;
-  purchase_value?: number;
-  purchase_sum?: number;
+  current_value?: number | null;
+  purchase_value?: number | null;
+  purchase_sum?: number | null;
   position_count?: number | null;
   missing_value_positions?: number | null;
   has_current_value?: boolean;

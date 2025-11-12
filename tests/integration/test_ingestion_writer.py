@@ -140,6 +140,7 @@ async def test_writer_persists_accounts(tmp_path: Path) -> None:
             pp_version=42,
             base_currency="EUR",
             properties={"build": "test-suite"},
+            parsed_client=None,
         )
 
     conn = _open_conn(db_path)
@@ -173,6 +174,13 @@ async def test_writer_persists_accounts(tmp_path: Path) -> None:
             "SELECT run_id, file_path, pp_version, base_currency FROM ingestion_metadata"
         ).fetchone()
         assert metadata_row == (run_id, "fixture.portfolio", 42, "EUR")
+
+        metadata_properties = conn.execute(
+            "SELECT properties FROM ingestion_metadata"
+        ).fetchone()
+        assert metadata_properties == (
+            '{"__pp_reader__":{"properties":{"build":"test-suite"}}}',
+        )
     finally:
         conn.close()
 
@@ -197,6 +205,15 @@ async def test_writer_links_transactions_to_units(tmp_path: Path) -> None:
     )
 
     async with async_ingestion_session(db_path, enable_wal=False) as writer:
+        writer.write_accounts(
+            [DummyAccount(uuid="acc-1", name="Account", currency_code="EUR")]
+        )
+        writer.write_portfolios(
+            [DummyPortfolio(uuid="port-1", name="Portfolio")]
+        )
+        writer.write_securities(
+            [DummySecurity(uuid="sec-1", name="Security", currency_code="EUR")]
+        )
         writer.write_transactions([txn])
 
     conn = _open_conn(db_path)

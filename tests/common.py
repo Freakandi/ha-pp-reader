@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 from typing import Any
 
@@ -11,6 +11,8 @@ from homeassistant.config_entries import (
     ConfigEntries,
     ConfigEntry,
     ConfigEntryState,
+    ConfigSubentryData,
+    ConfigSubentryDataWithId,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.util import ulid as ulid_util
@@ -34,6 +36,10 @@ class MockConfigEntry(ConfigEntry):
         reason: str | None = None,
         source: str = SOURCE_USER,
         state: ConfigEntryState | None = None,
+        subentries_data: Iterable[
+            ConfigSubentryData | ConfigSubentryDataWithId
+        ]
+        | None = None,
         title: str = "Mock Title",
         unique_id: str | None = None,
         version: int = 1,
@@ -42,6 +48,7 @@ class MockConfigEntry(ConfigEntry):
         normalized_keys = {
             key: tuple(value) for key, value in (discovery_keys or {}).items()
         }
+        normalized_subentries = tuple(subentries_data or ())
 
         super().__init__(
             data=data or {},
@@ -55,6 +62,7 @@ class MockConfigEntry(ConfigEntry):
             pref_disable_polling=pref_disable_polling,
             source=source,
             state=state or ConfigEntryState.NOT_LOADED,
+            subentries_data=normalized_subentries,
             title=title,
             unique_id=unique_id,
             version=version,

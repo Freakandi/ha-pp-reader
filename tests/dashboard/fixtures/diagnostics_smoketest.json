@@ -1,14 +1,46 @@
 {
+  "enrichment": {
+    "fx_rates": {
+      "latest_fetch": "2024-01-11T10:00:00Z",
+      "rows": 1
+    },
+    "historical_prices": {
+      "latest_fetch": null,
+      "rows": 1
+    },
+    "price_history_queue": {}
+  },
   "ingestion": {
     "ingestion_accounts": 1,
+    "ingestion_historical_prices": 1,
     "ingestion_portfolios": 1,
+    "ingestion_securities": 1,
+    "ingestion_transaction_units": 2,
     "ingestion_transactions": 2
   },
   "metrics": {
+    "latest_run_uuid": "run-normalization-smoke",
     "records": {
-      "portfolio_metrics": 1,
       "account_metrics": 1,
-      "position_metrics": 1
+      "portfolio_metrics": 1,
+      "security_metrics": 1
+    },
+    "runs": {
+      "count": 1,
+      "latest": {
+        "duration_ms": 5000,
+        "error_message": null,
+        "finished_at": "2024-01-11T09:55:05Z",
+        "processed_accounts": 1,
+        "processed_portfolios": 1,
+        "processed_securities": 1,
+        "run_uuid": "run-normalization-smoke",
+        "started_at": "2024-01-11T09:55:00Z",
+        "status": "completed",
+        "total_entities": 3,
+        "trigger": "smoketest"
+      },
+      "latest_started_at": "2024-01-11T09:55:00Z"
     },
     "status": "completed"
   },
@@ -18,6 +50,8 @@
       "portfolios": 1,
       "positions": 1
     },
+    "generated_at": "2024-01-11T10:00:00Z",
+    "metric_run_uuid": "run-normalization-smoke",
     "status": "ok"
   }
 }

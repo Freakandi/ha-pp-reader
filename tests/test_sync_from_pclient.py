@@ -203,6 +203,8 @@ def _prepare_portfolio_db(path: Path) -> sqlite3.Connection:
         *db_schema.PORTFOLIO_SCHEMA,
         *db_schema.PORTFOLIO_SECURITIES_SCHEMA,
         *db_schema.TRANSACTION_SCHEMA,
+        *db_schema.METADATA_SCHEMA,
+        *db_schema.INGESTION_SCHEMA,
     )
     for statement in schema_statements:
         conn.executescript(statement)

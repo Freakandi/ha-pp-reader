@@ -40,6 +40,12 @@ export default defineConfig(() => {
   return {
     publicDir: false,
     build: {
+      lib: {
+        entry: entryFile,
+        formats: ['es'],
+        name: 'PPReaderDashboard',
+        fileName: 'dashboard',
+      },
       sourcemap: true,
       emptyOutDir: false,
       outDir: outputDirectory,

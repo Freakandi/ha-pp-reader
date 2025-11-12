@@ -18,3 +18,5 @@ SIGNAL_NORMALIZATION_PROGRESS = "pp_reader_normalization_progress_signal"
 CONF_FX_UPDATE_INTERVAL_SECONDS = "fx_update_interval_seconds"
 DEFAULT_FX_UPDATE_INTERVAL_SECONDS = 6 * 3600  # 6 hours
 MIN_FX_UPDATE_INTERVAL_SECONDS = 900  # 15 minutes
+DEFAULT_DB_SUBDIR = "pp_reader_data"
+CONFIG_ENTRY_VERSION = 2

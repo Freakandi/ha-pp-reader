@@ -574,10 +574,8 @@ if (typeof handlePortfolioPositionsUpdate !== 'function') {
   });
 }
 
-const updateFooter =
-  typeof moduleApi.updatePortfolioFooterFromDom === 'function'
-    ? moduleApi.updatePortfolioFooterFromDom
-    : null;
+const footerHelperExported = typeof moduleApi.updatePortfolioFooterFromDom === 'function';
+const updateFooter = footerHelperExported ? moduleApi.updatePortfolioFooterFromDom : null;
 const flushPending =
   typeof moduleApi.flushPendingPositions === 'function'
     ? moduleApi.flushPendingPositions
@@ -632,6 +630,14 @@ portfolioRow.dataset.gainAbs = String(updatePayload.gain_abs);
 portfolioRow.dataset.gainPct = String(updatePayload.gain_pct);
 portfolioRow.dataset.hasValue = 'true';
 portfolioRow.dataset.fxUnavailable = smoketestPortfolio.coverage_ratio === 1 ? 'false' : 'true';
+portfolioRow.dataset.coverageRatio =
+  typeof smoketestPortfolio.coverage_ratio === 'number'
+    ? String(smoketestPortfolio.coverage_ratio)
+    : '';
+portfolioRow.dataset.provenance =
+  typeof smoketestPortfolio.provenance === 'string' ? smoketestPortfolio.provenance : '';
+portfolioRow.dataset.metricRunUuid =
+  typeof smoketestPortfolio.metric_run_uuid === 'string' ? smoketestPortfolio.metric_run_uuid : '';
 if (gainCell) {
   const gainClass = updatePayload.gain_abs >= 0 ? 'positive' : 'negative';
   gainCell.innerHTML = `<span class="${gainClass}">${formatEuro(updatePayload.gain_abs)}\u00A0€</span>`;
@@ -656,6 +662,7 @@ if (typeof reapplySort === 'function') {
 
 const footerGainCell = footer.cells[3];
 const summary = {
+  footerHelperExported,
   footerGain: footerGainCell?.textContent?.trim() ?? '',
   footerGainHtml: footerGainCell?.innerHTML ?? '',
   footerGainPct: footerGainCell?.dataset?.gainPct ?? '',
@@ -669,6 +676,9 @@ const summary = {
   pendingSizeBefore,
   pendingSizeAfter,
   detailsFound: Boolean(detailsLookup),
+  coverageRatio: portfolioRow.dataset.coverageRatio ?? '',
+  provenance: portfolioRow.dataset.provenance ?? '',
+  metricRunUuid: portfolioRow.dataset.metricRunUuid ?? '',
 };
 
 const normalizationPayload = {
@@ -704,6 +714,11 @@ summary.normalizedPositions = normalizedPositions;
 summary.diagnostics = {
   ingestionAccounts: diagnosticsSummary.ingestion?.ingestion_accounts ?? 0,
   ingestionPortfolios: diagnosticsSummary.ingestion?.ingestion_portfolios ?? 0,
+  ingestionTransactions: diagnosticsSummary.ingestion?.ingestion_transactions ?? 0,
+  fxRateRows: diagnosticsSummary.enrichment?.fx_rates?.rows ?? 0,
+  metricsStatus: diagnosticsSummary.metrics?.status ?? '',
+  metricsLatestRun: diagnosticsSummary.metrics?.latest_run_uuid ?? '',
+  normalizationStatus: diagnosticsSummary.normalization?.status ?? '',
   normalizationAccounts: diagnosticsSummary.normalization?.counts?.accounts ?? 0,
   normalizationPositions: diagnosticsSummary.normalization?.counts?.positions ?? 0,
 };

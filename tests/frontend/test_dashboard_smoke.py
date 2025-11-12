@@ -17,6 +17,7 @@ def test_dashboard_bundle_smoke() -> None:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
 
     lines = [line for line in result.stdout.splitlines() if line.strip()]
@@ -24,6 +25,7 @@ def test_dashboard_bundle_smoke() -> None:
 
     payload = json.loads(lines[-1])
 
+    assert payload["footerHelperExported"] is True
     assert payload["footerGain"] == "50,00\u00a0€"
     assert "positive" in payload["footerGainHtml"], (
         "footer gain markup should signal positive gains"
@@ -37,6 +39,9 @@ def test_dashboard_bundle_smoke() -> None:
     assert payload["pendingSizeBefore"] == 1
     assert payload["pendingSizeAfter"] == 0
     assert payload["detailsFound"] is True
+    assert payload["coverageRatio"] == "1"
+    assert payload["provenance"] == "cached"
+    assert payload["metricRunUuid"] == "run-normalization-smoke"
 
     normalized_positions = payload["normalizedPositions"]
     assert isinstance(normalized_positions, list)
@@ -55,4 +60,9 @@ def test_dashboard_bundle_smoke() -> None:
     diagnostics = payload["diagnostics"]
     assert diagnostics["ingestionAccounts"] == 1
     assert diagnostics["ingestionPortfolios"] == 1
+    assert diagnostics["ingestionTransactions"] == 2
+    assert diagnostics["fxRateRows"] == 1
+    assert diagnostics["metricsStatus"] == "completed"
+    assert diagnostics["metricsLatestRun"] == "run-normalization-smoke"
+    assert diagnostics["normalizationStatus"] == "ok"
     assert diagnostics["normalizationPositions"] == 1

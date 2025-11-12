@@ -19,8 +19,10 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from custom_components.pp_reader.models import parsed as parsed_models
-else:
-    parsed_models = None
+else:  # pragma: no cover - runtime fallback for typing only
+    parsed_models = None  # type: ignore[assignment]
+
+PARSER_META_KEY = "__pp_reader__"
 
 
 def _to_iso(dt: datetime | None) -> str | None:
@@ -37,6 +39,218 @@ def _json_dump(value: Mapping[str, Any] | None) -> str | None:
     if not isinstance(value, Mapping):  # Defensive: allow mapping-like inputs
         value = dict(value)
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _serialize_watchlists(parsed_client: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for watchlist in getattr(parsed_client, "watchlists", []) or []:
+        result.append(
+            {
+                "name": getattr(watchlist, "name", None),
+                "securities": list(getattr(watchlist, "securities", []) or []),
+            }
+        )
+    return [item for item in result if item.get("name")]
+
+
+def _serialize_plans(parsed_client: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for plan in getattr(parsed_client, "plans", []) or []:
+        result.append(
+            {
+                "name": getattr(plan, "name", None),
+                "note": getattr(plan, "note", None),
+                "security": getattr(plan, "security", None),
+                "portfolio": getattr(plan, "portfolio", None),
+                "account": getattr(plan, "account", None),
+                "attributes": dict(getattr(plan, "attributes", {}) or {}),
+                "auto_generate": bool(getattr(plan, "auto_generate", False)),
+                "date": getattr(plan, "date", None),
+                "interval": getattr(plan, "interval", None),
+                "amount": getattr(plan, "amount", None),
+                "fees": getattr(plan, "fees", None),
+                "transactions": list(getattr(plan, "transactions", []) or []),
+                "taxes": getattr(plan, "taxes", None),
+                "plan_type": getattr(plan, "plan_type", None),
+            }
+        )
+    return [item for item in result if item.get("name")]
+
+
+def _serialize_taxonomies(parsed_client: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for taxonomy in getattr(parsed_client, "taxonomies", []) or []:
+        classifications: list[dict[str, Any]] = []
+        for classification in getattr(taxonomy, "classifications", []) or []:
+            assignments: list[dict[str, Any]] = []
+            for assignment in getattr(classification, "assignments", []) or []:
+                assignments.append(
+                    {
+                        "investment_vehicle": getattr(
+                            assignment,
+                            "investment_vehicle",
+                            None,
+                        ),
+                        "weight": getattr(assignment, "weight", None),
+                        "rank": getattr(assignment, "rank", None),
+                        "data": dict(getattr(assignment, "data", {}) or {}),
+                    }
+                )
+            classifications.append(
+                {
+                    "id": getattr(classification, "id", None),
+                    "name": getattr(classification, "name", None),
+                    "parent_id": getattr(classification, "parent_id", None),
+                    "note": getattr(classification, "note", None),
+                    "color": getattr(classification, "color", None),
+                    "weight": getattr(classification, "weight", None),
+                    "rank": getattr(classification, "rank", None),
+                    "data": dict(getattr(classification, "data", {}) or {}),
+                    "assignments": assignments,
+                }
+            )
+
+        result.append(
+            {
+                "id": getattr(taxonomy, "id", None),
+                "name": getattr(taxonomy, "name", None),
+                "source": getattr(taxonomy, "source", None),
+                "dimensions": list(getattr(taxonomy, "dimensions", []) or []),
+                "classifications": classifications,
+            }
+        )
+    return [item for item in result if item.get("id")]
+
+
+def _serialize_dashboards(parsed_client: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for dashboard in getattr(parsed_client, "dashboards", []) or []:
+        columns: list[dict[str, Any]] = []
+        for column in getattr(dashboard, "columns", []) or []:
+            widgets: list[dict[str, Any]] = []
+            for widget in getattr(column, "widgets", []) or []:
+                widgets.append(
+                    {
+                        "type": getattr(widget, "type", None),
+                        "label": getattr(widget, "label", None),
+                        "configuration": dict(
+                            getattr(widget, "configuration", {}) or {}
+                        ),
+                    }
+                )
+            columns.append(
+                {
+                    "weight": getattr(column, "weight", None),
+                    "widgets": widgets,
+                }
+            )
+
+        result.append(
+            {
+                "name": getattr(dashboard, "name", None),
+                "configuration": dict(
+                    getattr(dashboard, "configuration", {}) or {}
+                ),
+                "columns": columns,
+                "dashboard_id": getattr(dashboard, "dashboard_id", None),
+            }
+        )
+    return [item for item in result if item.get("name")]
+
+
+def _serialize_settings(parsed_client: Any) -> dict[str, Any] | None:
+    settings = getattr(parsed_client, "settings", None)
+    if settings is None:
+        return None
+
+    bookmarks = [
+        {"label": getattr(bookmark, "label", None), "pattern": getattr(bookmark, "pattern", None)}
+        for bookmark in getattr(settings, "bookmarks", []) or []
+    ]
+    attribute_types = [
+        {
+            "id": getattr(attr, "id", None),
+            "name": getattr(attr, "name", None),
+            "column_label": getattr(attr, "column_label", None),
+            "source": getattr(attr, "source", None),
+            "target": getattr(attr, "target", None),
+            "type": getattr(attr, "type", None),
+            "converter_class": getattr(attr, "converter_class", None),
+            "properties": dict(getattr(attr, "properties", {}) or {}),
+        }
+        for attr in getattr(settings, "attribute_types", []) or []
+    ]
+    configuration_sets = [
+        {
+            "key": getattr(config, "key", None),
+            "uuid": getattr(config, "uuid", None),
+            "name": getattr(config, "name", None),
+            "data": getattr(config, "data", None),
+        }
+        for config in getattr(settings, "configuration_sets", []) or []
+    ]
+
+    payload = {
+        "bookmarks": [item for item in bookmarks if item.get("label")],
+        "attribute_types": [item for item in attribute_types if item.get("id")],
+        "configuration_sets": [
+            item for item in configuration_sets if item.get("key")
+        ],
+    }
+    if any(payload.values()):
+        return payload
+    return None
+
+
+def _serialize_extra_sections(parsed_client: Any | None) -> dict[str, Any]:
+    if parsed_client is None:
+        return {}
+
+    extra: dict[str, Any] = {}
+
+    watchlists = _serialize_watchlists(parsed_client)
+    if watchlists:
+        extra["watchlists"] = watchlists
+
+    plans = _serialize_plans(parsed_client)
+    if plans:
+        extra["plans"] = plans
+
+    taxonomies = _serialize_taxonomies(parsed_client)
+    if taxonomies:
+        extra["taxonomies"] = taxonomies
+
+    dashboards = _serialize_dashboards(parsed_client)
+    if dashboards:
+        extra["dashboards"] = dashboards
+
+    settings = _serialize_settings(parsed_client)
+    if settings:
+        extra["settings"] = settings
+
+    return extra
+
+
+def _build_metadata_blob(
+    properties: Mapping[str, Any] | None,
+    parsed_client: Any | None,
+) -> dict[str, Any] | None:
+    props_dict: dict[str, Any] = {}
+    if properties:
+        props_dict = {str(key): str(value) for key, value in dict(properties).items()}
+
+    extra_sections = _serialize_extra_sections(parsed_client)
+    if not props_dict and not extra_sections:
+        return None
+
+    payload: dict[str, Any] = {
+        PARSER_META_KEY: {
+            "properties": props_dict,
+        }
+    }
+    if extra_sections:
+        payload[PARSER_META_KEY].update(extra_sections)
+    return payload
 
 
 class IngestionWriter:
@@ -283,10 +497,12 @@ class IngestionWriter:
         parsed_at: datetime | None,
         pp_version: int | None,
         base_currency: str | None,
-        properties: Mapping[str, str] | None,
+        properties: Mapping[str, Any] | None,
+        parsed_client: Any | None = None,
     ) -> str:
         """Insert ingestion metadata and return the generated run identifier."""
         run_id = uuid4().hex
+        metadata_blob = _build_metadata_blob(properties, parsed_client)
         self._conn.execute(
             """
             INSERT OR REPLACE INTO ingestion_metadata (
@@ -299,7 +515,7 @@ class IngestionWriter:
                 _to_iso(parsed_at),
                 pp_version,
                 base_currency,
-                _json_dump(properties),
+                _json_dump(metadata_blob),
             ),
         )
         return run_id

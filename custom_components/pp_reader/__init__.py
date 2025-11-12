@@ -32,6 +32,8 @@ from .const import (
     CONF_FILE_PATH,
     CONF_FX_UPDATE_INTERVAL_SECONDS,
     CONF_HISTORY_RETENTION_YEARS,
+    CONFIG_ENTRY_VERSION,
+    DEFAULT_DB_SUBDIR,
     DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
     DOMAIN,
     MIN_FX_UPDATE_INTERVAL_SECONDS,
@@ -41,6 +43,7 @@ from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
 from .util import async_run_executor_job
+from .util.paths import resolve_storage_path
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -75,6 +78,11 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
     RuntimeError,
     TypeError,
     ValueError,
+)
+
+NORMALIZED_FLAG_KEYS: tuple[str, str] = (
+    "normalized_pipeline",
+    "normalized_dashboard_adapter",
 )
 
 
@@ -141,6 +149,50 @@ def _extract_feature_flag_options(options: Mapping[str, Any]) -> dict[str, bool]
         normalized[name] = bool(raw_value)
 
     return normalized
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Handle config entry migrations."""
+    version = entry.version or 1
+    if version >= CONFIG_ENTRY_VERSION:
+        return True
+
+    _LOGGER.info(
+        "Migriere Config Entry %s von Version %s → %s",
+        entry.entry_id,
+        version,
+        CONFIG_ENTRY_VERSION,
+    )
+
+    new_options = dict(entry.options or {})
+    normalized_flags = {
+        key: bool(value)
+        for key, value in _extract_feature_flag_options(new_options).items()
+    }
+
+    flags_changed = False
+    for flag_name in NORMALIZED_FLAG_KEYS:
+        if not normalized_flags.get(flag_name, False):
+            normalized_flags[flag_name] = True
+            flags_changed = True
+
+    if flags_changed:
+        feature_flag_options = dict(new_options.get("feature_flags") or {})
+        for flag_name in NORMALIZED_FLAG_KEYS:
+            feature_flag_options[flag_name] = True
+        new_options["feature_flags"] = feature_flag_options
+        hass.config_entries.async_update_entry(
+            entry,
+            version=CONFIG_ENTRY_VERSION,
+            options=new_options,
+        )
+    else:
+        hass.config_entries.async_update_entry(
+            entry,
+            version=CONFIG_ENTRY_VERSION,
+        )
+
+    return True
 
 
 def _store_feature_flags(
@@ -650,8 +702,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         initialize_database_schema = db_init_module.initialize_database_schema
 
         options = _get_entry_options(entry)
-        file_path = entry.data[CONF_FILE_PATH]
-        db_path = Path(entry.data[CONF_DB_PATH])
+        stored_file_path = entry.data[CONF_FILE_PATH]
+        resolved_file_path = resolve_storage_path(hass, stored_file_path)
+        portfolio_file = Path(resolved_file_path)
+        portfolio_stem = portfolio_file.stem
+        default_db_relative = Path(DEFAULT_DB_SUBDIR) / f"{portfolio_stem}.db"
+        db_path = resolve_storage_path(
+            hass,
+            entry.data.get(CONF_DB_PATH),
+            default_relative=default_db_relative,
+        )
 
         try:
             _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
@@ -662,10 +722,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise ConfigEntryNotReady(msg) from exc
 
         hass.data.setdefault(DOMAIN, {})
-        store: dict[str, Any] = {
-            "file_path": str(file_path),
-            "db_path": db_path,
-        }
+        store: dict[str, Any] = {"file_path": str(portfolio_file), "db_path": db_path}
         hass.data[DOMAIN][entry.entry_id] = store
 
         flag_overrides = _extract_feature_flag_options(options)
@@ -680,7 +737,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = coordinator_cls(
             hass,
             db_path=db_path,
-            file_path=Path(file_path),
+            file_path=portfolio_file,
             entry_id=entry.entry_id,
         )
         await coordinator.async_config_entry_first_refresh()

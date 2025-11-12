@@ -1,115 +1,89 @@
 {
-  "generated_at": "2024-01-11T10:00:00+00:00",
-  "metric_run_uuid": "run-normalization-smoke",
   "accounts": [
     {
-      "uuid": "acc-smoke",
-      "name": "Smoke Brokerage",
-      "currency_code": "EUR",
-      "orig_balance": 1000.0,
       "balance": 500.0,
+      "coverage_ratio": 1.0,
+      "currency_code": "EUR",
       "fx_rate": 1.0,
-      "fx_rate_source": "integration-test",
-      "fx_rate_timestamp": "2024-01-11T09:00:00+00:00",
-      "coverage_ratio": 1.0,
-      "provenance": "live_cache",
+      "fx_rate_source": "fixtures",
+      "fx_rate_timestamp": "2024-01-11T10:00:00Z",
       "metric_run_uuid": "run-normalization-smoke",
-      "fx_unavailable": false
-    }
-  ],
-  "portfolios": [
-    {
-      "uuid": "port-smoke",
-      "name": "Smoke Portfolio",
-      "current_value": 550.0,
-      "purchase_value": 500.0,
-      "purchase_sum": 500.0,
-      "position_count": 1,
-      "missing_value_positions": 0,
-      "has_current_value": true,
-      "performance": {
-        "gain_abs": 50.0,
-        "gain_pct": 10.0,
-        "total_change_eur": 50.0,
-        "total_change_pct": 10.0,
-        "source": "snapshot",
-        "coverage_ratio": 1.0,
-        "day_change": {
-          "price_change_native": 0.5,
-          "price_change_eur": 0.45,
-          "change_pct": 0.95,
-          "source": "market",
-          "coverage_ratio": 1.0
-        }
-      },
-      "coverage_ratio": 1.0,
-      "provenance": "cached",
-      "metric_run_uuid": "run-normalization-smoke",
-      "positions": [
-        {
-          "portfolio_uuid": "port-smoke",
-          "security_uuid": "sec-smoke",
-          "name": "Smoke Equity",
-          "currency_code": "USD",
-          "current_holdings": 5,
-          "purchase_value": 500.0,
-          "current_value": 550.0,
-          "average_cost": {
-            "native": 100.0,
-            "security": 100.0,
-            "account": 100.0,
-            "eur": 100.0,
-            "source": "totals",
-            "coverage_ratio": 1.0
-          },
-          "performance": {
-            "gain_abs": 50.0,
-            "gain_pct": 10.0,
-            "total_change_eur": 50.0,
-            "total_change_pct": 10.0,
-            "source": "snapshot",
-            "coverage_ratio": 1.0,
-            "day_change": {
-              "price_change_native": 0.5,
-              "price_change_eur": 0.45,
-              "change_pct": 0.95,
-              "source": "market",
-              "coverage_ratio": 1.0
-            }
-          },
-          "aggregation": {
-            "total_holdings": 5,
-            "positive_holdings": 5,
-            "purchase_value_cents": 50000,
-            "purchase_value_eur": 500.0,
-            "security_currency_total": 550.0,
-            "account_currency_total": 550.0,
-            "purchase_total_security": 500.0,
-            "purchase_total_account": 500.0
-          },
-          "coverage_ratio": 1.0,
-          "provenance": "snapshot",
-          "metric_run_uuid": "run-normalization-smoke",
-          "last_price_native": 110.0,
-          "last_price_eur": 105.0,
-          "last_close_native": 109.0,
-          "last_close_eur": 103.8,
-          "data_state": {
-            "status": "ok"
-          }
-        }
-      ],
-      "data_state": {
-        "status": "ok"
-      }
+      "name": "Smoke Brokerage",
+      "orig_balance": 500.0,
+      "provenance": "snapshot",
+      "uuid": "acc-smoke"
     }
   ],
   "diagnostics": {
-    "normalized_payload": {
-      "metric_run_uuid": "run-normalization-smoke",
+    "coverage": 1.0,
+    "generated_at": "2024-01-11T10:00:00Z",
+    "missing_rates": []
+  },
+  "generated_at": "2024-01-11T10:00:00Z",
+  "metric_run_uuid": "run-normalization-smoke",
+  "portfolios": [
+    {
       "coverage_ratio": 1.0,
-      "provenance": "snapshot",
-      "generated_at": "2024-01-11T10:00:00+00:00"
+      "current_value": 550.0,
+      "has_current_value": true,
+      "metric_run_uuid": "run-normalization-smoke",
+      "missing_value_positions": 0,
+      "name": "Smoke Portfolio",
+      "performance": {
+        "coverage_ratio": 1.0,
+        "gain_abs": 50.0,
+        "gain_pct": 10.0,
+        "provenance": "cached",
+        "source": "snapshot",
+        "total_change_eur": 50.0,
+        "total_change_pct": 10.0
+      },
+      "position_count": 1,
+      "positions": [
+        {
+          "aggregation": {
+            "coverage_ratio": 1.0,
+            "purchase_total_account": 500.0,
+            "purchase_total_security": 500.0,
+            "purchase_value_eur": 500.0,
+            "total_holdings": 5.0
+          },
+          "average_cost": {
+            "account": 100.0,
+            "eur": 100.0,
+            "security": 100.0
+          },
+          "coverage_ratio": 1.0,
+          "currency_code": "USD",
+          "current_holdings": 5.0,
+          "current_value": 550.0,
+          "metric_run_uuid": "run-normalization-smoke",
+          "name": "Smoke Equity",
+          "performance": {
+            "coverage_ratio": 1.0,
+            "day_change": {
+              "change_pct": 0.95,
+              "coverage_ratio": 1.0,
+              "price_change_eur": 0.45,
+              "price_change_native": 0.5,
+              "source": "market"
+            },
+            "gain_abs": 50.0,
+            "gain_pct": 10.0,
+            "provenance": "snapshot",
+            "source": "snapshot",
+            "total_change_eur": 50.0,
+            "total_change_pct": 10.0
+          },
+          "portfolio_uuid": "port-smoke",
+          "provenance": "snapshot",
+          "purchase_value": 500.0,
+          "security_uuid": "sec-smoke"
+        }
+      ],
+      "provenance": "cached",
+      "purchase_value": 500.0,
+      "uuid": "port-smoke"
     }
-  }
+  ]
 }

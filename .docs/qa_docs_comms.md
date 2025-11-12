@@ -36,6 +36,31 @@ This concept document outlines how testing, documentation, and stakeholder commu
      - Update `.docs/live_aggregation/qa_runs.md` with run ID, HA build, adapter version, and links to collected diagnostics.
      - Post status in `.docs/communications/status_updates.md`, tagging the frontend adapter owners and noting whether the toggle can move to default-on.
 
+## M6 QA Checklist (release enablement)
+- Track each run in `.docs/live_aggregation/qa_runs.md` with the date, HA build, git commit, and attached artefacts (pytest logs, bundle hashes, diagnostics exports) before handing off to release owners.
+
+### Backend regression runs
+- [ ] `source .venv/bin/activate && pip install -r requirements-dev.txt` to guarantee the Home Assistant pins plus dev extras (ruff, pytest plugins) match `requirements*.txt`.
+- [ ] `pytest -q` and `pytest --cov=custom_components/pp_reader --cov-report=term-missing | tee pytest_full.log` to cover ingestion → enrichment → normalization/metrics; stash the log under version control for auditors.
+- [ ] `pytest tests/test_event_push.py tests/test_ws_portfolios_live.py tests/test_ws_portfolio_positions.py tests/prices/test_history_queue.py tests/currencies/test_fx_async.py` to re-run the websocket/enrichment smoke matrix after fixtures refreshes.
+- [ ] `python -m script.hassfest` to validate manifests once feature flags or services change; failures block release packaging.
+- [ ] Upload diagnostics from `python -m scripts.diagnostics_dump --normalized --output tmp/m6_regression` so frontend reviewers can diff payloads against the recorded websocket samples.
+
+### Frontend smoke + bundle validation
+- [ ] Remove stale caches (`rm -rf node_modules/.vite`) after `npm ci` to ensure the Vite build uses the refreshed dependencies noted in `package-lock.json`.
+- [ ] `npm run lint:ts`, `npm run typecheck`, `npm test` to gate TypeScript types, dashboard store behaviour, and DOM snapshots referenced by `tests/dashboard/`.
+- [ ] `npm run build && node scripts/update_dashboard_module.mjs` to emit `custom_components/pp_reader/www/pp_reader_dashboard/js/*` and rewrite `custom_components/pp_reader/dashboard.module.js`.
+- [ ] Record the produced bundle hash (e.g., `dashboard.CeqyI7r9.js`) plus the generated module diff inside the QA run entry so ops can verify their deployment matches the release tag.
+- [ ] For operator rebuilds (self-hosted dashboards or downstream forks), document that `npm ci && npm run build` must be executed on every upgrade before restarting Home Assistant; copy the resulting `www/pp_reader_dashboard/` contents verbatim and re-run `scripts/prepare_main_pr.sh dev main` when promoting to `main`.
+
+### Manual dashboard verification & feature-flag expectations
+- [ ] Start Home Assistant with `./scripts/develop` (or `hass --config ~/coding/repos/ha-pp-reader/config` inside `venv-ha`) and ensure the integration is set up using the canonical fixtures.
+- [ ] In Settings → Devices & Services → Portfolio Performance Reader → Configure, toggle both `normalized_pipeline` and `normalized_dashboard_adapter` to **On**; capture a screenshot of the options flow plus the resulting `config_entry.options["feature_flags"]` block from diagnostics to prove defaults are correctly applied.
+- [ ] Run `python -m scripts.enrichment_smoketest --output tmp/m6_dashboard` to seed normalized snapshots that match the latest fixtures before loading the dashboard.
+- [ ] Open `http://127.0.0.1:8123/ppreader` (or the Vite dev server URL when `npm run dev` is active) using the `dev/dev` account, then validate Overview, Accounts, Positions, and Security Detail tabs for: latest coverage badge, FX banner states, and history chart parity with `pp_reader_dom_reference.md`.
+- [ ] Capture one websocket payload per `data_type` via browser devtools, annotate expected aggregator keys, and compare against `custom_components/pp_reader/util/diagnostics.py --normalized` output to confirm no legacy adapter payloads leak through.
+- [ ] Restart Home Assistant (or reload the integration) once assets are rebuilt to confirm operators only need a config-entry reload after toggling the feature flags—document any additional manual rebuild/restart requirements for the release announcement.
+
 ## Documentation Plan
 - **Architecture refresh.** Update `README-dev.md`, `.docs/ARCHITECTURE.md`, and `.docs/live_aggregation/` notes with diagrams referencing the canonical pipeline, replacing legacy flow explanations.
 - **User-facing guidance.** Revise `README.md` setup instructions, Home Assistant configuration steps in `config/README.md`, and troubleshooting guides to reflect new migration behaviours, WAL toggles, and diagnostics.

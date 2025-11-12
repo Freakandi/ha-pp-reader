@@ -117,6 +117,7 @@ Utility helpers live in `custom_components/pp_reader/util/`, which exposes `asyn
 - The Portfolio Performance protobuf schema lives in `custom_components/pp_reader/name/abuchen/portfolio/`. `client_pb2.py` is generated from `client.proto` and ships with a matching `.pyi` stub for typing. `client_pb2.py.bak` is retained solely as an upstream backup reference and is not imported at runtime.
 - The generated protobuf module is imported directly by `data.reader` and by the sync layer. Regeneration uses `protoc` with Python codegen and must preserve the namespace hierarchy to keep imports stable.
 - Dashboard assets are authored in TypeScript (`src/`) and compiled with Vite (`npm run build`). The build emits hashed browser bundles in `www/pp_reader_dashboard/js/` plus a stable `dashboard.module.js` entry that `panel.js` loads, with an optional dev-server override for live reloading.【F:package.json†L1-L31】【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L1-L163】
+- Release builds must run `npm ci && npm run build && node scripts/update_dashboard_module.mjs` (clearing `node_modules/.vite` when dependencies change) and then `scripts/prepare_main_pr.sh dev main` so the hashed bundles checked into `custom_components/pp_reader/www/pp_reader_dashboard/js/` match the version shipped to HACS.
 
 ---
 
@@ -196,12 +197,13 @@ Keys prefixed with `price_` are initialised lazily by `initialize_price_state` a
 
 ### Config flow & options flow
 - Config flow (`config_flow.PortfolioConfigFlow`)
-  - Step `user`: validate the `.portfolio` path and optionally choose to use the default database directory (`/config/pp_reader_data/<stem>.db`). Context state (`PPReaderConfigFlowContext`) persists the choice between steps.
+  - Step `user`: validate the `.portfolio` path and optionally choose to use the default database directory (`pp_reader_data/<stem>.db` underneath the Home Assistant config directory via `hass.config.path`). Context state (`PPReaderConfigFlowContext`) persists the choice between steps.
   - Step `db_path`: allow a custom directory for the SQLite file when the default is not used.
   - Validation relies on `data.reader.parse_data_portfolio` (protobuf parser) to ensure the file is readable before creating the entry.
 - Options flow exposes:
   - `price_update_interval_seconds` (>=300 seconds, default 900). Values below the minimum fall back to the default.
   - `enable_price_debug` toggles the effective log level for all price modules.
+  - Feature flags `normalized_pipeline` and `normalized_dashboard_adapter` are persisted per entry but default to `true` for every install (new or migrated). Reloading an entry enforces the defaults so the coordinator, WebSocket handlers, and dashboard always consume the canonical normalization payloads—legacy adapters were removed as part of the GA rollout.
   - Option changes trigger `_async_reload_entry_on_update`, which resets in-memory state, reschedules the interval, reapplies debug logging, and kicks off an immediate cycle.
   - Advanced overrides may include `history_retention_years`; `_normalize_history_retention_years` accepts positive integers or `"none"`/`"unlimited"` (case-insensitive) and stores `None` for unlimited retention. The option is persisted even though pruning is not yet enforced.【F:custom_components/pp_reader/__init__.py†L114-L149】
 
@@ -224,9 +226,10 @@ Sensors read from the coordinator snapshot (`coordinator.data`) to remain compat
 | Option | Source | Default | Validation | Impact |
 |--------|--------|---------|------------|--------|
 | `file_path` | Config flow | — | Must point to an existing `.portfolio` file | Defines the data source. |
-| `db_path` | Config flow | `/config/pp_reader_data/<portfolio>.db` | Directory must exist and be writable | Defines SQLite storage location. |
+| `db_path` | Config flow | `pp_reader_data/<portfolio>.db` (resolved inside the Home Assistant config directory) | Directory must exist and be writable | Defines SQLite storage location. |
 | `price_update_interval_seconds` | Options flow | 900 | Minimum 300 | Reschedules the recurring price fetch. |
 | `enable_price_debug` | Options flow | `false` | Boolean | Elevates price logger levels to DEBUG and is applied immediately. |
+| `feature_flags.normalized_pipeline` / `feature_flags.normalized_dashboard_adapter` | Options flow | `true` | Boolean | Must remain enabled; reloads force them back on so sensors, events, and the dashboard always read from the normalization snapshot (legacy adapters removed). |
 | `history_retention_years` | Advanced options override | `null` (unlimited) | Positive integer or keywords `none`/`unlimited` | Stored for planned pruning logic; currently informational.【F:custom_components/pp_reader/__init__.py†L114-L149】 |
 
 No credentials are required; Yahoo Finance quotes are public and the FX helper only fetches EUR rates.
@@ -335,7 +338,7 @@ The FX helper logs and returns partial results on network or database failures t
 
 All commands default to the coordinator snapshot when live aggregation fails to keep the dashboard responsive. `_live_portfolios_payload` centralises the fetch logic: it queries SQLite via `fetch_live_portfolios` inside an executor, logs and falls back to coordinator snapshots on error, and normalises results before serialising. The accounts endpoint invokes `ensure_exchange_rates_for_dates`/`load_latest_rates` so FX metadata is up to date when non-EUR accounts are present. Security-specific commands reuse `async_run_executor_job` to call `get_security_snapshot` and `iter_security_close_prices`, ensuring blocking SQLite work never stalls the event loop.【F:custom_components/pp_reader/data/websocket.py†L640-L778】
 
-The frontend adapter mirrors the canonical payloads one-to-one. `src/data/api.ts` invokes the commands above, passes responses through the normalizers in `src/lib/api/portfolio/`, and writes the resulting `NormalizedAccountSnapshot` / `NormalizedPortfolioSnapshot` records into the singleton store in `src/lib/store/portfolioStore.ts`. Selectors in `src/lib/store/selectors/portfolio.ts` expose derived tables for overview cards, account badges, and per-security drilldowns so view controllers never touch the raw WebSocket payloads. Incremental updates flow over `EVENT_PANELS_UPDATED` via `custom_components/pp_reader/data/event_push.py`; `src/data/updateConfigsWS.ts` listens for those events, applies the same deserializers, merges the patches into the store, and emits `DASHBOARD_DIAGNOSTICS_EVENT` entries when coverage, provenance, or `metric_run_uuid` metadata change. Sharing the adapter between initial fetch and push updates guarantees that dashboard state matches the snapshots stored in SQLite even after reloads.
+The frontend adapter mirrors the canonical payloads one-to-one. `src/data/api.ts` invokes the commands above, passes responses through the normalizers in `src/lib/api/portfolio/`, and writes the resulting `NormalizedAccountSnapshot` / `NormalizedPortfolioSnapshot` records into the singleton store in `src/lib/store/portfolioStore.ts`. Selectors in `src/lib/store/selectors/portfolio.ts` expose derived tables for overview cards, account badges, and per-security drilldowns so view controllers never touch the raw WebSocket payloads. Incremental updates flow over `EVENT_PANELS_UPDATED` via `custom_components/pp_reader/data/event_push.py`; `src/data/updateConfigsWS.ts` listens for those events, applies the same deserializers, merges the patches into the store, and emits `DASHBOARD_DIAGNOSTICS_EVENT` entries when coverage, provenance, or `metric_run_uuid` metadata change. Sharing the adapter between initial fetch and push updates guarantees that dashboard state matches the snapshots stored in SQLite even after reloads, and the legacy DOM adapters (`window.__ppReader*`) have been removed as part of the normalized rollout.
 
 Portfolio and position responses merge any persisted `performance` payload with metrics derived from `select_performance_metrics`, ensuring gain/percentage totals and nested `day_change` values remain consistent with coordinator sensors and event payloads even when upstream caches omit fields. Deprecated flattenings (`gain_abs`, `gain_pct`, `day_price_change_*`, `avg_price_*`) are removed before the payload is emitted.【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】
 

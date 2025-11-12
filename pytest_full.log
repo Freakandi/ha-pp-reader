@@ -1,0 +1,2332 @@
+..F...FFFFF....FFF...F............F.............F..F..FF...FFFF.....FF.. [ 40%]
+....F..F.........F......F.....FFF.....................FF...FFFFFFFFFFF.. [ 81%]
+.....................F...F...FF.                                         [100%]
+=================================== FAILURES ===================================
+_________________ test_ensure_exchange_rates_persists_metadata _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_ensure_exchange_rates_per0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff4952e030>
+
+    @pytest.mark.asyncio
+    async def test_ensure_exchange_rates_persists_metadata(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Rates fetched via ensure_exchange_rates_for_dates persist with provenance."""
+        db_path = tmp_path / "fx_meta.db"
+        initialize_database_schema(db_path)
+    
+        async def _fake_fetch(
+            date: str,
+            currencies: set[str],
+            *,
+            retries: int,
+            initial_delay: float,
+        ) -> dict[str, float]:
+            assert date == "2024-03-05"
+            assert currencies == {"USD"}
+            assert retries == fx.FETCH_RETRIES
+            assert initial_delay == fx.FETCH_BACKOFF_SECONDS
+            return {"USD": 1.1111}
+    
+        monkeypatch.setattr(fx, "_fetch_exchange_rates_with_retry", _fake_fetch)
+    
+        await fx.ensure_exchange_rates_for_dates(
+            [datetime(2024, 3, 5, tzinfo=UTC)],
+            {"USD"},
+            db_path,
+        )
+    
+        stored = load_fx_rates_for_date(db_path, "2024-03-05")
+>       assert len(stored) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/currencies/test_fx_async.py:97: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    custom_components.pp_reader.currencies.fx:fx.py:387 \u274c Fehler beim Laden der Kurse\nTraceback (most recent call last):\n  File "/home/andreas/coding/repos/ha-pp-reader/custom_components/pp_reader/currencies/fx.py", line 379, in ensure_exchange_rates_for_dates\n    fetched = await _fetch_exchange_rates_with_retry(date_str, missing)\n                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\nTypeError: test_ensure_exchange_rates_persists_metadata.<locals>._fake_fetch() missing 2 required keyword-only arguments: 'retries' and 'initial_delay'
+_________________________ test_dashboard_bundle_smoke __________________________
+
+    def test_dashboard_bundle_smoke() -> None:
+        """Ensure key DOM helpers from the bundled dashboard behave as expected."""
+        repo_root = Path(__file__).resolve().parents[1]
+        script_path = repo_root / "frontend" / "dashboard_smoke.mjs"
+    
+        result = subprocess.run(
+            ["node", str(script_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        assert lines, "node script produced no output"
+    
+        payload = json.loads(lines[-1])
+    
+>       assert payload["footerGain"] == "50,00\\u00a0\u20ac"
+E       AssertionError: assert '50,00\xc2\\xa0\xe2\\x82\xac' == '50,00\\xa0\u20ac'
+E         
+E         - 50,00\xa0\u20ac
+E         + 50,00Â â‚¬
+
+tests/frontend/test_dashboard_smoke.py:27: AssertionError
+_____________ test_portfolio_update_gain_abs_handles_zero_purchase _____________
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/frontend/test_portfolio_update_gain_abs.py:14: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (['node', '/home/andreas/coding/repos/ha-pp-reader/tests/frontend/portfolio_update_gain_abs.mjs'],)
+kwargs = {'stderr': -1, 'stdout': -1, 'text': True}
+process = <Popen: returncode: 1 args: ['node', '/home/andreas/coding/repos/ha-pp-reade...>
+stdout = 'PPReader dashboard module v20250914b geladen\n'
+stderr = "file:///home/andreas/coding/repos/ha-pp-reader/tests/frontend/portfolio_update_gain_abs.mjs:444\n  throw new Error('d...ile:///home/andreas/coding/repos/ha-pp-reader/tests/frontend/portfolio_update_gain_abs.mjs:444:9\n\nNode.js v20.19.5\n"
+retcode = 1
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['node', '/home/andreas/coding/repos/ha-pp-reader/tests/frontend/portfolio_update_gain_abs.mjs']' returned non-zero exit status 1.
+
+../../../.pyenv/versions/3.13.3/lib/python3.13/subprocess.py:577: CalledProcessError
+_____________________ test_enrichment_pipeline_runs_stages _____________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_enrichment_pipeline_runs_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff44050500>
+
+    async def test_enrichment_pipeline_runs_stages(hass, tmp_path, monkeypatch) -> None:
+        """Both enrichment stages run and emit telemetry when enabled."""
+>       coordinator = await _create_coordinator(hass, tmp_path)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_enrichment_pipeline.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_enrichment_pipeline.py:26: in _create_coordinator
+    return PPReaderCoordinator(
+custom_components/pp_reader/data/coordinator.py:298: in __init__
+    super().__init__(
+venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py:92: in __init__
+    frame.report_usage(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+what = 'relies on ContextVar, but should pass the config entry explicitly.'
+
+    def report_usage(
+        what: str,
+        *,
+        breaks_in_ha_version: str | None = None,
+        core_behavior: ReportBehavior = ReportBehavior.ERROR,
+        core_integration_behavior: ReportBehavior = ReportBehavior.LOG,
+        custom_integration_behavior: ReportBehavior = ReportBehavior.LOG,
+        exclude_integrations: set[str] | None = None,
+        integration_domain: str | None = None,
+        level: int = logging.WARNING,
+    ) -> None:
+        """Report incorrect code usage.
+    
+        :param what: will be wrapped with "Detected that integration 'integration' {what}.
+        Please create a bug report at https://..."
+        :param breaks_in_ha_version: if set, the report will be adjusted to specify the
+        breaking version
+        :param exclude_integrations: skip specified integration when reviewing the stack.
+        If no integration is found, the core behavior will be applied
+        :param integration_domain: domain of the integration causing the issue. If None, the
+        stack frame will be searched to identify the integration causing the issue.
+        """
+        if (hass := _hass.hass) is None:
+>           raise RuntimeError("Frame helper not set up")
+E           RuntimeError: Frame helper not set up
+
+venv-ha/lib/python3.13/site-packages/homeassistant/helpers/frame.py:187: RuntimeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+________________ test_enrichment_pipeline_respects_stage_flags _________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_enrichment_pipeline_respe0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff492c2c10>
+
+    async def test_enrichment_pipeline_respects_stage_flags(
+        hass, tmp_path, monkeypatch
+    ) -> None:
+        """Disabled stage flags skip their scheduling hooks."""
+>       coordinator = await _create_coordinator(hass, tmp_path)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_enrichment_pipeline.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_enrichment_pipeline.py:26: in _create_coordinator
+    return PPReaderCoordinator(
+custom_components/pp_reader/data/coordinator.py:298: in __init__
+    super().__init__(
+venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py:92: in __init__
+    frame.report_usage(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+what = 'relies on ContextVar, but should pass the config entry explicitly.'
+
+    def report_usage(
+        what: str,
+        *,
+        breaks_in_ha_version: str | None = None,
+        core_behavior: ReportBehavior = ReportBehavior.ERROR,
+        core_integration_behavior: ReportBehavior = ReportBehavior.LOG,
+        custom_integration_behavior: ReportBehavior = ReportBehavior.LOG,
+        exclude_integrations: set[str] | None = None,
+        integration_domain: str | None = None,
+        level: int = logging.WARNING,
+    ) -> None:
+        """Report incorrect code usage.
+    
+        :param what: will be wrapped with "Detected that integration 'integration' {what}.
+        Please create a bug report at https://..."
+        :param breaks_in_ha_version: if set, the report will be adjusted to specify the
+        breaking version
+        :param exclude_integrations: skip specified integration when reviewing the stack.
+        If no integration is found, the core behavior will be applied
+        :param integration_domain: domain of the integration causing the issue. If None, the
+        stack frame will be searched to identify the integration causing the issue.
+        """
+        if (hass := _hass.hass) is None:
+>           raise RuntimeError("Frame helper not set up")
+E           RuntimeError: Frame helper not set up
+
+venv-ha/lib/python3.13/site-packages/homeassistant/helpers/frame.py:187: RuntimeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+____________ test_enrichment_pipeline_notifies_on_repeated_failures ____________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_enrichment_pipeline_notif0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff44219b50>
+
+    async def test_enrichment_pipeline_notifies_on_repeated_failures(
+        hass, tmp_path, monkeypatch
+    ) -> None:
+        """Persistent notification is raised after repeated enrichment failures."""
+>       coordinator = await _create_coordinator(hass, tmp_path)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_enrichment_pipeline.py:143: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_enrichment_pipeline.py:26: in _create_coordinator
+    return PPReaderCoordinator(
+custom_components/pp_reader/data/coordinator.py:298: in __init__
+    super().__init__(
+venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py:92: in __init__
+    frame.report_usage(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+what = 'relies on ContextVar, but should pass the config entry explicitly.'
+
+    def report_usage(
+        what: str,
+        *,
+        breaks_in_ha_version: str | None = None,
+        core_behavior: ReportBehavior = ReportBehavior.ERROR,
+        core_integration_behavior: ReportBehavior = ReportBehavior.LOG,
+        custom_integration_behavior: ReportBehavior = ReportBehavior.LOG,
+        exclude_integrations: set[str] | None = None,
+        integration_domain: str | None = None,
+        level: int = logging.WARNING,
+    ) -> None:
+        """Report incorrect code usage.
+    
+        :param what: will be wrapped with "Detected that integration 'integration' {what}.
+        Please create a bug report at https://..."
+        :param breaks_in_ha_version: if set, the report will be adjusted to specify the
+        breaking version
+        :param exclude_integrations: skip specified integration when reviewing the stack.
+        If no integration is found, the core behavior will be applied
+        :param integration_domain: domain of the integration causing the issue. If None, the
+        stack frame will be searched to identify the integration causing the issue.
+        """
+        if (hass := _hass.hass) is None:
+>           raise RuntimeError("Frame helper not set up")
+E           RuntimeError: Frame helper not set up
+
+venv-ha/lib/python3.13/site-packages/homeassistant/helpers/frame.py:187: RuntimeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+________________ test_async_refresh_all_persists_metric_batches ________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_async_refresh_all_persist0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff492a96d0>
+
+    @pytest.mark.asyncio
+    async def test_async_refresh_all_persists_metric_batches(hass, tmp_path, monkeypatch):
+        """Pipeline run should compute metrics, store them, and update run metadata."""
+        db_path = tmp_path / "metrics.db"
+        seed_metrics_database(db_path)
+        install_fx_stubs(monkeypatch)
+    
+        progress_events: list[tuple[str, dict]] = []
+    
+        def _capture(stage: str, payload: dict) -> None:
+            progress_events.append((stage, dict(payload)))
+    
+        run = await async_refresh_all(
+            hass,
+            db_path,
+            trigger="test-suite",
+            provenance="integration-test",
+            emit_progress=_capture,
+        )
+    
+        assert run.status == "completed"
+        assert run.trigger == "test-suite"
+        assert run.provenance == "integration-test"
+        assert run.processed_portfolios == 2
+        assert run.processed_accounts == 3
+        assert run.processed_securities == 2
+        assert run.total_entities == 7
+        assert run.duration_ms is not None
+    
+        stages = [stage for stage, _ in progress_events]
+        assert stages[:2] == ["start", "portfolios_computed"]
+        assert "completed" in stages
+    
+        conn = sqlite3.connect(str(db_path))
+        try:
+            portfolio_rows = conn.execute(
+                """
+                SELECT metric_run_uuid, portfolio_uuid, gain_abs_cents, coverage_ratio
+                FROM portfolio_metrics
+                ORDER BY portfolio_uuid
+                """
+            ).fetchall()
+            assert [(row[1], row[2], row[3]) for row in portfolio_rows] == [
+                ("portfolio-empty", 0, 1.0),
+                ("portfolio-main", 100_000, 1.0),
+            ]
+    
+            account_rows = conn.execute(
+                """
+                SELECT account_uuid, balance_native_cents, balance_eur_cents, coverage_ratio
+                FROM account_metrics
+                ORDER BY account_uuid
+                """
+            ).fetchall()
+            assert account_rows == [
+                ("acct-eur", 125_000, 125_000, 1.0),
+                ("acct-gbp", 150_000, None, 0.0),
+                ("acct-usd", 200_000, 160_000, 1.0),
+            ]
+    
+            security_rows = conn.execute(
+                """
+                SELECT security_uuid, gain_abs_cents, day_change_native, day_change_eur, day_change_coverage
+                FROM security_metrics
+                ORDER BY security_uuid
+                """
+            ).fetchall()
+>           assert security_rows == [
+                ("sec-eur", 50_000, None, None, 0.5),
+                ("sec-usd", 50_000, 5.0, 4.0, 1.0),
+            ]
+E           AssertionError: assert [('sec-eur', ... 4.3197, 1.0)] == [('sec-eur', ....0, 4.0, 1.0)]
+E             
+E             At index 1 diff: ('sec-usd', 50000, 5.0, 4.3197, 1.0) != ('sec-usd', 50000, 5.0, 4.0, 1.0)
+E             Use -v to get more diff
+
+tests/integration/test_metrics_pipeline.py:81: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+___________________ test_async_refresh_all_marks_failed_run ____________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_async_refresh_all_marks_f0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff44112ba0>
+
+    @pytest.mark.asyncio
+    async def test_async_refresh_all_marks_failed_run(hass, tmp_path, monkeypatch):
+        """Pipeline should mark the metric run as failed when a computation errors."""
+        db_path = tmp_path / "metrics_failure.db"
+        seed_metrics_database(db_path)
+        install_fx_stubs(monkeypatch)
+    
+        async_mock = AsyncMock(side_effect=RuntimeError("boom"))
+        monkeypatch.setattr(
+            "custom_components.pp_reader.metrics.portfolio.async_compute_portfolio_metrics",
+            async_mock,
+        )
+    
+>       with pytest.raises(RuntimeError, match="boom"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'RuntimeError'>
+
+tests/integration/test_metrics_pipeline.py:112: Failed
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+_______________ test_cli_smoketest_generates_normalized_snapshot _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_cli_smoketest_generates_n0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff44111be0>
+
+    @pytest.mark.asyncio
+    async def test_cli_smoketest_generates_normalized_snapshot(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Full CLI smoke test stages ingestion, metrics, and normalization payloads."""
+        db_path = tmp_path / "smoketest.db"
+        portfolio_path = tmp_path / "sample.portfolio"
+        portfolio_path.write_text("placeholder")
+        initialize_database_schema(db_path)
+    
+        parsed_client = _build_sample_parsed_client()
+    
+        async def _fake_parse_portfolio(
+            hass: Any,
+            *,
+            path: str,
+            writer: Any,
+            progress_cb: Any,
+        ) -> parsed.ParsedClient:
+            assert Path(path) == portfolio_path
+            # Simulate parser progress to ensure callback surfaces.
+            progress_cb(SimpleNamespace(stage="accounts", processed=1, total=1))
+            return parsed_client
+    
+        monkeypatch.setattr(
+            smoketest.parser_pipeline,
+            "async_parse_portfolio",
+            _fake_parse_portfolio,
+        )
+    
+        install_fx_stubs(monkeypatch, rate=1.05)
+    
+        monkeypatch.setattr(
+            smoketest.fx,
+            "discover_active_currencies",
+            lambda path: {"USD"},
+        )
+    
+        async def _fake_ensure_fx(_dates, currencies, _db_path):
+            assert currencies == {"USD"}
+    
+        monkeypatch.setattr(
+            smoketest.fx,
+            "ensure_exchange_rates_for_dates",
+            _fake_ensure_fx,
+        )
+    
+        planned: dict[str, Any] = {}
+    
+        async def _fake_plan_jobs(
+            self,
+            targets,
+            *,
+            lookback_days: int = 365,
+            interval: str = "1d",
+        ) -> int:
+            planned["targets"] = len(targets)
+            planned["lookback_days"] = lookback_days
+            planned["interval"] = interval
+            return len(targets)
+    
+        async def _fake_process_jobs(self, *, limit: int) -> dict[str, Any]:
+            planned["process_limit"] = limit
+            return {}
+    
+        monkeypatch.setattr(smoketest.HistoryQueueManager, "plan_jobs", _fake_plan_jobs)
+        monkeypatch.setattr(
+            smoketest.HistoryQueueManager,
+            "process_pending_jobs",
+            _fake_process_jobs,
+        )
+    
+        loop = asyncio.get_running_loop()
+        hass = smoketest._SmoketestHass(loop)
+    
+        run_id, parsed_result = await smoketest._run_parser(
+            hass,
+            portfolio_path,
+            db_path,
+            keep_staging=False,
+        )
+        assert run_id
+        assert parsed_result is parsed_client
+    
+        fx_summary = await smoketest._run_fx_refresh(db_path)
+        assert fx_summary["status"] == "ok"
+        assert fx_summary["currencies"] == ["USD"]
+        assert fx_summary["reference"]
+    
+        history_summary = await smoketest._run_price_history_jobs(
+            parsed_client,
+            db_path,
+            limit=3,
+        )
+        assert history_summary["status"] == "completed"
+        assert history_summary["targets"] == planned["targets"] == 1
+        assert planned["process_limit"] == 3
+    
+        metrics_summary = await smoketest._run_metrics(hass, db_path)
+        assert metrics_summary["status"] == "completed"
+>       assert metrics_summary["processed"]["portfolios"] == 1
+E       assert 0 == 1
+
+tests/integration/test_normalization_smoketest.py:203: AssertionError
+_______________ test_security_metrics_include_day_change_and_fx ________________
+
+hass = <HomeAssistant NOT_RUNNING>
+metrics_db = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_security_metrics_include_0/metrics.db')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff440f5400>
+
+    @pytest.mark.asyncio
+    async def test_security_metrics_include_day_change_and_fx(hass, metrics_db, monkeypatch):
+        """Security metrics should report performance deltas, FX-derived values, and coverage."""
+        install_fx_stubs(monkeypatch)
+    
+        records = await async_compute_security_metrics(hass, metrics_db, "run-003")
+        by_security = {(record.portfolio_uuid, record.security_uuid): record for record in records}
+    
+        assert set(by_security) == {
+            ("portfolio-main", "sec-eur"),
+            ("portfolio-main", "sec-usd"),
+        }
+    
+        eur_metrics = by_security[("portfolio-main", "sec-eur")]
+        assert eur_metrics.current_value_cents == 250_000
+        assert eur_metrics.purchase_value_cents == 200_000
+        assert eur_metrics.gain_abs_cents == 50_000
+        assert eur_metrics.gain_pct == pytest.approx(25.0)
+        assert eur_metrics.coverage_ratio == pytest.approx(1.0)
+        assert eur_metrics.day_change_source == "unavailable"
+        assert eur_metrics.day_change_coverage == pytest.approx(0.5)
+    
+        usd_metrics = by_security[("portfolio-main", "sec-usd")]
+        assert usd_metrics.current_value_cents == 150_000
+        assert usd_metrics.purchase_value_cents == 100_000
+        assert usd_metrics.gain_abs_cents == 50_000
+        assert usd_metrics.gain_pct == pytest.approx(50.0)
+        assert usd_metrics.coverage_ratio == pytest.approx(1.0)
+        assert usd_metrics.day_change_native == pytest.approx(5.0)
+>       assert usd_metrics.day_change_eur == pytest.approx(4.0)
+E       assert 4.3197 == 4.0 ± 4.0e-06
+E         
+E         comparison failed
+E         Obtained: 4.3197
+E         Expected: 4.0 ± 4.0e-06
+
+tests/metrics/test_metric_engine.py:117: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+___________________ test_history_fetcher_normalizes_blocking ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff44275fd0>
+
+    @pytest.mark.asyncio
+    async def test_history_fetcher_normalizes_blocking(monkeypatch: pytest.MonkeyPatch) -> None:
+        job = ingest.HistoryJob(
+            symbol="USD",
+            start=datetime(2024, 3, 1, tzinfo=UTC),
+            end=datetime(2024, 3, 2, tzinfo=UTC),
+        )
+    
+        def _fake_blocking(self, job_arg):
+            assert job_arg.symbol == "USD"
+            return {
+                ("USD", "2024-03-01"): {"close": 1.11},
+            }
+    
+        fetcher = ingest.YahooHistoryFetcher()
+        monkeypatch.setattr(ingest.YahooHistoryFetcher, "_fetch_blocking", _fake_blocking)
+    
+        candles = await fetcher.fetch(job)
+        assert len(candles) == 1
+>       assert candles[0].close == pytest.approx(1.11)
+               ^^^^^^^^^^
+E       KeyError: 0
+
+tests/prices/test_history_ingest.py:142: KeyError
+________ test_portfolio_contract_entry_falls_back_to_calculated_metrics ________
+
+>   ???
+E   assert <object objec...x7fff477de420> == 50.0
+E     
+E     comparison failed
+E     Obtained: 50.0
+E     Expected: <object object at 0x7fff477de420>
+
+/workspaces/ha-pp-reader/tests/test_coordinator_contract.py:59: AssertionError
+____________________ test_concurrent_writes_are_serialized _____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff44112ba0>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_currencies_fx.py:126: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/workspaces/ha-pp-reader/tests/test_currencies_fx.py:120: in call_save
+    ???
+custom_components/pp_reader/currencies/fx.py:171: in _save_rates
+    await _execute_db(_save_rates_sync, db_path, date, rates)
+custom_components/pp_reader/currencies/fx.py:68: in _execute_db
+    return await loop.run_in_executor(None, fn, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/currencies/fx.py:145: in _save_rates_sync
+    upsert_fx_rate(db_path, record, conn=conn)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('dummy.db')
+rate = FxRateRecord(date='2025-01-01', currency='USD', rate=1.1, fetched_at='2025-11-11T19:26:00Z', data_source='frankfurter', provider='frankfurter.app', provenance='{"currencies": ["USD"]}')
+
+    def upsert_fx_rate(
+        db_path: Path,
+        rate: FxRateRecord,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        """Insert or update an FX rate entry."""
+        if not rate.date:
+            message = "date darf nicht leer sein"
+            raise ValueError(message)
+        if not rate.currency:
+            message = "currency darf nicht leer sein"
+            raise ValueError(message)
+    
+        local_conn = conn or sqlite3.connect(str(db_path))
+    
+        try:
+            try:
+>               local_conn.execute(
+                ^^^^^^^^^^^^^^^^^^
+                    """
+                    INSERT OR REPLACE INTO fx_rates (
+                        date,
+                        currency,
+                        rate,
+                        fetched_at,
+                        data_source,
+                        provider,
+                        provenance
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        rate.date,
+                        rate.currency,
+                        rate.rate,
+                        rate.fetched_at,
+                        rate.data_source,
+                        rate.provider,
+                        rate.provenance,
+                    ),
+                )
+E               AttributeError: 'DummyConnection' object has no attribute 'execute'
+
+custom_components/pp_reader/data/db_access.py:1758: AttributeError
+________________________ test_currency_drift_warn_once _________________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_currency_drift_warn_once0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42d60ec0>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff442e6b10>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_currency_drift_once.py:74: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff4414ea50>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+------------------------------ Captured log call -------------------------------
+INFO     custom_components.pp_reader.data.db_init:db_init.py:456 \U0001f4c1 Erzeuge neue Datenbankdatei: /tmp/pytest-of-andreas/pytest-36/test_currency_drift_warn_once0/drift.db\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:89 Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:110 Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:169 Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'security_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'account_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_security' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_account' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.migrations.cleanup:cleanup.py:81 No legacy portfolio_securities columns detected - skipping cleanup\nINFO     custom_components.pp_reader.data.db_init:db_init.py:506 \U0001f4e6 Datenbank erfolgreich initialisiert: /tmp/pytest-of-andreas/pytest-36/test_currency_drift_warn_once0/drift.db
+_____________ test_get_portfolio_securities_exposes_native_average _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_get_portfolio_securities_0')
+
+    def test_get_portfolio_securities_exposes_native_average(tmp_path: Path) -> None:
+        """Portfolio security loaders should surface stored native averages."""
+        db_path = tmp_path / "portfolio_native.db"
+        initialize_database_schema(db_path)
+    
+        conn = sqlite3.connect(str(db_path))
+        try:
+            conn.execute(
+                "INSERT INTO portfolios (uuid, name) VALUES (?, ?)",
+                ("portfolio-native", "Native Coverage"),
+            )
+            conn.executemany(
+                "INSERT INTO securities (uuid, name) VALUES (?, ?)",
+                [("sec-native", "Native Equity"), ("sec-legacy", "Legacy Equity")],
+            )
+            conn.executemany(
+                """
+                INSERT INTO portfolio_securities (
+                    portfolio_uuid,
+                    security_uuid,
+                    current_holdings,
+                    purchase_value,
+                    avg_price_native,
+                    current_value
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    ("portfolio-native", "sec-native", 2.0, 100_000, 48.75, 125_000),
+                    ("portfolio-native", "sec-legacy", 5.0, 0, None, 0),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    
+        entries = get_portfolio_securities(db_path, "portfolio-native")
+        assert len(entries) == 2
+    
+        by_security = {entry.security_uuid: entry for entry in entries}
+        assert by_security["sec-native"].avg_price_native == pytest.approx(48.75)
+>       assert by_security["sec-native"].avg_price == pytest.approx(50_000.0)
+E       assert 5000000000000000000 == 50000.0 ± 0.05
+E         
+E         comparison failed
+E         Obtained: 5000000000000000000
+E         Expected: 50000.0 ± 0.05
+
+tests/test_db_access.py:350: AssertionError
+___________________ test_get_security_snapshot_multicurrency ___________________
+
+seeded_snapshot_db = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_get_security_snapshot_mul0/snapshot.db')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e27310>
+
+    def test_get_security_snapshot_multicurrency(
+        seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snapshot helper aggregates holdings and normalises FX prices."""
+        reference_date = datetime(2024, 5, 1, 12, 0, 0)
+    
+        class _FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return reference_date
+    
+        monkeypatch.setattr(
+            "custom_components.pp_reader.data.db_access.datetime",
+            _FixedDatetime,
+        )
+    
+        snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
+    
+        assert snapshot["name"] == "US Tech"
+        assert snapshot["currency_code"] == "USD"
+>       assert snapshot["total_holdings"] == pytest.approx(3.75, rel=0, abs=1e-6)
+E       assert 0.0 == 3.75 ± 1.0e-06
+E         
+E         comparison failed
+E         Obtained: 0.0
+E         Expected: 3.75 ± 1.0e-06
+
+tests/test_db_access.py:453: AssertionError
+____________ test_get_security_snapshot_handles_null_purchase_value ____________
+
+seeded_snapshot_db = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_get_security_snapshot_han0/snapshot.db')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e26890>
+
+    def test_get_security_snapshot_handles_null_purchase_value(
+        seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snapshot should treat NULL purchase sums as zero without averages."""
+    
+        class _FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return datetime(2024, 5, 1, 12, 0, 0)
+    
+        monkeypatch.setattr(
+            "custom_components.pp_reader.data.db_access.datetime",
+            _FixedDatetime,
+        )
+    
+        conn = sqlite3.connect(str(seeded_snapshot_db))
+        try:
+            conn.execute(
+                "UPDATE portfolio_securities SET purchase_value = NULL WHERE security_uuid = ?",
+                ("usd-sec",),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    
+        snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
+    
+        assert snapshot["purchase_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+        assert "avg_price_account" not in snapshot
+        assert "avg_price_security" not in snapshot
+        assert "average_purchase_price_native" not in snapshot
+        aggregation = snapshot["aggregation"]
+        assert isinstance(aggregation, dict)
+>       assert aggregation["purchase_total_security"] == pytest.approx(
+            475.16,
+            rel=0,
+            abs=1e-2,
+        )
+E       assert None == 475.16 ± 0.01
+E         
+E         comparison failed
+E         Obtained: None
+E         Expected: 475.16 ± 0.01
+
+tests/test_db_access.py:564: AssertionError
+_______ test_get_security_snapshot_zero_holdings_preserves_purchase_sum ________
+
+seeded_snapshot_db = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_get_security_snapshot_zer0/snapshot.db')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e26d60>
+
+    def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
+        seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Zero holdings should not trigger division errors and keep purchase sums."""
+        reference_date = datetime(2024, 5, 1, 12, 0, 0)
+    
+        class _FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return reference_date
+    
+        monkeypatch.setattr(
+            "custom_components.pp_reader.data.db_access.datetime",
+            _FixedDatetime,
+        )
+    
+        conn = sqlite3.connect(str(seeded_snapshot_db))
+        try:
+            conn.executemany(
+                """
+                UPDATE portfolio_securities
+                SET current_holdings = ?, purchase_value = ?
+                WHERE portfolio_uuid = ? AND security_uuid = ?
+                """,
+                [
+                    (0.0, 12_345, "p-usd-a", "usd-sec"),
+                    (0.0, 0, "p-usd-b", "usd-sec"),
+                ],
+            )
+            conn.execute(
+                """
+                INSERT INTO historical_prices (
+                    security_uuid,
+                    date,
+                    close,
+                    high,
+                    low,
+                    volume
+                ) VALUES (?, ?, ?, NULL, NULL, NULL)
+                """,
+                ("usd-sec", 20240430, int(175.5 * 10**8)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    
+        snapshot = get_security_snapshot(seeded_snapshot_db, "usd-sec")
+    
+        assert snapshot["total_holdings"] == pytest.approx(0.0, rel=0, abs=1e-6)
+        assert snapshot["market_value_eur"] == pytest.approx(0.0, rel=0, abs=1e-4)
+>       assert snapshot["purchase_value_eur"] == pytest.approx(123.45, rel=0, abs=1e-4)
+E       assert 0.0 == 123.45 ± 1.0e-04
+E         
+E         comparison failed
+E         Obtained: 0.0
+E         Expected: 123.45 ± 1.0e-04
+
+tests/test_db_access.py:670: AssertionError
+_______________________ test_debug_option_scoped_logging _______________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_debug_option_scoped_loggi0')
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff492ba9f0>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_debug_scope.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff4434f750>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+------------------------------ Captured log call -------------------------------
+INFO     custom_components.pp_reader.data.db_init:db_init.py:456 \U0001f4c1 Erzeuge neue Datenbankdatei: /tmp/pytest-of-andreas/pytest-36/test_debug_option_scoped_loggi0/debugscope.db\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:89 Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:110 Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:169 Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'security_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'account_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_security' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_account' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.migrations.cleanup:cleanup.py:81 No legacy portfolio_securities columns detected - skipping cleanup\nINFO     custom_components.pp_reader.data.db_init:db_init.py:506 \U0001f4e6 Datenbank erfolgreich initialisiert: /tmp/pytest-of-andreas/pytest-36/test_debug_option_scoped_loggi0/debugscope.db
+_______________________ test_fetch_live_portfolios_basic _______________________
+
+initialized_db = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_fetch_live_portfolios_bas0/portfolio.db')
+
+    def test_fetch_live_portfolios_basic(initialized_db: Path) -> None:
+        """fetch_live_portfolios aggregates sums and counts per portfolio."""
+        result = fetch_live_portfolios(initialized_db)
+    
+        # Should return one entry per portfolio (ordered by name)
+>       assert len(result) == 3
+E       assert 0 == 3
+E        +  where 0 = len([])
+
+tests/test_fetch_live_portfolios.py:57: AssertionError
+_______________ test_interval_change_cancels_old_and_creates_new _______________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_interval_change_cancels_o0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e26200>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff44148950>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_interval_change_reload.py:78: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff4434f750>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+------------------------------ Captured log call -------------------------------
+INFO     custom_components.pp_reader.data.db_init:db_init.py:456 \U0001f4c1 Erzeuge neue Datenbankdatei: /tmp/pytest-of-andreas/pytest-36/test_interval_change_cancels_o0/intchange.db\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:89 Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:110 Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:169 Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'security_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'account_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_security' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_account' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.migrations.cleanup:cleanup.py:81 No legacy portfolio_securities columns detected - skipping cleanup\nINFO     custom_components.pp_reader.data.db_init:db_init.py:506 \U0001f4e6 Datenbank erfolgreich initialisiert: /tmp/pytest-of-andreas/pytest-36/test_interval_change_cancels_o0/intchange.db
+___________________ test_fresh_schema_contains_price_columns ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_fresh_schema_contains_pri0')
+
+    def test_fresh_schema_contains_price_columns(tmp_path):
+        db_path = tmp_path / "fresh.db"
+        initialize_database_schema(db_path)
+    
+        cols = _get_columns(db_path, "securities")
+        assert "type" in cols, "Spalte type fehlt in frischer DB"
+        assert "last_price_source" in cols, "Spalte last_price_source fehlt in frischer DB"
+        assert "last_price_fetched_at" in cols, (
+            "Spalte last_price_fetched_at fehlt in frischer DB"
+        )
+        assert (cols["type"]["type"] or "").upper() == "TEXT"
+        assert (cols["last_price_source"]["type"] or "").upper() == "TEXT"
+        assert (cols["last_price_fetched_at"]["type"] or "").upper() == "TEXT"
+    
+        portfolio_cols = _get_columns(db_path, "portfolio_securities")
+        assert "current_holdings" in portfolio_cols
+        assert (portfolio_cols["current_holdings"]["type"] or "").upper() == "INTEGER"
+        assert "purchase_value" in portfolio_cols
+        assert (portfolio_cols["purchase_value"]["type"] or "").upper() == "INTEGER"
+        assert "avg_price" in portfolio_cols
+        assert (portfolio_cols["avg_price"]["type"] or "").upper() == "INTEGER"
+        assert "avg_price_native" in portfolio_cols
+        assert (portfolio_cols["avg_price_native"]["type"] or "").upper() == "INTEGER"
+        assert "security_currency_total" in portfolio_cols
+        assert (
+            portfolio_cols["security_currency_total"]["type"] or ""
+        ).upper() == "INTEGER"
+        assert "account_currency_total" in portfolio_cols
+        assert (portfolio_cols["account_currency_total"]["type"] or "").upper() == "INTEGER"
+        assert "avg_price_security" in portfolio_cols
+        assert (portfolio_cols["avg_price_security"]["type"] or "").upper() == "INTEGER"
+        assert "avg_price_account" in portfolio_cols
+        assert (portfolio_cols["avg_price_account"]["type"] or "").upper() == "INTEGER"
+        assert "current_value" in portfolio_cols
+        assert (portfolio_cols["current_value"]["type"] or "").upper() == "INTEGER"
+    
+        transaction_unit_cols = _get_columns(db_path, "transaction_units")
+        assert "fx_rate_to_base" in transaction_unit_cols
+        assert (transaction_unit_cols["fx_rate_to_base"]["type"] or "").upper() == "INTEGER"
+    
+        plan_cols = _get_columns(db_path, "plans")
+        for column in ("amount", "fees", "taxes"):
+>           assert column in plan_cols
+E           AssertionError: assert 'amount' in {}
+
+tests/test_migration.py:212: AssertionError
+__________________ test_panel_registered_before_first_refresh __________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_panel_registered_before_f0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42daaf90>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_panel_registration.py:51: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff440dba80>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+______________________ test_fetch_uses_configured_timeout ______________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42dabc40>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_fetch_uses_configured_tim0')
+
+    @pytest.mark.asyncio
+    async def test_fetch_uses_configured_timeout(monkeypatch, tmp_path):
+        hass = FakeHass()
+        entry_id = "timeout"
+        db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", None)
+        _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
+    
+        async def fake_fetch(self, symbols):
+            return {"AAPL": _make_quote("AAPL", 1.0, "USD")}
+    
+        async def fake_wait_for(awaitable, timeout_seconds, *, loop=None):
+            assert timeout_seconds == price_service.PRICE_FETCH_TIMEOUT
+            return await awaitable
+    
+        monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
+        monkeypatch.setattr(price_service.asyncio, "wait_for", fake_wait_for)
+    
+        meta = await price_service._run_price_cycle(hass, entry_id)
+    
+>       assert meta["quotes_returned"] == 1
+E       assert 0 == 1
+
+tests/test_price_service.py:448: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  custom_components.pp_reader.prices.price_service:price_service.py:950 prices_cycle: Chunk Fetch Fehler (exception) batch_size=1 idx=1
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/custom_components/pp_reader/prices/price_service.py", line 928, in _run_price_cycle
+    quotes_dict = await asyncio.wait_for(
+                        ~~~~~~~~~~~~~~~~^
+        provider.fetch(batch_symbols), timeout=PRICE_FETCH_TIMEOUT
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: test_fetch_uses_configured_timeout.<locals>.fake_wait_for() got an unexpected keyword argument 'timeout'
+WARNING  custom_components.pp_reader.prices.price_service:price_service.py:998 prices_cycle: zero-quotes detected (WARN) - error_counter=2
+_________________ test_price_update_refreshes_portfolio_gains __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e5cf30>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_price_update_refreshes_po0')
+
+    @pytest.mark.asyncio
+    async def test_price_update_refreshes_portfolio_gains(monkeypatch, tmp_path):
+        """A price change updates portfolio gains alongside the value payload."""
+        db_path = tmp_path / "portfolio_refresh.db"
+        initialize_database_schema(db_path)
+    
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.execute(
+                "INSERT INTO portfolios (uuid, name) VALUES (?, ?)",
+                ("pf-refresh", "Refresh Depot"),
+            )
+            conn.execute(
+                """
+                INSERT INTO securities (
+                    uuid, name, ticker_symbol, currency_code, retired, last_price,
+                    last_price_source
+                ) VALUES (?, ?, ?, ?, 0, ?, ?)
+                """,
+                (
+                    "sec-refresh",
+                    "Refresh Equity",
+                    "REF",
+                    "EUR",
+                    int(100 * 1e8),
+                    "yahoo",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO transactions (
+                    uuid, type, portfolio, date, currency_code, amount, shares, security
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "tx-refresh",
+                    0,
+                    "pf-refresh",
+                    "2024-01-01",
+                    "EUR",
+                    100_000,
+                    int(10 * 1e8),
+                    "sec-refresh",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO portfolio_securities (
+                    portfolio_uuid, security_uuid, current_holdings, purchase_value, current_value
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                ("pf-refresh", "sec-refresh", 10.0, 100_000, 100_000),
+            )
+            conn.commit()
+    
+        hass = FakeHass()
+        entry_id = "entry_refresh"
+        _init_store(hass, entry_id, db_path, {"REF": ["sec-refresh"]})
+    
+        async def _fake_revaluation(hass_, conn, updated_security_uuids):
+            return {"portfolio_values": None, "portfolio_positions": None}
+    
+        monkeypatch.setattr(
+            "custom_components.pp_reader.prices.revaluation.revalue_after_price_updates",
+            _fake_revaluation,
+        )
+    
+        def _fake_fetch_positions_for_portfolios(db_path_, portfolio_ids):
+            return {}
+    
+        monkeypatch.setattr(
+            "custom_components.pp_reader.prices.price_service.fetch_positions_for_portfolios",
+            _fake_fetch_positions_for_portfolios,
+        )
+    
+        pushed: list[tuple[str, Any]] = []
+    
+        def _fake_push_update(hass_, entry_id_, data_type, payload):
+            pushed.append((data_type, payload))
+    
+        monkeypatch.setattr(price_service, "_push_update", _fake_push_update)
+    
+        async def _fake_fetch(self, symbols):
+            assert symbols == ["REF"]
+            return {"REF": _make_quote("REF", 120.0, "EUR")}
+    
+        monkeypatch.setattr(YahooQueryProvider, "fetch", _fake_fetch)
+    
+        await _run_price_cycle(hass, entry_id)
+    
+        with sqlite3.connect(str(db_path)) as conn:
+            cur = conn.execute(
+                """
+                SELECT current_value FROM portfolio_securities
+                WHERE portfolio_uuid=? AND security_uuid=?
+                """,
+                ("pf-refresh", "sec-refresh"),
+            )
+            updated_current_value = cur.fetchone()[0]
+    
+        assert updated_current_value == 120_000
+    
+        pv_events = [payload for kind, payload in pushed if kind == "portfolio_values"]
+>       assert pv_events, "portfolio_values Event erwartet"
+E       AssertionError: portfolio_values Event erwartet
+E       assert []
+
+tests/test_price_service.py:895: AssertionError
+____________________ test_reload_triggers_new_initial_cycle ____________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_reload_triggers_new_initi0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42eafb60>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42e28c50>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_reload_initial_cycle.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff440dab10>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+------------------------------ Captured log call -------------------------------
+INFO     custom_components.pp_reader.data.db_init:db_init.py:456 \U0001f4c1 Erzeuge neue Datenbankdatei: /tmp/pytest-of-andreas/pytest-36/test_reload_triggers_new_initi0/demo.db\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:89 Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:110 Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:169 Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'security_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'account_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_security' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_account' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.migrations.cleanup:cleanup.py:81 No legacy portfolio_securities columns detected - skipping cleanup\nINFO     custom_components.pp_reader.data.db_init:db_init.py:506 \U0001f4e6 Datenbank erfolgreich initialisiert: /tmp/pytest-of-andreas/pytest-36/test_reload_triggers_new_initi0/demo.db
+_______________________ test_reload_logs_interval_change _______________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_reload_logs_interval_chan0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e5e4a0>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42d58aa0>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_reload_logs.py:49: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff442230b0>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+------------------------------ Captured log call -------------------------------
+INFO     custom_components.pp_reader.data.db_init:db_init.py:456 \U0001f4c1 Erzeuge neue Datenbankdatei: /tmp/pytest-of-andreas/pytest-36/test_reload_logs_interval_chan0/rl.db\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:89 Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:110 Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:169 Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'security_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'account_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_security' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_account' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.migrations.cleanup:cleanup.py:81 No legacy portfolio_securities columns detected - skipping cleanup\nINFO     custom_components.pp_reader.data.db_init:db_init.py:506 \U0001f4e6 Datenbank erfolgreich initialisiert: /tmp/pytest-of-andreas/pytest-36/test_reload_logs_interval_chan0/rl.db
+_________________ test_revaluation_uses_live_portfolio_values __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_revaluation_uses_live_por0')
+
+>   ???
+E   assert None is not None
+
+/workspaces/ha-pp-reader/tests/test_revaluation_live_aggregation.py:61: AssertionError
+_____________________ test_sync_portfolios_commits_changes _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_portfolios_commits_c0')
+
+    def test_sync_portfolios_commits_changes(tmp_path: Path) -> None:
+        """Portfolio synchronisation should leave no open transaction."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+        original_error = getattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None)
+        sync_module._TIMESTAMP_IMPORT_ERROR = None  # Ensure timestamp guard stays inactive
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:219: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff42e231f0>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+_____________ test_rebuild_transaction_units_collects_tax_and_fee ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_rebuild_transaction_units0')
+
+    def test_rebuild_transaction_units_collects_tax_and_fee(tmp_path: Path) -> None:
+        """Transaction units rebuild should expose fee/tax metadata for consumers."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:243: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44106890>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+__________________ test_emit_updates_skips_transaction_event ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e26660>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_emit_updates_skips_transa0')
+
+    def test_emit_updates_skips_transaction_event(monkeypatch, tmp_path: Path) -> None:
+        """Transaction changes should not result in websocket events."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:416: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44106d40>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+____________ test_sync_portfolio_securities_persists_native_average ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42d61e80>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_portfolio_securities0')
+
+    def test_sync_portfolio_securities_persists_native_average(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Sync should persist avg_price_native alongside EUR purchase metrics."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("pf-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:453: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff441062f0>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+_________ test_sync_securities_persists_deduplicated_historical_prices _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42dce430>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_persists_0')
+
+    def test_sync_securities_persists_deduplicated_historical_prices(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Historical Close rows should be deduplicated and ignore retired securities."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:612: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44107a60>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+_________________ test_sync_securities_skips_unchanged_history _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42e26660>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_skips_unc0')
+
+    def test_sync_securities_skips_unchanged_history(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A second sync without changes should not rewrite historical prices."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+        security = _DummySecurity(
+            uuid="sec-static",
+            name="Static",
+            prices=[_DummyPrice(date=10, close=100), _DummyPrice(date=11, close=110)],
+        )
+    
+        monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+        monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+    
+>       runner = _SyncRunner(
+            client=_DummyClient([security]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:680: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff441076a0>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+________________ test_sync_securities_appends_only_new_history _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec15c0>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_appends_o0')
+
+    def test_sync_securities_appends_only_new_history(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Only appended Close rows should be persisted on subsequent syncs."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+        base_prices = [
+            _DummyPrice(date=20, close=200),
+            _DummyPrice(date=21, close=210),
+        ]
+        security = _DummySecurity(uuid="sec-append", name="Append", prices=base_prices)
+    
+        monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+        monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+    
+>       runner = _SyncRunner(
+            client=_DummyClient([security]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:747: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44106f20>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+______ test_sync_securities_rewrites_mismatched_history_before_appending _______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec1a90>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_rewrites_0')
+
+    def test_sync_securities_rewrites_mismatched_history_before_appending(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Rewrites existing rows when earlier prices change alongside an append."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+        base_prices = [
+            _DummyPrice(date=30, close=300),
+            _DummyPrice(date=31, close=310),
+            _DummyPrice(date=32, close=320),
+        ]
+        security = _DummySecurity(uuid="sec-rewrite", name="Rewrite", prices=base_prices)
+    
+        monkeypatch.setattr(sync_module, "_TIMESTAMP_IMPORT_ERROR", None, raising=False)
+        monkeypatch.setattr(sync_module, "Timestamp", _FakeTimestamp, raising=False)
+    
+>       runner = _SyncRunner(
+            client=_DummyClient([security]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:820: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff441064d0>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+____________ test_sync_securities_warns_about_missing_daily_prices _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_warns_abo0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec09f0>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42ea76a0>
+
+    def test_sync_securities_warns_about_missing_daily_prices(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Missing Tage zwischen zwei Close-Werten sollen Warnungen erzeugen."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:891: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44105990>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+__________ test_sync_securities_ignores_gap_before_first_transaction ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_ignores_g0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec0ad0>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42eb6ad0>
+
+    def test_sync_securities_ignores_gap_before_first_transaction(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Price gaps before any transaction should not raise warnings."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:961: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff441067a0>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+________________ test_sync_securities_skips_stale_gap_warnings _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_skips_sta0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec1f60>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42eb67b0>
+
+    def test_sync_securities_skips_stale_gap_warnings(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Gaps far in the past should be ignored to avoid log spam."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:1037: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44106d40>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+__________________ test_sync_securities_ignores_weekend_gaps ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_ignores_w0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec3070>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42eb3380>
+
+    def test_sync_securities_ignores_weekend_gaps(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Warnungen sollten bei fehlenden Wochenendpreisen unterdrückt werden."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:1087: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44107b50>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+_______________ test_sync_securities_ignores_short_holiday_gaps ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_sync_securities_ignores_s0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42ec39a0>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42e36250>
+
+    def test_sync_securities_ignores_short_holiday_gaps(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Kurzfristige Feiertagslücken sollen nicht zu Warnungen führen."""
+        db_path = tmp_path / "portfolio.db"
+        conn = _prepare_portfolio_db(db_path)
+>       runner = _SyncRunner(
+            client=_DummyClient([_DummyPortfolio("portfolio-1")]),
+            conn=conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+
+tests/test_sync_from_pclient.py:1144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+custom_components/pp_reader/data/sync_from_pclient.py:392: in __init__
+    ingestion_client = load_proto_snapshot(conn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:945: in load_proto_snapshot
+    snapshot = load_ingestion_snapshot(conn)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+custom_components/pp_reader/data/ingestion_reader.py:611: in load_ingestion_snapshot
+    metadata = load_metadata(conn)
+               ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+conn = <sqlite3.Connection object at 0x7fff44104130>
+
+    def load_metadata(conn: sqlite3.Connection) -> dict[str, Any]:
+        """Return the latest ingestion metadata row."""
+        cursor = conn.cursor()
+>       cursor.execute(
+            """
+            SELECT run_id, file_path, parsed_at, pp_version, base_currency, properties
+            FROM ingestion_metadata
+            ORDER BY parsed_at DESC
+            LIMIT 1
+            """
+        )
+E       sqlite3.OperationalError: no such table: ingestion_metadata
+
+custom_components/pp_reader/data/ingestion_reader.py:105: OperationalError
+______________________ test_zero_quotes_warn_deduplicated ______________________
+
+hass = <HomeAssistant NOT_RUNNING>
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_zero_quotes_warn_deduplic0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fff42f20440>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fff42f203d0>
+
+>   ???
+
+/workspaces/ha-pp-reader/tests/test_zero_quotes_warn.py:58: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <[AttributeError("'MockConfigEntry' object has no attribute 'entry_id'") raised in repr()] MockConfigEntry object at 0x7fff4410c270>
+
+    def __init__(
+        self,
+        *,
+        data: Mapping[str, Any] | None = None,
+        disabled_by: str | None = None,
+        discovery_keys: Mapping[str, tuple[Any, ...]] | None = None,
+        domain: str = "test",
+        entry_id: str | None = None,
+        minor_version: int = 1,
+        options: Mapping[str, Any] | None = None,
+        pref_disable_new_entities: bool | None = None,
+        pref_disable_polling: bool | None = None,
+        reason: str | None = None,
+        source: str = SOURCE_USER,
+        state: ConfigEntryState | None = None,
+        title: str = "Mock Title",
+        unique_id: str | None = None,
+        version: int = 1,
+    ) -> None:
+        """Initialise a mock config entry with safe defaults."""
+        normalized_keys = {
+            key: tuple(value) for key, value in (discovery_keys or {}).items()
+        }
+    
+>       super().__init__(
+            data=data or {},
+            disabled_by=disabled_by,
+            discovery_keys=MappingProxyType(normalized_keys),
+            domain=domain,
+            entry_id=entry_id or ulid_util.ulid_now(),
+            minor_version=minor_version,
+            options=MappingProxyType(dict(options or {})),
+            pref_disable_new_entities=pref_disable_new_entities,
+            pref_disable_polling=pref_disable_polling,
+            source=source,
+            state=state or ConfigEntryState.NOT_LOADED,
+            title=title,
+            unique_id=unique_id,
+            version=version,
+        )
+E       TypeError: ConfigEntry.__init__() missing 1 required keyword-only argument: 'subentries_data'
+
+tests/common.py:46: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  homeassistant.loader:loader.py:693 We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+------------------------------ Captured log call -------------------------------
+INFO     custom_components.pp_reader.data.db_init:db_init.py:456 \U0001f4c1 Erzeuge neue Datenbankdatei: /tmp/pytest-of-andreas/pytest-36/test_zero_quotes_warn_deduplic0/zeroquotes.db\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:89 Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:110 Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:169 Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'security_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'account_currency_total' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_security' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:353 Runtime-Migration: Keine Aktualisierung f\xfcr 'avg_price_account' erforderlich\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.db_init:db_init.py:230 Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun\nDEBUG    custom_components.pp_reader.data.migrations.cleanup:cleanup.py:81 No legacy portfolio_securities columns detected - skipping cleanup\nINFO     custom_components.pp_reader.data.db_init:db_init.py:506 \U0001f4e6 Datenbank erfolgreich initialisiert: /tmp/pytest-of-andreas/pytest-36/test_zero_quotes_warn_deduplic0/zeroquotes.db
+____________ test_diagnostics_missing_database_returns_unavailable _____________
+
+>   ???
+E   AssertionError: assert {'enrichment_...': False, ...} == {}
+E     
+E     Left contains 8 more items:
+E     {'enrichment_fx_refresh': True,
+E      'enrichment_history_jobs': True,
+E      'enrichment_pipeline': False,
+E      'metrics_pipeline': False,
+E      'normalized_dashboard_adapter': False,...
+E     
+E     ...Full output truncated (4 lines hidden), use '-vv' to show
+
+/workspaces/ha-pp-reader/tests/util/test_diagnostics_enrichment.py:177: AssertionError
+____________________ test_collect_metrics_payload_with_data ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_collect_metrics_payload_w0')
+
+    def test_collect_metrics_payload_with_data(tmp_path) -> None:
+        db_path = tmp_path / "metrics.db"
+>       _create_metrics_db(db_path)
+
+tests/util/test_diagnostics_metrics.py:210: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_collect_metrics_payload_w0/metrics.db')
+
+    def _create_metrics_db(db_path: Path) -> None:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+>           _apply_schema(conn, db_schema.METRICS_SCHEMA)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'custom_components.pp_reader.data.db_schema' has no attribute 'METRICS_SCHEMA'. Did you mean: 'METRIC_RUNS_SCHEMA'?
+
+tests/util/test_diagnostics_metrics.py:25: AttributeError
+______________ test_async_get_parser_diagnostics_includes_metrics ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_async_get_parser_diagnost0')
+
+    @pytest.mark.asyncio
+    async def test_async_get_parser_diagnostics_includes_metrics(tmp_path) -> None:
+        db_path = tmp_path / "metrics_full.db"
+>       _create_metrics_db(db_path)
+
+tests/util/test_diagnostics_metrics.py:241: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/tmp/pytest-of-andreas/pytest-36/test_async_get_parser_diagnost0/metrics_full.db')
+
+    def _create_metrics_db(db_path: Path) -> None:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+>           _apply_schema(conn, db_schema.METRICS_SCHEMA)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'custom_components.pp_reader.data.db_schema' has no attribute 'METRICS_SCHEMA'. Did you mean: 'METRIC_RUNS_SCHEMA'?
+
+tests/util/test_diagnostics_metrics.py:25: AttributeError
+=============================== warnings summary ===============================
+venv-ha/lib/python3.13/site-packages/homeassistant/components/http/__init__.py:319
+  /home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/components/http/__init__.py:319: DeprecationWarning: Inheritance class HomeAssistantApplication from web.Application is discouraged
+    class HomeAssistantApplication(web.Application):
+
+tests/test_price_service.py::test_fetch_uses_configured_timeout
+  /home/andreas/coding/repos/ha-pp-reader/custom_components/pp_reader/prices/price_service.py:928: RuntimeWarning: coroutine 'test_fetch_uses_configured_timeout.<locals>.fake_fetch' was never awaited
+    quotes_dict = await asyncio.wait_for(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/currencies/test_fx_async.py::test_ensure_exchange_rates_persists_metadata
+FAILED tests/frontend/test_dashboard_smoke.py::test_dashboard_bundle_smoke - ...
+FAILED tests/frontend/test_portfolio_update_gain_abs.py::test_portfolio_update_gain_abs_handles_zero_purchase
+FAILED tests/integration/test_enrichment_pipeline.py::test_enrichment_pipeline_runs_stages
+FAILED tests/integration/test_enrichment_pipeline.py::test_enrichment_pipeline_respects_stage_flags
+FAILED tests/integration/test_enrichment_pipeline.py::test_enrichment_pipeline_notifies_on_repeated_failures
+FAILED tests/integration/test_metrics_pipeline.py::test_async_refresh_all_persists_metric_batches
+FAILED tests/integration/test_metrics_pipeline.py::test_async_refresh_all_marks_failed_run
+FAILED tests/integration/test_normalization_smoketest.py::test_cli_smoketest_generates_normalized_snapshot
+FAILED tests/metrics/test_metric_engine.py::test_security_metrics_include_day_change_and_fx
+FAILED tests/prices/test_history_ingest.py::test_history_fetcher_normalizes_blocking
+FAILED tests/test_coordinator_contract.py::test_portfolio_contract_entry_falls_back_to_calculated_metrics
+FAILED tests/test_currencies_fx.py::test_concurrent_writes_are_serialized - A...
+FAILED tests/test_currency_drift_once.py::test_currency_drift_warn_once - Typ...
+FAILED tests/test_db_access.py::test_get_portfolio_securities_exposes_native_average
+FAILED tests/test_db_access.py::test_get_security_snapshot_multicurrency - as...
+FAILED tests/test_db_access.py::test_get_security_snapshot_handles_null_purchase_value
+FAILED tests/test_db_access.py::test_get_security_snapshot_zero_holdings_preserves_purchase_sum
+FAILED tests/test_debug_scope.py::test_debug_option_scoped_logging - TypeErro...
+FAILED tests/test_fetch_live_portfolios.py::test_fetch_live_portfolios_basic
+FAILED tests/test_interval_change_reload.py::test_interval_change_cancels_old_and_creates_new
+FAILED tests/test_migration.py::test_fresh_schema_contains_price_columns - As...
+FAILED tests/test_panel_registration.py::test_panel_registered_before_first_refresh
+FAILED tests/test_price_service.py::test_fetch_uses_configured_timeout - asse...
+FAILED tests/test_price_service.py::test_price_update_refreshes_portfolio_gains
+FAILED tests/test_reload_initial_cycle.py::test_reload_triggers_new_initial_cycle
+FAILED tests/test_reload_logs.py::test_reload_logs_interval_change - TypeErro...
+FAILED tests/test_revaluation_live_aggregation.py::test_revaluation_uses_live_portfolio_values
+FAILED tests/test_sync_from_pclient.py::test_sync_portfolios_commits_changes
+FAILED tests/test_sync_from_pclient.py::test_rebuild_transaction_units_collects_tax_and_fee
+FAILED tests/test_sync_from_pclient.py::test_emit_updates_skips_transaction_event
+FAILED tests/test_sync_from_pclient.py::test_sync_portfolio_securities_persists_native_average
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_persists_deduplicated_historical_prices
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_skips_unchanged_history
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_appends_only_new_history
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_rewrites_mismatched_history_before_appending
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_warns_about_missing_daily_prices
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_ignores_gap_before_first_transaction
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_skips_stale_gap_warnings
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_ignores_weekend_gaps
+FAILED tests/test_sync_from_pclient.py::test_sync_securities_ignores_short_holiday_gaps
+FAILED tests/test_zero_quotes_warn.py::test_zero_quotes_warn_deduplicated - T...
+FAILED tests/util/test_diagnostics_enrichment.py::test_diagnostics_missing_database_returns_unavailable
+FAILED tests/util/test_diagnostics_metrics.py::test_collect_metrics_payload_with_data
+FAILED tests/util/test_diagnostics_metrics.py::test_async_get_parser_diagnostics_includes_metrics
+45 failed, 131 passed, 2 warnings in 14.93s

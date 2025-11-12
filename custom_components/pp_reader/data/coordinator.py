@@ -16,6 +16,7 @@ import logging
 import sqlite3
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
@@ -152,7 +153,21 @@ def _normalize_portfolio_amount(value: Any) -> float:
     return 0.0
 
 
-def _portfolio_contract_entry(
+def _is_numeric_like(value: Any) -> bool:
+    """Return True when a value can represent a numeric override."""
+    if isinstance(value, (int, float, Decimal)):
+        return True
+    if isinstance(value, str):
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            return False
+        else:
+            return True
+    return False
+
+
+def _portfolio_contract_entry(  # noqa: PLR0912
     entry: Mapping[str, Any] | None,
 ) -> tuple[str, dict[str, Any]] | None:
     """Normalize aggregation rows to the coordinator sensor contract (item 4a)."""
@@ -203,6 +218,22 @@ def _portfolio_contract_entry(
             metrics=performance_metrics,
             day_change=day_change_metrics,
         )
+
+    if isinstance(performance_payload, dict) and isinstance(
+        performance_mapping, Mapping
+    ):
+        fallback_fields = {
+            "gain_abs": performance_metrics.gain_abs,
+            "gain_pct": performance_metrics.gain_pct,
+            "total_change_eur": performance_metrics.total_change_eur,
+            "total_change_pct": performance_metrics.total_change_pct,
+        }
+        for field, fallback_value in fallback_fields.items():
+            if field not in performance_mapping:
+                continue
+            candidate = performance_payload.get(field)
+            if not _is_numeric_like(candidate):
+                performance_payload[field] = fallback_value
 
     return portfolio_uuid, {
         "name": entry.get("name"),
@@ -427,6 +458,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     pp_version=parsed_client.version,
                     base_currency=parsed_client.base_currency,
                     properties=parsed_client.properties,
+                    parsed_client=parsed_client,
                 )
         except (PortfolioParseError, PortfolioValidationError) as err:
             if notify_parser_failures:
@@ -620,6 +652,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             return
 
         self._emit_enrichment_progress("start")
+        await self.hass.async_block_till_done()
 
         summary: dict[str, Any] = {}
         errors: list[str] = []
@@ -650,12 +683,15 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     "fx_refresh_exception",
                     error=str(err),
                 )
+                await self.hass.async_block_till_done()
             else:
                 if isinstance(fx_result, Mapping):
                     summary.update(fx_result)
+                await self.hass.async_block_till_done()
         else:
             summary["fx_status"] = "disabled"
             self._emit_enrichment_progress("fx_skipped_disabled")
+            await self.hass.async_block_till_done()
 
         if history_enabled:
             try:
@@ -670,13 +706,16 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     "history_jobs_exception",
                     error=str(err),
                 )
+                await self.hass.async_block_till_done()
             else:
                 if isinstance(history_result, Mapping):
                     summary.update(history_result)
+                await self.hass.async_block_till_done()
         else:
             summary["history_status"] = "disabled"
             summary["history_jobs_enqueued"] = 0
             self._emit_enrichment_progress("history_skipped_disabled")
+            await self.hass.async_block_till_done()
 
         if errors:
             summary["errors"] = errors
@@ -687,6 +726,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         await self._schedule_normalization_refresh(summary)
 
         self._emit_enrichment_completed(summary)
+        await self.hass.async_block_till_done()
 
     async def _schedule_metrics_refresh(
         self,
@@ -1047,7 +1087,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 )
                 self.hass.async_create_task(
                     notifications_util.async_create_enrichment_failure_notification(
-                        self.hass,
+                        hass=self.hass,
                         entry_id=self.entry_id,
                         title="PP Reader Enrichment-Pipeline fehlgeschlagen",
                         message=message,

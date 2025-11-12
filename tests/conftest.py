@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 HOMEASSISTANT_IMPORT_ERROR: ModuleNotFoundError | None = None
-try:  # pragma: no cover - importability validated by targeted smoke tests
-    import homeassistant as _homeassistant  # noqa: F401
-except ModuleNotFoundError as err:  # pragma: no cover - missing HA in CI smoke env
-    HOMEASSISTANT_IMPORT_ERROR = err
-else:  # pragma: no cover - import used in fixtures only
-    HOMEASSISTANT_IMPORT_ERROR = None
+frame = None
+DATA_COMPONENTS: Any = None
+DATA_CUSTOM_COMPONENTS: Any = None
+DATA_INTEGRATIONS: Any = None
+DATA_MISSING_PLATFORMS: Any = None
+DATA_PRELOAD_PLATFORMS: Any = None
 
 if TYPE_CHECKING:  # pragma: no cover - typing helpers only
     from homeassistant.config_entries import ConfigEntries
@@ -22,6 +23,26 @@ if TYPE_CHECKING:  # pragma: no cover - typing helpers only
     from homeassistant.loader import Integration
 else:
     ConfigEntries = HomeAssistant = Integration = Any  # type: ignore[assignment]
+
+try:  # pragma: no cover - importability validated by targeted smoke tests
+    importlib.import_module("homeassistant")
+except ModuleNotFoundError as err:  # pragma: no cover - missing HA in CI smoke env
+    HOMEASSISTANT_IMPORT_ERROR = err
+else:  # pragma: no cover - import used in fixtures only
+    HOMEASSISTANT_IMPORT_ERROR = None
+    config_entries_mod = importlib.import_module("homeassistant.config_entries")
+    core_mod = importlib.import_module("homeassistant.core")
+    loader_mod = importlib.import_module("homeassistant.loader")
+    frame = importlib.import_module("homeassistant.helpers.frame")
+
+    ConfigEntries = config_entries_mod.ConfigEntries  # type: ignore[assignment]
+    HomeAssistant = core_mod.HomeAssistant  # type: ignore[assignment]
+    Integration = loader_mod.Integration  # type: ignore[assignment]
+    DATA_COMPONENTS = loader_mod.DATA_COMPONENTS
+    DATA_CUSTOM_COMPONENTS = loader_mod.DATA_CUSTOM_COMPONENTS
+    DATA_INTEGRATIONS = loader_mod.DATA_INTEGRATIONS
+    DATA_MISSING_PLATFORMS = loader_mod.DATA_MISSING_PLATFORMS
+    DATA_PRELOAD_PLATFORMS = loader_mod.DATA_PRELOAD_PLATFORMS
 
 pytest_plugins = ("pytest_asyncio",)
 
@@ -50,21 +71,13 @@ async def hass(
             allow_module_level=False,
         )
 
-    from homeassistant.config_entries import ConfigEntries
-    from homeassistant.core import HomeAssistant
-    from homeassistant.loader import (
-        DATA_COMPONENTS,
-        DATA_CUSTOM_COMPONENTS,
-        DATA_INTEGRATIONS,
-        DATA_MISSING_PLATFORMS,
-        DATA_PRELOAD_PLATFORMS,
-        Integration,
-    )
-
     asyncio.set_event_loop(event_loop)
     hass = HomeAssistant(str(tmp_path))
     hass.config_entries = ConfigEntries(hass, {})
     await hass.config_entries.async_initialize()
+
+    previous_frame_hass = frame._hass.hass
+    frame.async_setup(hass)
 
     class _HttpStub:
         def __init__(self) -> None:
@@ -85,7 +98,7 @@ async def hass(
 
     # Register the pp_reader integration so loader lookups succeed during tests.
     try:
-        import custom_components
+        import custom_components  # noqa: PLC0415
     except ImportError:  # pragma: no cover - repository layout unexpected
         custom_components = None
 
@@ -101,12 +114,14 @@ async def hass(
 
         # Ensure the package exposes its module under the __init__ attribute so tests
         # using monkeypatch paths like ``custom_components.pp_reader.__init__`` work.
-        import custom_components.pp_reader as pp_reader_module
+        import custom_components.pp_reader as pp_reader_module  # noqa: PLC0415
 
         custom_components.pp_reader.__init__ = pp_reader_module
 
     # Avoid loading real portfolio data during tests; coordinator sync is patched to no-op.
-    from custom_components.pp_reader.data.coordinator import PPReaderCoordinator
+    from custom_components.pp_reader.data.coordinator import (  # noqa: PLC0415
+        PPReaderCoordinator,
+    )
 
     original_sync_portfolio_file = PPReaderCoordinator._sync_portfolio_file
 
@@ -118,6 +133,7 @@ async def hass(
     try:
         yield hass
     finally:
+        frame._hass.hass = previous_frame_hass
         PPReaderCoordinator._sync_portfolio_file = original_sync_portfolio_file
         await hass.async_stop(force=True)
         await hass.async_block_till_done()

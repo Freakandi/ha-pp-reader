@@ -148,11 +148,6 @@ def normalize_price_to_eur_sync(
         return price_native
 
     try:
-        from custom_components.pp_reader.currencies.fx import (
-            ensure_exchange_rates_for_dates_sync,
-            load_cached_rate_records_sync,
-        )
-
         ensure_exchange_rates_for_dates_sync(
             [reference_date], {normalized_currency}, db_path
         )
@@ -189,7 +184,7 @@ CACHED_FX_HELPERS: dict[str, Any] = {}
 def _load_fx_helper(name: str) -> Any:
     """Dynamically import FX helper functions on first access."""
     if name not in CACHED_FX_HELPERS:
-        from custom_components.pp_reader.currencies import fx
+        from custom_components.pp_reader.currencies import fx  # noqa: PLC0415
 
         CACHED_FX_HELPERS[name] = getattr(fx, name)
     return CACHED_FX_HELPERS[name]

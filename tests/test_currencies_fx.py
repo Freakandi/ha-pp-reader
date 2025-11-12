@@ -95,7 +95,7 @@ async def test_concurrent_writes_are_serialized(
 
     def fake_connect(*_args: Any, **_kwargs: Any) -> Any:
         class DummyConnection:
-            def executemany(self, *_exec_args: Any, **_exec_kwargs: Any) -> None:
+            def _simulate_write(self) -> None:
                 nonlocal active_calls, max_concurrent
                 with state_lock:
                     active_calls += 1
@@ -105,6 +105,12 @@ async def test_concurrent_writes_are_serialized(
                 finally:
                     with state_lock:
                         active_calls -= 1
+
+            def execute(self, *_exec_args: Any, **_exec_kwargs: Any) -> None:
+                self._simulate_write()
+
+            def executemany(self, *_exec_args: Any, **_exec_kwargs: Any) -> None:
+                self._simulate_write()
 
             def commit(self) -> None:
                 """No-op commit stub."""

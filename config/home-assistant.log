@@ -1,328 +1,1728 @@
-2025-11-10 12:25:15.911 WARNING (SyncWorker_0) [homeassistant.loader] We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
-2025-11-10 12:25:16.832 WARNING (MainThread) [aiohttp_fast_zlib] zlib_ng and isal are not available, falling back to zlib, performance will be degraded.
-2025-11-10 12:25:16.898 INFO (MainThread) [homeassistant.setup] Setup of domain http took 0.07 seconds
-2025-11-10 12:25:16.899 INFO (MainThread) [homeassistant.setup] Setup of domain system_log took 0.07 seconds
-2025-11-10 12:25:16.899 INFO (MainThread) [homeassistant.setup] Setting up websocket_api
-2025-11-10 12:25:16.899 INFO (MainThread) [homeassistant.setup] Setup of domain websocket_api took 0.00 seconds
-2025-11-10 12:25:16.899 INFO (MainThread) [homeassistant.setup] Setup of domain logger took 0.07 seconds
-2025-11-10 12:25:16.899 INFO (MainThread) [homeassistant.setup] Setting up network
-2025-11-10 12:25:16.901 INFO (MainThread) [homeassistant.setup] Setup of domain network took 0.00 seconds
-2025-11-10 12:25:16.901 INFO (MainThread) [homeassistant.bootstrap] Setting up stage frontend: {'frontend'}; already set up: {}
-Dependencies: {'lovelace', 'search', 'diagnostics', 'onboarding', 'repairs', 'device_automation', 'file_upload', 'api', 'config', 'auth'}; already set up: {'websocket_api', 'system_log', 'http'}
-2025-11-10 12:25:16.901 INFO (MainThread) [homeassistant.setup] Setting up auth
-2025-11-10 12:25:16.902 INFO (MainThread) [homeassistant.setup] Setup of domain auth took 0.00 seconds
-2025-11-10 12:25:16.902 INFO (MainThread) [homeassistant.setup] Setting up onboarding
-2025-11-10 12:25:16.902 INFO (MainThread) [homeassistant.setup] Setup of domain onboarding took 0.00 seconds
-2025-11-10 12:25:16.902 INFO (MainThread) [homeassistant.setup] Setting up lovelace
-2025-11-10 12:25:16.903 INFO (MainThread) [homeassistant.setup] Setup of domain lovelace took 0.00 seconds
-2025-11-10 12:25:16.903 INFO (MainThread) [homeassistant.setup] Setting up search
-2025-11-10 12:25:16.904 INFO (MainThread) [homeassistant.setup] Setup of domain search took 0.00 seconds
-2025-11-10 12:25:16.904 INFO (MainThread) [homeassistant.setup] Setting up diagnostics
-2025-11-10 12:25:16.904 INFO (MainThread) [homeassistant.setup] Setup of domain diagnostics took 0.00 seconds
-2025-11-10 12:25:16.905 INFO (MainThread) [homeassistant.setup] Setting up repairs
-2025-11-10 12:25:16.905 INFO (MainThread) [homeassistant.setup] Setup of domain repairs took 0.00 seconds
-2025-11-10 12:25:16.905 INFO (MainThread) [homeassistant.setup] Setting up api
-2025-11-10 12:25:16.906 INFO (MainThread) [homeassistant.setup] Setup of domain api took 0.00 seconds
-2025-11-10 12:25:16.906 INFO (MainThread) [homeassistant.setup] Setting up file_upload
-2025-11-10 12:25:16.906 INFO (MainThread) [homeassistant.setup] Setup of domain file_upload took 0.00 seconds
-2025-11-10 12:25:16.906 INFO (MainThread) [homeassistant.setup] Setting up device_automation
-2025-11-10 12:25:16.907 INFO (MainThread) [homeassistant.setup] Setup of domain device_automation took 0.00 seconds
-2025-11-10 12:25:16.907 INFO (MainThread) [homeassistant.setup] Setting up config
-2025-11-10 12:25:16.909 INFO (MainThread) [homeassistant.setup] Setup of domain config took 0.00 seconds
-2025-11-10 12:25:16.910 INFO (MainThread) [homeassistant.setup] Setting up frontend
-2025-11-10 12:25:16.914 INFO (MainThread) [homeassistant.setup] Setup of domain frontend took 0.00 seconds
-2025-11-10 12:25:16.915 INFO (MainThread) [homeassistant.bootstrap] Setting up stage recorder: {'recorder'}; already set up: {}
+2025-11-10 22:30:29.938 WARNING (SyncWorker_0) [homeassistant.loader] We found a custom integration pp_reader which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you experience issues with Home Assistant
+2025-11-10 22:30:30.896 WARNING (MainThread) [aiohttp_fast_zlib] zlib_ng and isal are not available, falling back to zlib, performance will be degraded.
+2025-11-10 22:30:30.951 INFO (MainThread) [homeassistant.setup] Setup of domain system_log took 0.06 seconds
+2025-11-10 22:30:30.951 INFO (MainThread) [homeassistant.setup] Setup of domain http took 0.06 seconds
+2025-11-10 22:30:30.951 INFO (MainThread) [homeassistant.setup] Setting up websocket_api
+2025-11-10 22:30:30.951 INFO (MainThread) [homeassistant.setup] Setup of domain websocket_api took 0.00 seconds
+2025-11-10 22:30:30.952 INFO (MainThread) [homeassistant.setup] Setup of domain logger took 0.06 seconds
+2025-11-10 22:30:30.952 INFO (MainThread) [homeassistant.setup] Setting up network
+2025-11-10 22:30:30.953 INFO (MainThread) [homeassistant.setup] Setup of domain network took 0.00 seconds
+2025-11-10 22:30:30.953 INFO (MainThread) [homeassistant.bootstrap] Setting up stage frontend: {'frontend'}; already set up: {}
+Dependencies: {'api', 'auth', 'device_automation', 'config', 'file_upload', 'onboarding', 'repairs', 'lovelace', 'search', 'diagnostics'}; already set up: {'system_log', 'http', 'websocket_api'}
+2025-11-10 22:30:30.953 INFO (MainThread) [homeassistant.setup] Setting up api
+2025-11-10 22:30:30.954 INFO (MainThread) [homeassistant.setup] Setup of domain api took 0.00 seconds
+2025-11-10 22:30:30.954 INFO (MainThread) [homeassistant.setup] Setting up auth
+2025-11-10 22:30:30.955 INFO (MainThread) [homeassistant.setup] Setup of domain auth took 0.00 seconds
+2025-11-10 22:30:30.955 INFO (MainThread) [homeassistant.setup] Setting up device_automation
+2025-11-10 22:30:30.955 INFO (MainThread) [homeassistant.setup] Setup of domain device_automation took 0.00 seconds
+2025-11-10 22:30:30.955 INFO (MainThread) [homeassistant.setup] Setting up config
+2025-11-10 22:30:30.958 INFO (MainThread) [homeassistant.setup] Setup of domain config took 0.00 seconds
+2025-11-10 22:30:30.958 INFO (MainThread) [homeassistant.setup] Setting up diagnostics
+2025-11-10 22:30:30.959 INFO (MainThread) [homeassistant.setup] Setup of domain diagnostics took 0.00 seconds
+2025-11-10 22:30:30.959 INFO (MainThread) [homeassistant.setup] Setting up file_upload
+2025-11-10 22:30:30.959 INFO (MainThread) [homeassistant.setup] Setup of domain file_upload took 0.00 seconds
+2025-11-10 22:30:30.959 INFO (MainThread) [homeassistant.setup] Setting up onboarding
+2025-11-10 22:30:30.959 INFO (MainThread) [homeassistant.setup] Setup of domain onboarding took 0.00 seconds
+2025-11-10 22:30:30.959 INFO (MainThread) [homeassistant.setup] Setting up lovelace
+2025-11-10 22:30:30.961 INFO (MainThread) [homeassistant.setup] Setup of domain lovelace took 0.00 seconds
+2025-11-10 22:30:30.961 INFO (MainThread) [homeassistant.setup] Setting up repairs
+2025-11-10 22:30:30.962 INFO (MainThread) [homeassistant.setup] Setup of domain repairs took 0.00 seconds
+2025-11-10 22:30:30.962 INFO (MainThread) [homeassistant.setup] Setting up search
+2025-11-10 22:30:30.962 INFO (MainThread) [homeassistant.setup] Setup of domain search took 0.00 seconds
+2025-11-10 22:30:30.962 INFO (MainThread) [homeassistant.setup] Setting up frontend
+2025-11-10 22:30:30.967 INFO (MainThread) [homeassistant.setup] Setup of domain frontend took 0.00 seconds
+2025-11-10 22:30:30.967 INFO (MainThread) [homeassistant.bootstrap] Setting up stage recorder: {'recorder'}; already set up: {}
 Dependencies: {}; already set up: {}
-2025-11-10 12:25:16.915 INFO (MainThread) [homeassistant.setup] Setting up recorder
-2025-11-10 12:25:16.917 INFO (MainThread) [homeassistant.components.http] Now listening on port 8123
-2025-11-10 12:25:16.917 INFO (MainThread) [homeassistant.setup] Setup of domain http took 0.00 seconds
-2025-11-10 12:25:16.948 INFO (MainThread) [homeassistant.setup] Setup of domain recorder took 0.03 seconds
-2025-11-10 12:25:16.948 INFO (MainThread) [homeassistant.bootstrap] Nothing to set up in stage debugger: {'debugpy'}
-2025-11-10 12:25:16.948 INFO (MainThread) [homeassistant.bootstrap] Setting up stage zeroconf: {'zeroconf'}; already set up: {}
-Dependencies: {}; already set up: {'network', 'websocket_api', 'http', 'api'}
-2025-11-10 12:25:16.948 INFO (MainThread) [homeassistant.setup] Setting up zeroconf
-2025-11-10 12:25:16.951 INFO (MainThread) [homeassistant.components.zeroconf] Starting Zeroconf broadcast
-2025-11-10 12:25:16.951 INFO (MainThread) [homeassistant.setup] Setup of domain zeroconf took 0.00 seconds
-2025-11-10 12:25:16.951 INFO (MainThread) [homeassistant.bootstrap] Setting up stage 1: {'bluetooth', 'cloud', 'dhcp', 'ssdp', 'usb'}; already set up: {}
-Dependencies: {'backup', 'intent', 'webhook', 'wake_word', 'tts', 'assist_pipeline', 'ffmpeg', 'conversation', 'stt'}; already set up: {'websocket_api', 'http', 'network', 'repairs', 'auth'}
-2025-11-10 12:25:16.952 INFO (MainThread) [homeassistant.setup] Setting up backup
-2025-11-10 12:25:16.953 INFO (MainThread) [homeassistant.setup] Setting up webhook
-2025-11-10 12:25:16.953 INFO (MainThread) [homeassistant.setup] Setup of domain webhook took 0.00 seconds
-2025-11-10 12:25:16.956 INFO (MainThread) [homeassistant.setup] Setup of domain backup took 0.00 seconds
-2025-11-10 12:25:16.959 INFO (MainThread) [homeassistant.setup] Setting up wake_word
-2025-11-10 12:25:16.959 INFO (MainThread) [homeassistant.setup] Setup of domain wake_word took 0.00 seconds
-2025-11-10 12:25:16.962 INFO (MainThread) [homeassistant.setup] Setting up ffmpeg
-2025-11-10 12:25:16.978 INFO (MainThread) [homeassistant.setup] Setting up intent
-2025-11-10 12:25:16.979 INFO (MainThread) [homeassistant.setup] Setup of domain intent took 0.00 seconds
-2025-11-10 12:25:16.985 INFO (MainThread) [homeassistant.setup] Setting up stt
-2025-11-10 12:25:16.986 INFO (MainThread) [homeassistant.setup] Setup of domain stt took 0.00 seconds
-2025-11-10 12:25:17.004 INFO (MainThread) [homeassistant.setup] Setting up usb
-2025-11-10 12:25:17.005 INFO (MainThread) [homeassistant.setup] Setup of domain usb took 0.00 seconds
-2025-11-10 12:25:17.126 INFO (MainThread) [homeassistant.setup] Setting up dhcp
-2025-11-10 12:25:17.127 INFO (MainThread) [homeassistant.setup] Setup of domain dhcp took 0.00 seconds
-2025-11-10 12:25:17.130 INFO (MainThread) [homeassistant.setup] Setup of domain ffmpeg took 0.17 seconds
-2025-11-10 12:25:17.159 INFO (MainThread) [homeassistant.setup] Setting up ssdp
-2025-11-10 12:25:17.168 INFO (MainThread) [homeassistant.setup] Setup of domain ssdp took 0.01 seconds
-2025-11-10 12:25:17.238 INFO (MainThread) [homeassistant.setup] Setting up conversation
-2025-11-10 12:25:17.238 INFO (MainThread) [homeassistant.setup] Setup of domain conversation took 0.00 seconds
-2025-11-10 12:25:17.248 INFO (MainThread) [homeassistant.setup] Setting up bluetooth
-2025-11-10 12:25:17.288 ERROR (MainThread) [habluetooth.manager] Missing required permissions for Bluetooth management: Missing NET_ADMIN/NET_RAW capabilities for Bluetooth management. Automatic adapter recovery is unavailable. Add NET_ADMIN and NET_RAW capabilities to the container to enable it
-2025-11-10 12:25:17.289 INFO (MainThread) [homeassistant.setup] Setup of domain bluetooth took 0.04 seconds
-2025-11-10 12:25:17.289 INFO (MainThread) [habluetooth.channels.bluez] Bluetooth management socket connection closed
-2025-11-10 12:25:17.307 INFO (MainThread) [homeassistant.setup] Setting up tts
-2025-11-10 12:25:17.313 INFO (MainThread) [homeassistant.setup] Setting up event
-2025-11-10 12:25:17.314 INFO (MainThread) [homeassistant.setup] Setup of domain event took 0.00 seconds
-2025-11-10 12:25:17.314 INFO (MainThread) [homeassistant.setup] Setting up sensor
-2025-11-10 12:25:17.314 INFO (MainThread) [homeassistant.setup] Setup of domain sensor took 0.00 seconds
-2025-11-10 12:25:17.315 INFO (MainThread) [homeassistant.setup] Setup of domain tts took 0.01 seconds
-2025-11-10 12:25:17.316 INFO (MainThread) [homeassistant.components.event] Setting up backup.event
-2025-11-10 12:25:17.317 INFO (MainThread) [homeassistant.components.sensor] Setting up backup.sensor
-2025-11-10 12:25:17.340 INFO (MainThread) [homeassistant.setup] Setting up assist_pipeline
-2025-11-10 12:25:17.342 INFO (MainThread) [homeassistant.setup] Setup of domain assist_pipeline took 0.00 seconds
-2025-11-10 12:25:17.470 INFO (MainThread) [homeassistant.setup] Setting up cloud
-2025-11-10 12:25:17.472 INFO (MainThread) [homeassistant.setup] Setup of domain cloud took 0.00 seconds
-2025-11-10 12:25:17.473 INFO (MainThread) [homeassistant.bootstrap] Setting up stage 2: {'system_health', 'hardware', 'shopping_list', 'tag', 'input_select', 'application_credentials', 'radio_browser', 'timer', 'schedule', 'counter', 'pp_reader', 'input_boolean', 'input_button', 'script', 'google_translate', 'met', 'automation', 'zone', 'input_text', 'default_config', 'scene', 'sun', 'analytics', 'input_number', 'input_datetime', 'person'}; already set up: {'backup', 'network', 'logger', 'homeassistant', 'frontend'}
-Dependencies: {'camera', 'stream', 'history', 'trace', 'go2rtc', 'mobile_app', 'energy', 'logbook', 'usage_prediction', 'media_source', 'image_upload', 'my', 'blueprint', 'homeassistant_alerts', 'file'}; already set up: {'lovelace', 'http', 'repairs', 'webhook', 'cloud', 'file_upload', 'ssdp', 'dhcp', 'auth', 'stt', 'backup', 'websocket_api', 'network', 'recorder', 'conversation', 'system_log', 'diagnostics', 'wake_word', 'device_automation', 'frontend', 'search', 'bluetooth', 'intent', 'onboarding', 'zeroconf', 'tts', 'assist_pipeline', 'ffmpeg', 'api', 'config', 'usb'}
-2025-11-10 12:25:17.473 INFO (MainThread) [homeassistant.setup] Setting up camera
-2025-11-10 12:25:17.475 INFO (MainThread) [homeassistant.setup] Setup of domain camera took 0.00 seconds
-2025-11-10 12:25:17.475 INFO (MainThread) [homeassistant.setup] Setting up scene
-2025-11-10 12:25:17.475 INFO (MainThread) [homeassistant.components.scene] Setting up homeassistant.scene
-2025-11-10 12:25:17.476 INFO (MainThread) [homeassistant.setup] Setup of domain scene took 0.00 seconds
-2025-11-10 12:25:17.476 INFO (MainThread) [homeassistant.setup] Setting up system_health
-2025-11-10 12:25:17.477 INFO (MainThread) [homeassistant.setup] Setup of domain system_health took 0.00 seconds
-2025-11-10 12:25:17.477 INFO (MainThread) [homeassistant.setup] Setting up input_select
-2025-11-10 12:25:17.479 INFO (MainThread) [homeassistant.setup] Setup of domain input_select took 0.00 seconds
-2025-11-10 12:25:17.479 INFO (MainThread) [homeassistant.setup] Setting up image_upload
-2025-11-10 12:25:17.480 INFO (MainThread) [homeassistant.setup] Setup of domain image_upload took 0.00 seconds
-2025-11-10 12:25:17.480 INFO (MainThread) [homeassistant.setup] Setting up blueprint
-2025-11-10 12:25:17.480 INFO (MainThread) [homeassistant.setup] Setup of domain blueprint took 0.00 seconds
-2025-11-10 12:25:17.480 INFO (MainThread) [homeassistant.setup] Setting up timer
-2025-11-10 12:25:17.481 INFO (MainThread) [homeassistant.setup] Setup of domain timer took 0.00 seconds
-2025-11-10 12:25:17.482 INFO (MainThread) [homeassistant.setup] Setting up zone
-2025-11-10 12:25:17.483 INFO (MainThread) [homeassistant.setup] Setup of domain zone took 0.00 seconds
-2025-11-10 12:25:17.483 INFO (MainThread) [homeassistant.setup] Setting up person
-2025-11-10 12:25:17.484 INFO (MainThread) [homeassistant.setup] Setting up input_boolean
-2025-11-10 12:25:17.484 INFO (MainThread) [homeassistant.setup] Setup of domain input_boolean took 0.00 seconds
-2025-11-10 12:25:17.484 INFO (MainThread) [homeassistant.setup] Setting up input_button
-2025-11-10 12:25:17.485 INFO (MainThread) [homeassistant.setup] Setup of domain input_button took 0.00 seconds
-2025-11-10 12:25:17.485 INFO (MainThread) [homeassistant.setup] Setting up logbook
-2025-11-10 12:25:17.486 INFO (MainThread) [homeassistant.setup] Setup of domain logbook took 0.00 seconds
-2025-11-10 12:25:17.486 INFO (MainThread) [homeassistant.setup] Setting up trace
-2025-11-10 12:25:17.486 INFO (MainThread) [homeassistant.setup] Setup of domain trace took 0.00 seconds
-2025-11-10 12:25:17.486 INFO (MainThread) [homeassistant.setup] Setting up script
-2025-11-10 12:25:17.486 INFO (MainThread) [homeassistant.setup] Setup of domain script took 0.00 seconds
-2025-11-10 12:25:17.487 INFO (MainThread) [homeassistant.setup] Setting up stream
-2025-11-10 12:25:17.487 INFO (MainThread) [homeassistant.setup] Setting up history
-2025-11-10 12:25:17.488 INFO (MainThread) [homeassistant.setup] Setup of domain history took 0.00 seconds
-2025-11-10 12:25:17.488 INFO (MainThread) [homeassistant.setup] Setting up automation
-2025-11-10 12:25:17.489 INFO (MainThread) [homeassistant.setup] Setup of domain automation took 0.00 seconds
-2025-11-10 12:25:17.489 INFO (MainThread) [homeassistant.setup] Setting up media_source
-2025-11-10 12:25:17.490 INFO (MainThread) [homeassistant.setup] Setup of domain media_source took 0.00 seconds
-2025-11-10 12:25:17.490 INFO (MainThread) [homeassistant.setup] Setting up input_number
-2025-11-10 12:25:17.498 INFO (MainThread) [homeassistant.setup] Setup of domain input_number took 0.01 seconds
-2025-11-10 12:25:17.501 INFO (MainThread) [homeassistant.setup] Setup of domain person took 0.02 seconds
-2025-11-10 12:25:17.533 INFO (MainThread) [homeassistant.setup] Setting up hardware
-2025-11-10 12:25:17.549 INFO (MainThread) [homeassistant.setup] Setting up shopping_list
-2025-11-10 12:25:17.550 INFO (MainThread) [homeassistant.setup] Setup of domain shopping_list took 0.00 seconds
-2025-11-10 12:25:17.579 INFO (MainThread) [homeassistant.setup] Setup of domain hardware took 0.05 seconds
-2025-11-10 12:25:17.579 INFO (MainThread) [homeassistant.setup] Setting up tag
-2025-11-10 12:25:17.581 INFO (MainThread) [homeassistant.setup] Setup of domain tag took 0.00 seconds
-2025-11-10 12:25:17.613 INFO (MainThread) [homeassistant.setup] Setting up usage_prediction
-2025-11-10 12:25:17.613 INFO (MainThread) [homeassistant.setup] Setup of domain usage_prediction took 0.00 seconds
-2025-11-10 12:25:17.628 INFO (MainThread) [homeassistant.setup] Setup of domain stream took 0.14 seconds
-2025-11-10 12:25:17.628 INFO (MainThread) [homeassistant.setup] Setting up application_credentials
-2025-11-10 12:25:17.629 INFO (MainThread) [homeassistant.setup] Setup of domain application_credentials took 0.00 seconds
-2025-11-10 12:25:17.749 INFO (MainThread) [homeassistant.setup] Setting up radio_browser
-2025-11-10 12:25:17.749 INFO (MainThread) [homeassistant.setup] Setup of domain radio_browser took 0.00 seconds
-2025-11-10 12:25:17.754 INFO (MainThread) [homeassistant.setup] Setting up schedule
-2025-11-10 12:25:17.756 INFO (MainThread) [homeassistant.setup] Setup of domain schedule took 0.00 seconds
-2025-11-10 12:25:17.758 INFO (MainThread) [homeassistant.setup] Setting up counter
-2025-11-10 12:25:17.759 INFO (MainThread) [homeassistant.setup] Setup of domain counter took 0.00 seconds
-2025-11-10 12:25:17.835 INFO (MainThread) [homeassistant.setup] Setting up pp_reader
-2025-11-10 12:25:17.837 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
-2025-11-10 12:25:17.839 INFO (MainThread) [homeassistant.setup] Setup of domain pp_reader took 0.00 seconds
-2025-11-10 12:25:17.850 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+2025-11-10 22:30:30.967 INFO (MainThread) [homeassistant.setup] Setting up recorder
+2025-11-10 22:30:30.969 INFO (MainThread) [homeassistant.components.http] Now listening on port 8123
+2025-11-10 22:30:30.970 INFO (MainThread) [homeassistant.setup] Setup of domain http took 0.00 seconds
+2025-11-10 22:30:31.005 INFO (MainThread) [homeassistant.setup] Setup of domain recorder took 0.04 seconds
+2025-11-10 22:30:31.005 INFO (MainThread) [homeassistant.bootstrap] Nothing to set up in stage debugger: {'debugpy'}
+2025-11-10 22:30:31.005 INFO (MainThread) [homeassistant.bootstrap] Setting up stage zeroconf: {'zeroconf'}; already set up: {}
+Dependencies: {}; already set up: {'api', 'http', 'network', 'websocket_api'}
+2025-11-10 22:30:31.005 INFO (MainThread) [homeassistant.setup] Setting up zeroconf
+2025-11-10 22:30:31.009 INFO (MainThread) [homeassistant.components.zeroconf] Starting Zeroconf broadcast
+2025-11-10 22:30:31.009 INFO (MainThread) [homeassistant.setup] Setup of domain zeroconf took 0.00 seconds
+2025-11-10 22:30:31.009 INFO (MainThread) [homeassistant.bootstrap] Setting up stage 1: {'bluetooth', 'cloud', 'dhcp', 'usb', 'ssdp'}; already set up: {}
+Dependencies: {'backup', 'wake_word', 'stt', 'tts', 'webhook', 'conversation', 'intent', 'ffmpeg', 'assist_pipeline'}; already set up: {'auth', 'websocket_api', 'repairs', 'http', 'network'}
+2025-11-10 22:30:31.010 INFO (MainThread) [homeassistant.setup] Setting up backup
+2025-11-10 22:30:31.010 INFO (MainThread) [homeassistant.setup] Setting up webhook
+2025-11-10 22:30:31.011 INFO (MainThread) [homeassistant.setup] Setup of domain webhook took 0.00 seconds
+2025-11-10 22:30:31.014 INFO (MainThread) [homeassistant.setup] Setup of domain backup took 0.00 seconds
+2025-11-10 22:30:31.017 INFO (MainThread) [homeassistant.setup] Setting up wake_word
+2025-11-10 22:30:31.017 INFO (MainThread) [homeassistant.setup] Setup of domain wake_word took 0.00 seconds
+2025-11-10 22:30:31.024 INFO (MainThread) [homeassistant.setup] Setting up stt
+2025-11-10 22:30:31.024 INFO (MainThread) [homeassistant.setup] Setup of domain stt took 0.00 seconds
+2025-11-10 22:30:31.028 INFO (MainThread) [homeassistant.setup] Setting up ffmpeg
+2025-11-10 22:30:31.043 INFO (MainThread) [homeassistant.setup] Setting up intent
+2025-11-10 22:30:31.044 INFO (MainThread) [homeassistant.setup] Setup of domain intent took 0.00 seconds
+2025-11-10 22:30:31.059 INFO (MainThread) [homeassistant.setup] Setting up usb
+2025-11-10 22:30:31.060 INFO (MainThread) [homeassistant.setup] Setup of domain usb took 0.00 seconds
+2025-11-10 22:30:31.189 INFO (MainThread) [homeassistant.setup] Setting up dhcp
+2025-11-10 22:30:31.189 INFO (MainThread) [homeassistant.setup] Setup of domain dhcp took 0.00 seconds
+2025-11-10 22:30:31.205 INFO (MainThread) [homeassistant.setup] Setup of domain ffmpeg took 0.18 seconds
+2025-11-10 22:30:31.224 INFO (MainThread) [homeassistant.setup] Setting up ssdp
+2025-11-10 22:30:31.229 INFO (MainThread) [homeassistant.setup] Setup of domain ssdp took 0.00 seconds
+2025-11-10 22:30:31.310 INFO (MainThread) [homeassistant.setup] Setting up conversation
+2025-11-10 22:30:31.311 INFO (MainThread) [homeassistant.setup] Setup of domain conversation took 0.00 seconds
+2025-11-10 22:30:31.321 INFO (MainThread) [homeassistant.setup] Setting up bluetooth
+2025-11-10 22:30:31.364 ERROR (MainThread) [habluetooth.manager] Missing required permissions for Bluetooth management: Missing NET_ADMIN/NET_RAW capabilities for Bluetooth management. Automatic adapter recovery is unavailable. Add NET_ADMIN and NET_RAW capabilities to the container to enable it
+2025-11-10 22:30:31.365 INFO (MainThread) [homeassistant.setup] Setup of domain bluetooth took 0.04 seconds
+2025-11-10 22:30:31.365 INFO (MainThread) [habluetooth.channels.bluez] Bluetooth management socket connection closed
+2025-11-10 22:30:31.383 INFO (MainThread) [homeassistant.setup] Setting up tts
+2025-11-10 22:30:31.386 INFO (MainThread) [homeassistant.setup] Setup of domain tts took 0.00 seconds
+2025-11-10 22:30:31.390 INFO (MainThread) [homeassistant.setup] Setting up event
+2025-11-10 22:30:31.391 INFO (MainThread) [homeassistant.setup] Setup of domain event took 0.00 seconds
+2025-11-10 22:30:31.391 INFO (MainThread) [homeassistant.setup] Setting up sensor
+2025-11-10 22:30:31.392 INFO (MainThread) [homeassistant.setup] Setup of domain sensor took 0.00 seconds
+2025-11-10 22:30:31.393 INFO (MainThread) [homeassistant.components.event] Setting up backup.event
+2025-11-10 22:30:31.395 INFO (MainThread) [homeassistant.components.sensor] Setting up backup.sensor
+2025-11-10 22:30:31.419 INFO (MainThread) [homeassistant.setup] Setting up assist_pipeline
+2025-11-10 22:30:31.420 INFO (MainThread) [homeassistant.setup] Setup of domain assist_pipeline took 0.00 seconds
+2025-11-10 22:30:31.555 INFO (MainThread) [homeassistant.setup] Setting up cloud
+2025-11-10 22:30:31.557 INFO (MainThread) [homeassistant.setup] Setup of domain cloud took 0.00 seconds
+2025-11-10 22:30:31.557 INFO (MainThread) [homeassistant.bootstrap] Setting up stage 2: {'system_health', 'input_number', 'google_translate', 'shopping_list', 'input_text', 'input_boolean', 'scene', 'default_config', 'schedule', 'analytics', 'zone', 'input_button', 'sun', 'timer', 'application_credentials', 'tag', 'input_datetime', 'script', 'automation', 'met', 'radio_browser', 'input_select', 'counter', 'hardware', 'person'}; already set up: {'frontend', 'homeassistant', 'backup', 'logger', 'network'}
+Dependencies: {'usage_prediction', 'camera', 'my', 'homeassistant_alerts', 'history', 'mobile_app', 'media_source', 'blueprint', 'go2rtc', 'stream', 'file', 'image_upload', 'energy', 'trace', 'logbook'}; already set up: {'frontend', 'websocket_api', 'conversation', 'recorder', 'ffmpeg', 'assist_pipeline', 'system_log', 'config', 'backup', 'zeroconf', 'stt', 'webhook', 'http', 'lovelace', 'intent', 'auth', 'file_upload', 'bluetooth', 'tts', 'usb', 'repairs', 'cloud', 'network', 'ssdp', 'search', 'api', 'device_automation', 'wake_word', 'onboarding', 'dhcp', 'diagnostics'}
+2025-11-10 22:30:31.558 INFO (MainThread) [homeassistant.setup] Setting up scene
+2025-11-10 22:30:31.558 INFO (MainThread) [homeassistant.components.scene] Setting up homeassistant.scene
+2025-11-10 22:30:31.559 INFO (MainThread) [homeassistant.setup] Setup of domain scene took 0.00 seconds
+2025-11-10 22:30:31.559 INFO (MainThread) [homeassistant.setup] Setting up camera
+2025-11-10 22:30:31.561 INFO (MainThread) [homeassistant.setup] Setup of domain camera took 0.00 seconds
+2025-11-10 22:30:31.561 INFO (MainThread) [homeassistant.setup] Setting up system_health
+2025-11-10 22:30:31.561 INFO (MainThread) [homeassistant.setup] Setup of domain system_health took 0.00 seconds
+2025-11-10 22:30:31.562 INFO (MainThread) [homeassistant.setup] Setting up input_number
+2025-11-10 22:30:31.563 INFO (MainThread) [homeassistant.setup] Setup of domain input_number took 0.00 seconds
+2025-11-10 22:30:31.563 INFO (MainThread) [homeassistant.setup] Setting up history
+2025-11-10 22:30:31.564 INFO (MainThread) [homeassistant.setup] Setup of domain history took 0.00 seconds
+2025-11-10 22:30:31.564 INFO (MainThread) [homeassistant.setup] Setting up image_upload
+2025-11-10 22:30:31.565 INFO (MainThread) [homeassistant.setup] Setup of domain image_upload took 0.00 seconds
+2025-11-10 22:30:31.565 INFO (MainThread) [homeassistant.setup] Setting up zone
+2025-11-10 22:30:31.566 INFO (MainThread) [homeassistant.setup] Setup of domain zone took 0.00 seconds
+2025-11-10 22:30:31.567 INFO (MainThread) [homeassistant.setup] Setting up person
+2025-11-10 22:30:31.567 INFO (MainThread) [homeassistant.setup] Setting up input_boolean
+2025-11-10 22:30:31.568 INFO (MainThread) [homeassistant.setup] Setup of domain input_boolean took 0.00 seconds
+2025-11-10 22:30:31.568 INFO (MainThread) [homeassistant.setup] Setting up stream
+2025-11-10 22:30:31.568 INFO (MainThread) [homeassistant.setup] Setting up logbook
+2025-11-10 22:30:31.569 INFO (MainThread) [homeassistant.setup] Setup of domain logbook took 0.00 seconds
+2025-11-10 22:30:31.570 INFO (MainThread) [homeassistant.setup] Setting up media_source
+2025-11-10 22:30:31.570 INFO (MainThread) [homeassistant.setup] Setup of domain media_source took 0.00 seconds
+2025-11-10 22:30:31.571 INFO (MainThread) [homeassistant.setup] Setting up trace
+2025-11-10 22:30:31.571 INFO (MainThread) [homeassistant.setup] Setup of domain trace took 0.00 seconds
+2025-11-10 22:30:31.571 INFO (MainThread) [homeassistant.setup] Setting up input_button
+2025-11-10 22:30:31.572 INFO (MainThread) [homeassistant.setup] Setup of domain input_button took 0.00 seconds
+2025-11-10 22:30:31.572 INFO (MainThread) [homeassistant.setup] Setting up timer
+2025-11-10 22:30:31.573 INFO (MainThread) [homeassistant.setup] Setup of domain timer took 0.00 seconds
+2025-11-10 22:30:31.573 INFO (MainThread) [homeassistant.setup] Setting up blueprint
+2025-11-10 22:30:31.573 INFO (MainThread) [homeassistant.setup] Setup of domain blueprint took 0.00 seconds
+2025-11-10 22:30:31.574 INFO (MainThread) [homeassistant.setup] Setting up script
+2025-11-10 22:30:31.574 INFO (MainThread) [homeassistant.setup] Setup of domain script took 0.00 seconds
+2025-11-10 22:30:31.574 INFO (MainThread) [homeassistant.setup] Setting up automation
+2025-11-10 22:30:31.575 INFO (MainThread) [homeassistant.setup] Setup of domain automation took 0.00 seconds
+2025-11-10 22:30:31.575 INFO (MainThread) [homeassistant.setup] Setting up input_select
+2025-11-10 22:30:31.577 INFO (MainThread) [homeassistant.setup] Setup of domain input_select took 0.00 seconds
+2025-11-10 22:30:31.586 INFO (MainThread) [homeassistant.setup] Setup of domain person took 0.02 seconds
+2025-11-10 22:30:31.625 INFO (MainThread) [homeassistant.setup] Setting up google_translate
+2025-11-10 22:30:31.625 INFO (MainThread) [homeassistant.setup] Setup of domain google_translate took 0.00 seconds
+2025-11-10 22:30:31.652 INFO (MainThread) [homeassistant.setup] Setting up shopping_list
+2025-11-10 22:30:31.653 INFO (MainThread) [homeassistant.setup] Setup of domain shopping_list took 0.00 seconds
+2025-11-10 22:30:31.665 INFO (MainThread) [homeassistant.setup] Setting up input_text
+2025-11-10 22:30:31.667 INFO (MainThread) [homeassistant.setup] Setup of domain input_text took 0.00 seconds
+2025-11-10 22:30:31.675 INFO (MainThread) [homeassistant.setup] Setup of domain stream took 0.11 seconds
+2025-11-10 22:30:31.678 INFO (MainThread) [homeassistant.setup] Setting up tag
+2025-11-10 22:30:31.678 INFO (MainThread) [homeassistant.setup] Setup of domain tag took 0.00 seconds
+2025-11-10 22:30:31.686 INFO (MainThread) [homeassistant.setup] Setting up energy
+2025-11-10 22:30:31.686 INFO (MainThread) [homeassistant.setup] Setup of domain energy took 0.00 seconds
+2025-11-10 22:30:31.690 INFO (MainThread) [homeassistant.setup] Setting up file
+2025-11-10 22:30:31.690 INFO (MainThread) [homeassistant.setup] Setup of domain file took 0.00 seconds
+2025-11-10 22:30:31.735 INFO (MainThread) [homeassistant.setup] Setting up go2rtc
+2025-11-10 22:30:31.735 INFO (MainThread) [homeassistant.setup] Setup of domain go2rtc took 0.00 seconds
+2025-11-10 22:30:31.738 INFO (MainThread) [homeassistant.setup] Setting up homeassistant_alerts
+2025-11-10 22:30:31.738 INFO (MainThread) [homeassistant.setup] Setup of domain homeassistant_alerts took 0.00 seconds
+2025-11-10 22:30:31.739 INFO (MainThread) [homeassistant.setup] Setting up my
+2025-11-10 22:30:31.739 INFO (MainThread) [homeassistant.setup] Setup of domain my took 0.00 seconds
+2025-11-10 22:30:31.741 INFO (MainThread) [homeassistant.setup] Setting up sun
+2025-11-10 22:30:31.741 INFO (MainThread) [homeassistant.setup] Setup of domain sun took 0.00 seconds
+2025-11-10 22:30:31.743 INFO (MainThread) [homeassistant.setup] Setting up binary_sensor
+2025-11-10 22:30:31.744 INFO (MainThread) [homeassistant.setup] Setup of domain binary_sensor took 0.00 seconds
+2025-11-10 22:30:31.745 INFO (MainThread) [homeassistant.components.binary_sensor] Setting up sun.binary_sensor
+2025-11-10 22:30:31.746 INFO (MainThread) [homeassistant.components.sensor] Setting up sun.sensor
+2025-11-10 22:30:31.750 INFO (MainThread) [homeassistant.setup] Setting up usage_prediction
+2025-11-10 22:30:31.751 INFO (MainThread) [homeassistant.setup] Setup of domain usage_prediction took 0.00 seconds
+2025-11-10 22:30:31.754 INFO (MainThread) [homeassistant.setup] Setting up schedule
+2025-11-10 22:30:31.756 INFO (MainThread) [homeassistant.setup] Setup of domain schedule took 0.00 seconds
+2025-11-10 22:30:31.759 INFO (MainThread) [homeassistant.setup] Setting up application_credentials
+2025-11-10 22:30:31.760 INFO (MainThread) [homeassistant.setup] Setup of domain application_credentials took 0.00 seconds
+2025-11-10 22:30:31.761 INFO (MainThread) [homeassistant.setup] Setting up input_datetime
+2025-11-10 22:30:31.771 INFO (MainThread) [homeassistant.setup] Setup of domain input_datetime took 0.01 seconds
+2025-11-10 22:30:31.775 INFO (MainThread) [homeassistant.setup] Setting up met
+2025-11-10 22:30:31.775 INFO (MainThread) [homeassistant.setup] Setup of domain met took 0.00 seconds
+2025-11-10 22:30:31.885 INFO (MainThread) [homeassistant.setup] Setting up radio_browser
+2025-11-10 22:30:31.885 INFO (MainThread) [homeassistant.setup] Setup of domain radio_browser took 0.00 seconds
+2025-11-10 22:30:31.887 INFO (MainThread) [homeassistant.setup] Setting up counter
+2025-11-10 22:30:31.888 INFO (MainThread) [homeassistant.setup] Setup of domain counter took 0.00 seconds
+2025-11-10 22:30:31.901 INFO (MainThread) [homeassistant.setup] Setting up hardware
+2025-11-10 22:30:31.903 INFO (MainThread) [homeassistant.setup] Setting up todo
+2025-11-10 22:30:31.906 INFO (MainThread) [homeassistant.setup] Setup of domain todo took 0.00 seconds
+2025-11-10 22:30:31.909 INFO (MainThread) [homeassistant.components.tts] Setting up google_translate.tts
+2025-11-10 22:30:31.911 INFO (MainThread) [homeassistant.components.todo] Setting up shopping_list.todo
+2025-11-10 22:30:31.928 INFO (MainThread) [homeassistant.setup] Setup of domain hardware took 0.03 seconds
+2025-11-10 22:30:31.970 INFO (MainThread) [homeassistant.setup] Setting up mobile_app
+2025-11-10 22:30:31.971 INFO (MainThread) [homeassistant.setup] Setting up notify
+2025-11-10 22:30:31.971 INFO (MainThread) [homeassistant.setup] Setup of domain notify took 0.00 seconds
+2025-11-10 22:30:31.971 INFO (MainThread) [homeassistant.setup] Setup of domain mobile_app took 0.00 seconds
+2025-11-10 22:30:31.971 INFO (MainThread) [homeassistant.components.notify] Setting up notify.mobile_app
+2025-11-10 22:30:31.972 INFO (MainThread) [homeassistant.setup] Setting up default_config
+2025-11-10 22:30:31.972 INFO (MainThread) [homeassistant.setup] Setup of domain default_config took 0.00 seconds
+2025-11-10 22:30:31.976 INFO (MainThread) [homeassistant.components.sensor] Setting up energy.sensor
+2025-11-10 22:30:31.982 INFO (MainThread) [homeassistant.setup] Setting up analytics
+2025-11-10 22:30:31.982 INFO (MainThread) [homeassistant.setup] Setup of domain analytics took 0.00 seconds
+2025-11-10 22:30:31.986 INFO (MainThread) [homeassistant.setup] Setting up weather
+2025-11-10 22:30:31.986 INFO (MainThread) [homeassistant.setup] Setup of domain weather took 0.00 seconds
+2025-11-10 22:30:31.988 INFO (MainThread) [homeassistant.components.weather] Setting up met.weather
+2025-11-10 22:30:32.085 INFO (MainThread) [homeassistant.bootstrap] Home Assistant initialized in 2.15s
+2025-11-10 22:30:32.087 INFO (MainThread) [homeassistant.core] Starting Home Assistant 2025.11.1
+2025-11-10 22:30:32.105 INFO (SyncWorker_0) [homeassistant.loader] Loaded home_connect from homeassistant.components.home_connect
+2025-11-10 22:30:32.105 INFO (SyncWorker_2) [homeassistant.loader] Loaded thread from homeassistant.components.thread
+2025-11-10 22:30:32.397 INFO (SyncWorker_3) [homeassistant.loader] Loaded apple_tv from homeassistant.components.apple_tv
+2025-11-10 22:30:32.398 INFO (SyncWorker_0) [homeassistant.loader] Loaded heos from homeassistant.components.heos
+2025-11-10 22:30:42.605 INFO (SyncWorker_4) [homeassistant.loader] Loaded homekit_controller from homeassistant.components.homekit_controller
+2025-11-10 22:30:42.606 INFO (SyncWorker_4) [homeassistant.loader] Loaded proximity from homeassistant.components.proximity
+2025-11-10 22:30:42.606 INFO (SyncWorker_4) [homeassistant.loader] Loaded time_date from homeassistant.components.time_date
+2025-11-10 22:30:42.606 INFO (SyncWorker_4) [homeassistant.loader] Loaded emulated_roku from homeassistant.components.emulated_roku
+2025-11-10 22:30:42.606 INFO (SyncWorker_4) [homeassistant.loader] Loaded waze_travel_time from homeassistant.components.waze_travel_time
+2025-11-10 22:30:42.607 INFO (SyncWorker_4) [homeassistant.loader] Loaded generic_thermostat from homeassistant.components.generic_thermostat
+2025-11-10 22:30:42.607 INFO (SyncWorker_4) [homeassistant.loader] Loaded garages_amsterdam from homeassistant.components.garages_amsterdam
+2025-11-10 22:30:42.607 INFO (SyncWorker_4) [homeassistant.loader] Loaded group from homeassistant.components.group
+2025-11-10 22:30:42.607 INFO (SyncWorker_4) [homeassistant.loader] Loaded holiday from homeassistant.components.holiday
+2025-11-10 22:30:42.607 INFO (SyncWorker_4) [homeassistant.loader] Loaded alert from homeassistant.components.alert
+2025-11-10 22:30:42.608 INFO (SyncWorker_4) [homeassistant.loader] Loaded nextbus from homeassistant.components.nextbus
+2025-11-10 22:30:42.608 INFO (SyncWorker_4) [homeassistant.loader] Loaded random from homeassistant.components.random
+2025-11-10 22:30:42.609 INFO (SyncWorker_4) [homeassistant.loader] Loaded zodiac from homeassistant.components.zodiac
+2025-11-10 22:30:42.609 INFO (SyncWorker_4) [homeassistant.loader] Loaded statistics from homeassistant.components.statistics
+2025-11-10 22:30:42.610 INFO (SyncWorker_4) [homeassistant.loader] Loaded integration from homeassistant.components.integration
+2025-11-10 22:30:42.610 INFO (SyncWorker_4) [homeassistant.loader] Loaded local_ip from homeassistant.components.local_ip
+2025-11-10 22:30:42.611 INFO (SyncWorker_4) [homeassistant.loader] Loaded vegehub from homeassistant.components.vegehub
+2025-11-10 22:30:42.611 INFO (SyncWorker_4) [homeassistant.loader] Loaded rpi_power from homeassistant.components.rpi_power
+2025-11-10 22:30:42.612 INFO (SyncWorker_4) [homeassistant.loader] Loaded filesize from homeassistant.components.filesize
+2025-11-10 22:30:42.612 INFO (SyncWorker_4) [homeassistant.loader] Loaded remote_calendar from homeassistant.components.remote_calendar
+2025-11-10 22:30:42.613 INFO (SyncWorker_4) [homeassistant.loader] Loaded cpuspeed from homeassistant.components.cpuspeed
+2025-11-10 22:30:42.614 INFO (SyncWorker_4) [homeassistant.loader] Loaded moehlenhoff_alpha2 from homeassistant.components.moehlenhoff_alpha2
+2025-11-10 22:30:42.614 INFO (SyncWorker_4) [homeassistant.loader] Loaded min_max from homeassistant.components.min_max
+2025-11-10 22:30:42.615 INFO (SyncWorker_4) [homeassistant.loader] Loaded islamic_prayer_times from homeassistant.components.islamic_prayer_times
+2025-11-10 22:30:42.616 INFO (SyncWorker_4) [homeassistant.loader] Loaded cert_expiry from homeassistant.components.cert_expiry
+2025-11-10 22:30:42.616 INFO (SyncWorker_4) [homeassistant.loader] Loaded trend from homeassistant.components.trend
+2025-11-10 22:30:42.616 INFO (SyncWorker_4) [homeassistant.loader] Loaded generic_hygrostat from homeassistant.components.generic_hygrostat
+2025-11-10 22:30:42.617 INFO (SyncWorker_4) [homeassistant.loader] Loaded tod from homeassistant.components.tod
+2025-11-10 22:30:42.617 INFO (SyncWorker_4) [homeassistant.loader] Loaded generic from homeassistant.components.generic
+2025-11-10 22:30:42.618 INFO (SyncWorker_4) [homeassistant.loader] Loaded local_calendar from homeassistant.components.local_calendar
+2025-11-10 22:30:42.618 INFO (SyncWorker_4) [homeassistant.loader] Loaded demo from homeassistant.components.demo
+2025-11-10 22:30:42.619 INFO (SyncWorker_4) [homeassistant.loader] Loaded aurora from homeassistant.components.aurora
+2025-11-10 22:30:42.619 INFO (SyncWorker_4) [homeassistant.loader] Loaded mold_indicator from homeassistant.components.mold_indicator
+2025-11-10 22:30:42.619 INFO (SyncWorker_4) [homeassistant.loader] Loaded workday from homeassistant.components.workday
+2025-11-10 22:30:42.619 INFO (SyncWorker_4) [homeassistant.loader] Loaded derivative from homeassistant.components.derivative
+2025-11-10 22:30:42.620 INFO (SyncWorker_4) [homeassistant.loader] Loaded utility_meter from homeassistant.components.utility_meter
+2025-11-10 22:30:42.620 INFO (SyncWorker_4) [homeassistant.loader] Loaded nmap_tracker from homeassistant.components.nmap_tracker
+2025-11-10 22:30:42.620 INFO (SyncWorker_4) [homeassistant.loader] Loaded energenie_power_sockets from homeassistant.components.energenie_power_sockets
+2025-11-10 22:30:42.620 INFO (SyncWorker_4) [homeassistant.loader] Loaded google_travel_time from homeassistant.components.google_travel_time
+2025-11-10 22:30:42.620 INFO (SyncWorker_4) [homeassistant.loader] Loaded version from homeassistant.components.version
+2025-11-10 22:30:42.621 INFO (SyncWorker_4) [homeassistant.loader] Loaded growatt_server from homeassistant.components.growatt_server
+2025-11-10 22:30:42.621 INFO (SyncWorker_4) [homeassistant.loader] Loaded filter from homeassistant.components.filter
+2025-11-10 22:30:42.621 INFO (SyncWorker_4) [homeassistant.loader] Loaded history_stats from homeassistant.components.history_stats
+2025-11-10 22:30:42.621 INFO (SyncWorker_4) [homeassistant.loader] Loaded irm_kmi from homeassistant.components.irm_kmi
+2025-11-10 22:30:42.621 INFO (SyncWorker_4) [homeassistant.loader] Loaded season from homeassistant.components.season
+2025-11-10 22:30:42.622 INFO (SyncWorker_4) [homeassistant.loader] Loaded local_todo from homeassistant.components.local_todo
+2025-11-10 22:30:42.622 INFO (SyncWorker_4) [homeassistant.loader] Loaded uptime from homeassistant.components.uptime
+2025-11-10 22:30:42.622 INFO (SyncWorker_4) [homeassistant.loader] Loaded plant from homeassistant.components.plant
+2025-11-10 22:30:42.622 INFO (SyncWorker_4) [homeassistant.loader] Loaded threshold from homeassistant.components.threshold
+2025-11-10 22:30:42.622 INFO (SyncWorker_4) [homeassistant.loader] Loaded moon from homeassistant.components.moon
+2025-11-10 22:30:52.114 INFO (SyncWorker_4) [homeassistant.loader] Loaded playstation_network from homeassistant.components.playstation_network
+2025-11-10 22:31:15.751 WARNING (SyncWorker_2) [custom_components.pp_reader.data.reader] parse_data_portfolio is deprecated; use custom_components.pp_reader.services.parser_pipeline.async_parse_portfolio instead
+2025-11-10 22:31:15.813 INFO (MainThread) [homeassistant.setup] Setting up pp_reader
+2025-11-10 22:31:15.814 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:31:15.831 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.831 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.831 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.832 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:31:15.832 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:31:15.832 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:31:15.832 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:31:15.832 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.832 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.833 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.835 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.835 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.835 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.835 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:15.835 DEBUG (SyncWorker_5) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:31:15.855 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:31:15.855 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:31:15.861 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:31:15.949 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
 Traceback (most recent call last):
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: '/config/pp_reader_data'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 658, in async_setup_entry
-    await async_run_executor_job(hass, initialize_database_schema, db_path)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/util/__init__.py", line 24, in async_run_executor_job
-    return await result  # type: ignore[no-any-return]
-           ^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
   File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
     result = self.fn(*self.args, **self.kwargs)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/db_init.py", line 453, in initialize_database_schema
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 726, in mkdir
-    self.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-PermissionError: [Errno 13] Permission denied: '/config'
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:31:15.952 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
 
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 662, in async_setup_entry
-    raise ConfigEntryNotReady(msg) from exc
-homeassistant.exceptions.ConfigEntryNotReady: Datenbank konnte nicht initialisiert werden
-2025-11-10 12:25:17.856 INFO (MainThread) [homeassistant.setup] Setting up google_translate
-2025-11-10 12:25:17.856 INFO (MainThread) [homeassistant.setup] Setup of domain google_translate took 0.00 seconds
-2025-11-10 12:25:17.856 INFO (MainThread) [homeassistant.setup] Setting up homeassistant_alerts
-2025-11-10 12:25:17.856 INFO (MainThread) [homeassistant.setup] Setup of domain homeassistant_alerts took 0.00 seconds
-2025-11-10 12:25:17.858 INFO (MainThread) [homeassistant.setup] Setting up met
-2025-11-10 12:25:17.858 INFO (MainThread) [homeassistant.setup] Setup of domain met took 0.00 seconds
-2025-11-10 12:25:17.908 INFO (MainThread) [homeassistant.setup] Setting up go2rtc
-2025-11-10 12:25:17.908 INFO (MainThread) [homeassistant.setup] Setup of domain go2rtc took 0.00 seconds
-2025-11-10 12:25:17.924 INFO (MainThread) [homeassistant.setup] Setting up energy
-2025-11-10 12:25:17.924 INFO (MainThread) [homeassistant.setup] Setup of domain energy took 0.00 seconds
-2025-11-10 12:25:18.111 INFO (MainThread) [homeassistant.setup] Setting up input_text
-2025-11-10 12:25:18.112 INFO (MainThread) [homeassistant.setup] Setup of domain input_text took 0.00 seconds
-2025-11-10 12:25:18.112 INFO (MainThread) [homeassistant.setup] Setting up my
-2025-11-10 12:25:18.112 INFO (MainThread) [homeassistant.setup] Setup of domain my took 0.00 seconds
-2025-11-10 12:25:18.115 INFO (MainThread) [homeassistant.setup] Setting up file
-2025-11-10 12:25:18.116 INFO (MainThread) [homeassistant.setup] Setup of domain file took 0.00 seconds
-2025-11-10 12:25:18.118 INFO (MainThread) [homeassistant.setup] Setting up sun
-2025-11-10 12:25:18.118 INFO (MainThread) [homeassistant.setup] Setup of domain sun took 0.00 seconds
-2025-11-10 12:25:18.120 INFO (MainThread) [homeassistant.setup] Setting up binary_sensor
-2025-11-10 12:25:18.121 INFO (MainThread) [homeassistant.setup] Setup of domain binary_sensor took 0.00 seconds
-2025-11-10 12:25:18.122 INFO (MainThread) [homeassistant.setup] Setting up input_datetime
-2025-11-10 12:25:18.123 INFO (MainThread) [homeassistant.setup] Setup of domain input_datetime took 0.00 seconds
-2025-11-10 12:25:18.127 INFO (MainThread) [homeassistant.components.binary_sensor] Setting up sun.binary_sensor
-2025-11-10 12:25:18.128 INFO (MainThread) [homeassistant.components.sensor] Setting up sun.sensor
-2025-11-10 12:25:18.132 INFO (MainThread) [homeassistant.setup] Setting up todo
-2025-11-10 12:25:18.134 INFO (MainThread) [homeassistant.setup] Setup of domain todo took 0.00 seconds
-2025-11-10 12:25:18.140 INFO (MainThread) [homeassistant.components.todo] Setting up shopping_list.todo
-2025-11-10 12:25:18.158 INFO (MainThread) [homeassistant.setup] Setting up mobile_app
-2025-11-10 12:25:18.159 INFO (MainThread) [homeassistant.setup] Setting up notify
-2025-11-10 12:25:18.159 INFO (MainThread) [homeassistant.setup] Setup of domain notify took 0.00 seconds
-2025-11-10 12:25:18.159 INFO (MainThread) [homeassistant.setup] Setup of domain mobile_app took 0.00 seconds
-2025-11-10 12:25:18.160 INFO (MainThread) [homeassistant.components.notify] Setting up notify.mobile_app
-2025-11-10 12:25:18.160 INFO (MainThread) [homeassistant.setup] Setting up default_config
-2025-11-10 12:25:18.160 INFO (MainThread) [homeassistant.setup] Setup of domain default_config took 0.00 seconds
-2025-11-10 12:25:18.169 INFO (MainThread) [homeassistant.components.tts] Setting up google_translate.tts
-2025-11-10 12:25:18.171 INFO (MainThread) [homeassistant.components.sensor] Setting up energy.sensor
-2025-11-10 12:25:18.175 INFO (MainThread) [homeassistant.setup] Setting up analytics
-2025-11-10 12:25:18.175 INFO (MainThread) [homeassistant.setup] Setup of domain analytics took 0.00 seconds
-2025-11-10 12:25:18.223 INFO (MainThread) [homeassistant.setup] Setting up weather
-2025-11-10 12:25:18.224 INFO (MainThread) [homeassistant.setup] Setup of domain weather took 0.00 seconds
-2025-11-10 12:25:18.225 INFO (MainThread) [homeassistant.components.weather] Setting up met.weather
-2025-11-10 12:25:18.227 INFO (MainThread) [homeassistant.bootstrap] Home Assistant initialized in 2.32s
-2025-11-10 12:25:18.228 INFO (MainThread) [homeassistant.core] Starting Home Assistant 2025.11.1
-2025-11-10 12:25:18.239 INFO (SyncWorker_1) [homeassistant.loader] Loaded thread from homeassistant.components.thread
-2025-11-10 12:25:18.240 INFO (SyncWorker_5) [homeassistant.loader] Loaded denonavr from homeassistant.components.denonavr
-2025-11-10 12:25:18.243 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:31:15.954 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.095 seconds (success: False)
+2025-11-10 22:31:15.954 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
 Traceback (most recent call last):
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: '/config/pp_reader_data'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 658, in async_setup_entry
-    await async_run_executor_job(hass, initialize_database_schema, db_path)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/util/__init__.py", line 24, in async_run_executor_job
-    return await result  # type: ignore[no-any-return]
-           ^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
   File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
     result = self.fn(*self.args, **self.kwargs)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/db_init.py", line 453, in initialize_database_schema
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 726, in mkdir
-    self.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-PermissionError: [Errno 13] Permission denied: '/config'
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
 
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 662, in async_setup_entry
-    raise ConfigEntryNotReady(msg) from exc
-homeassistant.exceptions.ConfigEntryNotReady: Datenbank konnte nicht initialisiert werden
-2025-11-10 12:25:18.292 INFO (SyncWorker_0) [homeassistant.loader] Loaded apple_tv from homeassistant.components.apple_tv
-2025-11-10 12:25:20.941 INFO (SyncWorker_0) [homeassistant.loader] Loaded heos from homeassistant.components.heos
-2025-11-10 12:25:28.479 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
-Traceback (most recent call last):
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: '/config/pp_reader_data'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 658, in async_setup_entry
-    await async_run_executor_job(hass, initialize_database_schema, db_path)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/util/__init__.py", line 24, in async_run_executor_job
-    return await result  # type: ignore[no-any-return]
-           ^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
-    result = self.fn(*self.args, **self.kwargs)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/db_init.py", line 453, in initialize_database_schema
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 726, in mkdir
-    self.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-PermissionError: [Errno 13] Permission denied: '/config'
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
 
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 662, in async_setup_entry
-    raise ConfigEntryNotReady(msg) from exc
-homeassistant.exceptions.ConfigEntryNotReady: Datenbank konnte nicht initialisiert werden
-2025-11-10 12:25:37.764 INFO (SyncWorker_6) [homeassistant.loader] Loaded playstation_network from homeassistant.components.playstation_network
-2025-11-10 12:25:48.825 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
-Traceback (most recent call last):
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: '/config/pp_reader_data'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 658, in async_setup_entry
-    await async_run_executor_job(hass, initialize_database_schema, db_path)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/util/__init__.py", line 24, in async_run_executor_job
-    return await result  # type: ignore[no-any-return]
-           ^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
-    result = self.fn(*self.args, **self.kwargs)
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/db_init.py", line 453, in initialize_database_schema
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 726, in mkdir
-    self.parent.mkdir(parents=True, exist_ok=True)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/pathlib/_local.py", line 722, in mkdir
-    os.mkdir(self, mode)
-    ~~~~~~~~^^^^^^^^^^^^
-PermissionError: [Errno 13] Permission denied: '/config'
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
 
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 662, in async_setup_entry
-    raise ConfigEntryNotReady(msg) from exc
-homeassistant.exceptions.ConfigEntryNotReady: Datenbank konnte nicht initialisiert werden
-2025-11-10 12:26:18.731 INFO (Recorder) [homeassistant.components.recorder.pool.RecorderPool] Pool recreating
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:31:18.030 INFO (SyncWorker_0) [homeassistant.loader] Loaded denonavr from homeassistant.components.denonavr
+2025-11-10 22:31:21.206 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:31:21.211 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.211 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.211 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.212 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:31:21.212 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:31:21.212 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:31:21.212 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.213 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.214 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.214 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.214 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.214 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:21.214 DEBUG (SyncWorker_1) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:31:21.216 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:31:21.216 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:31:21.224 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:31:21.338 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:31:21.340 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:31:21.344 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.121 seconds (success: False)
+2025-11-10 22:31:21.344 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:31:31.805 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:31:31.810 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.810 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.810 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.811 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:31:31.811 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:31:31.811 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:31:31.811 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:31:31.811 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.811 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.812 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.813 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.813 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.813 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.813 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.813 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:31.814 DEBUG (SyncWorker_4) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:31:31.817 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:31:31.817 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:31:31.826 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:31:31.932 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:31:31.934 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:31:31.936 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.114 seconds (success: False)
+2025-11-10 22:31:31.936 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:31:52.090 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:31:52.095 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.095 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.095 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.096 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:31:52.096 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:31:52.096 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.097 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.098 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:31:52.099 DEBUG (SyncWorker_0) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:31:52.103 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:31:52.103 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:31:52.110 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:31:52.215 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:31:52.217 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:31:52.220 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.112 seconds (success: False)
+2025-11-10 22:31:52.220 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:32:30.013 INFO (SyncWorker_5) [homeassistant.loader] Loaded upnp from homeassistant.components.upnp
+2025-11-10 22:32:32.392 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:32:32.398 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.398 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.399 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.399 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:32:32.399 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.400 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.401 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.402 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:32:32.402 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:32:32.405 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:32:32.405 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:32:32.413 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:32:32.520 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:32:32.522 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:32:32.525 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.115 seconds (success: False)
+2025-11-10 22:32:32.525 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:33:52.621 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:33:52.626 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.626 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.627 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.627 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:33:52.628 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:33:52.628 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:33:52.628 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:33:52.629 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.629 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.629 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.629 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.629 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.629 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.630 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:33:52.631 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:33:52.634 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:33:52.634 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:33:52.642 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:33:52.751 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:33:52.753 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:33:52.755 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.115 seconds (success: False)
+2025-11-10 22:33:52.755 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:35:13.191 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:35:13.196 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.196 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.197 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.197 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:35:13.197 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:35:13.197 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:35:13.197 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:35:13.198 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.198 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.198 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.198 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.198 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.198 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.199 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:35:13.200 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:35:13.203 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:35:13.203 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:35:13.212 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:35:13.328 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:35:13.331 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:35:13.334 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.126 seconds (success: False)
+2025-11-10 22:35:13.334 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:36:33.612 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:36:33.615 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.616 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.616 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.616 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.617 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:36:33.618 DEBUG (SyncWorker_2) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:36:33.620 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:36:33.620 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:36:33.626 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:36:33.705 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:36:33.707 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:36:33.709 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.085 seconds (success: False)
+2025-11-10 22:36:33.709 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:37:53.964 DEBUG (MainThread) [custom_components.pp_reader] Panel-Placeholder 'ppreader' registriert
+2025-11-10 22:37:53.970 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Preis-Spalten bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.970 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_native' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.970 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Kaufpreis-Erweiterungsspalten bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.971 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'security_currency_total' erforderlich
+2025-11-10 22:37:53.971 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'account_currency_total' erforderlich
+2025-11-10 22:37:53.971 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_security' erforderlich
+2025-11-10 22:37:53.971 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Keine Aktualisierung für 'avg_price_account' erforderlich
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_security' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'avg_price_account' in 'portfolio_securities' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.972 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'fx_rates' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.973 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'fetched_at' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.973 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'data_source' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.973 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provider' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.973 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.db_init] Runtime-Migration: Spalte 'provenance' in 'ingestion_historical_prices' bereits vorhanden - nichts zu tun
+2025-11-10 22:37:53.973 DEBUG (SyncWorker_3) [custom_components.pp_reader.data.migrations.cleanup] No legacy portfolio_securities columns detected - skipping cleanup
+2025-11-10 22:37:53.976 INFO (MainThread) [custom_components.pp_reader] Preis-Debug Option=OFF (globale Logger-Konfiguration kann DEBUG-Ausgaben dennoch anzeigen) effective={'custom_components.pp_reader.prices': 'INFO', 'custom_components.pp_reader.prices.price_service': 'INFO', 'custom_components.pp_reader.prices.yahooquery_provider': 'INFO', 'custom_components.pp_reader.prices.revaluation': 'INFO', 'custom_components.pp_reader.prices.symbols': 'INFO', 'custom_components.pp_reader.prices.provider_base': 'INFO'}
+2025-11-10 22:37:53.976 INFO (MainThread) [custom_components.pp_reader] Ersetze vorhandenes Panel 'ppreader' (alt=None) durch entry_id=01K9QTW9Z488V46F01GCB6VYK5
+2025-11-10 22:37:53.985 INFO (MainThread) [custom_components.pp_reader.data.coordinator] Dateiänderung erkannt, starte Datenaktualisierung...
+2025-11-10 22:37:54.093 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Unerwarteter Fehler im Parserlauf
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+2025-11-10 22:37:54.094 ERROR (MainThread) [custom_components.pp_reader.data.coordinator] Fehler beim Laden der Daten
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+2025-11-10 22:37:54.097 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.115 seconds (success: False)
+2025-11-10 22:37:54.097 ERROR (MainThread) [custom_components.pp_reader] Fehler beim Setup des Config Entries
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 418, in _sync_portfolio_file
+    parsed_client = await parser_pipeline.async_parse_portfolio(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 79, in async_parse_portfolio
+    parsed_client = await hass.async_add_executor_job(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        _build_parsed_client, proto_client
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 153, in _build_parsed_client
+    securities = list(_iter_securities(proto_client))
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/services/parser_pipeline.py", line 200, in _iter_securities
+    parsed_security = parsed.ParsedSecurity.from_proto(security)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 328, in from_proto
+    ParsedSecurityEvent.from_proto(event) for event in security.events
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 215, in from_proto
+    data=_parse_any_sequence(getattr(event, "data", [])),
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 131, in _parse_any_sequence
+    return [_parse_any_value(value) for value in values]
+            ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/models/parsed.py", line 98, in _parse_any_value
+    kind = value.WhichOneof("value")
+ValueError: Protocol message PAnyValue has no "value" field.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 331, in _async_update_data
+    await self._sync_portfolio_file(last_update_truncated)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 449, in _sync_portfolio_file
+    raise UpdateFailed(msg) from exc
+homeassistant.helpers.update_coordinator.UpdateFailed: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 403, in _async_refresh
+    self.data = await self._async_update_data()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/data/coordinator.py", line 380, in _async_update_data
+    raise UpdateFailed(msg) from e
+homeassistant.helpers.update_coordinator.UpdateFailed: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/__init__.py", line 693, in async_setup_entry
+    await coordinator.async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 304, in async_config_entry_first_refresh
+    await self._async_config_entry_first_refresh()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/helpers/update_coordinator.py", line 336, in _async_config_entry_first_refresh
+    raise ex
+homeassistant.exceptions.ConfigEntryNotReady: Update fehlgeschlagen: Parserlauf fehlgeschlagen
+2025-11-10 22:38:03.488 INFO (Recorder) [homeassistant.components.recorder.pool.RecorderPool] Pool recreating

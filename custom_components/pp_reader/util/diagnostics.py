@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import sqlite3
 from collections.abc import Mapping
@@ -31,9 +32,9 @@ _LOGGER = logging.getLogger("custom_components.pp_reader.util.diagnostics")
 
 def _get_normalization_module() -> Any:
     """Import the normalization pipeline lazily to avoid circular imports."""
-    from custom_components.pp_reader.data import normalization_pipeline as pipeline
-
-    return pipeline
+    return importlib.import_module(
+        "custom_components.pp_reader.data.normalization_pipeline"
+    )
 
 
 def _normalized_unavailable(reason: str, **extra: Any) -> dict[str, Any]:
@@ -422,10 +423,6 @@ async def async_get_parser_diagnostics(
         if isinstance(candidate, datetime):
             fx_last_refresh = _serialize_datetime(candidate)
 
-    flag_snapshot: dict[str, bool] = {}
-    if entry_id:
-        flag_snapshot = feature_flag_snapshot(hass, entry_id=entry_id)
-
     if not path.exists():
         base_payload = {
             "ingestion": {
@@ -435,7 +432,7 @@ async def async_get_parser_diagnostics(
             "enrichment": {
                 "available": False,
                 "reason": "database not accessible",
-                "feature_flags": flag_snapshot,
+                "feature_flags": {},
                 "fx": {
                     "last_refresh": fx_last_refresh,
                 },
@@ -453,6 +450,10 @@ async def async_get_parser_diagnostics(
         )
 
         return base_payload
+
+    flag_snapshot: dict[str, bool] = {}
+    if entry_id:
+        flag_snapshot = feature_flag_snapshot(hass, entry_id=entry_id)
 
     def _collect() -> dict[str, Any]:
         conn = sqlite3.connect(str(path))

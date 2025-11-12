@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,10 +17,19 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 
+from custom_components.pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates,
+    load_latest_rates,
+)
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import round_currency
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    round_currency,
+    round_price,
+)
+from custom_components.pp_reader.util.datetime import UTC
 
-from .db_access import get_last_file_update
+from .db_access import get_accounts, get_last_file_update
 from .normalization_pipeline import (
     async_fetch_security_history,
     async_normalize_security_snapshot,
@@ -37,6 +46,7 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
+
 
 
 def _get_entry_data(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:
@@ -81,7 +91,7 @@ def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
     return currencies
 
 
-def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:
+def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
     """Coerce persisted security snapshots into JSON-serializable mappings."""
     if snapshot is None:
         return {}
@@ -100,6 +110,131 @@ def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:
         value = result.get(key)
         if isinstance(value, dict):
             result[key] = dict(value)
+
+    average_cost = result.get("average_cost")
+    if not isinstance(average_cost, dict):
+        average_cost = {}
+        result["average_cost"] = average_cost
+
+    if isinstance(average_cost, dict):
+        if average_cost.get("eur") is None:
+            purchase_value_eur = result.get("purchase_value_eur")
+            total_holdings = result.get("total_holdings") or 0
+            if purchase_value_eur is not None and total_holdings:
+                average_cost["eur"] = round_currency(
+                    purchase_value_eur / total_holdings,
+                    decimals=6,
+                    default=0.0,
+                )
+            elif total_holdings == 0:
+                average_cost["eur"] = 0.0
+        average_cost.setdefault("security", average_cost.get("security"))
+        average_cost.setdefault("account", average_cost.get("account"))
+        average_cost.setdefault("native", average_cost.get("security"))
+        average_cost.setdefault("source", average_cost.get("source") or "totals")
+        if average_cost.get("coverage_ratio") is None:
+            total_holdings = result.get("total_holdings")
+            average_cost["coverage_ratio"] = (
+                1.0 if total_holdings is not None else None
+            )
+
+    aggregation = result.get("aggregation")
+    if not isinstance(aggregation, dict):
+        aggregation = {}
+        result["aggregation"] = aggregation
+
+    total_holdings = result.get("total_holdings")
+    if total_holdings is None:
+        total_holdings = aggregation.get("total_holdings")
+    if total_holdings is None:
+        total_holdings = 0.0
+        aggregation["total_holdings"] = total_holdings
+    aggregation.setdefault(
+        "positive_holdings",
+        total_holdings if total_holdings > 0 else 0.0,
+    )
+
+    purchase_value_eur = result.get("purchase_value_eur")
+    if purchase_value_eur is None:
+        purchase_value_eur = aggregation.get("purchase_value_eur")
+    if purchase_value_eur is not None:
+        aggregation.setdefault("purchase_value_eur", purchase_value_eur)
+        if aggregation.get("purchase_value_cents") is None:
+            aggregation["purchase_value_cents"] = round(purchase_value_eur * 100)
+
+    purchase_total_security = aggregation.get("purchase_total_security")
+    if purchase_total_security is None:
+        purchase_total_security = result.get("purchase_total_security")
+        if purchase_total_security is not None:
+            aggregation["purchase_total_security"] = purchase_total_security
+    if aggregation.get("security_currency_total") is None:
+        aggregation["security_currency_total"] = purchase_total_security
+
+    purchase_total_account = aggregation.get("purchase_total_account")
+    if purchase_total_account is None:
+        purchase_total_account = result.get("purchase_total_account")
+        if purchase_total_account is not None:
+            aggregation["purchase_total_account"] = purchase_total_account
+    if aggregation.get("account_currency_total") is None:
+        aggregation["account_currency_total"] = purchase_total_account
+
+    performance = result.get("performance")
+    if not isinstance(performance, dict):
+        performance = {}
+        result["performance"] = performance
+
+    market_value_eur = result.get("market_value_eur")
+    purchase_value_eur = result.get("purchase_value_eur")
+    if performance.get("gain_abs") is None and None not in (
+        market_value_eur,
+        purchase_value_eur,
+    ):
+        performance["gain_abs"] = round_currency(
+            (market_value_eur or 0.0) - (purchase_value_eur or 0.0),
+            default=0.0,
+        )
+    if (
+        performance.get("total_change_eur") is None
+        and performance.get("gain_abs") is not None
+    ):
+        performance["total_change_eur"] = performance["gain_abs"]
+    if (
+        performance.get("gain_pct") is None
+        and performance.get("gain_abs") is not None
+    ):
+        denominator = purchase_value_eur or 0.0
+        performance["gain_pct"] = (
+            round_currency(
+                (performance["gain_abs"] / denominator) * 100,
+                default=0.0,
+            )
+            if denominator
+            else 0.0
+        )
+    if (
+        performance.get("total_change_pct") is None
+        and performance.get("total_change_eur") is not None
+    ):
+        denominator = purchase_value_eur or 0.0
+        performance["total_change_pct"] = (
+            round_currency(
+                (performance["total_change_eur"] / denominator) * 100,
+                default=0.0,
+            )
+            if denominator
+            else 0.0
+        )
+
+    day_change = performance.get("day_change")
+    if not isinstance(day_change, dict):
+        day_change = {}
+        performance["day_change"] = day_change
+
+    day_change.setdefault("price_change_native", None)
+    day_change.setdefault("price_change_eur", None)
+    day_change.setdefault("change_pct", None)
+    day_change.setdefault("source", performance.get("source") or "metrics")
+    day_change.setdefault("coverage_ratio", performance.get("coverage_ratio"))
 
     return result
 
@@ -135,7 +270,12 @@ def _portfolio_summaries(result: Any) -> list[dict[str, Any]]:
             "has_current_value": serialized.get("has_current_value"),
             "performance": serialized.get("performance"),
         }
-        optional_keys = ("coverage_ratio", "provenance", "metric_run_uuid")
+        optional_keys = (
+            "coverage_ratio",
+            "provenance",
+            "metric_run_uuid",
+            "data_state",
+        )
         for key in optional_keys:
             if key in serialized:
                 formatted[key] = serialized[key]
@@ -145,8 +285,9 @@ def _portfolio_summaries(result: Any) -> list[dict[str, Any]]:
 
 def _positions_payload(portfolio: Any) -> list[dict[str, Any]]:
     """Convert PositionSnapshot dataclasses to websocket payload entries."""
-    return [
-        {
+    entries: list[dict[str, Any]] = []
+    for position in portfolio.positions:
+        entry: dict[str, Any] = {
             "security_uuid": position.security_uuid,
             "name": position.name,
             "current_holdings": round_currency(
@@ -169,8 +310,39 @@ def _positions_payload(portfolio: Any) -> list[dict[str, Any]]:
             "performance": dict(position.performance),
             "aggregation": dict(position.aggregation),
         }
-        for position in portfolio.positions
-    ]
+        if position.coverage_ratio is not None:
+            entry["coverage_ratio"] = position.coverage_ratio
+        if position.provenance:
+            entry["provenance"] = position.provenance
+        if position.metric_run_uuid:
+            entry["metric_run_uuid"] = position.metric_run_uuid
+        if position.last_price_native is not None:
+            entry["last_price_native"] = round_price(
+                position.last_price_native,
+                decimals=6,
+            )
+        if position.last_price_eur is not None:
+            entry["last_price_eur"] = round_price(
+                position.last_price_eur,
+                decimals=6,
+            )
+        if position.last_close_native is not None:
+            entry["last_close_native"] = round_price(
+                position.last_close_native,
+                decimals=6,
+            )
+        if position.last_close_eur is not None:
+            entry["last_close_eur"] = round_price(
+                position.last_close_eur,
+                decimals=6,
+            )
+        if position.data_state.status != "ok" or position.data_state.message:
+            entry["data_state"] = {
+                "status": position.data_state.status,
+                "message": position.data_state.message,
+            }
+        entries.append(entry)
+    return entries
 def _wrap_with_loop_fallback(
     handler: Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any],
 ) -> Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any]:
@@ -347,18 +519,48 @@ async def ws_get_accounts(
         return
 
     try:
-        snapshot = await async_normalize_snapshot(hass, db_path)
+        db_accounts = await hass.async_add_executor_job(get_accounts, db_path)
     except Exception:
-        _LOGGER.exception("Fehler beim Laden der Normalisierung (accounts)")
+        _LOGGER.exception("Fehler beim Laden der Accounts")
         connection.send_error(
             msg["id"],
             "db_error",
-            "Fehler beim Laden der Normalisierung",
+            "Fehler beim Laden der Accounts",
         )
         return
 
-    account_data = _accounts_payload(snapshot)
-    connection.send_result(msg["id"], {"accounts": account_data})
+    fx_currencies = _collect_active_fx_currencies(db_accounts)
+    fx_rates: dict[str, float] = {}
+    if fx_currencies:
+        today = datetime.now(UTC)
+        await ensure_exchange_rates_for_dates([today], fx_currencies, db_path)
+        fx_rates = await load_latest_rates(today, db_path)
+
+    payload: list[dict[str, Any]] = []
+    for account in db_accounts:
+        currency = getattr(account, "currency_code", "EUR") or "EUR"
+        formatted = {
+            "name": getattr(account, "name", "Unknown"),
+            "currency_code": currency,
+        }
+        orig_raw = cent_to_eur(getattr(account, "balance", 0), default=0.0)
+        orig_balance = round_currency(orig_raw, default=None)
+        formatted["orig_balance"] = orig_balance or 0.0
+
+        normalized = currency.strip().upper() if isinstance(currency, str) else "EUR"
+        if normalized == "EUR":
+            formatted["balance"] = orig_balance
+        else:
+            rate = fx_rates.get(normalized)
+            formatted["balance"] = (
+                round_currency((orig_balance or 0.0) / rate, default=None)
+                if rate
+                else None
+            )
+
+        payload.append(formatted)
+
+    connection.send_result(msg["id"], {"accounts": payload})
 
 
 # === Websocket FileUpdate-Timestamp ===
@@ -421,8 +623,9 @@ async def ws_get_last_file_update(
         if last_file_update_raw:
             try:
                 parsed_update = datetime.strptime(
-                    last_file_update_raw, "%Y-%m-%dT%H:%M:%S"
-                ).replace(tzinfo=timezone.utc)  # noqa: UP017
+                    last_file_update_raw,
+                    "%Y-%m-%dT%H:%M:%S",
+                ).replace(tzinfo=UTC)
                 last_file_update = parsed_update.strftime("%d.%m.%Y, %H:%M")
             except ValueError:
                 _LOGGER.exception("Fehler beim Parsen des Zeitstempels")
@@ -671,11 +874,12 @@ async def ws_get_security_snapshot(  # noqa: PLR0911
         )
         return
 
+    serialized_snapshot = _serialise_security_snapshot(snapshot)
     connection.send_result(
         msg_id,
         {
             "security_uuid": security_uuid,
-            "snapshot": snapshot,
+            "snapshot": serialized_snapshot,
         },
     )
 

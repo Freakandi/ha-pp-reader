@@ -6,11 +6,15 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.15.0] - 2025-02-18
+
 ### Added
 - Documented the persisted metrics engine, diagnostics surface, and CLI smoke test so operators and contributors can inspect `metric_runs` snapshots and replay the parser → enrichment → metrics pipeline outside Home Assistant.【F:README.md†L34-L120】【F:README-dev.md†L16-L120】【F:.docs/qa_docs_comms.md†L1-L72】
 
 ### Changed
 - Finalized the normalized frontend adapter rollout: dashboard API helpers (`src/data/api.ts`), stores (`src/lib/store/portfolioStore.ts` / `src/lib/store/selectors/portfolio.ts`), and live update handlers (`src/data/updateConfigsWS.ts`) now exclusively consume the canonical `Normalized*Snapshot` payloads emitted by `custom_components/pp_reader/data/event_push.py`. There is no fallback path to the legacy DOM adapters, so any custom dashboard builds must be rebuilt (`npm run build`) or refreshed via HACS after upgrading. The canonical payload contract lives in `pp_reader_dom_reference.md`, ensuring websocket pushes and UI stores stay aligned.
+- Rebuilt the production dashboard bundles (`custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.CeqyI7r9.js` + `dashboard.module.js`) after clearing `node_modules/.vite`, then ran `npm run build`, `node scripts/update_dashboard_module.mjs`, and `scripts/prepare_main_pr.sh dev main` so the hashed artefacts shipped in HACS match the normalized adapter release.
+- Feature flags `normalized_pipeline` and `normalized_dashboard_adapter` now default to **on** for every config entry. Existing installations migrate automatically (config-entry version 2) so diagnostics, sensors, and websocket payloads always read from the normalization snapshot.
 
 ### Removed
 - Dropped the temporary `custom_components/pp_reader/data/performance.py` shim in favour of importing helpers directly from `custom_components/pp_reader/metrics/common.py`, completing the metric-engine cleanup.

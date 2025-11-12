@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,13 +14,9 @@ from custom_components.pp_reader.data.db_access import (
     load_metric_run,
     upsert_metric_run_metadata,
 )
-from custom_components.pp_reader.metrics.accounts import async_compute_account_metrics
-from custom_components.pp_reader.metrics.portfolio import (
-    async_compute_portfolio_metrics,
-)
-from custom_components.pp_reader.metrics.securities import (
-    async_compute_security_metrics,
-)
+from custom_components.pp_reader.metrics import accounts as metrics_accounts
+from custom_components.pp_reader.metrics import portfolio as metrics_portfolio
+from custom_components.pp_reader.metrics import securities as metrics_securities
 from custom_components.pp_reader.metrics.storage import (
     MetricBatch,
     async_create_metric_run,
@@ -32,6 +28,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 ProgressCallback = Callable[[str, Mapping[str, Any]], None]
+StageRunner = Callable[[ "HomeAssistant", Path, str], Awaitable[list[Any]]]
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.pipeline")
 
@@ -61,11 +58,17 @@ async def async_refresh_all(
     )
     _emit("start", run_uuid=run.run_uuid, trigger=trigger, provenance=provenance)
 
+    async def _run_stage(stage: str, runner: StageRunner) -> list[Any]:
+        try:
+            return await runner(hass, db_path, run.run_uuid)
+        except Exception as exc:
+            _emit(f"{stage}_failed", run_uuid=run.run_uuid, error=str(exc))
+            raise
+
     try:
-        portfolio_records = await async_compute_portfolio_metrics(
-            hass,
-            db_path,
-            run.run_uuid,
+        portfolio_records = await _run_stage(
+            "portfolios",
+            metrics_portfolio.async_compute_portfolio_metrics,
         )
         _emit(
             "portfolios_computed",
@@ -73,10 +76,9 @@ async def async_refresh_all(
             portfolio_count=len(portfolio_records),
         )
 
-        account_records = await async_compute_account_metrics(
-            hass,
-            db_path,
-            run.run_uuid,
+        account_records = await _run_stage(
+            "accounts",
+            metrics_accounts.async_compute_account_metrics,
         )
         _emit(
             "accounts_computed",
@@ -84,10 +86,9 @@ async def async_refresh_all(
             account_count=len(account_records),
         )
 
-        security_records = await async_compute_security_metrics(
-            hass,
-            db_path,
-            run.run_uuid,
+        security_records = await _run_stage(
+            "securities",
+            metrics_securities.async_compute_security_metrics,
         )
         _emit(
             "securities_computed",
@@ -100,6 +101,7 @@ async def async_refresh_all(
             accounts=tuple(account_records),
             securities=tuple(security_records),
         )
+        run = _apply_processed_counts(run, batch)
         _emit(
             "persistence_started",
             run_uuid=run.run_uuid,
@@ -114,6 +116,7 @@ async def async_refresh_all(
             run=run,
             batch=batch,
         )
+        persisted_run = _apply_processed_counts(persisted_run, batch)
         _emit(
             "persistence_completed",
             run_uuid=run.run_uuid,
@@ -173,3 +176,38 @@ async def async_refresh_all(
 def _utc_now_isoformat() -> str:
     """Return an ISO8601 UTC timestamp."""
     return datetime.now(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _apply_processed_counts(
+    run: MetricRunMetadata,
+    batch: MetricBatch,
+) -> MetricRunMetadata:
+    """Ensure processed counters and totals reflect the persisted batch."""
+    processed_portfolios = (
+        run.processed_portfolios
+        if run.processed_portfolios is not None
+        else len(batch.portfolios)
+    )
+    processed_accounts = (
+        run.processed_accounts
+        if run.processed_accounts is not None
+        else len(batch.accounts)
+    )
+    processed_securities = (
+        run.processed_securities
+        if run.processed_securities is not None
+        else len(batch.securities)
+    )
+    total_entities = (
+        run.total_entities
+        if run.total_entities is not None
+        else processed_portfolios + processed_accounts + processed_securities
+    )
+
+    return replace(
+        run,
+        processed_portfolios=processed_portfolios,
+        processed_accounts=processed_accounts,
+        processed_securities=processed_securities,
+        total_entities=total_entities,
+    )

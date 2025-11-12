@@ -38,3 +38,11 @@ Both documents stay available under `./.docs/cleanup/live_aggregation/` for audi
 - Evaluate micro-caching or batching hooks for heavy dashboards and capture findings in `scripts/enrichment_smoketest.py` / `tests/perf` fixtures before widening scope.
 
 These follow-ups keep normalization as the single source of truth across backend and frontend consumers while documenting the pending work for the frontend adapter handoff milestone.
+
+## Components eligible for removal post-release
+
+| Component | Owner | Blocking tests / validation | Notes |
+| --- | --- | --- | --- |
+| `_normalize_portfolio_row` / `_build_portfolio_data` shims (`custom_components/pp_reader/data/db_access.py`) | Backend (DB + sensors) | `pytest tests/test_db_access.py tests/sensors/test_*`, normalization regression matrix (`tests/integration/test_normalization_smoketest.py`) | LC-201 tracks the removal; sensors/diagnostics must read serialized `PortfolioSnapshot` / `AccountSnapshot` rows once adapter wiring lands.【F:.docs/legacy_cleanup_strategy.md†L36-L39】 |
+| Coordinator `portfolio_cache` / `account_cache` dicts and `fetch_live_portfolios` consumers | Backend (coordinator) | Websocket suite (`tests/test_event_push.py`, `tests/test_ws_portfolios_live.py`, `tests/test_ws_portfolio_positions.py`) plus enrichment smoke (`tests/prices/test_history_queue.py`) | LC-202 covers deletion once telemetry parity is documented in `pp_reader_dom_reference.md`; live payloads already stream normalized snapshots post-GA.【F:.docs/legacy_cleanup_strategy.md†L38-L39】 |
+| Frontend TS overrides (`window.__ppReader*`, legacy adapter bundles) | Frontend | `npm run lint:ts`, `npm run typecheck`, `npm test`, `tests/frontend/test_dashboard_smoke.py`, `tests/dashboard/*` | LC-203 removes overrides after Zustand selectors ship; regenerate DOM reference + dashboard bundles when dropping adapters.【F:.docs/legacy_cleanup_strategy.md†L40-L40】 |

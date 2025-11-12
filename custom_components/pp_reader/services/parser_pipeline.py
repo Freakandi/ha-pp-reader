@@ -152,6 +152,11 @@ def _build_parsed_client(proto_client: Any) -> parsed.ParsedClient:
     portfolios = list(_iter_portfolios(proto_client))
     securities = list(_iter_securities(proto_client))
     transactions = list(_iter_transactions(proto_client))
+    plans = list(_iter_plans(proto_client))
+    watchlists = list(_iter_watchlists(proto_client))
+    taxonomies = list(_iter_taxonomies(proto_client))
+    dashboards = list(_iter_dashboards(proto_client))
+    settings = _extract_settings(proto_client)
     properties = _extract_properties(proto_client)
 
     return parsed.ParsedClient(
@@ -161,6 +166,11 @@ def _build_parsed_client(proto_client: Any) -> parsed.ParsedClient:
         portfolios=portfolios,
         securities=securities,
         transactions=transactions,
+        plans=plans,
+        watchlists=watchlists,
+        taxonomies=taxonomies,
+        dashboards=dashboards,
+        settings=settings,
         properties=properties,
     )
 
@@ -213,6 +223,26 @@ def _iter_transactions(proto_client: Any) -> Iterable[parsed.ParsedTransaction]:
         yield parsed_transaction
 
 
+def _iter_plans(proto_client: Any) -> Iterable[parsed.ParsedInvestmentPlan]:
+    for plan in getattr(proto_client, "plans", []):
+        yield parsed.ParsedInvestmentPlan.from_proto(plan)
+
+
+def _iter_watchlists(proto_client: Any) -> Iterable[parsed.ParsedWatchlist]:
+    for watchlist in getattr(proto_client, "watchlists", []):
+        yield parsed.ParsedWatchlist.from_proto(watchlist)
+
+
+def _iter_taxonomies(proto_client: Any) -> Iterable[parsed.ParsedTaxonomy]:
+    for taxonomy in getattr(proto_client, "taxonomies", []):
+        yield parsed.ParsedTaxonomy.from_proto(taxonomy)
+
+
+def _iter_dashboards(proto_client: Any) -> Iterable[parsed.ParsedDashboard]:
+    for dashboard in getattr(proto_client, "dashboards", []):
+        yield parsed.ParsedDashboard.from_proto(dashboard)
+
+
 def _extract_properties(proto_client: Any) -> dict[str, str]:
     properties = getattr(proto_client, "properties", None)
     if properties is None:
@@ -225,6 +255,22 @@ def _extract_properties(proto_client: Any) -> dict[str, str]:
         for key, value in properties.items():  # type: ignore[assignment]
             result[str(key)] = str(value)
         return result
+
+
+def _extract_settings(proto_client: Any) -> parsed.ParsedSettings | None:
+    settings = getattr(proto_client, "settings", None)
+    if settings is None:
+        return None
+
+    has_field = getattr(proto_client, "HasField", None)
+    if callable(has_field):
+        try:
+            if not has_field("settings"):
+                return None
+        except ValueError:
+            pass
+
+    return parsed.ParsedSettings.from_proto(settings)
 
 
 def _validate_security_type(security: parsed.ParsedSecurity) -> None:

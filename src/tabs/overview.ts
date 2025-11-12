@@ -514,6 +514,13 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
           ? performance.gain_pct
           : null;
     const partialValue = d.fx_unavailable && hasValue;
+    const datasetCoverageRatio =
+      typeof d.coverage_ratio === 'number' && Number.isFinite(d.coverage_ratio)
+        ? d.coverage_ratio
+        : '';
+    const datasetProvenance = typeof d.provenance === 'string' ? d.provenance : '';
+    const datasetMetricRunUuid =
+      typeof d.metric_run_uuid === 'string' ? d.metric_run_uuid : '';
 
     const expanded = expandedPortfolios.has(d.uuid);
     const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
@@ -559,7 +566,10 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                   data-gain-abs="${escapeAttribute(datasetGainAbs)}"
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
                 data-has-value="${hasValue ? 'true' : 'false'}"
-                data-fx-unavailable="${d.fx_unavailable ? 'true' : 'false'}">`;
+                data-fx-unavailable="${d.fx_unavailable ? 'true' : 'false'}"
+                data-coverage-ratio="${escapeAttribute(datasetCoverageRatio)}"
+                data-provenance="${escapeAttribute(datasetProvenance)}"
+                data-metric-run-uuid="${escapeAttribute(datasetMetricRunUuid)}">`;
     const safeName = escapeHtml(d.name);
     const badgeMarkup = renderBadgeList(d.badges, { containerClass: 'portfolio-badges' });
     html += `<td>

@@ -84,3 +84,20 @@ def test_compact_event_data_serializes_dataclass_positions() -> None:
     assert isinstance(positions, list)
     assert positions[0]["security_uuid"] == "sec-1"
     assert positions[0]["aggregation"]["total_holdings"] == 2.0
+
+
+def test_compact_event_data_keeps_data_state() -> None:
+    payload = {
+        "portfolio_uuid": "portfolio-1",
+        "positions": [],
+        "data_state": {
+            "status": "warning",
+            "message": "missing coverage",
+        },
+    }
+
+    compacted = _compact_event_data("portfolio_positions", payload)
+    assert compacted["data_state"] == {
+        "status": "warning",
+        "message": "missing coverage",
+    }

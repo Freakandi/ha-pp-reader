@@ -3,7 +3,11 @@
  */
 
 import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
-import { renderDashboard, attachPortfolioToggleHandler } from './tabs/overview';
+import {
+  renderDashboard,
+  attachPortfolioToggleHandler,
+  updatePortfolioFooterFromDom,
+} from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
 import { accountsTabDescriptor } from './views/portfolio/accounts';
 import {
@@ -11,6 +15,9 @@ import {
   handleLastFileUpdate,
   handlePortfolioUpdate,
   handlePortfolioPositionsUpdate,
+  __TEST_ONLY__,
+  flushPendingPositions,
+  reapplyPositionsSort,
 } from './data/updateConfigsWS';
 import { getEntryId } from './data/api';
 import {
@@ -29,6 +36,14 @@ import type {
   HassUnsubscribe,
   HomeAssistant,
 } from './types/home-assistant';
+
+export { updatePortfolioFooterFromDom };
+export {
+  __TEST_ONLY__,
+  handlePortfolioPositionsUpdate,
+  flushPendingPositions,
+  reapplyPositionsSort,
+};
 
 type AddSwipeEvents = (
   element: HTMLElement,

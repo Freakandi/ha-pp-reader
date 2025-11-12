@@ -321,7 +321,12 @@ async def get_exchange_rates(
     needed = get_required_currencies(client)
 
     if not needed.issubset(set(rates.keys())):
-        fetched = await _fetch_exchange_rates_with_retry(date_str, needed)
+        fetched = await _fetch_exchange_rates_with_retry(
+            date_str,
+            needed,
+            retries=FETCH_RETRIES,
+            initial_delay=FETCH_BACKOFF_SECONDS,
+        )
         await _save_rates(db_path, date_str, fetched)
         rates.update(fetched)
 
@@ -376,7 +381,12 @@ async def ensure_exchange_rates_for_dates(
 
         if missing:
             try:
-                fetched = await _fetch_exchange_rates_with_retry(date_str, missing)
+                fetched = await _fetch_exchange_rates_with_retry(
+                    date_str,
+                    missing,
+                    retries=FETCH_RETRIES,
+                    initial_delay=FETCH_BACKOFF_SECONDS,
+                )
                 if fetched:
                     await _save_rates(db_path, date_str, fetched)
                 elif _should_log_warning(date_str, missing):

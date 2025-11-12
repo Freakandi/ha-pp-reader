@@ -18,7 +18,12 @@ from typing import Any
 from custom_components.pp_reader.data.aggregations import (
     AverageCostSelection,
     HoldingsAggregation,
+    compute_holdings_aggregation,
     select_average_cost,
+)
+from custom_components.pp_reader.metrics.common import (
+    compose_performance_payload,
+    select_performance_metrics,
 )
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
@@ -34,6 +39,7 @@ _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
 _MISSING_DB_RESOURCE_MESSAGE = "Entweder db_path oder conn muss angegeben werden."
 _EIGHT_DECIMAL_SCALE = 10**8
+_SCALED_INT_THRESHOLD = 10_000
 
 
 def _from_eight_decimal(
@@ -66,6 +72,49 @@ def _first_value(*values: Any) -> Any | None:
         if candidate not in (None, ""):
             return candidate
     return None
+
+
+def _compute_avg_price_cents(
+    purchase_value_cents: Any,
+    holdings: float | None,
+) -> float | None:
+    """Return the average purchase price (cents) per share."""
+    if holdings in (None, 0):
+        return None
+    try:
+        return float(purchase_value_cents) / float(holdings)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _decode_scaled_currency(
+    value: Any,
+    *,
+    decimals: int = 6,
+) -> float | None:
+    """Decode values that may already be floats or stored as 10^-8 integers."""
+    if value in (None, ""):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if abs(numeric) >= _SCALED_INT_THRESHOLD:
+        numeric = numeric / _EIGHT_DECIMAL_SCALE
+    return round(numeric, decimals)
+
+
+def _decode_holdings_value(value: Any) -> float:
+    """Normalize holdings that may already be real numbers or scaled integers."""
+    if value in (None, ""):
+        return 0.0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if abs(numeric) >= _SCALED_INT_THRESHOLD:
+        numeric = numeric / _EIGHT_DECIMAL_SCALE
+    return round(numeric, 6)
 
 
 @dataclass
@@ -147,6 +196,26 @@ class PortfolioSecurity:
         None  # Durchschnittlicher Kaufpreis in nativer Währung
     )
     current_value: float | None = None  # Aktueller Wert des Bestands in Cent
+
+
+def _deserialize_portfolio_security_row(row: sqlite3.Row) -> PortfolioSecurity:
+    """Map a sqlite row to PortfolioSecurity with normalized averages."""
+    holdings = _decode_holdings_value(row["current_holdings"])
+    purchase_value = int(row["purchase_value"] or 0)
+    avg_price_cents = _compute_avg_price_cents(purchase_value, holdings)
+    avg_price_native = _decode_scaled_currency(row["avg_price_native"])
+
+    current_value_raw = row["current_value"]
+    current_value = current_value_raw
+    return PortfolioSecurity(
+        portfolio_uuid=row["portfolio_uuid"],
+        security_uuid=row["security_uuid"],
+        current_holdings=holdings,
+        purchase_value=purchase_value,
+        avg_price=avg_price_cents,
+        avg_price_native=avg_price_native,
+        current_value=current_value,
+    )
 
 
 @dataclass
@@ -636,6 +705,7 @@ def get_portfolio_securities(
 ) -> list[PortfolioSecurity]:
     """Lädt alle Wertpapiere eines Depots aus der Tabelle portfolio_securities."""
     conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
     try:
         _LOGGER.debug("Lese portfolio_securities für portfolio_uuid=%s", portfolio_uuid)
         cur = conn.execute(
@@ -647,7 +717,8 @@ def get_portfolio_securities(
         """,
             (portfolio_uuid,),
         )
-        return [PortfolioSecurity(*row) for row in cur.fetchall()]
+        rows = cur.fetchall()
+        return [_deserialize_portfolio_security_row(row) for row in rows]
     except sqlite3.Error:
         _LOGGER.exception(
             "Fehler beim Laden der Wertpapiere für das Depot %s", portfolio_uuid
@@ -660,13 +731,14 @@ def get_portfolio_securities(
 def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
     """Lädt alle Einträge aus der Tabelle portfolio_securities."""
     conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
     try:
         cur = conn.execute("""
             SELECT portfolio_uuid, security_uuid, current_holdings,
                    purchase_value, avg_price, avg_price_native, current_value
             FROM portfolio_securities
         """)
-        return [PortfolioSecurity(*row) for row in cur.fetchall()]
+        return [_deserialize_portfolio_security_row(row) for row in cur.fetchall()]
     except sqlite3.Error:
         _LOGGER.exception(
             "Fehler beim Laden aller Wertpapiere aus portfolio_securities"
@@ -674,6 +746,278 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
         return []
     finally:
         conn.close()
+
+
+def _normalize_security_holding_row(row: sqlite3.Row) -> dict[str, Any]:
+    """Return a normalized dict for holdings aggregation."""
+    return {
+        "portfolio_uuid": row["portfolio_uuid"],
+        "security_uuid": row["security_uuid"],
+        "current_holdings": _decode_holdings_value(row["current_holdings"]),
+        "purchase_value": row["purchase_value"],
+        "avg_price_native": _decode_scaled_currency(row["avg_price_native"]),
+        "avg_price_security": _decode_scaled_currency(row["avg_price_security"]),
+        "avg_price_account": _decode_scaled_currency(row["avg_price_account"]),
+        "security_currency_total": _decode_scaled_currency(
+            row["security_currency_total"],
+            decimals=6,
+        )
+        or 0.0,
+        "account_currency_total": _decode_scaled_currency(
+            row["account_currency_total"],
+            decimals=6,
+        )
+        or 0.0,
+    }
+
+
+def _load_security_holdings(
+    conn: sqlite3.Connection,
+    security_uuid: str,
+) -> list[dict[str, Any]]:
+    """Fetch portfolio holdings for a given security."""
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                portfolio_uuid,
+                security_uuid,
+                current_holdings,
+                purchase_value,
+                avg_price_native,
+                avg_price_security,
+                avg_price_account,
+                security_currency_total,
+                account_currency_total
+            FROM portfolio_securities
+            WHERE security_uuid = ?
+            """,
+            (security_uuid,),
+        )
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Laden der Holdings für security_uuid=%s",
+            security_uuid,
+        )
+        return []
+
+    return [_normalize_security_holding_row(row) for row in cursor.fetchall()]
+
+
+def _empty_security_snapshot(security_row: sqlite3.Row) -> dict[str, Any]:
+    """Return the default empty snapshot payload."""
+    return {
+        "name": security_row["name"],
+        "currency_code": security_row["currency_code"] or "EUR",
+        "total_holdings": 0.0,
+        "last_price_native": None,
+        "last_price_eur": None,
+        "market_value_eur": 0.0,
+        "purchase_value_eur": 0.0,
+        "average_cost": {
+            "eur": None,
+            "security": None,
+            "account": None,
+            "native": None,
+            "source": "unavailable",
+            "coverage_ratio": None,
+        },
+        "aggregation": {
+            "total_holdings": 0.0,
+            "purchase_value_eur": 0.0,
+            "purchase_total_security": None,
+            "purchase_total_account": None,
+        },
+        "last_close_native": None,
+        "last_close_eur": None,
+        "performance": {
+            "gain_abs": 0.0,
+            "gain_pct": 0.0,
+            "total_change_eur": 0.0,
+            "total_change_pct": 0.0,
+            "source": "metrics",
+            "coverage_ratio": None,
+            "day_change": {
+                "price_change_native": None,
+                "price_change_eur": None,
+                "change_pct": None,
+                "source": "unavailable",
+                "coverage_ratio": 0.0,
+            },
+        },
+    }
+
+
+def _build_day_change_payload(
+    *,
+    last_price_native: float | None,
+    last_price_eur: float | None,
+    last_close_native: float | None,
+    last_close_eur: float | None,
+) -> dict[str, Any]:
+    """Return the structured day change payload."""
+    if (
+        last_price_native is None
+        or last_close_native is None
+        or last_price_eur is None
+        or last_close_eur is None
+    ):
+        return {
+            "price_change_native": None,
+            "price_change_eur": None,
+            "change_pct": None,
+            "source": "unavailable",
+            "coverage_ratio": 0.5,
+        }
+
+    price_change_native = round_price(
+        last_price_native - last_close_native,
+        decimals=6,
+    )
+    price_change_eur = round_price(
+        last_price_eur - last_close_eur,
+        decimals=6,
+    )
+    change_pct = (
+        round_currency(
+            (price_change_native / last_close_native) * 100,
+            default=None,
+        )
+        if last_close_native
+        else None
+    )
+    return {
+        "price_change_native": price_change_native,
+        "price_change_eur": price_change_eur,
+        "change_pct": change_pct,
+        "source": "native",
+        "coverage_ratio": 1.0,
+    }
+
+
+def _build_snapshot_from_holdings(
+    db_path: Path,
+    conn: sqlite3.Connection,
+    security_uuid: str,
+    security_row: sqlite3.Row,
+) -> dict[str, Any]:
+    """Construct a snapshot from portfolio_securities when metrics are unavailable."""
+    holdings_rows = _load_security_holdings(conn, security_uuid)
+    if not holdings_rows:
+        return _empty_security_snapshot(security_row)
+
+    aggregation = compute_holdings_aggregation(holdings_rows)
+    (
+        selection,
+        purchase_value_eur,
+        purchase_total_security,
+        purchase_total_account,
+    ) = _resolve_average_cost_totals(aggregation)
+
+    purchase_value_eur = (
+        round_currency(purchase_value_eur, default=0.0) or 0.0
+    )
+    purchase_total_security = (
+        round_currency(purchase_total_security, default=0.0) or 0.0
+    )
+    purchase_total_account = (
+        round_currency(purchase_total_account, default=0.0) or 0.0
+    )
+
+    total_holdings = round_currency(
+        aggregation.total_holdings,
+        decimals=6,
+        default=0.0,
+    ) or 0.0
+
+    reference_date = datetime.now()  # noqa: DTZ005
+    currency_code = security_row["currency_code"] or "EUR"
+
+    last_price_native_raw = security_row["last_price"]
+    last_price_native = normalize_raw_price(last_price_native_raw, decimals=4)
+    last_price_eur = None
+    if last_price_native_raw is not None:
+        last_price_eur = normalize_price_to_eur_sync(
+            last_price_native_raw,
+            currency_code,
+            reference_date,
+            db_path,
+        )
+    market_value_eur = 0.0
+    if last_price_eur is not None and total_holdings:
+        market_value_eur = (
+            round_currency(last_price_eur * total_holdings, default=0.0) or 0.0
+        )
+
+    raw_last_close, last_close_native = fetch_previous_close(
+        db_path,
+        security_uuid,
+        conn=conn,
+    )
+    last_close_eur = None
+    if raw_last_close is not None:
+        last_close_eur = normalize_price_to_eur_sync(
+            raw_last_close,
+            currency_code,
+            reference_date,
+            db_path,
+        )
+
+    day_change_payload = _build_day_change_payload(
+        last_price_native=last_price_native,
+        last_price_eur=last_price_eur,
+        last_close_native=last_close_native,
+        last_close_eur=last_close_eur,
+    )
+
+    gain_abs = round_currency(market_value_eur - purchase_value_eur, default=0.0) or 0.0
+    gain_pct = (
+        round_currency((gain_abs / purchase_value_eur) * 100, default=0.0)
+        if purchase_value_eur
+        else 0.0
+    )
+
+    average_cost_payload = {
+        "native": selection.native,
+        "security": selection.security,
+        "account": selection.account,
+        "eur": selection.eur,
+        "source": selection.source,
+        "coverage_ratio": selection.coverage_ratio,
+    }
+
+    aggregation_payload = {
+        "total_holdings": total_holdings,
+        "purchase_value_eur": purchase_value_eur,
+        "purchase_total_security": purchase_total_security,
+        "purchase_total_account": purchase_total_account,
+        "purchase_value_cents": int(aggregation.purchase_value_cents or 0),
+    }
+
+    performance_payload = {
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
+        "total_change_eur": gain_abs,
+        "total_change_pct": gain_pct,
+        "source": "calculated",
+        "coverage_ratio": 1.0 if total_holdings or purchase_value_eur else 0.0,
+        "day_change": day_change_payload,
+    }
+
+    return {
+        "name": security_row["name"],
+        "currency_code": currency_code,
+        "total_holdings": total_holdings,
+        "last_price_native": round_price(last_price_native, decimals=6),
+        "last_price_eur": round_price(last_price_eur, decimals=6),
+        "market_value_eur": market_value_eur,
+        "purchase_value_eur": purchase_value_eur,
+        "average_cost": average_cost_payload,
+        "aggregation": aggregation_payload,
+        "last_close_native": round_price(last_close_native, decimals=6),
+        "last_close_eur": round_price(last_close_eur, decimals=6),
+        "performance": performance_payload,
+    }
 
 
 def get_security_snapshot(  # noqa: PLR0912, PLR0915
@@ -704,32 +1048,12 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
 
         run_uuid = load_latest_completed_metric_run_uuid(db_path, conn=conn)
         if not run_uuid:
-            return {
-                "name": security_row["name"],
-                "currency_code": security_row["currency_code"] or "EUR",
-                "total_holdings": 0.0,
-                "last_price_native": None,
-                "last_price_eur": None,
-                "market_value_eur": 0.0,
-                "purchase_value_eur": 0.0,
-                "average_cost": {"eur": None, "security": None, "account": None},
-                "aggregation": {
-                    "total_holdings": 0.0,
-                    "purchase_value_eur": 0.0,
-                    "purchase_total_security": None,
-                    "purchase_total_account": None,
-                },
-                "last_close_native": None,
-                "last_close_eur": None,
-                "performance": {
-                    "gain_abs": 0.0,
-                    "gain_pct": 0.0,
-                    "total_change_eur": 0.0,
-                    "total_change_pct": 0.0,
-                    "source": "metrics",
-                    "coverage_ratio": None,
-                },
-            }
+            return _build_snapshot_from_holdings(
+                db_path,
+                conn,
+                security_uuid,
+                security_row,
+            )
 
         rows = conn.execute(
             """
@@ -761,32 +1085,12 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
         ).fetchall()
 
         if not rows:
-            return {
-                "name": security_row["name"],
-                "currency_code": security_row["currency_code"] or "EUR",
-                "total_holdings": 0.0,
-                "last_price_native": None,
-                "last_price_eur": None,
-                "market_value_eur": 0.0,
-                "purchase_value_eur": 0.0,
-                "average_cost": {"eur": None, "security": None, "account": None},
-                "aggregation": {
-                    "total_holdings": 0.0,
-                    "purchase_value_eur": 0.0,
-                    "purchase_total_security": None,
-                    "purchase_total_account": None,
-                },
-                "last_close_native": None,
-                "last_close_eur": None,
-                "performance": {
-                    "gain_abs": 0.0,
-                    "gain_pct": 0.0,
-                    "total_change_eur": 0.0,
-                    "total_change_pct": 0.0,
-                    "source": "metrics",
-                    "coverage_ratio": None,
-                },
-            }
+            return _build_snapshot_from_holdings(
+                db_path,
+                conn,
+                security_uuid,
+                security_row,
+            )
 
         totals = {
             "holdings_raw": 0,
@@ -2198,6 +2502,73 @@ def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
     return normalized
 
 
+def _fallback_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
+    """Aggregate live portfolio values directly from portfolio_securities."""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                p.uuid,
+                p.name,
+                COALESCE(SUM(ps.current_value), 0) AS current_value_cents,
+                COALESCE(SUM(ps.purchase_value), 0) AS purchase_value_cents,
+                SUM(
+                    CASE
+                        WHEN ps.current_holdings IS NOT NULL AND ps.current_holdings > 0
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS position_count
+            FROM portfolios p
+            LEFT JOIN portfolio_securities ps ON ps.portfolio_uuid = p.uuid
+            GROUP BY p.uuid, p.name
+            ORDER BY p.name COLLATE NOCASE
+            """
+        )
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    fallback_rows: list[dict[str, Any]] = []
+    for row in rows:
+        current_value = cent_to_eur(row["current_value_cents"], default=0.0) or 0.0
+        purchase_sum = cent_to_eur(row["purchase_value_cents"], default=0.0) or 0.0
+        try:
+            position_count = int(row["position_count"] or 0)
+        except (TypeError, ValueError):
+            position_count = 0
+
+        metrics_payload, day_change = select_performance_metrics(
+            current_value=current_value,
+            purchase_value=purchase_sum,
+            holdings=position_count,
+        )
+        performance_payload = compose_performance_payload(
+            None,
+            metrics=metrics_payload,
+            day_change=day_change,
+        )
+
+        entry: dict[str, Any] = {
+            "uuid": row["uuid"],
+            "name": row["name"],
+            "current_value": current_value,
+            "purchase_sum": purchase_sum,
+            "position_count": position_count,
+            "missing_value_positions": 0,
+            "has_current_value": position_count > 0 or current_value > 0,
+            "metric_run_uuid": None,
+            "performance": performance_payload,
+        }
+        coverage_ratio = performance_payload.get("coverage_ratio")
+        if coverage_ratio is not None:
+            entry["coverage_ratio"] = coverage_ratio
+        fallback_rows.append(entry)
+    return fallback_rows
+
+
 def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
     """Return latest persisted portfolio metrics for websocket/event consumers."""
     conn: sqlite3.Connection | None = None
@@ -2207,7 +2578,7 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             _LOGGER.debug(
                 "fetch_live_portfolios: kein abgeschlossener Metric-Run gefunden"
             )
-            return []
+            return _fallback_live_portfolios(db_path)
 
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row

@@ -52,13 +52,33 @@ function toFiniteNumberOrUndefined(value: unknown): number | undefined {
   return undefined;
 }
 
+function requireString(value: string | null | undefined, field: string): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  throw new Error(`mapPositionSnapshotToRecord: fehlendes ${field}`);
+}
+
+function requireNumber(value: number | null | undefined, field: string): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  throw new Error(`mapPositionSnapshotToRecord: fehlendes ${field}`);
+}
+
 function mapPositionSnapshotToRecord(snapshot: NormalizedPositionSnapshot): PortfolioPosition {
+  const securityUuid = requireString(snapshot.security_uuid, "security_uuid");
+  const name = requireString(snapshot.name, "name");
+  const currentHoldings = requireNumber(snapshot.current_holdings, "current_holdings");
+  const purchaseValue = requireNumber(snapshot.purchase_value, "purchase_value");
+  const currentValue = requireNumber(snapshot.current_value, "current_value");
+
   const position: PortfolioPosition = {
-    security_uuid: snapshot.security_uuid,
-    name: snapshot.name,
-    current_holdings: snapshot.current_holdings,
-    purchase_value: snapshot.purchase_value,
-    current_value: snapshot.current_value,
+    security_uuid: securityUuid,
+    name,
+    current_holdings: currentHoldings,
+    purchase_value: purchaseValue,
+    current_value: currentValue,
     average_cost: (snapshot.average_cost as AverageCostPayload | null | undefined) ?? null,
     performance: (snapshot.performance as PerformanceMetricsPayload | null | undefined) ?? null,
     aggregation: (snapshot.aggregation as HoldingsAggregationPayload | null | undefined) ?? null,

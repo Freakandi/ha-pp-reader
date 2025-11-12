@@ -38,6 +38,7 @@ export interface AverageCostPayload {
   eur: number | null;
   source: AverageCostSource;
   coverage_ratio: number | null;
+  [key: string]: unknown;
 }
 
 /**
@@ -49,6 +50,7 @@ export interface PerformanceDayChangePayload {
   change_pct: number | null;
   source: string;
   coverage_ratio: number | null;
+  [key: string]: unknown;
 }
 
 /**
@@ -65,6 +67,7 @@ export interface PerformanceMetricsPayload {
   source: string;
   coverage_ratio: number | null;
   day_change?: PerformanceDayChangePayload | null;
+  [key: string]: unknown;
 }
 
 export interface PanelConfigLike {
@@ -146,6 +149,7 @@ export interface HoldingsAggregationPayload {
   account_currency_total: number;
   purchase_total_security: number;
   purchase_total_account: number;
+  [key: string]: unknown;
 }
 
 export interface PortfolioPosition {

@@ -173,9 +173,8 @@ TRANSACTION_SCHEMA = [
     """,
 ]
 
-"""
 PLAN_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS plans (
         name TEXT PRIMARY KEY,
         note TEXT,
@@ -191,56 +190,56 @@ PLAN_SCHEMA = [
         interval INTEGER,
         type TEXT
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS plan_attributes (
         plan_name TEXT NOT NULL,
         key TEXT NOT NULL,
         value TEXT,
         FOREIGN KEY (plan_name) REFERENCES plans(name)
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS plan_transactions (
         plan_name TEXT NOT NULL,
         transaction_uuid TEXT NOT NULL,
         FOREIGN KEY (plan_name) REFERENCES plans(name)
     );
-    \"""
+    """
 ]
 
 WATCHLIST_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS watchlists (
         name TEXT PRIMARY KEY
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS watchlist_securities (
         watchlist_name TEXT NOT NULL,
         security_uuid TEXT NOT NULL,
         FOREIGN KEY (watchlist_name) REFERENCES watchlists(name),
         FOREIGN KEY (security_uuid) REFERENCES securities(uuid)
     );
-    \"""
+    """,
 ]
 
 TAXONOMY_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS taxonomies (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         source TEXT
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS taxonomy_dimensions (
         taxonomy_id TEXT NOT NULL,
         dimension TEXT NOT NULL,
         FOREIGN KEY (taxonomy_id) REFERENCES taxonomies(id)
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS taxonomy_classifications (
         id TEXT PRIMARY KEY,
         taxonomy_id TEXT NOT NULL,
@@ -252,8 +251,8 @@ TAXONOMY_SCHEMA = [
         rank INTEGER,
         FOREIGN KEY (taxonomy_id) REFERENCES taxonomies(id)
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS taxonomy_assignments (
         classification_id TEXT NOT NULL,
         investment_vehicle TEXT NOT NULL,
@@ -261,33 +260,33 @@ TAXONOMY_SCHEMA = [
         rank INTEGER,
         FOREIGN KEY (classification_id) REFERENCES taxonomy_classifications(id)
     );
-    \"""
+    """,
 ]
 
 DASHBOARD_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS dashboards (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS dashboard_configuration (
         dashboard_id TEXT NOT NULL,
         key TEXT NOT NULL,
         value TEXT,
         FOREIGN KEY (dashboard_id) REFERENCES dashboards(id)
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS dashboard_columns (
         dashboard_id TEXT NOT NULL,
         column_index INTEGER,
         weight INTEGER,
         FOREIGN KEY (dashboard_id) REFERENCES dashboards(id)
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS dashboard_widgets (
         dashboard_id TEXT NOT NULL,
         column_index INTEGER,
@@ -296,8 +295,8 @@ DASHBOARD_SCHEMA = [
         label TEXT,
         FOREIGN KEY (dashboard_id) REFERENCES dashboards(id)
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS widget_configuration (
         dashboard_id TEXT NOT NULL,
         column_index INTEGER,
@@ -305,17 +304,17 @@ DASHBOARD_SCHEMA = [
         key TEXT NOT NULL,
         value TEXT
     );
-    \"""
+    """,
 ]
 
 SETTINGS_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS settings_bookmarks (
         label TEXT NOT NULL,
         pattern TEXT NOT NULL
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS settings_attribute_types (
         id TEXT PRIMARY KEY,
         name TEXT,
@@ -325,35 +324,35 @@ SETTINGS_SCHEMA = [
         type TEXT,
         converter_class TEXT
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS settings_configuration_sets (
         key TEXT PRIMARY KEY,
         uuid TEXT,
         name TEXT,
         data TEXT
     );
-    \"""
+    """,
 ]
 
 PROPERTIES_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS client_properties (
         key TEXT PRIMARY KEY,
         value TEXT
     );
-    \"""
+    """,
 ]
 
 EXCHANGE_SCHEMA = [
-    \"""
+    """
     CREATE TABLE IF NOT EXISTS exchange_rate_series (
         base_currency TEXT NOT NULL,
         term_currency TEXT NOT NULL,
         last_modified TEXT
     );
-    \""",
-    \"""
+    """,
+    """
     CREATE TABLE IF NOT EXISTS exchange_rates (
         base_currency TEXT NOT NULL,
         term_currency TEXT NOT NULL,
@@ -361,9 +360,8 @@ EXCHANGE_SCHEMA = [
         rate INTEGER NOT NULL,        -- Wechselkurs in 10^-8 Einheiten
         PRIMARY KEY (base_currency, term_currency, date)
     );
-    \"""
+    """,
 ]
-"""
 
 FX_SCHEMA = [
     """
@@ -693,6 +691,13 @@ SECURITY_METRICS_SCHEMA = [
     """,
 ]
 
+METRICS_SCHEMA = [
+    *METRIC_RUNS_SCHEMA,
+    *PORTFOLIO_METRICS_SCHEMA,
+    *ACCOUNT_METRICS_SCHEMA,
+    *SECURITY_METRICS_SCHEMA,
+]
+
 PORTFOLIO_SNAPSHOT_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS portfolio_snapshots (
@@ -782,6 +787,13 @@ ALL_SCHEMAS = [
     *PORTFOLIO_SCHEMA,
     *PORTFOLIO_SECURITIES_SCHEMA,
     *TRANSACTION_SCHEMA,
+    *PLAN_SCHEMA,
+    *WATCHLIST_SCHEMA,
+    *TAXONOMY_SCHEMA,
+    *DASHBOARD_SCHEMA,
+    *SETTINGS_SCHEMA,
+    *PROPERTIES_SCHEMA,
+    *EXCHANGE_SCHEMA,
     *FX_SCHEMA,
     *PRICE_HISTORY_QUEUE_SCHEMA,
     *METADATA_SCHEMA,

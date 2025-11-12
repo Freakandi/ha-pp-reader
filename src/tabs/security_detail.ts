@@ -1001,7 +1001,10 @@ function composeAveragePurchaseTooltip(
   snapshot: SecuritySnapshotDetail | null | undefined,
   accountCurrency: string | null | undefined,
 ): string | null {
-  const securityCurrency = toUppercaseCode(snapshot?.currency_code) ?? '';
+  if (!snapshot) {
+    return null;
+  }
+  const securityCurrency = toUppercaseCode(snapshot.currency_code) ?? '';
   const accountCurrencySafe = toUppercaseCode(accountCurrency) ?? '';
 
   if (!securityCurrency || !accountCurrencySafe || securityCurrency === accountCurrencySafe) {
@@ -1075,6 +1078,9 @@ function composeAveragePurchaseTooltip(
 function selectAveragePurchaseBaseline(
   snapshot: SecuritySnapshotDetail | null | undefined,
 ): number | null {
+  if (!snapshot) {
+    return null;
+  }
   const averageCost = normalizeAverageCostPayload(snapshot.average_cost);
   const baseline = averageCost?.native ?? averageCost?.security ?? null;
   return isFiniteNumber(baseline) ? baseline : null;

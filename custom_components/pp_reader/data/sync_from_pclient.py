@@ -283,8 +283,11 @@ def _iso8601_to_epoch_day(value: str | None) -> int | None:
 
 def delete_missing_entries(
     conn: Connection, table: str, id_column: str, current_ids: Iterable[str]
-) -> None:
-    """Remove entries that are no longer present in the source dataset."""
+) -> bool:
+    """Remove entries no longer present in the source dataset.
+
+    Returns True when rows were deleted or the table was truncated.
+    """
     config = DELETE_TABLE_CONFIG.get(table)
     if config is None or config["id_column"] != id_column:
         msg = (
@@ -294,9 +297,11 @@ def delete_missing_entries(
 
     ids_to_keep = set(current_ids)
     cur = conn.cursor()
+    deleted = False
     if not ids_to_keep:
         _LOGGER.debug("Lösche alle Einträge aus %s (keine aktuellen IDs)", table)
         cur.execute(config["truncate_sql"])
+        deleted = True
     else:
         cur.execute(config["select_sql"])
         existing_ids = {row[0] for row in cur.fetchall()}
@@ -306,7 +311,9 @@ def delete_missing_entries(
                 config["delete_sql"],
                 [(stale_id,) for stale_id in stale_ids],
             )
+            deleted = True
     conn.commit()
+    return deleted
 
 
 def normalize_shares(shares: int | None) -> int | None:
@@ -403,16 +410,18 @@ class _SyncRunner:
         self.tx_units: dict[str, dict[str, Any]] = {}
         self.security_first_activity: dict[str, int] = {}
         self.cursor: Cursor | None = None
+        self._pending_account_events: set[str] = set()
 
     def run(self) -> None:
         self.cursor = self.conn.cursor()
         try:
             self.conn.execute("BEGIN TRANSACTION")
             self._store_last_file_update()
-            self._sync_transactions()
-            self._sync_accounts()
+            self._sync_accounts(compute_balances=False, emit_events=False)
             self._sync_securities()
             self._sync_portfolios()
+            self._sync_transactions()
+            self._sync_accounts()
             self._sync_portfolio_securities()
         except Exception:
             self.conn.rollback()
@@ -586,11 +595,25 @@ class _SyncRunner:
             if previous is None or epoch_day < previous:
                 self.security_first_activity[security_uuid] = epoch_day
 
-    def _sync_accounts(self) -> None:
+    def _sync_accounts(
+        self,
+        *,
+        compute_balances: bool | None = None,
+        emit_events: bool = True,
+    ) -> None:
         if self.cursor is None:
             return
+        if compute_balances is None:
+            compute_balances = self.changes.transactions
         account_ids = {account.uuid for account in self.client.accounts}
-        delete_missing_entries(self.conn, "accounts", "uuid", account_ids)
+        deleted_accounts = delete_missing_entries(
+            self.conn,
+            "accounts",
+            "uuid",
+            account_ids,
+        )
+        if deleted_accounts:
+            self.changes.accounts = True
 
         self.cursor.execute("SELECT uuid, currency_code FROM accounts")
         self.accounts_currency_map = {
@@ -624,7 +647,7 @@ class _SyncRunner:
                 updated_at,
             )
 
-            if self.changes.transactions:
+            if compute_balances:
                 if is_retired:
                     balance = 0
                 else:
@@ -647,15 +670,11 @@ class _SyncRunner:
                 or existing_account[1:6] != new_account_data[1:]
                 or balance != (existing_account[6] if existing_account else None)
             ):
-                self.changes.accounts = True
-                self.updated_data["accounts"].append(
-                    {
-                        "name": account.name,
-                        "balance": balance,
-                        "currency_code": account.currencyCode,
-                        "is_retired": is_retired,
-                    }
-                )
+                change_detected = True
+            else:
+                change_detected = False
+
+            if change_detected:
                 self.cursor.execute(
                     """
                     INSERT OR REPLACE INTO accounts
@@ -664,6 +683,21 @@ class _SyncRunner:
                     """,
                     (*new_account_data, balance),
                 )
+            pending = account.uuid in self._pending_account_events
+            if change_detected or pending:
+                self.changes.accounts = True
+                if emit_events:
+                    self.updated_data["accounts"].append(
+                        {
+                            "name": account.name,
+                            "balance": balance,
+                            "currency_code": account.currencyCode,
+                            "is_retired": is_retired,
+                        }
+                    )
+                    self._pending_account_events.discard(account.uuid)
+                else:
+                    self._pending_account_events.add(account.uuid)
 
     def _sync_securities(self) -> None:  # noqa: C901, PLR0912, PLR0915
         if self.cursor is None:
@@ -1749,6 +1783,7 @@ class _SyncRunner:
             "transactions": [],
         }
         self.changed_portfolios.clear()
+        self._pending_account_events.clear()
 
 
 def fetch_positions_for_portfolios(

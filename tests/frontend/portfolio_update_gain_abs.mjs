@@ -87,12 +87,19 @@ function createCell({ text = '', html = null } = {}) {
   return cell;
 }
 
+function createIndexedCollection(seed = []) {
+  const collection = Array.isArray(seed) ? [...seed] : [];
+  collection.item = (index) => collection[index] ?? null;
+  return collection;
+}
+
 function createRow() {
   const row = {
     tagName: 'TR',
     dataset: {},
-    cells: []
+    cells: createIndexedCollection()
   };
+  row.cells.item = (index) => row.cells[index] ?? null;
   const classList = createClassList(row);
   row.classList = classList;
 
@@ -111,7 +118,7 @@ function createRow() {
       return row.cells.map((cell) => `<td class="${cell.className ?? ''}">${cell.innerHTML}</td>`).join('');
     },
     set(value) {
-      row.cells = [];
+      row.cells = createIndexedCollection();
       const matches = (value || '').match(/<td[^>]*>[\s\S]*?<\/td>/gi) || [];
       for (const match of matches) {
         const classMatch = match.match(/class="([^"]*)"/i);
@@ -132,7 +139,7 @@ function createRow() {
       return row.cells.map((cell) => cell.textContent).join('');
     },
     set(value) {
-      row.cells = [createCell({ text: value ?? '' })];
+      row.cells = createIndexedCollection([createCell({ text: value ?? '' })]);
     }
   });
 
@@ -209,7 +216,8 @@ function createGenericElement(tagName = 'div') {
 
 function createTable(tbody) {
   const table = createGenericElement('table');
-  table.tBodies = tbody ? [tbody] : [];
+  table.tBodies = createIndexedCollection(tbody ? [tbody] : []);
+  table.tBodies.item = (index) => table.tBodies[index] ?? null;
 
   table.querySelector = (selector) => {
     if (selector === 'tbody') {
@@ -233,7 +241,7 @@ function createTable(tbody) {
 
   table.appendChild = (child) => {
     if (child?.tagName === 'TBODY') {
-      table.tBodies = [child];
+      table.tBodies = createIndexedCollection([child]);
     }
     return child;
   };
@@ -436,10 +444,8 @@ if (typeof handlePortfolioPositionsUpdate !== 'function') {
   });
 }
 
-const updatePortfolioFooter =
-  typeof moduleApi.updatePortfolioFooterFromDom === 'function'
-    ? moduleApi.updatePortfolioFooterFromDom
-    : null;
+const footerHelperExported = typeof moduleApi.updatePortfolioFooterFromDom === 'function';
+const updatePortfolioFooter = footerHelperExported ? moduleApi.updatePortfolioFooterFromDom : null;
 if (typeof updatePortfolioFooter !== 'function') {
   throw new Error('dashboard bundle did not expose updatePortfolioFooterFromDom');
 }
@@ -531,6 +537,7 @@ const footerGainHtml = footerGainCell?.innerHTML ?? '';
 const footerGainPct = footerGainCell?.dataset?.gainPct ?? '';
 
 const summary = {
+  footerHelperExported,
   footerGain,
   footerGainHtml,
   footerGainPct,
@@ -569,11 +576,41 @@ if (!Array.isArray(cachedPositions) || cachedPositions.length === 0) {
   throw new Error('expected cached positions for portfolio-gain-struct');
 }
 
-const normalizedPositions = cachedPositions.map((position) => ({
-  aggregation: position?.aggregation ?? null,
-  average_cost: position?.average_cost ?? null,
-  performance: position?.performance ?? null,
-}));
+const coerceNumeric = (value) => {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return value;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return value;
+};
+
+const normalizedPositions = cachedPositions.map((position) => {
+  const performance = position?.performance ?? null;
+  const normalizedPerformance = performance
+    ? {
+        ...performance,
+        gain_abs: coerceNumeric(performance.gain_abs),
+        gain_pct: coerceNumeric(performance.gain_pct),
+        total_change_eur: coerceNumeric(performance.total_change_eur),
+        total_change_pct: coerceNumeric(performance.total_change_pct),
+      }
+    : null;
+
+  return {
+    aggregation: position?.aggregation ?? null,
+    average_cost: position?.average_cost ?? null,
+    performance: normalizedPerformance,
+  };
+});
 
 summary.normalizedPositions = normalizedPositions;
 

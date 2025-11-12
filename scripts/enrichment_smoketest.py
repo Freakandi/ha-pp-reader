@@ -28,7 +28,9 @@ from custom_components.pp_reader.data.normalization_pipeline import (
     async_normalize_snapshot,
     serialize_normalization_result,
 )
+from custom_components.pp_reader.data.sync_from_pclient import sync_from_pclient
 from custom_components.pp_reader.metrics import pipeline as metrics_pipeline
+from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
     build_history_targets_from_parsed,
@@ -134,6 +136,7 @@ async def _run_parser(
             pp_version=parsed_client.version,
             base_currency=parsed_client.base_currency,
             properties=dict(parsed_client.properties),
+            parsed_client=parsed_client,
         )
     return run_id, parsed_client
 
@@ -248,6 +251,60 @@ async def _run_price_history_jobs(
         "candles": total_candles,
         "iterations": iterations,
     }
+
+
+async def _run_sync(db_path: Path) -> dict[str, Any]:
+    """Materialize staging data into the canonical portfolio tables."""
+    LOGGER.info("Synchronizing ingestion staging tables into canonical schema...")
+    try:
+        summary = await asyncio.to_thread(_sync_portfolio_database, db_path)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        LOGGER.exception("Portfolio sync failed")
+        return {"status": "failed", "error": str(exc)}
+
+    return {"status": "ok", **summary}
+
+
+def _sync_portfolio_database(db_path: Path) -> dict[str, Any]:
+    conn = sqlite3.connect(str(db_path))
+    try:
+        sync_from_pclient(
+            client_pb2.PClient(),
+            conn,
+            hass=None,
+            entry_id=None,
+            last_file_update=None,
+            db_path=db_path,
+        )
+        counts = {
+            table: _safe_table_count(conn, table)
+            for table in (
+                "accounts",
+                "portfolios",
+                "securities",
+                "transactions",
+                "portfolio_securities",
+            )
+        }
+        return {"counts": counts}
+    finally:
+        conn.close()
+
+
+def _safe_table_count(conn: sqlite3.Connection, table: str) -> int | None:
+    try:
+        cursor = conn.execute(
+            f'SELECT COUNT(*) FROM "{table}"'  # noqa: S608 - fixed table list
+        )
+        row = cursor.fetchone()
+    except sqlite3.Error:
+        return None
+    if not row:
+        return None
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        return None
 
 
 async def _run_metrics(
@@ -566,6 +623,9 @@ async def _async_main(args: argparse.Namespace) -> int:
         limit=history_limit,
     )
 
+    LOGGER.info("Synchronizing portfolio data...")
+    sync_summary = await _run_sync(db_path)
+
     LOGGER.info("Running metrics pipeline...")
     metrics_summary = await _run_metrics(hass, db_path)
 
@@ -581,6 +641,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         "database": str(db_path),
         "fx": fx_summary,
         "history": history_summary,
+        "sync": sync_summary,
         "metrics": metrics_summary,
         "normalization": normalization_summary,
         "diagnostics": diag,
@@ -595,10 +656,12 @@ async def _async_main(args: argparse.Namespace) -> int:
         exit_code = 2
     elif history_summary.get("status") in {"failed", "error"}:
         exit_code = 3
-    elif metrics_summary.get("status") not in {"completed"}:
+    elif sync_summary.get("status") not in {"ok"}:
         exit_code = 4
-    elif normalization_summary.get("status") not in {"ok"}:
+    elif metrics_summary.get("status") not in {"completed"}:
         exit_code = 5
+    elif normalization_summary.get("status") not in {"ok"}:
+        exit_code = 6
     return exit_code
 
 

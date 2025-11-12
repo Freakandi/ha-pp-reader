@@ -15,14 +15,14 @@ The 2025-02-14 backend regression run (`pytest -q` / coverage) failed with 48/49
 
 ## 3. Align parser + normalization models with protobuf contract
 - [x] Audit `custom_components/pp_reader/models/parsed.py` against `datamodel/backend-datamodel-final.md` to add missing fields (e.g., security/account aggregates, purchase FX metadata) and ensure `Parsed*` dataclasses hydrate every attribute that downstream normalization expects.
-- [ ] Update `services/parser_pipeline.py` and ingestion writers to persist the newly mapped fields, keeping progress events untouched.
-- [ ] Regenerate parser fixtures (`tests/models/test_parsed_models.py`, `tests/integration/test_sync_from_staging.py`) so assertions use the expanded dataclasses instead of legacy fallbacks.
-- [ ] Ensure normalization + websocket tests (`tests/test_event_push.py`, `tests/test_ws_portfolios_live.py`, `tests/test_ws_portfolio_positions.py`) load the enriched schema without proto field mismatches.
+ - [x] Update `services/parser_pipeline.py` and ingestion writers to persist the newly mapped fields, keeping progress events untouched.
+- [x] Regenerate parser fixtures (`tests/models/test_parsed_models.py`, `tests/integration/test_sync_from_staging.py`) so assertions use the expanded dataclasses instead of legacy fallbacks.
+- [x] Ensure normalization + websocket tests (`tests/test_event_push.py`, `tests/test_ws_portfolios_live.py`, `tests/test_ws_portfolio_positions.py`) load the enriched schema without proto field mismatches.
 
 ## 4. Fix dashboard smoke regressions triggered by missing normalized fields
-- [ ] Rebuild the normalized dashboard adapter so `src/` components emit the fields expected by websocket payloads (align with `tests/dashboard/` snapshots and `tests/frontend/` DOM references).
-- [ ] Run the Node test pipeline (`npm run lint:ts`, `npm run typecheck`, `npm test`) to ensure the adapter changes restore the failing smoke suite mentioned in the regression report.
-- [ ] If new normalized keys require HA wiring, update websocket serialization helpers in `custom_components/pp_reader/data/websocket.py` while keeping coordinator payload contracts stable.
+- [x] Rebuild the normalized dashboard adapter so `src/` components emit the fields expected by websocket payloads (align with `tests/dashboard/` snapshots and `tests/frontend/` DOM references).
+- [x] Run the Node test pipeline (`npm run lint:ts`, `npm run typecheck`, `npm test`) to ensure the adapter changes restore the failing smoke suite mentioned in the regression report.
+- [x] If new normalized keys require HA wiring, update websocket serialization helpers in `custom_components/pp_reader/data/websocket.py` while keeping coordinator payload contracts stable.
 
 ## 5. Final validation
-- [ ] Re-run `pytest -q` and `pytest --cov=custom_components/pp_reader --cov-report=term-missing` inside the project virtualenv once items 1–4 complete; document the passing results in `.docs/TODO_release_enablement.md` item 1.a.
+- [x] Re-run `pytest -q` and `pytest --cov=custom_components/pp_reader --cov-report=term-missing` inside the project virtualenv once items 1–4 complete; document the passing results in `.docs/TODO_release_enablement.md` item 1.a.

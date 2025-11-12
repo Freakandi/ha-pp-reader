@@ -7,6 +7,7 @@ Backend tooling must run inside the project virtual environment populated from `
 ## Development setup
 - Preferred bootstrap: `./scripts/setup_container`. The script installs the required system packages (ffmpeg, libturbojpeg, libpcap-dev, libsqlite3-dev, python3-venv), ensures Python 3.13.3 via `pyenv` when available, creates `.venv`, upgrades `pip`, installs `requirements.txt`, and prepares `config/` plus the `/config` symlink.
 - Activate the virtual environment in every new shell with `source .venv/bin/activate`.
+- When working inside Andreas' Raspberry Pi 5 VS Code environment, use the pre-created `venv-ha` instead: `source venv-ha/bin/activate`, then launch Home Assistant with `hass --config ~/coding/repos/ha-pp-reader/config`.
 - Install contributor extras when you plan to run tests or linting: `pip install -r requirements-dev.txt`.
 - Alternative bootstraps:
   - `./scripts/setup` (expects Python already available) seeds dependencies in-place and sets up `/config`.
@@ -15,7 +16,7 @@ Backend tooling must run inside the project virtual environment populated from `
 
 ## Day-to-day workflow
 - Start the development Home Assistant instance with `./scripts/develop`. The script seeds `config/`, maintains the `/config` symlink, and exports `PYTHONPATH` so Home Assistant sees `custom_components/`.
-- Format and lint Python code with `./scripts/lint` (runs `ruff format .` then `ruff check . --fix`).
+- Format and lint Python code with `./scripts/lint` (runs `ruff format .` then `ruff check . --fix`), available in venv-ha.
 - Run the Python tests with `pytest`. For coverage reporting use `pytest --cov=custom_components/pp_reader --cov-report=term-missing`.
 - Optional validation: run Home Assistant's integration validator with `python -m script.hassfest`.
 - Develop dashboard changes with `npm run dev` while Home Assistant runs; open `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` to stream assets from Vite.

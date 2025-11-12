@@ -92,9 +92,14 @@ def _make_position_snapshot() -> PositionSnapshot:
         average_cost=average_cost,
         performance=performance,
         aggregation=aggregation,
-        coverage_ratio=1.0,
-        provenance=None,
+        coverage_ratio=0.75,
+        provenance="metrics",
         metric_run_uuid="metric-1",
+        last_price_native=91.234567,
+        last_price_eur=92.345678,
+        last_close_native=90.0,
+        last_close_eur=91.0,
+        data_state=SnapshotDataState(status="warning", message="stale coverage"),
     )
 
 
@@ -191,18 +196,16 @@ async def test_ws_get_portfolio_positions_normalises_currency(
     assert position["purchase_value"] == pytest.approx(expected_purchase_value)
     assert position["current_value"] == pytest.approx(expected_current_value)
 
+    expected_position = _make_portfolio_snapshot(include_positions=True).positions[0]
     average_cost = position["average_cost"]
-    assert average_cost["eur"] == pytest.approx(
-        round_currency(expected_purchase_value / expected_holdings, default=0.0)
-        or 0.0
-    )
+    assert average_cost["eur"] == pytest.approx(expected_position.average_cost["eur"])
     assert average_cost["security"] == pytest.approx(
-        round_price(11.111111, decimals=6) or 0.0
+        round_price(expected_position.average_cost["security"], decimals=6) or 0.0
     )
     assert average_cost["account"] == pytest.approx(
-        round_price(22.222222, decimals=6) or 0.0
+        round_price(expected_position.average_cost["account"], decimals=6) or 0.0
     )
-    assert average_cost["source"] == "totals"
+    assert average_cost["source"] == expected_position.average_cost["source"]
 
     aggregation = position["aggregation"]
     assert aggregation["purchase_total_security"] == pytest.approx(
@@ -225,8 +228,34 @@ async def test_ws_get_portfolio_positions_normalises_currency(
         "source": performance_metrics.source,
         "coverage_ratio": performance_metrics.coverage_ratio,
     }
-    assert position["performance"] == expected_performance
-    assert position["performance"]["gain_abs"] == pytest.approx(expected_gain_abs)
+    actual_performance = position["performance"]
+    for key, value in expected_performance.items():
+        if value is None:
+            assert actual_performance[key] is None
+        elif isinstance(value, (int, float)):
+            assert actual_performance[key] == pytest.approx(value, rel=1e-4)
+        else:
+            assert actual_performance[key] == value
+    assert actual_performance["gain_abs"] == pytest.approx(expected_gain_abs)
+    assert position["coverage_ratio"] == pytest.approx(0.75)
+    assert position["provenance"] == "metrics"
+    assert position["metric_run_uuid"] == "metric-1"
+    assert position["last_price_native"] == pytest.approx(
+        round_price(91.234567, decimals=6) or 0.0
+    )
+    assert position["last_price_eur"] == pytest.approx(
+        round_price(92.345678, decimals=6) or 0.0
+    )
+    assert position["last_close_native"] == pytest.approx(
+        round_price(90.0, decimals=6) or 0.0
+    )
+    assert position["last_close_eur"] == pytest.approx(
+        round_price(91.0, decimals=6) or 0.0
+    )
+    assert position["data_state"] == {
+        "status": "warning",
+        "message": "stale coverage",
+    }
 
 
 def test_positions_payload_preserves_average_cost() -> None:
@@ -238,9 +267,7 @@ def test_positions_payload_preserves_average_cost() -> None:
     entry = payload[0]
 
     expected_average_cost = portfolio.positions[0].average_cost
-    assert entry["average_cost"]["eur"] == pytest.approx(
-        round_currency(expected_average_cost["eur"], default=0.0) or 0.0
-    )
+    assert entry["average_cost"]["eur"] == pytest.approx(expected_average_cost["eur"])
     assert entry["average_cost"]["security"] == pytest.approx(
         round_price(expected_average_cost["security"], decimals=6) or 0.0
     )

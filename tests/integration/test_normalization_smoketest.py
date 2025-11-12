@@ -26,15 +26,18 @@ def _ts(dt: datetime) -> Timestamp:
     return timestamp
 
 
+def _epoch_day(dt: datetime) -> int:
+    """Return the epoch day index expected by PP ingestion (days since 1970-01-01)."""
+    return int(dt.replace(tzinfo=UTC).timestamp() // 86400)
+
+
 def _build_sample_parsed_client() -> parsed.ParsedClient:
     """Return a minimal ParsedClient with Yahoo-compatible security metadata."""
     client = client_pb2.PClient()
     client.version = 7
     client.baseCurrency = "EUR"
 
-    prop = client.properties.add()
-    prop.key = "source"
-    prop.value.string = "normalization-smoketest"
+    client.properties["source"] = "normalization-smoketest"
 
     account = client.accounts.add()
     account.uuid = "acc-smoke"
@@ -61,11 +64,11 @@ def _build_sample_parsed_client() -> parsed.ParsedClient:
     prop.value.string = "SMOKE.DE"
 
     price = security.prices.add()
-    price.date = 20240110
+    price.date = _epoch_day(datetime(2024, 1, 10, tzinfo=UTC))
     price.close = 10_00
 
     latest = client_pb2.PFullHistoricalPrice()
-    latest.date = 20240111
+    latest.date = _epoch_day(datetime(2024, 1, 11, tzinfo=UTC))
     latest.close = 11_00
     security.latest.CopyFrom(latest)
 
@@ -84,7 +87,7 @@ def _build_sample_parsed_client() -> parsed.ParsedClient:
 
     buy = client.transactions.add()
     buy.uuid = "txn-buy"
-    buy.type = client_pb2.PTransaction.Type.BUY
+    buy.type = client_pb2.PTransaction.Type.PURCHASE
     buy.account = account.uuid
     buy.portfolio = portfolio.uuid
     buy.security = security.uuid
@@ -124,6 +127,20 @@ async def test_cli_smoketest_generates_normalized_snapshot(
         assert Path(path) == portfolio_path
         # Simulate parser progress to ensure callback surfaces.
         progress_cb(SimpleNamespace(stage="accounts", processed=1, total=1))
+        writer.write_accounts(parsed_client.accounts)
+        writer.write_portfolios(parsed_client.portfolios)
+        writer.write_securities(parsed_client.securities)
+        writer.write_transactions(parsed_client.transactions)
+        writer.write_transaction_units(
+            [(transaction.uuid, transaction.units) for transaction in parsed_client.transactions]
+        )
+        writer.write_historical_prices(
+            [
+                (security.uuid, security.prices)
+                for security in parsed_client.securities
+                if security.prices
+            ]
+        )
         return parsed_client
 
     monkeypatch.setattr(
@@ -199,6 +216,12 @@ async def test_cli_smoketest_generates_normalized_snapshot(
     assert history_summary["status"] == "completed"
     assert history_summary["targets"] == planned["targets"] == 1
     assert planned["process_limit"] == 3
+
+    sync_summary = await smoketest._run_sync(db_path)
+    assert sync_summary["status"] == "ok"
+    counts = sync_summary["counts"]
+    assert counts["portfolios"] == 1
+    assert counts["portfolio_securities"] == 1
 
     metrics_summary = await smoketest._run_metrics(hass, db_path)
     assert metrics_summary["status"] == "completed"

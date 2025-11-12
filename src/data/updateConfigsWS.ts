@@ -54,9 +54,24 @@ interface DiagnosticChange<T> {
   current: T | undefined;
 }
 
-type DiagnosticChanges = Partial<{
-  [K in keyof SnapshotDiagnosticsState]: DiagnosticChange<SnapshotDiagnosticsState[K]>;
-}>;
+type DiagnosticField = keyof SnapshotDiagnosticsState;
+type DiagnosticValue = string | number | null | undefined;
+
+type DiagnosticChanges = Partial<
+  Record<DiagnosticField, DiagnosticChange<DiagnosticValue>>
+>;
+
+function setDiagnosticChange(
+  changes: DiagnosticChanges,
+  field: DiagnosticField,
+  previousValue: DiagnosticValue,
+  currentValue: DiagnosticValue,
+): void {
+  changes[field] = {
+    previous: previousValue,
+    current: currentValue,
+  };
+}
 
 export interface DashboardDiagnosticsEventDetail {
   kind: DiagnosticSnapshotKind;
@@ -220,13 +235,12 @@ function diffDiagnostics(
   const changes: DiagnosticChanges = {};
   let hasChanges = false;
   for (const field of DIAGNOSTIC_FIELDS) {
-    if (previous?.[field] === next[field]) {
+    const previousValue = previous?.[field];
+    const currentValue = next[field];
+    if (previousValue === currentValue) {
       continue;
     }
-    changes[field] = {
-      previous: previous?.[field],
-      current: next[field],
-    };
+    setDiagnosticChange(changes, field, previousValue, currentValue);
     hasChanges = true;
   }
   return hasChanges ? changes : null;
@@ -236,13 +250,11 @@ function buildRemovalChanges(previous: SnapshotDiagnosticsState): DiagnosticChan
   const changes: DiagnosticChanges = {};
   let hasChanges = false;
   for (const field of DIAGNOSTIC_FIELDS) {
-    if (previous[field] === undefined) {
+    const previousValue = previous[field];
+    if (previousValue === undefined) {
       continue;
     }
-    changes[field] = {
-      previous: previous[field],
-      current: undefined,
-    };
+    setDiagnosticChange(changes, field, previousValue, undefined);
     hasChanges = true;
   }
   return hasChanges ? changes : null;
@@ -825,6 +837,13 @@ export function handlePortfolioUpdate(
     row.dataset.purchaseSum = purchase != null ? purchase.toString() : '';
     row.dataset.gainAbs = gainAbs != null ? gainAbs.toString() : '';
     row.dataset.gainPct = gainPct != null ? gainPct.toString() : '';
+    row.dataset.coverageRatio =
+      typeof snapshot.coverage_ratio === 'number' && Number.isFinite(snapshot.coverage_ratio)
+        ? snapshot.coverage_ratio.toString()
+        : '';
+    row.dataset.provenance = typeof snapshot.provenance === 'string' ? snapshot.provenance : '';
+    row.dataset.metricRunUuid =
+      typeof snapshot.metric_run_uuid === 'string' ? snapshot.metric_run_uuid : '';
 
     patched += 1;
   }

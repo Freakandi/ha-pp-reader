@@ -16,11 +16,13 @@ def test_portfolio_update_gain_abs_handles_zero_purchase() -> None:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert lines, "node script produced no output"
     data = json.loads(lines[-1])
 
+    assert data["footerHelperExported"] is True
     assert data["footerGain"] == "15,00\u00a0€"
     assert "positive" in data["footerGainHtml"]
     assert data["footerGainPct"] in ("", "0,00 %", "—")

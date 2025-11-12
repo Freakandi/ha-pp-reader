@@ -123,6 +123,7 @@ async def _async_run(
             pp_version=parsed_client.version,
             base_currency=parsed_client.base_currency,
             properties=dict(parsed_client.properties),
+            parsed_client=parsed_client,
         )
 
     return {

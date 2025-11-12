@@ -1,14 +1,19 @@
 """WebSocket tests for on-demand portfolio aggregation."""
 
 import asyncio
+import sqlite3
 from pathlib import Path
 
 import pytest
 
+from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.normalization_pipeline import (
+    NormalizationResult,
+    PortfolioSnapshot,
+    SnapshotDataState,
+)
 from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
-from custom_components.pp_reader.metrics.common import select_performance_metrics
-from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for module imports"
@@ -20,8 +25,6 @@ def initialized_db(tmp_path: Path) -> Path:
     """Create a minimal portfolio dataset for WebSocket integration tests."""
     db_path = tmp_path / "portfolio_ws.db"
     initialize_database_schema(db_path)
-
-    import sqlite3
 
     conn = sqlite3.connect(str(db_path))
     try:
@@ -115,132 +118,173 @@ class StubHass:
 
 
 @pytest.mark.asyncio
-async def test_ws_get_portfolio_data_returns_live_values(initialized_db: Path) -> None:
-    """The WebSocket handler should return DB aggregated values, not coordinator fallback."""
+async def test_ws_get_portfolio_data_returns_live_values(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The WebSocket handler should return normalization payloads as-is."""
     entry_id = "entry-1"
-    hass = StubHass(initialized_db, entry_id)
+    db_path = tmp_path / "portfolio_ws.db"
+    initialize_database_schema(db_path)
+    hass = StubHass(db_path, entry_id)
     connection = StubConnection()
 
-    msg = {"id": 1, "type": "pp_reader/get_portfolio_data", "entry_id": entry_id}
+    snapshot = NormalizationResult(
+        generated_at="2024-01-01T00:00:00Z",
+        metric_run_uuid="metric-1",
+        accounts=(),
+        portfolios=(
+            PortfolioSnapshot(
+                uuid="p1",
+                name="Alpha Depot",
+                current_value=1750000.0,
+                purchase_value=1500000.0,
+                position_count=1,
+                missing_value_positions=0,
+                performance={
+                    "gain_abs": 250000.0,
+                    "gain_pct": 16.6667,
+                    "total_change_eur": 250000.0,
+                    "total_change_pct": 16.6667,
+                    "source": "metrics",
+                    "coverage_ratio": 1.0,
+                },
+            ),
+            PortfolioSnapshot(
+                uuid="p2",
+                name="Beta Depot",
+                current_value=6200000.0,
+                purchase_value=5000000.0,
+                position_count=1,
+                missing_value_positions=0,
+                performance={
+                    "gain_abs": 1200000.0,
+                    "gain_pct": 24.0,
+                    "total_change_eur": 1200000.0,
+                    "total_change_pct": 24.0,
+                    "source": "metrics",
+                    "coverage_ratio": 0.75,
+                },
+            ),
+            PortfolioSnapshot(
+                uuid="p3",
+                name="Gamma Depot",
+                current_value=0.0,
+                purchase_value=0.0,
+                position_count=0,
+                missing_value_positions=0,
+                performance={
+                    "gain_abs": 0.0,
+                    "gain_pct": None,
+                    "total_change_eur": 0.0,
+                    "total_change_pct": None,
+                    "source": "metrics",
+                    "coverage_ratio": None,
+                },
+            ),
+        ),
+        diagnostics=None,
+    )
 
-    await ws_get_portfolio_data(hass, connection, msg)
+    called = {"value": False}
 
+    async def fake_snapshot(
+        hass_arg, db_path_arg, *, include_positions: bool = False
+    ):
+        called["value"] = True
+        return snapshot
+
+    monkeypatch.setattr(websocket_module, "async_normalize_snapshot", fake_snapshot)
+
+    await ws_get_portfolio_data(
+        hass,
+        connection,
+        {"id": 1, "type": "pp_reader/get_portfolio_data", "entry_id": entry_id},
+    )
+
+    assert called["value"] is True
     assert connection.errors == []
     assert len(connection.sent) == 1
     _, payload = connection.sent[0]
 
     portfolios = {item["uuid"]: item for item in payload["portfolios"]}
-    expected_performance_keys = {
-        "gain_abs",
-        "gain_pct",
-        "total_change_eur",
-        "total_change_pct",
-        "source",
-        "coverage_ratio",
+    assert portfolios["p1"]["current_value"] == pytest.approx(1_750_000.0)
+    assert portfolios["p1"]["purchase_sum"] == pytest.approx(1_500_000.0)
+    assert portfolios["p1"]["performance"]["gain_abs"] == pytest.approx(250_000.0)
+    assert portfolios["p2"]["performance"]["coverage_ratio"] == pytest.approx(0.75)
+    assert portfolios["p3"]["performance"]["gain_abs"] == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_ws_get_portfolio_data_includes_data_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Portfolios should forward SnapshotDataState metadata."""
+    db_path = tmp_path / "state.db"
+    initialize_database_schema(db_path)
+    entry_id = "entry-state"
+    hass = StubHass(db_path, entry_id)
+    connection = StubConnection()
+
+    snapshot = NormalizationResult(
+        generated_at="2024-02-01T00:00:00Z",
+        metric_run_uuid="metric-42",
+        accounts=(),
+        portfolios=(
+            PortfolioSnapshot(
+                uuid="portfolio-state",
+                name="State Depot",
+                current_value=100.0,
+                purchase_value=80.0,
+                position_count=1,
+                missing_value_positions=1,
+                performance={
+                    "gain_abs": 20.0,
+                    "gain_pct": 25.0,
+                    "total_change_eur": 20.0,
+                    "total_change_pct": 25.0,
+                    "source": "metrics",
+                    "coverage_ratio": None,
+                },
+                coverage_ratio=None,
+                provenance="metrics",
+                metric_run_uuid="metric-42",
+                positions=(),
+                data_state=SnapshotDataState(
+                    status="warning",
+                    message="Portfolio enthält Positionen ohne Bewertung.",
+                ),
+            ),
+        ),
+        diagnostics=None,
+    )
+
+    called = {"value": False}
+
+    async def fake_snapshot(
+        hass_arg, db_path_arg, *, include_positions: bool = False
+    ):
+        called["value"] = True
+        return snapshot
+
+    monkeypatch.setattr(websocket_module, "async_normalize_snapshot", fake_snapshot)
+
+    await ws_get_portfolio_data(
+        hass,
+        connection,
+        {"id": 99, "type": "pp_reader/get_portfolio_data", "entry_id": entry_id},
+    )
+
+    assert called["value"] is True
+    assert called["value"] is True
+    assert connection.errors == []
+    assert len(connection.sent) == 1
+    _, payload = connection.sent[0]
+    portfolio_payload = payload["portfolios"][0]
+    assert portfolio_payload["uuid"] == "portfolio-state"
+    assert portfolio_payload["purchase_sum"] == pytest.approx(80.0)
+    assert portfolio_payload["data_state"] == {
+        "status": "warning",
+        "message": "Portfolio enthält Positionen ohne Bewertung.",
     }
-
-    expected_p1_current = round_currency(
-        cent_to_eur(175_000_000, default=0.0),
-        default=0.0,
-    )
-    expected_p1_purchase = round_currency(
-        cent_to_eur(150_000_000, default=0.0),
-        default=0.0,
-    )
-    assert portfolios["p1"]["current_value"] == expected_p1_current
-    assert portfolios["p1"]["purchase_sum"] == expected_p1_purchase
-    assert portfolios["p1"]["position_count"] == 1
-    performance_p1, _ = select_performance_metrics(
-        current_value=expected_p1_current,
-        purchase_value=expected_p1_purchase,
-        holdings=1,
-    )
-    assert "gain_abs" not in portfolios["p1"]
-    assert "gain_pct" not in portfolios["p1"]
-    performance_payload_p1 = portfolios["p1"].get("performance")
-    assert performance_payload_p1 is not None
-    assert set(performance_payload_p1) == expected_performance_keys
-    assert performance_payload_p1["gain_abs"] == pytest.approx(performance_p1.gain_abs)
-    assert performance_payload_p1["gain_pct"] == pytest.approx(performance_p1.gain_pct)
-    assert performance_payload_p1["total_change_eur"] == pytest.approx(
-        performance_p1.total_change_eur
-    )
-    assert performance_payload_p1["total_change_pct"] == pytest.approx(
-        performance_p1.total_change_pct
-    )
-    assert performance_payload_p1["source"] == performance_p1.source
-    coverage_ratio_p1 = performance_p1.coverage_ratio
-    if coverage_ratio_p1 is None:
-        assert performance_payload_p1["coverage_ratio"] is None
-    else:
-        assert performance_payload_p1["coverage_ratio"] == pytest.approx(
-            coverage_ratio_p1
-        )
-
-    expected_p2_current = round_currency(
-        cent_to_eur(620_000_000, default=0.0),
-        default=0.0,
-    )
-    expected_p2_purchase = round_currency(
-        cent_to_eur(500_000_000, default=0.0),
-        default=0.0,
-    )
-    assert portfolios["p2"]["current_value"] == expected_p2_current
-    assert portfolios["p2"]["purchase_sum"] == expected_p2_purchase
-    assert portfolios["p2"]["position_count"] == 1
-    performance_p2, _ = select_performance_metrics(
-        current_value=expected_p2_current,
-        purchase_value=expected_p2_purchase,
-        holdings=1,
-    )
-    assert "gain_abs" not in portfolios["p2"]
-    assert "gain_pct" not in portfolios["p2"]
-    performance_payload_p2 = portfolios["p2"].get("performance")
-    assert performance_payload_p2 is not None
-    assert set(performance_payload_p2) == expected_performance_keys
-    assert performance_payload_p2["gain_abs"] == pytest.approx(performance_p2.gain_abs)
-    assert performance_payload_p2["gain_pct"] == pytest.approx(performance_p2.gain_pct)
-    assert performance_payload_p2["total_change_eur"] == pytest.approx(
-        performance_p2.total_change_eur
-    )
-    assert performance_payload_p2["total_change_pct"] == pytest.approx(
-        performance_p2.total_change_pct
-    )
-    assert performance_payload_p2["source"] == performance_p2.source
-    coverage_ratio_p2 = performance_p2.coverage_ratio
-    if coverage_ratio_p2 is None:
-        assert performance_payload_p2["coverage_ratio"] is None
-    else:
-        assert performance_payload_p2["coverage_ratio"] == pytest.approx(
-            coverage_ratio_p2
-        )
-
-    assert portfolios["p3"]["current_value"] == 0.0
-    assert portfolios["p3"]["purchase_sum"] == 0.0
-    assert portfolios["p3"]["position_count"] == 0
-    performance_p3, _ = select_performance_metrics(
-        current_value=0.0,
-        purchase_value=0.0,
-        holdings=0,
-    )
-    assert "gain_abs" not in portfolios["p3"]
-    assert "gain_pct" not in portfolios["p3"]
-    performance_payload_p3 = portfolios["p3"].get("performance")
-    assert performance_payload_p3 is not None
-    assert set(performance_payload_p3) == expected_performance_keys
-    assert performance_payload_p3["gain_abs"] == pytest.approx(performance_p3.gain_abs)
-    assert performance_payload_p3["gain_pct"] == pytest.approx(performance_p3.gain_pct)
-    assert performance_payload_p3["total_change_eur"] == pytest.approx(
-        performance_p3.total_change_eur
-    )
-    assert performance_payload_p3["total_change_pct"] == pytest.approx(
-        performance_p3.total_change_pct
-    )
-    assert performance_payload_p3["source"] == performance_p3.source
-    coverage_ratio_p3 = performance_p3.coverage_ratio
-    if coverage_ratio_p3 is None:
-        assert performance_payload_p3["coverage_ratio"] is None
-    else:
-        assert performance_payload_p3["coverage_ratio"] == pytest.approx(
-            coverage_ratio_p3
-        )
