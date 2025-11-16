@@ -39,6 +39,16 @@ export default defineConfig(() => {
 
   return {
     publicDir: false,
+    server: {
+      watch: {
+        // Ignore Python virtual environments to avoid hitting Pi watcher limits.
+        ignored: [
+          '**/venv-ha/**',
+          '**/.venv/**',
+          '**/venv/**',
+        ],
+      },
+    },
     build: {
       lib: {
         entry: entryFile,

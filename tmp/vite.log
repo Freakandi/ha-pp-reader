@@ -1,0 +1,8 @@
+
+> ha-pp-reader@1.0.0 dev
+> vite dev --host 127.0.0.1 --port 5173
+
+
+  VITE v5.4.20  ready in 244 ms
+
+  ➜  Local:   http://127.0.0.1:5173/

@@ -157,6 +157,9 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._last_pipeline_summary: dict[str, Any] | None = None
         self._enrichment_failure_streak = 0
         self._enrichment_failure_notified = False
+        self._manual_update_log_handle: asyncio.TimerHandle | None = None
+        self._manual_update_log_count = 0
+        self._manual_update_window_started: float | None = None
 
     async def _async_update_data(self) -> dict:
         """Überwache Dateiänderungen und orchestriere den Pipeline-Status."""
@@ -292,6 +295,70 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         async_dispatcher_send(self.hass, SIGNAL_PARSER_COMPLETED, payload)
         self.async_set_updated_data(self._build_telemetry_payload())
 
+    def _cancel_manual_update_log_handle(self) -> None:
+        """Cancel a scheduled manual update summary."""
+        if self._manual_update_log_handle is not None:
+            self._manual_update_log_handle.cancel()
+            self._manual_update_log_handle = None
+        self._manual_update_log_count = 0
+        self._manual_update_window_started = None
+
+    def _emit_manual_update_summary(self) -> None:
+        """Emit a condensed debug log for telemetry refresh bursts."""
+        self._manual_update_log_handle = None
+        count = self._manual_update_log_count
+        self._manual_update_log_count = 0
+        started = self._manual_update_window_started
+        self._manual_update_window_started = None
+        if not count:
+            return
+        if count == 1:
+            _LOGGER.debug(
+                "Telemetry snapshot refreshed (entry_id=%s)",
+                self.entry_id,
+            )
+            return
+        duration = 0.0
+        if started is not None:
+            duration = max(self.hass.loop.time() - started, 0.0)
+        _LOGGER.debug(
+            "Telemetry snapshot refreshed %s times within %.2fs (entry_id=%s)",
+            count,
+            duration or 0.0,
+            self.entry_id,
+        )
+
+    def _track_manual_update(self) -> None:
+        """Debounce noisy debug logs when telemetry updates rapidly."""
+        self._manual_update_log_count += 1
+        if self._manual_update_log_handle is not None:
+            return
+        loop = self.hass.loop
+        self._manual_update_window_started = loop.time()
+        self._manual_update_log_handle = loop.call_later(
+            1.0,
+            self._emit_manual_update_summary,
+        )
+
+    async def async_shutdown(self) -> None:
+        """Cancel scheduled updates and clear manual log debouncers."""
+        self._cancel_manual_update_log_handle()
+        await super().async_shutdown()
+
+    def async_set_updated_data(self, data: dict[str, Any]) -> None:
+        """Update coordinator telemetry without emitting per-call debug logs."""
+        self._async_unsub_refresh()
+        self._debounced_refresh.async_cancel()
+
+        self.data = data
+        self.last_update_success = True
+        self._track_manual_update()
+
+        if self._listeners:
+            self._schedule_refresh()
+
+        self.async_update_listeners()
+
     def _build_telemetry_payload(
         self,
         *,
@@ -387,83 +454,48 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
     async def _schedule_enrichment_jobs(self, parsed_client: Any) -> dict[str, Any]:
         """Plan FX refresh and price history jobs after imports."""
-        enriched_enabled = is_enabled(
-            "enrichment_pipeline",
-            self.hass,
-            entry_id=self.entry_id,
-            default=False,
-        )
-        if not enriched_enabled:
-            _LOGGER.debug(
-                "Enrichment-Pipeline deaktiviert, überspringe Planung (entry_id=%s)",
-                self.entry_id,
-            )
-            return {}
-
+        summary: dict[str, Any] = {}
+        errors: list[str] = []
         self._emit_enrichment_progress("start")
         await self.hass.async_block_till_done()
 
-        summary: dict[str, Any] = {}
-        errors: list[str] = []
-
-        fx_enabled = is_enabled(
-            "enrichment_fx_refresh",
-            self.hass,
-            entry_id=self.entry_id,
-            default=True,
-        )
-        history_enabled = is_enabled(
-            "enrichment_history_jobs",
-            self.hass,
-            entry_id=self.entry_id,
-            default=True,
-        )
-
-        if fx_enabled:
-            try:
-                fx_result = await self._schedule_fx_refresh()
-            except Exception as err:  # pragma: no cover - defensive
-                _LOGGER.exception(
-                    "Enrichment-Pipeline: FX-Planung fehlgeschlagen (entry_id=%s)",
-                    self.entry_id,
-                )
-                errors.append(str(err))
-                self._emit_enrichment_progress(
-                    "fx_refresh_exception",
-                    error=str(err),
-                )
-                await self.hass.async_block_till_done()
-            else:
-                if isinstance(fx_result, Mapping):
-                    summary.update(fx_result)
-                await self.hass.async_block_till_done()
+        try:
+            fx_result = await self._schedule_fx_refresh()
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.exception(
+                "Enrichment-Pipeline: FX-Planung fehlgeschlagen (entry_id=%s)",
+                self.entry_id,
+            )
+            errors.append(str(err))
+            self._emit_enrichment_progress(
+                "fx_refresh_exception",
+                error=str(err),
+            )
+            await self.hass.async_block_till_done()
         else:
-            summary["fx_status"] = "disabled"
-            self._emit_enrichment_progress("fx_skipped_disabled")
+            if isinstance(fx_result, Mapping):
+                summary.update(fx_result)
             await self.hass.async_block_till_done()
 
-        if history_enabled:
-            try:
-                history_result = await self._schedule_price_history_jobs(parsed_client)
-            except Exception as err:  # pragma: no cover - defensive
-                _LOGGER.exception(
-                    "Enrichment-Pipeline: History-Planung fehlgeschlagen (entry_id=%s)",
-                    self.entry_id,
-                )
-                errors.append(str(err))
-                self._emit_enrichment_progress(
-                    "history_jobs_exception",
-                    error=str(err),
-                )
-                await self.hass.async_block_till_done()
-            else:
-                if isinstance(history_result, Mapping):
-                    summary.update(history_result)
-                await self.hass.async_block_till_done()
+        try:
+            history_result = await self._schedule_price_history_jobs(parsed_client)
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.exception(
+                (
+                    "Enrichment-Pipeline: History-Planung fehlgeschlagen "
+                    "(entry_id=%s)"
+                ),
+                self.entry_id,
+            )
+            errors.append(str(err))
+            self._emit_enrichment_progress(
+                "history_jobs_exception",
+                error=str(err),
+            )
+            await self.hass.async_block_till_done()
         else:
-            summary["history_status"] = "disabled"
-            summary["history_jobs_enqueued"] = 0
-            self._emit_enrichment_progress("history_skipped_disabled")
+            if isinstance(history_result, Mapping):
+                summary.update(history_result)
             await self.hass.async_block_till_done()
 
         if errors:
@@ -484,21 +516,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         *,
         errors: Iterable[str],
     ) -> None:
-        """Trigger the metrics engine when the feature flag is enabled."""
-        metrics_enabled = is_enabled(
-            "metrics_pipeline",
-            self.hass,
-            entry_id=self.entry_id,
-            default=False,
-        )
-        if not metrics_enabled:
-            summary["metrics_status"] = "disabled"
-            self._emit_metrics_progress(
-                "disabled",
-                {"reason": "feature_flag_disabled"},
-            )
-            return
-
+        """Trigger the metrics engine after enrichment tasks finished."""
         error_list = list(errors)
         failure_reasons = summary.get("failure_reasons") or ()
         if error_list or failure_reasons:

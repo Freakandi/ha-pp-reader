@@ -375,13 +375,22 @@ async def _load_canonical_snapshots(
 
     accounts = _clone(bundle.accounts)
     portfolios = _clone(bundle.portfolios)
+    account_count = len(accounts)
+    portfolio_count = len(portfolios)
+    status = "ok"
+    if account_count == 0 and portfolio_count == 0:
+        LOGGER.error(
+            "Canonical snapshot bundle is empty (metric_run_uuid=%s).",
+            bundle.metric_run_uuid,
+        )
+        status = "empty"
     return {
-        "status": "ok",
+        "status": status,
         "metric_run_uuid": bundle.metric_run_uuid,
         "snapshot_at": bundle.snapshot_at,
         "counts": {
-            "accounts": len(accounts),
-            "portfolios": len(portfolios),
+            "accounts": account_count,
+            "portfolios": portfolio_count,
         },
         "accounts": accounts,
         "portfolios": portfolios,

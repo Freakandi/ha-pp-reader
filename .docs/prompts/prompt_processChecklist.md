@@ -5,13 +5,15 @@ PROMPT:
 Arbeite als Implementierungs-Assistent für das Home Assistant Integration Projekt `pp_reader`.
 
 Ziel:
-Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/TODO_cleanup_diff_sync.md
+Abarbeitung der vollständigen ToDo-Liste für die Canonical-Pipeline-Korrektur gemäß:
+- `.docs/TODO_canonical_pipeline_fix.md` (Details siehe `.docs/canonical_pipeline_fix.md`)
 
 Unterstützende Ressourcen und bisherige Arbeit:
-- .docs/refactor_roadmap.md
-- .docs/legacy_cleanup_strategy.md
-- Files in datamodel/
+- `.docs/refactor_roadmap.md`
+- `.docs/legacy_cleanup_strategy.md`
+- `.docs/TODO_cleanup_diff_sync.md` (Historie/Referenz, kein direkter Arbeitsplan mehr)
+- `.docs/canonical_pipeline_fix.md`
+- Files in `datamodel/`
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -26,7 +28,7 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - Relevante TODO-Datei (`TODO_cleanup_diff_sync.md`): markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - Relevante TODO-Datei (`TODO_canonical_pipeline_fix.md`): markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
    - Alle lint-Prüfungen müssen erfolgreich durchlaufen (ESLint für TypeScript, ruff für Python)

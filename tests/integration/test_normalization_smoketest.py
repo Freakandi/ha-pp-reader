@@ -13,6 +13,9 @@ import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.normalized_store import (
+    async_load_latest_snapshot_bundle,
+)
 from custom_components.pp_reader.models import parsed
 from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 from custom_components.pp_reader.util import diagnostics
@@ -314,6 +317,24 @@ async def test_cli_smoketest_generates_normalized_snapshot(
     assert canonical_summary["status"] == "ok"
     assert canonical_summary["counts"]["accounts"] == 1
     assert canonical_summary["counts"]["portfolios"] == 1
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        def _count(table: str) -> int:
+            return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
+        assert _count("metric_runs") >= 1
+        assert _count("portfolio_metrics") >= 1
+        assert _count("account_metrics") >= 1
+        assert _count("portfolio_snapshots") >= 1
+        assert _count("account_snapshots") >= 1
+    finally:
+        conn.close()
+
+    bundle = await async_load_latest_snapshot_bundle(hass, db_path)
+    assert bundle.metric_run_uuid == metrics_summary["run_uuid"]
+    assert len(bundle.accounts) >= 1
+    assert len(bundle.portfolios) >= 1
 
     diagnostics_payload = await diagnostics.async_get_parser_diagnostics(
         hass,

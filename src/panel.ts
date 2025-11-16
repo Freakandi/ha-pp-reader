@@ -28,6 +28,20 @@ interface DashboardHostElement extends DashboardElement {
 const PANEL_URL = new URL(import.meta.url);
 const ASSET_BASE_URL = new URL('./', PANEL_URL);
 const ASSET_VERSION = PANEL_URL.searchParams.get('v');
+const BUNDLED_ASSET_ROOT = '/pp_reader_dashboard/';
+
+const CSS_BASE_URL = (() => {
+  if (typeof window !== 'undefined') {
+    try {
+      if (PANEL_URL.origin !== window.location.origin) {
+        return new URL(BUNDLED_ASSET_ROOT, window.location.origin);
+      }
+    } catch (error) {
+      console.warn('[pp_reader] Konnte CSS-Basispfad nicht ableiten, verwende Panel-URL.', error);
+    }
+  }
+  return ASSET_BASE_URL;
+})();
 
 class PPReaderPanel extends HTMLElement {
   private _dashboardEl: DashboardHostElement | null = null;
@@ -108,7 +122,7 @@ class PPReaderPanel extends HTMLElement {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     try {
-      const url = new URL(relativePath, ASSET_BASE_URL);
+      const url = new URL(relativePath, CSS_BASE_URL);
       if (ASSET_VERSION) {
         url.searchParams.set('v', ASSET_VERSION);
       }

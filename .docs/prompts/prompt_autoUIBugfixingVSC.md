@@ -25,8 +25,9 @@ Execute a combined automated + manual UI verification loop for the Portfolio Per
    - Start Home Assistant + the Vite dev server (see Runtime Setup) before invoking Playwright, so `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` is reachable.
    - Override defaults with env vars if needed: `PP_READER_HA_BASE_URL` (Home Assistant origin), `PP_READER_VITE_URL` (Vite dev server URL), `PP_READER_HA_USERNAME`, `PP_READER_HA_PASSWORD`.
    - Execute headless checks via `npm run test:ui -- --project=Chromium`; add `--headed` when debugging interactions locally.
-   - Capture UI evidence throughout the run; store every screenshot under `tests/ui/playwright/`.
-   - Use `chafa tests/ui/playwright/<filename>.png` immediately after each capture to visually inspect it inside the terminal. This verifies the screenshot without leaving the CLI.
+  - Capture UI evidence throughout the run; store every screenshot under `tests/ui/playwright/`. These must be actual browser captures that reviewers can open (e.g., take the shot with `npx playwright screenshot --device="Desktop Chrome" <url> <path>.png` or `chromium --headless --screenshot=<path>.png <url>`). Do not synthesize images from text logs.
+  - When using `npx playwright screenshot`, pass `--wait-for-selector='home-assistant-main' --wait-for-timeout=4000` (or equivalent) so the HA shell finishes rendering instead of capturing the splash screen.
+  - Use `chafa tests/ui/playwright/<filename>.png` immediately after each capture to visually inspect it inside the terminal. This verifies the screenshot without leaving the CLI.
    - If the HA auth form cannot be displayed because an existing session is active, take the evidence from the Portfolio Dashboard panel at `http://127.0.0.1:8123/ppreader`.
 
 ## Runtime Setup
@@ -38,7 +39,7 @@ Execute a combined automated + manual UI verification loop for the Portfolio Per
    - Run `npm run dev -- --host 127.0.0.1 --port 5173` to start Vite.
    - Access the panel via `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` after signing into Home Assistant (credentials: `dev` / `dev`).
    - Keep the browser's developer tools (console + network tabs) visible.
-   - Before making any fixes, capture a “before” screenshot of the issue; capture an “after” screenshot once the fix is verified. Save each file to `tests/ui/playwright/` named `YY-MM-DD_HH:MM_[before|after].png` (24h time, UTC). When login UI cannot be reached (e.g., due to an already authenticated HA session), capture the Portfolio Dashboard view instead so reviewers still have context.
+   - Before making any fixes, capture a “before” screenshot of the issue; capture an “after” screenshot once the fix is verified. Save each file to `tests/ui/playwright/` named `YY-MM-DD_HH:MM_[before|after].png` (24h time, UTC). These captures must show the actual HA/PP Reader UI, not a textual mockup. When login UI cannot be reached (e.g., due to an already authenticated HA session), capture the Portfolio Dashboard view instead so reviewers still have context.
 3. **Playwright Smoke Pass**
    - With both Home Assistant and Vite active, run `npm run test:ui -- --project=Chromium` to capture a baseline headless result before manual poking.
    - Re-run the same command (or `npm run test:ui` to fan out across all browsers) after every fix touching the dashboard code or backend APIs that feed it.

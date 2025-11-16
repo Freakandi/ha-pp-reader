@@ -6,6 +6,7 @@ Document the authoritative strategy for retiring the protobuf diff-sync pipeline
 ## Authoritative Decisions
 - **Canonical storage:** Snapshot + metric tables (`portfolio_snapshots`, `account_snapshots`, `portfolio_metrics`, `account_metrics`, `security_metrics`, `metric_runs`) are the only runtime source of truth. Legacy diff-sync tables exist solely until all consumers migrate and will then be removed.
 - **Transition strategy:** No interim ingestion-applier or hybrid flow. Refactor every consumer directly to the canonical layer, then delete the diff-sync code paths as soon as tests confirm the migration.
+- **Feature flags:** Runtime feature flag plumbing remains available for future experiments, but enrichment, FX refresh, metrics, and normalization always execute after every parser run with no user-facing toggles.
 
 ## Target Architecture
 1. **Parser & Staging (existing):**
