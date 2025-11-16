@@ -14,7 +14,6 @@ import asyncio
 import functools
 import json
 import logging
-import sqlite3
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,9 +27,10 @@ from custom_components.pp_reader.data.normalization_pipeline import (
     async_normalize_snapshot,
     serialize_normalization_result,
 )
-from custom_components.pp_reader.data.sync_from_pclient import sync_from_pclient
+from custom_components.pp_reader.data.normalized_store import (
+    async_load_latest_snapshot_bundle,
+)
 from custom_components.pp_reader.metrics import pipeline as metrics_pipeline
-from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
     build_history_targets_from_parsed,
@@ -253,60 +253,6 @@ async def _run_price_history_jobs(
     }
 
 
-async def _run_sync(db_path: Path) -> dict[str, Any]:
-    """Materialize staging data into the canonical portfolio tables."""
-    LOGGER.info("Synchronizing ingestion staging tables into canonical schema...")
-    try:
-        summary = await asyncio.to_thread(_sync_portfolio_database, db_path)
-    except Exception as exc:  # pragma: no cover - defensive logging
-        LOGGER.exception("Portfolio sync failed")
-        return {"status": "failed", "error": str(exc)}
-
-    return {"status": "ok", **summary}
-
-
-def _sync_portfolio_database(db_path: Path) -> dict[str, Any]:
-    conn = sqlite3.connect(str(db_path))
-    try:
-        sync_from_pclient(
-            client_pb2.PClient(),
-            conn,
-            hass=None,
-            entry_id=None,
-            last_file_update=None,
-            db_path=db_path,
-        )
-        counts = {
-            table: _safe_table_count(conn, table)
-            for table in (
-                "accounts",
-                "portfolios",
-                "securities",
-                "transactions",
-                "portfolio_securities",
-            )
-        }
-        return {"counts": counts}
-    finally:
-        conn.close()
-
-
-def _safe_table_count(conn: sqlite3.Connection, table: str) -> int | None:
-    try:
-        cursor = conn.execute(
-            f'SELECT COUNT(*) FROM "{table}"'  # noqa: S608 - fixed table list
-        )
-        row = cursor.fetchone()
-    except sqlite3.Error:
-        return None
-    if not row:
-        return None
-    try:
-        return int(row[0])
-    except (TypeError, ValueError):
-        return None
-
-
 async def _run_metrics(
     hass: _SmoketestHass,
     db_path: Path,
@@ -393,145 +339,56 @@ async def _run_normalization_snapshot(
     }
 
 
-def _collect_diagnostics(db_path: Path) -> dict[str, Any]:
-    """Gather counts and timestamps for ingestion/enrichment artifacts."""
-    payload: dict[str, Any] = {"ingestion": {}, "enrichment": {}, "metrics": {}}
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+async def _load_canonical_snapshots(
+    hass: _SmoketestHass,
+    db_path: Path,
+) -> dict[str, Any]:
+    """Load the persisted snapshot bundle from SQLite for diagnostics."""
+    LOGGER.info("Loading canonical snapshot bundle from %s", db_path)
     try:
-        for table in diagnostics.INGESTION_TABLES:
-            try:
-                cursor = conn.execute(
-                    f'SELECT COUNT(*) FROM "{table}"'  # noqa: S608 - tables are static
-                )
-                payload["ingestion"][table] = int(cursor.fetchone()[0])
-            except sqlite3.Error as exc:  # pragma: no cover - defensive logging
-                LOGGER.debug("Unable to count table %s: %s", table, exc)
-                payload["ingestion"][table] = None
-
-        fx_row = conn.execute(
-            """
-            SELECT COUNT(*) AS total, MAX(fetched_at) AS latest
-            FROM fx_rates
-            """
-        ).fetchone()
-        payload["enrichment"]["fx_rates"] = {
-            "rows": int(fx_row["total"]) if fx_row else 0,
-            "latest_fetch": fx_row["latest"] if fx_row else None,
+        bundle = await async_load_latest_snapshot_bundle(hass, db_path)
+    except FileNotFoundError:
+        return {
+            "status": "missing",
+            "reason": f"database not found at {db_path}",
+        }
+    except Exception as exc:
+        LOGGER.exception("Failed to load canonical snapshot bundle")
+        return {
+            "status": "failed",
+            "error": str(exc),
         }
 
-        history_row = conn.execute(
-            """
-            SELECT COUNT(*) AS total, MAX(fetched_at) AS latest
-            FROM ingestion_historical_prices
-            """
-        ).fetchone()
-        payload["enrichment"]["historical_prices"] = {
-            "rows": int(history_row["total"]) if history_row else 0,
-            "latest_fetch": history_row["latest"] if history_row else None,
+    if not bundle.metric_run_uuid:
+        return {
+            "status": "pending",
+            "reason": "no canonical snapshot recorded yet",
         }
 
-        queue_rows = conn.execute(
-            """
-            SELECT status, COUNT(*) AS count
-            FROM price_history_queue
-            GROUP BY status
-            """
-        ).fetchall()
-        payload["enrichment"]["price_history_queue"] = {
-            row["status"]: row["count"] for row in queue_rows
-        }
+    def _clone(entries: tuple[dict[str, Any], ...]) -> list[dict[str, Any]]:
+        return [dict(entry) for entry in entries]
 
-        runs_overview = conn.execute(
-            """
-            SELECT
-                COUNT(*) AS total_runs,
-                MAX(started_at) AS latest_started_at
-            FROM metric_runs
-            """
-        ).fetchone()
-        latest_run_row = conn.execute(
-            """
-            SELECT
-                run_uuid,
-                status,
-                trigger,
-                started_at,
-                finished_at,
-                duration_ms,
-                total_entities,
-                processed_portfolios,
-                processed_accounts,
-                processed_securities,
-                error_message
-            FROM metric_runs
-            ORDER BY started_at DESC
-            LIMIT 1
-            """
-        ).fetchone()
+    accounts = _clone(bundle.accounts)
+    portfolios = _clone(bundle.portfolios)
+    return {
+        "status": "ok",
+        "metric_run_uuid": bundle.metric_run_uuid,
+        "snapshot_at": bundle.snapshot_at,
+        "counts": {
+            "accounts": len(accounts),
+            "portfolios": len(portfolios),
+        },
+        "accounts": accounts,
+        "portfolios": portfolios,
+    }
 
-        metrics_counts: dict[str, int | None] = {}
-        try:
-            portfolio_count = conn.execute(
-                "SELECT COUNT(*) AS total FROM portfolio_metrics"
-            ).fetchone()
-            metrics_counts["portfolio_metrics"] = (
-                int(portfolio_count["total"]) if portfolio_count else 0
-            )
-        except sqlite3.Error:  # pragma: no cover - defensive logging
-            metrics_counts["portfolio_metrics"] = None
-
-        try:
-            account_count = conn.execute(
-                "SELECT COUNT(*) AS total FROM account_metrics"
-            ).fetchone()
-            metrics_counts["account_metrics"] = (
-                int(account_count["total"]) if account_count else 0
-            )
-        except sqlite3.Error:  # pragma: no cover - defensive logging
-            metrics_counts["account_metrics"] = None
-
-        try:
-            security_count = conn.execute(
-                "SELECT COUNT(*) AS total FROM security_metrics"
-            ).fetchone()
-            metrics_counts["security_metrics"] = (
-                int(security_count["total"]) if security_count else 0
-            )
-        except sqlite3.Error:  # pragma: no cover - defensive logging
-            metrics_counts["security_metrics"] = None
-
-        payload["metrics"] = {
-            "runs": {
-                "count": int(runs_overview["total_runs"]) if runs_overview else 0,
-                "latest_started_at": (
-                    runs_overview["latest_started_at"] if runs_overview else None
-                ),
-                "latest": {
-                    key: latest_run_row[key]
-                    for key in (
-                        "run_uuid",
-                        "status",
-                        "trigger",
-                        "started_at",
-                        "finished_at",
-                        "duration_ms",
-                        "total_entities",
-                        "processed_portfolios",
-                        "processed_accounts",
-                        "processed_securities",
-                        "error_message",
-                    )
-                }
-                if latest_run_row
-                else None,
-            },
-            "records": metrics_counts,
-        }
-    finally:
-        conn.close()
-
-    return payload
+def _snapshot_status_to_exit_code(status: str | None) -> int:
+    """Map canonical snapshot status values to dedicated exit codes."""
+    if status == "ok":
+        return 0
+    if status in {"pending", "missing"}:
+        return 6
+    return 7
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
@@ -623,9 +480,6 @@ async def _async_main(args: argparse.Namespace) -> int:
         limit=history_limit,
     )
 
-    LOGGER.info("Synchronizing portfolio data...")
-    sync_summary = await _run_sync(db_path)
-
     LOGGER.info("Running metrics pipeline...")
     metrics_summary = await _run_metrics(hass, db_path)
 
@@ -635,15 +489,20 @@ async def _async_main(args: argparse.Namespace) -> int:
         include_positions=include_positions,
     )
 
-    diag = _collect_diagnostics(db_path)
+    canonical_snapshots = await _load_canonical_snapshots(hass, db_path)
+    diag = await diagnostics.async_get_parser_diagnostics(
+        hass,
+        db_path,
+        entry_id=None,
+    )
     summary = {
         "run_id": run_id,
         "database": str(db_path),
         "fx": fx_summary,
         "history": history_summary,
-        "sync": sync_summary,
         "metrics": metrics_summary,
         "normalization": normalization_summary,
+        "snapshots": canonical_snapshots,
         "diagnostics": diag,
     }
     LOGGER.info(
@@ -656,12 +515,15 @@ async def _async_main(args: argparse.Namespace) -> int:
         exit_code = 2
     elif history_summary.get("status") in {"failed", "error"}:
         exit_code = 3
-    elif sync_summary.get("status") not in {"ok"}:
-        exit_code = 4
     elif metrics_summary.get("status") not in {"completed"}:
-        exit_code = 5
+        exit_code = 4
     elif normalization_summary.get("status") not in {"ok"}:
-        exit_code = 6
+        exit_code = 5
+
+    if exit_code == 0:
+        snapshot_status = canonical_snapshots.get("status")
+        exit_code = _snapshot_status_to_exit_code(snapshot_status)
+
     return exit_code
 
 

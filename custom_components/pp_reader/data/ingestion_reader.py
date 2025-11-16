@@ -16,13 +16,6 @@ try:  # pragma: no cover - optional dependency
 except ModuleNotFoundError:  # pragma: no cover - protobuf optional
     _ProtoTimestamp = None
 
-try:  # pragma: no cover - optional dependency
-    from custom_components.pp_reader.name.abuchen.portfolio import (
-        client_pb2 as _client_pb2,
-    )
-except ModuleNotFoundError:  # pragma: no cover - protobuf optional
-    _client_pb2 = None
-
 PARSER_META_KEY = "__pp_reader__"
 
 SqliteRow = tuple[Any, ...]
@@ -62,8 +55,9 @@ class IngestionSnapshot:
 def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
+    sanitized = f"{value[:-1]}+00:00" if value.endswith("Z") else value
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(sanitized)
     except ValueError:
         return None
 
@@ -966,35 +960,3 @@ def _apply_settings_proto(client: Any, settings: parsed.ParsedSettings | None) -
             config_proto.name = config.name
         if config.data:
             config_proto.data = config.data
-def load_proto_snapshot(conn: sqlite3.Connection) -> Any | None:
-    """Return a protobuf PClient constructed from staging data."""
-    if _client_pb2 is None:
-        return None
-
-    if not _ingestion_schema_available(conn):
-        return None
-
-    snapshot = load_ingestion_snapshot(conn)
-    if snapshot is None:
-        return None
-
-    parsed_client = snapshot.client
-
-    client = _client_pb2.PClient()
-    if parsed_client.base_currency:
-        client.baseCurrency = parsed_client.base_currency
-    if parsed_client.version:
-        client.version = int(parsed_client.version)
-
-    _copy_any_map(client.properties, parsed_client.properties)
-    _apply_accounts_proto(client, parsed_client.accounts)
-    _apply_portfolios_proto(client, parsed_client.portfolios)
-    _apply_securities_proto(client, parsed_client.securities)
-    _apply_transactions_proto(client, parsed_client.transactions)
-    _apply_plans_proto(client, parsed_client.plans)
-    _apply_watchlists_proto(client, parsed_client.watchlists)
-    _apply_taxonomies_proto(client, parsed_client.taxonomies)
-    _apply_dashboards_proto(client, parsed_client.dashboards)
-    _apply_settings_proto(client, parsed_client.settings)
-
-    return client

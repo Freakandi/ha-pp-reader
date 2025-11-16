@@ -53,13 +53,12 @@ This concept document outlines how testing, documentation, and stakeholder commu
 - [ ] Record the produced bundle hash (e.g., `dashboard.CeqyI7r9.js`) plus the generated module diff inside the QA run entry so ops can verify their deployment matches the release tag.
 - [ ] For operator rebuilds (self-hosted dashboards or downstream forks), document that `npm ci && npm run build` must be executed on every upgrade before restarting Home Assistant; copy the resulting `www/pp_reader_dashboard/` contents verbatim and re-run `scripts/prepare_main_pr.sh dev main` when promoting to `main`.
 
-### Manual dashboard verification & feature-flag expectations
+### Manual dashboard verification
 - [ ] Start Home Assistant with `./scripts/develop` (or `hass --config ~/coding/repos/ha-pp-reader/config` inside `venv-ha`) and ensure the integration is set up using the canonical fixtures.
-- [ ] In Settings → Devices & Services → Portfolio Performance Reader → Configure, toggle both `normalized_pipeline` and `normalized_dashboard_adapter` to **On**; capture a screenshot of the options flow plus the resulting `config_entry.options["feature_flags"]` block from diagnostics to prove defaults are correctly applied.
 - [ ] Run `python -m scripts.enrichment_smoketest --output tmp/m6_dashboard` to seed normalized snapshots that match the latest fixtures before loading the dashboard.
 - [ ] Open `http://127.0.0.1:8123/ppreader` (or the Vite dev server URL when `npm run dev` is active) using the `dev/dev` account, then validate Overview, Accounts, Positions, and Security Detail tabs for: latest coverage badge, FX banner states, and history chart parity with `pp_reader_dom_reference.md`.
 - [ ] Capture one websocket payload per `data_type` via browser devtools, annotate expected aggregator keys, and compare against `custom_components/pp_reader/util/diagnostics.py --normalized` output to confirm no legacy adapter payloads leak through.
-- [ ] Restart Home Assistant (or reload the integration) once assets are rebuilt to confirm operators only need a config-entry reload after toggling the feature flags—document any additional manual rebuild/restart requirements for the release announcement.
+- [ ] Restart Home Assistant (or reload the integration) once assets are rebuilt to document any manual rebuild/restart requirements for the release announcement.
 
 ## Documentation Plan
 - **Architecture refresh.** Update `README-dev.md`, `.docs/ARCHITECTURE.md`, and `.docs/live_aggregation/` notes with diagrams referencing the canonical pipeline, replacing legacy flow explanations.

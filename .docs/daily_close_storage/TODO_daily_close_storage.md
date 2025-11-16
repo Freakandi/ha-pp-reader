@@ -65,8 +65,8 @@
       - Ziel: Schritte erläutern, wie das History-Flag aktiviert wird (z.B. via YAML/Optionsflow), bis UI-Unterstützung folgt.
 
 5. Tests erweitern
-   a) [x] Migrationstest für Index hinzufügen
-      - Datei: `tests/test_migration.py`
+   a) [x] Migrationstest für Index hinzufügen (Legacy test removed — the index is now part of the canonical schema via `ALL_SCHEMAS`).
+      - Datei: `tests/test_migration.py` (entfernt)
       - Abschnitt/Funktion: Neuer Testfall `test_creates_historical_price_index`
       - Ziel: Verifizieren, dass Initialisierung/Migration den Index `idx_historical_prices_security_date` anlegt.
    b) [x] Import-Deduplikation testen
@@ -126,4 +126,3 @@
       - Datei/Command: `pytest`
       - Abschnitt/Funktion: Warnungen zu nicht awaiteten WebSocket-Helfern (`custom_components/pp_reader/data/websocket.py`)
       - Ziel: Laufzeit-Warnungen aus der Test-Suite eliminieren, um potenzielle Ressourcen-Lecks zu vermeiden.
-

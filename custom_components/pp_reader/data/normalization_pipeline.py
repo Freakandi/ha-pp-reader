@@ -18,7 +18,7 @@ else:  # pragma: no cover - runtime fallback for type hints
     HomeAssistant = Any  # type: ignore[assignment]
 
 from custom_components.pp_reader.logic.securities import get_missing_fx_diagnostics
-from custom_components.pp_reader.metrics.storage import MetricBatch
+from custom_components.pp_reader.metrics.storage import load_latest_metric_batch
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
@@ -35,16 +35,13 @@ from .db_access import (
     PortfolioMetricRecord,
     Security,
     SecurityMetricRecord,
-    fetch_account_metrics,
-    fetch_portfolio_metrics,
-    fetch_security_metrics,
     get_accounts,
     get_portfolios,
     get_securities,
     get_security_snapshot,
     iter_security_close_prices,
-    load_latest_completed_metric_run_uuid,
 )
+from .snapshot_writer import persist_normalization_result
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.normalization")
 
@@ -343,12 +340,8 @@ def _normalize_snapshot_sync(
     include_positions: bool,
 ) -> NormalizationResult:
     """Build the snapshot synchronously for executor execution."""
-    run_uuid = load_latest_completed_metric_run_uuid(db_path)
-    metric_batch = _load_metric_batch(
-        db_path,
-        run_uuid,
-        include_positions=include_positions,
-    )
+    run_metadata, metric_batch = load_latest_metric_batch(db_path)
+    run_uuid = run_metadata.run_uuid if run_metadata else None
 
     accounts = _safe_load(get_accounts, db_path, "accounts")
     portfolios = _safe_load(get_portfolios, db_path, "portfolios")
@@ -369,62 +362,28 @@ def _normalize_snapshot_sync(
         position_context=position_context,
     )
 
-    return NormalizationResult(
+    result = NormalizationResult(
         generated_at=_utc_now_isoformat(),
         metric_run_uuid=run_uuid,
         accounts=tuple(account_snapshots),
         portfolios=tuple(portfolio_snapshots),
         diagnostics=get_missing_fx_diagnostics(),
     )
-
-
-def _load_metric_batch(
-    db_path: Path,
-    run_uuid: str | None,
-    *,
-    include_positions: bool,
-) -> MetricBatch:
-    """Load persisted metric records into a MetricBatch container."""
-    if not run_uuid:
-        return MetricBatch()
-
     try:
-        portfolio_metrics = fetch_portfolio_metrics(db_path, run_uuid)
+        persist_normalization_result(
+            db_path,
+            result,
+            account_serializer=serialize_account_snapshot,
+            portfolio_serializer=serialize_portfolio_snapshot,
+        )
     except Exception:
         _LOGGER.exception(
-            "normalization_pipeline: Fehler beim Laden der Portfolio-Metriken "
+            "normalization_pipeline: Fehler beim Persistieren der Canonical Snapshots "
             "(run_uuid=%s)",
             run_uuid,
         )
-        portfolio_metrics = []
+    return result
 
-    try:
-        account_metrics = fetch_account_metrics(db_path, run_uuid)
-    except Exception:
-        _LOGGER.exception(
-            "normalization_pipeline: Fehler beim Laden der Konto-Metriken "
-            "(run_uuid=%s)",
-            run_uuid,
-        )
-        account_metrics = []
-
-    security_metrics: Sequence[SecurityMetricRecord] | tuple[()] = ()
-    if include_positions:
-        try:
-            security_metrics = fetch_security_metrics(db_path, run_uuid)
-        except Exception:
-            _LOGGER.exception(
-                "normalization_pipeline: Fehler beim Laden der Wertpapier-Metriken "
-                "(run_uuid=%s)",
-                run_uuid,
-            )
-            security_metrics = []
-
-    return MetricBatch(
-        portfolios=tuple(portfolio_metrics),
-        accounts=tuple(account_metrics),
-        securities=tuple(security_metrics),
-    )
 
 
 def _compose_account_snapshots(
@@ -786,19 +745,21 @@ def load_portfolio_position_snapshots(
         return {}
 
     resolved_path = Path(db_path)
-    run_uuid = load_latest_completed_metric_run_uuid(resolved_path)
+    try:
+        run_metadata, metric_batch = load_latest_metric_batch(resolved_path)
+    except Exception:  # pragma: no cover - defensive fallback
+        _LOGGER.exception(
+            "normalization_pipeline: Fehler beim Laden der Metric-Batch für "
+            "portfolio_positions",
+        )
+        return dict.fromkeys(normalized_ids, ())
+    run_uuid = run_metadata.run_uuid if run_metadata else None
     if not run_uuid:
         return dict.fromkeys(normalized_ids, ())
 
-    try:
-        security_metrics = fetch_security_metrics(resolved_path, run_uuid)
-    except Exception:
-        _LOGGER.exception(
-            "normalization_pipeline: Fehler beim Laden der Wertpapier-Metriken "
-            "für portfolio_positions (run_uuid=%s)",
-            run_uuid,
-        )
-        security_metrics = []
+    security_metrics: Sequence[SecurityMetricRecord] | tuple[()] = (
+        metric_batch.securities or ()
+    )
 
     securities = _load_securities(resolved_path)
     grouped_metrics = _index_security_metrics_by_portfolio(security_metrics)

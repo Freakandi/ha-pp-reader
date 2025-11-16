@@ -5,7 +5,6 @@ Handles user configuration steps for setting up portfolio file and database path
 """
 
 import logging
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -28,13 +27,36 @@ from .const import (
     DOMAIN,
     MIN_FX_UPDATE_INTERVAL_SECONDS,
 )
-from .data.reader import parse_data_portfolio
+from .services import (
+    PortfolioParseError,
+    PortfolioValidationError,
+    parser_pipeline,
+)
 from .util.paths import default_database_path, resolve_storage_path
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL = 900
 MIN_OPTIONS_PRICE_UPDATE_INTERVAL = 300
+
+
+class _ValidationWriter:
+    """No-op writer used to validate portfolio uploads."""
+
+    def write_accounts(self, _accounts: list[Any]) -> None:
+        return None
+
+    def write_portfolios(self, _portfolios: list[Any]) -> None:
+        return None
+
+    def write_securities(self, _securities: list[Any]) -> None:
+        return None
+
+    def write_transactions(self, _transactions: list[Any]) -> None:
+        return None
+
+
+_VALIDATION_WRITER = _ValidationWriter()
 
 
 class PPReaderConfigFlowContext(ConfigFlowContext):
@@ -84,35 +106,41 @@ class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
 
             if not errors and resolved_file_path is not None:
                 try:
-                    parsed = await self.hass.async_add_executor_job(
-                        parse_data_portfolio, str(resolved_file_path)
+                    await parser_pipeline.async_parse_portfolio(
+                        hass=self.hass,
+                        path=str(resolved_file_path),
+                        writer=_VALIDATION_WRITER,
+                        fire_progress=False,
+                    )
+                except (PortfolioParseError, PortfolioValidationError) as err:
+                    _LOGGER.warning(
+                        "Portfolio-Validierung fehlgeschlagen: %s",
+                        err,
+                    )
+                    errors["base"] = "parse_failed"
+                except Exception:
+                    _LOGGER.exception("Unbekannter Fehler beim Parserlauf")
+                    errors["base"] = "unknown"
+                else:
+                    self.context.update(
+                        {
+                            "file_path": str(resolved_file_path),
+                            "db_use_default": db_use_default,
+                        }
                     )
 
-                    if parsed is None:
-                        errors["base"] = "parse_failed"
-                    else:
-                        self.context.update(
-                            {
-                                "file_path": str(resolved_file_path),
-                                "db_use_default": db_use_default,
-                            }
+                    if db_use_default:
+                        portfolio_stem = resolved_file_path.stem
+                        db_path = default_database_path(self.hass, portfolio_stem)
+
+                        return self.async_create_entry(
+                            title=resolved_file_path.name,
+                            data={
+                                CONF_FILE_PATH: str(resolved_file_path),
+                                CONF_DB_PATH: str(db_path),
+                            },
                         )
-
-                        if db_use_default:
-                            portfolio_stem = resolved_file_path.stem
-                            db_path = default_database_path(self.hass, portfolio_stem)
-
-                            return self.async_create_entry(
-                                title=resolved_file_path.name,
-                                data={
-                                    CONF_FILE_PATH: str(resolved_file_path),
-                                    CONF_DB_PATH: str(db_path),
-                                },
-                            )
-                        return await self.async_step_db_path()
-                except Exception:
-                    _LOGGER.exception("Unbekannter Fehler")
-                    errors["base"] = "unknown"
+                    return await self.async_step_db_path()
 
         data_schema = vol.Schema(
             {
@@ -237,37 +265,6 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
             return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
         return val
 
-    def _current_feature_flag(self, name: str, *, default: bool = False) -> bool:
-        """Aktuellen Feature-Flag Wert liefern (oder Default)."""
-        flags = self._entry.options.get("feature_flags")
-        if isinstance(flags, Mapping):
-            value = flags.get(name)
-            if value is not None:
-                return bool(value)
-        return default
-
-    def _merge_feature_flags(self, overrides: Mapping[str, Any]) -> dict[str, bool]:
-        """Feature-Flag-Overrides mit bestehenden Optionen zusammenführen."""
-        merged: dict[str, bool] = {}
-        current = self._entry.options.get("feature_flags")
-        if isinstance(current, Mapping):
-            for key, value in current.items():
-                if not isinstance(key, str):
-                    continue
-                normalized = key.strip().lower()
-                if not normalized:
-                    continue
-                merged[normalized] = bool(value)
-
-        for key, value in overrides.items():
-            if not isinstance(key, str):
-                continue
-            normalized = key.strip().lower()
-            if not normalized:
-                continue
-            merged[normalized] = bool(value)
-        return merged
-
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Initialer Options-Schritt (Intervall + Debug)."""
         errors: dict[str, str] = {}
@@ -303,16 +300,7 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                 user_input.get("enable_price_debug", False)
             )
 
-            normalized_dashboard_adapter = bool(
-                user_input.pop("normalized_dashboard_adapter", True)
-            )
-
             if not errors:
-                user_input["feature_flags"] = self._merge_feature_flags(
-                    {
-                        "normalized_dashboard_adapter": normalized_dashboard_adapter,
-                    }
-                )
                 self._logger.debug("OptionsFlow: Speichere Optionen %s", user_input)
                 return self.async_create_entry(title="", data=user_input)
 
@@ -329,12 +317,6 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                 vol.Optional(
                     "enable_price_debug",
                     default=self._current_debug(),
-                ): bool,
-                vol.Optional(
-                    "normalized_dashboard_adapter",
-                    default=self._current_feature_flag(
-                        "normalized_dashboard_adapter", default=True
-                    ),
                 ): bool,
             }
         )

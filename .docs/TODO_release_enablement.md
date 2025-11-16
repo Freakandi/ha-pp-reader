@@ -1,5 +1,5 @@
 1. [ ] QA & Regression Validation
-   a) [x] Run full backend regression (`pytest -q` plus `pytest --cov=custom_components/pp_reader --cov-report=term-missing`) inside the project venv to confirm ingestion → enrichment → normalization passes with the normalized dashboard adapter enabled.
+   a) [x] Run full backend regression (`pytest -q` plus `pytest --cov=custom_components/pp_reader --cov-report=term-missing`) inside the project venv to confirm ingestion → enrichment → normalization passes with the canonical dashboard adapter flow.
       - Ziel: Catch parser/db/schema regressions before release packaging and capture failing modules for remediation.
       - 2025-02-14: Lauf `pytest -q` und `pytest --cov=custom_components/pp_reader --cov-report=term-missing` schlägt mit 48/49 Failures (u. a. fehlende `avg_price_*`-Spalten, fehlende `datetime.UTC`, Proto-Feldabweichungen, Node-Smoke-Tests) fehl → Blocker durch ausstehende Schema-/Datamodel-Migrationen.
       - 2025-02-17: `pytest -q` und `pytest --cov=custom_components/pp_reader --cov-report=term-missing` laufen in `venv-ha` vollständig grün (176 Tests, 1 Warnung) → Regressionen behoben, Ergebnisse in Pipelines dokumentiert.
@@ -16,7 +16,7 @@
       - Ziel: Keep frontend regression tests deterministic under the normalized adapter.
 
 3. [ ] Documentation & QA Playbook
-   a) [x] Extend `.docs/qa_docs_comms.md` with an M6 QA checklist covering backend regression runs, frontend smoke tests, and manual dashboard verification steps (including feature-flag expectations and operator rebuild instructions).
+   a) [x] Extend `.docs/qa_docs_comms.md` with an M6 QA checklist covering backend regression runs, frontend smoke tests, and manual dashboard verification steps (plus operator rebuild instructions).
       - Ziel: Give QA/ops teams a single runbook for sign-off.
    b) [x] Update `README.md`, `README-dev.md`, and `ARCHITECTURE.md` with final rollout instructions (feature flag defaults, asset rebuild guidance, note about removal of legacy adapters).
       - Ziel: Ensure external contributors understand the stabilized contract without referencing TODO files.
@@ -26,7 +26,7 @@
       - Ziel: Prepare HACS packaging with a clear semantic version for the normalized adapter GA.
    b) [x] Run `npm run build` followed by `scripts/update_dashboard_module.mjs` / `scripts/prepare_main_pr.sh dev main` to refresh bundled assets and ensure release branches stay in sync.
       - Ziel: Prevent mismatched dashboard bundles when promoting to `main`.
-   c) [x] Tag telemetry/diagnostics defaults (e.g., enable `normalized_pipeline` and `normalized_dashboard_adapter` by default) and describe any config-entry migration steps.
+   c) [x] Document telemetry/diagnostics defaults (normalized ingestion + adapter always on) and describe any config-entry migration steps.
       - Ziel: Minimize operator intervention during rollout.
 
 5. [ ] Legacy Cleanup Enablement

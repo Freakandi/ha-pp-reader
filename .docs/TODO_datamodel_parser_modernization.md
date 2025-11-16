@@ -19,7 +19,7 @@
       - Ziel/Ergebnis der Änderung: Zentraler Einstiegspunkt für Parser-Services gemäss `.docs/backend_workstreams.md`
    b) [x] Verschiebe die bisherige ZIP-/protobuf-Einleselogik aus `data/reader.py` nach `services/portfolio_file.py` und statte sie mit `async_read_portfolio_bytes` (nutzt `asyncio.to_thread`) sowie synchronem Fallback `read_portfolio_bytes` aus.
       - Dateipfad(e): custom_components/pp_reader/services/portfolio_file.py (neu), custom_components/pp_reader/data/reader.py (Umbau auf Thin-Wrapper)
-      - Betroffene Funktion(en)/Abschnitt(e): Funktionen `async_read_portfolio_bytes`, `read_portfolio_bytes`, Anpassung `parse_data_portfolio`
+      - Betroffene Funktion(en)/Abschnitt(e): Funktionen `async_read_portfolio_bytes`, `read_portfolio_bytes`, Ablösung des Legacy-Readers
       - Ziel/Ergebnis der Änderung: Nicht-blockierende Dateizugriffe mit sauberem Fehler-Handling und Wiederverwendung in Pipeline und CLI
    c) [x] Implementiere Validierungsfehler für fehlende `data.portfolio`, beschädigte ZIPs, fehlende protobuf-Laufzeit und unerwartete Nachrichtentypen; logge die Fehler über den Logger-Namespace `custom_components.pp_reader.services.parser`.
       - Dateipfad(e): custom_components/pp_reader/services/portfolio_file.py, custom_components/pp_reader/services/__init__.py
@@ -69,7 +69,7 @@
       - Ziel/Ergebnis der Änderung: Sichtbare Parser-Statusaktualisierungen für nachgelagerte Komponenten
    c) [x] Passe `custom_components/pp_reader/data/reader.py` auf die neue Pipeline an (Deprecated-Markierung für direkte Nutzung, Weiterleitung auf `async_parse_portfolio`).
       - Dateipfad(e): custom_components/pp_reader/data/reader.py
-      - Betroffene Funktion(en)/Abschnitt(e): Funktion `parse_data_portfolio`, Modul-Dokumentation
+      - Betroffene Funktion(en)/Abschnitt(e): Legacy-Wrapper im Modul `data.reader`, Modul-Dokumentation
       - Ziel/Ergebnis der Änderung: Altaufrufe funktionieren vorerst, weisen aber auf den neuen Weg hin
 
 6. [ ] Phase 5 – Übergangspfad für Legacy-Sync

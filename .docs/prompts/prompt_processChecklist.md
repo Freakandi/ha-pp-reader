@@ -6,19 +6,12 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Listen für die anstehenden Änderungen gemäß:
-- .docs/TODO_release_enablement.md
+- .docs/TODO_cleanup_diff_sync.md
 
 Unterstützende Ressourcen und bisherige Arbeit:
 - .docs/refactor_roadmap.md
-- .docs/backend_workstreams.md
 - .docs/legacy_cleanup_strategy.md
-- .docs/qa_docs_comms.md
-- .docs/TODO_datamodel_parser_modernization.md
-- .docs/TODO_enrichment_pipeline.md
-- .docs/TODO_metric_engine.md
-- .docs/cleanup/normalization_followups.md
-- .docs/TODO_normalization_pipeline.md
-- .docs/TODO_frontend_adapter_rollout.md
+- Files in datamodel/
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige immer den aktuellen Stand des Repos (insb. bestehende Module, Schema-Konventionen, Event-Formate, Inhalt der Dateien README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md, AGENTS.md).
@@ -33,7 +26,7 @@ Vorgehensweise (strikt einhalten):
    - Achte auf: Keine Änderung bestehender Coordinator-Datenstrukturen oder Event-Payload-Formate.
 5. Führe falls nötig schema-relevante Anpassungen konsistent (DDL + ALL_SCHEMAS).
 6. Nach Codeänderung: Aktualisiere die Checkliste:
-   - Relevante TODO-Datei (`TODO_release_enablement.md`): markiere Item mit ☑ oder ändere Checkbox auf [x]
+   - Relevante TODO-Datei (`TODO_cleanup_diff_sync.md`): markiere Item mit ☑ oder ändere Checkbox auf [x]
 7. Führe eine kurze Selbstprüfung durch:
    - Führe lint-Prüfungen für alle geänderten Module durch (ESLint für TypeScript, ruff für Python)
    - Alle lint-Prüfungen müssen erfolgreich durchlaufen (ESLint für TypeScript, ruff für Python)

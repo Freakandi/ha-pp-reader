@@ -13,7 +13,6 @@ from custom_components.pp_reader.data.ingestion_reader import (
     load_ingestion_snapshot,
     load_metadata,
     load_portfolios,
-    load_proto_snapshot,
     load_securities,
     load_transactions,
 )
@@ -128,62 +127,3 @@ async def test_load_ingestion_snapshot_returns_dataclasses(tmp_path: Path) -> No
     finally:
         conn.close()
 
-
-@pytest.mark.asyncio
-async def test_load_proto_snapshot_builds_pclient(tmp_path: Path) -> None:
-    """Ensure the proto builder recreates PClient from staging tables."""
-    db_path = tmp_path / "stage.db"
-
-    async with async_ingestion_session(db_path, enable_wal=False) as writer:
-        writer.write_accounts(
-            [DummyAccount(uuid="acc-1", name="Account", currency_code="EUR")]
-        )
-        writer.write_portfolios(
-            [
-                DummyPortfolio(
-                    uuid="port-1",
-                    name="Portfolio",
-                    reference_account="acc-1",
-                )
-            ]
-        )
-        writer.write_securities(
-            [
-                DummySecurity(
-                    uuid="sec-1",
-                    name="Security",
-                    currency_code="EUR",
-                    prices=[],
-                )
-            ]
-        )
-        writer.write_transactions(
-            [
-                DummyTransaction(
-                    uuid="txn-1",
-                    type=0,
-                    account="acc-1",
-                    portfolio="port-1",
-                )
-            ]
-        )
-        writer.finalize_ingestion(
-            file_path="fixture.portfolio",
-            parsed_at=datetime.now(tz=UTC),
-            pp_version=7,
-            base_currency="EUR",
-            properties={"build": "test-suite"},
-            parsed_client=None,
-        )
-
-    conn = _open_connection(db_path)
-    try:
-        client = load_proto_snapshot(conn)
-        assert client is not None
-        assert client.baseCurrency == "EUR"
-        assert client.version == 7
-        assert client.accounts[0].name == "Account"
-        assert client.portfolios[0].referenceAccount == "acc-1"
-        assert client.transactions[0].uuid == "txn-1"
-    finally:
-        conn.close()

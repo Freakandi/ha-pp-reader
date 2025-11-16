@@ -29,8 +29,9 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
 from custom_components.pp_reader.data.event_push import _push_update
-from custom_components.pp_reader.data.sync_from_pclient import (
-    fetch_positions_for_portfolios,
+from custom_components.pp_reader.data.normalized_store import (
+    SnapshotBundle,
+    async_load_latest_snapshot_bundle,
 )
 from custom_components.pp_reader.logic.securities import (
     db_calculate_current_holdings,
@@ -57,6 +58,8 @@ async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, An
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from homeassistant.core import HomeAssistant
 
     from custom_components.pp_reader.prices.provider_base import Quote
@@ -806,134 +809,6 @@ def _process_currency_drift_mismatches(
     store["price_currency_drift_logged"] = drift_logged
 
 
-def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
-    """Convert revaluation aggregates into the canonical portfolio payload."""
-    payload: list[dict[str, Any]] = []
-    for pid, data in pv_dict.items():
-        if not isinstance(data, Mapping):
-            continue
-
-        uuid = data.get("uuid", pid)
-        if not uuid:
-            continue
-
-        entry: dict[str, Any] = {"uuid": str(uuid)}
-
-        position_count = data.get("position_count")
-        if position_count is None and "count" in data:
-            position_count = data.get("count")
-        if position_count is not None:
-            entry["position_count"] = position_count
-
-        for key in (
-            "name",
-            "current_value",
-            "purchase_sum",
-            "performance",
-            "missing_value_positions",
-        ):
-            if key in data:
-                entry[key] = data[key]
-
-        payload.append(entry)
-
-    return payload
-
-
-def _round_currency_or_zero(value: float | None) -> float:
-    rounded = round_currency(value, default=0.0)
-    return float(rounded) if rounded is not None else 0.0
-
-
-def _cent_to_eur_or_zero(value: float | None) -> float:
-    euros = cent_to_eur(value, default=0.0)
-    return float(euros) if euros is not None else 0.0
-
-
-def _build_performance_snapshot(
-    current_value: float,
-    purchase_sum: float,
-) -> dict[str, Any]:
-    gain_abs = _round_currency_or_zero(current_value - purchase_sum)
-    gain_pct = (
-        _round_currency_or_zero((gain_abs / purchase_sum) * 100.0)
-        if purchase_sum
-        else 0.0
-    )
-    return {
-        "gain_abs": gain_abs,
-        "gain_pct": gain_pct,
-        "total_change_eur": gain_abs,
-        "total_change_pct": gain_pct,
-        "source": "calculated",
-        "coverage_ratio": 1.0,
-        "day_change": {
-            "price_change_native": None,
-            "price_change_eur": None,
-            "change_pct": None,
-            "source": "unavailable",
-            "coverage_ratio": 0.0,
-        },
-    }
-
-
-def _load_portfolio_values_snapshot(
-    db_path: Path | str,
-    security_uuids: set[str],
-) -> dict[str, dict[str, Any]]:
-    """Build portfolio aggregates from the latest portfolio_securities snapshot."""
-    if not security_uuids:
-        return {}
-
-    path = Path(db_path)
-    placeholders = ",".join("?" for _ in security_uuids)
-    query = f"""
-        SELECT
-            ps.portfolio_uuid AS portfolio_uuid,
-            p.name AS name,
-            SUM(COALESCE(ps.current_value, 0)) AS current_value_cents,
-            SUM(COALESCE(ps.purchase_value, 0)) AS purchase_value_cents,
-            COUNT(*) AS position_count,
-            SUM(
-                CASE
-                    WHEN ps.current_value IS NULL OR ps.purchase_value IS NULL THEN 1
-                    ELSE 0
-                END
-            ) AS missing_positions
-        FROM portfolio_securities ps
-        JOIN portfolios p ON p.uuid = ps.portfolio_uuid
-        WHERE ps.security_uuid IN ({placeholders})
-        GROUP BY ps.portfolio_uuid, p.name
-    """  # noqa: S608 - placeholders are parameterized via sqlite bindings
-
-    try:
-        with sqlite3.connect(str(path)) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(query, tuple(security_uuids)).fetchall()
-    except sqlite3.Error:
-        _LOGGER.debug(
-            "prices_cycle: Snapshot Aggregation fehlgeschlagen", exc_info=True
-        )
-        return {}
-
-    snapshot: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        portfolio_uuid = row["portfolio_uuid"]
-        current_value = _cent_to_eur_or_zero(row["current_value_cents"])
-        purchase_sum = _cent_to_eur_or_zero(row["purchase_value_cents"])
-        entry = {
-            "uuid": portfolio_uuid,
-            "name": row["name"],
-            "current_value": current_value,
-            "purchase_sum": purchase_sum,
-            "performance": _build_performance_snapshot(current_value, purchase_sum),
-            "position_count": row["position_count"] or 0,
-            "missing_value_positions": row["missing_positions"] or 0,
-        }
-        snapshot[portfolio_uuid] = entry
-    return snapshot
-
-
 async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
     cycle_start_ts = time.time()
     store = hass.data[DOMAIN][entry_id]
@@ -1186,6 +1061,9 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 changed_count = 0
 
             revaluation_result = {"portfolio_values": None, "portfolio_positions": None}
+            snapshot_bundle: SnapshotBundle | None = None
+            snapshot_lookup: dict[str, dict[str, Any]] = {}
+
             if changed_count > 0:
                 updated_security_uuids_final = (
                     set(scaled_updates.keys()) if scaled_updates else set()
@@ -1201,31 +1079,21 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             "prices_cycle: Fehler bei partieller Revaluation",
                             exc_info=True,
                         )
-                    pv_dict_fallback = revaluation_result.get("portfolio_values")
-                    if not pv_dict_fallback:
-                        snapshot = await async_run_executor_job(
-                            hass,
-                            _load_portfolio_values_snapshot,
-                            db_path,
-                            updated_security_uuids_final,
-                        )
-                        if snapshot:
-                            _LOGGER.debug(
-                                (
-                                    "prices_cycle: Fallback portfolio_values "
-                                    "Snapshot genutzt (%s Portfolios)"
-                                ),
-                                len(snapshot),
-                            )
-                            revaluation_result["portfolio_values"] = snapshot
-
             # Events
             if changed_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
 
                 if pv_dict:
                     try:
-                        pv_payload = _build_portfolio_values_payload(pv_dict)
+                        if not snapshot_lookup:
+                            snapshot_bundle, snapshot_lookup = (
+                                await _async_load_snapshot_bundle(hass, db_path)
+                            )
+                        pv_payload = _compose_portfolio_payload_from_snapshots(
+                            pv_dict,
+                            snapshot_lookup,
+                            snapshot_bundle,
+                        )
 
                         # Diff-Logging (alter vs neuer Wert) - nur DEBUG
                         if _LOGGER.isEnabledFor(logging.DEBUG):
@@ -1289,24 +1157,23 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 # Positions: reuse falls vorhanden, sonst load
                 try:
                     positions_map = revaluation_result.get("portfolio_positions")
-                    if not positions_map and pv_dict:
-                        # Fallback positions (synchroner Loader)
-                        affected = set(pv_dict.keys())
-                        positions_map = fetch_positions_for_portfolios(
-                            db_path, affected
-                        )
                     if positions_map:
+                        if not snapshot_lookup:
+                            snapshot_bundle, snapshot_lookup = (
+                                await _async_load_snapshot_bundle(hass, db_path)
+                            )
                         for pid, positions in positions_map.items():
+                            entry_payload = _build_positions_event_entry(
+                                pid,
+                                positions or [],
+                                snapshot_lookup,
+                                snapshot_bundle,
+                            )
                             _push_update(
                                 hass,
                                 entry_id,
                                 "portfolio_positions",
-                                [
-                                    {
-                                        "portfolio_uuid": pid,
-                                        "positions": positions,
-                                    }
-                                ],
+                                [entry_payload],
                             )
                     else:
                         _LOGGER.debug(
@@ -1412,3 +1279,140 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             }
         else:
             return meta
+def _snapshot_lookup_from_bundle(
+    bundle: SnapshotBundle | None,
+) -> dict[str, dict[str, Any]]:
+    if not bundle:
+        return {}
+    lookup: dict[str, dict[str, Any]] = {}
+    for entry in bundle.portfolios:
+        if isinstance(entry, Mapping):
+            uuid = entry.get("uuid")
+            if uuid:
+                lookup[str(uuid)] = dict(entry)
+    return lookup
+
+
+def _normalized_metadata(
+    entry: Mapping[str, Any] | None,
+    bundle: SnapshotBundle | None,
+) -> dict[str, Any] | None:
+    if entry is None and bundle is None:
+        return None
+
+    metadata: dict[str, Any] = {}
+    metric_run_uuid = (
+        entry.get("metric_run_uuid") if entry else None
+    ) or (bundle.metric_run_uuid if bundle else None)
+    if metric_run_uuid:
+        metadata["metric_run_uuid"] = metric_run_uuid
+
+    generated_at = entry.get("generated_at") if entry else None
+    if not generated_at and bundle:
+        generated_at = bundle.snapshot_at
+    if generated_at:
+        metadata["generated_at"] = generated_at
+
+    coverage_ratio = entry.get("coverage_ratio") if entry else None
+    if isinstance(coverage_ratio, (int, float)):
+        metadata["coverage_ratio"] = coverage_ratio
+
+    provenance = entry.get("provenance") if entry else None
+    if isinstance(provenance, str) and provenance:
+        metadata["provenance"] = provenance
+
+    return metadata or None
+
+
+def _compose_portfolio_payload_from_snapshots(
+    pv_dict: Mapping[str, Mapping[str, Any]],
+    snapshot_map: Mapping[str, Mapping[str, Any]],
+    bundle: SnapshotBundle | None,
+) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for pid, data in pv_dict.items():
+        if not isinstance(data, Mapping):
+            continue
+
+        base = dict(snapshot_map.get(pid, {}))
+        uuid = data.get("uuid") or base.get("uuid") or pid
+        entry: dict[str, Any] = {"uuid": str(uuid)}
+        entry.update({k: v for k, v in base.items() if k not in entry})
+
+        for key in ("name", "performance", "coverage_ratio", "provenance"):
+            if key in data and data[key] is not None:
+                entry[key] = data[key]
+
+        position_count = data.get("position_count")
+        if position_count is None and "count" in data:
+            position_count = data.get("count")
+        if position_count is not None:
+            entry["position_count"] = position_count
+
+        if "missing_value_positions" in data:
+            entry["missing_value_positions"] = data["missing_value_positions"]
+
+        current_value = data.get("current_value")
+        if current_value is not None:
+            entry["current_value"] = current_value
+
+        purchase_value = data.get("purchase_sum", data.get("purchase_value"))
+        if purchase_value is not None:
+            entry["purchase_value"] = purchase_value
+            entry["purchase_sum"] = purchase_value
+
+        normalized_payload = _normalized_metadata(entry, bundle)
+        if normalized_payload:
+            entry["normalized_payload"] = normalized_payload
+
+        payload.append(entry)
+
+    return payload
+
+
+def _build_positions_event_entry(
+    portfolio_uuid: str,
+    positions: list[dict[str, Any]] | Any,
+    snapshot_map: Mapping[str, Mapping[str, Any]],
+    bundle: SnapshotBundle | None,
+) -> dict[str, Any]:
+    base = snapshot_map.get(portfolio_uuid, {})
+    payload_positions: list[dict[str, Any]] = []
+    if isinstance(positions, list):
+        for position in positions:
+            if isinstance(position, Mapping):
+                payload_positions.append(dict(position))
+            else:
+                payload_positions.append(position)
+    elif positions:
+        payload_positions = list(positions)
+    entry: dict[str, Any] = {
+        "portfolio_uuid": portfolio_uuid,
+        "positions": payload_positions,
+    }
+    normalized_payload = _normalized_metadata(base, bundle)
+    if normalized_payload:
+        entry["normalized_payload"] = normalized_payload
+        if normalized_payload.get("metric_run_uuid"):
+            entry["metric_run_uuid"] = normalized_payload["metric_run_uuid"]
+        if normalized_payload.get("coverage_ratio") is not None:
+            entry["coverage_ratio"] = normalized_payload["coverage_ratio"]
+        if normalized_payload.get("provenance"):
+            entry["provenance"] = normalized_payload["provenance"]
+    return entry
+
+
+async def _async_load_snapshot_bundle(
+    hass: HomeAssistant,
+    db_path: Path | str,
+) -> tuple[SnapshotBundle | None, dict[str, dict[str, Any]]]:
+    try:
+        bundle = await async_load_latest_snapshot_bundle(hass, db_path)
+    except Exception:  # noqa: BLE001 - diagnostics only
+        _LOGGER.debug(
+            "prices_cycle: Fehler beim Laden der Snapshot-Bundles (db_path=%s)",
+            db_path,
+            exc_info=True,
+        )
+        return None, {}
+    return bundle, _snapshot_lookup_from_bundle(bundle)

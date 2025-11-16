@@ -9,10 +9,11 @@ import pytest
 from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.normalization_pipeline import (
-    NormalizationResult,
     PortfolioSnapshot,
     SnapshotDataState,
+    serialize_portfolio_snapshot,
 )
+from custom_components.pp_reader.data.normalized_store import SnapshotBundle
 from custom_components.pp_reader.data.websocket import DOMAIN, ws_get_portfolio_data
 
 pytest.importorskip(
@@ -129,72 +130,74 @@ async def test_ws_get_portfolio_data_returns_live_values(
     hass = StubHass(db_path, entry_id)
     connection = StubConnection()
 
-    snapshot = NormalizationResult(
-        generated_at="2024-01-01T00:00:00Z",
-        metric_run_uuid="metric-1",
-        accounts=(),
-        portfolios=(
-            PortfolioSnapshot(
-                uuid="p1",
-                name="Alpha Depot",
-                current_value=1750000.0,
-                purchase_value=1500000.0,
-                position_count=1,
-                missing_value_positions=0,
-                performance={
-                    "gain_abs": 250000.0,
-                    "gain_pct": 16.6667,
-                    "total_change_eur": 250000.0,
-                    "total_change_pct": 16.6667,
-                    "source": "metrics",
-                    "coverage_ratio": 1.0,
-                },
-            ),
-            PortfolioSnapshot(
-                uuid="p2",
-                name="Beta Depot",
-                current_value=6200000.0,
-                purchase_value=5000000.0,
-                position_count=1,
-                missing_value_positions=0,
-                performance={
-                    "gain_abs": 1200000.0,
-                    "gain_pct": 24.0,
-                    "total_change_eur": 1200000.0,
-                    "total_change_pct": 24.0,
-                    "source": "metrics",
-                    "coverage_ratio": 0.75,
-                },
-            ),
-            PortfolioSnapshot(
-                uuid="p3",
-                name="Gamma Depot",
-                current_value=0.0,
-                purchase_value=0.0,
-                position_count=0,
-                missing_value_positions=0,
-                performance={
-                    "gain_abs": 0.0,
-                    "gain_pct": None,
-                    "total_change_eur": 0.0,
-                    "total_change_pct": None,
-                    "source": "metrics",
-                    "coverage_ratio": None,
-                },
-            ),
+    portfolios = (
+        PortfolioSnapshot(
+            uuid="p1",
+            name="Alpha Depot",
+            current_value=1750000.0,
+            purchase_value=1500000.0,
+            position_count=1,
+            missing_value_positions=0,
+            performance={
+                "gain_abs": 250000.0,
+                "gain_pct": 16.6667,
+                "total_change_eur": 250000.0,
+                "total_change_pct": 16.6667,
+                "source": "metrics",
+                "coverage_ratio": 1.0,
+            },
         ),
-        diagnostics=None,
+        PortfolioSnapshot(
+            uuid="p2",
+            name="Beta Depot",
+            current_value=6200000.0,
+            purchase_value=5000000.0,
+            position_count=1,
+            missing_value_positions=0,
+            performance={
+                "gain_abs": 1200000.0,
+                "gain_pct": 24.0,
+                "total_change_eur": 1200000.0,
+                "total_change_pct": 24.0,
+                "source": "metrics",
+                "coverage_ratio": 0.75,
+            },
+        ),
+        PortfolioSnapshot(
+            uuid="p3",
+            name="Gamma Depot",
+            current_value=0.0,
+            purchase_value=0.0,
+            position_count=0,
+            missing_value_positions=0,
+            performance={
+                "gain_abs": 0.0,
+                "gain_pct": None,
+                "total_change_eur": 0.0,
+                "total_change_pct": None,
+                "source": "metrics",
+                "coverage_ratio": None,
+            },
+        ),
+    )
+    bundle = SnapshotBundle(
+        metric_run_uuid="metric-1",
+        snapshot_at="2024-01-01T00:00:00Z",
+        accounts=(),
+        portfolios=tuple(serialize_portfolio_snapshot(p) for p in portfolios),
     )
 
     called = {"value": False}
 
-    async def fake_snapshot(
-        hass_arg, db_path_arg, *, include_positions: bool = False
-    ):
+    async def fake_snapshot_bundle(hass_arg, db_path_arg):
         called["value"] = True
-        return snapshot
+        return bundle
 
-    monkeypatch.setattr(websocket_module, "async_normalize_snapshot", fake_snapshot)
+    monkeypatch.setattr(
+        websocket_module,
+        "async_load_latest_snapshot_bundle",
+        fake_snapshot_bundle,
+    )
 
     await ws_get_portfolio_data(
         hass,
@@ -209,7 +212,7 @@ async def test_ws_get_portfolio_data_returns_live_values(
 
     portfolios = {item["uuid"]: item for item in payload["portfolios"]}
     assert portfolios["p1"]["current_value"] == pytest.approx(1_750_000.0)
-    assert portfolios["p1"]["purchase_sum"] == pytest.approx(1_500_000.0)
+    assert portfolios["p1"]["purchase_value"] == pytest.approx(1_500_000.0)
     assert portfolios["p1"]["performance"]["gain_abs"] == pytest.approx(250_000.0)
     assert portfolios["p2"]["performance"]["coverage_ratio"] == pytest.approx(0.75)
     assert portfolios["p3"]["performance"]["gain_abs"] == pytest.approx(0.0)
@@ -227,48 +230,48 @@ async def test_ws_get_portfolio_data_includes_data_state(
     hass = StubHass(db_path, entry_id)
     connection = StubConnection()
 
-    snapshot = NormalizationResult(
-        generated_at="2024-02-01T00:00:00Z",
+    snapshot = PortfolioSnapshot(
+        uuid="portfolio-state",
+        name="State Depot",
+        current_value=100.0,
+        purchase_value=80.0,
+        position_count=1,
+        missing_value_positions=1,
+        performance={
+            "gain_abs": 20.0,
+            "gain_pct": 25.0,
+            "total_change_eur": 20.0,
+            "total_change_pct": 25.0,
+            "source": "metrics",
+            "coverage_ratio": None,
+        },
+        coverage_ratio=None,
+        provenance="metrics",
         metric_run_uuid="metric-42",
-        accounts=(),
-        portfolios=(
-            PortfolioSnapshot(
-                uuid="portfolio-state",
-                name="State Depot",
-                current_value=100.0,
-                purchase_value=80.0,
-                position_count=1,
-                missing_value_positions=1,
-                performance={
-                    "gain_abs": 20.0,
-                    "gain_pct": 25.0,
-                    "total_change_eur": 20.0,
-                    "total_change_pct": 25.0,
-                    "source": "metrics",
-                    "coverage_ratio": None,
-                },
-                coverage_ratio=None,
-                provenance="metrics",
-                metric_run_uuid="metric-42",
-                positions=(),
-                data_state=SnapshotDataState(
-                    status="warning",
-                    message="Portfolio enthält Positionen ohne Bewertung.",
-                ),
-            ),
+        positions=(),
+        data_state=SnapshotDataState(
+            status="warning",
+            message="Portfolio enthält Positionen ohne Bewertung.",
         ),
-        diagnostics=None,
+    )
+    bundle = SnapshotBundle(
+        metric_run_uuid="metric-42",
+        snapshot_at="2024-02-01T00:00:00Z",
+        accounts=(),
+        portfolios=(serialize_portfolio_snapshot(snapshot),),
     )
 
     called = {"value": False}
 
-    async def fake_snapshot(
-        hass_arg, db_path_arg, *, include_positions: bool = False
-    ):
+    async def fake_bundle_loader(hass_arg, db_path_arg):
         called["value"] = True
-        return snapshot
+        return bundle
 
-    monkeypatch.setattr(websocket_module, "async_normalize_snapshot", fake_snapshot)
+    monkeypatch.setattr(
+        websocket_module,
+        "async_load_latest_snapshot_bundle",
+        fake_bundle_loader,
+    )
 
     await ws_get_portfolio_data(
         hass,
@@ -283,7 +286,7 @@ async def test_ws_get_portfolio_data_includes_data_state(
     _, payload = connection.sent[0]
     portfolio_payload = payload["portfolios"][0]
     assert portfolio_payload["uuid"] == "portfolio-state"
-    assert portfolio_payload["purchase_sum"] == pytest.approx(80.0)
+    assert portfolio_payload["purchase_value"] == pytest.approx(80.0)
     assert portfolio_payload["data_state"] == {
         "status": "warning",
         "message": "Portfolio enthält Positionen ohne Bewertung.",

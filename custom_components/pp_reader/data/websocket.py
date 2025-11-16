@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -17,30 +18,22 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 
-from custom_components.pp_reader.currencies.fx import (
-    ensure_exchange_rates_for_dates,
-    load_latest_rates,
+from custom_components.pp_reader.data.normalized_store import (
+    SnapshotBundle,
+    async_load_latest_snapshot_bundle,
 )
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import (
-    cent_to_eur,
-    round_currency,
-    round_price,
-)
+from custom_components.pp_reader.util.currency import round_currency, round_price
 from custom_components.pp_reader.util.datetime import UTC
 
-from .db_access import get_accounts, get_last_file_update
+from .db_access import get_last_file_update, get_transactions
 from .normalization_pipeline import (
     async_fetch_security_history,
     async_normalize_security_snapshot,
     async_normalize_snapshot,
-    serialize_account_snapshot,
-    serialize_portfolio_snapshot,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
-
     from homeassistant.components.websocket_api import ActiveConnection
     from homeassistant.core import HomeAssistant
 
@@ -69,26 +62,6 @@ def _resolve_db_path(entry_data: Mapping[str, Any]) -> Path:
         message = "db_path für den Config Entry fehlt"
         raise ValueError(message)
     return Path(db_path_raw)
-
-
-def _collect_active_fx_currencies(accounts: Iterable[Any]) -> set[str]:
-    """Return active non-EUR currency codes from the given accounts."""
-    currencies: set[str] = set()
-    for account in accounts:
-        if getattr(account, "is_retired", False):
-            continue
-
-        currency = getattr(account, "currency_code", None)
-        if not isinstance(currency, str):
-            continue
-
-        normalized = currency.strip().upper()
-        if not normalized or normalized == "EUR":
-            continue
-
-        currencies.add(normalized)
-
-    return currencies
 
 
 def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
@@ -239,48 +212,111 @@ def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901
     return result
 
 
-def _accounts_payload(result: Any) -> list[dict[str, Any]]:
-    """Convert AccountSnapshot dataclasses into the legacy payload format."""
-    payload: list[dict[str, Any]] = []
-    for account in result.accounts:
-        serialized = serialize_account_snapshot(account)
-        formatted: dict[str, Any] = {}
-        for key in ("name", "currency_code", "orig_balance", "balance"):
-            if key in serialized:
-                formatted[key] = serialized[key]
-        if serialized.get("fx_unavailable"):
-            formatted["fx_unavailable"] = True
-        payload.append(formatted)
-    return payload
-
-
-def _portfolio_summaries(result: Any) -> list[dict[str, Any]]:
-    """Return portfolio summary payloads with legacy purchase_sum key."""
-    payload: list[dict[str, Any]] = []
-    for snapshot in result.portfolios:
-        serialized = serialize_portfolio_snapshot(snapshot)
-        purchase_value = serialized.pop("purchase_value", 0.0) or 0.0
-        formatted: dict[str, Any] = {
-            "uuid": serialized.get("uuid"),
-            "name": serialized.get("name"),
-            "current_value": serialized.get("current_value"),
-            "purchase_sum": purchase_value,
-            "position_count": serialized.get("position_count"),
-            "missing_value_positions": serialized.get("missing_value_positions"),
-            "has_current_value": serialized.get("has_current_value"),
-            "performance": serialized.get("performance"),
-        }
-        optional_keys = (
-            "coverage_ratio",
-            "provenance",
-            "metric_run_uuid",
-            "data_state",
+def _resolve_entry_and_path(
+    hass: HomeAssistant,
+    entry_id: str,
+    *,
+    msg_id: int | None,
+    connection: websocket_api.ActiveConnection,
+) -> tuple[dict[str, Any], Path] | None:
+    """Resolve hass.data entry metadata and db_path with shared error handling."""
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
+        return None
+    except ValueError as err:
+        connection.send_error(msg_id, "db_error", str(err))
+        return None
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Auflösen des Config Entries (%s)",
+            entry_id,
         )
-        for key in optional_keys:
-            if key in serialized:
-                formatted[key] = serialized[key]
-        payload.append(formatted)
+        connection.send_error(msg_id, "db_error", "entry_id Auflösung fehlgeschlagen")
+        return None
+    return entry_data, db_path
+
+
+async def _load_snapshot_bundle(
+    hass: HomeAssistant,
+    db_path: Path,
+    *,
+    msg_id: int | None,
+    connection: websocket_api.ActiveConnection,
+) -> SnapshotBundle | None:
+    """Load the latest snapshot bundle or notify the websocket client."""
+    try:
+        bundle = await async_load_latest_snapshot_bundle(hass, db_path)
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Laden der Snapshot-Bundles (db_path=%s)",
+            db_path,
+        )
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "Fehler beim Laden der Snapshots",
+        )
+        return None
+
+    if not bundle.metric_run_uuid or not bundle.snapshot_at:
+        connection.send_error(
+            msg_id,
+            "data_unavailable",
+            "Es liegen noch keine Normalisierungssnapshots vor.",
+        )
+        return None
+    return bundle
+
+
+def _clone_snapshot_entries(
+    entries: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Make shallow copies of snapshot entries to avoid mutating shared caches."""
+    payload: list[dict[str, Any]] = []
+    for entry in entries:
+        if isinstance(entry, Mapping):
+            payload.append(dict(entry))
+        else:
+            payload.append(dict(entry.__dict__))  # pragma: no cover - defensive
     return payload
+
+
+def _normalized_payload_from_bundle(
+    bundle: SnapshotBundle,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """Return normalized account/portfolio payloads plus dashboard metadata."""
+    accounts = _clone_snapshot_entries(bundle.accounts)
+    portfolios = _clone_snapshot_entries(bundle.portfolios)
+    normalized_payload = {
+        "generated_at": bundle.snapshot_at,
+        "metric_run_uuid": bundle.metric_run_uuid,
+        "accounts": accounts,
+        "portfolios": portfolios,
+    }
+    return accounts, portfolios, normalized_payload
+
+
+def _serialize_transactions(transactions: list[Any]) -> list[dict[str, Any]]:
+    """Convert Transaction dataclasses into plain dictionaries for JSON."""
+    return [
+        {
+            "uuid": getattr(tx, "uuid", None),
+            "type": getattr(tx, "type", None),
+            "account": getattr(tx, "account", None),
+            "portfolio": getattr(tx, "portfolio", None),
+            "other_account": getattr(tx, "other_account", None),
+            "other_portfolio": getattr(tx, "other_portfolio", None),
+            "date": getattr(tx, "date", None),
+            "currency_code": getattr(tx, "currency_code", None),
+            "amount": getattr(tx, "amount", None),
+            "shares": getattr(tx, "shares", None),
+            "security": getattr(tx, "security", None),
+        }
+        for tx in transactions
+    ]
 
 
 def _positions_payload(portfolio: Any) -> list[dict[str, Any]]:
@@ -429,63 +465,52 @@ async def ws_get_dashboard_data(
     Return the initial dashboard dataset for the configured entry.
 
     Änderung (Migration Schritt 2.b):
-    - Portfolios jetzt via fetch_live_portfolios (On-Demand Aggregation,
-      Single Source of Truth).
-    - Fallback auf Coordinator Snapshot bei Fehler (stale aber verfügbar).
-    - Andere Teile (accounts, last_file_update, transactions) unverändert.
-    - Payload-Shape bleibt unverändert (keine Mutation bestehender Keys).
+    - Accounts/Portfolios kommen direkt aus den persistierten Snapshots
+      (`normalized_store`) und enthalten zusätzlich `normalized_payload`.
+    - Transactions werden bei Bedarf aus SQLite gelesen.
     """
     entry_id = msg.get("entry_id")
     if not entry_id:
         connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
         return
 
-    try:
-        entry_data = _get_entry_data(hass, entry_id)
-        db_path = _resolve_db_path(entry_data)
-    except LookupError as err:
-        connection.send_error(msg["id"], "not_found", str(err))
+    resolved = _resolve_entry_and_path(
+        hass,
+        entry_id,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if resolved is None:
         return
-    except ValueError as err:
-        connection.send_error(msg["id"], "db_error", str(err))
-        return
-    except Exception:
-        _LOGGER.exception("WebSocket: Fehler beim Auflösen von entry_id %s", entry_id)
-        error_msg = "entry_id Auflösung fehlgeschlagen"
-        connection.send_error(msg["id"], "db_error", error_msg)
-        return
+    _, db_path = resolved
 
-    coordinator = entry_data.get("coordinator")
-
-    # Accounts & Transactions weiter wie zuvor (Snapshot / bestehende Helper)
-    accounts: list[dict[str, Any]] = []
-    transactions = []
-    last_file_update = None
-    if coordinator:
-        transactions = coordinator.data.get("transactions", [])
-        last_file_update = coordinator.data.get("last_update")
-
-    try:
-        snapshot = await async_normalize_snapshot(hass, db_path)
-    except Exception:
-        _LOGGER.exception("Fehler beim Laden der Normalisierung (dashboard)")
-        connection.send_error(
-            msg["id"],
-            "db_error",
-            "Fehler beim Laden der Normalisierung",
-        )
+    bundle = await _load_snapshot_bundle(
+        hass,
+        db_path,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if bundle is None:
         return
 
-    accounts = _accounts_payload(snapshot)
-    portfolios = _portfolio_summaries(snapshot)
+    transactions = await async_run_executor_job(hass, get_transactions, db_path)
+    last_file_update = await async_run_executor_job(
+        hass,
+        get_last_file_update,
+        db_path,
+    )
+    accounts_payload, portfolios_payload, normalized_payload = (
+        _normalized_payload_from_bundle(bundle)
+    )
 
     connection.send_result(
         msg["id"],
         {
-            "accounts": accounts,
-            "portfolios": portfolios,
+            "accounts": accounts_payload,
+            "portfolios": portfolios_payload,
             "last_file_update": last_file_update,
-            "transactions": transactions,
+            "transactions": _serialize_transactions(transactions),
+            "normalized_payload": normalized_payload,
         },
     )
 
@@ -501,66 +526,40 @@ async def ws_get_dashboard_data(
 async def ws_get_accounts(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Return active accounts with original and EUR-converted balance (FX)."""
+    """Return the latest canonical account snapshots for an entry."""
     try:
         entry_id = msg["entry_id"]
     except KeyError:
         connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
         return
 
-    try:
-        entry_data = _get_entry_data(hass, entry_id)
-        db_path = _resolve_db_path(entry_data)
-    except LookupError as err:
-        connection.send_error(msg["id"], "not_found", str(err))
+    resolved = _resolve_entry_and_path(
+        hass,
+        entry_id,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if resolved is None:
         return
-    except ValueError as err:
-        connection.send_error(msg["id"], "db_error", str(err))
-        return
+    _, db_path = resolved
 
-    try:
-        db_accounts = await hass.async_add_executor_job(get_accounts, db_path)
-    except Exception:
-        _LOGGER.exception("Fehler beim Laden der Accounts")
-        connection.send_error(
-            msg["id"],
-            "db_error",
-            "Fehler beim Laden der Accounts",
-        )
+    bundle = await _load_snapshot_bundle(
+        hass,
+        db_path,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if bundle is None:
         return
 
-    fx_currencies = _collect_active_fx_currencies(db_accounts)
-    fx_rates: dict[str, float] = {}
-    if fx_currencies:
-        today = datetime.now(UTC)
-        await ensure_exchange_rates_for_dates([today], fx_currencies, db_path)
-        fx_rates = await load_latest_rates(today, db_path)
-
-    payload: list[dict[str, Any]] = []
-    for account in db_accounts:
-        currency = getattr(account, "currency_code", "EUR") or "EUR"
-        formatted = {
-            "name": getattr(account, "name", "Unknown"),
-            "currency_code": currency,
-        }
-        orig_raw = cent_to_eur(getattr(account, "balance", 0), default=0.0)
-        orig_balance = round_currency(orig_raw, default=None)
-        formatted["orig_balance"] = orig_balance or 0.0
-
-        normalized = currency.strip().upper() if isinstance(currency, str) else "EUR"
-        if normalized == "EUR":
-            formatted["balance"] = orig_balance
-        else:
-            rate = fx_rates.get(normalized)
-            formatted["balance"] = (
-                round_currency((orig_balance or 0.0) / rate, default=None)
-                if rate
-                else None
-            )
-
-        payload.append(formatted)
-
-    connection.send_result(msg["id"], {"accounts": payload})
+    accounts_payload, _, normalized_payload = _normalized_payload_from_bundle(bundle)
+    connection.send_result(
+        msg["id"],
+        {
+            "accounts": accounts_payload,
+            "normalized_payload": normalized_payload,
+        },
+    )
 
 
 # === Websocket FileUpdate-Timestamp ===
@@ -657,57 +656,38 @@ async def ws_get_portfolio_data(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """
-    Return current portfolio aggregates via on-demand DB aggregation.
-
-    Änderung (Migration Schritt 2.a):
-    - Statt Coordinator-Snapshot jetzt Aufruf `fetch_live_portfolios`
-      (Single Source of Truth).
-    - Fallback (WARN) auf alten Snapshot bei Fehler, um keine Hard-Failure im
-      Frontend zu erzeugen.
-    - Payload-Shape UNVERÄNDERT: {"portfolios": { uuid:
-      {name,value,count,purchase_sum}, ... }}.
-    """
+    """Return canonical portfolio aggregates from the latest snapshot bundle."""
     entry_id = msg.get("entry_id")
     if not entry_id:
         connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
         return
 
-    try:
-        entry_data = _get_entry_data(hass, entry_id)
-        db_path = _resolve_db_path(entry_data)
-    except LookupError as err:
-        connection.send_error(msg["id"], "not_found", str(err))
+    resolved = _resolve_entry_and_path(
+        hass,
+        entry_id,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if resolved is None:
         return
-    except ValueError as err:
-        connection.send_error(msg["id"], "db_error", str(err))
-        return
-    except Exception:
-        _LOGGER.exception(
-            "WebSocket: Fehler beim Auflösen des Config Entries (%s)",
-            entry_id,
-        )
-        error_msg = "entry_id Auflösung fehlgeschlagen"
-        connection.send_error(msg["id"], "db_error", error_msg)
+    _, db_path = resolved
+
+    bundle = await _load_snapshot_bundle(
+        hass,
+        db_path,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if bundle is None:
         return
 
-    try:
-        snapshot = await async_normalize_snapshot(hass, db_path)
-    except Exception:
-        _LOGGER.exception("Fehler beim Laden der Normalisierung (portfolio_data)")
-        connection.send_error(
-            msg["id"],
-            "db_error",
-            "Fehler beim Laden der Normalisierung",
-        )
-        return
-
-    portfolios = _portfolio_summaries(snapshot)
+    _, portfolios_payload, normalized_payload = _normalized_payload_from_bundle(bundle)
 
     connection.send_result(
         msg["id"],
         {
-            "portfolios": portfolios,
+            "portfolios": portfolios_payload,
+            "normalized_payload": normalized_payload,
         },
     )
 

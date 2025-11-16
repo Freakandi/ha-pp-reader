@@ -288,14 +288,15 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         portfolio_path.write_text("fixture", encoding="utf-8")
         initialize_database_schema(db_path)
 
-        parsed_client = normalization_test._build_sample_parsed_client()  # noqa: SLF001
+        parsed_client, sample_proto = normalization_test._build_sample_parsed_client()  # noqa: SLF001
         async def _fake_parse_portfolio(
-            _hass: Any,
+            hass: Any,
             *,
             path: str,
             writer: Any,
             progress_cb: Any,
         ) -> Any:
+            _ = hass
             if Path(path) != portfolio_path:
                 msg = "Unexpected portfolio path during fixture generation."
                 raise RuntimeError(msg)
@@ -337,7 +338,8 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         ) -> int:
             return len(targets)
 
-        async def _fake_process_jobs(_self: Any, *, _limit: int) -> dict[str, Any]:
+        async def _fake_process_jobs(_self: Any, *, limit: int) -> dict[str, Any]:
+            _ = limit
             return {}
 
         monkeypatch = pytest.MonkeyPatch()
@@ -380,11 +382,6 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         )
         monkeypatch.setattr(
             normalization_pipeline,
-            "load_latest_completed_metric_run_uuid",
-            lambda _db_path: METRIC_RUN_UUID,
-        )
-        monkeypatch.setattr(
-            normalization_pipeline,
             "get_missing_fx_diagnostics",
             lambda: {
                 "missing_rates": [],
@@ -396,6 +393,7 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         loop = asyncio.get_running_loop()
         hass = smoketest._SmoketestHass(loop)  # noqa: SLF001
         metrics_summary: dict[str, Any] | None = None
+        canonical_snapshots: dict[str, Any] | None = None
         try:
             _run_id, parsed_result = await smoketest._run_parser(  # noqa: SLF001
                 hass,
@@ -413,7 +411,12 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
                 db_path,
                 limit=3,
             )
-            await smoketest._run_sync(db_path)  # noqa: SLF001
+            await smoketest._run_sync(  # noqa: SLF001
+                db_path,
+                hass,
+                portfolio_path,
+                proto_client=sample_proto,
+            )
             _seed_fx_rate_row(db_path)
             metrics_summary = await smoketest._run_metrics(hass, db_path)  # noqa: SLF001
             _seed_metric_run_metadata(db_path)
@@ -423,7 +426,12 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
                 db_path,
                 include_positions=include_positions,
             )
-            diagnostics_payload = smoketest._collect_diagnostics(db_path)  # noqa: SLF001
+            canonical_snapshots = await smoketest._load_canonical_snapshots(  # noqa: SLF001
+                hass,
+                db_path,
+            )
+            diag_helper = smoketest.diagnostics.async_get_parser_diagnostics
+            diagnostics_payload = await diag_helper(hass, db_path)
         finally:
             monkeypatch.undo()
 
@@ -437,15 +445,10 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         for position in portfolio.get("positions", []):
             position["metric_run_uuid"] = METRIC_RUN_UUID
 
-    diagnostics_payload["normalization"] = {
-        "status": normalization_summary.get("status"),
-        "counts": normalization_summary.get("counts"),
-        "generated_at": NORMALIZATION_TIMESTAMP,
-        "metric_run_uuid": METRIC_RUN_UUID,
-    }
-    diagnostics_payload["metrics"]["latest_run_uuid"] = METRIC_RUN_UUID
-    diagnostics_payload["metrics"]["runs"]["latest_started_at"] = METRIC_RUN_STARTED
-    diagnostics_payload["metrics"]["runs"]["latest"] = {
+    metrics_status = (metrics_summary or {}).get("status", "completed")
+    metrics_payload = diagnostics_payload.setdefault("metrics", {})
+    metrics_payload["status"] = metrics_status
+    metrics_payload["latest_run"] = {
         "run_uuid": METRIC_RUN_UUID,
         "status": "completed",
         "trigger": "smoketest",
@@ -457,15 +460,31 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         "processed_accounts": 1,
         "processed_securities": 1,
         "error_message": None,
+        "provenance": "cli",
     }
-    metrics_status = (metrics_summary or {}).get("status", "completed")
-    diagnostics_payload["metrics"]["status"] = metrics_status
-    normalization_counts = diagnostics_payload["normalization"].setdefault("counts", {})
-    total_positions = sum(
-        len(portfolio.get("positions") or [])
-        for portfolio in payload.get("portfolios", [])
+    coverage = metrics_payload.setdefault("coverage", {})
+    coverage.setdefault(
+        "portfolios",
+        {"available": True, "total": 1, "with_coverage": 1, "avg_coverage": 1.0},
     )
-    normalization_counts["positions"] = total_positions
+    coverage.setdefault(
+        "accounts",
+        {"available": True, "total": 1, "with_coverage": 1, "avg_coverage": 1.0},
+    )
+    coverage.setdefault(
+        "securities",
+        {"available": True, "total": 1, "with_coverage": 1, "avg_coverage": 1.0},
+    )
+
+    canonical_source = canonical_snapshots or {}
+    normalized = diagnostics_payload.setdefault("normalized_payload", {})
+    normalized["generated_at"] = NORMALIZATION_TIMESTAMP
+    normalized["metric_run_uuid"] = METRIC_RUN_UUID
+    normalized["accounts"] = canonical_source.get("accounts", [])
+    normalized["portfolios"] = canonical_source.get("portfolios", [])
+    normalized["available"] = True
+    normalized["account_count"] = len(normalized["accounts"])
+    normalized["portfolio_count"] = len(normalized["portfolios"])
 
     return payload, diagnostics_payload
 

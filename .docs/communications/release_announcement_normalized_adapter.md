@@ -5,9 +5,7 @@ Use this script when announcing the normalized adapter General Availability acro
 ## Internal Maintainer Briefing (Slack / Teams)
 
 ```
-Portfolio Performance Reader v0.15.0 is live in dev and ready for promotion. The normalized ingestion → metrics → dashboard adapter stack is now the only code path: coordinator payload shims, DOM overrides, and `_normalize_portfolio_row` have been removed.
-
-Every config entry re-migrates to options version 2 and forces `normalized_pipeline` plus `normalized_dashboard_adapter` to **On**. Reloading the entry restores the defaults, so please avoid toggling the flags off unless you are debugging a blocker.
+Portfolio Performance Reader v0.15.0 is live in dev and ready for promotion. The normalized ingestion → metrics → dashboard adapter stack is now the only code path: coordinator payload shims, DOM overrides, and `_normalize_portfolio_row` have been removed. Normalized adapters are no longer behind feature flags.
 
 Regression gates are green (pytest + coverage, websocket/enrichment matrix, npm lint/typecheck/test/build) and the release bundles were rebuilt after clearing `node_modules/.vite`. Diagnostics capture the serialized normalization payload, and the dashboard stores consume the same schema documented in `pp_reader_dom_reference.md`.
 
@@ -22,7 +20,7 @@ Maintainers running local dashboards must rebuild (`npm run build`) or pull the 
 ## HACS / Community Announcement (Release Notes, Forum, Discord)
 
 ```
-Portfolio Performance Reader 0.15.0 ships the normalized adapter GA. Every sensor, websocket payload, and the bundled dashboard now reads from the canonical normalization snapshots persisted in SQLite. Feature flags `normalized_pipeline` and `normalized_dashboard_adapter` are enabled for all installs (new + upgraded) so the integration no longer exposes the legacy DOM adapters.
+Portfolio Performance Reader 0.15.0 ships the normalized adapter GA. Every sensor, websocket payload, and the bundled dashboard now reads from the canonical normalization snapshots persisted in SQLite. The normalized ingestion/adapter path is always enabled—legacy DOM adapters have been removed.
 
 What’s new:
 - Rebuilt dashboard API helpers and stores consume the normalized `PortfolioSnapshot` / `AccountSnapshot` schema one-to-one; coverage, provenance, metric-run UUIDs, and diagnostics match backend data.
@@ -31,7 +29,7 @@ What’s new:
 
 Breaking changes & required actions:
 1. Rebuild dashboard assets after upgrading (`npm run build`, then copy the hashed bundles or install through HACS). Custom forks must clear `node_modules/.vite` before building.
-2. Reload the Portfolio Performance Reader config entry so the normalized flags stay **On**; disabling them removes the only payload path and will break the dashboard.
+2. Reload the Portfolio Performance Reader config entry after upgrading so it picks up the rebuilt assets and refreshed diagnostics.
 3. If you posted automation scripts or custom widgets that read legacy `avg_price_*` or `gain_*` fields, switch to the structured `average_cost` and `performance` blocks documented in `pp_reader_dom_reference.md`.
 
 Need help? File an issue with diagnostics attached (they now include the serialized `normalized_payload`) or join the HA forum thread linked from the repository README.
@@ -46,7 +44,7 @@ Need help? File an issue with diagnostics attached (they now include the seriali
   - Publish 0.15.0 through HACS once the release PR (with rebuilt bundles) has been merged into `main`.
   - Post the community announcement above in the release discussion, Discord, and any internal ops channel.
 - **After upgrade**
-  - Ask operators to reload the config entry once and confirm diagnostics show `normalized_pipeline` + `normalized_dashboard_adapter` set to `true`.
+- Ask operators to reload the config entry once and confirm diagnostics show the normalized payload bundle.
   - Remind custom dashboard users to rebuild assets or pull the shipped `custom_components/pp_reader/www/pp_reader_dashboard/js/*.js` hashes.
 
 ## Timeline & Owners

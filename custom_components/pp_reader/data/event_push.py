@@ -52,6 +52,8 @@ def _ensure_serializable(value: Any) -> Any:
 
 def _compact_event_data(_data_type: str, data: Any) -> Any:
     """Return an event payload with canonical structures preserved."""
+    if _is_sequence(data):
+        return [_ensure_serializable(item) for item in data]
     return _ensure_serializable(data)
 
 

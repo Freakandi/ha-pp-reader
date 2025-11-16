@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
+from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -59,9 +59,6 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.typing import ConfigType
 
-_NAMESPACE_ALIAS = "pp_reader"
-sys.modules[_NAMESPACE_ALIAS] = sys.modules[__name__]
-
 PRICE_LOGGER_NAMES = [
     "custom_components.pp_reader.prices",
     "custom_components.pp_reader.prices.price_service",
@@ -80,24 +77,14 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
     ValueError,
 )
 
-NORMALIZED_FLAG_KEYS: tuple[str, str] = (
-    "normalized_pipeline",
-    "normalized_dashboard_adapter",
-)
-
-
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
-    from .prices import price_service as price_service_module
-
-    return price_service_module
+    return import_module("custom_components.pp_reader.prices.price_service")
 
 
 def _get_fx_module() -> ModuleType:
     """Return the FX helper module on demand."""
-    from .currencies import fx as fx_module
-
-    return fx_module
+    return import_module("custom_components.pp_reader.currencies.fx")
 
 
 def _build_panel_config(
@@ -165,22 +152,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     new_options = dict(entry.options or {})
-    normalized_flags = {
-        key: bool(value)
-        for key, value in _extract_feature_flag_options(new_options).items()
-    }
+    options_changed = False
+    if "feature_flags" in new_options:
+        new_options.pop("feature_flags")
+        options_changed = True
 
-    flags_changed = False
-    for flag_name in NORMALIZED_FLAG_KEYS:
-        if not normalized_flags.get(flag_name, False):
-            normalized_flags[flag_name] = True
-            flags_changed = True
-
-    if flags_changed:
-        feature_flag_options = dict(new_options.get("feature_flags") or {})
-        for flag_name in NORMALIZED_FLAG_KEYS:
-            feature_flag_options[flag_name] = True
-        new_options["feature_flags"] = feature_flag_options
+    if options_changed:
         hass.config_entries.async_update_entry(
             entry,
             version=CONFIG_ENTRY_VERSION,

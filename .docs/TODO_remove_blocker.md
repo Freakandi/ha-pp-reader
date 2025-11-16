@@ -4,7 +4,7 @@ The 2025-02-14 backend regression run (`pytest -q` / coverage) failed with 48/49
 
 ## 1. Restore portfolio schema coverage for average price metrics
 - [x] Extend the `portfolio_securities` schema to surface every average-cost column required by the normalization pipeline (`avg_price_native`, `avg_price_security`, `avg_price_account`) inside `custom_components/pp_reader/data/db_schema.py` and `ALL_SCHEMAS`.
-- [x] Add runtime migrations in `custom_components/pp_reader/data/db_init.py` so existing installations add the missing columns without breaking idempotent startup (guard through `LEGACY_PORTFOLIO_COLUMNS`).
+- [x] Add runtime migrations in `custom_components/pp_reader/data/db_init.py` so existing installations add the missing columns without breaking idempotent startup (guard through `LEGACY_PORTFOLIO_COLUMNS`). *(These helpers have since been removed as part of the canonical database cleanup.)*
 - [x] Update ingestion + sync writers (`data/ingestion_writer.py`, `data/sync_from_pclient.py`) and purchase aggregation helpers (`logic/securities.py`, `prices/price_service.py`) to persist/populate the columns, keeping emitted payloads free of deprecated fields.
 - [x] Refresh fixtures that assert database shape (`tests/test_db_access.py`, `tests/test_sync_from_pclient.py`, `tests/test_migration.py`) and the canonical schema docs (`datamodel/SQLite_data.md`) so pytest stops flagging missing average-cost fields.
 

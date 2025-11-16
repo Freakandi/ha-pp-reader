@@ -5,7 +5,6 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,6 +12,7 @@ import pytest
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data import db_schema
+from custom_components.pp_reader.data.normalized_store import SnapshotBundle
 from custom_components.pp_reader.util import diagnostics
 
 
@@ -207,6 +207,19 @@ async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatc
         MagicMock(return_value=flag_snapshot),
     )
 
+    monkeypatch.setattr(
+        diagnostics,
+        "async_load_latest_snapshot_bundle",
+        AsyncMock(
+            return_value=SnapshotBundle(
+                metric_run_uuid=None,
+                snapshot_at="2024-02-01T00:00:00Z",
+                accounts=(),
+                portfolios=(),
+            )
+        ),
+    )
+
     result = await diagnostics.async_get_parser_diagnostics(
         hass,
         db_path,
@@ -224,12 +237,13 @@ async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatc
     assert enrichment["feature_flags"] == flag_snapshot
     normalized = result["normalized_payload"]
     assert normalized["available"] is False
-    assert normalized["reason"] == "feature_flag_disabled"
+    assert normalized["reason"] == "metric_run_missing"
+    assert normalized["generated_at"] == "2024-02-01T00:00:00Z"
 
 
 @pytest.mark.asyncio
 async def test_diagnostics_exposes_normalized_payload(tmp_path, monkeypatch: Any) -> None:
-    """Normalized payload should be included when the feature flag is enabled."""
+    """Normalized payload should be included when the snapshot tables contain data."""
     db_path = tmp_path / "diagnostics_norm.db"
     _create_enrichment_db(db_path)
 
@@ -240,7 +254,6 @@ async def test_diagnostics_exposes_normalized_payload(tmp_path, monkeypatch: Any
     flag_snapshot = {
         "enrichment_pipeline": True,
         "enqueue_prices": True,
-        "normalized_pipeline": True,
     }
     monkeypatch.setattr(
         diagnostics,
@@ -248,29 +261,23 @@ async def test_diagnostics_exposes_normalized_payload(tmp_path, monkeypatch: Any
         MagicMock(return_value=flag_snapshot),
     )
 
-    class DummyPipeline:
-        """Stub normalization pipeline for diagnostics tests."""
+    bundle = SnapshotBundle(
+        metric_run_uuid="metric-99",
+        snapshot_at="2024-03-01T00:00:00Z",
+        accounts=({"uuid": "acct-1"},),
+        portfolios=({"uuid": "portfolio-1"},),
+    )
 
-        @staticmethod
-        async def async_normalize_snapshot(_hass, db_path_arg, *, include_positions: bool) -> Any:
-            assert Path(db_path_arg) == db_path
-            assert include_positions is False
-            return SimpleNamespace(
-                generated_at="2024-03-01T00:00:00Z",
-                metric_run_uuid="metric-99",
-            )
+    async def _fake_bundle(hass_arg: Any, db_path_arg: Path) -> SnapshotBundle:
+        assert Path(db_path_arg) == db_path
+        assert hass_arg is hass
+        return bundle
 
-        @staticmethod
-        def serialize_normalization_result(snapshot) -> dict[str, Any]:
-            return {
-                "generated_at": snapshot.generated_at,
-                "metric_run_uuid": snapshot.metric_run_uuid,
-                "accounts": [{"uuid": "acct-1"}],
-                "portfolios": [{"uuid": "portfolio-1"}],
-                "diagnostics": {"rate_lookup_failures": []},
-            }
-
-    monkeypatch.setattr(diagnostics, "_get_normalization_module", lambda: DummyPipeline)
+    monkeypatch.setattr(
+        diagnostics,
+        "async_load_latest_snapshot_bundle",
+        AsyncMock(side_effect=_fake_bundle),
+    )
 
     result = await diagnostics.async_get_parser_diagnostics(
         hass,

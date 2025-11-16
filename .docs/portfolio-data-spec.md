@@ -12,8 +12,8 @@ workflows.
 
 | Stage | Intermediate structure | Definition |
 | --- | --- | --- |
-| Parsing | `PClient` protobuf tree | Produced by `parse_data_portfolio` when extracting `data.portfolio` from the uploaded archive.【F:custom_components/pp_reader/data/reader.py†L1-L88】 |
-| Persistence | SQLite tables (`accounts`, `portfolios`, `portfolio_securities`, `transactions`, `historical_prices`, …) | Populated by `sync_from_pclient` via `_sync_data_to_db` during coordinator syncs.【F:custom_components/pp_reader/data/coordinator.py†L41-L108】【F:custom_components/pp_reader/data/db_schema.py†L1-L160】 |
+| Parsing | `PClient` protobuf tree | Produced by `parser_pipeline.async_parse_portfolio` when extracting `data.portfolio` from the uploaded archive and streaming typed entities into the ingestion writer.【F:custom_components/pp_reader/services/parser_pipeline.py†L1-L87】 |
+| Persistence | SQLite staging + canonical tables (`ingestion_*`, `metric_runs`, `portfolio_metrics`, `account_metrics`, `security_metrics`, `portfolio_snapshots`, `account_snapshots`) | Populated by `ingestion_writer`, `metrics.storage`, and `snapshot_writer.persist_normalization_result` after each parser run; no diff-sync pipeline remains.【F:custom_components/pp_reader/data/ingestion_writer.py†L1-L140】【F:custom_components/pp_reader/metrics/storage.py†L1-L160】【F:custom_components/pp_reader/data/snapshot_writer.py†L1-L120】 |
 | Aggregation helpers | `Account`, `Portfolio`, `PortfolioSecurity`, `HoldingsAggregation`, `AverageCostSelection`, `PerformanceMetrics`, `DayChangeMetrics` | Dataclasses and helpers in `db_access.py`, `aggregations.py`, and `performance.py` derive balances, holdings coverage, and gain metrics from the persisted snapshot.【F:custom_components/pp_reader/data/db_access.py†L14-L128】【F:custom_components/pp_reader/data/aggregations.py†L1-L120】【F:custom_components/pp_reader/data/performance.py†L1-L120】 |
 | Coordinator store | `PPReaderCoordinator.data` | Legacy sensor contract containing `accounts`, `portfolios`, `transactions`, and `last_update`; populated from the aggregation helpers and reused by Home Assistant entities.【F:custom_components/pp_reader/data/coordinator.py†L134-L228】 |
 | Websocket payloads | Normalisers such as `_live_portfolios_payload`, `_normalize_portfolio_positions`, `_serialise_security_snapshot` | Convert aggregation results into transport-safe dictionaries for websocket commands and `panels_updated` events.【F:custom_components/pp_reader/data/websocket.py†L492-L575】【F:custom_components/pp_reader/data/websocket.py†L280-L404】【F:custom_components/pp_reader/data/event_push.py†L1-L120】 |
@@ -21,14 +21,19 @@ workflows.
 
 ## 1. Parsing and persistence
 
-1. **Portfolio import** – `parse_data_portfolio` unwraps the `.portfolio`
-   archive, strips the `PPPBV1` header when present, and materialises the
-   `PClient` protobuf (`name.abuchen.portfolio.client_pb2`).【F:custom_components/pp_reader/data/reader.py†L19-L88】
+1. **Portfolio import** – `parser_pipeline.async_parse_portfolio` unwraps the
+   `.portfolio` archive, strips the `PPPBV1` header when present, and
+   materialises the `PClient` protobuf (`name.abuchen.portfolio.client_pb2`). It
+   yields deterministic batches (`StageBatch`) that the ingestion writer uses to
+   persist staging tables and emit parser progress events for the coordinator.【F:custom_components/pp_reader/services/parser_pipeline.py†L1-L140】【F:custom_components/pp_reader/data/ingestion_writer.py†L1-L140】
 2. **SQLite synchronisation** – When the coordinator notices a fresher
-   portfolio file (`_should_sync`), `_sync_data_to_db` hands the parsed tree to
-   `sync_from_pclient`. The helper maintains the database schema defined in
-   `db_schema.py`, covering core tables such as `accounts`, `portfolio_*`,
-   `transactions`, `securities`, and `historical_prices`.【F:custom_components/pp_reader/data/coordinator.py†L41-L188】【F:custom_components/pp_reader/data/db_schema.py†L1-L160】
+   portfolio file (`_should_sync`), it runs the parser inside
+   `async_ingestion_session`, commits the `ingestion_*` rows, and schedules
+   enrichment → metrics → normalization. The metrics pipeline populates
+   `portfolio_metrics`/`account_metrics`/`security_metrics` plus `metric_runs`,
+   while the normalization pipeline stores canonical account/portfolio snapshot
+   payloads via `snapshot_writer`. Legacy diff-sync tables are interpreted only
+   through these canonical writers; there is no protobuf replay step.【F:custom_components/pp_reader/data/coordinator.py†L200-L420】【F:custom_components/pp_reader/metrics/pipeline.py†L1-L120】【F:custom_components/pp_reader/data/snapshot_writer.py†L1-L150】
 3. **Backups** – `setup_backup_system` registers `pp_reader.trigger_backup_debug`
    for manual snapshots and runs scheduled backups to `backups/` every six
    hours.【F:custom_components/pp_reader/data/backup_db.py†L17-L76】
@@ -167,4 +172,3 @@ are registered from `__init__.py` during setup.【F:custom_components/pp_reader/
 Maintain this document whenever the ingestion pipeline, websocket payloads, or
 frontend contracts evolve so downstream consumers keep a single, authoritative
 reference.
-

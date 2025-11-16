@@ -11,6 +11,16 @@ Portfolio Performance Reader keeps your Home Assistant instance in sync with the
 - Runs entirely on your Home Assistant host; the only outbound traffic comes from optional pricing providers such as Yahoo Finance or the Frankfurter FX API.
 - Queues enrichment jobs after each import: FX rates are cached in SQLite, and Yahoo history fetches populate the `historical_prices` table for offline dashboards.
 
+## Canonical ingestion pipeline
+Portfolio Performance Reader no longer ships the protobuf diff-sync flow. Every import follows the same canonical chain and only the persisted snapshot tables feed runtime consumers:
+
+1. **Parser → staging (`ingestion_*`)** – `custom_components/pp_reader/services/parser_pipeline.py` streams `.portfolio` data into typed ingestion tables through `data/ingestion_writer.py`, capturing parser metadata per run for diagnostics and CLI tools.
+2. **Metrics persistence** – `custom_components/pp_reader/metrics/pipeline.py` aggregates coverage/gain data for accounts, portfolios, and securities, storing results inside `metric_runs`, `portfolio_metrics`, `account_metrics`, and `security_metrics` via `metrics/storage.py`.
+3. **Normalization snapshots** – `custom_components/pp_reader/data/normalization_pipeline.py` serializes each `NormalizationResult` into `portfolio_snapshots` and `account_snapshots`. The async helpers in `data/normalized_store.py` expose `async_load_latest_snapshot_bundle` and `async_load_metric_summary` so every coordinator consumer rehydrates the same persisted payloads without touching coordinator caches.
+4. **Consumers** – Sensors, WebSocket handlers, diagnostics, CLI scripts, and dispatcher events all read from `normalized_store` (or directly from the canonical tables) which makes HA restarts and dashboard reloads deterministic.
+
+No other pipeline persists runtime state; the snapshot and metric tables are the single source of truth for sensors, events, and the dashboard.
+
 ## Features
 - **Automatic portfolio sync:** Watches the configured `.portfolio` file, normalises identifiers, and mirrors portfolio/account balances as Home Assistant entities.
 - **Shared performance metrics:** An asynchronous metrics pipeline (under `custom_components/pp_reader/metrics/`) aggregates gains, day-change deltas, coverage, and provenance into dedicated tables so automations, events, and the dashboard all read the exact snapshot that was persisted.
@@ -76,9 +86,8 @@ Release packages include pre-built dashboard bundles. When working from a git ch
 - The sidebar entry **Portfolio Dashboard** lists all portfolios with live updates, totals, and highlight effects when rows change.
 - Selecting a position opens a security detail tab with range selectors (`1W`…`ALL`), performance deltas, and SVG charts generated from the stored daily closes.
 
-### Normalized rollout defaults
-- `normalized_pipeline` and `normalized_dashboard_adapter` are enabled for every config entry starting with the normalized adapter GA release. New installs inherit both toggles automatically; upgrading entries will see the flags flipped to **On** the next time the integration reloads. Keep them enabled—legacy payload shims and DOM adapters have been removed, so sensors, WebSocket clients, and the bundled dashboard always consume the canonical normalization snapshot.
-- Confirm the defaults from **Settings → Devices & Services → Portfolio Performance Reader → Configure → Feature flags** after upgrading. If a local override is toggled off for troubleshooting, reloading the config entry reapplies the GA defaults.
+### Canonical normalization defaults
+- The normalized ingestion + dashboard adapter path is mandatory. Every install runs parser → ingestion → metrics → normalization after each import so sensors, WebSocket clients, and the bundled dashboard always consume the persisted snapshot.
 - Custom clients must deserialize the structured payloads documented in `pp_reader_dom_reference.md` and `src/lib/api/portfolio/types.ts`. Deprecated flat fields (`gain_abs`, `avg_price_*`, `day_price_change_*`) are no longer surfaced by sensors, events, or WebSocket responses.
 
 ### Automations & data consumers

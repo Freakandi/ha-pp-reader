@@ -103,8 +103,8 @@ flowchart TB
   SecuritySnapshotPayload --> UI
 
   subgraph SecurityHistory["Security History"]
-    PortfolioPrices[["Portfolio Performance prices"]] --> SyncHistory[["sync_from_pclient"]]
-    SyncHistory --> HistoricalPricesDB[("SQLite historical_prices")]
+    PortfolioPrices[["Portfolio Performance prices"]] --> IngestionHistory[["ingestion_writer"]]
+    IngestionHistory --> HistoricalPricesDB[("SQLite historical_prices")]
     YahooHistory[["Yahoo history ingest"]] --> HistoricalPricesDB
     FxHelpers[["FX normalization helpers"]] --> SecurityHistoryHandler[["ws_get_security_history"]]
     HistoricalPricesDB --> SecurityHistoryHandler

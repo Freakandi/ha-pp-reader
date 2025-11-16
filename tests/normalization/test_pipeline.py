@@ -10,11 +10,13 @@ from custom_components.pp_reader.data import normalization_pipeline as pipeline
 from custom_components.pp_reader.data.db_access import (
     Account,
     AccountMetricRecord,
+    MetricRunMetadata,
     Portfolio,
     PortfolioMetricRecord,
     Security,
     SecurityMetricRecord,
 )
+from custom_components.pp_reader.metrics.storage import MetricBatch
 
 
 def _shares_raw(value: float) -> int:
@@ -149,24 +151,17 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     }
     diagnostics = {"missing_rates": []}
 
-    def fake_load_run(path: Path) -> str:
-        assert path == db_path
-        return run_uuid
-
-    def fake_fetch_portfolio_metrics(path: Path, run: str):
-        assert path == db_path
-        assert run == run_uuid
-        return portfolio_metrics
-
-    def fake_fetch_account_metrics(path: Path, run: str):
-        assert path == db_path
-        assert run == run_uuid
-        return account_metrics
-
-    def fake_fetch_security_metrics(path: Path, run: str):
-        assert path == db_path
-        assert run == run_uuid
-        return security_metrics
+    metric_run = MetricRunMetadata(
+        run_uuid=run_uuid,
+        status="completed",
+        started_at="2024-03-01T00:00:00Z",
+        finished_at="2024-03-01T00:10:00Z",
+    )
+    metric_batch = MetricBatch(
+        portfolios=tuple(portfolio_metrics),
+        accounts=tuple(account_metrics),
+        securities=tuple(security_metrics),
+    )
 
     def fake_price_to_eur(
         raw_price,
@@ -186,12 +181,12 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
 
     monkeypatch.setattr(
         pipeline,
-        "load_latest_completed_metric_run_uuid",
-        fake_load_run,
+        "load_latest_metric_batch",
+        lambda path: (
+            (metric_run if path == db_path else None),
+            metric_batch,
+        ),
     )
-    monkeypatch.setattr(pipeline, "fetch_portfolio_metrics", fake_fetch_portfolio_metrics)
-    monkeypatch.setattr(pipeline, "fetch_account_metrics", fake_fetch_account_metrics)
-    monkeypatch.setattr(pipeline, "fetch_security_metrics", fake_fetch_security_metrics)
     monkeypatch.setattr(pipeline, "get_accounts", lambda _: accounts)
     monkeypatch.setattr(pipeline, "get_portfolios", lambda _: portfolios)
     monkeypatch.setattr(pipeline, "get_securities", lambda _: securities)
@@ -262,16 +257,9 @@ def test_normalize_snapshot_handles_missing_metric_run(
 
     monkeypatch.setattr(
         pipeline,
-        "load_latest_completed_metric_run_uuid",
-        lambda _path: None,
+        "load_latest_metric_batch",
+        lambda _path: (None, MetricBatch()),
     )
-
-    def unexpected(*_args, **_kwargs):
-        raise AssertionError("metric loaders must not run without a completed run")
-
-    monkeypatch.setattr(pipeline, "fetch_portfolio_metrics", unexpected)
-    monkeypatch.setattr(pipeline, "fetch_account_metrics", unexpected)
-    monkeypatch.setattr(pipeline, "fetch_security_metrics", unexpected)
     monkeypatch.setattr(pipeline, "get_accounts", lambda _: accounts)
     monkeypatch.setattr(pipeline, "get_portfolios", lambda _: portfolios)
     monkeypatch.setattr(pipeline, "get_missing_fx_diagnostics", lambda: None)
@@ -304,19 +292,15 @@ def test_load_portfolio_position_snapshots_handles_loader_errors(
     db_path = tmp_path / "positions.db"
     portfolio_ids = ["portfolio-a", "portfolio-b"]
 
-    monkeypatch.setattr(
-        pipeline,
-        "load_latest_completed_metric_run_uuid",
-        lambda path: "run-error" if path == db_path else None,
-    )
-
-    def failing_fetch(_path: Path, _run: str):
-        raise RuntimeError("security metrics unavailable")
+    def failing_loader(path: Path):
+        if path == db_path:
+            raise RuntimeError("security metrics unavailable")
+        return (None, MetricBatch())
 
     def failing_securities(_path: Path):
         raise RuntimeError("securities unavailable")
 
-    monkeypatch.setattr(pipeline, "fetch_security_metrics", failing_fetch)
+    monkeypatch.setattr(pipeline, "load_latest_metric_batch", failing_loader)
     monkeypatch.setattr(pipeline, "get_securities", failing_securities)
 
     snapshots = pipeline.load_portfolio_position_snapshots(db_path, portfolio_ids)

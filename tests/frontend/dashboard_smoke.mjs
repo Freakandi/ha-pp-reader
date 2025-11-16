@@ -712,15 +712,20 @@ const normalizedPositions = cachedPositions.map((position) => ({
 
 summary.normalizedPositions = normalizedPositions;
 summary.diagnostics = {
-  ingestionAccounts: diagnosticsSummary.ingestion?.ingestion_accounts ?? 0,
-  ingestionPortfolios: diagnosticsSummary.ingestion?.ingestion_portfolios ?? 0,
-  ingestionTransactions: diagnosticsSummary.ingestion?.ingestion_transactions ?? 0,
-  fxRateRows: diagnosticsSummary.enrichment?.fx_rates?.rows ?? 0,
-  metricsStatus: diagnosticsSummary.metrics?.status ?? '',
-  metricsLatestRun: diagnosticsSummary.metrics?.latest_run_uuid ?? '',
-  normalizationStatus: diagnosticsSummary.normalization?.status ?? '',
-  normalizationAccounts: diagnosticsSummary.normalization?.counts?.accounts ?? 0,
-  normalizationPositions: diagnosticsSummary.normalization?.counts?.positions ?? 0,
+  ingestionAccounts: diagnosticsSummary.ingestion?.processed_entities?.accounts ?? 0,
+  ingestionPortfolios: diagnosticsSummary.ingestion?.processed_entities?.portfolios ?? 0,
+  ingestionTransactions: diagnosticsSummary.ingestion?.processed_entities?.transactions ?? 0,
+  fxRateRows: diagnosticsSummary.enrichment?.fx?.latest_rate_fetch ? 1 : 0,
+  metricsStatus: diagnosticsSummary.metrics?.available ? 'available' : diagnosticsSummary.metrics?.reason ?? '',
+  metricsLatestRun: diagnosticsSummary.metrics?.latest_run?.run_uuid ?? '',
+  normalizationStatus: diagnosticsSummary.normalized_payload?.available
+    ? 'ok'
+    : diagnosticsSummary.normalized_payload?.reason ?? 'unavailable',
+  normalizationAccounts: diagnosticsSummary.normalized_payload?.account_count ?? 0,
+  normalizationPositions: (diagnosticsSummary.normalized_payload?.portfolios ?? []).reduce(
+    (total, entry) => total + (entry?.position_count ?? 0),
+    0,
+  ),
 };
 
 console.log(JSON.stringify(summary));

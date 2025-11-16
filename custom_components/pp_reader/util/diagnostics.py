@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-import importlib
 import logging
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data import ingestion_reader
+from custom_components.pp_reader.data.normalized_store import (
+    async_load_latest_snapshot_bundle,
+)
 from custom_components.pp_reader.feature_flags import snapshot as feature_flag_snapshot
 
 if TYPE_CHECKING:
@@ -28,13 +30,6 @@ INGESTION_TABLES = (
 
 __all__ = ["async_get_parser_diagnostics"]
 _LOGGER = logging.getLogger("custom_components.pp_reader.util.diagnostics")
-
-
-def _get_normalization_module() -> Any:
-    """Import the normalization pipeline lazily to avoid circular imports."""
-    return importlib.import_module(
-        "custom_components.pp_reader.data.normalization_pipeline"
-    )
 
 
 def _normalized_unavailable(reason: str, **extra: Any) -> dict[str, Any]:
@@ -55,47 +50,43 @@ async def _collect_normalized_payload(
     db_path: Path,
     *,
     entry_id: str | None,
-    flag_snapshot: Mapping[str, bool],
 ) -> dict[str, Any]:
-    """Resolve the serialized normalization result for diagnostics."""
-    if entry_id and not flag_snapshot.get("normalized_pipeline", False):
-        return _normalized_unavailable("feature_flag_disabled")
-
+    """Load the canonical snapshot bundle for diagnostics."""
     try:
-        pipeline = _get_normalization_module()
-        snapshot = await pipeline.async_normalize_snapshot(
-            hass,
-            db_path,
-            include_positions=False,
-        )
+        bundle = await async_load_latest_snapshot_bundle(hass, db_path)
     except FileNotFoundError:
         return _normalized_unavailable("database_not_found")
     except Exception:
         _LOGGER.exception(
-            "Diagnostics: normalization snapshot failed (entry_id=%s)",
+            "Diagnostics: snapshot bundle load failed (entry_id=%s)",
             entry_id,
         )
-        return _normalized_unavailable("normalization_failed")
+        return _normalized_unavailable("normalized_store_failed")
 
-    if snapshot.metric_run_uuid is None:
+    if not bundle.metric_run_uuid:
         return _normalized_unavailable(
             "metric_run_missing",
-            generated_at=snapshot.generated_at,
+            generated_at=bundle.snapshot_at,
         )
 
-    serialized = pipeline.serialize_normalization_result(snapshot)
-    accounts = serialized.get("accounts", [])
-    portfolios = serialized.get("portfolios", [])
+    accounts = _clone_snapshot_entries(bundle.accounts)
+    portfolios = _clone_snapshot_entries(bundle.portfolios)
     return {
         "available": True,
-        "generated_at": snapshot.generated_at,
-        "metric_run_uuid": snapshot.metric_run_uuid,
+        "generated_at": bundle.snapshot_at,
+        "metric_run_uuid": bundle.metric_run_uuid,
         "accounts": accounts,
         "portfolios": portfolios,
         "account_count": len(accounts),
         "portfolio_count": len(portfolios),
-        "diagnostics": serialized.get("diagnostics"),
     }
+
+
+def _clone_snapshot_entries(
+    entries: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return shallow copies of persisted snapshot payload rows."""
+    return [dict(entry) for entry in entries]
 
 
 def _serialize_datetime(value: datetime | None) -> str | None:
@@ -481,7 +472,6 @@ async def async_get_parser_diagnostics(
         hass,
         path,
         entry_id=entry_id,
-        flag_snapshot=flag_snapshot,
     )
     payload["normalized_payload"] = normalized_payload
     return payload

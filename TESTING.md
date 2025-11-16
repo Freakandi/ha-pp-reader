@@ -119,7 +119,6 @@ Start-Process .\htmlcov\index.html
   - `tests/prices/test_price_service.py:0` (Preis-Orchestrator End-to-End Szenarien)
   - `tests/prices/test_zero_quotes_warn.py:0` (Warn-Log Deduplikation)
   - `tests/prices/test_debug_scope.py:0` (Logger-Scope Option)
-  - `tests/prices/test_price_persistence_fields.py:0` (Persistenz erlaubter Spalten)
 
 ### 4.2 Marker
 
@@ -203,6 +202,8 @@ Events / Logging Assertions prüfen Sequenzen (z.B. Reihenfolge `portfolio_value
 | `scripts/develop` | Start Home Assistant (system Python) | `./scripts/develop` | Setzt `PYTHONPATH` für `custom_components`. |
 | `scripts/codex_develop` | Start HA über venv Binary | `./scripts/codex_develop` | Nutzt `.venv/bin/hass`. |
 | `scripts/lint` | Ruff Format + Lint Fix | `./scripts/lint` | Führt nacheinander `ruff format .` und `ruff check . --fix` aus. |
+| `scripts/enrichment_smoketest.py` | Parser → FX → Preisverlauf → Metrics → Normalisierung als End-to-End QA | `python -m scripts.enrichment_smoketest --portfolio config/pp_reader_data/S-Depot.portfolio` | Bricht ab, sobald keine kanonischen Snapshots vorliegen: `pending`/`missing` → Exit-Code 6, andere Fehler → Exit-Code 7. Nutzt ausschließlich Snapshot-/Metric-Tabellen (Legacy-Diff-Sync ignoriert). |
+| `scripts/diagnostics_dump.py` | Zeigt den Inhalt der kanonischen Snapshot- & Metric-Tabellen (Abgleich zu Sensor/Websocket Payloads) | `python -m scripts.diagnostics_dump --db-path config/pp_reader_data/pp_reader.db --limit 5` | Gibt JSON mit Tabellenzählern + Payload-Previews aus (`snapshot_at`, UUIDs, Werte). Ideal für QA/Support zum Verifizieren, dass HA dieselben Daten wie SQLite liefert. |
 
 Alle haben `#!/usr/bin/env bash` Shebang → Unix Shell. Unter Windows via Git Bash / WSL empfohlen.
 
@@ -328,7 +329,7 @@ Erweiterungsanker:
 - Keine dedizierten `tests/fixtures/` Dateien im Auszug.
 - Temporäre Portfoliodateien werden on-the-fly erstellt (z.B. `portfolio_file.write_text("DUMMY")` in `tests/prices/test_zero_quotes_warn.py:58`).
 - Datenbank: Nutzung temporärer Pfade (`tmp_path / "debugscope.db"` in `tests/prices/test_debug_scope.py:16`).
-- Keine sensiblen echten Finanzdaten enthalten – alle Werte synthetisch (IDs: generierte UUIDs in `test_price_persistence_fields.py:...`).
+- Keine sensiblen echten Finanzdaten enthalten – alle Werte synthetisch (IDs: generierte UUIDs innerhalb der Preis-Service-Tests).
 
 Konvention:
 - `tmp_path` Pytest Fixture → pfadbasierte Isolation
@@ -434,7 +435,6 @@ Test für Preiswarnung referenzieren: `tests/prices/test_zero_quotes_warn.py:0` 
 | Event Reihenfolge Test | `tests/prices/test_price_service.py:490+` |
 | Domain Manifest | `custom_components/pp_reader/manifest.json:1-20` |
 | Option Debug Scope Test | `tests/prices/test_debug_scope.py:0-60` |
-| Persistenz-Felder Test | `tests/prices/test_price_persistence_fields.py:0-40` |
 | Architekturreferenz Service Inkonsistenz | `ARCHITECTURE.md:468` |
 
 ---

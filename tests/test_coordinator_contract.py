@@ -1,60 +1,49 @@
 from __future__ import annotations
 
-import pytest
-
-from custom_components.pp_reader.data.coordinator import _portfolio_contract_entry
+from custom_components.pp_reader.data.coordinator import CoordinatorTelemetry
 
 
-def _build_entry(
-    *,
-    uuid: str = "pf-1",
-    current_value: float = 200.0,
-    purchase_sum: float = 150.0,
-    position_count: int = 1,
-    performance: dict[str, object] | None = None,
-    name: str = "Alpha Portfolio",
-) -> dict[str, object]:
-    entry: dict[str, object] = {
-        "uuid": uuid,
-        "name": name,
-        "current_value": current_value,
-        "purchase_sum": purchase_sum,
-        "position_count": position_count,
-    }
-    if performance is not None:
-        entry["performance"] = performance
-    return entry
-
-
-def test_portfolio_contract_entry_preserves_precision_overrides() -> None:
-    """Custom performance overrides should remain untouched in the payload."""
-    override = {
-        "gain_abs": "12.3456",
-        "gain_pct": "3.210987",
-        "day_change": {},
-    }
-    normalized = _portfolio_contract_entry(_build_entry(performance=override))
-    assert normalized is not None
-    _, payload = normalized
-
-    assert "gain_abs" not in payload
-    assert "gain_pct" not in payload
-    performance_payload = payload["performance"]
-    assert isinstance(performance_payload, dict)
-    assert performance_payload["gain_abs"] == override["gain_abs"]
-    assert performance_payload["gain_pct"] == override["gain_pct"]
-
-
-def test_portfolio_contract_entry_falls_back_to_calculated_metrics() -> None:
-    """Invalid overrides should fall back to the calculated performance metrics."""
-    normalized = _portfolio_contract_entry(
-        _build_entry(performance={"gain_abs": object(), "gain_pct": None})
+def test_coordinator_telemetry_serialization() -> None:
+    """CoordinatorTelemetry exposes a stable schema for downstream consumers."""
+    telemetry = CoordinatorTelemetry(
+        last_update="2024-03-14T12:00:00",
+        ingestion_run_id="ing-1",
+        parser_stage="parse_portfolio",
+        parser_processed=10,
+        parser_total=42,
+        metric_run_id="met-9",
+        normalized_metric_run_uuid="met-9",
+        normalized_generated_at="2024-03-14T12:05:00Z",
+        enrichment_summary={"fx_status": "skipped", "history_status": "up_to_date"},
     )
-    assert normalized is not None
-    _, payload = normalized
 
-    assert "gain_abs" not in payload
-    assert "gain_pct" not in payload
-    performance_payload = payload["performance"]
-    assert pytest.approx(performance_payload["gain_abs"]) == 50.0
-    assert pytest.approx(performance_payload["gain_pct"], rel=0, abs=1e-2) == 33.33
+    payload = telemetry.as_dict()
+    assert payload["last_update"] == "2024-03-14T12:00:00"
+
+    ingestion = payload["ingestion"]
+    assert ingestion["run_id"] == "ing-1"
+    assert ingestion["parser"]["stage"] == "parse_portfolio"
+    assert ingestion["parser"]["processed"] == 10
+    assert ingestion["parser"]["total"] == 42
+
+    metrics = payload["metrics"]
+    assert metrics["run_id"] == "met-9"
+
+    normalization = payload["normalization"]
+    assert normalization["metric_run_uuid"] == "met-9"
+    assert normalization["generated_at"] == "2024-03-14T12:05:00Z"
+
+    assert payload["enrichment"] == {
+        "fx_status": "skipped",
+        "history_status": "up_to_date",
+    }
+
+
+def test_coordinator_telemetry_enrichment_is_copied() -> None:
+    """Mutating the serialized payload must not leak into the telemetry cache."""
+    telemetry = CoordinatorTelemetry()
+    payload = telemetry.as_dict()
+
+    payload["enrichment"]["fx_status"] = "mutated"
+
+    assert telemetry.enrichment_summary == {}

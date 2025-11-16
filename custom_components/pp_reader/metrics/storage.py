@@ -16,6 +16,11 @@ from custom_components.pp_reader.data.db_access import (
     MetricRunMetadata,
     PortfolioMetricRecord,
     SecurityMetricRecord,
+    fetch_account_metrics,
+    fetch_portfolio_metrics,
+    fetch_security_metrics,
+    load_latest_completed_metric_run_uuid,
+    load_metric_run,
     upsert_account_metrics,
     upsert_metric_run_metadata,
     upsert_portfolio_metrics,
@@ -78,6 +83,67 @@ async def async_store_metric_batch(
         run,
         batch,
     )
+
+
+def load_metric_batch(
+    db_path: Path | str,
+    run_uuid: str | None,
+) -> tuple[MetricRunMetadata | None, MetricBatch]:
+    """Load persisted metrics for a specific run."""
+    resolved_path = Path(db_path)
+    if not run_uuid:
+        return None, MetricBatch()
+
+    run = load_metric_run(resolved_path, run_uuid)
+    if run is None:
+        _LOGGER.warning(
+            "metrics.storage: Metric-Run %s nicht gefunden - gebe leeres Batch zurück",
+            run_uuid,
+        )
+        return None, MetricBatch()
+
+    try:
+        portfolio_metrics = fetch_portfolio_metrics(resolved_path, run_uuid)
+    except Exception:  # pragma: no cover - defensive fallback
+        _LOGGER.exception(
+            "metrics.storage: Fehler beim Laden der Portfolio-Metriken (run_uuid=%s)",
+            run_uuid,
+        )
+        portfolio_metrics = []
+
+    try:
+        account_metrics = fetch_account_metrics(resolved_path, run_uuid)
+    except Exception:  # pragma: no cover - defensive fallback
+        _LOGGER.exception(
+            "metrics.storage: Fehler beim Laden der Konto-Metriken (run_uuid=%s)",
+            run_uuid,
+        )
+        account_metrics = []
+
+    try:
+        security_metrics = fetch_security_metrics(resolved_path, run_uuid)
+    except Exception:  # pragma: no cover - defensive fallback
+        _LOGGER.exception(
+            "metrics.storage: Fehler beim Laden der Wertpapier-Metriken (run_uuid=%s)",
+            run_uuid,
+        )
+        security_metrics = []
+
+    batch = MetricBatch(
+        portfolios=tuple(portfolio_metrics),
+        accounts=tuple(account_metrics),
+        securities=tuple(security_metrics),
+    )
+    return run, batch
+
+
+def load_latest_metric_batch(
+    db_path: Path | str,
+) -> tuple[MetricRunMetadata | None, MetricBatch]:
+    """Return the most recent completed metric batch and metadata."""
+    resolved_path = Path(db_path)
+    run_uuid = load_latest_completed_metric_run_uuid(resolved_path)
+    return load_metric_batch(resolved_path, run_uuid)
 
 
 def _create_metric_run_sync(

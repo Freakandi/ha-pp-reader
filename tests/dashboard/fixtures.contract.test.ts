@@ -47,22 +47,29 @@ test('normalization smoketest fixture mirrors canonical IDs', () => {
 
 test('diagnostics smoketest fixture keeps ingestion/metrics counts in sync', () => {
   const ingestion = diagnosticsFixture.ingestion ?? {};
-  assert.strictEqual(ingestion.ingestion_accounts, 1);
-  assert.strictEqual(ingestion.ingestion_portfolios, 1);
-  assert.strictEqual(ingestion.ingestion_transactions, 2);
-  assert.strictEqual(ingestion.ingestion_transaction_units, 2);
+  const processed = ingestion.processed_entities ?? {};
+  assert.strictEqual(processed.accounts, 1);
+  assert.strictEqual(processed.portfolios, 1);
+  assert.strictEqual(processed.transactions, 2);
+  assert.strictEqual(processed.transaction_units, 2);
 
   const enrichment = diagnosticsFixture.enrichment ?? {};
-  assert.strictEqual(enrichment.fx_rates?.rows, 1);
-  const metrics = diagnosticsFixture.metrics ?? {};
-  assert.strictEqual(metrics.status, 'completed');
-  assert.strictEqual(metrics.latest_run_uuid, 'run-normalization-smoke');
-  assert.strictEqual(metrics.records?.portfolio_metrics, 1);
-  assert.strictEqual(metrics.records?.account_metrics, 1);
-  assert.strictEqual(metrics.records?.security_metrics, 1);
+  assert.strictEqual(enrichment.available, true);
+  assert.ok(enrichment.fx?.latest_rate_fetch);
 
-  const normalization = diagnosticsFixture.normalization ?? {};
-  assert.strictEqual(normalization.status, 'ok');
-  assert.strictEqual(normalization.counts?.accounts, 1);
-  assert.strictEqual(normalization.counts?.positions, 1);
+  const metrics = diagnosticsFixture.metrics ?? {};
+  assert.strictEqual(metrics.available, true);
+  const latestRun = metrics.latest_run ?? {};
+  assert.strictEqual(latestRun.run_uuid, 'run-normalization-smoke');
+
+  const normalized = diagnosticsFixture.normalized_payload ?? {};
+  assert.strictEqual(normalized.available, true);
+  assert.strictEqual(normalized.account_count, 1);
+  assert.strictEqual(normalized.portfolio_count, 1);
+  const positionTotal = (normalized.portfolios ?? []).reduce(
+    (acc: number, entry: { position_count?: number } | null) =>
+      acc + (entry?.position_count ?? 0),
+    0,
+  );
+  assert.strictEqual(positionTotal, 1);
 });

@@ -27,6 +27,7 @@ import pytest
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.data.normalized_store import SnapshotBundle
 from custom_components.pp_reader.prices import price_service
 from custom_components.pp_reader.prices.price_service import (
     _run_price_cycle,
@@ -204,6 +205,82 @@ async def test_change_triggers_events(monkeypatch, tmp_path):
     assert meta["changed"] == 1
     # portfolio_values Event erwartet
     assert any(ev[0] == "portfolio_values" for ev in events)
+
+
+@pytest.mark.asyncio
+async def test_price_cycle_adds_normalized_payload(monkeypatch, tmp_path):
+    hass = FakeHass()
+    entry_id = "meta"
+    db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", 100_000_000)
+    _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
+
+    events: list[tuple[str, list | dict]] = []
+
+    def fake_push(hass_, entry, data_type, payload):
+        events.append((data_type, payload))
+
+    async def fake_reval(hass_, conn, uuids):
+        return {
+            "portfolio_values": {
+                "pf1": {
+                    "uuid": "pf1",
+                    "name": "Depot",
+                    "current_value": 250.0,
+                    "purchase_sum": 200.0,
+                    "position_count": 2,
+                    "performance": {"gain_abs": 50.0, "source": "metrics"},
+                }
+            },
+            "portfolio_positions": {
+                "pf1": [
+                    {
+                        "security_uuid": "sec1",
+                        "name": "Alpha",
+                        "current_holdings": 1.0,
+                        "purchase_value": 200.0,
+                        "current_value": 250.0,
+                        "average_cost": {},
+                        "performance": {},
+                        "aggregation": {},
+                    }
+                ]
+            },
+        }
+
+    async def fake_fetch(self, symbols):
+        return {"AAPL": _make_quote("AAPL", 1.05, "USD")}
+
+    async def fake_bundle(hass_, path):
+        return SnapshotBundle(
+            metric_run_uuid="run-1",
+            snapshot_at="2024-03-01T00:00:00Z",
+            accounts=(),
+            portfolios=(
+                {
+                    "uuid": "pf1",
+                    "coverage_ratio": 0.85,
+                    "provenance": "metrics",
+                },
+            ),
+        )
+
+    monkeypatch.setattr(price_service, "_push_update", fake_push)
+    monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
+    monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
+    monkeypatch.setattr(
+        price_service, "async_load_latest_snapshot_bundle", fake_bundle
+    )
+
+    meta = await price_service._run_price_cycle(hass, entry_id)
+
+    assert meta["changed"] == 1
+    values_event = next(payload for dtype, payload in events if dtype == "portfolio_values")
+    positions_event = next(
+        payload for dtype, payload in events if dtype == "portfolio_positions"
+    )
+    assert values_event[0]["normalized_payload"]["metric_run_uuid"] == "run-1"
+    assert positions_event[0]["normalized_payload"]["generated_at"] == "2024-03-01T00:00:00Z"
+    assert positions_event[0]["coverage_ratio"] == 0.85
 
 
 def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
@@ -709,38 +786,29 @@ async def test_normal_batch(monkeypatch, tmp_path):
             "portfolio_values": {
                 "port1": _make_portfolio_value_entry("port1", "P1", 1234.56, 1111.11, 2)
             },
-            "portfolio_positions": None,  # Positions kommen über separaten Fetch
+            "portfolio_positions": {
+                "port1": [
+                    {
+                        "security_uuid": "secA",
+                        "security_name": "Security A",
+                        "shares": 10.0,
+                        "price": 101.23,
+                        "value": 1012.30,
+                    },
+                    {
+                        "security_uuid": "secB",
+                        "security_name": "Security B",
+                        "shares": 5.0,
+                        "price": 199.99,
+                        "value": 999.95,
+                    },
+                ]
+            },
         }
 
     monkeypatch.setattr(
         "custom_components.pp_reader.prices.revaluation.revalue_after_price_updates",
         _fake_revalue_after_price_updates,
-    )
-
-    # Positions-Fetch Patch
-    def _fake_fetch_positions_for_portfolios(db_path_, portfolio_ids):
-        return {
-            "port1": [
-                {
-                    "security_uuid": "secA",
-                    "security_name": "Security A",
-                    "shares": 10.0,
-                    "price": 101.23,
-                    "value": 1012.30,
-                },
-                {
-                    "security_uuid": "secB",
-                    "security_name": "Security B",
-                    "shares": 5.0,
-                    "price": 199.99,
-                    "value": 999.95,
-                },
-            ]
-        }
-
-    monkeypatch.setattr(
-        "custom_components.pp_reader.prices.price_service.fetch_positions_for_portfolios",
-        _fake_fetch_positions_for_portfolios,
     )
 
     # Event Capture
@@ -849,19 +917,22 @@ async def test_price_update_refreshes_portfolio_gains(monkeypatch, tmp_path):
     _init_store(hass, entry_id, db_path, {"REF": ["sec-refresh"]})
 
     async def _fake_revaluation(hass_, conn, updated_security_uuids):
-        return {"portfolio_values": None, "portfolio_positions": None}
+        return {
+            "portfolio_values": {
+                "pf-refresh": _make_portfolio_value_entry(
+                    "pf-refresh",
+                    "Refresh",
+                    1200.0,
+                    1000.0,
+                    1,
+                )
+            },
+            "portfolio_positions": None,
+        }
 
     monkeypatch.setattr(
         "custom_components.pp_reader.prices.revaluation.revalue_after_price_updates",
         _fake_revaluation,
-    )
-
-    def _fake_fetch_positions_for_portfolios(db_path_, portfolio_ids):
-        return {}
-
-    monkeypatch.setattr(
-        "custom_components.pp_reader.prices.price_service.fetch_positions_for_portfolios",
-        _fake_fetch_positions_for_portfolios,
     )
 
     pushed: list[tuple[str, Any]] = []
@@ -994,31 +1065,22 @@ async def test_filter_invalid_price(monkeypatch, tmp_path):
                     "portX", "Portfolio X", 999.99, 500.0, 2
                 )
             },
-            "portfolio_positions": None,
+            "portfolio_positions": {
+                "portX": [
+                    {
+                        "security_uuid": "secB",
+                        "security_name": "Security B",
+                        "shares": 10.0,
+                        "price": 80.25,
+                        "value": 802.5,
+                    }
+                ]
+            },
         }
 
     monkeypatch.setattr(
         "custom_components.pp_reader.prices.revaluation.revalue_after_price_updates",
         _fake_revalue_after_price_updates,
-    )
-
-    # Positions Loader Patch
-    def _fake_fetch_positions_for_portfolios(db_path_, portfolio_ids):
-        return {
-            "portX": [
-                {
-                    "security_uuid": "secB",
-                    "security_name": "Security B",
-                    "shares": 10.0,
-                    "price": 80.25,
-                    "value": 802.5,
-                }
-            ]
-        }
-
-    monkeypatch.setattr(
-        "custom_components.pp_reader.prices.price_service.fetch_positions_for_portfolios",
-        _fake_fetch_positions_for_portfolios,
     )
 
     pushed = []
@@ -1128,31 +1190,22 @@ async def test_missing_symbol(monkeypatch, tmp_path):
                     "portZ", "Portfolio Z", 555.55, 444.44, 1
                 )
             },
-            "portfolio_positions": None,
+            "portfolio_positions": {
+                "portZ": [
+                    {
+                        "security_uuid": "secB",
+                        "security_name": "Security B",
+                        "shares": 5.0,
+                        "price": 21.75,
+                        "value": 108.75,
+                    }
+                ]
+            },
         }
 
     monkeypatch.setattr(
         "custom_components.pp_reader.prices.revaluation.revalue_after_price_updates",
         _fake_revalue_after_price_updates,
-    )
-
-    # Positionsdaten nur für secB
-    def _fake_fetch_positions_for_portfolios(db_path_, portfolio_ids):
-        return {
-            "portZ": [
-                {
-                    "security_uuid": "secB",
-                    "security_name": "Security B",
-                    "shares": 5.0,
-                    "price": 21.75,
-                    "value": 108.75,
-                }
-            ]
-        }
-
-    monkeypatch.setattr(
-        "custom_components.pp_reader.prices.price_service.fetch_positions_for_portfolios",
-        _fake_fetch_positions_for_portfolios,
     )
 
     pushed: list[tuple[str, list | dict]] = []
@@ -1269,30 +1322,22 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
                     "portCF", "Portfolio CF", 12345.67, 11111.11, 5
                 )
             },
-            "portfolio_positions": None,
+            "portfolio_positions": {
+                "portCF": [
+                    {
+                        "security_uuid": "sec10",
+                        "security_name": "Security 10",
+                        "shares": 2.0,
+                        "price": 999.99,
+                        "value": 1999.98,
+                    }
+                ]
+            },
         }
 
     monkeypatch.setattr(
         "custom_components.pp_reader.prices.revaluation.revalue_after_price_updates",
         _fake_revalue_after_price_updates,
-    )
-
-    def _fake_fetch_positions_for_portfolios(db_path_, portfolio_ids):
-        return {
-            "portCF": [
-                {
-                    "security_uuid": "sec10",
-                    "security_name": "Security 10",
-                    "shares": 2.0,
-                    "price": 999.99,
-                    "value": 1999.98,
-                }
-            ]
-        }
-
-    monkeypatch.setattr(
-        "custom_components.pp_reader.prices.price_service.fetch_positions_for_portfolios",
-        _fake_fetch_positions_for_portfolios,
     )
 
     pushed = []

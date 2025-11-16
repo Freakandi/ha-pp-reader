@@ -219,7 +219,7 @@ Don’t:
 ## 15. Key Files (Reference)
 
 - Core: `__init__.py`, `const.py`
-- Data Layer: `data/{coordinator,reader,sync_from_pclient,db_schema,db_init,websocket}.py`
+- Data Layer: `data/{coordinator,db_schema,db_init,websocket,normalized_store,snapshot_writer}.py`
 - Aggregation: `logic/*.py`
 - Prices: `prices/{price_service,revaluation,provider_base,yahooquery_provider}.py`
 - FX: `currencies/fx.py`

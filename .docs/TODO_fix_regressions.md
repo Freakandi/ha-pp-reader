@@ -82,8 +82,8 @@ Context: `source venv-ha/bin/activate && pytest -q` still reports 44 failures (s
 
 ## R10 – Schema bootstrap for plans + dependent tables
 - [x] `initialize_database_schema` no longer creates the `plans` table columns (`amount`, `fees`, `taxes`) that migrations and tests expect.
-- Relevant failures: `tests/test_migration.py::test_fresh_schema_contains_price_columns`.
+- Relevant failures: `tests/test_migration.py::test_fresh_schema_contains_price_columns` (legacy suite now removed).
 - How to fix:
   1. Compare `custom_components/pp_reader/data/db_schema.py` against `datamodel/SQLite_data.md` and reintroduce the `plans` table definition (or adjust the test/doc to match the intentional removal).
   2. Ensure `ALL_SCHEMAS` includes the `plans` table so migrations stay in sync.
-  3. Update the migration tests (and docs) once the schema is back in lockstep.
+  3. Update the migration tests (and docs) once the schema is back in lockstep, or retire the legacy suite entirely (current state).

@@ -1,8 +1,7 @@
-1. [ ] Phase 0 – Payload Contract & Feature Flag
+1. [ ] Phase 0 – Payload Contract
    a) [x] Document the canonical dashboard payload contract (accounts, portfolios, positions, diagnostics) under `pp_reader_dom_reference.md` and ensure it mirrors `datamodel/backend-datamodel-final.md`.
       - Ziel: Frontend contributors have a single source of truth for field names, types, and provenance metadata.
-   b) [x] Introduce a `normalized_dashboard_adapter` feature flag (if needed) in `custom_components/pp_reader/feature_flags.py` tied to config-entry options so UI work can ship incrementally.
-      - Ziel: Allow developers to flip between legacy adapters and the normalized pipeline during rollout without reintroducing compatibility logic.
+   b) [x] (Historical) A stop-gap feature flag backed the rollout; it has since been removed so the normalized adapter is always enabled.
    c) [x] Extend `.docs/cleanup/normalization_followups.md` with the entry point and validation checklist for the frontend adapter handoff.
 
 2. [ ] Phase 1 – API Client & Store Foundations

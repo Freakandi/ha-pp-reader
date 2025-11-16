@@ -25,12 +25,12 @@
       - Dateipfad(e): custom_components/pp_reader/data/db_schema.py
       - Betroffene Funktion(en)/Abschnitt(e): `PORTFOLIO_SECURITIES_SCHEMA` (Felder `current_holdings`, `avg_price_native`, `security_currency_total`, `account_currency_total`, `avg_price_security`, `avg_price_account`, `current_value`, generierte Spalte `avg_price`); `TRANSACTION_SCHEMA` (`transaction_units.fx_rate_to_base`); `PLAN_SCHEMA` (`amount`, `fees`, `taxes`); `EXCHANGE_SCHEMA` (`exchange_rates.rate`); `FX_SCHEMA` (`fx_rates.rate`)
       - Ziel/Ergebnis der Änderung: Alle neu erzeugten Tabellen speichern Preise, Werte, Anteile und FX-Raten ausschließlich als 10^-8-ganzzahlige Werte
-   b) [x] Aktualisiere die Laufzeit-Migrationshelfer in `custom_components/pp_reader/data/db_init.py`, damit neu erzeugte oder nachgezogene Spalten die INTEGER-Skalierung erhalten und bestehende REAL-Defaults entfernt werden.
+   b) [x] Aktualisiere die Laufzeit-Migrationshelfer in `custom_components/pp_reader/data/db_init.py`, damit neu erzeugte oder nachgezogene Spalten die INTEGER-Skalierung erhalten und bestehende REAL-Defaults entfernt werden. *(Legacy note: the runtime helpers were later deleted once canonical schema bootstrap became mandatory.)*
       - Dateipfad(e): custom_components/pp_reader/data/db_init.py
       - Betroffene Funktion(en)/Abschnitt(e): `_ensure_portfolio_securities_native_column`, `_ensure_portfolio_purchase_extensions`, `_backfill_portfolio_purchase_extension_defaults`, `initialize_database_schema`
       - Ziel/Ergebnis der Änderung: Schema-Initialisierung und Best-effort-Migration erzeugen integer-skalierte Spalten ohne Float-Rückstände
-   c) [x] Passe die Schema-Prüfungen in `tests/test_migration.py` an, sodass sie die neuen INTEGER-Typen und Spalteninhalte validieren.
-      - Dateipfad(e): tests/test_migration.py
+   c) [x] Passe die Schema-Prüfungen in `tests/test_migration.py` an, sodass sie die neuen INTEGER-Typen und Spalteninhalte validieren. *(Obsolete – the legacy migration test suite has been removed together with the runtime helpers.)*
+      - Dateipfad(e): tests/test_migration.py (entfernt)
       - Betroffene Funktion(en)/Abschnitt(e): `_get_columns`; Tests `test_fresh_schema_contains_price_columns`, `test_legacy_schema_migrated`
       - Ziel/Ergebnis der Änderung: Tests schlagen an, sobald Schema-Definitionen von der integer-skalierten Vorgabe abweichen
    d) [x] Überarbeite die Inline-Schema-Fixtures in `tests/test_price_service.py`, damit sie die INTEGER-Skalierung für Portfolio- und Transaktionstabellen widerspiegeln.
@@ -173,12 +173,12 @@
       - Dateipfad(e): tests/test_price_service.py
       - Betroffene Funktion(en)/Abschnitt(e): `_setup_price_rows`, `test_refresh_impacted_portfolio_securities_uses_currency_helpers`
       - Ziel/Ergebnis der Änderung: Preisservice-Tests prüfen Integerpersistenz und korrekte Dezimalausgabe nach Updates
-   k) [ ] Passe `tests/test_price_persistence_fields.py` auf 10^-8-Skalenwerte und neue Pflichtspaltenprüfungen an.
-      - Dateipfad(e): tests/test_price_persistence_fields.py
+   k) [x] Passe `tests/test_price_persistence_fields.py` auf 10^-8-Skalenwerte und neue Pflichtspaltenprüfungen an. *(Legacy Persistenz-Test entfernt.)*
+      - Dateipfad(e): tests/test_price_persistence_fields.py (entfernt)
       - Betroffene Funktion(en)/Abschnitt(e): `test_only_allowed_price_columns_persisted`
       - Ziel/Ergebnis der Änderung: Persistenztests garantieren, dass nur erlaubte Integer-Spalten geschrieben werden
-   l) [ ] Synchronisiere `tests/test_migration.py` mit den aktualisierten Schema-Definitionen und prüfe Integer-Datentypen je Migration.
-      - Dateipfad(e): tests/test_migration.py
+   l) [x] Synchronisiere `tests/test_migration.py` mit den aktualisierten Schema-Definitionen und prüfe Integer-Datentypen je Migration. *(Legacy Migrationstest entfernt.)*
+      - Dateipfad(e): tests/test_migration.py (entfernt)
       - Betroffene Funktion(en)/Abschnitt(e): `test_migrate_schema_*`
       - Ziel/Ergebnis der Änderung: Migrationstests verifizieren die vollständige Integerumstellung über alle Schema-Versionen
    m) [ ] Aktualisiere `tests/test_ws_portfolio_positions.py`, damit Websocket-Payloads formatierte Dezimalwerte und Roh-Integer-Felder korrekt spiegeln.

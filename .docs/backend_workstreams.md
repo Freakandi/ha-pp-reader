@@ -1,18 +1,18 @@
 # Backend Workstreams for the Datamodel Refactor
 
-This concept document enumerates the backend workstreams required to deliver the canonical ingestion → normalization → delivery pipeline described in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md), [`datamodel/parsed_pp_data.md`](../datamodel/parsed_pp_data.md), and the backend flow chart in [`datamodel/mermaid_backend_flow.mmd`](../datamodel/mermaid_backend_flow.mmd).
+This concept document enumerates the backend workstreams required to deliver (and now maintain) the canonical ingestion → metrics → normalization pipeline described in [`datamodel/backend-datamodel-final.md`](../datamodel/backend-datamodel-final.md), [`datamodel/parsed_pp_data.md`](../datamodel/parsed_pp_data.md), and the backend flow chart in [`datamodel/mermaid_backend_flow.mmd`](../datamodel/mermaid_backend_flow.mmd).
 
 ## Parser Modernization
-- **Target implementation.** Replace the legacy protobuf loader with a streaming parser centred around `custom_components/pp_reader/services/parser_pipeline.py` so Portfolio Performance payloads hydrate typed models and persist into dedicated ingestion tables prior to normalization. Parser domain logic continues to live under `custom_components/pp_reader/services/` and `custom_components/pp_reader/models/parsed.py`, exposing ingestion metadata for diagnostics and CLI workflows.
+- **Current implementation.** A streaming parser centred around `custom_components/pp_reader/services/parser_pipeline.py` hydrates typed models directly from the `.portfolio` protobuf and persists into dedicated ingestion tables prior to normalization. Parser domain logic lives under `custom_components/pp_reader/services/` and `custom_components/pp_reader/models/parsed.py`, exposing ingestion metadata for diagnostics and CLI workflows.
 - **Behaviour updates.**
   - Convert blocking file IO into asynchronous coroutine entry points invoked by the integration setup coordinator.
   - Validate protobuf invariants (missing UUIDs, unsupported security types) inline and raise descriptive Home Assistant errors for logging.
   - Emit structured progress/telemetry events (dispatcher + HA bus) and populate staging metadata so downstream enrichment, diagnostics, and CLI tooling can inspect parser runs.
-  - Reset and refill ingestion staging tables on every import to guarantee idempotent persistence before legacy normalization executes.
+  - Reset and refill ingestion staging tables on every import to guarantee idempotent persistence before the canonical normalization pass executes.
 - **New/updated modules.**
   - Introduce `custom_components/pp_reader/services/parser_pipeline.py` to orchestrate streaming protobuf parsing, validation, and progress callbacks while batching writes.
   - Extend `custom_components/pp_reader/models/parsed.py` with dataclasses mirroring the canonical ingestion schema prior to normalization.
-  - Add `custom_components/pp_reader/data/ingestion_writer.py` and `custom_components/pp_reader/data/ingestion_reader.py` as the staging persistence/loader layer consumed by legacy sync and diagnostics.
+  - Add `custom_components/pp_reader/data/ingestion_writer.py` and `custom_components/pp_reader/data/ingestion_reader.py` as the staging persistence/loader layer consumed by normalization, diagnostics, and CLI tooling.
   - Update `custom_components/pp_reader/data/coordinator.py` to execute the streaming parser, manage staging lifecycle, and propagate dispatcher progress alongside diagnostics from `custom_components/pp_reader/util/diagnostics.py`.
   - Provide CLI parity via `custom_components/pp_reader/cli/import_portfolio.py` (and `__main__.py`) so local imports share the Home Assistant pipeline (`scripts/import_portfolio.py` wrapper).
 - **Legacy retirement.** Decommission `custom_components/pp_reader/pclient/__init__.py` and related synchronous import helpers once the streaming parser reaches parity. Removal is gated on:
@@ -27,7 +27,7 @@ This concept document enumerates the backend workstreams required to deliver the
   - `HistoryQueueManager` derives symbols from parsed securities, plans jobs into `price_history_queue`, and coordinates executor-backed fetches plus persistence through `fetch_history_for_jobs`.
   - `price_service.initialize_price_state` and the surrounding task orchestration in `price_service` schedule enrichment cycles, push dispatcher telemetry via `data/event_push.py`, and trigger `revaluation.revalue_after_price_updates` once prices land.
 - **Primary modules.**
-  - `custom_components/pp_reader/currencies/fx.py` – discovery of active currencies, async Frankfurter client, cache loaders (`load_cached_rate_records`), and sync fallbacks for legacy code paths.
+  - `custom_components/pp_reader/currencies/fx.py` – discovery of active currencies, async Frankfurter client, cache loaders (`load_cached_rate_records`), and light-weight executor fallbacks for environments without aiohttp.
   - `custom_components/pp_reader/prices/history_queue.py` – queue lifecycle (`plan_jobs`, `run_queue_once`), job status transitions, and candle scaling before writes.
   - `custom_components/pp_reader/prices/history_ingest.py` – Yahoo history job model, batching helpers, and executor bridge used by the queue manager.
   - `custom_components/pp_reader/prices/yahooquery_provider.py` & `prices/provider_base.py` – shared fetch interface, chunk sizing, and provider health flags.
@@ -42,7 +42,7 @@ This concept document enumerates the backend workstreams required to deliver the
   - `custom_components/pp_reader/metrics/{portfolio,accounts,securities}.py` aggregate normalized tables, apply FX data, and reuse rounding helpers from `metrics/common.py` to keep payload math deterministic.
   - `custom_components/pp_reader/metrics/storage.py` batches inserts through `MetricBatch`, writing all three metric tables plus `metric_runs` within a single transaction before the coordinator or CLI emits dispatcher events.
   - Loader APIs in `custom_components/pp_reader/data/db_access.py` expose typed `*MetricRecord` dataclasses that websocket handlers and diagnostics rely on instead of recomputing values ad hoc.
-  - `custom_components/pp_reader/data/event_push.py` and `custom_components/pp_reader/data/websocket.py` retrieve persisted metrics (including coverage/provenance fields) to populate Home Assistant payloads without touching legacy helpers.
+  - `custom_components/pp_reader/data/event_push.py` and `custom_components/pp_reader/data/websocket.py` retrieve persisted metrics (including coverage/provenance fields) via `data/normalized_store` to populate Home Assistant payloads without recomputing values.
 - **New/updated modules.**
   - `custom_components/pp_reader/metrics/pipeline.py`, `metrics/storage.py`, and the metric calculators (`metrics/portfolio.py`, `metrics/accounts.py`, `metrics/securities.py`) that encapsulate orchestration, persistence, and computation responsibilities.
   - Schema definitions for `metric_runs`, `portfolio_metrics`, `account_metrics`, and `security_metrics` inside `custom_components/pp_reader/data/db_schema.py`, plus CRUD helpers/dataclasses in `custom_components/pp_reader/data/db_access.py`.
@@ -58,15 +58,12 @@ This concept document enumerates the backend workstreams required to deliver the
 - **Behaviour updates.**
   - WebSocket handlers (`data/websocket.py`) and dispatcher/event publishers (`data/event_push.py`) read from the serialized snapshots, emitting consistent `data_type` values (`accounts`, `portfolio_values`, `portfolio_positions`, `security_snapshot`, `security_history`) over Home Assistant's `EVENT_PANELS_UPDATED` stream.
   - CLI helpers (`scripts/enrichment_smoketest.py`, `custom_components/pp_reader/cli`) and diagnostics (`util/diagnostics.py`) reuse the same `async_normalize_snapshot` entry point; diagnostics expose the cached payload under `normalized_payload` so QA can diff backend vs. frontend.
-  - Coordinator orchestration (`data/coordinator.PPReaderCoordinator`) waits for metrics completion, hydrates the normalization cache (feature flag `normalized_pipeline`), and pushes incremental events so sensors and dashboard panels never fall back to legacy `_normalize_*` helpers.
+- Coordinator orchestration (`data/coordinator.PPReaderCoordinator`) waits for metrics completion, hydrates the normalization cache, and pushes incremental events so sensors and dashboard panels never fall back to bespoke `_normalize_*` helpers (they now load snapshots from SQLite).
 - **New/updated modules.**
   - Snapshot schema (`portfolio_snapshots`, `account_snapshots`) and migrations inside `custom_components/pp_reader/data/db_schema.py` plus loader helpers in `data/db_access.py`.
   - `custom_components/pp_reader/data/normalization_pipeline.py` exporting dataclasses, serialization helpers, and async entry points for Home Assistant as well as CLI callers.
   - Coordinator glue in `custom_components/pp_reader/data/coordinator.py` that caches the serialized result per entry_id and publishes updates through `_push_update`.
-- **Legacy retirement.** Remaining `_sync_*` vestiges inside `custom_components/pp_reader/data/sync_from_pclient.py` are now bypassed by snapshots, but keep the fallbacks until:
-  - Migration scripts confirm older databases are backfilled with snapshot rows (tracked in `.docs/native_price/migration.md`).
-  - Regression suites (`tests/integration/test_db_sync.py`, `tests/normalization/test_pipeline.py`, and websocket/event tests) keep parity across imports.
-  - QA sign-off is logged in `.docs/cleanup/normalization_signoff.md`, after which the legacy helpers can be dropped entirely.
+- **Legacy retirement.** ✅ `custom_components/pp_reader/data/sync_from_pclient.py` and its `_sync_*` helpers were removed; snapshots + metrics are now the only runtime path. Follow-up verification focuses on schema backfill coverage and QA sign-off for existing installs.
 
 ## Storage & Persistence
 - **Target implementation.** Harden SQLite persistence to guarantee idempotent imports, resumable enrichment, and observable state transitions.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,16 +26,9 @@ _LOGGER = logging.getLogger(__name__)
 def _resolve_portfolio_name(depot_sensor: PortfolioDepotSensor) -> str:
     """Return the portfolio name associated with the provided depot sensor."""
     attributes = depot_sensor.extra_state_attributes or {}
-    portfolio_uuid = attributes.get("portfolio_uuid")
-
-    if portfolio_uuid:
-        portfolios = depot_sensor.coordinator.data.get("portfolios")
-        if isinstance(portfolios, Mapping):
-            portfolio_data = portfolios.get(portfolio_uuid)
-            if isinstance(portfolio_data, Mapping):
-                name = portfolio_data.get("name")
-                if isinstance(name, str) and name:
-                    return name
+    name = attributes.get("portfolio_name")
+    if isinstance(name, str) and name:
+        return name
 
     entity_name = depot_sensor.name or ""
     if entity_name.startswith("Depotwert "):

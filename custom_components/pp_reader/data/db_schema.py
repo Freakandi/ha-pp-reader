@@ -814,8 +814,14 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_securities_portfolio
 ON portfolio_securities (portfolio_uuid)
 """
 
+HISTORICAL_PRICES_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_historical_prices_security_date
+ON historical_prices (security_uuid, date)
+"""
+
 # Aufnahme des neuen Index in ALL_SCHEMAS (additiv, idempotent)
 # Fallback: Falls ALL_SCHEMAS hier noch nicht definiert war (unwahrscheinlich),
 # würde dies ein Entwicklungsproblem anzeigen.
 with suppress(NameError):
     ALL_SCHEMAS.append(SCHEMA_LIVE_AGGREGATION_INDEX)  # type: ignore[attr-defined]
+    ALL_SCHEMAS.append(HISTORICAL_PRICES_INDEX)  # type: ignore[attr-defined]

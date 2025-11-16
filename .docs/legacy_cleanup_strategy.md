@@ -14,7 +14,9 @@ The canonical ingestion → enrichment → metrics → normalization flow descri
 
 ### 1. Retire protobuf diff sync (`sync_from_pclient`) and `_legacy_sync_to_db`
 
-**Scope.** The coordinator still re-parses `.portfolio` archives with the deprecated reader module and forwards them to `_legacy_sync_to_db`, which imports `data.sync_from_pclient` and replays the old `_SyncRunner` diff-sync pipeline.【F:custom_components/pp_reader/data/coordinator.py†L440-L542】【F:custom_components/pp_reader/data/reader.py†L1-L101】【F:custom_components/pp_reader/data/sync_from_pclient.py†L1-L200】
+**Status.** ✅ Completed in March 2025 — config flow validation now uses `parser_pipeline.async_parse_portfolio`, the `data/reader.py` + `data/sync_from_pclient.py` modules were deleted, CLI/tests were updated to rely solely on canonical ingestion → normalization, and `_legacy_sync_to_db` no longer exists in the coordinator.
+
+**Scope.** The coordinator still re-parses `.portfolio` archives with the deprecated reader module and forwards them to `_legacy_sync_to_db`, which imports `data.sync_from_pclient` and replays the old `_SyncRunner` diff-sync pipeline.【F:custom_components/pp_reader/data/coordinator.py†L440-L542】【F:custom_components/pp_reader/data/reader.py†L1-L101】【F:custom_components/pp_reader/data/sync_from_pclient.py†L1-L200】 *(Historical context only; this architecture has now been removed.)*
 
 **Canonical replacement.** The streaming parser plus ingestion writer already persist typed entities, and the normalization pipeline emits the payloads consumed by sensors, websocket commands, events, CLI tooling, and diagnostics.【F:custom_components/pp_reader/services/parser_pipeline.py†L1-L80】【F:custom_components/pp_reader/data/ingestion_writer.py†L1-L138】【F:custom_components/pp_reader/data/normalization_pipeline.py†L68-L194】
 
@@ -79,7 +81,7 @@ The canonical ingestion → enrichment → metrics → normalization flow descri
 
 ### 4. Remove feature flags and config options that toggle the normalized pipelines
 
-**Scope.** Feature flags (`use_staging_importer`, `enrichment_pipeline`, `metrics_pipeline`, `normalized_pipeline`, `normalized_dashboard_adapter`) still exist in `feature_flags.py`, the config-entry options flow, and diagnostics even though the GA announcement already mandated the normalized adapter for every install.【F:custom_components/pp_reader/feature_flags.py†L13-L24】【F:README-dev.md†L38-L50】
+**Scope.** Historical feature flags (`use_staging_importer`, `enrichment_pipeline`, `metrics_pipeline`, `normalized_pipeline`, `normalized_dashboard_adapter`) previously lived in `feature_flags.py` and config-entry options. The normalized-specific toggles have now been removed so canonical ingestion/normalization always runs.
 
 **Legacy assets to delete.**
 - Flag defaults and option parsing in `feature_flags.py`, `__init__.py` (`NORMALIZED_FLAG_KEYS`), coordinator flag lookups, and diagnostics gating logic.【F:custom_components/pp_reader/__init__.py†L60-L136】【F:custom_components/pp_reader/util/diagnostics.py†L53-L99】
@@ -88,7 +90,7 @@ The canonical ingestion → enrichment → metrics → normalization flow descri
 
 **Prerequisites.**
 - Config-entry migrations already set the flags to `true` for every entry (see release enablement doc), so removing the options is a no-op for existing users.【F:.docs/TODO_release_enablement.md†L1-L80】
-- Diagnostics expose `normalized_payload` whenever the flag snapshot reports `normalized_pipeline=True`; once the flag disappears, diagnostics should unconditionally collect the payload (or error if normalization fails).
+- Diagnostics now expose `normalized_payload` unconditionally; any failure surfaces as an explicit error state instead of a disabled flag gate.
 
 **Validation.**
 - Reload an existing config entry and verify options migrate cleanly with no leftover `feature_flags` dict.
@@ -98,22 +100,7 @@ The canonical ingestion → enrichment → metrics → normalization flow descri
 
 ### 5. Delete legacy database migrations and cleanup helpers
 
-**Scope.** `db_init.py` and `data/migrations/cleanup.py` still contain runtime schema patches for columns that only existed before the staging schema landed (e.g., `avg_price_native`, `security_currency_total`, legacy portfolio columns). They are invoked on every startup and guarded by tests that simulate the pre-refactor layouts.【F:custom_components/pp_reader/data/db_init.py†L31-L125】【F:custom_components/pp_reader/data/migrations/cleanup.py†L1-L88】【F:tests/test_migration.py†L224-L320】
-
-**Legacy assets to delete.**
-- `_ensure_runtime_price_columns`, `_ensure_portfolio_securities_native_column`, and `cleanup_portfolio_security_legacy_columns`, plus their imports from `data/migrations`.
-- Migration-specific fixtures/tests (`tests/test_migration.py`, `tests/test_price_persistence_fields.py`) that only assert the legacy schema upgrades.
-- Documentation sections that still instruct contributors to run the cleanup helpers.
-
-**Prerequisites.**
-- SQLite schema definitions in `data/db_schema.py` already include the canonical tables for ingestion, enrichment, metrics, and normalization; new installs do not require these runtime ALTER TABLE statements.
-- WAL-safe migrations for the canonical schema are covered by the existing init tests (`tests/unit/test_db_schema_enrichment.py`, `tests/normalization/test_pipeline.py`).
-
-**Validation.**
-- Run the full `tests/test_db_access.py`, `tests/normalization`, and `tests/metrics` suites against an empty database to ensure bootstrap works without the legacy patches.
-- Spot-check upgrades by opening an older database copy, running `initialize_database_schema`, and confirming no unexpected ALTER TABLE statements fire (the helper should become a no-op once removed).
-
-**Notes.** Announce in `CHANGELOG.md` that in-place upgrades now require reinstalling the integration if the database predates the staging schema (per the repository rules, we no longer provide migration tooling).
+✅ **Completed.** Runtime ALTER TABLE helpers in `db_init.py`, the `data/migrations/cleanup.py` module, and the regression tests (`tests/test_migration.py`, `tests/test_price_persistence_fields.py`) have been removed. Database initialization now relies solely on the canonical schema + snapshot writers; existing installations must recreate their SQLite database from the current schema if they still depend on the legacy columns.【F:custom_components/pp_reader/data/db_init.py†L1-L180】【F:custom_components/pp_reader/data/db_schema.py†L1-L200】
 
 ### 6. Remove legacy-only tests, fixtures, and utilities
 
@@ -121,7 +108,7 @@ The canonical ingestion → enrichment → metrics → normalization flow descri
 
 **Legacy assets to delete.**
 - `tests/test_sync_from_pclient.py`, `tests/integration/test_sync_from_staging.py`, and fixtures under `tests/fixtures/legacy_*`.
-- Migration guards (`tests/test_migration.py`, `tests/test_price_persistence_fields.py`) once the ALTER TABLE helpers disappear.
+- Migration guards (`tests/test_migration.py`, `tests/test_price_persistence_fields.py`) once the ALTER TABLE helpers disappear. ✅ Removed alongside the runtime migrations.
 - Any dashboard or frontend tests that still stub the legacy payload shapes instead of the normalized snapshots.
 
 **Prerequisites.**

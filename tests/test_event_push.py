@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+import pytest
+from homeassistant.const import EVENT_PANELS_UPDATED
+
+from custom_components.pp_reader.data import event_push
 from custom_components.pp_reader.data.event_push import _compact_event_data
 
 
@@ -101,3 +106,73 @@ def test_compact_event_data_keeps_data_state() -> None:
         "status": "warning",
         "message": "missing coverage",
     }
+
+
+class _StubLoop:
+    """Record thread-safe loop invocations."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def call_soon_threadsafe(self, callback, *args) -> None:
+        self.calls.append((callback, args))
+        callback(*args)
+
+
+class _StubBus:
+    """Capture fired events."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict]] = []
+
+    def fire(self, event_type: str, payload: dict) -> None:
+        self.events.append((event_type, payload))
+
+
+class _StubHass:
+    """Minimal hass-like object for event push testing."""
+
+    def __init__(self) -> None:
+        self.loop = _StubLoop()
+        self.bus = _StubBus()
+
+
+def test_push_update_emits_canonical_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_push_update should compact payloads and emit recorder-safe events."""
+    hass = _StubHass()
+    now = datetime(2024, 3, 1, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(event_push.dt_util, "utcnow", lambda: now)
+
+    payload = [
+        {
+            "uuid": "portfolio-1",
+            "current_value": 1234.5,
+            "positions": (),
+        },
+    ]
+    expected_data = [
+        {
+            "uuid": "portfolio-1",
+            "current_value": 1234.5,
+            "positions": [],
+        },
+    ]
+
+    event_push._push_update(
+        hass,
+        entry_id="entry-1",
+        data_type="portfolio_values",
+        data=payload,
+    )
+
+    # loop should schedule exactly one fire call, executed immediately by the stub
+    assert len(hass.loop.calls) == 1
+    assert len(hass.bus.events) == 1
+
+    event_type, event_payload = hass.bus.events[0]
+    assert event_type == EVENT_PANELS_UPDATED
+    assert event_payload["domain"] == "pp_reader"
+    assert event_payload["entry_id"] == "entry-1"
+    assert event_payload["data_type"] == "portfolio_values"
+    assert event_payload["data"] == expected_data
+    assert event_payload["synced_at"] == "2024-03-01T12:00:00+00:00"

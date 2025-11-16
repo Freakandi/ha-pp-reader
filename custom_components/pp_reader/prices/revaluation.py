@@ -25,16 +25,15 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.data.db_access import fetch_live_portfolios
-from custom_components.pp_reader.data.sync_from_pclient import (
-    fetch_positions_for_portfolios,
+from custom_components.pp_reader.data.normalization_pipeline import (
+    load_portfolio_position_snapshots,
+    serialize_position_snapshot,
 )
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur, round_currency
 
 # HINWEIS (Item portfolio_aggregation_reuse):
 # Die Revaluation nutzt fetch_live_portfolios als Single Source of Truth und
@@ -53,9 +52,6 @@ else:  # pragma: no cover - runtime alias for type checking compatibility
 
     HomeAssistant = Any
     Iterable = _collections_abc.Iterable
-
-
-PRICE_SCALE = 10**8
 
 
 async def revalue_after_price_updates(
@@ -109,11 +105,6 @@ async def revalue_after_price_updates(
         return {"portfolio_values": None, "portfolio_positions": None}
 
     portfolio_positions = await _load_portfolio_positions(hass, db_path, affected)
-    portfolio_positions = _ensure_portfolio_positions(
-        conn,
-        affected,
-        portfolio_positions,
-    )
 
     return {
         "portfolio_values": portfolio_values,
@@ -243,7 +234,10 @@ async def _load_portfolio_positions(
 
     try:
         raw_positions = await async_run_executor_job(
-            hass, fetch_positions_for_portfolios, db_path, affected
+            hass,
+            load_portfolio_position_snapshots,
+            db_path,
+            affected,
         )
     except RuntimeError:
         _LOGGER.warning(
@@ -255,162 +249,12 @@ async def _load_portfolio_positions(
     if not raw_positions:
         return None
 
-    return raw_positions
+    serialized: dict[str, list[dict[str, Any]]] = {}
+    for pid, entries in raw_positions.items():
+        payload = [
+            serialize_position_snapshot(position) for position in entries or ()
+        ]
+        if payload:
+            serialized[pid] = payload
 
-
-def _ensure_portfolio_positions(
-    conn: sqlite3.Connection,
-    portfolio_ids: set[str],
-    existing: dict[str, list[dict]] | None,
-) -> dict[str, list[dict]] | None:
-    """Ensure portfolio positions exist by falling back to raw tables when needed."""
-    if not portfolio_ids:
-        return existing
-
-    portfolio_positions = existing or {}
-    missing_ids = {pid for pid in portfolio_ids if not portfolio_positions.get(pid)}
-
-    if not missing_ids:
-        return portfolio_positions or None
-
-    fallback = _load_positions_fallback(conn, missing_ids)
-    if not fallback:
-        return portfolio_positions or None
-
-    for pid, entries in fallback.items():
-        if entries:
-            portfolio_positions[pid] = entries
-
-    return portfolio_positions or None
-
-
-def _load_positions_fallback(
-    conn: sqlite3.Connection, portfolio_ids: set[str]
-) -> dict[str, list[dict[str, Any]]] | None:
-    """Build lightweight position payloads directly from portfolio_securities."""
-    placeholders = ",".join("?" for _ in portfolio_ids)
-    if not placeholders:
-        return None
-
-    query = """
-        SELECT
-            ps.portfolio_uuid,
-            ps.security_uuid,
-            ps.current_holdings,
-            ps.purchase_value,
-            ps.current_value,
-            ps.avg_price_native,
-            ps.avg_price_security,
-            ps.avg_price_account,
-            ps.security_currency_total,
-            ps.account_currency_total,
-            s.name,
-            s.currency_code
-        FROM portfolio_securities AS ps
-        LEFT JOIN securities AS s ON s.uuid = ps.security_uuid
-        WHERE ps.portfolio_uuid IN ({placeholders})
-        ORDER BY ps.portfolio_uuid, s.name
-    """.format(placeholders=placeholders)  # noqa: UP032 - dynamic placeholders via str.format
-
-    try:
-        rows = conn.execute(query, tuple(portfolio_ids)).fetchall()
-    except sqlite3.Error:
-        _LOGGER.warning(
-            "revaluation: Fallback konnte portfolio_positions nicht laden",
-            exc_info=True,
-        )
-        return None
-
-    if not rows:
-        return None
-
-    positions: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for (
-        portfolio_uuid,
-        security_uuid,
-        current_holdings,
-        purchase_value,
-        current_value,
-        avg_price_native,
-        avg_price_security,
-        avg_price_account,
-        security_total,
-        account_total,
-        name,
-        currency_code,
-    ) in rows:
-        entry = {
-            "portfolio_uuid": portfolio_uuid,
-            "security_uuid": security_uuid,
-            "name": name or security_uuid,
-            "currency_code": (currency_code or "EUR").upper(),
-            "current_holdings": _to_float(current_holdings),
-            "purchase_value": cent_to_eur(purchase_value, default=0.0) or 0.0,
-            "current_value": cent_to_eur(current_value, default=0.0) or 0.0,
-            "average_cost": _build_average_cost_payload(
-                native=avg_price_native,
-                security=avg_price_security,
-                account=avg_price_account,
-            ),
-            "aggregation": _build_aggregation_payload(
-                security_total=security_total,
-                account_total=account_total,
-            ),
-            "performance": {},
-        }
-        positions[portfolio_uuid].append(entry)
-
-    return dict(positions)
-
-
-def _to_float(value: Any) -> float:
-    try:
-        return float(value or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _from_eight_decimal(value: Any, *, decimals: int = 6) -> float | None:
-    if value in (None, ""):
-        return None
-
-    try:
-        normalized = float(value) / PRICE_SCALE
-    except (TypeError, ValueError):
-        return None
-
-    return round_currency(normalized, decimals=decimals, default=None)
-
-
-def _build_average_cost_payload(
-    *,
-    native: Any,
-    security: Any,
-    account: Any,
-) -> dict[str, float]:
-    payload: dict[str, float] = {}
-    native_value = _from_eight_decimal(native)
-    if native_value is not None:
-        payload["native"] = native_value
-    security_value = _from_eight_decimal(security)
-    if security_value is not None:
-        payload["security"] = security_value
-    account_value = _from_eight_decimal(account)
-    if account_value is not None:
-        payload["account"] = account_value
-    return payload
-
-
-def _build_aggregation_payload(
-    *,
-    security_total: Any,
-    account_total: Any,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {}
-    security_value = cent_to_eur(security_total, default=None)
-    if security_value is not None:
-        payload["purchase_total_security"] = security_value
-    account_value = cent_to_eur(account_total, default=None)
-    if account_value is not None:
-        payload["purchase_total_account"] = account_value
-    return payload
+    return serialized or None
