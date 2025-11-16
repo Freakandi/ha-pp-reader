@@ -205,7 +205,7 @@ PLAN_SCHEMA = [
         transaction_uuid TEXT NOT NULL,
         FOREIGN KEY (plan_name) REFERENCES plans(name)
     );
-    """
+    """,
 ]
 
 WATCHLIST_SCHEMA = [

@@ -204,7 +204,9 @@ async def test_async_parse_portfolio_emits_progress(hass, monkeypatch) -> None:
         "securities",
         "transactions",
     ]
-    assert all(update.processed == 1 and update.total == 1 for update in progress_updates)
+    assert all(
+        update.processed == 1 and update.total == 1 for update in progress_updates
+    )
 
     assert [event.data["stage"] for event in events] == [
         "accounts",

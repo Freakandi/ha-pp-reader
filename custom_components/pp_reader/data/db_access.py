@@ -914,21 +914,20 @@ def _build_snapshot_from_holdings(
         purchase_total_account,
     ) = _resolve_average_cost_totals(aggregation)
 
-    purchase_value_eur = (
-        round_currency(purchase_value_eur, default=0.0) or 0.0
-    )
+    purchase_value_eur = round_currency(purchase_value_eur, default=0.0) or 0.0
     purchase_total_security = (
         round_currency(purchase_total_security, default=0.0) or 0.0
     )
-    purchase_total_account = (
-        round_currency(purchase_total_account, default=0.0) or 0.0
-    )
+    purchase_total_account = round_currency(purchase_total_account, default=0.0) or 0.0
 
-    total_holdings = round_currency(
-        aggregation.total_holdings,
-        decimals=6,
-        default=0.0,
-    ) or 0.0
+    total_holdings = (
+        round_currency(
+            aggregation.total_holdings,
+            decimals=6,
+            default=0.0,
+        )
+        or 0.0
+    )
 
     reference_date = datetime.now()  # noqa: DTZ005
     currency_code = security_row["currency_code"] or "EUR"
@@ -1298,9 +1297,7 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
 
 def _utc_now_isoformat() -> str:
     """Return the current UTC timestamp in ISO8601 notation."""
-    return datetime.now(tz=UTC).replace(microsecond=0).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    return datetime.now(tz=UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _row_to_metric_run(row: sqlite3.Row) -> MetricRunMetadata:
@@ -2432,8 +2429,6 @@ def fetch_previous_close(
         if conn is None:
             with suppress(sqlite3.Error):
                 local_conn.close()
-
-
 
 
 def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:

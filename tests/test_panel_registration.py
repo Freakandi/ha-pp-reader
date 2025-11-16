@@ -14,6 +14,7 @@ import pytest
 from homeassistant.const import CONF_FILE_PATH
 from homeassistant.core import HomeAssistant
 
+import custom_components.pp_reader as integration
 from custom_components.pp_reader.const import CONF_DB_PATH, DOMAIN
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from tests.common import MockConfigEntry
@@ -81,8 +82,6 @@ async def test_placeholder_panel_registered_during_setup(
         "custom_components.pp_reader.__init__.async_register_built_in_panel",
         fake_register_panel,
     )
-
-    import custom_components.pp_reader as integration
 
     assert await integration.async_setup(hass, {})
     assert captured_configs, "Expected the placeholder registration to run"

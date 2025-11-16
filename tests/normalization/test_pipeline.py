@@ -227,8 +227,12 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     assert alpha_position.security_uuid == "sec-1"
     assert alpha_position.current_value == pytest.approx(2500.0)
     assert alpha_position.average_cost["eur"] == pytest.approx(363.64)
-    assert alpha_position.average_cost["security"] == pytest.approx(381.818182, rel=1e-6)
-    assert alpha_position.performance["day_change"]["price_change_eur"] == pytest.approx(0.11)
+    assert alpha_position.average_cost["security"] == pytest.approx(
+        381.818182, rel=1e-6
+    )
+    assert alpha_position.performance["day_change"][
+        "price_change_eur"
+    ] == pytest.approx(0.11)
 
     assert zeta.uuid == "portfolio-a"
     assert zeta.data_state.status == "error"

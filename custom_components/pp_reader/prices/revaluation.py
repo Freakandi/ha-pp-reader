@@ -251,9 +251,7 @@ async def _load_portfolio_positions(
 
     serialized: dict[str, list[dict[str, Any]]] = {}
     for pid, entries in raw_positions.items():
-        payload = [
-            serialize_position_snapshot(position) for position in entries or ()
-        ]
+        payload = [serialize_position_snapshot(position) for position in entries or ()]
         if payload:
             serialized[pid] = payload
 

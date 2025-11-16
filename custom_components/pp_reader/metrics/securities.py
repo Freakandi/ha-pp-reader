@@ -63,7 +63,6 @@ async def async_compute_security_metrics(
     )
 
 
-
 def _compute_security_metrics_sync(
     db_path: Path,
     run_uuid: str,

@@ -55,7 +55,9 @@ async def test_portfolio_metrics_aggregate_values(hass, metrics_db, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_account_metrics_apply_fx_and_report_coverage(hass, metrics_db, monkeypatch):
+async def test_account_metrics_apply_fx_and_report_coverage(
+    hass, metrics_db, monkeypatch
+):
     """Account metrics must convert non-EUR balances and expose coverage metadata."""
     install_fx_stubs(monkeypatch)
 
@@ -86,12 +88,16 @@ async def test_account_metrics_apply_fx_and_report_coverage(hass, metrics_db, mo
 
 
 @pytest.mark.asyncio
-async def test_security_metrics_include_day_change_and_fx(hass, metrics_db, monkeypatch):
+async def test_security_metrics_include_day_change_and_fx(
+    hass, metrics_db, monkeypatch
+):
     """Security metrics should report performance deltas, FX-derived values, and coverage."""
     install_fx_stubs(monkeypatch)
 
     records = await async_compute_security_metrics(hass, metrics_db, "run-003")
-    by_security = {(record.portfolio_uuid, record.security_uuid): record for record in records}
+    by_security = {
+        (record.portfolio_uuid, record.security_uuid): record for record in records
+    }
 
     assert set(by_security) == {
         ("portfolio-main", "sec-eur"),

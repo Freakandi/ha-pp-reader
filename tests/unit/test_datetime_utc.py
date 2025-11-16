@@ -7,18 +7,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _MODULE_PATH = (
-    Path(__file__)
-    .resolve()
-    .parents[2]
+    Path(__file__).resolve().parents[2]
     / "custom_components"
     / "pp_reader"
     / "util"
     / "datetime.py"
 )
 
-_SPEC = importlib.util.spec_from_file_location(
-    "pp_reader_util_datetime", _MODULE_PATH
-)
+_SPEC = importlib.util.spec_from_file_location("pp_reader_util_datetime", _MODULE_PATH)
 if _SPEC is None or _SPEC.loader is None:  # pragma: no cover - sanity guard
     error_message = f"Unable to load module from {_MODULE_PATH}"
     raise RuntimeError(error_message)

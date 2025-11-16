@@ -1086,9 +1086,10 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 if pv_dict:
                     try:
                         if not snapshot_lookup:
-                            snapshot_bundle, snapshot_lookup = (
-                                await _async_load_snapshot_bundle(hass, db_path)
-                            )
+                            (
+                                snapshot_bundle,
+                                snapshot_lookup,
+                            ) = await _async_load_snapshot_bundle(hass, db_path)
                         pv_payload = _compose_portfolio_payload_from_snapshots(
                             pv_dict,
                             snapshot_lookup,
@@ -1159,9 +1160,10 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     positions_map = revaluation_result.get("portfolio_positions")
                     if positions_map:
                         if not snapshot_lookup:
-                            snapshot_bundle, snapshot_lookup = (
-                                await _async_load_snapshot_bundle(hass, db_path)
-                            )
+                            (
+                                snapshot_bundle,
+                                snapshot_lookup,
+                            ) = await _async_load_snapshot_bundle(hass, db_path)
                         for pid, positions in positions_map.items():
                             entry_payload = _build_positions_event_entry(
                                 pid,
@@ -1279,6 +1281,8 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             }
         else:
             return meta
+
+
 def _snapshot_lookup_from_bundle(
     bundle: SnapshotBundle | None,
 ) -> dict[str, dict[str, Any]]:
@@ -1301,9 +1305,9 @@ def _normalized_metadata(
         return None
 
     metadata: dict[str, Any] = {}
-    metric_run_uuid = (
-        entry.get("metric_run_uuid") if entry else None
-    ) or (bundle.metric_run_uuid if bundle else None)
+    metric_run_uuid = (entry.get("metric_run_uuid") if entry else None) or (
+        bundle.metric_run_uuid if bundle else None
+    )
     if metric_run_uuid:
         metadata["metric_run_uuid"] = metric_run_uuid
 

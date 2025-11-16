@@ -42,6 +42,7 @@ from .history_ingest import (
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from custom_components.pp_reader.models import parsed as parsed_models
+
     ParsedSecurityType = parsed_models.ParsedSecurity
 else:
     ParsedSecurityType = Any
@@ -73,7 +74,6 @@ def _symbol_from_properties(properties: Mapping[str, Any]) -> tuple[str | None, 
             if normalized:
                 return normalized, f"property:{key}"
     return None, ""
-
 
 
 _PENDING_STATUSES = ("pending", "running")
@@ -137,8 +137,6 @@ def _load_latest_history_epoch(
 
 def _latest_epoch_to_date(epoch: int) -> date:
     return datetime.fromtimestamp(epoch * 86400, tz=UTC).date()
-
-
 
 
 def build_history_targets_from_parsed(

@@ -16,7 +16,10 @@ from custom_components.pp_reader.data.ingestion_reader import (
     load_securities,
     load_transactions,
 )
-from custom_components.pp_reader.data.ingestion_writer import async_ingestion_session
+from custom_components.pp_reader.data.ingestion_writer import (
+    IngestionMetadata,
+    async_ingestion_session,
+)
 from tests.integration.test_ingestion_writer import (
     DummyAccount,
     DummyHistoricalPrice,
@@ -82,19 +85,23 @@ async def test_load_ingestion_snapshot_returns_dataclasses(tmp_path: Path) -> No
                     amount=150_00,
                     security="sec-1",
                     units=[
-                        DummyTransactionUnit(type=0, amount=150_00, currency_code="EUR"),
+                        DummyTransactionUnit(
+                            type=0, amount=150_00, currency_code="EUR"
+                        ),
                         DummyTransactionUnit(type=1, amount=15_00, currency_code="EUR"),
                     ],
                 )
             ]
         )
         writer.finalize_ingestion(
-            file_path="fixture.portfolio",
-            parsed_at=datetime(2024, 1, 2, tzinfo=UTC),
-            pp_version=42,
-            base_currency="EUR",
-            properties={"build": "test-suite"},
-            parsed_client=None,
+            IngestionMetadata(
+                file_path="fixture.portfolio",
+                parsed_at=datetime(2024, 1, 2, tzinfo=UTC),
+                pp_version=42,
+                base_currency="EUR",
+                properties={"build": "test-suite"},
+                parsed_client=None,
+            )
         )
 
     conn = _open_connection(db_path)
@@ -126,4 +133,3 @@ async def test_load_ingestion_snapshot_returns_dataclasses(tmp_path: Path) -> No
         assert snapshot.metadata["file_path"] == "fixture.portfolio"
     finally:
         conn.close()
-

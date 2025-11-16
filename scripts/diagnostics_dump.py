@@ -125,6 +125,7 @@ def _build_payload_preview(
     limit: int,
 ) -> dict[str, list[dict[str, Any]]]:
     """Return the first N snapshot payloads from the normalized store."""
+
     def _trim(entries: tuple[dict[str, Any], ...]) -> list[dict[str, Any]]:
         return [dict(payload) for payload in entries[:limit]]
 
@@ -246,6 +247,7 @@ def _serialize_metric_batch(
     limit: int,
 ) -> dict[str, list[dict[str, Any]]]:
     """Return trimmed previews for each metric scope."""
+
     def _serialize_portfolio(record: Any) -> dict[str, Any]:
         return {
             "portfolio_uuid": record.portfolio_uuid,
@@ -280,9 +282,7 @@ def _serialize_metric_batch(
     portfolios = [
         _serialize_portfolio(record) for record in (batch.portfolios or ())[:limit]
     ]
-    accounts = [
-        _serialize_account(record) for record in (batch.accounts or ())[:limit]
-    ]
+    accounts = [_serialize_account(record) for record in (batch.accounts or ())[:limit]]
     securities = [
         _serialize_security(record) for record in (batch.securities or ())[:limit]
     ]

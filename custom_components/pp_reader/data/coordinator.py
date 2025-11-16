@@ -49,7 +49,7 @@ from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util import diagnostics as diagnostics_util
 from custom_components.pp_reader.util import notifications as notifications_util
 
-from .ingestion_writer import async_ingestion_session
+from .ingestion_writer import IngestionMetadata, async_ingestion_session
 from .normalization_pipeline import (
     NormalizationResult,
     async_normalize_snapshot,
@@ -224,12 +224,14 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     progress_cb=self._handle_parser_progress,
                 )
                 self._last_ingestion_run_id = writer.finalize_ingestion(
-                    file_path=str(self.file_path),
-                    parsed_at=datetime.now(UTC),
-                    pp_version=parsed_client.version,
-                    base_currency=parsed_client.base_currency,
-                    properties=parsed_client.properties,
-                    parsed_client=parsed_client,
+                    IngestionMetadata(
+                        file_path=str(self.file_path),
+                        parsed_at=datetime.now(UTC),
+                        pp_version=parsed_client.version,
+                        base_currency=parsed_client.base_currency,
+                        properties=parsed_client.properties,
+                        parsed_client=parsed_client,
+                    )
                 )
         except (PortfolioParseError, PortfolioValidationError) as err:
             if notify_parser_failures:
@@ -238,10 +240,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                         self.hass,
                         entry_id=self.entry_id,
                         title="Portfolio Performance Import fehlgeschlagen",
-                        message=(
-                            f"Fehler: {err}\n"
-                            f"Quelle: {self.file_path}"
-                        ),
+                        message=(f"Fehler: {err}\nQuelle: {self.file_path}"),
                     )
                 )
             msg = f"Parserlauf fehlgeschlagen: {err}"

@@ -125,8 +125,10 @@ def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
     with _WRITE_LOCK:
         conn = sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
         try:
-            fetched_at = datetime.now(tz=UTC).replace(microsecond=0).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
+            fetched_at = (
+                datetime.now(tz=UTC)
+                .replace(microsecond=0)
+                .strftime("%Y-%m-%dT%H:%M:%SZ")
             )
             provenance = json.dumps(
                 {"currencies": sorted(rates.keys())},

@@ -24,7 +24,6 @@ _METRIC_SCHEMA_BUNDLES = (
 )
 
 
-
 def _iter_metric_ddl() -> Iterable[str]:
     """Yield DDL statements for metric-related tables and indexes."""
     for schema in _METRIC_SCHEMA_BUNDLES:
@@ -91,6 +90,8 @@ def initialize_database_schema(db_path: Path) -> None:
     except Exception:
         _LOGGER.exception("❌ Kritischer Fehler bei DB-Initialisierung")
         raise
+
+
 INGESTION_TABLES: tuple[str, ...] = (
     "ingestion_historical_prices",
     "ingestion_transaction_units",

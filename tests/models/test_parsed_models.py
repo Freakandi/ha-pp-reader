@@ -209,7 +209,10 @@ def test_parsed_client_handles_optional_sections() -> None:
 
     assert parsed_client.plans[0].name == "Monthly ETF"
     assert parsed_client.watchlists[0].securities == ["sec-uuid"]
-    assert parsed_client.taxonomies[0].classifications[0].assignments[0].investment_vehicle == "sec-uuid"
+    assert (
+        parsed_client.taxonomies[0].classifications[0].assignments[0].investment_vehicle
+        == "sec-uuid"
+    )
     assert parsed_client.dashboards[0].columns[0].widgets[0].type == "chart"
     assert parsed_client.settings is not None
     assert parsed_client.settings.bookmarks[0].label == "ETF"

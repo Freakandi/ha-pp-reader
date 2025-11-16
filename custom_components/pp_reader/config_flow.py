@@ -208,6 +208,8 @@ class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="db_path", data_schema=data_schema, errors=errors
         )
+
+
 # -----------------------------------------------------------------------------
 # Options Flow (Grundgerüst)
 # -----------------------------------------------------------------------------

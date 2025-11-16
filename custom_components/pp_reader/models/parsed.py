@@ -333,9 +333,7 @@ class ParsedSecurity:
                 ParsedHistoricalPrice.from_proto(price) for price in security.prices
             ],
             latest=latest_price,
-            events=[
-                ParsedSecurityEvent.from_proto(event) for event in security.events
-            ],
+            events=[ParsedSecurityEvent.from_proto(event) for event in security.events],
             updated_at=_timestamp_to_datetime(_maybe_field(security, "updatedAt")),
         )
 
@@ -441,9 +439,7 @@ class ParsedConfigurationSet:
     data: str | None
 
     @classmethod
-    def from_proto(
-        cls, config: client_pb2.PConfigurationSet
-    ) -> ParsedConfigurationSet:
+    def from_proto(cls, config: client_pb2.PConfigurationSet) -> ParsedConfigurationSet:
         """Build a configuration set from the protobuf representation."""
         return cls(
             key=config.key,
@@ -500,9 +496,7 @@ class ParsedInvestmentPlan:
     plan_type: int | None = None
 
     @classmethod
-    def from_proto(
-        cls, plan: client_pb2.PInvestmentPlan
-    ) -> ParsedInvestmentPlan:
+    def from_proto(cls, plan: client_pb2.PInvestmentPlan) -> ParsedInvestmentPlan:
         """Build an investment plan from the protobuf representation."""
         plan_type = _maybe_field(plan, "type")
         return cls(

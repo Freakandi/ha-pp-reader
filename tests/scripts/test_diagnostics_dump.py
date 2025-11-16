@@ -30,7 +30,9 @@ from scripts import diagnostics_dump
 
 
 @pytest.mark.asyncio
-async def test_async_collect_canonical_diagnostics_reports_missing(tmp_path: Path) -> None:
+async def test_async_collect_canonical_diagnostics_reports_missing(
+    tmp_path: Path,
+) -> None:
     """Missing SQLite files should surface the `missing` status."""
     missing_path = tmp_path / "does-not-exist.db"
     summary = await diagnostics_dump.async_collect_canonical_diagnostics(missing_path)
@@ -40,7 +42,9 @@ async def test_async_collect_canonical_diagnostics_reports_missing(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_async_collect_canonical_diagnostics_returns_preview(tmp_path: Path) -> None:
+async def test_async_collect_canonical_diagnostics_returns_preview(
+    tmp_path: Path,
+) -> None:
     """Snapshot + metric previews should reflect persisted canonical tables."""
     db_path = tmp_path / "diag.db"
     initialize_database_schema(db_path)

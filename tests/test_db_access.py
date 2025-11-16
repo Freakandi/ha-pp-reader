@@ -357,7 +357,6 @@ def test_get_portfolio_securities_exposes_native_average(tmp_path: Path) -> None
     }
 
 
-
 def test_iter_security_close_prices_orders_and_filters_range(
     seeded_history_db: Path,
 ) -> None:

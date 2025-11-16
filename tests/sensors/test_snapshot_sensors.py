@@ -13,7 +13,9 @@ from custom_components.pp_reader.sensors.store import SnapshotSensorStore
 class _DummyCoordinator:
     """Minimal coordinator replacement for sensor unit tests."""
 
-    def __init__(self, hass: Any, db_path: Path, run_uuid: str | None = "run-1") -> None:
+    def __init__(
+        self, hass: Any, db_path: Path, run_uuid: str | None = "run-1"
+    ) -> None:
         self.hass = hass
         self.db_path = db_path
         self.data = {"normalization": {"metric_run_uuid": run_uuid}}
@@ -111,4 +113,6 @@ async def test_account_sensor_reads_from_snapshot_store(hass, tmp_path, monkeypa
     await sensor.async_added_to_hass()
 
     assert sensor.native_value == pytest.approx(120.5)
-    assert sensor.extra_state_attributes["letzte_aktualisierung"] == "2024-01-01T00:00:00Z"
+    assert (
+        sensor.extra_state_attributes["letzte_aktualisierung"] == "2024-01-01T00:00:00Z"
+    )

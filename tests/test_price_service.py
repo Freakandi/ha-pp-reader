@@ -267,19 +267,22 @@ async def test_price_cycle_adds_normalized_payload(monkeypatch, tmp_path):
     monkeypatch.setattr(price_service, "_push_update", fake_push)
     monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
     monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
-    monkeypatch.setattr(
-        price_service, "async_load_latest_snapshot_bundle", fake_bundle
-    )
+    monkeypatch.setattr(price_service, "async_load_latest_snapshot_bundle", fake_bundle)
 
     meta = await price_service._run_price_cycle(hass, entry_id)
 
     assert meta["changed"] == 1
-    values_event = next(payload for dtype, payload in events if dtype == "portfolio_values")
+    values_event = next(
+        payload for dtype, payload in events if dtype == "portfolio_values"
+    )
     positions_event = next(
         payload for dtype, payload in events if dtype == "portfolio_positions"
     )
     assert values_event[0]["normalized_payload"]["metric_run_uuid"] == "run-1"
-    assert positions_event[0]["normalized_payload"]["generated_at"] == "2024-03-01T00:00:00Z"
+    assert (
+        positions_event[0]["normalized_payload"]["generated_at"]
+        == "2024-03-01T00:00:00Z"
+    )
     assert positions_event[0]["coverage_ratio"] == 0.85
 
 

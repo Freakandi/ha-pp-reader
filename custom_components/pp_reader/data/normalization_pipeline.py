@@ -385,7 +385,6 @@ def _normalize_snapshot_sync(
     return result
 
 
-
 def _compose_account_snapshots(
     accounts: Sequence[Account],
     account_metrics: Sequence[AccountMetricRecord],
@@ -551,9 +550,7 @@ def _compose_performance_payload(
 
     gain_abs = cent_to_eur(metric.gain_abs_cents, default=0.0) or 0.0
     total_change = (
-        cent_to_eur(metric.total_change_eur_cents, default=None)
-        or gain_abs
-        or 0.0
+        cent_to_eur(metric.total_change_eur_cents, default=None) or gain_abs or 0.0
     )
 
     payload: dict[str, Any] = {
@@ -583,8 +580,7 @@ def _load_position_snapshots(
     *,
     db_path: Path,
     portfolio_uuid: str,
-    metric_rows: Sequence[SecurityMetricRecord] | tuple[()]
-    | None,
+    metric_rows: Sequence[SecurityMetricRecord] | tuple[()] | None,
     securities: Mapping[str, Security],
 ) -> Iterable[PositionSnapshot]:
     """Convert persisted security metrics into PositionSnapshot dataclasses."""
@@ -645,9 +641,7 @@ def _load_position_snapshots(
 
         gain_abs = cent_to_eur(record.gain_abs_cents, default=0.0) or 0.0
         total_change_eur = (
-            cent_to_eur(record.total_change_eur_cents, default=None)
-            or gain_abs
-            or 0.0
+            cent_to_eur(record.total_change_eur_cents, default=None) or gain_abs or 0.0
         )
         performance_payload: dict[str, Any] = {
             "gain_abs": gain_abs,
@@ -803,12 +797,10 @@ def _build_security_snapshot_from_positions(
     purchase_value = sum(position.purchase_value for position in matched)
 
     purchase_total_security = _sum_optional(
-        position.aggregation.get("purchase_total_security")
-        for position in matched
+        position.aggregation.get("purchase_total_security") for position in matched
     )
     purchase_total_account = _sum_optional(
-        position.aggregation.get("purchase_total_account")
-        for position in matched
+        position.aggregation.get("purchase_total_account") for position in matched
     )
 
     coverage_values = [
@@ -825,9 +817,10 @@ def _build_security_snapshot_from_positions(
         else None
     )
 
-    performance_gain_abs = _sum_optional(
-        position.performance.get("gain_abs") for position in matched
-    ) or 0.0
+    performance_gain_abs = (
+        _sum_optional(position.performance.get("gain_abs") for position in matched)
+        or 0.0
+    )
     performance_total_change = _sum_optional(
         position.performance.get("total_change_eur") for position in matched
     )
@@ -862,9 +855,7 @@ def _build_security_snapshot_from_positions(
     if last_price_eur is None and last_price_native is not None:
         last_price_eur = last_price_native if first.currency_code == "EUR" else None
 
-    last_close_native = _first_value(
-        position.last_close_native for position in matched
-    )
+    last_close_native = _first_value(position.last_close_native for position in matched)
     last_close_eur = _first_value(position.last_close_eur for position in matched)
 
     average_cost = {

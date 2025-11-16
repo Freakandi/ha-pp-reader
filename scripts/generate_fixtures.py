@@ -289,6 +289,7 @@ async def _generate_smoketest_payload(  # noqa: PLR0915
         initialize_database_schema(db_path)
 
         parsed_client, sample_proto = normalization_test._build_sample_parsed_client()  # noqa: SLF001
+
         async def _fake_parse_portfolio(
             hass: Any,
             *,
@@ -517,8 +518,7 @@ async def _async_main(args: argparse.Namespace) -> None:
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Regenerate smoketest fixtures shared between backend and "
-            "frontend suites."
+            "Regenerate smoketest fixtures shared between backend and frontend suites."
         ),
     )
     parser.add_argument(

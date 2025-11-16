@@ -22,7 +22,10 @@ from typing import TYPE_CHECKING, Any
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.currencies import fx
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.data.ingestion_writer import async_ingestion_session
+from custom_components.pp_reader.data.ingestion_writer import (
+    IngestionMetadata,
+    async_ingestion_session,
+)
 from custom_components.pp_reader.data.normalization_pipeline import (
     async_normalize_snapshot,
     serialize_normalization_result,
@@ -131,12 +134,14 @@ async def _run_parser(
             progress_cb=printer.update,
         )
         run_id = writer.finalize_ingestion(
-            file_path=str(portfolio_path),
-            parsed_at=datetime.now(UTC),
-            pp_version=parsed_client.version,
-            base_currency=parsed_client.base_currency,
-            properties=dict(parsed_client.properties),
-            parsed_client=parsed_client,
+            IngestionMetadata(
+                file_path=str(portfolio_path),
+                parsed_at=datetime.now(UTC),
+                pp_version=parsed_client.version,
+                base_currency=parsed_client.base_currency,
+                properties=dict(parsed_client.properties),
+                parsed_client=parsed_client,
+            )
         )
     return run_id, parsed_client
 
@@ -381,6 +386,7 @@ async def _load_canonical_snapshots(
         "accounts": accounts,
         "portfolios": portfolios,
     }
+
 
 def _snapshot_status_to_exit_code(status: str | None) -> int:
     """Map canonical snapshot status values to dedicated exit codes."""

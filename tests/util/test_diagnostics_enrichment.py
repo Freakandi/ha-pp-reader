@@ -186,7 +186,9 @@ async def test_diagnostics_missing_database_returns_unavailable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatch: Any) -> None:
+async def test_diagnostics_enrichment_payload_from_database(
+    tmp_path, monkeypatch: Any
+) -> None:
     db_path = tmp_path / "enrichment.db"
     _create_enrichment_db(db_path)
 
@@ -242,7 +244,9 @@ async def test_diagnostics_enrichment_payload_from_database(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_exposes_normalized_payload(tmp_path, monkeypatch: Any) -> None:
+async def test_diagnostics_exposes_normalized_payload(
+    tmp_path, monkeypatch: Any
+) -> None:
     """Normalized payload should be included when the snapshot tables contain data."""
     db_path = tmp_path / "diagnostics_norm.db"
     _create_enrichment_db(db_path)

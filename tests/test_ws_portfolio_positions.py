@@ -32,9 +32,7 @@ class StubHass:
     """Minimal Home Assistant stub exposing entry metadata."""
 
     def __init__(self, entry_id: str, db_path: Path) -> None:
-        self.data = {
-            websocket_module.DOMAIN: {entry_id: {"db_path": str(db_path)}}
-        }
+        self.data = {websocket_module.DOMAIN: {entry_id: {"db_path": str(db_path)}}}
 
 
 class StubConnection:

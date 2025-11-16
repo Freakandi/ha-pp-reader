@@ -7,6 +7,7 @@ import json
 import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -23,6 +24,18 @@ else:  # pragma: no cover - runtime fallback for typing only
     parsed_models = None  # type: ignore[assignment]
 
 PARSER_META_KEY = "__pp_reader__"
+
+
+@dataclass(slots=True)
+class IngestionMetadata:
+    """Metadata persisted at the end of an ingestion run."""
+
+    file_path: str | None = None
+    parsed_at: datetime | None = None
+    pp_version: int | None = None
+    base_currency: str | None = None
+    properties: Mapping[str, Any] | None = None
+    parsed_client: Any | None = None
 
 
 def _to_iso(dt: datetime | None) -> str | None:
@@ -42,61 +55,47 @@ def _json_dump(value: Mapping[str, Any] | None) -> str | None:
 
 
 def _serialize_watchlists(parsed_client: Any) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for watchlist in getattr(parsed_client, "watchlists", []) or []:
-        result.append(
-            {
-                "name": getattr(watchlist, "name", None),
-                "securities": list(getattr(watchlist, "securities", []) or []),
-            }
-        )
-    return [item for item in result if item.get("name")]
+    return [
+        {
+            "name": getattr(watchlist, "name", None),
+            "securities": list(getattr(watchlist, "securities", []) or []),
+        }
+        for watchlist in getattr(parsed_client, "watchlists", []) or []
+        if getattr(watchlist, "name", None)
+    ]
 
 
 def _serialize_plans(parsed_client: Any) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for plan in getattr(parsed_client, "plans", []) or []:
-        result.append(
-            {
-                "name": getattr(plan, "name", None),
-                "note": getattr(plan, "note", None),
-                "security": getattr(plan, "security", None),
-                "portfolio": getattr(plan, "portfolio", None),
-                "account": getattr(plan, "account", None),
-                "attributes": dict(getattr(plan, "attributes", {}) or {}),
-                "auto_generate": bool(getattr(plan, "auto_generate", False)),
-                "date": getattr(plan, "date", None),
-                "interval": getattr(plan, "interval", None),
-                "amount": getattr(plan, "amount", None),
-                "fees": getattr(plan, "fees", None),
-                "transactions": list(getattr(plan, "transactions", []) or []),
-                "taxes": getattr(plan, "taxes", None),
-                "plan_type": getattr(plan, "plan_type", None),
-            }
-        )
-    return [item for item in result if item.get("name")]
+    return [
+        {
+            "name": getattr(plan, "name", None),
+            "note": getattr(plan, "note", None),
+            "security": getattr(plan, "security", None),
+            "portfolio": getattr(plan, "portfolio", None),
+            "account": getattr(plan, "account", None),
+            "attributes": dict(getattr(plan, "attributes", {}) or {}),
+            "auto_generate": bool(getattr(plan, "auto_generate", False)),
+            "date": getattr(plan, "date", None),
+            "interval": getattr(plan, "interval", None),
+            "amount": getattr(plan, "amount", None),
+            "fees": getattr(plan, "fees", None),
+            "transactions": list(getattr(plan, "transactions", []) or []),
+            "taxes": getattr(plan, "taxes", None),
+            "plan_type": getattr(plan, "plan_type", None),
+        }
+        for plan in getattr(parsed_client, "plans", []) or []
+        if getattr(plan, "name", None)
+    ]
 
 
 def _serialize_taxonomies(parsed_client: Any) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for taxonomy in getattr(parsed_client, "taxonomies", []) or []:
-        classifications: list[dict[str, Any]] = []
-        for classification in getattr(taxonomy, "classifications", []) or []:
-            assignments: list[dict[str, Any]] = []
-            for assignment in getattr(classification, "assignments", []) or []:
-                assignments.append(
-                    {
-                        "investment_vehicle": getattr(
-                            assignment,
-                            "investment_vehicle",
-                            None,
-                        ),
-                        "weight": getattr(assignment, "weight", None),
-                        "rank": getattr(assignment, "rank", None),
-                        "data": dict(getattr(assignment, "data", {}) or {}),
-                    }
-                )
-            classifications.append(
+    taxonomies = [
+        {
+            "id": getattr(taxonomy, "id", None),
+            "name": getattr(taxonomy, "name", None),
+            "source": getattr(taxonomy, "source", None),
+            "dimensions": list(getattr(taxonomy, "dimensions", []) or []),
+            "classifications": [
                 {
                     "id": getattr(classification, "id", None),
                     "name": getattr(classification, "name", None),
@@ -106,56 +105,55 @@ def _serialize_taxonomies(parsed_client: Any) -> list[dict[str, Any]]:
                     "weight": getattr(classification, "weight", None),
                     "rank": getattr(classification, "rank", None),
                     "data": dict(getattr(classification, "data", {}) or {}),
-                    "assignments": assignments,
+                    "assignments": [
+                        {
+                            "investment_vehicle": getattr(
+                                assignment,
+                                "investment_vehicle",
+                                None,
+                            ),
+                            "weight": getattr(assignment, "weight", None),
+                            "rank": getattr(assignment, "rank", None),
+                            "data": dict(getattr(assignment, "data", {}) or {}),
+                        }
+                        for assignment in getattr(classification, "assignments", [])
+                        or []
+                    ],
                 }
-            )
-
-        result.append(
-            {
-                "id": getattr(taxonomy, "id", None),
-                "name": getattr(taxonomy, "name", None),
-                "source": getattr(taxonomy, "source", None),
-                "dimensions": list(getattr(taxonomy, "dimensions", []) or []),
-                "classifications": classifications,
-            }
-        )
-    return [item for item in result if item.get("id")]
+                for classification in getattr(taxonomy, "classifications", []) or []
+            ],
+        }
+        for taxonomy in getattr(parsed_client, "taxonomies", []) or []
+    ]
+    return [item for item in taxonomies if item.get("id")]
 
 
 def _serialize_dashboards(parsed_client: Any) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for dashboard in getattr(parsed_client, "dashboards", []) or []:
-        columns: list[dict[str, Any]] = []
-        for column in getattr(dashboard, "columns", []) or []:
-            widgets: list[dict[str, Any]] = []
-            for widget in getattr(column, "widgets", []) or []:
-                widgets.append(
-                    {
-                        "type": getattr(widget, "type", None),
-                        "label": getattr(widget, "label", None),
-                        "configuration": dict(
-                            getattr(widget, "configuration", {}) or {}
-                        ),
-                    }
-                )
-            columns.append(
+    dashboards = [
+        {
+            "name": getattr(dashboard, "name", None),
+            "configuration": dict(getattr(dashboard, "configuration", {}) or {}),
+            "columns": [
                 {
                     "weight": getattr(column, "weight", None),
-                    "widgets": widgets,
+                    "widgets": [
+                        {
+                            "type": getattr(widget, "type", None),
+                            "label": getattr(widget, "label", None),
+                            "configuration": dict(
+                                getattr(widget, "configuration", {}) or {}
+                            ),
+                        }
+                        for widget in getattr(column, "widgets", []) or []
+                    ],
                 }
-            )
-
-        result.append(
-            {
-                "name": getattr(dashboard, "name", None),
-                "configuration": dict(
-                    getattr(dashboard, "configuration", {}) or {}
-                ),
-                "columns": columns,
-                "dashboard_id": getattr(dashboard, "dashboard_id", None),
-            }
-        )
-    return [item for item in result if item.get("name")]
+                for column in getattr(dashboard, "columns", []) or []
+            ],
+            "dashboard_id": getattr(dashboard, "dashboard_id", None),
+        }
+        for dashboard in getattr(parsed_client, "dashboards", []) or []
+    ]
+    return [item for item in dashboards if item.get("name")]
 
 
 def _serialize_settings(parsed_client: Any) -> dict[str, Any] | None:
@@ -164,7 +162,10 @@ def _serialize_settings(parsed_client: Any) -> dict[str, Any] | None:
         return None
 
     bookmarks = [
-        {"label": getattr(bookmark, "label", None), "pattern": getattr(bookmark, "pattern", None)}
+        {
+            "label": getattr(bookmark, "label", None),
+            "pattern": getattr(bookmark, "pattern", None),
+        }
         for bookmark in getattr(settings, "bookmarks", []) or []
     ]
     attribute_types = [
@@ -193,9 +194,7 @@ def _serialize_settings(parsed_client: Any) -> dict[str, Any] | None:
     payload = {
         "bookmarks": [item for item in bookmarks if item.get("label")],
         "attribute_types": [item for item in attribute_types if item.get("id")],
-        "configuration_sets": [
-            item for item in configuration_sets if item.get("key")
-        ],
+        "configuration_sets": [item for item in configuration_sets if item.get("key")],
     }
     if any(payload.values()):
         return payload
@@ -260,9 +259,7 @@ class IngestionWriter:
         """Store connection reference for subsequent writes."""
         self._conn = conn
 
-    def write_accounts(
-        self, accounts: Sequence[parsed_models.ParsedAccount]
-    ) -> None:
+    def write_accounts(self, accounts: Sequence[parsed_models.ParsedAccount]) -> None:
         """Persist parsed accounts into the staging layer."""
         if not accounts:
             return
@@ -490,19 +487,12 @@ class IngestionWriter:
             rows,
         )
 
-    def finalize_ingestion(
-        self,
-        *,
-        file_path: str | None,
-        parsed_at: datetime | None,
-        pp_version: int | None,
-        base_currency: str | None,
-        properties: Mapping[str, Any] | None,
-        parsed_client: Any | None = None,
-    ) -> str:
+    def finalize_ingestion(self, metadata: IngestionMetadata) -> str:
         """Insert ingestion metadata and return the generated run identifier."""
         run_id = uuid4().hex
-        metadata_blob = _build_metadata_blob(properties, parsed_client)
+        metadata_blob = _build_metadata_blob(
+            metadata.properties, metadata.parsed_client
+        )
         self._conn.execute(
             """
             INSERT OR REPLACE INTO ingestion_metadata (
@@ -511,10 +501,10 @@ class IngestionWriter:
             """,
             (
                 run_id,
-                file_path,
-                _to_iso(parsed_at),
-                pp_version,
-                base_currency,
+                metadata.file_path,
+                _to_iso(metadata.parsed_at),
+                metadata.pp_version,
+                metadata.base_currency,
                 _json_dump(metadata_blob),
             ),
         )

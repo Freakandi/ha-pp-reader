@@ -236,6 +236,4 @@ def _persist_portfolio_snapshots(
 
 
 def _utc_now_isoformat() -> str:
-    return datetime.now(UTC).replace(microsecond=0).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    return datetime.now(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")

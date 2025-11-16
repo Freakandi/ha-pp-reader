@@ -36,9 +36,7 @@ class MockConfigEntry(ConfigEntry):
         reason: str | None = None,
         source: str = SOURCE_USER,
         state: ConfigEntryState | None = None,
-        subentries_data: Iterable[
-            ConfigSubentryData | ConfigSubentryDataWithId
-        ]
+        subentries_data: Iterable[ConfigSubentryData | ConfigSubentryDataWithId]
         | None = None,
         title: str = "Mock Title",
         unique_id: str | None = None,

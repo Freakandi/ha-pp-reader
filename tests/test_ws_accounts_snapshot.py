@@ -126,7 +126,9 @@ async def test_ws_get_accounts_reports_missing_snapshots(
     connection = StubConnection()
 
     async def fake_bundle_loader(hass_arg, db_path_arg):
-        return SnapshotBundle(metric_run_uuid=None, snapshot_at=None, accounts=(), portfolios=())
+        return SnapshotBundle(
+            metric_run_uuid=None, snapshot_at=None, accounts=(), portfolios=()
+        )
 
     monkeypatch.setattr(
         websocket_module,

@@ -66,9 +66,7 @@ async def async_compute_account_metrics(
                 )
                 fx_records = await load_cached_rate_records(reference_date, db_path)
             except Exception:
-                _LOGGER.exception(
-                    "Fehler beim Laden der FX-Kurse für Kontometriken"
-                )
+                _LOGGER.exception("Fehler beim Laden der FX-Kurse für Kontometriken")
                 fx_records = {}
 
     records: list[AccountMetricRecord] = []

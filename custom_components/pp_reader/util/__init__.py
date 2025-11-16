@@ -4,19 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from inspect import isawaitable
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 __all__ = ["async_run_executor_job"]
 
-_T = TypeVar("_T")
-
 
 async def async_run_executor_job(
-    hass: HomeAssistant, func: Callable[..., _T], *args: Any
-) -> _T:
+    hass: HomeAssistant, func: Callable[..., Any], *args: Any
+) -> Any:
     """Execute a blocking job and gracefully handle non-awaitable fallbacks."""
     result = hass.async_add_executor_job(func, *args)
 

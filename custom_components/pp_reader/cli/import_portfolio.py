@@ -13,7 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.data.ingestion_writer import async_ingestion_session
+from custom_components.pp_reader.data.ingestion_writer import (
+    IngestionMetadata,
+    async_ingestion_session,
+)
 from custom_components.pp_reader.services import parser_pipeline
 
 LOGGER = logging.getLogger("custom_components.pp_reader.cli.import_portfolio")
@@ -52,9 +55,7 @@ class _CliHomeAssistant:
         self.loop = loop
         self.bus = _CliEventBus()
 
-    async def async_add_executor_job(
-        self, func: Any, *args: Any, **kwargs: Any
-    ) -> Any:
+    async def async_add_executor_job(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Execute blocking work in the default executor."""
         bound = functools.partial(func, *args, **kwargs)
         return await self.loop.run_in_executor(None, bound)
@@ -118,12 +119,14 @@ async def _async_run(
             progress_cb=lambda progress: printer.update(progress),
         )
         run_id = writer.finalize_ingestion(
-            file_path=str(portfolio_path),
-            parsed_at=datetime.now(UTC),
-            pp_version=parsed_client.version,
-            base_currency=parsed_client.base_currency,
-            properties=dict(parsed_client.properties),
-            parsed_client=parsed_client,
+            IngestionMetadata(
+                file_path=str(portfolio_path),
+                parsed_at=datetime.now(UTC),
+                pp_version=parsed_client.version,
+                base_currency=parsed_client.base_currency,
+                properties=dict(parsed_client.properties),
+                parsed_client=parsed_client,
+            )
         )
 
     return {

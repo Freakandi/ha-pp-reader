@@ -88,11 +88,7 @@ def _split_metadata_properties(
                 prop_map = {str(key): str(value) for key, value in props.items()}
             else:
                 prop_map = {}
-            extra = {
-                key: value
-                for key, value in meta.items()
-                if key != "properties"
-            }
+            extra = {key: value for key, value in meta.items() if key != "properties"}
             return prop_map, extra
 
     prop_map = {str(key): str(value) for key, value in dict(raw).items()}
@@ -309,9 +305,9 @@ def load_securities(conn: sqlite3.Connection) -> list[parsed.ParsedSecurity]:
                     is_retired=bool(is_retired),
                     attributes=_load_json(attributes),
                     properties=_load_json(properties),
-                updated_at=_parse_datetime(updated_at),
+                    updated_at=_parse_datetime(updated_at),
+                )
             )
-        )
 
     return securities
 

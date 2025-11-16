@@ -9,6 +9,7 @@ from custom_components.pp_reader.prices.price_service import (
     initialize_price_state,
     load_and_map_symbols,
 )
+from custom_components.pp_reader.prices.provider_base import Quote
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
     YahooQueryProvider,
@@ -56,8 +57,6 @@ async def test_batches_count_regression(tmp_path, monkeypatch, caplog):
 
     async def fake_fetch(self, symbols):
         # Return a constant price >0 for each symbol
-        from custom_components.pp_reader.prices.provider_base import Quote
-
         return {
             sym: Quote(
                 symbol=sym,

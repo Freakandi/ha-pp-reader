@@ -71,7 +71,9 @@ def test_normalize_history_dict_multiindex() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_history_for_jobs_respects_fetcher(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_history_for_jobs_respects_fetcher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     jobs = [
         ingest.HistoryJob(
             symbol="USD",
@@ -97,7 +99,9 @@ async def test_fetch_history_for_jobs_respects_fetcher(monkeypatch: pytest.Monke
     fetcher = ingest.YahooHistoryFetcher()
     monkeypatch.setattr(ingest.YahooHistoryFetcher, "fetch", _fake_fetch)
 
-    results = await ingest.fetch_history_for_jobs(jobs, fetcher=fetcher, max_concurrency=1)
+    results = await ingest.fetch_history_for_jobs(
+        jobs, fetcher=fetcher, max_concurrency=1
+    )
     assert len(results) == 2
     for candles in results.values():
         assert len(candles) == 1
@@ -121,7 +125,9 @@ def test_chunk_history_jobs_batches_correctly() -> None:
 
 
 @pytest.mark.asyncio
-async def test_history_fetcher_normalizes_blocking(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_history_fetcher_normalizes_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     job = ingest.HistoryJob(
         symbol="USD",
         start=datetime(2024, 3, 1, tzinfo=UTC),

@@ -205,7 +205,10 @@ async def test_cli_smoketest_generates_normalized_snapshot(
         writer.write_securities(parsed_client.securities)
         writer.write_transactions(parsed_client.transactions)
         writer.write_transaction_units(
-            [(transaction.uuid, transaction.units) for transaction in parsed_client.transactions]
+            [
+                (transaction.uuid, transaction.units)
+                for transaction in parsed_client.transactions
+            ]
         )
         writer.write_historical_prices(
             [

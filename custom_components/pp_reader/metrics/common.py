@@ -201,4 +201,3 @@ def compose_performance_payload(
         merged.pop("day_change", None)
 
     return merged
-

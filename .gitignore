@@ -14,4 +14,7 @@ coverage.xml
 .ruff_cache
 
 # Home Assistant configuration
+config/*
 !config/configuration.yaml
+!config/enrichment_smoketest.log
+!config/pp_reader_data/

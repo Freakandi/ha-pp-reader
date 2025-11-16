@@ -7,7 +7,6 @@ import inspect
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
-from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -38,10 +37,12 @@ from .const import (
     DOMAIN,
     MIN_FX_UPDATE_INTERVAL_SECONDS,
 )
+from .currencies import fx as fx_module
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
+from .prices import price_service as price_service_module
 from .util import async_run_executor_job
 from .util.paths import resolve_storage_path
 
@@ -77,14 +78,15 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
     ValueError,
 )
 
+
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
-    return import_module("custom_components.pp_reader.prices.price_service")
+    return price_service_module
 
 
 def _get_fx_module() -> ModuleType:
     """Return the FX helper module on demand."""
-    return import_module("custom_components.pp_reader.currencies.fx")
+    return fx_module
 
 
 def _build_panel_config(

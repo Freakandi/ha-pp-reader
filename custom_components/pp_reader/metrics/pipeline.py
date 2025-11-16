@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 ProgressCallback = Callable[[str, Mapping[str, Any]], None]
-StageRunner = Callable[[ "HomeAssistant", Path, str], Awaitable[list[Any]]]
+StageRunner = Callable[["HomeAssistant", Path, str], Awaitable[list[Any]]]
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.pipeline")
 

@@ -18,7 +18,9 @@ from custom_components.pp_reader.data.db_init import initialize_database_schema
 
 
 @pytest.mark.asyncio
-async def test_fetch_exchange_rates_with_retry_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_exchange_rates_with_retry_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Ensure retries stop once data is returned."""
     attempts: list[int] = []
 
@@ -42,7 +44,9 @@ async def test_fetch_exchange_rates_with_retry_succeeds(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_fetch_exchange_rates_with_retry_exhausts(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_exchange_rates_with_retry_exhausts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Return empty dict when retries are exhausted."""
     attempts: list[int] = []
 
@@ -127,7 +131,6 @@ def test_discover_active_currencies(tmp_path: Path) -> None:
     assert discovered == {"USD", "CHF"}
 
 
-
 def test_load_cached_rate_records_sync(tmp_path):
     db_path = tmp_path / "fx_cached.db"
     initialize_database_schema(db_path)
@@ -143,7 +146,9 @@ def test_load_cached_rate_records_sync(tmp_path):
     )
     upsert_fx_rate(db_path, record)
 
-    records = fx.load_cached_rate_records_sync(datetime(2024, 3, 1, tzinfo=UTC), db_path)
+    records = fx.load_cached_rate_records_sync(
+        datetime(2024, 3, 1, tzinfo=UTC), db_path
+    )
     assert "USD" in records
     cached = records["USD"]
     assert cached.fetched_at == "2024-03-01T10:00:00Z"

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
+from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant
+from custom_components.pp_reader.const import DEFAULT_DB_SUBDIR
 
-from ..const import DEFAULT_DB_SUBDIR
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
-PathInput = Union[str, Path]
+PathInput = str | Path
 _CONTAINER_CONFIG_ROOT = Path("/config")
 
 
@@ -28,9 +29,12 @@ def resolve_storage_path(
     paths to the host-specific config directory when Home Assistant is not
     running inside a container.
     """
-    if configured_path is None or (isinstance(configured_path, str) and not configured_path.strip()):
+    if configured_path is None or (
+        isinstance(configured_path, str) and not configured_path.strip()
+    ):
         if default_relative is None:
-            raise ValueError("No path configured and no default provided")
+            msg = "No path configured and no default provided"
+            raise ValueError(msg)
         configured_path = default_relative
 
     path = Path(configured_path).expanduser()

@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache, partial
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from custom_components.pp_reader.const import EVENT_PARSER_PROGRESS
 from custom_components.pp_reader.models import parsed
@@ -37,8 +37,26 @@ SUPPORTED_SECURITY_TYPES: Final = {
     "OTHER",
 }
 
-WriterT = TypeVar("WriterT")
 ProgressCallback = Callable[["ParseProgress"], Awaitable[None] | None]
+
+try:  # pragma: no cover - executed during import
+    from custom_components.pp_reader.name.abuchen.portfolio import (
+        client_pb2 as _client_pb2,
+    )
+
+    _PROTOBUF_SCHEMA_ERROR: Exception | None = None
+except ModuleNotFoundError as err:  # pragma: no cover - handled at runtime
+    _client_pb2 = None  # type: ignore[assignment]
+    _PROTOBUF_SCHEMA_ERROR = err
+
+try:  # pragma: no cover - executed during import
+    from google.protobuf import message as _protobuf_message
+
+    _PROTOBUF_RUNTIME_ERROR: Exception | None = None
+except ModuleNotFoundError as err:  # pragma: no cover - handled at runtime
+    _protobuf_message = None  # type: ignore[assignment]
+    _PROTOBUF_RUNTIME_ERROR = err
+
 
 @dataclass(slots=True)
 class ParseProgress:
@@ -61,7 +79,7 @@ class StageBatch:
 async def async_parse_portfolio(
     hass: HomeAssistant,
     path: str,
-    writer: WriterT,
+    writer: Any,
     progress_cb: ProgressCallback | None = None,
     *,
     fire_progress: bool = True,
@@ -132,19 +150,13 @@ async def _async_parse_proto_client(hass: HomeAssistant, payload: bytes) -> Any:
 
 @lru_cache(maxsize=1)
 def _get_proto_runtime() -> tuple[Any, Any]:
-    try:
-        from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
-    except ModuleNotFoundError as err:
+    if _PROTOBUF_SCHEMA_ERROR is not None or _client_pb2 is None:
         msg = "protobuf schema not available"
-        raise PortfolioParseError(msg) from err
-
-    try:
-        from google.protobuf import message as protobuf_message
-    except ModuleNotFoundError as err:
+        raise PortfolioParseError(msg) from _PROTOBUF_SCHEMA_ERROR
+    if _PROTOBUF_RUNTIME_ERROR is not None or _protobuf_message is None:
         msg = "protobuf runtime not installed"
-        raise PortfolioParseError(msg) from err
-
-    return client_pb2, protobuf_message
+        raise PortfolioParseError(msg) from _PROTOBUF_RUNTIME_ERROR
+    return _client_pb2, _protobuf_message
 
 
 def _build_parsed_client(proto_client: Any) -> parsed.ParsedClient:
@@ -295,7 +307,7 @@ def _validate_transaction_units(transaction: parsed.ParsedTransaction) -> None:
 
 async def _process_stage(
     hass: HomeAssistant,
-    writer: WriterT,
+    writer: Any,
     batch: StageBatch,
     progress_cb: ProgressCallback | None,
     *,

@@ -46,7 +46,15 @@ def test_fresh_schema_contains_enrichment_tables(tmp_path):
     initialize_database_schema(db_path)
 
     fx_cols = _get_columns(db_path, "fx_rates")
-    for column in ("date", "currency", "rate", "fetched_at", "data_source", "provider", "provenance"):
+    for column in (
+        "date",
+        "currency",
+        "rate",
+        "fetched_at",
+        "data_source",
+        "provider",
+        "provenance",
+    ):
         assert column in fx_cols, f"Spalte '{column}' fehlt in fx_rates"
 
     history_cols = _get_columns(db_path, "historical_prices")
@@ -55,7 +63,9 @@ def test_fresh_schema_contains_enrichment_tables(tmp_path):
 
     ingestion_cols = _get_columns(db_path, "ingestion_historical_prices")
     for column in ("fetched_at", "data_source", "provider", "provenance"):
-        assert column in ingestion_cols, f"Spalte '{column}' fehlt in ingestion_historical_prices"
+        assert column in ingestion_cols, (
+            f"Spalte '{column}' fehlt in ingestion_historical_prices"
+        )
 
     queue_cols = _get_columns(db_path, "price_history_queue")
     expected_queue = {
@@ -74,7 +84,9 @@ def test_fresh_schema_contains_enrichment_tables(tmp_path):
         "created_at",
         "updated_at",
     }
-    assert expected_queue.issubset(queue_cols.keys()), "price_history_queue unvollständig"
+    assert expected_queue.issubset(queue_cols.keys()), (
+        "price_history_queue unvollständig"
+    )
 
     queue_indexes = _get_index_names(db_path, "price_history_queue")
     assert "idx_price_history_queue_status" in queue_indexes
@@ -146,11 +158,15 @@ def test_runtime_migration_adds_enrichment_columns(tmp_path):
 
     history_cols = _get_columns(db_path, "historical_prices")
     for column in ("fetched_at", "data_source", "provider", "provenance"):
-        assert column in history_cols, "Runtime-Migration hat Historienmetadaten nicht ergänzt"
+        assert column in history_cols, (
+            "Runtime-Migration hat Historienmetadaten nicht ergänzt"
+        )
 
     ingestion_cols = _get_columns(db_path, "ingestion_historical_prices")
     for column in ("fetched_at", "data_source", "provider", "provenance"):
-        assert column in ingestion_cols, "Runtime-Migration hat Ingestion-Metadaten nicht ergänzt"
+        assert column in ingestion_cols, (
+            "Runtime-Migration hat Ingestion-Metadaten nicht ergänzt"
+        )
 
     queue_cols = _get_columns(db_path, "price_history_queue")
     assert "id" in queue_cols, "Queue-Tabelle wurde nicht erstellt"

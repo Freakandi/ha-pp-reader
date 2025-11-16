@@ -41,7 +41,6 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pp_reader"
 
 
-
 def _get_entry_data(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:
     """Return the hass.data entry payload or raise LookupError."""
     domain_entries = hass.data.get(DOMAIN)
@@ -107,9 +106,7 @@ def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901
         average_cost.setdefault("source", average_cost.get("source") or "totals")
         if average_cost.get("coverage_ratio") is None:
             total_holdings = result.get("total_holdings")
-            average_cost["coverage_ratio"] = (
-                1.0 if total_holdings is not None else None
-            )
+            average_cost["coverage_ratio"] = 1.0 if total_holdings is not None else None
 
     aggregation = result.get("aggregation")
     if not isinstance(aggregation, dict):
@@ -171,10 +168,7 @@ def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901
         and performance.get("gain_abs") is not None
     ):
         performance["total_change_eur"] = performance["gain_abs"]
-    if (
-        performance.get("gain_pct") is None
-        and performance.get("gain_abs") is not None
-    ):
+    if performance.get("gain_pct") is None and performance.get("gain_abs") is not None:
         denominator = purchase_value_eur or 0.0
         performance["gain_pct"] = (
             round_currency(
@@ -379,6 +373,8 @@ def _positions_payload(portfolio: Any) -> list[dict[str, Any]]:
             }
         entries.append(entry)
     return entries
+
+
 def _wrap_with_loop_fallback(
     handler: Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any],
 ) -> Callable[[HomeAssistant, ActiveConnection, dict[str, Any]], Any]:

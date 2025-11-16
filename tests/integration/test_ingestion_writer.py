@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.pp_reader.data.ingestion_writer import async_ingestion_session
+from custom_components.pp_reader.data.ingestion_writer import (
+    IngestionMetadata,
+    async_ingestion_session,
+)
 
 
 @dataclass
@@ -135,12 +138,14 @@ async def test_writer_persists_accounts(tmp_path: Path) -> None:
         writer.write_securities([security])
 
         run_id = writer.finalize_ingestion(
-            file_path="fixture.portfolio",
-            parsed_at=datetime(2024, 1, 2, tzinfo=UTC),
-            pp_version=42,
-            base_currency="EUR",
-            properties={"build": "test-suite"},
-            parsed_client=None,
+            IngestionMetadata(
+                file_path="fixture.portfolio",
+                parsed_at=datetime(2024, 1, 2, tzinfo=UTC),
+                pp_version=42,
+                base_currency="EUR",
+                properties={"build": "test-suite"},
+                parsed_client=None,
+            )
         )
 
     conn = _open_conn(db_path)
@@ -208,9 +213,7 @@ async def test_writer_links_transactions_to_units(tmp_path: Path) -> None:
         writer.write_accounts(
             [DummyAccount(uuid="acc-1", name="Account", currency_code="EUR")]
         )
-        writer.write_portfolios(
-            [DummyPortfolio(uuid="port-1", name="Portfolio")]
-        )
+        writer.write_portfolios([DummyPortfolio(uuid="port-1", name="Portfolio")])
         writer.write_securities(
             [DummySecurity(uuid="sec-1", name="Security", currency_code="EUR")]
         )
