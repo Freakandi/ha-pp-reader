@@ -25,6 +25,9 @@ Execute a combined automated + manual UI verification loop for the Portfolio Per
    - Start Home Assistant + the Vite dev server (see Runtime Setup) before invoking Playwright, so `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` is reachable.
    - Override defaults with env vars if needed: `PP_READER_HA_BASE_URL` (Home Assistant origin), `PP_READER_VITE_URL` (Vite dev server URL), `PP_READER_HA_USERNAME`, `PP_READER_HA_PASSWORD`.
    - Execute headless checks via `npm run test:ui -- --project=Chromium`; add `--headed` when debugging interactions locally.
+   - Capture UI evidence throughout the run; store every screenshot under `tests/ui/playwright/`.
+   - Use `chafa tests/ui/playwright/<filename>.png` immediately after each capture to visually inspect it inside the terminal. This verifies the screenshot without leaving the CLI.
+   - If the HA auth form cannot be displayed because an existing session is active, take the evidence from the Portfolio Dashboard panel at `http://127.0.0.1:8123/ppreader`.
 
 ## Runtime Setup
 1. **Home Assistant Logs**
@@ -35,6 +38,7 @@ Execute a combined automated + manual UI verification loop for the Portfolio Per
    - Run `npm run dev -- --host 127.0.0.1 --port 5173` to start Vite.
    - Access the panel via `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` after signing into Home Assistant (credentials: `dev` / `dev`).
    - Keep the browser's developer tools (console + network tabs) visible.
+   - Before making any fixes, capture a “before” screenshot of the issue; capture an “after” screenshot once the fix is verified. Save each file to `tests/ui/playwright/` named `YY-MM-DD_HH:MM_[before|after].png` (24h time, UTC). When login UI cannot be reached (e.g., due to an already authenticated HA session), capture the Portfolio Dashboard view instead so reviewers still have context.
 3. **Playwright Smoke Pass**
    - With both Home Assistant and Vite active, run `npm run test:ui -- --project=Chromium` to capture a baseline headless result before manual poking.
    - Re-run the same command (or `npm run test:ui` to fan out across all browsers) after every fix touching the dashboard code or backend APIs that feed it.
@@ -48,6 +52,7 @@ Repeat until every interaction path behaves or one issue is detected and fixed:
    - Enumerate the dashboard's interactive affordances (navigation links, selectors, toggles, editable inputs, sortable tables, drill-downs, hover states).
    - Exercise them systematically, including stress cases (rapid toggles, resizing, empty states, slow network simulation via DevTools throttling).
    - Watch for layout shifts, rendering glitches, accessibility regressions, and mis-synced data relative to backend sensors.
+   - Keep screenshot evidence current: at minimum one “before fix” capture when the defect is observed, and one “after fix” capture that demonstrates the corrected behaviour. Inspect every capture immediately (use `chafa` or another CLI viewer) to ensure it isn’t blank or an error page; recapture if needed.
 3. **Telemetry Monitoring**
    - Continuously observe the Home Assistant `hass --config …` terminal for `pp_reader` warnings/errors.
    - Keep the browser console clear; treat any new warning/error/network failure as a candidate issue.
@@ -61,6 +66,7 @@ Repeat until every interaction path behaves or one issue is detected and fixed:
 - Only the first qualifying UI/log/console issue per session is addressed.
 - All automated quality gates (`npm run lint:ts`, `npm run typecheck`, `npm test`, `npm run test:ui -- --project=Chromium`, and `./scripts/lint`) pass after the fix.
 - Manual verification demonstrates the corrected behaviour in the dashboard.
+- Shut down every Home Assistant and Vite dev server process you started (or reused) before declaring the session complete.
 - Additional issues discovered remain documented for future loops but unfixed in this pass.
 
 ## Reporting Template

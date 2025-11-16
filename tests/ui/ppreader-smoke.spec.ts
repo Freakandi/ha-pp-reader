@@ -50,8 +50,10 @@ test.describe('Portfolio Performance Reader dashboard', () => {
     await openDashboardPanel(page);
     await page.waitForURL(/\/ppreader/i, { timeout: 60_000 });
 
-    // The dashboard title lives inside the pp-reader-panel shadow DOM, but text is accessible for assertions.
-    await expect(page.getByText('Portfolio Dashboard')).toBeVisible({ timeout: 60_000 });
+    // The dashboard header renders as an H1 inside the pp-reader-panel shadow DOM.
+    await expect(
+      page.getByRole('heading', { name: 'Portfolio Dashboard', exact: true }),
+    ).toBeVisible({ timeout: 60_000 });
 
     // Basic smoke check to ensure the dashboard root custom element attached.
     const hasDashboardRoot = await page
