@@ -21,3 +21,10 @@ config/*
 !config/custom_components/
 config/custom_components/*
 !config/custom_components/__init__.py
+
+# Playwright artifacts
+playwright-report/
+test-results/
+blob-report/
+tmp/playwright-report/
+tmp/playwright-results/

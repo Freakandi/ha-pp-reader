@@ -13,7 +13,10 @@
     "build:types": "tsc -p tsconfig.json",
     "lint": "npm run lint:ts",
     "lint:ts": "eslint \"src/**/*.{ts,tsx}\"",
-    "test": "node ./scripts/run_ts_tests.mjs"
+    "test": "node ./scripts/run_ts_tests.mjs",
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed",
+    "test:ui:debug": "PWDEBUG=1 playwright test"
   },
   "keywords": [],
   "author": "",
@@ -25,6 +28,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^9.13.0",
+    "@playwright/experimental-ct-react": "^1.56.1",
     "@playwright/test": "^1.56.1",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20.19.19",

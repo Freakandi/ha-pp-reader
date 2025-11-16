@@ -19,7 +19,12 @@ Execute a combined automated + manual UI verification loop for the Portfolio Per
 2. **Node / Frontend**
    - Ensure Node 20.18+ (or 18.18+) and npm 10+ are active: run `node --version` / `npm --version`.
    - Install/refresh dependencies with `npm install` from the repo root.
-   - Warm up the tooling by running `npm run lint:ts`, `npm run typecheck`, and `npm test` once; all must pass before starting the UI loop.
+   - Warm up the tooling by running `npm run lint:ts`, `npm run typecheck`, `npm test`, and `npm run test:ui -- --list` once; all must pass before starting the UI loop.
+3. **Playwright UI Harness**
+   - UI smoke tests live under `tests/ui/` and run through `playwright.config.ts`.
+   - Start Home Assistant + the Vite dev server (see Runtime Setup) before invoking Playwright, so `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` is reachable.
+   - Override defaults with env vars if needed: `PP_READER_HA_BASE_URL` (Home Assistant origin), `PP_READER_VITE_URL` (Vite dev server URL), `PP_READER_HA_USERNAME`, `PP_READER_HA_PASSWORD`.
+   - Execute headless checks via `npm run test:ui -- --project=Chromium`; add `--headed` when debugging interactions locally.
 
 ## Runtime Setup
 1. **Home Assistant Logs**
@@ -30,11 +35,14 @@ Execute a combined automated + manual UI verification loop for the Portfolio Per
    - Run `npm run dev -- --host 127.0.0.1 --port 5173` to start Vite.
    - Access the panel via `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173` after signing into Home Assistant (credentials: `dev` / `dev`).
    - Keep the browser's developer tools (console + network tabs) visible.
+3. **Playwright Smoke Pass**
+   - With both Home Assistant and Vite active, run `npm run test:ui -- --project=Chromium` to capture a baseline headless result before manual poking.
+   - Re-run the same command (or `npm run test:ui` to fan out across all browsers) after every fix touching the dashboard code or backend APIs that feed it.
 
 ## UI Testing Loop
 Repeat until every interaction path behaves or one issue is detected and fixed:
 1. **Automated Pass**
-   - Re-run `npm run lint:ts`, `npm run typecheck`, and `npm test` after any change touching TypeScript.
+   - Re-run `npm run lint:ts`, `npm run typecheck`, `npm test`, and `npm run test:ui -- --project=Chromium` after any change touching TypeScript.
    - Trigger backend-focused checks (`./scripts/lint`, targeted `pytest -k <area>`) when UI fixes impact Python handlers or API responses.
 2. **Interactive Verification**
    - Enumerate the dashboard's interactive affordances (navigation links, selectors, toggles, editable inputs, sortable tables, drill-downs, hover states).
@@ -51,7 +59,7 @@ Repeat until every interaction path behaves or one issue is detected and fixed:
 
 ## Completion Criteria
 - Only the first qualifying UI/log/console issue per session is addressed.
-- All automated quality gates (`npm run lint:ts`, `npm run typecheck`, `npm test`, and `./scripts/lint`) pass after the fix.
+- All automated quality gates (`npm run lint:ts`, `npm run typecheck`, `npm test`, `npm run test:ui -- --project=Chromium`, and `./scripts/lint`) pass after the fix.
 - Manual verification demonstrates the corrected behaviour in the dashboard.
 - Additional issues discovered remain documented for future loops but unfixed in this pass.
 
