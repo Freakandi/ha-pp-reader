@@ -46,7 +46,7 @@ def initialize_database_schema(db_path: Path) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not db_path.exists():
-            _LOGGER.info("📁 Erzeuge neue Datenbankdatei: %s", db_path)
+            _LOGGER.info("Erzeuge neue Datenbankdatei: %s", db_path)
 
         conn = sqlite3.connect(str(db_path))
         conn.execute("PRAGMA foreign_keys = ON")
@@ -79,16 +79,16 @@ def initialize_database_schema(db_path: Path) -> None:
 
         except Exception as err:
             conn.rollback()
-            error_message = f"❌ Fehler beim Erstellen der Tabellen: {err}"
+            error_message = f"Fehler beim Erstellen der Tabellen: {err}"
             _LOGGER.exception(error_message)
             raise
 
         finally:
             conn.close()
-            _LOGGER.info("📦 Datenbank erfolgreich initialisiert: %s", db_path)
+            _LOGGER.info("Datenbank erfolgreich initialisiert: %s", db_path)
 
     except Exception:
-        _LOGGER.exception("❌ Kritischer Fehler bei DB-Initialisierung")
+        _LOGGER.exception("Kritischer Fehler bei DB-Initialisierung")
         raise
 
 

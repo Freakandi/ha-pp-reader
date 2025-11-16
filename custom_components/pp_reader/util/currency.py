@@ -159,7 +159,7 @@ def normalize_price_to_eur_sync(
     record = fx_records.get(normalized_currency)
     if record is None:
         _LOGGER.warning(
-            "⚠️ Kein Wechselkurs für %s (%s)",
+            "Kein Wechselkurs für %s (%s)",
             normalized_currency,
             reference_date.strftime("%Y-%m-%d"),
         )
@@ -169,7 +169,7 @@ def normalize_price_to_eur_sync(
         normalized = price_native / float(record.rate)
     except (TypeError, ValueError, ZeroDivisionError):
         _LOGGER.warning(
-            "⚠️ Ungültiger Wechselkurs für %s (%s)",
+            "Ungültiger Wechselkurs für %s (%s)",
             normalized_currency,
             reference_date.strftime("%Y-%m-%d"),
         )

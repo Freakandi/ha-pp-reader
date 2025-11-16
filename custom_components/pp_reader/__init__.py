@@ -147,7 +147,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return True
 
     _LOGGER.info(
-        "Migriere Config Entry %s von Version %s → %s",
+        "Migriere Config Entry %s von Version %s -> %s",
         entry.entry_id,
         version,
         CONFIG_ENTRY_VERSION,
@@ -426,15 +426,15 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
         if inspect.isawaitable(register_result):
             await register_result
         _LOGGER.info(
-            "✅ Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
+            "Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
             cache_bust,
             entry.entry_id,
         )
     except ValueError:
-        _LOGGER.exception("❌ Fehler bei der Registrierung des Panels")
+        _LOGGER.exception("Fehler bei der Registrierung des Panels")
     except AttributeError:
         _LOGGER.exception(
-            "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+            "panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
         )
 
 
@@ -471,10 +471,10 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
             await register_result
         _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
     except ValueError:
-        _LOGGER.exception("❌ Fehler bei der Registrierung des Panel-Platzhalters")
+        _LOGGER.exception("Fehler bei der Registrierung des Panel-Platzhalters")
     except AttributeError:
         _LOGGER.exception(
-            "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+            "panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
         )
 
 
@@ -548,9 +548,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
         websocket_api.async_register_command(hass, websocket.ws_get_security_snapshot)
         websocket_api.async_register_command(hass, websocket.ws_get_security_history)
-        # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
+        # _LOGGER.debug("Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
-        _LOGGER.exception("❌ Fehler bei der Registrierung der Websocket-Befehle")
+        _LOGGER.exception("Fehler bei der Registrierung der Websocket-Befehle")
 
     return True
 
@@ -693,10 +693,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
         try:
-            _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
+            _LOGGER.info("Initialisiere Datenbank falls notwendig: %s", db_path)
             await async_run_executor_job(hass, initialize_database_schema, db_path)
         except Exception as exc:
-            _LOGGER.exception("❌ Fehler bei der DB-Initialisierung")
+            _LOGGER.exception("Fehler bei der DB-Initialisierung")
             msg = "Datenbank konnte nicht initialisiert werden"
             raise ConfigEntryNotReady(msg) from exc
 
@@ -732,7 +732,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             await setup_backup_system(hass, db_path)
         except Exception:
-            _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems")
+            _LOGGER.exception("Fehler beim Setup des Backup-Systems")
 
         return True  # noqa: TRY300
 

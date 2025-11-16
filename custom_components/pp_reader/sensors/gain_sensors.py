@@ -74,7 +74,7 @@ class PortfolioGainAbsSensor(CoordinatorEntity, SensorEntity):
             purchase = float(purchase_value)
         except (TypeError, ValueError) as err:
             message = (
-                "❌ Fehler beim Berechnen des Kursgewinns für "
+                "Fehler beim Berechnen des Kursgewinns für "
                 f"{self._portfolio_name}: {err}"
             )
             _LOGGER.exception(message)
@@ -124,7 +124,7 @@ class PortfolioGainPctSensor(CoordinatorEntity, SensorEntity):
             purchase = float(purchase_value)
         except (TypeError, ValueError) as err:
             message = (
-                "❌ Fehler beim Berechnen des Kursgewinns (%) für "
+                "Fehler beim Berechnen des Kursgewinns (%) für "
                 f"{self._portfolio_name}: {err}"
             )
             _LOGGER.exception(message)

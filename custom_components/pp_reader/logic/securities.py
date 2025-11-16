@@ -230,7 +230,7 @@ def _determine_exchange_rate(
             missing_logged.add(key)
             _record_rate_failure(transaction.currency_code, tx_date)
             _LOGGER.warning(
-                "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
+                "Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
                 tx_date.strftime("%Y-%m-%d"),
                 transaction.currency_code,
             )
@@ -428,7 +428,7 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mi
                     _record_missing_native_position(tx.portfolio, tx.security)
                     _LOGGER.warning(
                         (
-                            "⚠️ Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
+                            "Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
                             "(Transaktion %s). Bitte manuell prüfen."
                         ),
                         tx.portfolio,
@@ -594,7 +594,7 @@ def db_calculate_holdings_value(
                 latest_price /= rate  # Wende den Wechselkurs an
             else:
                 _LOGGER.warning(
-                    "⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
+                    "Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
                     currency_code,
                 )
                 data["current_value"] = None

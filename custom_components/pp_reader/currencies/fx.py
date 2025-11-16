@@ -237,7 +237,7 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
             if response.status != 200:  # noqa: PLR2004
                 if _should_log_warning(date, currencies):
                     _LOGGER.warning(
-                        "⚠️ Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                        "Fehler beim Abruf der Wechselkurse (%s): Status %d",
                         date,
                         response.status,
                     )
@@ -247,13 +247,13 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     except (TimeoutError, aiohttp.ClientError, OSError) as err:
         if _should_log_warning(date, currencies):
             _LOGGER.warning(
-                "⚠️ Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
+                "Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
                 date,
                 err,
             )
         return {}
     except Exception:
-        _LOGGER.exception("❌ Fehler beim Abruf der Wechselkurse")
+        _LOGGER.exception("Fehler beim Abruf der Wechselkurse")
         return {}
 
 
@@ -393,10 +393,10 @@ async def ensure_exchange_rates_for_dates(
                     await _save_rates(db_path, date_str, fetched)
                 elif _should_log_warning(date_str, missing):
                     _LOGGER.warning(
-                        "⚠️ Keine Kurse erhalten für %s am %s", missing, date_str
+                        "Keine Kurse erhalten für %s am %s", missing, date_str
                     )
             except Exception:
-                _LOGGER.exception("❌ Fehler beim Laden der Kurse")
+                _LOGGER.exception("Fehler beim Laden der Kurse")
 
 
 def ensure_exchange_rates_for_dates_sync(
