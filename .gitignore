@@ -17,7 +17,7 @@ coverage.xml
 config/*
 !config/configuration.yaml
 !config/enrichment_smoketest.log
-!config/pp_reader_data/
+!config/pp_reader_data/S-Depot.portfolio
 !config/custom_components/
 config/custom_components/*
 !config/custom_components/__init__.py
