@@ -77,7 +77,9 @@
 }
 
 .header-card h1,
-.header-card .header-content h1 {
+.header-card h2,
+.header-card .header-content h1,
+.header-card .header-content h2 {
   margin: 0;
   font-size: 1.65rem;
   font-weight: 600;
@@ -88,7 +90,9 @@
 }
 
 .header-card.sticky .header-content h1,
-.header-card.sticky h1 {
+.header-card.sticky .header-content h2,
+.header-card.sticky h1,
+.header-card.sticky h2 {
   margin: 0;
   font-size: 1.1rem;
   text-align: center;
@@ -244,12 +248,16 @@
   }
 
   .header-card h1,
-  .header-card .header-content h1 {
+  .header-card h2,
+  .header-card .header-content h1,
+  .header-card .header-content h2 {
     font-size: 1.4rem;
   }
 
   .header-card.sticky h1,
-  .header-card.sticky .header-content h1 {
+  .header-card.sticky h2,
+  .header-card.sticky .header-content h1,
+  .header-card.sticky .header-content h2 {
     font-size: 1rem;
   }
 

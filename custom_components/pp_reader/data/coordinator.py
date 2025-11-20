@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from custom_components.pp_reader import metrics
 from custom_components.pp_reader.const import (
     EVENT_ENRICHMENT_PROGRESS,
     EVENT_METRICS_PROGRESS,
@@ -36,6 +35,7 @@ from custom_components.pp_reader.const import (
 )
 from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.feature_flags import is_enabled
+from custom_components.pp_reader.metrics.pipeline import async_refresh_all
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
     build_history_targets_from_parsed,
@@ -49,6 +49,7 @@ from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util import diagnostics as diagnostics_util
 from custom_components.pp_reader.util import notifications as notifications_util
 
+from .canonical_sync import async_sync_ingestion_to_canonical
 from .ingestion_writer import IngestionMetadata, async_ingestion_session
 from .normalization_pipeline import (
     NormalizationResult,
@@ -114,6 +115,19 @@ def _get_last_db_update(db_path: Path) -> datetime | None:
     return None
 
 
+def _set_last_db_update(db_path: Path, file_update: datetime) -> None:
+    """Persist the last processed file timestamp into the metadata table."""
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO metadata (key, date)
+            VALUES ('last_file_update', ?)
+            ON CONFLICT(key) DO UPDATE SET date=excluded.date
+            """,
+            (file_update.isoformat(),),
+        )
+
+
 class PPReaderCoordinator(DataUpdateCoordinator):
     """
     A coordinator for data updates from a file, synching to an SQLite database.
@@ -160,6 +174,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._manual_update_log_handle: asyncio.TimerHandle | None = None
         self._manual_update_log_count = 0
         self._manual_update_window_started: float | None = None
+        self._history_lock = asyncio.Lock()
 
     async def _async_update_data(self) -> dict:
         """Überwache Dateiänderungen und orchestriere den Pipeline-Status."""
@@ -253,7 +268,14 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             msg = "Parserlauf fehlgeschlagen"
             raise UpdateFailed(msg) from exc
 
+        await async_sync_ingestion_to_canonical(self.hass, self.db_path)
         self.last_file_update = last_update_truncated
+        await async_run_executor_job(
+            self.hass,
+            _set_last_db_update,
+            self.db_path,
+            last_update_truncated,
+        )
         summary = await self._schedule_enrichment_jobs(parsed_client)
         self._last_pipeline_summary = summary
         self._notify_parser_completed()
@@ -457,7 +479,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         summary: dict[str, Any] = {}
         errors: list[str] = []
         self._emit_enrichment_progress("start")
-        await self.hass.async_block_till_done()
+        # Never call hass.async_block_till_done() inside setup; it can deadlock HA
+        # bootstrap when enrichment jobs spawn long-running tasks.
 
         try:
             fx_result = await self._schedule_fx_refresh()
@@ -471,20 +494,15 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "fx_refresh_exception",
                 error=str(err),
             )
-            await self.hass.async_block_till_done()
         else:
             if isinstance(fx_result, Mapping):
                 summary.update(fx_result)
-            await self.hass.async_block_till_done()
 
         try:
             history_result = await self._schedule_price_history_jobs(parsed_client)
         except Exception as err:  # pragma: no cover - defensive
             _LOGGER.exception(
-                (
-                    "Enrichment-Pipeline: History-Planung fehlgeschlagen "
-                    "(entry_id=%s)"
-                ),
+                ("Enrichment-Pipeline: History-Planung fehlgeschlagen (entry_id=%s)"),
                 self.entry_id,
             )
             errors.append(str(err))
@@ -492,11 +510,9 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "history_jobs_exception",
                 error=str(err),
             )
-            await self.hass.async_block_till_done()
         else:
             if isinstance(history_result, Mapping):
                 summary.update(history_result)
-            await self.hass.async_block_till_done()
 
         if errors:
             summary["errors"] = errors
@@ -507,7 +523,6 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         await self._schedule_normalization_refresh(summary)
 
         self._emit_enrichment_completed(summary)
-        await self.hass.async_block_till_done()
         return summary
 
     async def _schedule_metrics_refresh(
@@ -540,7 +555,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         )
 
         try:
-            run = await metrics.async_refresh_all(
+            run = await async_refresh_all(
                 self.hass,
                 self.db_path,
                 trigger="coordinator",
@@ -621,6 +636,52 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "generated_at": snapshot.generated_at,
             },
         )
+
+    async def _process_history_queue_once(self, *, reason: str) -> None:
+        """Drain pending price-history jobs and persist retrieved candles."""
+        if self._history_lock.locked():
+            _LOGGER.debug(
+                "History-Queue: Skip (busy) entry_id=%s reason=%s",
+                self.entry_id,
+                reason,
+            )
+            return
+
+        async with self._history_lock:
+            manager = HistoryQueueManager(self.db_path)
+            try:
+                results = await manager.process_pending_jobs(limit=15)
+            except Exception:  # noqa: BLE001 - defensive logging
+                _LOGGER.warning(
+                    (
+                        "History-Queue: Verarbeitung fehlgeschlagen "
+                        "(entry_id=%s reason=%s)"
+                    ),
+                    self.entry_id,
+                    reason,
+                    exc_info=True,
+                )
+                return
+
+            job_count = len(results)
+            candle_total = sum(len(candles) for candles in results.values())
+            if job_count:
+                _LOGGER.info(
+                    (
+                        "History-Queue: verarbeitet jobs=%s candles=%s "
+                        "(entry_id=%s reason=%s)"
+                    ),
+                    job_count,
+                    candle_total,
+                    self.entry_id,
+                    reason,
+                )
+            else:
+                _LOGGER.debug(
+                    "History-Queue: keine pending Jobs (entry_id=%s reason=%s)",
+                    self.entry_id,
+                    reason,
+                )
 
     async def _schedule_fx_refresh(self) -> dict[str, Any] | None:
         """Schedule an FX refresh for active non-EUR currencies."""
@@ -751,6 +812,9 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             self._emit_enrichment_progress(
                 "history_jobs_enqueued",
                 jobs_enqueued=enqueued,
+            )
+            self.hass.async_create_task(
+                self._process_history_queue_once(reason="enrichment")
             )
             return {
                 "history_status": "jobs_enqueued",

@@ -199,88 +199,97 @@ class HistoryQueueManager:
         if not targets:
             return 0
 
-        today = datetime.now(UTC).date()
-        start_floor = today - timedelta(days=lookback_days - 1)
-        enqueued = 0
+        def _plan_jobs_sync() -> int:
+            today = datetime.now(UTC).date()
+            start_floor = today - timedelta(days=lookback_days - 1)
+            enqueued = 0
 
-        conn = sqlite3.connect(str(self._db_path))
-        try:
-            for target in targets:
-                if not target.security_uuid:
-                    continue
+            conn = sqlite3.connect(str(self._db_path))
+            try:
+                for target in targets:
+                    if not target.security_uuid:
+                        continue
 
-                if price_history_job_exists(
-                    self._db_path,
-                    target.security_uuid,
-                    statuses=_PENDING_STATUSES,
-                ):
-                    continue
+                    if price_history_job_exists(
+                        self._db_path,
+                        target.security_uuid,
+                        statuses=_PENDING_STATUSES,
+                    ):
+                        continue
 
-                latest_epoch = _load_latest_history_epoch(conn, target.security_uuid)
-                if latest_epoch is None:
-                    job_start_date = start_floor
-                else:
-                    job_start_date = _latest_epoch_to_date(latest_epoch) + timedelta(
-                        days=1,
+                    latest_epoch = _load_latest_history_epoch(
+                        conn, target.security_uuid
+                    )
+                    if latest_epoch is None:
+                        job_start_date = start_floor
+                    else:
+                        job_start_date = _latest_epoch_to_date(
+                            latest_epoch
+                        ) + timedelta(
+                            days=1,
+                        )
+
+                    if job_start_date > today:
+                        continue
+
+                    job_end_date = today
+                    start_dt = datetime(
+                        job_start_date.year,
+                        job_start_date.month,
+                        job_start_date.day,
+                        tzinfo=UTC,
+                    )
+                    end_dt = datetime(
+                        job_end_date.year,
+                        job_end_date.month,
+                        job_end_date.day,
+                        tzinfo=UTC,
                     )
 
-                if job_start_date > today:
-                    continue
+                    symbol, symbol_source = target.resolve_symbol()
+                    if not symbol:
+                        continue
 
-                job_end_date = today
-                start_dt = datetime(
-                    job_start_date.year,
-                    job_start_date.month,
-                    job_start_date.day,
-                    tzinfo=UTC,
-                )
-                end_dt = datetime(
-                    job_end_date.year,
-                    job_end_date.month,
-                    job_end_date.day,
-                    tzinfo=UTC,
-                )
+                    job = HistoryJob(
+                        symbol=symbol,
+                        start=start_dt,
+                        end=end_dt,
+                        interval=interval,
+                    )
 
-                symbol, symbol_source = target.resolve_symbol()
-                if not symbol:
-                    continue
+                    provenance_payload = json.dumps(
+                        {
+                            "symbol": job.symbol,
+                            "start": job.start.isoformat(),
+                            "end": job.end.isoformat(),
+                            "interval": job.interval,
+                            "symbol_source": symbol_source or "unknown",
+                            "feed": target.feed,
+                            "online_id": target.online_id,
+                            "ticker_symbol": target.ticker_symbol,
+                            "name": target.name,
+                        }
+                    )
 
-                job = HistoryJob(
-                    symbol=symbol,
-                    start=start_dt,
-                    end=end_dt,
-                    interval=interval,
-                )
+                    new_job = NewPriceHistoryJob(
+                        security_uuid=target.security_uuid,
+                        requested_date=_epoch_day(job.end),
+                        status="pending",
+                        priority=0,
+                        scheduled_at=datetime.now(UTC).strftime(
+                            "%Y-%m-%dT%H:%M:%SZ",
+                        ),
+                        data_source=(target.feed.lower() if target.feed else "yahoo"),
+                        provenance=provenance_payload,
+                    )
+                    enqueue_price_history_job(self._db_path, new_job)
+                    enqueued += 1
+            finally:
+                conn.close()
 
-                provenance_payload = json.dumps(
-                    {
-                        "symbol": job.symbol,
-                        "start": job.start.isoformat(),
-                        "end": job.end.isoformat(),
-                        "interval": job.interval,
-                        "symbol_source": symbol_source or "unknown",
-                        "feed": target.feed,
-                        "online_id": target.online_id,
-                        "ticker_symbol": target.ticker_symbol,
-                        "name": target.name,
-                    }
-                )
+            return enqueued
 
-                new_job = NewPriceHistoryJob(
-                    security_uuid=target.security_uuid,
-                    requested_date=_epoch_day(job.end),
-                    status="pending",
-                    priority=0,
-                    scheduled_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    data_source=(target.feed.lower() if target.feed else "yahoo"),
-                    provenance=provenance_payload,
-                )
-                enqueue_price_history_job(self._db_path, new_job)
-                enqueued += 1
-        finally:
-            conn.close()
-
-        return enqueued
+        return await asyncio.to_thread(_plan_jobs_sync)
 
     async def process_pending_jobs(
         self,

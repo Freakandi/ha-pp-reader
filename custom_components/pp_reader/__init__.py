@@ -24,7 +24,10 @@ from homeassistant.components.panel_custom import (
 )
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_time_change,
+    async_track_time_interval,
+)
 
 from .const import (
     CONF_DB_PATH,
@@ -516,6 +519,35 @@ def _initialize_fx_tasks(
     hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
 
 
+def _initialize_history_tasks(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+) -> None:
+    """Schedule periodic processing of price history jobs."""
+
+    async def _run_history_queue(_now: datetime) -> None:
+        coordinator: Any = store.get("coordinator")
+        if coordinator is None:
+            return
+        hass.async_create_task(
+            coordinator._process_history_queue_once(reason="scheduled")  # noqa: SLF001
+        )
+
+    remove_listener = async_track_time_change(
+        hass,
+        _run_history_queue,
+        hour=[2, 14],
+        minute=0,
+        second=0,
+    )
+    store["history_task_cancel"] = remove_listener
+    _LOGGER.debug(
+        "Price-History Scheduler aktiviert (02:00/14:00 lokal) entry_id=%s",
+        entry.entry_id,
+    )
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
     """Set up your component."""
     # Dashboard-Dateien registrieren
@@ -726,6 +758,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         _initialize_price_tasks(hass, entry, store, options)
         _initialize_fx_tasks(hass, entry, store, options)
+        _initialize_history_tasks(hass, entry, store)
 
         entry.async_on_unload(entry.add_update_listener(_async_reload_entry_on_update))
 
@@ -743,7 +776,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  # noqa: PLR0912
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
@@ -814,6 +847,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "FX-Service: Unerwarteter Fehler beim Unload-Cleanup",
                 exc_info=True,
             )
+        try:
+            cancel_history = store.get("history_task_cancel")
+            if cancel_history:
+                cancel_history()
+                _LOGGER.debug(
+                    "Price-History Scheduler gestoppt (entry_id=%s)", entry.entry_id
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("History-Scheduler: Fehler beim Cleanup", exc_info=True)
 
     # Gesamten Entry-State löschen wenn Plattformen entladen
     if unload_ok:

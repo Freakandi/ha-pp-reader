@@ -11,6 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from custom_components.pp_reader.data.canonical_sync import (
+    async_sync_ingestion_to_canonical,
+)
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.ingestion_writer import (
     IngestionMetadata,
@@ -149,6 +152,7 @@ async def _async_run(
         "base_currency": parsed_client.base_currency,
     }
 
+    await async_sync_ingestion_to_canonical(hass, db_path)
     LOGGER.info("Running metrics pipeline...")
     metrics_run = await metrics_pipeline.async_refresh_all(
         hass,

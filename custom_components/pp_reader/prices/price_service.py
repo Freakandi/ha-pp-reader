@@ -38,6 +38,7 @@ from custom_components.pp_reader.logic.securities import (
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
+from custom_components.pp_reader.metrics.pipeline import async_refresh_all
 from custom_components.pp_reader.prices import revaluation
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
@@ -55,6 +56,55 @@ from custom_components.pp_reader.util.currency import (
 async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Proxy to the revaluation helper (patchable for tests)."""
     return await revaluation.revalue_after_price_updates(*args, **kwargs)
+
+
+async def _schedule_metrics_after_price_change(
+    hass: HomeAssistant,
+    entry_id: str,
+    db_path: Path | str | None,
+    changed_count: int,
+) -> None:
+    """Kick off a metrics refresh after price updates so snapshots stay in sync."""
+    if changed_count <= 0 or not db_path:
+        return
+
+    store = hass.data[DOMAIN].get(entry_id, {})
+    existing_task: asyncio.Task | None = store.get("metrics_refresh_task")
+    if existing_task and not existing_task.done():
+        _LOGGER.debug(
+            "prices_cycle: Metrics-Refresh bereits aktiv (entry_id=%s)", entry_id
+        )
+        return
+
+    async def _run_metrics_refresh() -> None:
+        try:
+            _LOGGER.info(
+                "prices_cycle: Starte Metrics-Refresh (entry_id=%s, changed=%s)",
+                entry_id,
+                changed_count,
+            )
+            run = await async_refresh_all(
+                hass,
+                db_path,
+                trigger="price_cycle",
+            )
+            _LOGGER.debug(
+                "prices_cycle: Metrics-Refresh abgeschlossen run_uuid=%s status=%s",
+                getattr(run, "run_uuid", None),
+                getattr(run, "status", None),
+            )
+        except Exception:  # noqa: BLE001 - defensive logging
+            _LOGGER.warning(
+                "prices_cycle: Metrics-Refresh nach Preis-Update fehlgeschlagen",
+                exc_info=True,
+            )
+        finally:
+            store.pop("metrics_refresh_task", None)
+
+    metrics_task = hass.async_create_task(
+        _run_metrics_refresh(), name="pp_reader_metrics_after_price_cycle"
+    )
+    store["metrics_refresh_task"] = metrics_task
 
 
 if TYPE_CHECKING:
@@ -1188,6 +1238,9 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         exc_info=True,
                     )
             quotes_returned = len(all_quotes)
+            await _schedule_metrics_after_price_change(
+                hass, entry_id, db_path, changed_count
+            )
             if quotes_returned > 0:
                 if chunk_failure_count == 0:
                     if prev_error_counter > 0:

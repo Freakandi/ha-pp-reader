@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 
+from custom_components.pp_reader.data import canonical_sync
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.normalized_store import (
     async_load_latest_snapshot_bundle,
@@ -108,76 +109,6 @@ def _build_sample_parsed_client() -> tuple[parsed.ParsedClient, client_pb2.PClie
 
     parsed_client = parsed.ParsedClient.from_proto(client)
     return parsed_client, client
-
-
-def _seed_canonical_tables(db_path: Path, parsed_client: parsed.ParsedClient) -> None:
-    """Populate canonical account/portfolio tables for metrics evaluation."""
-    conn = sqlite3.connect(str(db_path))
-    try:
-        conn.execute("DELETE FROM accounts")
-        conn.execute("DELETE FROM portfolios")
-        conn.execute("DELETE FROM portfolio_securities")
-
-        for account in parsed_client.accounts:
-            conn.execute(
-                """
-                INSERT INTO accounts (uuid, name, currency_code, note, is_retired, balance)
-                VALUES (?, ?, ?, ?, 0, ?)
-                """,
-                (
-                    account.uuid,
-                    account.name,
-                    getattr(account, "currency_code", None) or "EUR",
-                    getattr(account, "note", None),
-                    getattr(account, "balance", None) or 0,
-                ),
-            )
-
-        for portfolio in parsed_client.portfolios:
-            conn.execute(
-                """
-                INSERT INTO portfolios (uuid, name, note, reference_account, is_retired)
-                VALUES (?, ?, ?, ?, 0)
-                """,
-                (
-                    portfolio.uuid,
-                    portfolio.name,
-                    getattr(portfolio, "note", None),
-                    getattr(portfolio, "reference_account", None),
-                ),
-            )
-
-        if parsed_client.portfolios and parsed_client.securities:
-            portfolio = parsed_client.portfolios[0]
-            security = parsed_client.securities[0]
-            holdings = getattr(security, "shares", None) or 5
-            current_holdings = int(holdings * 10**8)
-            purchase_value = 500_00
-            conn.execute(
-                """
-                INSERT INTO portfolio_securities (
-                    portfolio_uuid,
-                    security_uuid,
-                    current_holdings,
-                    purchase_value,
-                    avg_price_native,
-                    avg_price_security,
-                    avg_price_account,
-                    security_currency_total,
-                    account_currency_total,
-                    current_value
-                ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, 0, NULL)
-                """,
-                (
-                    portfolio.uuid,
-                    security.uuid,
-                    current_holdings,
-                    purchase_value,
-                ),
-            )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 @pytest.mark.asyncio
@@ -281,7 +212,7 @@ async def test_cli_smoketest_generates_normalized_snapshot(
     )
     assert run_id
     assert parsed_result is parsed_client
-    _seed_canonical_tables(db_path, parsed_client)
+    await canonical_sync.async_sync_ingestion_to_canonical(hass, db_path)
 
     fx_summary = await smoketest._run_fx_refresh(db_path)
     assert fx_summary["status"] == "ok"
@@ -320,6 +251,7 @@ async def test_cli_smoketest_generates_normalized_snapshot(
 
     conn = sqlite3.connect(str(db_path))
     try:
+
         def _count(table: str) -> int:
             return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
