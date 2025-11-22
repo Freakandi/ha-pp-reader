@@ -287,6 +287,10 @@ async def _run_fx_refresh_once(
 ) -> None:
     """Ensure current FX rates are cached for active currencies."""
     fx_module = _get_fx_module()
+    from custom_components.pp_reader.data.fx_backfill import (  # noqa: PLC0415
+        backfill_fx,
+    )
+
     db_path = store.get("db_path")
     if db_path is None:
         _LOGGER.debug(
@@ -333,6 +337,28 @@ async def _run_fx_refresh_once(
             return
 
         reference = datetime.now(UTC)
+        try:
+            backfill_summary = await backfill_fx(
+                db_path=db_path,
+                currencies=currencies,
+                end=reference,
+            )
+            inserted_total = sum(backfill_summary.values())
+            if inserted_total:
+                _LOGGER.info(
+                    "FX-Refresh: Backfill eingefügt=%d für %s (entry_id=%s)",
+                    inserted_total,
+                    sorted(backfill_summary.keys()),
+                    entry.entry_id,
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Refresh: Backfill fehlgeschlagen (entry_id=%s)",
+                entry.entry_id,
+                exc_info=True,
+            )
+
+        # Keep the latest-day fetch to refresh today's rate even after backfill.
         try:
             await fx_module.ensure_exchange_rates_for_dates(
                 [reference],

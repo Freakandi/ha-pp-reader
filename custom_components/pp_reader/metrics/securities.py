@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.securities")
+_SCALED_INT_THRESHOLD = 10_000
+_EIGHT_DECIMAL_SCALE = 10**8
+_FX_GAP_WARNED: set[str] = set()
 
 _SECURITY_AGGREGATION_SQL = """
     SELECT
@@ -111,10 +114,16 @@ def _build_security_metric_record(
         return None
 
     try:
-        current_value_cents = _coerce_int(row["current_value"])
+        current_value_cents = _normalize_currency_cents(
+            _coerce_int(row["current_value"])
+        )
         purchase_value_cents = _coerce_int(row["purchase_value"])
         holdings_raw = _coerce_int(row["current_holdings"])
-        holdings_value = _coerce_float(row["current_holdings"])
+        holdings_value = _normalize_holdings_value(
+            _coerce_float(row["current_holdings"])
+        )
+        purchase_security_total = _coerce_float(row["security_currency_total"])
+        purchase_account_total = _coerce_float(row["account_currency_total"])
 
         current_value_eur = cent_to_eur(current_value_cents, default=None)
         purchase_value_eur = cent_to_eur(purchase_value_cents, default=None)
@@ -133,6 +142,21 @@ def _build_security_metric_record(
                 currency,
                 reference_date,
                 db_path,
+            )
+        if (
+            currency != "EUR"
+            and last_price_raw is not None
+            and last_price_eur is None
+            and currency not in _FX_GAP_WARNED
+        ):
+            _FX_GAP_WARNED.add(currency)
+            _LOGGER.warning(
+                (
+                    "Fehlender FX-Kurs für %s zum %s (last_price); "
+                    "Metrics ggf. unvollständig"
+                ),
+                currency,
+                reference_date.strftime("%Y-%m-%d"),
             )
         last_price_eur_value = (
             round_price(last_price_eur, decimals=4)
@@ -154,6 +178,20 @@ def _build_security_metric_record(
                 reference_date,
                 db_path,
             )
+            if (
+                currency != "EUR"
+                and last_close_eur is None
+                and currency not in _FX_GAP_WARNED
+            ):
+                _FX_GAP_WARNED.add(currency)
+                _LOGGER.warning(
+                    (
+                        "Fehlender FX-Kurs für %s zum %s (last_close); "
+                        "Metrics ggf. unvollständig"
+                    ),
+                    currency,
+                    reference_date.strftime("%Y-%m-%d"),
+                )
 
         day_change_eur_override = _compute_day_change_eur(
             last_price_eur_value,
@@ -192,12 +230,8 @@ def _build_security_metric_record(
             holdings_raw=holdings_raw,
             current_value_cents=current_value_cents,
             purchase_value_cents=purchase_value_cents,
-            purchase_security_value_raw=_coerce_optional_int(
-                row["security_currency_total"]
-            ),
-            purchase_account_value_cents=_coerce_optional_int(
-                row["account_currency_total"]
-            ),
+            purchase_security_value_raw=purchase_security_total,
+            purchase_account_value_cents=purchase_account_total,
             gain_abs_cents=gain_abs_cents,
             gain_pct=performance_metrics.gain_pct,
             total_change_eur_cents=gain_abs_cents,
@@ -290,3 +324,25 @@ def _coerce_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_holdings_value(value: float | None) -> float:
+    """Convert holdings that may be stored as 1e-8 scaled integers."""
+    if value is None:
+        return 0.0
+    if abs(value) >= _SCALED_INT_THRESHOLD:
+        return value / _EIGHT_DECIMAL_SCALE
+    return value
+
+
+def _normalize_currency_cents(value: int) -> int:
+    """
+    Decode currency amounts that might be persisted as 1e-8 scaled integers.
+
+    Legacy data multiplied the EUR cents by 1e8, which resulted in grossly
+    inflated totals. Detect obviously scaled values and downscale them so
+    downstream snapshots stay in a sane range.
+    """
+    if abs(value) >= _SCALED_INT_THRESHOLD * _EIGHT_DECIMAL_SCALE:
+        return round(value / _EIGHT_DECIMAL_SCALE)
+    return value

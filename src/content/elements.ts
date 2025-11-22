@@ -148,15 +148,18 @@ export function formatValue(
     }
     formatted = base;
     if (formatted) {
-      const MAX_LEN = 60;
-      if (formatted.length > MAX_LEN) {
-        formatted = formatted.slice(0, MAX_LEN - 1) + '…';
-      }
-      // Entferne frühere Präfixe (Abwärtskompatibilität)
-      if (formatted.startsWith('Kontostand ')) {
-        formatted = formatted.substring('Kontostand '.length);
-      } else if (formatted.startsWith('Depotwert ')) {
-        formatted = formatted.substring('Depotwert '.length);
+      const hasMarkup = /<|&lt;|&gt;/.test(formatted);
+      if (!hasMarkup) {
+        const MAX_LEN = 60;
+        if (formatted.length > MAX_LEN) {
+          formatted = formatted.slice(0, MAX_LEN - 1) + '…';
+        }
+        // Entferne frühere Präfixe (Abwärtskompatibilität)
+        if (formatted.startsWith('Kontostand ')) {
+          formatted = formatted.substring('Kontostand '.length);
+        } else if (formatted.startsWith('Depotwert ')) {
+          formatted = formatted.substring('Depotwert '.length);
+        }
       }
     }
   }

@@ -1,0 +1,28 @@
+{
+  "generated_at": "2025-11-22T06:06:11Z",
+  "portfolios": [
+    {
+      "name": "Gold",
+      "positions": [
+        {
+          "aggregation": {
+            "coverage_ratio": 1.0,
+            "purchase_total_account": 74.35,
+            "purchase_total_security": 7.4e-05,
+            "purchase_value_eur": 7435.0,
+            "total_holdings": 4.0
+          },
+          "average_cost": {
+            "account": 18.59,
+            "eur": 1858.75,
+            "security": 1.8e-05
+          },
+          "current_holdings": 4.0,
+          "name": "GOLD Physisch",
+          "purchase_value": 7435.0
+        }
+      ],
+      "uuid": "8492735e-ddf7-4c7a-9555-f400a4ad89b7"
+    }
+  ]
+}

@@ -303,3 +303,37 @@ Dependencies: {'stream', 'homeassistant_alerts', 'file', 'logbook', 'go2rtc', 'e
 [36m2025-11-20 22:36:31.223 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.002 seconds (success: True)[0m
 [36m2025-11-20 22:37:31.223 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.003 seconds (success: True)[0m
 [36m2025-11-20 22:38:31.222 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.002 seconds (success: True)[0m
+[36m2025-11-20 22:39:31.223 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.002 seconds (success: True)[0m
+[36m2025-11-20 22:40:31.223 DEBUG (MainThread) [custom_components.pp_reader.data.coordinator] Finished fetching pp_reader data in 0.002 seconds (success: True)[0m
+[32m2025-11-20 22:40:41.468 INFO (Recorder) [homeassistant.components.recorder.pool.RecorderPool] Pool recreating[0m
+[33m2025-11-20 22:40:41.474 WARNING (MainThread) [homeassistant.core] Task <Task pending name='Task-3763' coro=<_run_price_cycle() running at /home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/prices/price_service.py:897> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at /home/andreas/.pyenv/versions/3.13.3/lib/python3.13/asyncio/futures.py:384, Task.task_wakeup()] created at /home/andreas/.pyenv/versions/3.13.3/lib/python3.13/asyncio/base_events.py:459> cb=[set.remove()] created at /home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/homeassistant/util/async_.py:44> was still running after final writes shutdown stage; Integrations should cancel non-critical tasks when receiving the stop event to prevent delaying shutdown[0m
+[33m2025-11-20 22:40:41.935 WARNING (Thread-4 (_do_shutdown)) [homeassistant.util.executor] Thread[SyncWorker_4] is still running at shutdown: File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/threading.py", line 1012, in _bootstrap
+    self._bootstrap_inner()
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/threading.py", line 1041, in _bootstrap_inner
+    self.run()
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/threading.py", line 992, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 93, in _worker
+    work_item.run()
+  File "/home/andreas/.pyenv/versions/3.13.3/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/config/custom_components/pp_reader/prices/yahooquery_provider.py", line 90, in _fetch_quotes_blocking
+    tk = ticker_factory(symbols, asynchronous=False)
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/yahooquery/ticker.py", line 94, in __init__
+    super().__init__(**kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/yahooquery/base.py", line 38, in __init__
+    self.crumb = get_crumb(self.session)
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/yahooquery/session_management.py", line 27, in get_crumb
+    response = session.get("https://query2.finance.yahoo.com/v1/test/getcrumb")
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/curl_cffi/requests/session.py", line 661, in get
+    return self.request(method="GET", url=url, **kwargs)
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/curl_cffi/requests/session.py", line 640, in request
+    c.perform()
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/curl_cffi/curl.py", line 362, in perform
+    ret = lib.curl_easy_perform(self._curl)[0m
+Exception ignored from cffi callback <function buffer_callback at 0x7fff22056160>:
+Traceback (most recent call last):
+  File "/home/andreas/coding/repos/ha-pp-reader/venv-ha/lib/python3.13/site-packages/curl_cffi/curl.py", line 100, in buffer_callback
+    @ffi.def_extern()
+SystemExit: 
+[33m2025-11-20 22:40:42.031 WARNING (SyncWorker_4) [custom_components.pp_reader.prices.yahooquery_provider] YahooQuery Chunk-Fetch Fehler: Failed to perform, curl: (23) Failure writing output to destination, passed 13 returned 0. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.[0m

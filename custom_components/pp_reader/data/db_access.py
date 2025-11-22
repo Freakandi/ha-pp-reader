@@ -8,6 +8,7 @@ and related data in a SQLite database.
 import json
 import logging
 import sqlite3
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
@@ -1095,8 +1096,8 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
             "holdings_raw": 0,
             "current_value_cents": 0,
             "purchase_value_cents": 0,
-            "purchase_account_value_cents": 0,
-            "purchase_security_value_raw": 0,
+            "purchase_account_value_cents": 0.0,
+            "purchase_security_value_raw": 0.0,
             "gain_abs_cents": 0,
             "total_change_eur_cents": 0,
         }
@@ -1119,10 +1120,10 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
             totals["purchase_value_cents"] += int(
                 row_data.get("purchase_value_cents") or 0
             )
-            totals["purchase_account_value_cents"] += int(
+            totals["purchase_account_value_cents"] += float(
                 row_data.get("purchase_account_value_cents") or 0
             )
-            totals["purchase_security_value_raw"] += int(
+            totals["purchase_security_value_raw"] += float(
                 row_data.get("purchase_security_value_raw") or 0
             )
             totals["gain_abs_cents"] += int(row_data.get("gain_abs_cents") or 0)
@@ -1157,10 +1158,10 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
         purchase_value_eur = (
             cent_to_eur(totals["purchase_value_cents"], default=0.0) or 0.0
         )
-        purchase_total_account = cent_to_eur(
+        purchase_total_account = round_currency(
             totals["purchase_account_value_cents"], default=None
         )
-        purchase_total_security = _from_eight_decimal(
+        purchase_total_security = round_currency(
             totals["purchase_security_value_raw"],
             decimals=6,
             default=None,
@@ -2087,6 +2088,121 @@ def upsert_fx_rate(
                 rate.currency,
             )
             raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_fx_rates_bulk(
+    db_path: Path,
+    rates: Sequence[FxRateRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update multiple FX rate entries in a single statement."""
+    if not rates:
+        return
+
+    for rate in rates:
+        if not rate.date:
+            message = "date darf nicht leer sein"
+            raise ValueError(message)
+        if not rate.currency:
+            message = "currency darf nicht leer sein"
+            raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            local_conn.executemany(
+                """
+                INSERT INTO fx_rates (
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date, currency) DO UPDATE SET
+                    rate = excluded.rate,
+                    fetched_at = excluded.fetched_at,
+                    data_source = excluded.data_source,
+                    provider = excluded.provider,
+                    provenance = excluded.provenance
+                """,
+                [
+                    (
+                        rate.date,
+                        rate.currency,
+                        rate.rate,
+                        rate.fetched_at,
+                        rate.data_source,
+                        rate.provider,
+                        rate.provenance,
+                    )
+                    for rate in rates
+                ],
+            )
+            if conn is None:
+                local_conn.commit()
+        except sqlite3.Error:
+            _LOGGER.exception("Fehler beim Bulk-Speichern von FX-Kursen")
+            raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def _iter_chunks(
+    items: Sequence[FxRateRecord],
+    size: int,
+) -> Iterator[Sequence[FxRateRecord]]:
+    """Yield non-overlapping chunks from a sequence."""
+    for idx in range(0, len(items), size):
+        yield items[idx : idx + size]
+
+
+def upsert_fx_rates_chunked(
+    db_path: Path,
+    rates: Sequence[FxRateRecord],
+    *,
+    chunk_size: int = 500,
+    retries: int = 3,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert multiple FX rates in chunks with simple retry on database locks."""
+    if not rates:
+        return
+    if chunk_size <= 0:
+        message = "chunk_size must be positive"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        for chunk in _iter_chunks(rates, chunk_size):
+            delay = 0.25
+            for attempt in range(retries):
+                try:
+                    upsert_fx_rates_bulk(
+                        db_path,
+                        chunk,
+                        conn=local_conn,
+                    )
+                    if conn is None:
+                        local_conn.commit()
+                    break
+                except sqlite3.OperationalError as err:
+                    is_locked = "database is locked" in str(err).lower()
+                    last_attempt = attempt >= retries - 1
+                    if not is_locked or last_attempt:
+                        _LOGGER.exception("Fehler beim chunked FX-Insert")
+                        raise
+                    time.sleep(delay)
+                    delay *= 2
     finally:
         if conn is None:
             local_conn.close()

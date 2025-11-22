@@ -27,6 +27,7 @@ from custom_components.pp_reader.util.currency import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_SCALED_INT_THRESHOLD = 10_000
 
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
@@ -581,6 +582,12 @@ def db_calculate_holdings_value(
     # Berechne den aktuellen Wert für jede Position
     for (portfolio_uuid, security_uuid), data in current_hold_pur.items():
         holdings = data.get("current_holdings", 0)
+        # current_holdings kann bereits skaliert (10^-8) oder normalisiert sein.
+        if (
+            isinstance(holdings, (int, float))
+            and abs(holdings) >= _SCALED_INT_THRESHOLD
+        ):
+            holdings = holdings / 10**8
 
         # Hole den aktuellen Preis
         latest_price = normalize_raw_price(latest_prices.get(security_uuid, 0.0))

@@ -150,17 +150,90 @@ function titleCase(value: string): string {
 }
 
 function composeProvenanceBadge(provenance: string | null): OverviewBadge | null {
-  const normalized = toNonEmptyString(provenance);
+  const normalized = normalizeProvenanceLabel(provenance);
   if (!normalized) {
     return null;
   }
-  const friendly = titleCase(normalized);
+
+  const friendly = normalized;
   return {
     key: `provenance-${normalized}`,
     label: `Quelle: ${friendly}`,
     tone: "neutral",
     description: "Backend-Provenance zur Nachverfolgung der Kennzahlen.",
   };
+}
+
+function normalizeProvenanceLabel(provenance: string | null): string | null {
+  const normalized = toNonEmptyString(provenance);
+  if (!normalized) {
+    return null;
+  }
+
+  const structured = parseStructuredProvenance(normalized);
+  if (structured) {
+    return structured;
+  }
+
+  return titleCase(normalized);
+}
+
+function parseStructuredProvenance(provenance: string): string | null {
+  const trimmed = provenance.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(trimmed) as unknown;
+    const currencies = extractCurrencyCodes(payload);
+    const provider =
+      payload && typeof payload === "object"
+        ? toNonEmptyString(
+            (payload as Record<string, unknown>).provider ??
+              (payload as Record<string, unknown>).source,
+          )
+        : null;
+
+    if (currencies.length && provider) {
+      return `${titleCase(provider)} (${currencies.join(", ")})`;
+    }
+    if (currencies.length) {
+      return `FX (${currencies.join(", ")})`;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function extractCurrencyCodes(payload: unknown): string[] {
+  const normalizeCode = (value: unknown): string | null => {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const trimmed = value.trim();
+    return trimmed ? trimmed.toUpperCase() : null;
+  };
+
+  const fromArray = (values: unknown[]): string[] =>
+    values
+      .map(normalizeCode)
+      .filter((code): code is string => Boolean(code));
+
+  if (Array.isArray(payload)) {
+    return fromArray(payload);
+  }
+
+  if (payload && typeof payload === "object") {
+    const currencies = (payload as Record<string, unknown>).currencies;
+    if (Array.isArray(currencies)) {
+      return fromArray(currencies);
+    }
+  }
+
+  return [];
 }
 
 function buildAccountRow(
@@ -237,7 +310,10 @@ function buildPortfolioRow(
   const missingValuePositions = toInteger(snapshot.missing_value_positions);
   const currentValue = toFiniteNumber(snapshot.current_value);
   const purchaseSum =
-    toFiniteNumber(snapshot.purchase_value ?? snapshot.purchase_sum) ?? 0;
+    toFiniteNumber(snapshot.purchase_sum) ??
+    toFiniteNumber((snapshot as { purchase_value_eur?: unknown })?.purchase_value_eur) ??
+    toFiniteNumber(snapshot.purchase_value) ??
+    0;
 
   const performance = normalizePerformancePayload(snapshot.performance);
   const gainAbs = performance?.gain_abs ?? null;

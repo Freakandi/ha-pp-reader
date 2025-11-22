@@ -51,6 +51,7 @@ from custom_components.pp_reader.util.currency import (
     eur_to_cent,
     round_currency,
 )
+from custom_components.pp_reader.util.scaling import SCALE
 
 
 async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -119,6 +120,8 @@ CONSECUTIVE_ERROR_THRESHOLD = 3
 INVALID_SCALED_PRICE_ERROR = (
     "Ungültiger skalierten Preis (ensure_no_extra_persist Guard)"
 )
+_SCALED_INT_THRESHOLD = 10_000
+_EIGHT_DECIMAL_SCALE = int(SCALE)
 ZERO_QUOTES_WARN_INTERVAL = 1_800
 # Yahoo Finance benötigt teils >10s für große Chunks -
 # 20s verhindern False-Timeouts.
@@ -128,6 +131,31 @@ HOLDING_VALUE_MATCH_EPSILON = 1e-9
 TOTAL_VALUE_MATCH_EPSILON = 1e-6
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _normalize_scaled_quantity(value: Any) -> float:
+    """Interpret raw numeric values that may already be scaled by 1e8."""
+    if value in (None, ""):
+        return 0.0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+    if abs(numeric) >= _SCALED_INT_THRESHOLD:
+        return numeric / _EIGHT_DECIMAL_SCALE
+    return numeric
+
+
+def _scale_quantity(value: float | None) -> int:
+    """Return an integer representation using the canonical 1e8 scaling."""
+    if value in (None, ""):
+        return 0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return round(numeric * _EIGHT_DECIMAL_SCALE)
 
 
 def initialize_price_state(hass: HomeAssistant, entry_id: str) -> None:
@@ -449,7 +477,9 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         impacted_pairs.add(key)
                         impacted_portfolios.add(portfolio_uuid)
                         existing_entries[key] = {
-                            "current_holdings": float(cur_hold or 0.0),
+                            "current_holdings": _normalize_scaled_quantity(
+                                cur_hold or 0.0
+                            ),
                             "purchase_value": int(purch_val or 0),
                             "avg_price_native": (
                                 float(avg_native) if avg_native is not None else None
@@ -606,6 +636,7 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                 if holdings is None:
                     continue
 
+                holdings = _normalize_scaled_quantity(holdings)
                 current_hold_pur[key] = {
                     "current_holdings": holdings,
                     "purchase_value": purchase_value or 0.0,
@@ -628,7 +659,9 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
             upserts: list[tuple] = []
             for key, data in holdings_values.items():
                 portfolio_uuid, security_uuid = key
-                current_holdings_val = float(data.get("current_holdings", 0.0) or 0.0)
+                current_holdings_val = _normalize_scaled_quantity(
+                    data.get("current_holdings", 0.0)
+                )
                 purchase_value_eur = (
                     round_currency(data.get("purchase_value"), default=0.0) or 0.0
                 )
@@ -750,7 +783,7 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     (
                         portfolio_uuid,
                         security_uuid,
-                        current_holdings_val,
+                        _scale_quantity(current_holdings_val),
                         purchase_value_cents,
                         avg_price_native_val,
                         avg_price_security_val,

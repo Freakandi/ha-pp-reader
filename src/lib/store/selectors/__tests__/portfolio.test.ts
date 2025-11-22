@@ -46,6 +46,34 @@ test('selectAccountOverviewRows surfaces fx_unavailable state and coverage badge
   assert.match(coverageBadge.label, /FX-Abdeckung 42%/);
 });
 
+test('selectAccountOverviewRows flattens structured provenance payloads for badges', (t) => {
+  t.after(() => {
+    storeTestApi.reset();
+  });
+
+  setAccountSnapshots([
+    {
+      uuid: 'acc-fx-provenance',
+      name: 'FX Provenance Konto',
+      currency_code: 'CAD',
+      orig_balance: 0,
+      balance: 0,
+      fx_unavailable: false,
+      provenance: '{"currencies":["cad","hkd"]}',
+    },
+  ]);
+
+  const rows = selectAccountOverviewRows();
+  assert.strictEqual(rows.length, 1);
+
+  const [row] = rows;
+  const provenanceBadge = row.badges.find((badge) =>
+    badge.key.startsWith('provenance-'),
+  );
+  assert(provenanceBadge, 'missing provenance badge');
+  assert.strictEqual(provenanceBadge.label, 'Quelle: FX (CAD, HKD)');
+});
+
 test('selectPortfolioOverviewRows flags partial coverage portfolios with no metrics', (t) => {
   t.after(() => {
     storeTestApi.reset();
@@ -80,4 +108,28 @@ test('selectPortfolioOverviewRows flags partial coverage portfolios with no metr
   assert(coverageBadge, 'missing portfolio coverage badge');
   assert.strictEqual(coverageBadge.tone, 'warning');
   assert.match(coverageBadge.label, /Abdeckung 76%/);
+});
+
+test('selectPortfolioOverviewRows prefers EUR purchase_sum over native purchase_value', (t) => {
+  t.after(() => {
+    storeTestApi.reset();
+  });
+
+  replacePortfolioSnapshots([
+    {
+      uuid: 'portfolio-fx',
+      name: 'FX Depot',
+      current_value: 1000,
+      purchase_value: 1200,
+      purchase_sum: 800,
+      position_count: 3,
+      performance: null,
+    },
+  ]);
+
+  const rows = selectPortfolioOverviewRows();
+  assert.strictEqual(rows.length, 1);
+
+  const [row] = rows;
+  assert.strictEqual(row.purchase_sum, 800);
 });

@@ -107,8 +107,9 @@ function normalizePortfolioSnapshot(
   }
 
   const purchaseValue =
-    toNullableNumber(candidate.purchase_value) ??
-    toNullableNumber(candidate.purchase_sum);
+    toNullableNumber(candidate.purchase_sum) ??
+    toNullableNumber((candidate as { purchase_value_eur?: unknown }).purchase_value_eur) ??
+    toNullableNumber(candidate.purchase_value);
   if (purchaseValue !== undefined) {
     normalized.purchase_value = purchaseValue;
     normalized.purchase_sum = purchaseValue;

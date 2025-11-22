@@ -57,6 +57,44 @@ def _compact_event_data(_data_type: str, data: Any) -> Any:
     return _ensure_serializable(data)
 
 
+def _chunk_sequence_payload(
+    base_payload: dict[str, Any],
+    items: Sequence[Any],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    """Split a sequence payload into recorder-safe chunks."""
+    if not items:
+        return []
+
+    chunks: list[dict[str, Any]] = []
+    current: list[Any] = []
+
+    for item in items:
+        current.append(item)
+        candidate = dict(base_payload)
+        candidate["data"] = list(current)
+
+        if _estimate_event_size(candidate) > max_bytes:
+            # If a single item already exceeds the limit, emit it as-is so the
+            # consumer still receives the update (recorder may still drop it).
+            if len(current) == 1:
+                chunks.append(candidate)
+                current = []
+                continue
+
+            # Flush the previous chunk without the oversized item.
+            current.pop()
+            chunks.append(
+                {**base_payload, "data": list(current)},
+            )
+            current = [item]
+
+    if current:
+        chunks.append({**base_payload, "data": list(current)})
+
+    return chunks
+
+
 @callback
 def _push_update(
     hass: HomeAssistant | None,
@@ -69,15 +107,50 @@ def _push_update(
         return
 
     compact_data = _compact_event_data(data_type, data)
-    payload = {
+    base_payload = {
         "domain": DOMAIN,
         "entry_id": entry_id,
         "data_type": data_type,
-        "data": compact_data,
         "synced_at": dt_util.utcnow().isoformat(timespec="seconds"),
     }
+    payload = {**base_payload, "data": compact_data}
 
     payload_size = _estimate_event_size(payload)
+    if payload_size > EVENT_DATA_MAX_BYTES and _is_sequence(compact_data):
+        chunk_payloads = _chunk_sequence_payload(
+            base_payload,
+            list(compact_data),
+            EVENT_DATA_MAX_BYTES - _EVENT_SIZE_MARGIN,
+        )
+        if len(chunk_payloads) > 1:
+            _LOGGER.warning(
+                (
+                    "Event payload for %s exceeds recorder limit (%d > %d bytes). "
+                    "Split into %d chunk(s) to keep events recorder-safe."
+                ),
+                data_type,
+                payload_size,
+                EVENT_DATA_MAX_BYTES,
+                len(chunk_payloads),
+            )
+            for chunk in chunk_payloads:
+                chunk_size = _estimate_event_size(chunk)
+                if chunk_size > EVENT_DATA_MAX_BYTES:
+                    _LOGGER.warning(
+                        (
+                            "Chunked %s payload still exceeds recorder limit "
+                            "(%d bytes) - event data may be dropped"
+                        ),
+                        data_type,
+                        chunk_size,
+                    )
+                hass.loop.call_soon_threadsafe(
+                    hass.bus.fire,
+                    EVENT_PANELS_UPDATED,
+                    chunk,
+                )
+            return
+
     if payload_size > EVENT_DATA_MAX_BYTES:
         _LOGGER.warning(
             (

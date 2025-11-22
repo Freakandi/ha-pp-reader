@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.portfolio")
+_SCALED_INT_THRESHOLD = 10_000
+_EIGHT_DECIMAL_SCALE = 10**8
 
 _PORTFOLIO_AGGREGATION_SQL = """
     SELECT
@@ -82,7 +84,9 @@ def _compute_portfolio_metrics_sync(
         if not portfolio_uuid:
             continue
 
-        current_value_cents = _coerce_int(row["current_value"])
+        current_value_cents = _normalize_currency_cents(
+            _coerce_int(row["current_value"])
+        )
         purchase_value_cents = _coerce_int(row["purchase_sum"])
         position_count = _coerce_int(row["position_count"])
         missing_value_positions = _coerce_int(row["missing_value_positions"])
@@ -130,3 +134,15 @@ def _coerce_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _normalize_currency_cents(value: int) -> int:
+    """
+    Decode currency amounts that might be persisted as 1e-8 scaled integers.
+
+    Inflated legacy totals can be detected by their magnitude and rescaled to
+    canonical cents so downstream snapshots remain reasonable.
+    """
+    if abs(value) >= _SCALED_INT_THRESHOLD * _EIGHT_DECIMAL_SCALE:
+        return round(value / _EIGHT_DECIMAL_SCALE)
+    return value

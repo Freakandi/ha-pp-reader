@@ -228,18 +228,27 @@ export function normalizeAggregationPayload(
 }
 
 export function normalizePositionRecord(value: unknown): PortfolioPositionRecord | null {
-  if (isPortfolioPositionRecord(value)) {
-    return clonePosition(value);
-  }
   if (!value || typeof value !== 'object') {
     return null;
   }
-  const record = value as Record<string, unknown>;
+  const record = isPortfolioPositionRecord(value)
+    ? (clonePosition(value) as Record<string, unknown>)
+    : (value as Record<string, unknown>);
   const securityUuid = toNonEmptyString(record.security_uuid);
   const name = toNonEmptyString(record.name);
   const currentHoldings = toFiniteCurrency(record.current_holdings);
-  const purchaseValue = normalizeCurrencyValue(record.purchase_value);
   const currentValue = normalizeCurrencyValue(record.current_value);
+  const aggregation = normalizeAggregationPayload(record.aggregation);
+  const aggregationRaw =
+    record.aggregation && typeof record.aggregation === 'object'
+      ? (record.aggregation as Record<string, unknown>)
+      : null;
+  const purchaseValue =
+    toNullableNumber((record as { purchase_value_eur?: unknown }).purchase_value_eur) ??
+    toNullableNumber(aggregationRaw?.purchase_value_eur) ??
+    toNullableNumber(aggregationRaw?.purchase_total_account) ??
+    toNullableNumber(aggregationRaw?.account_currency_total) ??
+    normalizeCurrencyValue(record.purchase_value);
 
   if (
     !securityUuid ||
@@ -266,7 +275,6 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
   if (averageCost) {
     normalized.average_cost = averageCost;
   }
-  const aggregation = normalizeAggregationPayload(record.aggregation);
   if (aggregation) {
     normalized.aggregation = aggregation;
   }

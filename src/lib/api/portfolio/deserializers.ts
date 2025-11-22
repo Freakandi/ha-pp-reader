@@ -137,11 +137,18 @@ export function deserializePositionSnapshot(value: unknown): NormalizedPositionS
   if (!isRecord(value)) {
     return null;
   }
-
+  const aggregationRaw = value.aggregation;
   const securityUuid = toStringValue(value.security_uuid);
   const name = toStringValue(value.name);
   const currentHoldings = toFiniteNumber(value.current_holdings);
-  const purchaseValue = toFiniteNumber(value.purchase_value);
+  const purchaseValue =
+    toFiniteNumber(value.purchase_value_eur) ??
+    (isRecord(aggregationRaw)
+      ? toFiniteNumber(aggregationRaw.purchase_value_eur) ??
+        toFiniteNumber(aggregationRaw.purchase_total_account) ??
+        toFiniteNumber(aggregationRaw.account_currency_total)
+      : null) ??
+    toFiniteNumber(value.purchase_value);
   const currentValue = toFiniteNumber(value.current_value);
 
   if (!securityUuid || !name || currentHoldings == null || purchaseValue == null || currentValue == null) {
@@ -221,7 +228,9 @@ export function deserializePortfolioSnapshot(value: unknown): NormalizedPortfoli
     return null;
   }
 
-  const purchaseValueRaw = toFiniteNumber(value.purchase_value ?? value.purchase_sum ?? value.purchaseSum);
+  const purchaseValueRaw = toFiniteNumber(
+    value.purchase_sum ?? value.purchase_value_eur ?? value.purchase_value ?? value.purchaseSum,
+  );
   const purchaseValue = purchaseValueRaw ?? 0;
 
   const snapshot: NormalizedPortfolioSnapshot = {

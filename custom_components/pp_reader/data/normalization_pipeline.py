@@ -607,11 +607,11 @@ def _load_position_snapshots(
         holdings = _from_holdings_raw(record.holdings_raw)
         current_value = cent_to_eur(record.current_value_cents, default=0.0) or 0.0
         purchase_value = cent_to_eur(record.purchase_value_cents, default=0.0) or 0.0
-        purchase_total_account = cent_to_eur(
+        purchase_total_account = round_currency(
             record.purchase_account_value_cents,
             default=None,
         )
-        purchase_total_security = _from_eight_decimal(
+        purchase_total_security = round_currency(
             record.purchase_security_value_raw,
             decimals=6,
             default=None,

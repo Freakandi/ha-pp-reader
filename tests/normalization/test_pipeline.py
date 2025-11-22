@@ -25,8 +25,65 @@ def _shares_raw(value: float) -> int:
 
 
 def _price_raw(value: float) -> int:
-    """Convert price totals to the stored 10^-8 representation."""
+    """Convert prices to the stored 10^-8 representation."""
     return int(round(value * 10**8))
+
+
+def _purchase_total(value: float) -> float:
+    """Return a purchase total in its native currency units."""
+    return float(value)
+
+
+def test_load_position_snapshots_preserves_purchase_totals(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Purchase totals must not be downscaled when hydrating position snapshots."""
+    metric_rows = [
+        SecurityMetricRecord(
+            metric_run_uuid="run-totals",
+            portfolio_uuid="portfolio-gold",
+            security_uuid="sec-gold",
+            security_currency_code="USD",
+            holdings_raw=_shares_raw(4.0),
+            current_value_cents=1_416_493,
+            purchase_value_cents=743_500,
+            purchase_security_value_raw=7_435,
+            purchase_account_value_cents=7_435,
+            gain_abs_cents=672_993,
+            gain_pct=90.52,
+            total_change_eur_cents=672_993,
+            total_change_pct=90.52,
+            source="calculated",
+            coverage_ratio=1.0,
+        )
+    ]
+
+    # Avoid FX lookups during the test run
+    monkeypatch.setattr(pipeline, "normalize_price_to_eur_sync", lambda *args, **kwargs: None)
+
+    snapshots = tuple(
+        pipeline._load_position_snapshots(  # type: ignore[attr-defined]
+            db_path=tmp_path / "positions.db",
+            portfolio_uuid="portfolio-gold",
+            metric_rows=metric_rows,
+            securities={
+                "sec-gold": Security(
+                    uuid="sec-gold",
+                    name="GOLD Physisch",
+                    currency_code="USD",
+                )
+            },
+        )
+    )
+
+    assert len(snapshots) == 1
+    position = snapshots[0]
+
+    assert position.aggregation["purchase_total_account"] == pytest.approx(7_435.0)
+    assert position.aggregation["purchase_total_security"] == pytest.approx(7_435.0)
+    assert position.average_cost["account"] == pytest.approx(1_858.75)
+    assert position.average_cost["security"] == pytest.approx(1_858.75)
 
 
 def test_normalize_snapshot_compiles_multi_portfolio_payload(
@@ -107,8 +164,8 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
             holdings_raw=_shares_raw(5.5),
             current_value_cents=250_000,
             purchase_value_cents=200_000,
-            purchase_security_value_raw=_price_raw(2_100.0),
-            purchase_account_value_cents=205_000,
+            purchase_security_value_raw=_purchase_total(2_100.0),
+            purchase_account_value_cents=_purchase_total(2_050.0),
             gain_abs_cents=50_000,
             gain_pct=25.0,
             total_change_eur_cents=50_000,
@@ -132,8 +189,8 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
             holdings_raw=_shares_raw(2.0),
             current_value_cents=150_000,
             purchase_value_cents=100_000,
-            purchase_security_value_raw=_price_raw(1_100.0),
-            purchase_account_value_cents=95_000,
+            purchase_security_value_raw=_purchase_total(1_100.0),
+            purchase_account_value_cents=_purchase_total(950.0),
             gain_abs_cents=50_000,
             gain_pct=50.0,
             total_change_eur_cents=50_000,
