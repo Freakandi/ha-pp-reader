@@ -95,7 +95,7 @@ void test(
 );
 
 void test(
-  'buildPurchasePriceDisplayForTest falls back to account currency when security averages missing',
+  'buildPurchasePriceDisplayForTest falls back to account currency and surfaces EUR conversion',
   async () =>
     withOverviewModule(module => {
       const { buildPurchasePriceDisplayForTest: helper } = getOverviewTestHelpers(module);
@@ -117,7 +117,7 @@ void test(
           native: null,
           security: null,
           account: 8,
-          eur: 640,
+          eur: 8,
           source: 'aggregation',
           coverage_ratio: 1,
         },
@@ -133,9 +133,56 @@ void test(
       });
 
       assert.match(markup, /purchase-price--primary">8,00\u00A0USD/);
-      assert.doesNotMatch(markup, /purchase-price--secondary/);
-      assert.strictEqual(ariaLabel, '8,00 USD');
+      assert.match(markup, /purchase-price--secondary">8,00\u00A0EUR/);
+      assert.match(ariaLabel, /8,00 USD/);
+      assert.match(ariaLabel, /8,00 EUR/);
       assert.strictEqual(sortValue, 640);
+    }),
+);
+
+void test(
+  'buildPurchasePriceDisplayForTest renders a single EUR value for EUR-denominated securities',
+  async () =>
+    withOverviewModule(module => {
+      const { buildPurchasePriceDisplayForTest: helper } = getOverviewTestHelpers(module);
+      const { markup, ariaLabel, sortValue } = helper({
+        security_uuid: 'security-eur',
+        name: 'EUR Equity',
+        security_currency_code: 'EUR',
+        account_currency_code: 'EUR',
+        aggregation: {
+          total_holdings: 50,
+          positive_holdings: 50,
+          purchase_value_cents: 74000,
+          purchase_value_eur: 740,
+          security_currency_total: 740,
+          account_currency_total: 740,
+          purchase_total_security: 740,
+          purchase_total_account: 740,
+        },
+        average_cost: {
+          native: 14.8015,
+          security: 14.8015,
+          account: 14.8,
+          eur: 14.8,
+          source: 'totals',
+          coverage_ratio: 1,
+        },
+        performance: {
+          gain_abs: 0,
+          gain_pct: 0,
+          total_change_eur: 0,
+          total_change_pct: 0,
+          source: 'snapshot',
+          coverage_ratio: 1,
+          day_change: null,
+        },
+      });
+
+      assert.match(markup, /purchase-price--primary">14,80\u00A0EUR/);
+      assert.doesNotMatch(markup, /purchase-price--secondary/);
+      assert.strictEqual(ariaLabel, '14,80 EUR');
+      assert.strictEqual(sortValue, 740);
     }),
 );
 
@@ -180,9 +227,9 @@ void test(
       });
 
       assert.match(markup, /purchase-price--primary">3,14159\u00A0USD/);
-      assert.match(markup, /purchase-price--secondary">2,50\u00A0CHF/);
+      assert.match(markup, /purchase-price--secondary">2,50\u00A0EUR/);
       assert.match(ariaLabel, /3,14159 USD/);
-      assert.match(ariaLabel, /2,50 CHF/);
+      assert.match(ariaLabel, /2,50 EUR/);
       assert.strictEqual(sortValue, 105);
     }),
 );

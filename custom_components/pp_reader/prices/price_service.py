@@ -27,11 +27,17 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
-from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
+from custom_components.pp_reader.data.db_access import (
+    Transaction as DbTransaction,
+    fetch_live_portfolios,
+)
 from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
+)
+from custom_components.pp_reader.data.normalization_pipeline import (
+    async_normalize_snapshot,
 )
 from custom_components.pp_reader.logic.securities import (
     db_calculate_current_holdings,
@@ -94,6 +100,37 @@ async def _schedule_metrics_after_price_change(
                 getattr(run, "run_uuid", None),
                 getattr(run, "status", None),
             )
+            try:
+                await async_normalize_snapshot(
+                    hass,
+                    Path(db_path),
+                    include_positions=False,
+                )
+            except Exception:  # noqa: BLE001 - defensive logging
+                _LOGGER.debug(
+                    "prices_cycle: Normalization nach Metrics-Refresh fehlgeschlagen",
+                    exc_info=True,
+                )
+
+            try:
+                portfolio_payload = await async_run_executor_job(
+                    hass,
+                    fetch_live_portfolios,
+                    Path(db_path),
+                )
+            except Exception:  # noqa: BLE001 - defensive logging
+                _LOGGER.debug(
+                    "prices_cycle: Live-Portfolio-Payload nach Metrics-Refresh fehlgeschlagen",
+                    exc_info=True,
+                )
+            else:
+                if portfolio_payload is not None:
+                    _push_update(
+                        hass,
+                        entry_id,
+                        "portfolio_values",
+                        portfolio_payload,
+                    )
         except Exception:  # noqa: BLE001 - defensive logging
             _LOGGER.warning(
                 "prices_cycle: Metrics-Refresh nach Preis-Update fehlgeschlagen",

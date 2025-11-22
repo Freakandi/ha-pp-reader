@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .ingestion_schema import ensure_ingestion_transaction_eur_column
 from .snapshot_tables import ensure_snapshot_tables
 
-__all__ = ["ensure_snapshot_tables"]
+__all__ = ["ensure_snapshot_tables", "ensure_ingestion_transaction_eur_column"]

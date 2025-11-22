@@ -6,6 +6,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+### Added
+- Per-transaction EUR purchase values are persisted during ingestion and can be backfilled via `python -m custom_components.pp_reader.data.backfill_fx_tx --db <path> [--currency USD] [--dry-run]` so portfolio aggregates, metrics, and websocket payloads expose accurate EUR and native totals.
+
 ### Changed
 - Config flow validation now streams `.portfolio` archives through `parser_pipeline.async_parse_portfolio` (via a no-op writer) so upload errors reuse the canonical parser instead of the deprecated protobuf helper.
 - `scripts/enrichment_smoketest.py` runs parser → ingestion → metrics → normalization exclusively, removing the redundant diff-sync staging step.

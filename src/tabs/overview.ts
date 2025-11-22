@@ -183,33 +183,37 @@ function buildPurchasePriceDisplay(
   const averageAccount = toNullableNumber(averageCost?.account);
   const averageEur = toNullableNumber(averageCost?.eur);
 
-  const effectiveSecurity = averageSecurity ?? averageNative;
-  const effectiveAccount = averageAccount ?? averageEur;
+  const nativeAverage = averageSecurity ?? averageNative;
+  const eurAverage = averageEur ?? (accountCurrency === 'EUR' ? averageAccount : null);
+  const resolvedSecurityCurrency = securityCurrency ?? accountCurrency ?? 'EUR';
+  const isEurSecurity = resolvedSecurityCurrency === 'EUR';
 
-  let primaryValue = effectiveSecurity;
-  let primaryCurrency = securityCurrency;
-  let primaryText = formatPriceWithCurrency(effectiveSecurity, securityCurrency);
+  let primaryCurrency: string | null;
+  let primaryValue: number | null;
 
-  if (!primaryText) {
-    primaryValue = effectiveAccount;
-    primaryCurrency = accountCurrency;
-    primaryText = formatPriceWithCurrency(effectiveAccount, accountCurrency);
+  if (!isEurSecurity) {
+    if (nativeAverage != null) {
+      primaryCurrency = resolvedSecurityCurrency;
+      primaryValue = nativeAverage;
+    } else if (averageAccount != null) {
+      primaryCurrency = accountCurrency;
+      primaryValue = averageAccount;
+    } else {
+      primaryCurrency = 'EUR';
+      primaryValue = eurAverage ?? null;
+    }
+  } else {
+    primaryCurrency = 'EUR';
+    primaryValue = eurAverage ?? nativeAverage ?? averageAccount ?? null;
   }
 
-  const formattedAccount = formatPriceWithCurrency(
-    effectiveAccount,
-    accountCurrency,
-  );
+  const primaryText = formatPriceWithCurrency(primaryValue, primaryCurrency);
+  const formattedEur = !isEurSecurity
+    ? formatPriceWithCurrency(eurAverage, 'EUR')
+    : null;
 
   const shouldRenderAccount =
-    formattedAccount !== null &&
-    (primaryText == null ||
-      !primaryCurrency ||
-      !accountCurrency ||
-      accountCurrency !== primaryCurrency ||
-      (isFiniteNumber(effectiveAccount) &&
-        isFiniteNumber(primaryValue) &&
-        Math.abs(effectiveAccount - primaryValue) > 1e-6));
+    !!formattedEur && formattedEur !== primaryText;
 
   const parts: string[] = [];
   const ariaParts: string[] = [];
@@ -226,11 +230,11 @@ function buildPurchasePriceDisplay(
     ariaParts.push('Kein Kaufpreis verfügbar');
   }
 
-  if (shouldRenderAccount && formattedAccount && formattedAccount !== primaryText) {
+  if (shouldRenderAccount && formattedEur) {
     parts.push(
-      `<span class="purchase-price purchase-price--secondary">${formattedAccount}</span>`,
+      `<span class="purchase-price purchase-price--secondary">${formattedEur}</span>`,
     );
-    ariaParts.push(formattedAccount.replace(/\u00A0/g, ' '));
+    ariaParts.push(formattedEur.replace(/\u00A0/g, ' '));
   }
 
   const markup = parts.join('<br>');

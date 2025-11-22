@@ -7,6 +7,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from custom_components.pp_reader.data.db_access import Transaction
+from custom_components.pp_reader.logic.accounting import db_calc_account_balance
 from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import cent_to_eur
@@ -114,31 +116,178 @@ def _lookup_fx_rate(
     return None
 
 
+def _load_ingestion_transactions(conn: sqlite3.Connection) -> list[Transaction]:
+    """Return staged transactions mapped to the canonical dataclass."""
+    try:
+        cursor = conn.execute(
+            """
+            SELECT uuid, type, account, portfolio,
+                   other_account, other_portfolio,
+                   date, currency_code, amount, shares, security,
+                   amount_eur_cents
+            FROM ingestion_transactions
+            ORDER BY date
+            """
+        )
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Laden der staged Transaktionen für die Konto-Synchronisation"
+        )
+        return []
+
+    transactions: list[Transaction] = []
+    for row in cursor.fetchall():
+        uuid = row["uuid"]
+        if not uuid:
+            continue
+        transactions.append(
+            Transaction(
+                uuid=uuid,
+                type=int(row["type"] or 0),
+                account=row["account"],
+                portfolio=row["portfolio"],
+                other_account=row["other_account"],
+                other_portfolio=row["other_portfolio"],
+                date=row["date"],
+                currency_code=row["currency_code"],
+                amount=int(row["amount"] or 0),
+                shares=row["shares"],
+                security=row["security"],
+                amount_eur_cents=(
+                    int(row["amount_eur_cents"])
+                    if row["amount_eur_cents"] is not None
+                    else None
+                ),
+            )
+        )
+    return transactions
+
+
+def _load_transaction_units(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
+    """Return FX-aware transaction unit metadata keyed by transaction UUID."""
+    try:
+        cursor = conn.execute(
+            """
+            SELECT transaction_uuid, fx_amount, fx_currency_code
+            FROM ingestion_transaction_units
+            WHERE fx_amount IS NOT NULL
+               OR fx_currency_code IS NOT NULL
+            """
+        )
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Laden der transaction_units für die Konto-Synchronisation"
+        )
+        return {}
+
+    units: dict[str, dict[str, Any]] = {}
+    for row in cursor.fetchall():
+        tx_uuid = row["transaction_uuid"]
+        if not tx_uuid:
+            continue
+        raw_fx_amount = row["fx_amount"]
+        try:
+            fx_amount = int(raw_fx_amount) if raw_fx_amount is not None else None
+        except (TypeError, ValueError):
+            fx_amount = None
+        fx_currency = row["fx_currency_code"]
+
+        # Prefer the first non-empty FX payload per transaction.
+        existing = units.get(tx_uuid)
+        should_replace = (
+            existing is None
+            or (
+                existing.get("fx_amount") in (None, 0)
+                and fx_amount not in (None, 0)
+            )
+        )
+        if should_replace:
+            units[tx_uuid] = {
+                "fx_amount": fx_amount,
+                "fx_currency_code": fx_currency,
+            }
+    return units
+
+
+def _compute_account_balances(
+    conn: sqlite3.Connection, accounts: list[sqlite3.Row]
+) -> dict[str, int]:
+    """Compute per-account balances (cent) from staged transactions."""
+    if not accounts:
+        return {}
+
+    transactions = _load_ingestion_transactions(conn)
+    if not transactions:
+        return {}
+
+    tx_units = _load_transaction_units(conn)
+    accounts_currency_map = {
+        row["uuid"]: (row["currency_code"] or "").strip().upper()
+        for row in accounts
+        if row["uuid"]
+    }
+
+    balances: dict[str, int] = {}
+    for account_uuid in accounts_currency_map:
+        try:
+            balances[account_uuid] = db_calc_account_balance(
+                account_uuid,
+                transactions,
+                accounts_currency_map=accounts_currency_map,
+                tx_units=tx_units,
+            )
+        except Exception:  # pragma: no cover - defensive
+            _LOGGER.exception(
+                "Fehler bei der Berechnung des Kontostands für %s", account_uuid
+            )
+    return balances
+
+
 def _sync_accounts(conn: sqlite3.Connection) -> None:
     conn.execute("DELETE FROM accounts")
     conn.execute("DELETE FROM account_attributes")
-    conn.execute(
+    cursor = conn.execute(
         """
-        INSERT INTO accounts (
-            uuid,
-            name,
-            currency_code,
-            note,
-            is_retired,
-            updated_at,
-            balance
-        )
-        SELECT
-            uuid,
-            name,
-            COALESCE(currency_code, ''),
-            note,
-            is_retired,
-            updated_at,
-            0
+        SELECT uuid, name, currency_code, note, is_retired, updated_at
         FROM ingestion_accounts
+        ORDER BY name
         """
     )
+    accounts = cursor.fetchall()
+    balances = _compute_account_balances(conn, accounts)
+
+    rows: list[tuple[Any, ...]] = []
+    for row in accounts:
+        uuid = row["uuid"]
+        if not uuid:
+            continue
+        rows.append(
+            (
+                uuid,
+                row["name"],
+                row["currency_code"] or "",
+                row["note"],
+                row["is_retired"],
+                row["updated_at"],
+                balances.get(uuid, 0),
+            )
+        )
+
+    if rows:
+        conn.executemany(
+            """
+            INSERT INTO accounts (
+                uuid,
+                name,
+                currency_code,
+                note,
+                is_retired,
+                updated_at,
+                balance
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
 
 
 def _sync_portfolios(conn: sqlite3.Connection) -> None:
@@ -225,6 +374,7 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
             type,
             currency_code,
             amount,
+            amount_eur_cents,
             shares,
             date
         FROM ingestion_transactions
@@ -240,6 +390,13 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
         security = row["security"]
         tx_type = int(row["type"] or 0)
         amount_raw = int(row["amount"] or 0)
+        amount_eur_raw = row["amount_eur_cents"]
+        try:
+            amount_eur_cents = (
+                int(amount_eur_raw) if amount_eur_raw is not None else None
+            )
+        except (TypeError, ValueError):
+            amount_eur_cents = None
         shares_raw = int(row["shares"] or 0)
         currency_code = (row["currency_code"] or "").strip().upper()
         tx_date = row["date"] or ""
@@ -257,16 +414,23 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
 
         if tx_type in purchase_types:
             entry["holdings_raw"] += shares_raw
-            rate = _lookup_fx_rate(conn, currency_code, tx_date)
-            if rate is None or rate == 0:
-                continue
-
-            purchase_cents_eur = amount_raw / float(rate)
-            entry["purchase_value_eur_cents"] += purchase_cents_eur
-
             account_total = cent_to_eur(amount_raw, default=0.0) or 0.0
             entry["account_currency_total"] += account_total
             entry["security_currency_total"] += account_total
+
+            if amount_eur_cents is None:
+                _LOGGER.warning(
+                    (
+                        "Kein EUR-Betrag für Transaktion "
+                        "portfolio=%s security=%s date=%s currency=%s"
+                    ),
+                    portfolio or "<ohne Portfolio>",
+                    security or "<ohne Wertpapier>",
+                    tx_date or "<ohne Datum>",
+                    currency_code or "<ohne Währung>",
+                )
+            else:
+                entry["purchase_value_eur_cents"] += float(amount_eur_cents)
         elif tx_type in sale_types:
             entry["holdings_raw"] -= abs(shares_raw)
 

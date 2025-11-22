@@ -141,6 +141,7 @@ class Transaction:
     amount: int  # Cent-Betrag
     shares: int | None  # *10^8 für Genauigkeit
     security: str | None  # Security UUID
+    amount_eur_cents: int | None = None
 
 
 @dataclass

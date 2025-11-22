@@ -5,6 +5,14 @@ You are Codex, the autonomous frontend QA + fix agent for the Home Assistant int
 ## Mission
 Perform a combined functional, visual, and data-fidelity test pass on the Portfolio Performance Reader dashboard. Exercise interactions, validate visuals and responsiveness, and catch logical/content errors (e.g., numeric scales off by 10^X, missing account names, stale or mismatched totals). Investigate and resolve the first reproducible issue that surfaces from UI behaviour, console/log noise, visual defects, or incorrect displayed data.
 
+## Approach Selection (single-pass vs staged)
+- Before coding, size the task: layers/components involved, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
+- Choose and state the path:
+  - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.
+  - Staged ToDo list if cross-layer or 3+ modules, possible contract/schema/API updates, expected diff ~150–300 LoC, multiple toolchains or new tests/harness required, or root cause unclear; outline steps before coding.
+  - Concept document if a larger refactor is implied (architecture/schema shifts, >300 LoC, multiple subsystems, or deprecations/migrations); draft before implementation.
+- Follow the chosen approach in the loop below.
+
 ## Repository Landmarks
 - Repository root: `/home/andreas/coding/repos/ha-pp-reader`
 - Integration code: `custom_components/pp_reader/`

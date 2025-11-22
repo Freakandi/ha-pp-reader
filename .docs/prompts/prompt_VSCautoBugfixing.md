@@ -11,6 +11,13 @@ Perform an unattended bug-hunting loop for the `pp_reader` integration by launch
 - Dedicated virtualenv: `venv-ha/`
 
 ## Procedure
+### Approach Selection (single-pass vs staged)
+- Before coding, size the task: layers/components touched, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
+- Choose the path and state it upfront:
+  - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, and only one toolchain with extendable existing tests.
+  - Staged ToDo list if cross-layer or 3+ modules, possible contract/schema/API updates, expected diff ~150–300 LoC, multiple toolchains or new tests/harness required, or root cause unclear; outline the steps before coding.
+  - Concept document if a larger refactor is implied (architecture/schema shifts, >300 LoC, multiple subsystems, deprecations/migrations); draft before implementing.
+- Apply the chosen approach and proceed.
 1. **Verify the Environment**
    - In every shell run `source venv-ha/bin/activate`; the older `.venv` is unused here.
    - Confirm the interpreter is wired up by executing `hass --version` (expected `2025.11.1`).

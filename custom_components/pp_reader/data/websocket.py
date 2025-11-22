@@ -320,6 +320,7 @@ def _positions_payload(portfolio: Any) -> list[dict[str, Any]]:
         entry: dict[str, Any] = {
             "security_uuid": position.security_uuid,
             "name": position.name,
+            "currency_code": position.currency_code,
             "current_holdings": round_currency(
                 position.current_holdings,
                 decimals=6,

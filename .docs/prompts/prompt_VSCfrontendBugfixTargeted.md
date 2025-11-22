@@ -29,6 +29,14 @@ Error summary (required):
 Supporting logs, console output, or reproduction steps (optional):
 <<<LOG_OR_REPRO_STEPS_GO_HERE>>>
 
+## Approach Selection (single-pass vs staged)
+- Before coding, size the task: impacted layers/components, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
+- Choose and state the path:
+  - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.
+  - Staged ToDo list if cross-layer or 3+ modules, possible contract/schema/API updates, expected diff ~150–300 LoC, multiple toolchains or new tests/harness required, or root cause unclear; outline steps before coding.
+  - Concept document if a larger refactor is implied (architecture/schema shifts, >300 LoC, multiple subsystems, deprecations/migrations); draft before implementation.
+- Apply the chosen approach through the workflow below.
+
 ## Working Instructions
 1. Read the error summary and supporting material to identify the suspected defect. Existing behaviour is correct unless evidence shows otherwise.
 2. Reproduce the issue using HA + Vite when applicable (panel URL: `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173`; login `dev` / `dev`).

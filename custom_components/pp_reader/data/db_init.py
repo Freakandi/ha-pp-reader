@@ -13,7 +13,10 @@ from .db_schema import (
     PORTFOLIO_METRICS_SCHEMA,
     SECURITY_METRICS_SCHEMA,
 )
-from .migrations import ensure_snapshot_tables
+from .migrations import (
+    ensure_ingestion_transaction_eur_column,
+    ensure_snapshot_tables,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _METRIC_SCHEMA_BUNDLES = (
@@ -107,6 +110,7 @@ def ensure_ingestion_tables(conn: sqlite3.Connection) -> None:
     """Create ingestion staging tables if they are missing."""
     for stmt in _iter_ingestion_ddl():
         conn.execute(stmt)
+    ensure_ingestion_transaction_eur_column(conn)
 
 
 def clear_ingestion_stage(conn: sqlite3.Connection) -> None:

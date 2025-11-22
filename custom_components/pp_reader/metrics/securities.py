@@ -125,10 +125,10 @@ def _build_security_metric_record(
         purchase_security_total = _coerce_float(row["security_currency_total"])
         purchase_account_total = _coerce_float(row["account_currency_total"])
 
+        currency = (row["currency_code"] or "EUR").strip().upper()
+
         current_value_eur = cent_to_eur(current_value_cents, default=None)
         purchase_value_eur = cent_to_eur(purchase_value_cents, default=None)
-
-        currency = (row["currency_code"] or "EUR").strip().upper()
 
         last_price_raw = _coerce_optional_int(row["last_price"])
         last_price_native = None

@@ -214,6 +214,15 @@ async def test_cli_smoketest_generates_normalized_snapshot(
     assert parsed_result is parsed_client
     await canonical_sync.async_sync_ingestion_to_canonical(hass, db_path)
 
+    conn = sqlite3.connect(str(db_path))
+    try:
+        balance_row = conn.execute(
+            "SELECT balance FROM accounts WHERE uuid = ?", ("acc-smoke",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert balance_row and balance_row[0] == 50_000
+
     fx_summary = await smoketest._run_fx_refresh(db_path)
     assert fx_summary["status"] == "ok"
     assert fx_summary["currencies"] == ["USD"]

@@ -250,6 +250,9 @@ async def test_ws_get_portfolio_positions_normalises_currency(
     assert position["last_close_eur"] == pytest.approx(
         round_price(91.0, decimals=6) or 0.0
     )
+    expected_positions = payload["positions"]
+    expected_position = expected_positions[0]
+    assert position["currency_code"] == expected_position["currency_code"]
     assert position["data_state"] == {
         "status": "warning",
         "message": "stale coverage",
@@ -273,3 +276,85 @@ def test_positions_payload_preserves_average_cost() -> None:
         round_price(expected_average_cost["account"], decimals=6) or 0.0
     )
     assert entry["average_cost"]["source"] == expected_average_cost["source"]
+
+
+def test_positions_payload_includes_dual_purchase_totals() -> None:
+    """Non-EUR positions should expose EUR and native purchase totals side by side."""
+    holdings = 150.0
+    purchase_value_eur = 120.0
+    current_value_eur = 180.0
+    purchase_total_native = 300.0  # account & security totals in native currency
+
+    performance_metrics, _ = select_performance_metrics(
+        current_value=current_value_eur,
+        purchase_value=purchase_value_eur,
+        holdings=holdings,
+    )
+
+    position = PositionSnapshot(
+        portfolio_uuid="portfolio-non-eur",
+        security_uuid="security-hkd",
+        name="HKD Equity",
+        currency_code="HKD",
+        current_holdings=holdings,
+        purchase_value=purchase_value_eur,
+        current_value=current_value_eur,
+        average_cost={
+            "eur": purchase_value_eur / holdings,
+            "security": purchase_total_native / holdings,
+            "account": purchase_total_native / holdings,
+            "source": "totals",
+        },
+        performance={
+            "gain_abs": performance_metrics.gain_abs,
+            "gain_pct": performance_metrics.gain_pct,
+            "total_change_eur": performance_metrics.total_change_eur,
+            "total_change_pct": performance_metrics.total_change_pct,
+            "source": performance_metrics.source,
+            "coverage_ratio": performance_metrics.coverage_ratio,
+        },
+        aggregation={
+            "total_holdings": holdings,
+            "purchase_value_eur": purchase_value_eur,
+            "purchase_total_security": purchase_total_native,
+            "purchase_total_account": purchase_total_native,
+        },
+    )
+    portfolio = PortfolioSnapshot(
+        uuid="portfolio-non-eur",
+        name="HKD Depot",
+        current_value=current_value_eur,
+        purchase_value=purchase_value_eur,
+        position_count=1,
+        missing_value_positions=0,
+        performance={
+            "gain_abs": performance_metrics.gain_abs,
+            "gain_pct": performance_metrics.gain_pct,
+            "total_change_eur": performance_metrics.total_change_eur,
+            "total_change_pct": performance_metrics.total_change_pct,
+            "source": performance_metrics.source,
+            "coverage_ratio": performance_metrics.coverage_ratio,
+        },
+        positions=(position,),
+        data_state=SnapshotDataState(),
+    )
+
+    payload = websocket_module._positions_payload(portfolio)
+    assert len(payload) == 1
+    entry = payload[0]
+
+    assert entry["purchase_value"] == pytest.approx(purchase_value_eur)
+    assert entry["average_cost"]["eur"] == pytest.approx(purchase_value_eur / holdings)
+    assert entry["average_cost"]["account"] == pytest.approx(
+        purchase_total_native / holdings
+    )
+    assert entry["average_cost"]["security"] == pytest.approx(
+        purchase_total_native / holdings
+    )
+
+    assert entry["aggregation"]["purchase_total_account"] == pytest.approx(
+        purchase_total_native
+    )
+    assert entry["aggregation"]["purchase_total_security"] == pytest.approx(
+        purchase_total_native
+    )

@@ -489,6 +489,7 @@ INGESTION_SCHEMA = [
         date TEXT,
         currency_code TEXT,
         amount INTEGER,
+        amount_eur_cents INTEGER,        -- Kaufwert in EUR-Cent (FX-berechnet)
         shares INTEGER,
         note TEXT,
         security TEXT,

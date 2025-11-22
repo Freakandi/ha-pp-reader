@@ -239,3 +239,58 @@ async def test_writer_links_transactions_to_units(tmp_path: Path) -> None:
         ]
     finally:
         conn.close()
+
+
+@pytest.mark.asyncio
+async def test_writer_populates_amount_eur_cents(tmp_path: Path) -> None:
+    """Non-EUR transactions should store EUR cents when FX is available."""
+    db_path = tmp_path / "stage.db"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE fx_rates (
+                date TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                rate REAL NOT NULL,
+                fetched_at TEXT,
+                data_source TEXT,
+                provider TEXT,
+                provenance TEXT,
+                PRIMARY KEY (date, currency)
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
+            ("2024-01-01", "USD", 1.1),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    txn = DummyTransaction(
+        uuid="txn-2",
+        type=0,
+        currency_code="USD",
+        amount=110_00,
+        date=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+
+    async with async_ingestion_session(db_path, enable_wal=False) as writer:
+        writer.write_transactions([txn])
+
+    conn = _open_conn(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT amount, amount_eur_cents
+            FROM ingestion_transactions
+            WHERE uuid = ?
+            """,
+            ("txn-2",),
+        ).fetchone()
+        assert row == (11000, 10000)
+    finally:
+        conn.close()

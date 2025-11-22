@@ -6,19 +6,19 @@ Arbeite als Implementierungs-Assistent für das Home Assistant Integration Proje
 
 Ziel:
 Abarbeitung der vollständigen ToDo-Liste für das aktuelle Thema:
-- `.docs/TODO_currency_timeseries.md` (Details siehe `.docs/currency_timeseries.md`)
+- `.docs/TODO_fx_purchase_eur.md` (per-transaction EUR storage + FX handling)
 
 Unterstützende Ressourcen und bisherige Arbeit:
-- `.docs/refactor_roadmap.md`
-- `.docs/legacy_cleanup_strategy.md`
-- `.docs/canonical_pipeline_fix.md`
-- `.docs/TODO_cleanup_diff_sync.md` (Historie/Referenz)
-- Files in `datamodel/`
+- `.docs/native_price/currency_timeseries.md` (FX background)
+- `.docs/native_price/fix_native_purchase.md`
+- `.docs/native_price/TODO_native_avg_purchase_price.md`
+- `.docs/native_price/TODO_fix_native_purchase.md` (historical context)
+- Files in `datamodel/` (schema references)
 - AGENTS.md (Umgebungsregeln), README.md, README-dev.md, CHANGELOG.md, ARCHITECTURE.md
 
 Vorgehensweise (strikt einhalten):
 1. Lade / berücksichtige den aktuellen Stand des Repos und der Docs (insb. bestehende Module, Schema-Konventionen, Event-Formate).
-2. Wähle genau EIN offenes Item (Checkbox [ ]) aus `.docs/TODO_currency_timeseries.md` mit höchster logischer Priorität (Abhängigkeiten beachten). Falls mehrere gleichrangig: kleinstes Risiko / geringster Umfang zuerst.
+2. Wähle genau EIN offenes Item (Checkbox [ ]) aus `.docs/TODO_fx_purchase_eur.md` mit höchster logischer Priorität (Abhängigkeiten beachten). Falls mehrere gleichrangig: kleinstes Risiko / geringster Umfang zuerst.
 3. Beschreibe kurz:
    - Gewähltes Item (Nummer + Text)
    - Warum jetzt (Abhängigkeit / Reihenfolge)

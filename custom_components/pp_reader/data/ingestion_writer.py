@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
@@ -12,6 +13,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from custom_components.pp_reader.data.canonical_sync import _lookup_fx_rate
+from custom_components.pp_reader.util.currency import (
+    cent_to_eur,
+    ensure_exchange_rates_for_dates_sync,
+    eur_to_cent,
+)
 from custom_components.pp_reader.util.datetime import UTC
 
 from .db_init import clear_ingestion_stage, ensure_ingestion_tables
@@ -24,6 +31,8 @@ else:  # pragma: no cover - runtime fallback for typing only
     parsed_models = None  # type: ignore[assignment]
 
 PARSER_META_KEY = "__pp_reader__"
+_LOGGER = logging.getLogger("custom_components.pp_reader.data.ingestion_writer")
+DATABASE_LIST_MIN_COLUMNS = 3
 
 
 @dataclass(slots=True)
@@ -252,12 +261,114 @@ def _build_metadata_blob(
     return payload
 
 
+def _normalize_currency_code(value: str | None) -> str | None:
+    """Return an upper-cased currency code or None for empty values."""
+    if not value:
+        return None
+    normalized = value.strip().upper()
+    return normalized or None
+
+
 class IngestionWriter:
     """Persist parsed portfolio entities into staging tables."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, *, db_path: Path | None = None
+    ) -> None:
         """Store connection reference for subsequent writes."""
         self._conn = conn
+        self._db_path = Path(db_path) if db_path else self._derive_db_path(conn)
+
+    def _ensure_fx_rates(self, requests: dict[Any, set[str]]) -> None:
+        """Ensure FX rates exist for the requested currency/date combinations."""
+        if not requests or self._db_path is None:
+            return
+
+        for tx_date, currencies in requests.items():
+            if not currencies:
+                continue
+            try:
+                ensure_exchange_rates_for_dates_sync(
+                    [tx_date],
+                    set(currencies),
+                    self._db_path,
+                )
+            except Exception:  # pragma: no cover - defensive logging
+                formatted_date = (
+                    tx_date.strftime("%Y-%m-%d")
+                    if hasattr(tx_date, "strftime")
+                    else tx_date
+                )
+                _LOGGER.exception(
+                    "Fehler beim Laden der FX-Kurse für %s (%s)",
+                    formatted_date,
+                    ", ".join(sorted(currencies)),
+                )
+
+    def _compute_amount_eur_cents(
+        self,
+        amount: int | None,
+        currency_code: str | None,
+        tx_date: Any,
+    ) -> int | None:
+        """Return EUR cents for the given transaction or None when unavailable."""
+        currency = _normalize_currency_code(currency_code)
+        if amount in (None, "") or currency is None:
+            return None
+        if currency == "EUR":
+            return int(amount)
+
+        date_str = _to_iso(tx_date)
+        if not date_str:
+            _LOGGER.warning(
+                "Kein Datum für FX-Umrechnung (%s) - amount_eur_cents bleibt NULL",
+                currency,
+            )
+            return None
+
+        rate = _lookup_fx_rate(self._conn, currency, date_str)
+        native_value = cent_to_eur(amount, default=None)
+        if rate in (None, 0) or native_value is None:
+            _LOGGER.warning(
+                "Kein FX-Kurs gefunden für %s zum %s - amount_eur_cents bleibt NULL",
+                currency,
+                date_str,
+            )
+            return None
+
+        try:
+            eur_value = native_value / float(rate)
+        except (TypeError, ValueError, ZeroDivisionError):
+            _LOGGER.warning(
+                "Ungültiger FX-Kurs für %s zum %s - amount_eur_cents bleibt NULL",
+                currency,
+                date_str,
+            )
+            return None
+
+        return eur_to_cent(eur_value, default=None)
+
+    @staticmethod
+    def _derive_db_path(conn: sqlite3.Connection) -> Path | None:
+        """Return the SQLite file path for the active connection if available."""
+        try:
+            rows = conn.execute("PRAGMA database_list").fetchall()
+        except sqlite3.Error:
+            _LOGGER.debug("Unable to resolve database path via PRAGMA database_list")
+            return None
+
+        for row in rows:
+            if len(row) < DATABASE_LIST_MIN_COLUMNS:
+                continue
+            name = row[1]
+            path = row[2]
+            if (
+                name == "main"
+                and path
+                and path not in {":memory:", "file::memory:?cache=shared"}
+            ):
+                return Path(path)
+        return None
 
     def write_accounts(self, accounts: Sequence[parsed_models.ParsedAccount]) -> None:
         """Persist parsed accounts into the staging layer."""
@@ -378,12 +489,27 @@ class IngestionWriter:
         if not transactions:
             return
 
+        fx_requests: dict[Any, set[str]] = {}
         txn_rows: list[tuple[Any, ...]] = []
         unit_payload: list[
             tuple[str, Sequence[parsed_models.ParsedTransactionUnit]]
         ] = []
 
         for txn in transactions:
+            currency = _normalize_currency_code(getattr(txn, "currency_code", None))
+            has_date = getattr(txn, "date", None) is not None
+            if currency and currency != "EUR" and has_date:
+                fx_requests.setdefault(txn.date, set()).add(currency)
+
+        if fx_requests:
+            self._ensure_fx_rates(fx_requests)
+
+        for txn in transactions:
+            amount_eur_cents = self._compute_amount_eur_cents(
+                getattr(txn, "amount", None),
+                getattr(txn, "currency_code", None),
+                getattr(txn, "date", None),
+            )
             txn_rows.append(
                 (
                     txn.uuid,
@@ -397,6 +523,7 @@ class IngestionWriter:
                     _to_iso(txn.date),
                     txn.currency_code,
                     txn.amount,
+                    amount_eur_cents,
                     txn.shares,
                     txn.note,
                     txn.security,
@@ -411,10 +538,10 @@ class IngestionWriter:
             """
             INSERT OR REPLACE INTO ingestion_transactions (
                 uuid, type, account, portfolio, other_account, other_portfolio,
-                other_uuid, other_updated_at, date, currency_code, amount, shares,
-                note, security, source, updated_at
+                other_uuid, other_updated_at, date, currency_code, amount,
+                amount_eur_cents, shares, note, security, source, updated_at
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             txn_rows,
@@ -535,7 +662,7 @@ async def async_ingestion_session(
         if reset_stage:
             await asyncio.to_thread(clear_ingestion_stage, conn)
 
-        writer = IngestionWriter(conn)
+        writer = IngestionWriter(conn, db_path=db_path)
         try:
             yield writer
             await asyncio.to_thread(conn.commit)
