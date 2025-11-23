@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from types import SimpleNamespace
 from typing import Any
 
@@ -226,3 +227,33 @@ async def test_enrichment_pipeline_disabled_still_runs_metrics(
 
     recorded = [label for label, _payload in calls]
     assert recorded == ["metrics", "normalization"]
+
+
+async def test_history_queue_processing_drains_multiple_batches(
+    hass, tmp_path, monkeypatch
+) -> None:
+    """Queue processing keeps requesting batches until the queue is empty."""
+    coordinator = await _create_coordinator(hass, tmp_path)
+
+    batches = deque(
+        [
+            {1: [object()], 2: [object()]},
+            {3: [object()]},
+            {},
+        ]
+    )
+    calls: list[int] = []
+
+    async def _fake_process(self, *, limit: int = 10):
+        calls.append(limit)
+        return batches.popleft()
+
+    monkeypatch.setattr(
+        "custom_components.pp_reader.prices.history_queue.HistoryQueueManager.process_pending_jobs",
+        _fake_process,
+    )
+
+    await coordinator._process_history_queue_once(reason="test")
+
+    assert calls == [15, 15, 15]
+    assert not batches

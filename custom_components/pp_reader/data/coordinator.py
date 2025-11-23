@@ -649,30 +649,42 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         async with self._history_lock:
             manager = HistoryQueueManager(self.db_path)
-            try:
-                results = await manager.process_pending_jobs(limit=15)
-            except Exception:  # noqa: BLE001 - defensive logging
-                _LOGGER.warning(
-                    (
-                        "History-Queue: Verarbeitung fehlgeschlagen "
-                        "(entry_id=%s reason=%s)"
-                    ),
-                    self.entry_id,
-                    reason,
-                    exc_info=True,
-                )
-                return
+            total_jobs = 0
+            total_candles = 0
+            iterations = 0
 
-            job_count = len(results)
-            candle_total = sum(len(candles) for candles in results.values())
-            if job_count:
+            while True:
+                iterations += 1
+                try:
+                    results = await manager.process_pending_jobs(limit=15)
+                except Exception:  # noqa: BLE001 - defensive logging
+                    _LOGGER.warning(
+                        (
+                            "History-Queue: Verarbeitung fehlgeschlagen "
+                            "(entry_id=%s reason=%s batch=%s)"
+                        ),
+                        self.entry_id,
+                        reason,
+                        iterations,
+                        exc_info=True,
+                    )
+                    return
+
+                if not results:
+                    break
+
+                total_jobs += len(results)
+                total_candles += sum(len(candles) for candles in results.values())
+
+            if total_jobs:
                 _LOGGER.info(
                     (
-                        "History-Queue: verarbeitet jobs=%s candles=%s "
+                        "History-Queue: verarbeitet jobs=%s candles=%s batches=%s "
                         "(entry_id=%s reason=%s)"
                     ),
-                    job_count,
-                    candle_total,
+                    total_jobs,
+                    total_candles,
+                    iterations,
                     self.entry_id,
                     reason,
                 )

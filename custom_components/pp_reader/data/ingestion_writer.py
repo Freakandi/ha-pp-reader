@@ -288,10 +288,12 @@ class IngestionWriter:
             if not currencies:
                 continue
             try:
+                # Reuse staging connection to avoid WAL writer locks during ingestion.
                 ensure_exchange_rates_for_dates_sync(
                     [tx_date],
                     set(currencies),
                     self._db_path,
+                    conn=self._conn,
                 )
             except Exception:  # pragma: no cover - defensive logging
                 formatted_date = (

@@ -30,6 +30,7 @@ Supporting logs, console output, or reproduction steps (optional):
 <<<LOG_OR_REPRO_STEPS_GO_HERE>>>
 
 ## Approach Selection (single-pass vs staged)
+- Do not create workarounds or fallbacks, always go for a direct, clean implementation of desired changes or bugfixes
 - Before coding, size the task: impacted layers/components, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
 - Choose and state the path:
   - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.

@@ -30,9 +30,9 @@
    d) [x] Integration: seed sparse FX, run backfill + aggregation, assert positions (incl. HKD/JPY-style) expose EUR and native averages correctly.
    e) [x] Update/extend existing websocket/overview tests to assert dual-line Kaufpreis for non-EUR holdings and correct gain baseline.
 
-7. [ ] Documentation and ops notes  
-   a) [x] Add short how-to for the backfill command and when to run it after deployment.  
-   b) [x] Note schema change in release notes/CHANGELOG and any expected runtime impact (FX lookups).  
+7. [x] Documentation and ops notes
+   a) [x] Add short how-to for the backfill command and when to run it after deployment.
+   b) [x] Note schema change in release notes/CHANGELOG and any expected runtime impact (FX lookups).
    c) [x] Mention log signals for missing FX and how to remedy (run FX backfill).
 
 Optional

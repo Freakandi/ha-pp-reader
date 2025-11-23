@@ -241,10 +241,71 @@ export function setPortfolioPositionsSnapshot(
     portfolioState.set(portfolioUuid, next);
     return;
   }
-  const normalized = positions.map(clonePositionSnapshot);
+
+  const mergePosition = (
+    base: NormalizedPositionSnapshot | undefined,
+    patch: NormalizedPositionSnapshot,
+  ): NormalizedPositionSnapshot => {
+    const merged: NormalizedPositionSnapshot = base ? clonePositionSnapshot(base) : {} as NormalizedPositionSnapshot;
+
+    const shallowKeys: (keyof NormalizedPositionSnapshot)[] = [
+      'portfolio_uuid',
+      'security_uuid',
+      'name',
+      'currency_code',
+      'current_holdings',
+      'purchase_value',
+      'current_value',
+      'coverage_ratio',
+      'provenance',
+      'metric_run_uuid',
+    ];
+
+    shallowKeys.forEach(key => {
+      if (patch[key] !== undefined) {
+        (merged as any)[key] = patch[key];
+      }
+    });
+
+    const mergeObjectField = (field: keyof NormalizedPositionSnapshot) => {
+      const value = patch[field];
+      if (value && typeof value === 'object') {
+        const baseObj =
+          base && base[field] && typeof base[field] === 'object'
+            ? (base[field] as Record<string, unknown>)
+            : {};
+        (merged as any)[field] = { ...baseObj, ...(value as Record<string, unknown>) };
+      } else if (value !== undefined) {
+        (merged as any)[field] = value;
+      }
+    };
+
+    mergeObjectField('performance');
+    mergeObjectField('aggregation');
+    mergeObjectField('average_cost');
+    mergeObjectField('data_state');
+
+    return merged;
+  };
+
+  const existingPositions = Array.isArray(entry.positions) ? entry.positions : [];
+  const existingBySecurity = new Map(
+    existingPositions
+      .filter((pos) => pos.security_uuid)
+      .map((pos) => [pos.security_uuid as string, pos]),
+  );
+
+  const mergedPositions = positions
+    .filter((candidate): candidate is NormalizedPositionSnapshot => Boolean(candidate))
+    .map((patch) => {
+      const base = patch.security_uuid ? existingBySecurity.get(patch.security_uuid) : undefined;
+      return mergePosition(base, patch);
+    })
+    .map(clonePositionSnapshot);
+
   const next: PortfolioSnapshotWithId = {
     ...entry,
-    positions: normalized,
+    positions: mergedPositions,
   };
   portfolioState.set(portfolioUuid, next);
 }

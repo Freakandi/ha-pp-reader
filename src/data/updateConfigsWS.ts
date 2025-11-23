@@ -171,6 +171,13 @@ const DIAGNOSTIC_FIELDS: readonly (keyof SnapshotDiagnosticsState)[] = [
   'generated_at',
 ];
 
+type PositionsChunkState = {
+  expected: number;
+  chunks: Map<number, PortfolioPositionRecord[]>;
+};
+
+const positionsChunkBuffers = new Map<string, PositionsChunkState>();
+
 function getDiagnosticKey(kind: DiagnosticSnapshotKind, uuid: string): string {
   return `${kind}:${uuid}`;
 }
@@ -938,6 +945,57 @@ function normalizePortfolioUuid(payload: PortfolioPositionsUpdatePayload | null 
   return null;
 }
 
+function resetPositionsChunkBuffer(portfolioUuid: string): void {
+  positionsChunkBuffers.delete(portfolioUuid);
+}
+
+function normalizeChunkIndex(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function mergePositionsChunk(
+  portfolioUuid: string,
+  chunkIndex: number | null,
+  chunkCount: number | null,
+  positions: PortfolioPositionRecord[],
+): PortfolioPositionRecord[] | null {
+  if (!chunkCount || chunkCount <= 1 || !chunkIndex) {
+    resetPositionsChunkBuffer(portfolioUuid);
+    return positions;
+  }
+
+  const expected = chunkCount;
+  const state =
+    positionsChunkBuffers.get(portfolioUuid) ??
+    ({ expected, chunks: new Map<number, PortfolioPositionRecord[]>() } as PositionsChunkState);
+
+  if (state.expected !== expected) {
+    state.chunks.clear();
+    state.expected = expected;
+  }
+
+  state.chunks.set(chunkIndex, positions);
+  positionsChunkBuffers.set(portfolioUuid, state);
+
+  if (state.chunks.size < expected) {
+    // Warten auf weitere Chunks.
+    return null;
+  }
+
+  const merged: PortfolioPositionRecord[] = [];
+  for (let idx = 1; idx <= expected; idx += 1) {
+    const chunk = state.chunks.get(idx);
+    if (chunk && Array.isArray(chunk)) {
+      merged.push(...chunk);
+    }
+  }
+  resetPositionsChunkBuffer(portfolioUuid);
+  return merged;
+}
+
 function processPortfolioPositionsUpdate(
   update: PortfolioPositionsUpdatePayload | null | undefined,
   root: QueryRoot | null | undefined,
@@ -949,15 +1007,32 @@ function processPortfolioPositionsUpdate(
   }
 
   const error = update?.error;
+  const chunkIndex = normalizeChunkIndex(update?.chunk_index);
+  const chunkCount = normalizeChunkIndex(update?.chunk_count);
   const normalizedPositions = normalizePositionRecords(update?.positions ?? []);
+
+  if (error) {
+    resetPositionsChunkBuffer(portfolioUuid);
+  }
+
+  const mergedPositions = error
+    ? normalizedPositions
+    : mergePositionsChunk(portfolioUuid, chunkIndex, chunkCount, normalizedPositions);
+
+  if (!error && mergedPositions === null) {
+    // Partial chunk received; wait for the remaining pieces.
+    return true;
+  }
+
+  const finalPositions = error ? normalizedPositions : mergedPositions ?? [];
   emitPortfolioPositionsDiagnostics(portfolioUuid, update);
 
   if (!error) {
-    setPortfolioPositions(portfolioUuid, normalizedPositions);
-    setPortfolioPositionsSnapshot(portfolioUuid, normalizedPositions);
+    setPortfolioPositions(portfolioUuid, finalPositions);
+    setPortfolioPositionsSnapshot(portfolioUuid, finalPositions);
   }
 
-  const result = applyPortfolioPositionsToDom(root, portfolioUuid, normalizedPositions, error);
+  const result = applyPortfolioPositionsToDom(root, portfolioUuid, finalPositions, error);
 
   if (result.applied) {
     pendingPortfolioUpdates.delete(portfolioUuid);

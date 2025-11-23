@@ -128,6 +128,8 @@ export const __TEST_ONLY__ = {
     snapshot: SecuritySnapshotDetail | null | undefined,
   ): NormalizedHistoryEntry[] => buildHistorySeriesWithSnapshotPrice(historySeries, snapshot),
   composeAveragePurchaseTooltipForTest: composeAveragePurchaseTooltip,
+  parseHistoryDateForTest: parseHistoryDate,
+  resolveRangeOptionsForTest: resolveRangeOptions,
   selectAveragePurchaseBaselineForTest: selectAveragePurchaseBaseline,
   resolveAccountCurrencyCodeForTest: resolveAccountCurrencyCode,
   resolvePurchaseFxTimestampForTest: resolvePurchaseFxTimestamp,
@@ -328,6 +330,14 @@ function normaliseDate(date: Date): Date {
   return clone;
 }
 
+function toHistoryDateCode(date: Date): number | null {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return toEpochDay(normaliseDate(date));
+}
+
 function toFiniteNumber(value: unknown): number | null {
   return toFiniteCurrency(value);
 }
@@ -371,15 +381,25 @@ function formatErrorLabel(error: unknown, fallback = 'Unbekannter Fehler'): stri
   return fallback;
 }
 
-function resolveRangeOptions(rangeKey: SecurityHistoryRangeKey): SecurityHistoryOptions {
-  const now = normaliseDate(new Date());
+function resolveRangeOptions(
+  rangeKey: SecurityHistoryRangeKey,
+  today?: Date,
+): SecurityHistoryOptions {
+  const now = normaliseDate(today instanceof Date ? today : new Date());
   const rangeDays = RANGE_DAY_COUNTS[rangeKey];
-  const options: SecurityHistoryOptions = { end_date: toEpochDay(now) };
+  const endDateCode = toHistoryDateCode(now);
+  const options: SecurityHistoryOptions = {};
+  if (endDateCode != null) {
+    options.end_date = endDateCode;
+  }
 
   if (Number.isFinite(rangeDays) && rangeDays > 0) {
     const start = new Date(now.getTime());
     start.setUTCDate(start.getUTCDate() - (rangeDays - 1));
-    options.start_date = toEpochDay(start);
+    const startDateCode = toHistoryDateCode(start);
+    if (startDateCode != null) {
+      options.start_date = startDateCode;
+    }
   }
 
   return options;
@@ -390,19 +410,49 @@ function parseHistoryDate(raw: unknown): Date | null {
     return null;
   }
 
-  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
-    return new Date(raw.getTime());
+  if (raw instanceof Date) {
+    return Number.isNaN(raw.getTime()) ? null : new Date(raw.getTime());
   }
 
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    const timestamp = raw * 86400000;
-    if (Number.isFinite(timestamp)) {
-      return new Date(timestamp);
+    const integerValue = Math.trunc(raw);
+    if (integerValue >= 1_000_000 && integerValue <= 99_999_999) {
+      const year = Math.floor(integerValue / 10_000);
+      const month = Math.floor((integerValue % 10_000) / 100);
+      const day = integerValue % 100;
+      const candidate = new Date(Date.UTC(year, month - 1, day));
+      return Number.isNaN(candidate.getTime()) ? null : candidate;
     }
+
+    if (integerValue >= 0 && integerValue <= 100_000) {
+      const candidate = new Date(integerValue * 86400000);
+      return Number.isNaN(candidate.getTime()) ? null : normaliseDate(candidate);
+    }
+
+    if (integerValue > 1e12) {
+      const candidate = new Date(integerValue);
+      return Number.isNaN(candidate.getTime()) ? null : candidate;
+    }
+
+    if (integerValue > 1e9) {
+      const candidate = new Date(integerValue * 1000);
+      return Number.isNaN(candidate.getTime()) ? null : candidate;
+    }
+
+    return null;
   }
 
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
+    if (/^\d{1,6}$/.test(trimmed)) {
+      const numeric = Number.parseInt(trimmed, 10);
+      if (Number.isFinite(numeric) && numeric >= 0 && numeric <= 100_000) {
+        const candidate = new Date(numeric * 86400000);
+        if (!Number.isNaN(candidate.getTime())) {
+          return normaliseDate(candidate);
+        }
+      }
+    }
     if (/^\d{8}$/.test(trimmed)) {
       const year = Number.parseInt(trimmed.slice(0, 4), 10);
       const month = Number.parseInt(trimmed.slice(4, 6), 10) - 1;
@@ -417,11 +467,6 @@ function parseHistoryDate(raw: unknown): Date | null {
           return date;
         }
       }
-    }
-
-    const parsed = Date.parse(trimmed);
-    if (Number.isFinite(parsed)) {
-      return new Date(parsed);
     }
   }
 

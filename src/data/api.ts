@@ -232,6 +232,8 @@ export interface PortfolioPositionsUpdatePayload {
   portfolioUuid?: string | null;
   positions?: NormalizedPositionSnapshot[] | null;
   error?: string | null;
+  chunk_index?: number | null;
+  chunk_count?: number | null;
   normalized_payload?: NormalizedPayloadMetadata | null;
   coverage_ratio?: number | null;
   provenance?: string | null;

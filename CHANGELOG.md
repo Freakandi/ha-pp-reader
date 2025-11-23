@@ -13,6 +13,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - Config flow validation now streams `.portfolio` archives through `parser_pipeline.async_parse_portfolio` (via a no-op writer) so upload errors reuse the canonical parser instead of the deprecated protobuf helper.
 - `scripts/enrichment_smoketest.py` runs parser → ingestion → metrics → normalization exclusively, removing the redundant diff-sync staging step.
 - The normalized ingestion/dashboard pipeline now runs unconditionally; config entries migrate to version 3 and drop the legacy feature-flag options so diagnostics, sensors, and websockets always read the canonical snapshots.
+- Live price fetch batches now use chunk size 50 (up from 10) to reduce cycle duration and avoid watchdog warnings on larger symbol sets.
 
 ### Removed
 - Deleted `custom_components/pp_reader/data/sync_from_pclient.py`, the deprecated `data/reader.py` shim, and the associated pytest suites; canonical ingestion, metrics, and normalization tables are now the only runtime persistence paths.

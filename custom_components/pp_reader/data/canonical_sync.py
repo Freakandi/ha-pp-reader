@@ -37,6 +37,7 @@ def _sync_ingestion_to_canonical(db_path: Path) -> None:
         _sync_portfolios(conn)
         _sync_securities(conn)
         _sync_portfolio_securities(conn, db_path)
+        _sync_historical_prices(conn)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -114,6 +115,44 @@ def _lookup_fx_rate(
 
     _LOGGER.warning("Kein FX-Kurs gefunden für %s zum %s", normalized, tx_date)
     return None
+
+
+def _sync_historical_prices(conn: sqlite3.Connection) -> None:
+    """Upsert staged historical prices into the canonical table."""
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO historical_prices (
+                security_uuid,
+                date,
+                close,
+                high,
+                low,
+                volume,
+                fetched_at,
+                data_source,
+                provider,
+                provenance
+            )
+            SELECT
+                security_uuid,
+                date,
+                close,
+                high,
+                low,
+                volume,
+                NULL,
+                'portfolio',
+                'portfolio',
+                NULL
+            FROM ingestion_historical_prices
+            """
+        )
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Synchronisieren der historischen Preise aus der Ingestion"
+        )
+        raise
 
 
 def _load_ingestion_transactions(conn: sqlite3.Connection) -> list[Transaction]:

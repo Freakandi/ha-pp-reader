@@ -23,6 +23,10 @@ import { getEntryId } from './data/api';
 import {
   getRegisteredDashboardElements,
   getRegisteredPanelHosts,
+  registerDashboardElement,
+  unregisterDashboardElement,
+  registerPanelHost,
+  unregisterPanelHost,
 } from './dashboard/registry';
 import type {
   DashboardTabDescriptor,
@@ -43,6 +47,12 @@ export {
   handlePortfolioPositionsUpdate,
   flushPendingPositions,
   reapplyPositionsSort,
+};
+export {
+  registerDashboardElement,
+  unregisterDashboardElement,
+  registerPanelHost,
+  unregisterPanelHost,
 };
 
 type AddSwipeEvents = (
@@ -516,6 +526,10 @@ function requestDashboardRender(): void {
     dashboardElement._render();
   }
 }
+
+export const __TEST_ONLY_DASHBOARD = {
+  findDashboardElement,
+};
 
 function notifyExternalRender(page: number): void {
   const dashboardElement = findDashboardElement();

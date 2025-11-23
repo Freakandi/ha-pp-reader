@@ -1291,7 +1291,7 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
     call_count = {"n": 0}
 
     async def _fake_fetch(self, symbols):
-        # Zwei Aufrufe erwartet: 1. Batch (10 Symbole), 2. Batch (1 Symbol)
+        # Zwei Aufrufe erwartet: 1. Batch (CHUNK_SIZE Symbole), 2. Batch (1 Symbol)
         call_count["n"] += 1
         if call_count["n"] == 1:
             # Simulierter Chunk-Fehler

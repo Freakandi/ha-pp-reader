@@ -2,7 +2,7 @@
 Queue management for historical price ingestion.
 
 Coordinates creation of Yahoo history jobs backed by the `price_history_queue`
-table and persists fetched candles into the ingestion staging tables.
+table and persists fetched candles into the canonical history store.
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ else:
     ParsedSecurityType = Any
 
 _DEFAULT_LOOKBACK_DAYS = 365
+_REFRESH_OVERLAP_DAYS = 30
 
 
 def _normalize_symbol_token(value: str | None) -> str | None:
@@ -223,10 +224,11 @@ class HistoryQueueManager:
                     if latest_epoch is None:
                         job_start_date = start_floor
                     else:
-                        job_start_date = _latest_epoch_to_date(
-                            latest_epoch
-                        ) + timedelta(
-                            days=1,
+                        latest_date = _latest_epoch_to_date(latest_epoch)
+                        overlap = min(_REFRESH_OVERLAP_DAYS, lookback_days)
+                        job_start_date = max(
+                            start_floor,
+                            latest_date - timedelta(days=overlap - 1),
                         )
 
                     if job_start_date > today:
@@ -425,7 +427,7 @@ def _persist_candles(
     try:
         conn.executemany(
             """
-            INSERT OR REPLACE INTO ingestion_historical_prices (
+            INSERT OR REPLACE INTO historical_prices (
                 security_uuid,
                 date,
                 close,

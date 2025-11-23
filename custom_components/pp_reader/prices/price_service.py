@@ -169,6 +169,52 @@ TOTAL_VALUE_MATCH_EPSILON = 1e-6
 
 _LOGGER = logging.getLogger(__name__)
 
+_ALLOWED_PORTFOLIO_SNAPSHOT_FIELDS = {
+    "uuid",
+    "name",
+    "performance",
+    "coverage_ratio",
+    "provenance",
+    "metric_run_uuid",
+    "generated_at",
+    "position_count",
+    "missing_value_positions",
+    "has_current_value",
+    "current_value",
+    "purchase_value",
+    "purchase_sum",
+}
+_ALLOWED_POSITION_FIELDS = {
+    "security_uuid",
+    "name",
+    "currency_code",
+    "current_holdings",
+    "purchase_value",
+    "current_value",
+    "coverage_ratio",
+    "provenance",
+    "metric_run_uuid",
+    "data_state",
+    "fx_unavailable",
+}
+
+
+def _slim_position_payload(position: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a trimmed position payload suitable for live push events."""
+    slim: dict[str, Any] = {
+        key: value for key, value in position.items() if key in _ALLOWED_POSITION_FIELDS
+    }
+
+    performance = position.get("performance")
+    if isinstance(performance, Mapping):
+        slim["performance"] = {
+            key: performance.get(key)
+            for key in ("gain_abs", "gain_pct")
+            if performance.get(key) is not None
+        }
+
+    return slim
+
 
 def _normalize_scaled_quantity(value: Any) -> float:
     """Interpret raw numeric values that may already be scaled by 1e8."""
@@ -1461,7 +1507,11 @@ def _compose_portfolio_payload_from_snapshots(
         if not isinstance(data, Mapping):
             continue
 
-        base = dict(snapshot_map.get(pid, {}))
+        base = {
+            key: value
+            for key, value in dict(snapshot_map.get(pid, {})).items()
+            if key in _ALLOWED_PORTFOLIO_SNAPSHOT_FIELDS
+        }
         uuid = data.get("uuid") or base.get("uuid") or pid
         entry: dict[str, Any] = {"uuid": str(uuid)}
         entry.update({k: v for k, v in base.items() if k not in entry})
@@ -1507,12 +1557,11 @@ def _build_positions_event_entry(
     payload_positions: list[dict[str, Any]] = []
     if isinstance(positions, list):
         for position in positions:
-            if isinstance(position, Mapping):
-                payload_positions.append(dict(position))
-            else:
-                payload_positions.append(position)
-    elif positions:
-        payload_positions = list(positions)
+            if not isinstance(position, Mapping):
+                continue
+            payload_positions.append(_slim_position_payload(position))
+    elif positions and isinstance(positions, Mapping):
+        payload_positions.append(_slim_position_payload(positions))
     entry: dict[str, Any] = {
         "portfolio_uuid": portfolio_uuid,
         "positions": payload_positions,

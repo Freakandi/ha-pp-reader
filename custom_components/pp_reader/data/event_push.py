@@ -95,6 +95,70 @@ def _chunk_sequence_payload(
     return chunks
 
 
+def _chunk_positions_entry_payloads(
+    base_payload: dict[str, Any],
+    entries: Sequence[Any],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    """Split portfolio_positions entries into recorder-safe chunks."""
+    chunked_payloads: list[dict[str, Any]] = []
+
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+
+        positions = entry.get("positions")
+        if not _is_sequence(positions):
+            continue
+
+        entry_base = {k: v for k, v in entry.items() if k != "positions"}
+        pos_list = list(positions)
+        if not pos_list:
+            continue
+
+        position_chunks: list[list[Any]] = []
+        current: list[Any] = []
+
+        for position in pos_list:
+            current.append(position)
+            candidate_entry = {**entry_base, "positions": list(current)}
+            candidate_payload = {**base_payload, "data": [candidate_entry]}
+            if _estimate_event_size(candidate_payload) > max_bytes:
+                if len(current) == 1:
+                    # Single position already exceeds the limit, emit as-is.
+                    position_chunks.append(list(current))
+                    current = []
+                    continue
+
+                # Flush previous chunk without the oversized item.
+                current.pop()
+                position_chunks.append(list(current))
+                current = [position]
+
+        if current:
+            position_chunks.append(list(current))
+
+        if not position_chunks:
+            continue
+
+        if len(position_chunks) == 1:
+            chunk_entry = {**entry_base, "positions": position_chunks[0]}
+            chunked_payloads.append({**base_payload, "data": [chunk_entry]})
+            continue
+
+        chunk_count = len(position_chunks)
+        for idx, chunk in enumerate(position_chunks, start=1):
+            chunk_entry = {
+                **entry_base,
+                "positions": chunk,
+                "chunk_index": idx,
+                "chunk_count": chunk_count,
+            }
+            chunked_payloads.append({**base_payload, "data": [chunk_entry]})
+
+    return chunked_payloads
+
+
 @callback
 def _push_update(
     hass: HomeAssistant | None,
@@ -116,6 +180,41 @@ def _push_update(
     payload = {**base_payload, "data": compact_data}
 
     payload_size = _estimate_event_size(payload)
+    if payload_size > EVENT_DATA_MAX_BYTES and data_type == "portfolio_positions":
+        chunk_payloads = _chunk_positions_entry_payloads(
+            base_payload,
+            compact_data if _is_sequence(compact_data) else [compact_data],
+            EVENT_DATA_MAX_BYTES - _EVENT_SIZE_MARGIN,
+        )
+        if chunk_payloads:
+            _LOGGER.warning(
+                (
+                    "Event payload for %s exceeds recorder limit (%d > %d bytes). "
+                    "Split portfolio_positions into %d chunk(s)."
+                ),
+                data_type,
+                payload_size,
+                EVENT_DATA_MAX_BYTES,
+                len(chunk_payloads),
+            )
+            for chunk_payload in chunk_payloads:
+                chunk_size = _estimate_event_size(chunk_payload)
+                if chunk_size > EVENT_DATA_MAX_BYTES:
+                    _LOGGER.warning(
+                        (
+                            "Chunked %s payload still exceeds recorder limit "
+                            "(%d bytes) - event data may be dropped"
+                        ),
+                        data_type,
+                        chunk_size,
+                    )
+                hass.loop.call_soon_threadsafe(
+                    hass.bus.fire,
+                    EVENT_PANELS_UPDATED,
+                    chunk_payload,
+                )
+            return
+
     if payload_size > EVENT_DATA_MAX_BYTES and _is_sequence(compact_data):
         chunk_payloads = _chunk_sequence_payload(
             base_payload,

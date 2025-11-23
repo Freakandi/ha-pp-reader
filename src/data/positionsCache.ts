@@ -27,6 +27,7 @@ export type PortfolioPositionRecord = BasePositionSnapshot & {
   performance?: PerformanceMetricsPayload | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
+   fx_unavailable?: boolean | null;
   [key: string]: unknown;
 };
 
@@ -79,6 +80,50 @@ function clonePosition(position: PortfolioPositionRecord): PortfolioPositionReco
   return clone;
 }
 
+function mergePositionRecords(
+  base: PortfolioPositionRecord | undefined,
+  patch: PortfolioPositionRecord,
+): PortfolioPositionRecord {
+  const merged = base ? clonePosition(base) : {} as PortfolioPositionRecord;
+
+  const shallowKeys: (keyof PortfolioPositionRecord)[] = [
+    'portfolio_uuid',
+    'security_uuid',
+    'name',
+    'currency_code',
+    'current_holdings',
+    'purchase_value',
+    'current_value',
+    'coverage_ratio',
+    'provenance',
+    'metric_run_uuid',
+    'fx_unavailable',
+  ];
+
+  shallowKeys.forEach(key => {
+    if (patch[key] !== undefined) {
+      (merged as any)[key] = patch[key];
+    }
+  });
+
+  const mergeObjectField = (field: keyof PortfolioPositionRecord) => {
+    const value = patch[field];
+    if (value && typeof value === 'object') {
+      const baseObj = (base && base[field] && typeof base[field] === 'object') ? base[field] as Record<string, unknown> : {};
+      (merged as any)[field] = { ...baseObj, ...(value as Record<string, unknown>) };
+    } else if (value !== undefined) {
+      (merged as any)[field] = value;
+    }
+  };
+
+  mergeObjectField('performance');
+  mergeObjectField('aggregation');
+  mergeObjectField('average_cost');
+  mergeObjectField('data_state');
+
+  return merged;
+}
+
 export function setPortfolioPositions(
   portfolioUuid: string | null | undefined,
   positions: readonly PortfolioPositionRecord[] | null | undefined,
@@ -92,10 +137,28 @@ export function setPortfolioPositions(
     return;
   }
 
-  const normalised = positions
+  if (positions.length === 0) {
+    portfolioPositionsCache.set(portfolioUuid, []);
+    return;
+  }
+
+  const existing = portfolioPositionsCache.get(portfolioUuid) ?? [];
+  const existingBySecurity = new Map(
+    existing
+      .filter(entry => entry.security_uuid)
+      .map(entry => [entry.security_uuid as string, entry]),
+  );
+
+  const merged = positions
     .filter((candidate): candidate is PortfolioPositionRecord => Boolean(candidate))
+    .map(patch => {
+      const key = patch.security_uuid ?? '';
+      const base = key ? existingBySecurity.get(key) : undefined;
+      return mergePositionRecords(base, patch);
+    })
     .map(clonePosition);
-  portfolioPositionsCache.set(portfolioUuid, normalised);
+
+  portfolioPositionsCache.set(portfolioUuid, merged);
 }
 
 export function hasPortfolioPositions(portfolioUuid: string | null | undefined): boolean {

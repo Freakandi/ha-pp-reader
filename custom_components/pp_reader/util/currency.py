@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from math import isfinite
 from typing import TYPE_CHECKING, Any
 
@@ -194,10 +195,11 @@ def ensure_exchange_rates_for_dates_sync(
     dates: Iterable[datetime],
     currencies: set[str],
     db_path: Path,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Proxy to the FX helper without importing it at module import time."""
     helper = _load_fx_helper("ensure_exchange_rates_for_dates_sync")
-    helper(dates, currencies, db_path)
+    helper(dates, currencies, db_path, conn=conn)
 
 
 def load_cached_rate_records_sync(

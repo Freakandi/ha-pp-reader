@@ -29,6 +29,8 @@ YAHOO_SOURCE = "yahoo"
 
 _LOGGER = logging.getLogger(__name__)
 _YAHOOQUERY_IMPORT_ERROR = False
+_YAHOO_DNS_ERROR_TOKEN = "Could not resolve host: guce.yahoo.com"
+_YAHOOQUERY_DNS_WARNED = False
 
 
 def _normalize_datetime(value: datetime | date | str) -> datetime:
@@ -172,6 +174,8 @@ class YahooHistoryFetcher:
                 end=end_str,
             )
         except Exception as exc:  # noqa: BLE001
+            if _handle_yahoo_dns_error(exc):
+                return []
             _LOGGER.warning(
                 "YahooQuery History Fetch Fehler für %s (%s-%s): %s",
                 job.symbol,
@@ -182,6 +186,24 @@ class YahooHistoryFetcher:
             return []
 
         return history
+
+
+def _handle_yahoo_dns_error(exc: Exception) -> bool:
+    """Detect DNS failures hitting Yahoo consent hosts and log once."""
+    global _YAHOOQUERY_DNS_WARNED  # noqa: PLW0603
+
+    message = str(exc)
+    if _YAHOO_DNS_ERROR_TOKEN in message:
+        if not _YAHOOQUERY_DNS_WARNED:
+            _LOGGER.warning(
+                "YahooQuery History DNS-Fehler erkannt (%s). "
+                "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
+                _YAHOO_DNS_ERROR_TOKEN,
+            )
+            _YAHOOQUERY_DNS_WARNED = True
+        return True
+
+    return False
 
 
 def _normalize_history(symbol: str, history: object) -> list[HistoryCandle]:
@@ -296,6 +318,8 @@ def _coerce_timestamp(value: object) -> datetime:
     result: datetime | None = None
 
     if isinstance(value, datetime):
+        result = _normalize_datetime(value)
+    elif isinstance(value, date):
         result = _normalize_datetime(value)
     elif value is None:
         result = None

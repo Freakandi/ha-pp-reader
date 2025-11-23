@@ -104,8 +104,12 @@ def discover_active_currencies(db_path: Path) -> set[str]:
     return {code for code in currencies if code != "EUR"}
 
 
-def _load_rates_for_date_sync(db_path: Path, date: str) -> dict[str, float]:
-    records = load_fx_rates_for_date(db_path, date)
+def _load_rates_for_date_sync(
+    db_path: Path,
+    date: str,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, float]:
+    records = load_fx_rates_for_date(db_path, date, conn=conn)
     result: dict[str, float] = {}
     for record in records:
         try:
@@ -119,11 +123,18 @@ def _load_rates_for_date_sync(db_path: Path, date: str) -> dict[str, float]:
     return result
 
 
-def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
+def _save_rates_sync(
+    db_path: Path,
+    date: str,
+    rates: dict[str, float],
+    conn: sqlite3.Connection | None = None,
+) -> None:
     if not rates:
         return
     with _WRITE_LOCK:
-        conn = sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
+        local_conn = conn or sqlite3.connect(
+            str(db_path), timeout=SQLITE_TIMEOUT
+        )
         try:
             fetched_at = (
                 datetime.now(tz=UTC)
@@ -144,13 +155,21 @@ def _save_rates_sync(db_path: Path, date: str, rates: dict[str, float]) -> None:
                     provider=FRANKFURTER_PROVIDER,
                     provenance=provenance,
                 )
-                upsert_fx_rate(db_path, record, conn=conn)
-            conn.commit()
+                upsert_fx_rate(db_path, record, conn=local_conn)
+            if conn is None:
+                local_conn.commit()
         finally:
-            conn.close()
+            if conn is None:
+                local_conn.close()
 
 
-async def _load_rates_for_date(db_path: Path, date: str) -> dict[str, float]:
+async def _load_rates_for_date(
+    db_path: Path,
+    date: str,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, float]:
+    if conn is not None:
+        return _load_rates_for_date_sync(db_path, date, conn=conn)
     return await _execute_db(_load_rates_for_date_sync, db_path, date)
 
 
@@ -159,6 +178,7 @@ async def _save_rates(
     date: str,
     rates: dict[str, float],
     *,
+    conn: sqlite3.Connection | None = None,
     retries: int = 3,
     initial_delay: float = 0.5,
 ) -> None:
@@ -170,7 +190,10 @@ async def _save_rates(
 
     for attempt in range(1, retries + 1):
         try:
-            await _execute_db(_save_rates_sync, db_path, date, rates)
+            if conn is not None:
+                _save_rates_sync(db_path, date, rates, conn=conn)
+            else:
+                await _execute_db(_save_rates_sync, db_path, date, rates)
         except sqlite3.OperationalError as err:
             if "database is locked" not in str(err).lower():
                 raise
@@ -370,7 +393,10 @@ def load_cached_rate_records_sync(
 
 
 async def ensure_exchange_rates_for_dates(
-    dates: list[datetime], currencies: set[str], db_path: Path
+    dates: list[datetime],
+    currencies: set[str],
+    db_path: Path,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
     if not currencies:
@@ -378,7 +404,7 @@ async def ensure_exchange_rates_for_dates(
 
     for dt in dates:
         date_str = dt.strftime("%Y-%m-%d")
-        existing = await _load_rates_for_date(db_path, date_str)
+        existing = await _load_rates_for_date(db_path, date_str, conn=conn)
         missing = currencies - set(existing.keys())
 
         if missing:
@@ -390,7 +416,7 @@ async def ensure_exchange_rates_for_dates(
                     initial_delay=FETCH_BACKOFF_SECONDS,
                 )
                 if fetched:
-                    await _save_rates(db_path, date_str, fetched)
+                    await _save_rates(db_path, date_str, fetched, conn=conn)
                 elif _should_log_warning(date_str, missing):
                     _LOGGER.warning(
                         "Keine Kurse erhalten für %s am %s", missing, date_str
@@ -400,18 +426,29 @@ async def ensure_exchange_rates_for_dates(
 
 
 def ensure_exchange_rates_for_dates_sync(
-    dates: list[datetime], currencies: set[str], db_path: Path
+    dates: list[datetime],
+    currencies: set[str],
+    db_path: Path,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Ensure required exchange rates exist using a synchronous wrapper."""
 
     def run_async_task(
-        dates: list[datetime], currencies: set[str], db_path: Path
+        dates: list[datetime],
+        currencies: set[str],
+        db_path: Path,
+        conn: sqlite3.Connection | None = None,
     ) -> None:
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
             loop.run_until_complete(
-                ensure_exchange_rates_for_dates(dates, currencies, db_path)
+                ensure_exchange_rates_for_dates(
+                    dates,
+                    currencies,
+                    db_path,
+                    conn=conn,
+                )
             )
         finally:
             asyncio.set_event_loop(None)
@@ -419,4 +456,4 @@ def ensure_exchange_rates_for_dates_sync(
                 loop.close()
 
     if currencies and dates:
-        run_async_task(dates, currencies, db_path)
+        run_async_task(dates, currencies, db_path, conn)

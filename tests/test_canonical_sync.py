@@ -205,3 +205,70 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
         assert row["avg_price_account"] == pytest.approx(2.0)
     finally:
         conn.close()
+
+
+def test_sync_historical_prices_populates_canonical(tmp_path: Path) -> None:
+    """Staged history rows should be upserted into historical_prices."""
+    db_path = tmp_path / "history.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute(
+            """
+            CREATE TABLE ingestion_historical_prices (
+                security_uuid TEXT,
+                date INTEGER,
+                close INTEGER,
+                high INTEGER,
+                low INTEGER,
+                volume INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE historical_prices (
+                security_uuid TEXT,
+                date INTEGER,
+                close INTEGER,
+                high INTEGER,
+                low INTEGER,
+                volume INTEGER,
+                fetched_at TEXT,
+                data_source TEXT,
+                provider TEXT,
+                provenance TEXT,
+                PRIMARY KEY (security_uuid, date)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT INTO ingestion_historical_prices (security_uuid, date, close, high, low, volume)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("sec-hist", 20240101, 123_450_000_000, 124_000_000_000, 122_000_000_000, 10_000),
+        )
+        conn.commit()
+
+        canonical_sync._sync_historical_prices(conn)
+
+        row = conn.execute(
+            """
+            SELECT security_uuid, date, close, high, low, volume, data_source, provider, fetched_at
+            FROM historical_prices
+            """
+        ).fetchone()
+        assert row is not None
+        assert row["security_uuid"] == "sec-hist"
+        assert row["date"] == 20240101
+        assert row["close"] == 123_450_000_000
+        assert row["high"] == 124_000_000_000
+        assert row["low"] == 122_000_000_000
+        assert row["volume"] == 10_000
+        assert row["data_source"] == "portfolio"
+        assert row["provider"] == "portfolio"
+        assert row["fetched_at"] is None
+    finally:
+        conn.close()

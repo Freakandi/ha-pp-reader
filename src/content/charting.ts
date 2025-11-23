@@ -879,6 +879,30 @@ export function updateLineChart(
     return;
   }
 
+  if (points.length === 1) {
+    const single = points[0];
+    const tinyLength = Math.max(
+      0.5,
+      Math.min(4, Math.max(state.width - state.margin.left - state.margin.right, 1) * 0.01),
+    );
+    const lineD = `M${single.x.toFixed(2)} ${single.y.toFixed(2)} h${tinyLength.toFixed(2)}`;
+    state.linePath.setAttribute('d', lineD);
+    if (state.areaPath) {
+      state.areaPath.setAttribute('d', '');
+    }
+    if (state.focusCircle) {
+      state.focusCircle.setAttribute('cx', single.x.toFixed(2));
+      state.focusCircle.setAttribute('cy', single.y.toFixed(2));
+      state.focusCircle.style.opacity = '1';
+    }
+    if (state.focusLine) {
+      state.focusLine.style.opacity = '0';
+    }
+    updateAxes(state);
+    updateBaselineLine(state);
+    return;
+  }
+
   const lineD = buildLinePath(points);
   state.linePath.setAttribute('d', lineD);
 
