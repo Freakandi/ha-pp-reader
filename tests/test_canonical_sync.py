@@ -53,6 +53,7 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
         conn.execute(
             """
             CREATE TABLE ingestion_transactions (
+                uuid TEXT,
                 portfolio TEXT,
                 security TEXT,
                 type INTEGER,
@@ -97,15 +98,18 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
         conn.execute(
             """
             INSERT INTO ingestion_transactions (
-                portfolio, security, type, currency_code, amount, shares, date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                uuid, portfolio, security, type, currency_code, amount, amount_eur_cents,
+                shares, date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                "tx-1",
                 "p-1",
                 "s-1",
                 2,  # PURCHASE
                 "HKD",
                 10_000,  # cents in native currency
+                None,
                 100,  # shares
                 "2024-01-01",
             ),
@@ -132,6 +136,7 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
         conn.execute(
             """
             CREATE TABLE ingestion_transactions (
+                uuid TEXT,
                 portfolio TEXT,
                 security TEXT,
                 type INTEGER,
@@ -164,12 +169,13 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
         conn.executemany(
             """
             INSERT INTO ingestion_transactions (
-                portfolio, security, type, currency_code, amount, amount_eur_cents,
+                uuid, portfolio, security, type, currency_code, amount, amount_eur_cents,
                 shares, date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
+                    "tx-1",
                     "p-1",
                     "s-1",
                     2,  # PURCHASE
@@ -180,6 +186,7 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
                     "2024-02-01",
                 ),
                 (
+                    "tx-2",
                     "p-1",
                     "s-1",
                     2,
@@ -203,6 +210,115 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
         assert row["account_currency_total"] == pytest.approx(300.0)
         assert row["avg_price_security"] == pytest.approx(2.0)
         assert row["avg_price_account"] == pytest.approx(2.0)
+    finally:
+        conn.close()
+
+
+def test_sync_portfolio_securities_prefers_fx_units(tmp_path: Path) -> None:
+    """FX unit totals should populate security-currency aggregates."""
+    db_path = tmp_path / "fx_units.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute(
+            """
+            CREATE TABLE ingestion_transactions (
+                uuid TEXT,
+                portfolio TEXT,
+                security TEXT,
+                type INTEGER,
+                currency_code TEXT,
+                amount INTEGER,
+                amount_eur_cents INTEGER,
+                shares INTEGER,
+                date TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE ingestion_transaction_units (
+                transaction_uuid TEXT,
+                type INTEGER,
+                amount INTEGER,
+                currency_code TEXT,
+                fx_amount INTEGER,
+                fx_currency_code TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE securities (
+                uuid TEXT,
+                name TEXT,
+                currency_code TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE portfolio_securities (
+                portfolio_uuid TEXT,
+                security_uuid TEXT,
+                current_holdings INTEGER,
+                purchase_value INTEGER,
+                avg_price_native REAL,
+                avg_price_security REAL,
+                avg_price_account REAL,
+                security_currency_total REAL,
+                account_currency_total REAL,
+                current_value INTEGER
+            )
+            """
+        )
+
+        conn.execute(
+            "INSERT INTO securities (uuid, name, currency_code) VALUES (?, ?, ?)",
+            ("sec-1", "FX Equity", "USD"),
+        )
+        conn.execute(
+            """
+            INSERT INTO ingestion_transactions (
+                uuid, portfolio, security, type, currency_code, amount, amount_eur_cents,
+                shares, date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "tx-fx",
+                "p-1",
+                "sec-1",
+                2,
+                "EUR",
+                50_000,  # 500 EUR
+                50_000,
+                100,
+                "2024-03-01",
+            ),
+        )
+        conn.executemany(
+            """
+            INSERT INTO ingestion_transaction_units (
+                transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("tx-fx", 0, 50_000, "EUR", 60_000, "USD"),
+                ("tx-fx", 2, 0, "EUR", 2_000, "USD"),
+            ],
+        )
+        conn.commit()
+
+        canonical_sync._sync_portfolio_securities(conn, db_path)
+
+        row = conn.execute("SELECT * FROM portfolio_securities").fetchone()
+        assert row is not None
+        assert row["current_holdings"] == 100
+        assert row["purchase_value"] == 50_000
+        assert row["account_currency_total"] == pytest.approx(500.0)
+        assert row["security_currency_total"] == pytest.approx(620.0)
+        assert row["avg_price_security"] == pytest.approx(6.2)
+        assert row["avg_price_account"] == pytest.approx(5.0)
     finally:
         conn.close()
 

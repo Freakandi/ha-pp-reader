@@ -9,7 +9,6 @@ import {
   updatePortfolioFooterFromDom,
 } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
-import { accountsTabDescriptor } from './views/portfolio/accounts';
 import {
   handleAccountUpdate,
   handleLastFileUpdate,
@@ -111,7 +110,6 @@ const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
-  accountsTabDescriptor,
 ];
 
 const detailTabRegistry = new Map<string, DashboardTabDescriptor>();

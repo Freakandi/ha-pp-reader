@@ -327,7 +327,8 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
     if not units:
         return None, None, None
 
-    entries: list[dict[str, Any]]
+    entries: list[dict[str, Any]] = []
+    fallback_unit: dict[str, Any] | None = None
     if isinstance(units, list):
         entries = [entry for entry in units if isinstance(entry, dict)]
     elif isinstance(units, dict):
@@ -335,7 +336,7 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
         if isinstance(nested, list):
             entries = [entry for entry in nested if isinstance(entry, dict)]
         else:
-            return None, None, None
+            fallback_unit = units
     else:
         return None, None, None
 
@@ -370,6 +371,22 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
 
         if native_amount is not None and account_amount is not None:
             break
+
+    if native_amount is None and fallback_unit:
+        simple_fx_amount = fallback_unit.get("fx_amount")
+        converted_native = cent_to_eur(simple_fx_amount)
+        if converted_native is not None:
+            native_amount = converted_native
+
+        if native_currency is None:
+            currency = fallback_unit.get("fx_currency_code")
+            if isinstance(currency, str):
+                native_currency = currency
+
+        if account_amount is None:
+            converted_account = cent_to_eur(fallback_unit.get("amount"))
+            if converted_account is not None:
+                account_amount = converted_account
 
     return native_amount, native_currency, account_amount
 
@@ -453,8 +470,11 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mi
             security_total = native_amount
             security_currency = native_currency
             if security_total is None:
-                security_total = account_total
-                security_currency = security_currency or tx.currency_code
+                if native_currency and native_currency != tx.currency_code:
+                    security_total = None
+                else:
+                    security_total = account_total
+                    security_currency = security_currency or tx.currency_code
             security_price = (
                 security_total / shares
                 if security_total is not None and shares > 0

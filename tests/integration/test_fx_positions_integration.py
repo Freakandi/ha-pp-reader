@@ -139,6 +139,6 @@ def test_fx_backfill_flows_into_positions(tmp_path: Path) -> None:
     assert position.purchase_value == pytest.approx(120.0)
     assert position.average_cost["eur"] == pytest.approx(120.0 / 150)
     assert position.average_cost["account"] == pytest.approx(300.0 / 150)
-    assert position.average_cost["security"] == pytest.approx(300.0 / 150)
+    assert position.average_cost["security"] == pytest.approx(1200.0 / 150)
     assert position.aggregation["purchase_total_account"] == pytest.approx(300.0)
-    assert position.aggregation["purchase_total_security"] == pytest.approx(300.0)
+    assert position.aggregation["purchase_total_security"] == pytest.approx(1200.0)

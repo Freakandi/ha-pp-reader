@@ -224,6 +224,7 @@ def _load_transaction_units(conn: sqlite3.Connection) -> dict[str, dict[str, Any
         tx_uuid = row["transaction_uuid"]
         if not tx_uuid:
             continue
+
         raw_fx_amount = row["fx_amount"]
         try:
             fx_amount = int(raw_fx_amount) if raw_fx_amount is not None else None
@@ -231,21 +232,46 @@ def _load_transaction_units(conn: sqlite3.Connection) -> dict[str, dict[str, Any
             fx_amount = None
         fx_currency = row["fx_currency_code"]
 
-        # Prefer the first non-empty FX payload per transaction.
-        existing = units.get(tx_uuid)
-        should_replace = (
-            existing is None
-            or (
-                existing.get("fx_amount") in (None, 0)
-                and fx_amount not in (None, 0)
-            )
+        if fx_amount is None:
+            continue
+
+        entry = units.setdefault(
+            tx_uuid,
+            {
+                "fx_amount": 0,
+                "fx_currency_code": None,
+            },
         )
-        if should_replace:
-            units[tx_uuid] = {
-                "fx_amount": fx_amount,
-                "fx_currency_code": fx_currency,
-            }
+        try:
+            entry["fx_amount"] += fx_amount
+        except (TypeError, ValueError):
+            # Skip malformed amounts but keep previously accumulated values.
+            pass
+        if entry.get("fx_currency_code") in (None, "") and fx_currency:
+            entry["fx_currency_code"] = fx_currency
     return units
+
+
+def _load_security_currency_map(conn: sqlite3.Connection) -> dict[str, str]:
+    """Return a mapping of security UUID to its native currency code."""
+    try:
+        cursor = conn.execute(
+            """
+            SELECT uuid, currency_code
+            FROM securities
+            """
+        )
+    except sqlite3.Error:
+        _LOGGER.exception("Fehler beim Laden der Wertpapier-Stammdaten")
+        return {}
+
+    mapping: dict[str, str] = {}
+    for row in cursor.fetchall():
+        uuid = row["uuid"]
+        currency = row["currency_code"]
+        if uuid:
+            mapping[uuid] = (currency or "").strip().upper() or "EUR"
+    return mapping
 
 
 def _compute_account_balances(
@@ -397,6 +423,8 @@ def _sync_securities(conn: sqlite3.Connection) -> None:
 def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
     conn.execute("DELETE FROM portfolio_securities")
     _ = db_path
+    tx_units = _load_transaction_units(conn)
+    security_currency_map = _load_security_currency_map(conn)
     purchase_types = (
         client_pb2.PTransaction.Type.PURCHASE,
         client_pb2.PTransaction.Type.INBOUND_DELIVERY,
@@ -408,6 +436,7 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
     cursor = conn.execute(
         """
         SELECT
+            uuid,
             portfolio,
             security,
             type,
@@ -425,6 +454,7 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
     aggregates: dict[tuple[str, str], dict[str, float]] = {}
 
     for row in cursor.fetchall():
+        tx_uuid = row["uuid"]
         portfolio = row["portfolio"]
         security = row["security"]
         tx_type = int(row["type"] or 0)
@@ -439,6 +469,11 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
         shares_raw = int(row["shares"] or 0)
         currency_code = (row["currency_code"] or "").strip().upper()
         tx_date = row["date"] or ""
+        security_currency = (
+            security_currency_map.get(security)
+            or currency_code
+            or "EUR"
+        )
 
         key = (portfolio, security)
         entry = aggregates.setdefault(
@@ -455,7 +490,53 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
             entry["holdings_raw"] += shares_raw
             account_total = cent_to_eur(amount_raw, default=0.0) or 0.0
             entry["account_currency_total"] += account_total
-            entry["security_currency_total"] += account_total
+
+            security_total: float | None = None
+            unit = tx_units.get(tx_uuid) if tx_uuid else None
+            if unit:
+                unit_currency = (
+                    (unit.get("fx_currency_code") or "").strip().upper()
+                )
+                unit_total = cent_to_eur(
+                    unit.get("fx_amount"), default=None
+                )
+                if (
+                    unit_total is not None
+                    and unit_currency
+                    and unit_currency == security_currency
+                ):
+                    security_total = unit_total
+
+            if security_total is None:
+                if currency_code == security_currency:
+                    security_total = account_total
+                else:
+                    eur_value = (
+                        cent_to_eur(amount_eur_cents, default=None)
+                        if amount_eur_cents is not None
+                        else None
+                    )
+                    if eur_value is not None:
+                        rate_security = _lookup_fx_rate(
+                            conn, security_currency, tx_date
+                        )
+                        if rate_security:
+                            security_total = eur_value * rate_security
+                    if security_total is None:
+                        rate_security = _lookup_fx_rate(
+                            conn, security_currency, tx_date
+                        )
+                        rate_account = _lookup_fx_rate(
+                            conn, currency_code, tx_date
+                        )
+                        if (
+                            rate_security
+                            and rate_account
+                            and rate_account not in (0, None)
+                        ):
+                            security_total = (account_total / rate_account) * rate_security
+
+            entry["security_currency_total"] += security_total or 0.0
 
             if amount_eur_cents is None:
                 _LOGGER.warning(

@@ -138,3 +138,47 @@ def test_harmonic_drive_purchase_without_fx_row(
     assert computation.avg_price_native is None
     assert computation.avg_price_security == pytest.approx(2_488.0, rel=0, abs=1e-6)
     assert computation.avg_price_account == pytest.approx(2_488.0, rel=0, abs=1e-6)
+
+
+def test_simplified_fx_units_are_used_for_native_totals(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """fx_amount/fx_currency_code without nested entries should still feed native totals."""
+    _patch_fx(monkeypatch)
+
+    db_path = tmp_path / "fx.sqlite"
+    transactions = [
+        Transaction(
+            uuid="tx-fx-simple",
+            type=0,
+            account="acct-1",
+            portfolio="pf-1",
+            other_account=None,
+            other_portfolio=None,
+            date="2024-06-10T00:00:00",
+            currency_code="EUR",
+            amount=50_000,
+            shares=100_000_000,
+            security="sec-1",
+        )
+    ]
+    tx_units = {
+        "tx-fx-simple": {
+            "fx_amount": 54_000,
+            "fx_currency_code": "USD",
+        }
+    }
+
+    metrics = securities.db_calculate_sec_purchase_value(
+        transactions,
+        db_path,
+        tx_units=tx_units,
+    )
+
+    computation = metrics[("pf-1", "sec-1")]
+    assert computation.purchase_value == pytest.approx(500.0, rel=0, abs=1e-6)
+    assert computation.security_currency_total == pytest.approx(540.0, rel=0, abs=1e-6)
+    assert computation.account_currency_total == pytest.approx(500.0, rel=0, abs=1e-6)
+    assert computation.avg_price_native == pytest.approx(540.0, rel=0, abs=1e-6)
+    assert computation.avg_price_security == pytest.approx(540.0, rel=0, abs=1e-6)
+    assert computation.avg_price_account == pytest.approx(500.0, rel=0, abs=1e-6)
