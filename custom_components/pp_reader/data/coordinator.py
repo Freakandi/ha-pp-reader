@@ -656,7 +656,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             while True:
                 iterations += 1
                 try:
-                    results = await manager.process_pending_jobs(limit=15)
+                    # Use a larger batch to drain startup history faster while the
+                    # executor concurrency guard inside the fetcher still keeps
+                    # Yahoo requests bounded.
+                    results = await manager.process_pending_jobs(limit=45)
                 except Exception:  # noqa: BLE001 - defensive logging
                     _LOGGER.warning(
                         (

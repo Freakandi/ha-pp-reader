@@ -29,9 +29,15 @@ Error summary (required):
 Supporting logs, console output, or reproduction steps (optional):
 <<<LOG_OR_REPRO_STEPS_GO_HERE>>>
 
-## Approach Selection (single-pass vs staged)
-- Do not create workarounds or fallbacks, always go for a direct, clean implementation of desired changes or bugfixes
-- Before coding, size the task: impacted layers/components, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
+## Order: Workflow Steps 1–3 → Evaluation → Branch and Execute (single-pass vs staged)
+- Do not create workarounds or fallbacks—always go for a direct, clean implementation of the desired change or bugfix.
+- Mandatory first: complete Workflow steps 1–3 (read the error summary, reproduce with HA + Vite, and inspect the implicated frontend code/logs). Do this discovery before any evaluation or approach declaration.
+- After steps 1–3, provide a concise evaluation—restate the observed issue/expected behaviour, list suspected layers/components/data paths, note required toolchains (HA, Vite, Playwright, pytest), rough scope/LoC, and key unknowns. Do not propose fixes yet.
+- Immediately after the evaluation, pick and state the approach with the line `Approach: <implement now | staged plan | concept>` plus a one-sentence rationale.
+- Then execute according to the chosen approach:
+  - `implement now`: proceed with coding the fix using the Working Instructions below with no further user interaction.
+  - `staged plan`: produce a clear ToDo list in .docs/ (no code changes yet) that would be executed next and move to reporting/cleanup.
+  - `concept`: draft the concept document in .docs/ outlining the direction (no code changes yet) and move to reporting/cleanup.
 - Choose and state the path:
   - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.
   - Staged ToDo list if cross-layer or 3+ modules, possible contract/schema/API updates, expected diff ~150–300 LoC, multiple toolchains or new tests/harness required, or root cause unclear; outline steps before coding.
@@ -41,11 +47,12 @@ Supporting logs, console output, or reproduction steps (optional):
 ## Working Instructions
 1. Read the error summary and supporting material to identify the suspected defect. Existing behaviour is correct unless evidence shows otherwise.
 2. Reproduce the issue using HA + Vite when applicable (panel URL: `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173`; login `dev` / `dev`).
-3. Implement the minimal code and asset changes required to resolve the problem without regressing other behaviour.
-4. Add or update focused automated/manual tests when practical.
-5. Rebuild or reload the frontend and rerun the reproduction steps to confirm the fix.
-6. Run relevant project checks (`npm run lint:ts`, `npm run typecheck`, `npm test`, `npm run test:ui -- --project=Chromium`; add backend checks like `./scripts/lint`/`pytest` if backend touched).
-7. Keep edits scoped to the defect; avoid unrelated refactors. Maintain style conventions and compatibility with HA APIs.
+3. Inspect the implicated frontend code/logs to pinpoint the defect and confirm the current behaviour.
+4. Implement the minimal code and asset changes required to resolve the problem without regressing other behaviour.
+5. Add or update focused automated/manual tests when practical.
+6. Rebuild or reload the frontend and rerun the reproduction steps to confirm the fix.
+7. Run relevant project checks (`npm run lint:ts`, `npm run typecheck`, `npm test`, `npm run test:ui -- --project=Chromium`; add backend checks like `./scripts/lint`/`pytest` if backend touched).
+8. Keep edits scoped to the defect; avoid unrelated refactors. Maintain style conventions and compatibility with HA APIs.
 
 ## Output Expectations
 - Lead with what you fixed and how.

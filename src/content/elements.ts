@@ -82,13 +82,27 @@ export function formatValue(
     return `<span class="missing-value" role="note" aria-label="${title}" title="${title}">—</span>`;
   };
 
-  if (['gain_abs', 'gain_pct'].includes(key)) {
+  if (['gain_abs', 'gain_pct', 'day_change_abs', 'day_change_pct'].includes(key)) {
     if (value == null && row) {
       const performance = row.performance;
       if (typeof performance === 'object' && performance !== null) {
-        const metric = (performance as Record<string, unknown>)[key];
-        if (typeof metric === 'number') {
-          value = metric;
+        if (key.startsWith('day_change')) {
+          const dayChange = (performance as Record<string, unknown>).day_change;
+          if (dayChange && typeof dayChange === 'object') {
+            const metric =
+              key === 'day_change_pct'
+                ? (dayChange as Record<string, unknown>).change_pct
+                : (dayChange as Record<string, unknown>).value_change_eur ??
+                  (dayChange as Record<string, unknown>).price_change_eur;
+            if (typeof metric === 'number') {
+              value = metric;
+            }
+          }
+        } else {
+          const metric = (performance as Record<string, unknown>)[key];
+          if (typeof metric === 'number') {
+            value = metric;
+          }
         }
       }
     }
@@ -98,11 +112,11 @@ export function formatValue(
     if (value == null || context?.hasValue === false) {
       return renderMissingValue(missingReason);
     }
-    const numeric = typeof value === 'number' ? value : toNumber(value);
-    if (!Number.isFinite(numeric)) {
-      return renderMissingValue(missingReason);
-    }
-    const symbol = key === 'gain_pct' ? '%' : '€';
+      const numeric = typeof value === 'number' ? value : toNumber(value);
+      if (!Number.isFinite(numeric)) {
+        return renderMissingValue(missingReason);
+      }
+    const symbol = key.endsWith('pct') ? '%' : '€';
     formatted = safeNumber(numeric) + `&nbsp;${symbol}`;
     const cls = resolveRoundedTrend(numeric, 2);
     return `<span class="${cls}">${formatted}</span>`;
@@ -243,6 +257,24 @@ export function makeTable(
                 candidate = metric;
               }
             }
+          } else if (
+            (c.key === 'day_change_abs' || c.key === 'day_change_pct') &&
+            (typeof candidate !== 'number' || !Number.isFinite(candidate))
+          ) {
+            const performance = row.performance;
+            if (typeof performance === 'object' && performance !== null) {
+              const dayChange = (performance as Record<string, unknown>).day_change;
+              if (dayChange && typeof dayChange === 'object') {
+                const metric =
+                  c.key === 'day_change_pct'
+                    ? (dayChange as Record<string, unknown>).change_pct
+                    : (dayChange as Record<string, unknown>).value_change_eur ??
+                      (dayChange as Record<string, unknown>).price_change_eur;
+                if (typeof metric === 'number') {
+                  candidate = metric;
+                }
+              }
+            }
           }
           if (typeof candidate === 'number' && Number.isFinite(candidate)) {
             const numericCandidate = candidate;
@@ -272,6 +304,18 @@ export function makeTable(
       const currentValueSum = sums['current_value'] ?? null;
       if (currentValueSum != null && currentValueSum !== 0) {
         sums['gain_pct'] = (gainAbsSum / (currentValueSum - gainAbsSum)) * 100;
+      }
+    }
+  }
+
+  const dayChangeAbsSum = sums['day_change_abs'] ?? null;
+  if (dayChangeAbsSum != null) {
+    const currentValueSum = sums['current_value'] ?? null;
+    if (currentValueSum != null) {
+      const previousClose = currentValueSum - dayChangeAbsSum;
+      if (previousClose) {
+        sums['day_change_pct'] = (dayChangeAbsSum / previousClose) * 100;
+        sumMeta['day_change_pct'] = { hasValue: true };
       }
     }
   }
@@ -428,10 +472,13 @@ export function sortTableRows(
     const posMap: Record<string, number> = {
       name: 0,
       current_holdings: 1,
-      purchase_value: 2,
-      current_value: 3,
-      gain_abs: 4,
-      gain_pct: 5
+      average_price: 2,
+      purchase_value: 3,
+      current_value: 4,
+      day_change_abs: 5,
+      day_change_pct: 6,
+      gain_abs: 7,
+      gain_pct: 8
     };
     const mappedIdx = posMap[key];
     if (typeof mappedIdx === 'number') {

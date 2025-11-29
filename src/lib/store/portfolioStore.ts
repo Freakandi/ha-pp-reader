@@ -115,6 +115,15 @@ function normalizePortfolioSnapshot(
     normalized.purchase_sum = purchaseValue;
   }
 
+  const dayChangeAbs = toNullableNumber((candidate as { day_change_abs?: unknown }).day_change_abs);
+  if (dayChangeAbs !== undefined) {
+    normalized.day_change_abs = dayChangeAbs;
+  }
+  const dayChangePct = toNullableNumber((candidate as { day_change_pct?: unknown }).day_change_pct);
+  if (dayChangePct !== undefined) {
+    normalized.day_change_pct = dayChangePct;
+  }
+
   const positionCount = toFiniteInteger(candidate.position_count);
   if (positionCount !== undefined) {
     normalized.position_count = positionCount;

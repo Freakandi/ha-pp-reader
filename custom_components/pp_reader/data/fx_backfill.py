@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.fx_backfill")
 
 SQLITE_TIMEOUT = 30.0
-DATE_FMT = "%Y-%m-%d"
 
 CurrencyCoverage = dict[str, str | None]
 CurrencyCoverageMap = dict[str, CurrencyCoverage]
@@ -271,34 +270,6 @@ def _parse_date(value: str | date | datetime) -> date:
     raise ValueError(message)
 
 
-def _iter_date_range(start: date, end: date) -> list[str]:
-    total_days = (end - start).days + 1
-    return [
-        (start + timedelta(days=offset)).strftime(DATE_FMT)
-        for offset in range(total_days)
-    ]
-
-
-def _select_existing_fx_dates(
-    db_path: Path, currency: str, start: str, end: str
-) -> set[str]:
-    conn = sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
-    conn.row_factory = sqlite3.Row
-    try:
-        cursor = conn.execute(
-            """
-            SELECT date
-            FROM fx_rates
-            WHERE currency = ?
-              AND date BETWEEN ? AND ?
-            """,
-            (currency, start, end),
-        )
-        return {row["date"] for row in cursor.fetchall() if row["date"]}
-    finally:
-        conn.close()
-
-
 async def _persist_fx_records(
     db_path: Path, records: Sequence[FxRateRecord]
 ) -> None:
@@ -357,39 +328,30 @@ async def backfill_fx(  # noqa: PLR0913,PLR0915 - explicit keyword args for clar
             _LOGGER.debug("Skipping %s: no transaction date coverage", currency)
             continue
 
-        effective_start = _parse_date(start) if start else datetime.fromisoformat(
+        desired_start = _parse_date(start) if start else datetime.fromisoformat(
             first_tx_date
         ).date()
-        if effective_start > effective_end:
+        latest_fx_date = entry.get("latest_fx_date")
+        if latest_fx_date:
+            latest_known = _parse_date(latest_fx_date)
+            desired_start = max(desired_start, latest_known + timedelta(days=1))
+
+        fetch_end = effective_end
+        if limit_days is not None and limit_days > 0:
+            limited_start = fetch_end - timedelta(days=limit_days - 1)
+            desired_start = max(desired_start, limited_start)
+
+        if desired_start > fetch_end:
+            summary[currency] = 0
             _LOGGER.debug(
                 "Skipping %s: start date after end (%s > %s)",
                 currency,
-                effective_start,
-                effective_end,
+                desired_start,
+                fetch_end,
             )
             continue
 
-        expected_dates = _iter_date_range(effective_start, effective_end)
-        if limit_days is not None and limit_days > 0:
-            expected_dates = expected_dates[-limit_days:]
-            effective_start = datetime.fromisoformat(expected_dates[0]).date()
-
-        existing_dates = _select_existing_fx_dates(
-            db_path,
-            currency,
-            expected_dates[0],
-            expected_dates[-1],
-        )
-        missing_dates = [dt for dt in expected_dates if dt not in existing_dates]
-        missing_count = len(missing_dates)
-        if not missing_dates:
-            _LOGGER.debug("No missing FX dates for %s", currency)
-            summary[currency] = 0
-            continue
-
-        fetch_start = datetime.fromisoformat(missing_dates[0]).date()
-        fetch_end = datetime.fromisoformat(missing_dates[-1]).date()
-
+        missing_count = (fetch_end - desired_start).days + 1
         if max_days is not None and max_days > 0 and missing_count > max_days:
             _LOGGER.warning(
                 (
@@ -399,7 +361,7 @@ async def backfill_fx(  # noqa: PLR0913,PLR0915 - explicit keyword args for clar
                 currency,
                 missing_count,
                 max_days,
-                fetch_start,
+                desired_start,
                 fetch_end,
             )
             summary[currency] = 0
@@ -408,33 +370,17 @@ async def backfill_fx(  # noqa: PLR0913,PLR0915 - explicit keyword args for clar
         _LOGGER.info(
             "Backfilling FX for %s (%s .. %s, %d day(s))%s",
             currency,
-            fetch_start,
+            desired_start,
             fetch_end,
-            len(missing_dates),
+            missing_count,
             " [dry-run]" if dry_run else "",
         )
-        _LOGGER.debug(
-            "FX gaps for %s: expected=%d existing=%d missing=%d",
-            currency,
-            len(expected_dates),
-            len(existing_dates),
-            missing_count,
-        )
         if dry_run:
-            preview = ", ".join(missing_dates[:5])
             summary[currency] = missing_count
-            _LOGGER.info(
-                "Dry-run: %s missing %d day(s) (%s .. %s); first gaps: %s",
-                currency,
-                missing_count,
-                fetch_start,
-                fetch_end,
-                preview,
-            )
             continue
 
         try:
-            records = await fetch_fx_range(currency, fetch_start, fetch_end)
+            records = await fetch_fx_range(currency, desired_start, fetch_end)
         except Exception as exc:  # noqa: BLE001 - defensive CLI surface
             _log_failure(currency, exc)
             summary[currency] = 0
@@ -444,7 +390,7 @@ async def backfill_fx(  # noqa: PLR0913,PLR0915 - explicit keyword args for clar
             _LOGGER.warning(
                 "No FX records fetched for %s (%s .. %s)",
                 currency,
-                fetch_start,
+                desired_start,
                 fetch_end,
             )
             summary[currency] = 0

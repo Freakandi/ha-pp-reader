@@ -277,6 +277,9 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     assert alpha.uuid == "portfolio-b"
     assert alpha.current_value == pytest.approx(2500.0)
     assert alpha.performance["gain_abs"] == pytest.approx(500.0)
+    assert alpha.day_change_abs is None
+    assert alpha.day_change_pct is None
+    assert "day_change" not in alpha.performance or alpha.performance["day_change"] is None
     assert alpha.data_state.status == "ok"
     assert len(alpha.positions) == 1
 
@@ -287,9 +290,7 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     assert alpha_position.average_cost["security"] == pytest.approx(
         381.818182, rel=1e-6
     )
-    assert alpha_position.performance["day_change"][
-        "price_change_eur"
-    ] == pytest.approx(0.11)
+    assert "day_change" not in alpha_position.performance or alpha_position.performance["day_change"] is None
 
     assert zeta.uuid == "portfolio-a"
     assert zeta.data_state.status == "error"
@@ -300,7 +301,7 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     assert zeta_position.currency_code == "USD"
     assert zeta_position.last_price_native == pytest.approx(77.5)
     assert zeta_position.last_price_eur == pytest.approx(69.75)
-    assert zeta_position.last_close_eur == pytest.approx(63.0)
+    assert zeta_position.last_close_eur is None
 
 
 def test_normalize_snapshot_handles_missing_metric_run(

@@ -30,6 +30,7 @@ _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.securities")
 _SCALED_INT_THRESHOLD = 10_000
 _EIGHT_DECIMAL_SCALE = 10**8
 _FX_GAP_WARNED: set[str] = set()
+_MAX_CLOSE_STALENESS_DAYS = 7
 
 _SECURITY_AGGREGATION_SQL = """
     SELECT
@@ -164,10 +165,11 @@ def _build_security_metric_record(
             else None
         )
 
-        raw_last_close, last_close_native = fetch_previous_close(
+        prev_date, raw_last_close, last_close_native = fetch_previous_close(
             db_path,
             security_uuid,
             conn=conn,
+            before_epoch_day=int(reference_date.timestamp() // 86400),
         )
 
         last_close_eur = None

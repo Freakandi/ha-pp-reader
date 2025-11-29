@@ -45,6 +45,8 @@ export interface PortfolioOverviewRow {
   position_count: number;
   current_value: number | null;
   purchase_sum: number;
+  day_change_abs: number | null;
+  day_change_pct: number | null;
   gain_abs: number | null;
   gain_pct: number | null;
   hasValue: boolean;
@@ -314,10 +316,39 @@ function buildPortfolioRow(
     toFiniteNumber((snapshot as { purchase_value_eur?: unknown })?.purchase_value_eur) ??
     toFiniteNumber(snapshot.purchase_value) ??
     0;
+  const dayChangeAbs =
+    toFiniteNumber((snapshot as { day_change_abs?: unknown }).day_change_abs) ?? null;
+  const dayChangePct =
+    toFiniteNumber((snapshot as { day_change_pct?: unknown }).day_change_pct) ?? null;
 
   const performance = normalizePerformancePayload(snapshot.performance);
   const gainAbs = performance?.gain_abs ?? null;
   const gainPct = performance?.gain_pct ?? null;
+  const performanceDayChange = performance?.day_change ?? null;
+  let resolvedDayChangeAbs =
+    dayChangeAbs ??
+    (performanceDayChange?.value_change_eur != null
+      ? toFiniteNumber(performanceDayChange.value_change_eur)
+      : null);
+  let resolvedDayChangePct =
+    dayChangePct ??
+    (performanceDayChange?.change_pct != null
+      ? toFiniteNumber(performanceDayChange.change_pct)
+      : null);
+
+  if (resolvedDayChangeAbs == null && resolvedDayChangePct != null && currentValue != null) {
+    const baseline = currentValue / (1 + resolvedDayChangePct / 100);
+    if (baseline) {
+      resolvedDayChangeAbs = currentValue - baseline;
+    }
+  }
+
+  if (resolvedDayChangePct == null && resolvedDayChangeAbs != null && currentValue != null) {
+    const baseline = currentValue - resolvedDayChangeAbs;
+    if (baseline) {
+      resolvedDayChangePct = (resolvedDayChangeAbs / baseline) * 100;
+    }
+  }
 
   const hasValue = currentValue != null;
   const fxUnavailable = snapshot.has_current_value === false || !hasValue;
@@ -345,6 +376,8 @@ function buildPortfolioRow(
     position_count: positionCount,
     current_value: currentValue,
     purchase_sum: purchaseSum,
+    day_change_abs: resolvedDayChangeAbs ?? null,
+    day_change_pct: resolvedDayChangePct ?? null,
     gain_abs: gainAbs,
     gain_pct: gainPct,
     hasValue,

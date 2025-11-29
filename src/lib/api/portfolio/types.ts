@@ -44,6 +44,8 @@ export interface NormalizedPortfolioSnapshot {
   purchase_sum?: number | null;
   position_count?: number | null;
   missing_value_positions?: number | null;
+  day_change_abs?: number | null;
+  day_change_pct?: number | null;
   has_current_value?: boolean;
   performance?: Record<string, unknown> | null;
   coverage_ratio?: number | null;

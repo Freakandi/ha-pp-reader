@@ -120,6 +120,8 @@ def _make_portfolio_snapshot(*, include_positions: bool) -> PortfolioSnapshot:
             "source": "calculated",
             "coverage_ratio": 1.0,
         },
+        day_change_abs=None,
+        day_change_pct=None,
         positions=positions,
         data_state=SnapshotDataState(),
     )
@@ -335,6 +337,8 @@ def test_positions_payload_includes_dual_purchase_totals() -> None:
             "source": performance_metrics.source,
             "coverage_ratio": performance_metrics.coverage_ratio,
         },
+        day_change_abs=None,
+        day_change_pct=None,
         positions=(position,),
         data_state=SnapshotDataState(),
     )

@@ -90,6 +90,8 @@ async def test_async_collect_canonical_diagnostics_returns_preview(
         position_count=2,
         missing_value_positions=0,
         performance={"gain_abs": 500.0, "gain_pct": 50.0},
+        day_change_abs=None,
+        day_change_pct=None,
     )
     result = NormalizationResult(
         generated_at="2024-04-01T12:05:00Z",

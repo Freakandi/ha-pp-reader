@@ -37,10 +37,17 @@ from .provider_base import PriceProvider, Quote
 
 _LOGGER = logging.getLogger(__name__)
 
-CHUNK_SIZE = 50  # Sicherheitskonstante (primär durch Orchestrator genutzt)
+# Smaller chunk lowers per-request latency to reduce timeouts on slow links.
+CHUNK_SIZE = 30  # Sicherheitskonstante (primär durch Orchestrator genutzt)
 _YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
-_YAHOO_DNS_ERROR_TOKEN = "Could not resolve host: guce.yahoo.com"
-_YAHOOQUERY_DNS_WARNED = False
+_YAHOO_DNS_ERROR_TOKENS = (
+    "Could not resolve host: guce.yahoo.com",
+    "Could not resolve host: consent.yahoo.com",
+    "Could not resolve host: query2.finance.yahoo.com",
+    "Could not resolve host: finance.yahoo.com",
+)
+_YAHOOQUERY_DNS_WARNED: set[str] = set()
+_DNS_RETRY_DELAY = 0.4
 
 
 if TYPE_CHECKING:  # pragma: no cover - nur für Type Checker relevant
@@ -88,12 +95,21 @@ def _fetch_quotes_blocking(symbols: list[str]) -> dict:
     if len(symbols) > CHUNK_SIZE:
         symbols = symbols[:CHUNK_SIZE]
 
-    try:
+    def _fetch_once() -> dict:
         tk = ticker_factory(symbols, asynchronous=False)
         return getattr(tk, "quotes", {}) or {}
+
+    try:
+        return _fetch_once()
     except Exception as exc:  # noqa: BLE001 - yahooquery wirft diverse Exceptions
         if _handle_yahoo_dns_error(exc):
-            return {}
+            time.sleep(_DNS_RETRY_DELAY)
+            try:
+                return _fetch_once()
+            except Exception as retry_exc:  # noqa: BLE001
+                if not _handle_yahoo_dns_error(retry_exc):
+                    _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", retry_exc)
+                return {}
         _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", exc)
         return {}
 
@@ -181,16 +197,16 @@ class YahooQueryProvider(PriceProvider):
 
 def _handle_yahoo_dns_error(exc: Exception) -> bool:
     """Detect DNS failures hitting Yahoo consent hosts and log once."""
-    global _YAHOOQUERY_DNS_WARNED  # noqa: PLW0603
-
     message = str(exc)
-    if _YAHOO_DNS_ERROR_TOKEN in message:
-        if not _YAHOOQUERY_DNS_WARNED:
-            _LOGGER.warning(
-                "YahooQuery Quotes DNS-Fehler erkannt (%s). "
-                "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
-                _YAHOO_DNS_ERROR_TOKEN,
-            )
-            _YAHOOQUERY_DNS_WARNED = True
-        return True
+
+    for token in _YAHOO_DNS_ERROR_TOKENS:
+        if token in message:
+            if token not in _YAHOOQUERY_DNS_WARNED:
+                _LOGGER.warning(
+                    "YahooQuery Quotes DNS-Fehler erkannt (%s). "
+                    "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
+                    token,
+                )
+                _YAHOOQUERY_DNS_WARNED.add(token)
+            return True
     return False

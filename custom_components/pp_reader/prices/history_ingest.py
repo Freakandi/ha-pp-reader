@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from importlib import import_module
@@ -24,13 +25,21 @@ if TYPE_CHECKING:
 
 DEFAULT_HISTORY_INTERVAL = "1d"
 DEFAULT_JOB_BATCH_SIZE = 5
-DEFAULT_MAX_CONCURRENCY = 4
+# Slightly higher concurrency keeps startup history drains from stretching
+# over many executor waves without overwhelming Yahoo.
+DEFAULT_MAX_CONCURRENCY = 8
 YAHOO_SOURCE = "yahoo"
 
 _LOGGER = logging.getLogger(__name__)
 _YAHOOQUERY_IMPORT_ERROR = False
-_YAHOO_DNS_ERROR_TOKEN = "Could not resolve host: guce.yahoo.com"
-_YAHOOQUERY_DNS_WARNED = False
+_YAHOO_DNS_ERROR_TOKENS = (
+    "Could not resolve host: guce.yahoo.com",
+    "Could not resolve host: consent.yahoo.com",
+    "Could not resolve host: query2.finance.yahoo.com",
+    "Could not resolve host: finance.yahoo.com",
+)
+_YAHOOQUERY_DNS_WARNED: set[str] = set()
+_DNS_RETRY_DELAY = 0.4
 
 
 def _normalize_datetime(value: datetime | date | str) -> datetime:
@@ -166,42 +175,61 @@ class YahooHistoryFetcher:
 
         start_str = job.start.strftime("%Y-%m-%d")
         end_str = job.end.strftime("%Y-%m-%d")
-        try:
-            ticker = ticker_factory(job.symbol, asynchronous=False)
-            history = ticker.history(
+        ticker = None
+
+        def _call_history() -> object:
+            nonlocal ticker
+            ticker = ticker or ticker_factory(job.symbol, asynchronous=False)
+            return ticker.history(
                 interval=job.interval,
                 start=start_str,
                 end=end_str,
             )
+
+        try:
+            history = _call_history()
         except Exception as exc:  # noqa: BLE001
             if _handle_yahoo_dns_error(exc):
+                time.sleep(_DNS_RETRY_DELAY)
+                try:
+                    history = _call_history()
+                except Exception as retry_exc:  # noqa: BLE001
+                    if not _handle_yahoo_dns_error(retry_exc):
+                        _LOGGER.warning(
+                            "YahooQuery History Fetch Fehler für %s (%s-%s): %s",
+                            job.symbol,
+                            start_str,
+                            end_str,
+                            retry_exc,
+                        )
+                    return []
+            else:
+                _LOGGER.warning(
+                    "YahooQuery History Fetch Fehler für %s (%s-%s): %s",
+                    job.symbol,
+                    start_str,
+                    end_str,
+                    exc,
+                )
                 return []
-            _LOGGER.warning(
-                "YahooQuery History Fetch Fehler für %s (%s-%s): %s",
-                job.symbol,
-                start_str,
-                end_str,
-                exc,
-            )
-            return []
 
         return history
 
 
 def _handle_yahoo_dns_error(exc: Exception) -> bool:
     """Detect DNS failures hitting Yahoo consent hosts and log once."""
-    global _YAHOOQUERY_DNS_WARNED  # noqa: PLW0603
-
     message = str(exc)
-    if _YAHOO_DNS_ERROR_TOKEN in message:
-        if not _YAHOOQUERY_DNS_WARNED:
-            _LOGGER.warning(
-                "YahooQuery History DNS-Fehler erkannt (%s). "
-                "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
-                _YAHOO_DNS_ERROR_TOKEN,
-            )
-            _YAHOOQUERY_DNS_WARNED = True
-        return True
+
+    for token in _YAHOO_DNS_ERROR_TOKENS:
+        if token in message:
+            if token not in _YAHOOQUERY_DNS_WARNED:
+                _LOGGER.warning(
+                    "YahooQuery History DNS-Fehler erkannt (%s). "
+                    "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
+                    token,
+                )
+                _YAHOOQUERY_DNS_WARNED.add(token)
+            return True
 
     return False
 

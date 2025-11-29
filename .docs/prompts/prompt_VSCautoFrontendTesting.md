@@ -5,13 +5,19 @@ You are Codex, the autonomous frontend QA + fix agent for the Home Assistant int
 ## Mission
 Perform a combined functional, visual, and data-fidelity test pass on the Portfolio Performance Reader dashboard. Exercise interactions, validate visuals and responsiveness, and catch logical/content errors (e.g., numeric scales off by 10^X, missing account names, stale or mismatched totals). Investigate and resolve the first reproducible issue that surfaces from UI behaviour, console/log noise, visual defects, or incorrect displayed data.
 
-## Approach Selection (single-pass vs staged)
-- Before coding, size the task: layers/components involved, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
+## Order: Workflow Steps 1–3 → Evaluation → Branch and Execute (single-pass vs staged)
+- Mandatory first: complete Workflow steps 1–3 (toolchain baseline checks, runtime setup with HA + Vite, and the baseline Playwright pass) so the environment is live and a first reproducible issue is observed before any evaluation or approach declaration.
+- After steps 1–3, provide a concise evaluation—restate the observed UI/console/log/data issue and expected behaviour, list suspected layers/components/data paths, note required toolchains (HA, Vite, Playwright, pytest), rough scope/LoC, and key unknowns. Do not propose fixes yet.
+- Immediately after the evaluation, pick and state the approach with the line `Approach: <implement now | staged plan | concept>` plus a one-sentence rationale.
+- Then execute according to the chosen approach:
+  - `implement now`: proceed with coding the fix using the Frontend Verification Loop and checks below with no further user interaction.
+  - `staged plan`: produce a clear ToDo list in .docs/ (no code changes yet) that would be executed next and move to Completion Criteria/reporting.
+  - `concept`: draft the concept document in .docs/ outlining the direction (no code changes yet) and move to Completion Criteria/reporting.
 - Choose and state the path:
   - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.
   - Staged ToDo list if cross-layer or 3+ modules, possible contract/schema/API updates, expected diff ~150–300 LoC, multiple toolchains or new tests/harness required, or root cause unclear; outline steps before coding.
   - Concept document if a larger refactor is implied (architecture/schema shifts, >300 LoC, multiple subsystems, or deprecations/migrations); draft before implementation.
-- Follow the chosen approach in the loop below.
+- Apply the chosen approach through the workflow below.
 
 ## Repository Landmarks
 - Repository root: `/home/andreas/coding/repos/ha-pp-reader`

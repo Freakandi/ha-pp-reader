@@ -89,6 +89,8 @@ async def test_async_load_latest_snapshot_bundle_returns_decoded_payloads(
         position_count=1,
         missing_value_positions=0,
         performance={"gain_abs": 100.0, "source": "metrics"},
+        day_change_abs=None,
+        day_change_pct=None,
     )
     result = NormalizationResult(
         generated_at="2024-03-01T00:00:00Z",

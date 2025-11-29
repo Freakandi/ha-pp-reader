@@ -146,6 +146,8 @@ async def test_ws_get_portfolio_data_returns_live_values(
                 "source": "metrics",
                 "coverage_ratio": 1.0,
             },
+            day_change_abs=None,
+            day_change_pct=None,
         ),
         PortfolioSnapshot(
             uuid="p2",
@@ -162,6 +164,8 @@ async def test_ws_get_portfolio_data_returns_live_values(
                 "source": "metrics",
                 "coverage_ratio": 0.75,
             },
+            day_change_abs=None,
+            day_change_pct=None,
         ),
         PortfolioSnapshot(
             uuid="p3",
@@ -178,6 +182,8 @@ async def test_ws_get_portfolio_data_returns_live_values(
                 "source": "metrics",
                 "coverage_ratio": None,
             },
+            day_change_abs=None,
+            day_change_pct=None,
         ),
     )
     bundle = SnapshotBundle(
@@ -245,6 +251,8 @@ async def test_ws_get_portfolio_data_includes_data_state(
             "source": "metrics",
             "coverage_ratio": None,
         },
+        day_change_abs=None,
+        day_change_pct=None,
         coverage_ratio=None,
         provenance="metrics",
         metric_run_uuid="metric-42",

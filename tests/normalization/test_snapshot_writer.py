@@ -122,6 +122,8 @@ def test_persist_normalization_result_writes_account_and_portfolio_rows(
             "coverage_ratio": 0.85,
             "provenance": "metrics",
         },
+        day_change_abs=None,
+        day_change_pct=None,
         coverage_ratio=0.85,
         provenance="metrics",
         metric_run_uuid="run-1",
@@ -146,7 +148,7 @@ def test_persist_normalization_result_writes_account_and_portfolio_rows(
     conn = sqlite3.connect(str(db_path))
     try:
         account_rows = _fetch_all(conn, "account_snapshots")
-        portfolio_rows = _fetch_all(conn, "portfolio_snapshots")
+    portfolio_rows = _fetch_all(conn, "portfolio_snapshots")
     finally:
         conn.close()
 
@@ -251,6 +253,8 @@ def test_persist_normalization_result_updates_existing_entries(
             "total_change_pct": 37.77,
             "source": "metrics",
         },
+        day_change_abs=None,
+        day_change_pct=None,
     )
     result_v2 = NormalizationResult(
         generated_at="2024-03-02T10:00:00Z",

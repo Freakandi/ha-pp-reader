@@ -15,8 +15,14 @@ Observed issue (required; describe the incorrect UI/state and expected behaviour
 Supporting logs, console output, or reproduction steps (optional):
 <<<LOG_OR_REPRO_STEPS_GO_HERE>>>
 
-## Approach Selection (single-pass vs staged)
-- Before coding, size the task: impacted layers/components, files/modules count, rough LoC, required toolchains (HA, Vite, Playwright, pytest), likelihood of contract/schema/API changes, and whether new test harnesses are needed.
+## Order: Workflow Steps 1–3 → Evaluation → Branch and Execute (single-pass vs staged)
+- Mandatory first: complete Workflow steps 1–3 (understand the description, reproduce with HA + Vite, inspect relevant frontend/backend code/logs). This means actually searching/reading the implicated code paths before any evaluation or approach declaration.
+- After steps 1–3, provide a concise evaluation—restate the observed issue/expected behaviour, list suspected layers/components/data paths, note required toolchains (HA, Vite, Playwright, pytest), rough scope/LoC, and key unknowns. Do not propose fixes yet.
+- Immediately after the evaluation, pick and state the approach with the line `Approach: <implement now | staged plan | concept>` plus a one-sentence rationale.
+- Then execute according to the chosen approach:
+  - `implement now`: proceed with coding the fix following Workflow steps 4–8 with no further user interaction.
+  - `staged plan`: produce a clear ToDo list in .docs/ (no code changes yet) that would be executed next and execute workflow step 8.
+  - `concept`: draft the concept document in .docs/ outlining the refactor/architecture direction (no code changes yet) and execute workflow step 8.
 - Choose and state the path:
   - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.
   - Staged ToDo list if cross-layer or 3+ modules, possible contract/schema/API updates, expected diff ~150–300 LoC, multiple toolchains or new tests/harness required, or root cause unclear; outline steps before coding.

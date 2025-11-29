@@ -950,11 +950,15 @@ def _build_snapshot_from_holdings(
             round_currency(last_price_eur * total_holdings, default=0.0) or 0.0
         )
 
-    raw_last_close, last_close_native = fetch_previous_close(
+    prev_date, raw_last_close, last_close_native = fetch_previous_close(
         db_path,
         security_uuid,
         conn=conn,
+        before_epoch_day=int(reference_date.timestamp() // 86400),
     )
+    if prev_date is None or (int(reference_date.timestamp() // 86400) - int(prev_date) > 7):
+        raw_last_close = None
+        last_close_native = None
     last_close_eur = None
     if raw_last_close is not None:
         last_close_eur = normalize_price_to_eur_sync(
@@ -1217,11 +1221,15 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
         last_close_native = normalize_raw_price(last_close_native_raw, decimals=4)
         raw_last_close = None
         if last_close_native_raw is None:
-            raw_last_close, last_close_native = fetch_previous_close(
+            prev_date, raw_last_close, last_close_native = fetch_previous_close(
                 db_path,
                 security_uuid,
                 conn=conn,
+                before_epoch_day=int(reference_date.timestamp() // 86400),
             )
+            if prev_date is None or (int(reference_date.timestamp() // 86400) - int(prev_date) > 7):
+                raw_last_close = None
+                last_close_native = None
             if raw_last_close is not None and last_close_native is None:
                 last_close_native = normalize_raw_price(raw_last_close, decimals=4)
         last_close_eur = normalize_price_to_eur_sync(
@@ -2492,8 +2500,13 @@ def fetch_previous_close(
     security_uuid: str,
     *,
     conn: sqlite3.Connection | None = None,
-) -> tuple[int | None, float | None]:
-    """Fetch the most recent historical close price for a security."""
+    before_epoch_day: int | None = None,
+) -> tuple[int | None, int | None, float | None]:
+    """Fetch the most recent historical close price for a security.
+
+    Returns a tuple of (date_epoch, close_raw, close_native). If before_epoch_day
+    is provided, only closes strictly older than that day are considered.
+    """
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
         raise ValueError(message)
@@ -2504,30 +2517,33 @@ def fetch_previous_close(
 
     try:
         try:
-            cursor = local_conn.execute(
-                """
-                SELECT close
+            params: list[object] = [security_uuid]
+            sql = """
+                SELECT close, date
                 FROM historical_prices
                 WHERE security_uuid = ?
-                ORDER BY date DESC
-                LIMIT 1
-                """,
-                (security_uuid,),
-            )
+            """
+            if before_epoch_day is not None:
+                sql += " AND date < ?"
+                params.append(before_epoch_day)
+            sql += " ORDER BY date DESC LIMIT 1"
+
+            cursor = local_conn.execute(sql, params)
             row = cursor.fetchone()
         except sqlite3.Error:
             _LOGGER.exception(
                 "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
                 security_uuid,
             )
-            return None, None
+            return None, None, None
 
         if not row:
-            return None, None
+            return None, None, None
 
         raw_close = row[0]
+        date_value = row[1] if len(row) > 1 else None
         if raw_close is None:
-            return None, None
+            return date_value, None, None
 
         close_native: float | None = None
         try:
@@ -2541,7 +2557,7 @@ def fetch_previous_close(
             )
             close_native = None
 
-        return int(raw_close), close_native
+        return date_value, int(raw_close), close_native
     finally:
         if conn is None:
             with suppress(sqlite3.Error):
@@ -2681,6 +2697,103 @@ def _fallback_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
     return fallback_rows
 
 
+def _load_portfolio_day_changes(
+    db_path: Path, run_uuid: str, portfolio_ids: Sequence[str]
+) -> dict[str, tuple[float | None, float | None, float | None]]:
+    """Aggregate day-change deltas per portfolio from security metrics."""
+    if not portfolio_ids:
+        return {}
+
+    conn: sqlite3.Connection | None = None
+    changes: dict[str, tuple[float | None, float | None, float | None]] = {}
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        for portfolio_uuid in portfolio_ids:
+            rows = conn.execute(
+                """
+                SELECT
+                    holdings_raw,
+                    current_value_cents,
+                    day_change_eur
+                FROM security_metrics
+                WHERE metric_run_uuid = ?
+                  AND portfolio_uuid = ?
+                """,
+                (run_uuid, portfolio_uuid),
+            ).fetchall()
+            if not rows:
+                continue
+
+            total_current_cents = 0
+            total_day_change_eur = 0.0
+            rows_with_change = 0
+            rows_missing_change = 0
+
+            for row in rows:
+                try:
+                    total_current_cents += int(row["current_value_cents"] or 0)
+                except (TypeError, ValueError):
+                    total_current_cents += 0
+
+                holdings = _from_holdings_raw(row["holdings_raw"])
+                if holdings <= 0:
+                    continue
+
+                try:
+                    per_share_delta = float(row["day_change_eur"])
+                except (TypeError, ValueError):
+                    rows_missing_change += 1
+                    continue
+
+                delta_eur = round_currency(per_share_delta * holdings, default=None)
+                if delta_eur is None:
+                    rows_missing_change += 1
+                    continue
+
+                total_day_change_eur += delta_eur
+                rows_with_change += 1
+
+            if rows_with_change == 0:
+                coverage_ratio = (
+                    0.0
+                    if rows_missing_change > 0
+                    else None
+                )
+                changes[portfolio_uuid] = (None, None, coverage_ratio)
+                continue
+
+            coverage_ratio = rows_with_change / (
+                rows_with_change + rows_missing_change
+            ) if rows_with_change + rows_missing_change > 0 else None
+
+            current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
+            day_change_pct = None
+            previous_close_value = current_value_eur - total_day_change_eur
+            if previous_close_value not in (None, 0):
+                day_change_pct = round_currency(
+                    (total_day_change_eur / previous_close_value) * 100,
+                    default=None,
+                )
+
+            changes[portfolio_uuid] = (
+                round_currency(total_day_change_eur, default=None),
+                day_change_pct,
+                coverage_ratio,
+            )
+    except Exception:  # pragma: no cover - defensive logging
+        _LOGGER.exception(
+            "fetch_live_portfolios: day-change Aggregation fehlgeschlagen (run_uuid=%s)",
+            run_uuid,
+        )
+    finally:
+        if conn is not None:
+            with suppress(Exception):
+                conn.close()
+
+    return changes
+
+
 def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
     """Return latest persisted portfolio metrics for websocket/event consumers."""
     conn: sqlite3.Connection | None = None
@@ -2719,7 +2832,49 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             (run_uuid,),
         )
         rows = cursor.fetchall()
-        return [_normalize_portfolio_row(row) for row in rows]
+        normalized = [_normalize_portfolio_row(row) for row in rows]
+        day_changes = _load_portfolio_day_changes(
+            db_path,
+            run_uuid,
+            [entry["uuid"] for entry in normalized if entry.get("uuid")],
+        )
+        for entry in normalized:
+            portfolio_uuid = entry.get("uuid")
+            if not portfolio_uuid:
+                continue
+            day_change = day_changes.get(portfolio_uuid)
+            if not day_change:
+                continue
+
+            day_change_value, day_change_pct, coverage_ratio = day_change
+            if day_change_value is not None:
+                entry["day_change_abs"] = day_change_value
+            if day_change_pct is not None:
+                entry["day_change_pct"] = day_change_pct
+
+            performance = entry.get("performance")
+            if isinstance(performance, dict):
+                base_day_change = performance.get("day_change")
+                payload = (
+                    base_day_change
+                    if isinstance(base_day_change, dict)
+                    else {}
+                )
+                payload = {
+                    **payload,
+                    "change_pct": day_change_pct,
+                    "value_change_eur": day_change_value,
+                    "coverage_ratio": (
+                        coverage_ratio
+                        if coverage_ratio is not None
+                        else payload.get("coverage_ratio")
+                    ),
+                    "source": payload.get("source") or "aggregated",
+                }
+                performance["day_change"] = payload
+                entry["performance"] = performance
+
+        return normalized
     except Exception:
         _LOGGER.exception("fetch_live_portfolios fehlgeschlagen (db_path=%s)", db_path)
         return []

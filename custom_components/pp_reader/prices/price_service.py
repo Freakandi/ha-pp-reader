@@ -161,8 +161,8 @@ _SCALED_INT_THRESHOLD = 10_000
 _EIGHT_DECIMAL_SCALE = int(SCALE)
 ZERO_QUOTES_WARN_INTERVAL = 1_800
 # Yahoo Finance benötigt teils >10s für große Chunks -
-# 20s verhindern False-Timeouts.
-PRICE_FETCH_TIMEOUT = 20
+# größere Puffer reduzieren Timeout-Abbrüche.
+PRICE_FETCH_TIMEOUT = 30
 TRANSACTION_UNIT_CHUNK_SIZE = 500
 HOLDING_VALUE_MATCH_EPSILON = 1e-9
 TOTAL_VALUE_MATCH_EPSILON = 1e-6

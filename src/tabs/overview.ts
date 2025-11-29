@@ -50,8 +50,11 @@ type PortfolioQueryRoot = Document | HTMLElement;
 type PortfolioPositionsSortKey =
   | 'name'
   | 'current_holdings'
+  | 'average_price'
   | 'purchase_value'
   | 'current_value'
+  | 'day_change_abs'
+  | 'day_change_pct'
   | 'gain_abs'
   | 'gain_pct';
 
@@ -60,8 +63,11 @@ type PortfolioSortDirection = 'asc' | 'desc';
 const PORTFOLIO_SORT_KEYS: readonly PortfolioPositionsSortKey[] = [
   'name',
   'current_holdings',
+  'average_price',
   'purchase_value',
   'current_value',
+  'day_change_abs',
+  'day_change_pct',
   'gain_abs',
   'gain_pct',
 ];
@@ -248,6 +254,58 @@ export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
 };
 
+function computePositionDayChange(position: PortfolioPositionRecord): { value: number | null; pct: number | null } {
+  const holdings = toFiniteCurrency(position.current_holdings);
+  if (holdings == null) {
+    return { value: null, pct: null };
+  }
+
+  const lastPriceEur = toFiniteCurrency((position as { last_price_eur?: unknown }).last_price_eur);
+  const lastCloseEur = toFiniteCurrency((position as { last_close_eur?: unknown }).last_close_eur);
+
+  let dayChangeValue: number | null = null;
+  let dayChangePct: number | null = null;
+
+  if (lastPriceEur != null && lastCloseEur != null) {
+    const priceDelta = lastPriceEur - lastCloseEur;
+    dayChangeValue = priceDelta * holdings;
+    const closeValue = lastCloseEur * holdings;
+    if (closeValue) {
+      dayChangePct = (dayChangeValue / closeValue) * 100;
+    }
+  }
+
+  const performance = normalizePerformancePayload(position.performance);
+  const dayChangePayload = performance?.day_change ?? null;
+
+  if (dayChangeValue == null && dayChangePayload?.price_change_eur != null) {
+    dayChangeValue = dayChangePayload.price_change_eur * holdings;
+  }
+
+  if (dayChangePct == null && dayChangePayload?.change_pct != null) {
+    dayChangePct = dayChangePayload.change_pct;
+  }
+
+  if (dayChangeValue == null && dayChangePct != null) {
+    const currentValue = toFiniteCurrency(position.current_value);
+    if (currentValue != null) {
+      const baseline = currentValue / (1 + dayChangePct / 100);
+      if (baseline) {
+        dayChangeValue = currentValue - baseline;
+      }
+    }
+  }
+
+  const roundedValue =
+    dayChangeValue != null && Number.isFinite(dayChangeValue)
+      ? Math.round(dayChangeValue * 100) / 100
+      : null;
+  const roundedPct =
+    dayChangePct != null && Number.isFinite(dayChangePct) ? Math.round(dayChangePct * 100) / 100 : null;
+
+  return { value: roundedValue, pct: roundedPct };
+}
+
 // Global cache exports have been removed; cache interactions now flow through
 // the shared data/positionsCache module.
 const expandedPortfolios = new Set<string>();           // gemerkte geöffnete Depots (persistiert über Re-Renders)
@@ -259,11 +317,11 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
   function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): void {
     if (!tableEl) {
       return;
-    }
-    const bodyRows = Array.from(tableEl.querySelectorAll<HTMLTableRowElement>('tbody tr'));
-    bodyRows.forEach(row => {
-      const gainAbsCell = row.cells.item(4);
-      const gainPctCell = row.cells.item(5);
+  }
+  const bodyRows = Array.from(tableEl.querySelectorAll<HTMLTableRowElement>('tbody tr'));
+  bodyRows.forEach(row => {
+      const gainAbsCell = row.cells.item(7);
+      const gainPctCell = row.cells.item(8);
       if (!gainAbsCell || !gainPctCell) {
         return;
       }
@@ -290,15 +348,23 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
   const cols = [
     { key: 'name', label: 'Wertpapier' },
     { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
-    { key: 'purchase_value', label: 'Ø Kaufpreis', align: 'right' as const },
+    { key: 'average_price', label: 'Ø Kaufpreis', align: 'right' as const },
+    { key: 'purchase_value', label: 'Kaufpreis (EUR)', align: 'right' as const },
     { key: 'current_value', label: 'Aktueller Wert', align: 'right' as const },
-    { key: 'gain_abs', label: '+/-', align: 'right' as const },
-    { key: 'gain_pct', label: '%', align: 'right' as const }
+    { key: 'day_change_abs', label: 'Heute +/-', align: 'right' as const },
+    { key: 'day_change_pct', label: 'Heute %', align: 'right' as const },
+    { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' as const },
+    { key: 'gain_pct', label: 'Gesamt %', align: 'right' as const }
   ];
   const rows = positions.map((p) => {
     const performance = normalizePerformancePayload(p.performance);
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
     const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    const dayChange = computePositionDayChange(p);
+    const purchaseTotal =
+      typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
+        ? p.purchase_value
+        : null;
 
     return {
       name:
@@ -311,21 +377,25 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
         typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
           ? p.current_holdings
           : null,
-      purchase_value:
+      average_price:
         typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
           ? p.purchase_value
           : null,
+      purchase_value: purchaseTotal,
       current_value:
         typeof p.current_value === 'number' || typeof p.current_value === 'string'
           ? p.current_value
           : null,
+      day_change_abs: dayChange.value,
+      day_change_pct: dayChange.pct,
       gain_abs: gainAbs,
       gain_pct: gainPct,
+      performance,
     };
   });
 
   // Basis-HTML über makeTable erzeugen
-  const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'gain_abs']);
+  const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'day_change_abs', 'gain_abs']);
 
   // Header um data-sort-key ergänzen + sortable Klasse setzen
   try {
@@ -368,7 +438,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
             purchaseCell.removeAttribute('aria-label');
           }
         }
-          const gainCell = tr.cells.item(4);
+          const gainCell = tr.cells.item(7);
         if (gainCell) {
           const performance = normalizePerformancePayload(pos.performance);
           const gainPctValue =
@@ -393,7 +463,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
           gainCell.dataset.gainPct = pctLabel;
           gainCell.dataset.gainSign = pctSign;
         }
-          const gainPctCell = tr.cells.item(5);
+          const gainPctCell = tr.cells.item(8);
         if (gainPctCell) {
           gainPctCell.classList.add('gain-pct-cell');
         }
@@ -486,9 +556,12 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
   const cols = [
     { key: 'name', label: 'Name' },
     { key: 'position_count', label: 'Anzahl Positionen', align: 'right' },
+    { key: 'purchase_value', label: 'Kaufwert', align: 'right' },
     { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
+    { key: 'day_change_abs', label: 'Heute +/-', align: 'right' },
+    { key: 'day_change_pct', label: 'Heute %', align: 'right' },
     { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' },
-    { key: 'gain_pct', label: '%', align: 'right' }
+    { key: 'gain_pct', label: 'Gesamt %', align: 'right' }
   ];
   cols.forEach(c => {
     const align = c.align === 'right' ? ' class="align-right"' : '';
@@ -517,6 +590,23 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
         : typeof performance?.gain_pct === 'number'
           ? performance.gain_pct
           : null;
+    const dayChangePayload =
+      performance && typeof performance === 'object'
+        ? (performance as Record<string, unknown>).day_change
+        : null;
+    const dayChangeAbs =
+      typeof d.day_change_abs === 'number'
+        ? d.day_change_abs
+        : dayChangePayload && typeof dayChangePayload === 'object'
+          ? ((dayChangePayload as Record<string, unknown>).value_change_eur ??
+            (dayChangePayload as Record<string, unknown>).price_change_eur)
+          : null;
+    const dayChangePct =
+      typeof d.day_change_pct === 'number'
+        ? d.day_change_pct
+        : dayChangePayload && typeof dayChangePayload === 'object' && typeof (dayChangePayload as Record<string, unknown>).change_pct === 'number'
+          ? (dayChangePayload as Record<string, unknown>).change_pct as number
+          : null;
     const partialValue = d.fx_unavailable && hasValue;
     const datasetCoverageRatio =
       typeof d.coverage_ratio === 'number' && Number.isFinite(d.coverage_ratio)
@@ -531,12 +621,18 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     const detailId = `portfolio-details-${d.uuid}`;
     const rowData = {
       fx_unavailable: d.fx_unavailable,
+      purchase_value: purchaseSum,
       current_value: currentValue,
+      day_change_abs: dayChangeAbs,
+      day_change_pct: dayChangePct,
       gain_abs: gainAbs,
       gain_pct: gainPct
     };
     const valueContext = { hasValue };
+    const purchaseValueCell = formatValue('purchase_value', rowData.purchase_value, rowData, valueContext);
     const currentValueCell = formatValue('current_value', rowData.current_value, rowData, valueContext);
+    const dayChangeAbsCell = formatValue('day_change_abs', rowData.day_change_abs, rowData, valueContext);
+    const dayChangePctCell = formatValue('day_change_pct', rowData.day_change_pct, rowData, valueContext);
     const gainAbsCell = formatValue('gain_abs', rowData.gain_abs, rowData, valueContext);
     const gainPctCell = formatValue('gain_pct', rowData.gain_pct, rowData, valueContext);
 
@@ -552,6 +648,10 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
         : '';
       const datasetGainAbs = hasValue && typeof gainAbs === 'number' && Number.isFinite(gainAbs) ? gainAbs : '';
       const datasetGainPct = hasValue && typeof gainPct === 'number' && Number.isFinite(gainPct) ? gainPct : '';
+      const datasetDayChangeAbs =
+        hasValue && typeof dayChangeAbs === 'number' && Number.isFinite(dayChangeAbs) ? dayChangeAbs : '';
+      const datasetDayChangePct =
+        hasValue && typeof dayChangePct === 'number' && Number.isFinite(dayChangePct) ? dayChangePct : '';
       const positionCountAttr = String(positionCount);
 
     let gainAbsAttributes = '';
@@ -567,6 +667,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                   data-position-count="${positionCountAttr}"
                   data-current-value="${escapeAttribute(datasetCurrentValue)}"
                   data-purchase-sum="${escapeAttribute(purchaseSum)}"
+                  data-day-change="${escapeAttribute(datasetDayChangeAbs)}"
+                  data-day-change-pct="${escapeAttribute(datasetDayChangePct)}"
                   data-gain-abs="${escapeAttribute(datasetGainAbs)}"
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
                 data-has-value="${hasValue ? 'true' : 'false'}"
@@ -588,7 +690,10 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
       </td>`;
       const positionCountDisplay = positionCount.toLocaleString('de-DE');
       html += `<td class="align-right">${positionCountDisplay}</td>`;
+    html += `<td class="align-right">${purchaseValueCell}</td>`;
     html += `<td class="align-right">${currentValueCell}</td>`;
+    html += `<td class="align-right">${dayChangeAbsCell}</td>`;
+    html += `<td class="align-right">${dayChangePctCell}</td>`;
     html += `<td class="align-right"${gainAbsAttributes}>${gainAbsCell}</td>`;
     html += `<td class="align-right gain-pct-cell">${gainPctCell}</td>`;
     html += '</tr>';
@@ -598,7 +703,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                 id="${detailId}"
                 role="region"
                 aria-label="Positionen für ${d.name}">
-      <td colspan="5">
+      <td colspan="${cols.length}">
         <div class="positions-container">${expanded
         ? (hasPortfolioPositions(d.uuid)
           ? renderPositionsTable(getPortfolioPositions(d.uuid))
@@ -623,6 +728,24 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     }
     return a;
   }, 0);
+  const dayChangeValues = availableDepots
+    .map(d => {
+      if (typeof d.day_change_abs === 'number') {
+        return d.day_change_abs;
+      }
+      const perfDayChange = d.performance && typeof d.performance === 'object'
+        ? (d.performance as Record<string, unknown>).day_change
+        : null;
+      if (perfDayChange && typeof perfDayChange === 'object') {
+        const valueChange = (perfDayChange as Record<string, unknown>).value_change_eur;
+        if (typeof valueChange === 'number' && Number.isFinite(valueChange)) {
+          return valueChange;
+        }
+      }
+      return null;
+    })
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const sumDayChangeAbs = dayChangeValues.reduce((a, value) => a + value, 0);
   const sumGainAbs = availableDepots.reduce((a, d) => {
     if (typeof d.performance?.gain_abs === 'number' && Number.isFinite(d.performance.gain_abs)) {
       return a + d.performance.gain_abs;
@@ -633,16 +756,34 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
   }, 0);
   const sumHasValue = availableDepots.length > 0;
   const sumIsPartial = availableDepots.length !== depots.length;
+  const dayChangeHasValue = dayChangeValues.length > 0;
+  const sumDayChangePct =
+    dayChangeHasValue && sumHasValue && sumCurrent !== 0
+      ? (() => {
+          const previousClose = sumCurrent - sumDayChangeAbs;
+          if (!previousClose) {
+            return null;
+          }
+          return (sumDayChangeAbs / previousClose) * 100;
+        })()
+      : null;
   const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
 
   const sumRowData = {
     fx_unavailable: sumIsPartial,
+    purchase_value: sumHasValue ? sumPurchase : null,
     current_value: sumHasValue ? sumCurrent : null,
+    day_change_abs: dayChangeHasValue ? sumDayChangeAbs : null,
+    day_change_pct: dayChangeHasValue ? sumDayChangePct : null,
     gain_abs: sumHasValue ? sumGainAbs : null,
     gain_pct: sumHasValue ? sumGainPct : null
   };
   const sumContext = { hasValue: sumHasValue };
+  const dayChangeContext = { hasValue: dayChangeHasValue };
+  const sumPurchaseCell = formatValue('purchase_value', sumRowData.purchase_value, sumRowData, sumContext);
   const sumCurrentCell = formatValue('current_value', sumRowData.current_value, sumRowData, sumContext);
+  const sumDayChangeAbsCell = formatValue('day_change_abs', sumRowData.day_change_abs, sumRowData, dayChangeContext);
+  const sumDayChangePctCell = formatValue('day_change_pct', sumRowData.day_change_pct, sumRowData, dayChangeContext);
   const sumGainAbsCell = formatValue('gain_abs', sumRowData.gain_abs, sumRowData, sumContext);
   const sumGainPctCell = formatValue('gain_pct', sumRowData.gain_pct, sumRowData, sumContext);
 
@@ -659,6 +800,11 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     const sumPositionAttr = String(Math.round(sumPositions));
     const sumCurrentAttr = sumHasValue ? String(sumCurrent) : '';
     const sumPurchaseAttr = sumHasValue ? String(sumPurchase) : '';
+    const sumDayChangeAttr = dayChangeHasValue ? String(sumDayChangeAbs) : '';
+    const sumDayChangePctAttr =
+      dayChangeHasValue && typeof sumDayChangePct === 'number' && Number.isFinite(sumDayChangePct)
+        ? String(sumDayChangePct)
+        : '';
     const sumGainAbsAttr = sumHasValue ? String(sumGainAbs) : '';
     const sumGainPctAttr = sumHasValue && typeof sumGainPct === 'number' && Number.isFinite(sumGainPct)
       ? String(sumGainPct)
@@ -668,13 +814,18 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
       data-position-count="${sumPositionAttr}"
       data-current-value="${escapeAttribute(sumCurrentAttr)}"
       data-purchase-sum="${escapeAttribute(sumPurchaseAttr)}"
+      data-day-change="${escapeAttribute(sumDayChangeAttr)}"
+      data-day-change-pct="${escapeAttribute(sumDayChangePctAttr)}"
       data-gain-abs="${escapeAttribute(sumGainAbsAttr)}"
       data-gain-pct="${escapeAttribute(sumGainPctAttr)}"
       data-has-value="${sumHasValue ? 'true' : 'false'}"
       data-fx-unavailable="${sumIsPartial ? 'true' : 'false'}">
       <td>Summe</td>
       <td class="align-right">${Math.round(sumPositions).toLocaleString('de-DE')}</td>
+    <td class="align-right">${sumPurchaseCell}</td>
     <td class="align-right">${sumCurrentCell}</td>
+    <td class="align-right">${sumDayChangeAbsCell}</td>
+    <td class="align-right">${sumDayChangePctCell}</td>
     <td class="align-right"${sumGainAbsAttributes}>${sumGainAbsCell}</td>
     <td class="align-right gain-pct-cell">${sumGainPctCell}</td>
   </tr>`;
@@ -731,7 +882,9 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   let sumCurrent = 0;
   let sumPurchase = 0;
   let sumGainAbs = 0;
+  let sumDayChange = 0;
   let hasValueRow = false;
+  let hasDayChangeRow = false;
   let allRowsComplete = true;
   let fxUnavailable = false;
 
@@ -757,6 +910,7 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     const currentValue = readDatasetNumber(row.dataset.currentValue);
     const gainAbs = readDatasetNumber(row.dataset.gainAbs);
     const purchaseSum = readDatasetNumber(row.dataset.purchaseSum);
+    const dayChange = readDatasetNumber((row as Record<string, any>).dataset?.dayChange);
 
     if (currentValue == null || gainAbs == null || purchaseSum == null) {
       allRowsComplete = false;
@@ -766,10 +920,24 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     sumCurrent += currentValue;
     sumGainAbs += gainAbs;
     sumPurchase += purchaseSum;
+    if (dayChange != null) {
+      sumDayChange += dayChange;
+      hasDayChangeRow = true;
+    }
   }
 
   const totalsComplete = hasValueRow && allRowsComplete;
   const sumGainPct = totalsComplete && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
+  const sumDayChangePct =
+    hasDayChangeRow && totalsComplete && sumCurrent !== 0
+      ? (() => {
+          const previousClose = sumCurrent - sumDayChange;
+          if (!previousClose) {
+            return null;
+          }
+          return (sumDayChange / previousClose) * 100;
+        })()
+      : null;
 
   let footer = Array.from(tbody.children).find((child): child is HTMLTableRowElement =>
     child instanceof HTMLTableRowElement && child.classList.contains('footer-row')
@@ -784,24 +952,34 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
 
   const footerRowData = {
     fx_unavailable: fxUnavailable || !totalsComplete,
+    purchase_value: totalsComplete ? sumPurchase : null,
     current_value: totalsComplete ? sumCurrent : null,
+    day_change_abs: hasDayChangeRow && totalsComplete ? sumDayChange : null,
+    day_change_pct: hasDayChangeRow && totalsComplete ? sumDayChangePct : null,
     gain_abs: totalsComplete ? sumGainAbs : null,
     gain_pct: totalsComplete ? sumGainPct : null,
   };
   const footerContext = { hasValue: totalsComplete };
+  const dayChangeContext = { hasValue: hasDayChangeRow && totalsComplete };
 
+  const purchaseValueHtml = formatValue('purchase_value', footerRowData.purchase_value, footerRowData, footerContext);
   const currentValueHtml = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
+  const dayChangeAbsHtml = formatValue('day_change_abs', footerRowData.day_change_abs, footerRowData, dayChangeContext);
+  const dayChangePctHtml = formatValue('day_change_pct', footerRowData.day_change_pct, footerRowData, dayChangeContext);
   const gainAbsHtml = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
   const gainPctHtml = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
 
     footer.innerHTML = `
       <td>Summe</td>
       <td class="align-right">${sumPositionsDisplay}</td>
+      <td class="align-right">${purchaseValueHtml}</td>
       <td class="align-right">${currentValueHtml}</td>
+      <td class="align-right">${dayChangeAbsHtml}</td>
+      <td class="align-right">${dayChangePctHtml}</td>
       <td class="align-right">${gainAbsHtml}</td>
       <td class="align-right">${gainPctHtml}</td>
     `;
-    const footerGainAbsCell = footer.cells.item(3);
+    const footerGainAbsCell = footer.cells.item(6);
   if (footerGainAbsCell) {
     footerGainAbsCell.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number'
       ? `${formatNumber(sumGainPct)} %`
@@ -813,6 +991,11 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   footer.dataset.positionCount = String(Math.round(sumPositions));
   footer.dataset.currentValue = totalsComplete ? String(sumCurrent) : '';
   footer.dataset.purchaseSum = totalsComplete ? String(sumPurchase) : '';
+  footer.dataset.dayChange = totalsComplete && hasDayChangeRow ? String(sumDayChange) : '';
+  footer.dataset.dayChangePct =
+    totalsComplete && hasDayChangeRow && typeof sumDayChangePct === 'number'
+      ? String(sumDayChangePct)
+      : '';
   footer.dataset.gainAbs = totalsComplete ? String(sumGainAbs) : '';
   footer.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number' ? String(sumGainPct) : '';
   footer.dataset.hasValue = totalsComplete ? 'true' : 'false';
@@ -889,10 +1072,13 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
         const idxMap: Record<PortfolioPositionsSortKey, number> = {
           name: 0,
           current_holdings: 1,
-          purchase_value: 2,
-          current_value: 3,
-          gain_abs: 4,
-          gain_pct: 5,
+          average_price: 2,
+          purchase_value: 3,
+          current_value: 4,
+          day_change_abs: 5,
+          day_change_pct: 6,
+          gain_abs: 7,
+          gain_pct: 8,
         };
         const colIdx = idxMap[key];
           const aCellEl = a.cells.item(colIdx);

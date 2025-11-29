@@ -48,6 +48,7 @@ export interface PerformanceDayChangePayload {
   price_change_native: number | null;
   price_change_eur: number | null;
   change_pct: number | null;
+  value_change_eur?: number | null;
   source: string;
   coverage_ratio: number | null;
   [key: string]: unknown;
@@ -215,15 +216,30 @@ export function isPerformanceDayChangePayload(
 
   const record = value;
 
-  if (typeof record.source !== "string") {
+  const hasNative =
+    !("price_change_native" in record) || isNullableNumber(record.price_change_native);
+  const hasEur =
+    !("price_change_eur" in record) || isNullableNumber(record.price_change_eur);
+  const hasChange = !("change_pct" in record) || isNullableNumber(record.change_pct);
+  const hasValueChange =
+    !("value_change_eur" in record) || isNullableNumber(record.value_change_eur);
+
+  if (!hasNative || !hasEur || !hasChange || !hasValueChange) {
     return false;
   }
 
-  const hasNative = "price_change_native" in record && isNullableNumber(record.price_change_native);
-  const hasEur = "price_change_eur" in record && isNullableNumber(record.price_change_eur);
-  const hasChange = "change_pct" in record && isNullableNumber(record.change_pct);
+  const hasAnyMetric =
+    (("price_change_native" in record || "price_change_eur" in record || "change_pct" in record || "value_change_eur" in record) &&
+      (record.price_change_native != null ||
+        record.price_change_eur != null ||
+        record.change_pct != null ||
+        record.value_change_eur != null));
 
-  if (!hasNative || !hasEur || !hasChange) {
+  if (!hasAnyMetric) {
+    return false;
+  }
+
+  if ("source" in record && record.source !== undefined && typeof record.source !== "string") {
     return false;
   }
 

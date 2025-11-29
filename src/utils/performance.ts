@@ -50,8 +50,14 @@ function normalizeDayChangePayload(raw: unknown): PerformanceDayChangePayload | 
   const priceChangeNative = toFiniteNumber(candidate.price_change_native);
   const priceChangeEur = toFiniteNumber(candidate.price_change_eur);
   const changePct = toFiniteNumber(candidate.change_pct);
+  const valueChangeEur = toFiniteNumber((candidate as { value_change_eur?: unknown }).value_change_eur);
 
-  if (priceChangeNative == null && priceChangeEur == null && changePct == null) {
+  if (
+    priceChangeNative == null &&
+    priceChangeEur == null &&
+    changePct == null &&
+    valueChangeEur == null
+  ) {
     return null;
   }
 
@@ -62,6 +68,7 @@ function normalizeDayChangePayload(raw: unknown): PerformanceDayChangePayload | 
     price_change_native: priceChangeNative,
     price_change_eur: priceChangeEur,
     change_pct: changePct,
+    value_change_eur: valueChangeEur ?? null,
     source,
     coverage_ratio: coverage,
   };

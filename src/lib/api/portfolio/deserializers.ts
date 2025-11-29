@@ -239,6 +239,11 @@ export function deserializePortfolioSnapshot(value: unknown): NormalizedPortfoli
     current_value: currentValue,
     purchase_value: purchaseValue,
     purchase_sum: purchaseValue,
+    day_change_abs: toFiniteNumber(
+      (value as { day_change_abs?: unknown })?.day_change_abs ??
+        (value as { day_change_eur?: unknown })?.day_change_eur,
+    ) ?? undefined,
+    day_change_pct: toFiniteNumber((value as { day_change_pct?: unknown })?.day_change_pct) ?? undefined,
     position_count: toInteger(value.position_count ?? value.count) ?? undefined,
     missing_value_positions: toInteger(value.missing_value_positions) ?? undefined,
     has_current_value: readBoolean(value.has_current_value),
