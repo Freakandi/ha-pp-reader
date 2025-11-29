@@ -557,7 +557,7 @@ def _initialize_history_tasks(
         if coordinator is None:
             return
         hass.async_create_task(
-            coordinator._process_history_queue_once(reason="scheduled")  # noqa: SLF001
+            coordinator._plan_and_process_history_jobs(reason="scheduled")  # noqa: SLF001
         )
 
     remove_listener = async_track_time_change(
@@ -572,6 +572,12 @@ def _initialize_history_tasks(
         "Price-History Scheduler aktiviert (02:00/14:00 lokal) entry_id=%s",
         entry.entry_id,
     )
+
+    coordinator: Any = store.get("coordinator")
+    if coordinator is not None:
+        hass.async_create_task(
+            coordinator._plan_and_process_history_jobs(reason="startup")  # noqa: SLF001
+        )
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001

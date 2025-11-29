@@ -770,7 +770,7 @@ tbody tr:hover {
 }
 
 .line-chart-axis-tick-y {
-  transform: translateY(50%);
+  transform: translateY(-50%);
   padding-right: 0.35rem;
 }
 

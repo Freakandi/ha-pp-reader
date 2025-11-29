@@ -135,6 +135,24 @@ test('composeAveragePurchaseTooltipForTest renders FX information from averages'
   assert.match(tooltipText, /\(Stand: 02\.01\.2024\)/);
 });
 
+test('composeAveragePurchaseTooltipForTest falls back to EUR when account currency matches security', () => {
+  const snapshot = {
+    currency_code: 'HKD',
+    average_cost: {
+      native: '160.8545',
+      security: '160.8545',
+      account: '160.8545',
+      eur: '17.77',
+      source: 'totals',
+    },
+    purchase_fx_timestamp: '2024-05-10T00:00:00Z',
+  } as const;
+
+  const tooltip = composeAveragePurchaseTooltipForTest(snapshot, 'HKD');
+  assert.ok(tooltip, 'expected tooltip even when account currency matches security');
+  assert.match(tooltip, /1 HKD = 0,1105 EUR/, 'tooltip should reflect EUR fallback rate');
+});
+
 test('resolvePurchaseFxTimestampForTest prefers dedicated FX timestamps', () => {
   const timestamp = resolvePurchaseFxTimestampForTest({
     purchase_fx_timestamp: '2023-12-24T05:30:00Z',
@@ -242,4 +260,39 @@ test('buildHeaderMetaForTest consumes backend performance payloads verbatim', ()
     averageGroupTitle.includes('FX-Kurs (Kauf)'),
     'average purchase tooltip should be derived from backend averages',
   );
+});
+
+test('buildHeaderMetaForTest renders EUR average when provided alongside native', () => {
+  const snapshot = {
+    name: 'FX Security',
+    currency_code: 'HKD',
+    total_holdings: '100',
+    market_value_eur: '1000',
+    average_cost: {
+      native: '160.8545',
+      security: '160.8545',
+      account: '160.8545',
+      eur: '17.77',
+      source: 'aggregation',
+      coverage_ratio: '1',
+    },
+    performance: {
+      total_change_eur: 0,
+      total_change_pct: 0,
+      source: 'snapshot',
+      coverage_ratio: 1,
+    },
+  } as const;
+
+  const meta = buildHeaderMetaForTest(snapshot);
+  const dom = new JSDOM(`<div>${meta}</div>`);
+  const document = dom.window.document;
+
+  const averageGroup = document.querySelector(
+    '.security-meta-item--average .value-group',
+  );
+  assert.ok(averageGroup, 'expected average purchase group');
+  const averageText = averageGroup.textContent || '';
+  assert.match(averageText, /160,8545\s*HKD/, 'native average should be shown');
+  assert.match(averageText, /17,77\s*EUR/, 'EUR average should be shown alongside native');
 });

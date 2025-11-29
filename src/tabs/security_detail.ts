@@ -1050,25 +1050,39 @@ function composeAveragePurchaseTooltip(
     return null;
   }
   const securityCurrency = toUppercaseCode(snapshot.currency_code) ?? '';
-  const accountCurrencySafe = toUppercaseCode(accountCurrency) ?? '';
-
-  if (!securityCurrency || !accountCurrencySafe || securityCurrency === accountCurrencySafe) {
-    return null;
-  }
-
   const averageCost = normalizeAverageCostPayload(snapshot.average_cost);
-  if (!averageCost) {
+  if (!averageCost || !securityCurrency) {
     return null;
   }
 
   const securityAverage = averageCost.native ?? averageCost.security ?? null;
-  const accountAverage = averageCost.account ?? averageCost.eur ?? null;
+  const rawAccountAverage = averageCost.account ?? averageCost.eur ?? null;
+  let accountAverage = rawAccountAverage;
+  let accountCurrencySafe = toUppercaseCode(accountCurrency) ?? '';
+
+  // Fallback: if the account currency matches the security currency but EUR is present,
+  // surface the EUR average to enable the tooltip.
+  if (
+    isPositiveFinite(averageCost.eur) &&
+    (!accountCurrencySafe || accountCurrencySafe === securityCurrency)
+  ) {
+    accountAverage = averageCost.eur;
+    accountCurrencySafe = 'EUR';
+  }
+
+  if (
+    !securityCurrency ||
+    !accountCurrencySafe ||
+    securityCurrency === accountCurrencySafe
+  ) {
+    return null;
+  }
 
   if (!isPositiveFinite(securityAverage) || !isPositiveFinite(accountAverage)) {
     return null;
   }
 
-  const fxRate = accountAverage / securityAverage;
+  const fxRate = (accountAverage as number) / (securityAverage as number);
   if (!Number.isFinite(fxRate) || fxRate <= 0) {
     return null;
   }
@@ -1256,6 +1270,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     ? ` title="${escapeAttribute(averagePurchaseTooltip)}"`
     : '';
   const averagePurchaseValues: string[] = [];
+  const hasEurAverage = isFiniteNumber(averagePurchaseEurRaw);
 
   if (isFiniteNumber(averagePurchaseNativeRaw)) {
     averagePurchaseValues.push(
@@ -1272,19 +1287,37 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     );
   }
 
-  const shouldRenderAccountValue =
+  let secondaryAverage: number | null = null;
+  let secondaryCurrency: string | null = null;
+
+  if (
+    hasEurAverage &&
+    (
+      currency !== 'EUR' ||
+      !isFiniteNumber(averagePurchaseNativeRaw) ||
+      !areNumbersClose(averagePurchaseEurRaw as number, averagePurchaseNativeRaw)
+    )
+  ) {
+    secondaryAverage = averagePurchaseEurRaw as number;
+    secondaryCurrency = 'EUR';
+  } else if (
     isFiniteNumber(resolvedAccountAverage) &&
-    (!isFiniteNumber(averagePurchaseNativeRaw) ||
-      !accountCurrency ||
+    accountCurrency &&
+    (
       !currency ||
       accountCurrency !== currency ||
-      !areNumbersClose(resolvedAccountAverage, averagePurchaseNativeRaw));
+      !areNumbersClose(resolvedAccountAverage as number, averagePurchaseNativeRaw ?? NaN)
+    )
+  ) {
+    secondaryAverage = resolvedAccountAverage as number;
+    secondaryCurrency = accountCurrency;
+  }
 
-  if (shouldRenderAccountValue && isFiniteNumber(resolvedAccountAverage)) {
+  if (secondaryAverage != null && isFiniteNumber(secondaryAverage)) {
     averagePurchaseValues.push(
       wrapValue(
-        `${formatPrice(resolvedAccountAverage)}${
-          accountCurrency ? `&nbsp;${accountCurrency}` : ''
+        `${formatPrice(secondaryAverage)}${
+          secondaryCurrency ? `&nbsp;${secondaryCurrency}` : ''
         }`,
         'value--average value--average-eur',
       ),
@@ -1360,14 +1393,22 @@ function getHistoryChartOptions(
 ): LineChartOptions {
   const measuredWidth = host.clientWidth || host.offsetWidth || 0;
   const width = measuredWidth > 0 ? measuredWidth : 640;
-  const height = Math.min(Math.max(Math.floor(width * 0.55), 220), 420);
+  const height = Math.min(Math.max(Math.floor(width * 0.5), 240), 440);
   const safeCurrency = (currency || '').toUpperCase() || 'EUR';
   const baselineValue = isFiniteNumber(baseline) ? baseline : null;
+  const marginLeft = Math.max(48, Math.min(72, Math.round(width * 0.075)));
+  const marginRight = Math.max(28, Math.min(56, Math.round(width * 0.05)));
+  const marginBottom = Math.max(40, Math.min(64, Math.round(height * 0.14)));
 
   return {
     width,
     height,
-    margin: { top: 16, right: 20, bottom: 32, left: 20 },
+    margin: {
+      top: 18,
+      right: marginRight,
+      bottom: marginBottom,
+      left: marginLeft,
+    },
     series,
     yFormatter: (value) => formatPrice(value),
     tooltipRenderer: ({ xFormatted, yFormatted }) => `

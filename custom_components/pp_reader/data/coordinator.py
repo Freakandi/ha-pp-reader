@@ -695,6 +695,31 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     reason,
                 )
 
+    async def _plan_and_process_history_jobs(self, *, reason: str) -> None:
+        """Plan missing history from canonical securities and then drain queue."""
+        manager = HistoryQueueManager(self.db_path)
+        enqueued = 0
+        try:
+            enqueued = await manager.plan_jobs_for_securities_table()
+        except Exception:  # noqa: BLE001 - defensive logging
+            _LOGGER.warning(
+                "History-Queue: Planung aus securities-Tabelle fehlgeschlagen "
+                "(entry_id=%s reason=%s)",
+                self.entry_id,
+                reason,
+                exc_info=True,
+            )
+        else:
+            if enqueued:
+                _LOGGER.info(
+                    "History-Queue: %s Jobs aus securities-Tabelle eingeplant "
+                    "(entry_id=%s reason=%s)",
+                    enqueued,
+                    self.entry_id,
+                    reason,
+                )
+        await self._process_history_queue_once(reason=reason)
+
     async def _schedule_fx_refresh(self) -> dict[str, Any] | None:
         """Schedule an FX refresh for active non-EUR currencies."""
         try:

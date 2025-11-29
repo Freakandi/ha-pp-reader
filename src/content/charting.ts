@@ -841,21 +841,15 @@ export function updateLineChart(
 
   assignDimensions(state, options.width, options.height, options.margin);
 
-  const { width, height, margin } = state;
+  const { width, height } = state;
   state.svg.setAttribute('width', String(width));
   state.svg.setAttribute('height', String(height));
   state.svg.setAttribute('viewBox', `0 0 ${String(width)} ${String(height)}`);
 
-  state.overlay.setAttribute('x', margin.left.toFixed(2));
-  state.overlay.setAttribute('y', margin.top.toFixed(2));
-  state.overlay.setAttribute(
-    'width',
-    Math.max(width - margin.left - margin.right, 0).toFixed(2),
-  );
-  state.overlay.setAttribute(
-    'height',
-    Math.max(height - margin.top - margin.bottom, 0).toFixed(2),
-  );
+  state.overlay.setAttribute('x', '0');
+  state.overlay.setAttribute('y', '0');
+  state.overlay.setAttribute('width', Math.max(width, 0).toFixed(2));
+  state.overlay.setAttribute('height', Math.max(height, 0).toFixed(2));
 
   if (Array.isArray(options.series)) {
     state.series = Array.from(options.series);

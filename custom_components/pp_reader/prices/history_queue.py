@@ -27,6 +27,7 @@ from custom_components.pp_reader.data.db_access import (
     NewPriceHistoryJob,
     complete_price_history_job,
     enqueue_price_history_job,
+    get_securities,
     get_price_history_jobs_by_status,
     mark_price_history_job_started,
     price_history_job_exists,
@@ -172,6 +173,35 @@ def build_history_targets_from_parsed(
     return targets
 
 
+def _build_targets_from_securities_table(
+    securities: Sequence[Any],
+) -> list[SecurityHistoryTarget]:
+    """Derive queue targets from canonical DB securities (ticker/online id only)."""
+    targets: list[SecurityHistoryTarget] = []
+    for security in securities:
+        security_uuid = getattr(security, "uuid", None)
+        if not security_uuid:
+            continue
+        ticker_symbol = getattr(security, "ticker_symbol", None)
+        resolved_symbol = _normalize_symbol_token(ticker_symbol)
+        if not resolved_symbol:
+            continue
+        retired = bool(getattr(security, "retired", False))
+        if retired:
+            continue
+        targets.append(
+            SecurityHistoryTarget(
+                security_uuid=security_uuid,
+                feed=None,
+                ticker_symbol=ticker_symbol,
+                online_id=None,
+                properties={},
+                name=getattr(security, "name", None),
+            )
+        )
+    return targets
+
+
 class HistoryQueueManager:
     """Coordinate queue planning and execution for Yahoo history jobs."""
 
@@ -292,6 +322,28 @@ class HistoryQueueManager:
             return enqueued
 
         return await asyncio.to_thread(_plan_jobs_sync)
+
+    async def plan_jobs_for_securities_table(
+        self,
+        *,
+        lookback_days: int = _DEFAULT_LOOKBACK_DAYS,
+        interval: str = DEFAULT_HISTORY_INTERVAL,
+    ) -> int:
+        """Plan jobs based on canonical securities (ticker_symbol only)."""
+
+        def _load_targets() -> list[SecurityHistoryTarget]:
+            securities = get_securities(self._db_path).values()
+            return _build_targets_from_securities_table(tuple(securities))
+
+        targets = await asyncio.to_thread(_load_targets)
+        if not targets:
+            return 0
+
+        return await self.plan_jobs(
+            targets,
+            lookback_days=lookback_days,
+            interval=interval,
+        )
 
     async def process_pending_jobs(
         self,
