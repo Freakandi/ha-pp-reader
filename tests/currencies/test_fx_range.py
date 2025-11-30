@@ -78,7 +78,9 @@ async def test_fetch_fx_range_handles_non_200(
 ) -> None:
     """Non-200 responses return an empty list."""
     monkeypatch.setattr(
-        fx.aiohttp, "ClientSession", lambda *args, **kwargs: _FakeSession({}, status=500)
+        fx.aiohttp,
+        "ClientSession",
+        lambda *args, **kwargs: _FakeSession({}, status=500),
     )
 
     records = await fx.fetch_fx_range("usd", "2024-04-01", "2024-04-02")

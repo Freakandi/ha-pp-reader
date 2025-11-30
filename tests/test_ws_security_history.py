@@ -228,16 +228,13 @@ def _run_ws_get_security_snapshot(*args, **kwargs) -> None:
 
 
 def _epoch_day_to_date(value: int) -> date:
-    """Convert an integer YYYYMMDD representation into a date object."""
-    year = value // 10_000
-    month = (value % 10_000) // 100
-    day = value % 100
-    return date(year, month, day)
+    """Convert an epoch-day integer into a date object."""
+    return date(1970, 1, 1) + timedelta(days=value)
 
 
 def _date_to_epoch_day(value: date) -> int:
-    """Convert a date object into its YYYYMMDD integer representation."""
-    return value.year * 10_000 + value.month * 100 + value.day
+    """Convert a date object into its epoch-day integer representation."""
+    return (value - date(1970, 1, 1)).days
 
 
 @pytest.fixture
@@ -247,10 +244,10 @@ def seeded_history_db(tmp_path: Path) -> Path:
     initialize_database_schema(db_path)
 
     price_rows = [
-        ("sec-1", 20240101, int(10.0 * 1e8), None, None, None),
-        ("sec-1", 20240102, int(10.5 * 1e8), None, None, None),
-        ("sec-1", 20240103, int(10.75 * 1e8), None, None, None),
-        ("sec-2", 20240103, int(99.999 * 1e8), None, None, None),
+        ("sec-1", _date_to_epoch_day(date(2024, 1, 1)), int(10.0 * 1e8), None, None, None),
+        ("sec-1", _date_to_epoch_day(date(2024, 1, 2)), int(10.5 * 1e8), None, None, None),
+        ("sec-1", _date_to_epoch_day(date(2024, 1, 3)), int(10.75 * 1e8), None, None, None),
+        ("sec-2", _date_to_epoch_day(date(2024, 1, 3)), int(99.999 * 1e8), None, None, None),
     ]
 
     conn = sqlite3.connect(str(db_path))
@@ -328,6 +325,80 @@ def seeded_history_db(tmp_path: Path) -> Path:
     return db_path
 
 
+@pytest.fixture
+def seeded_history_db_with_transactions(seeded_history_db: Path) -> Path:
+    """Populate the history DB with purchase/sale transactions for chart markers."""
+    conn = sqlite3.connect(str(seeded_history_db))
+    try:
+        conn.executemany(
+            """
+            INSERT INTO transactions (
+                uuid, type, portfolio, date, currency_code, amount, shares, security
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "tx-inbound",
+                    2,
+                    "portfolio-A",
+                    "2024-01-01",
+                    "EUR",
+                    20000,
+                    100000000,
+                    "sec-1",
+                ),
+                (
+                    "tx-buy",
+                    0,
+                    "portfolio-A",
+                    "2024-01-02",
+                    "EUR",
+                    123456,
+                    250000000,
+                    "sec-1",
+                ),
+                (
+                    "tx-sell",
+                    1,
+                    "portfolio-A",
+                    "2024-01-03",
+                    "EUR",
+                    150000,
+                    300000000,
+                    "sec-1",
+                ),
+                (
+                    "tx-outbound",
+                    3,
+                    "portfolio-A",
+                    "2024-01-04",
+                    "EUR",
+                    50000,
+                    100000000,
+                    "sec-1",
+                ),
+            ],
+        )
+        conn.executemany(
+            """
+            INSERT INTO transaction_units (
+                transaction_uuid, type, amount, currency_code
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("tx-sell", 2, 1000, "EUR"),  # fees
+                ("tx-sell", 1, 2000, "EUR"),  # taxes
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return seeded_history_db
+
+
 def test_ws_get_security_history_returns_filtered_prices(
     seeded_history_db: Path,
 ) -> None:
@@ -344,8 +415,8 @@ def test_ws_get_security_history_returns_filtered_prices(
             "type": "pp_reader/get_security_history",
             "entry_id": entry_id,
             "security_uuid": "sec-1",
-            "start_date": 20240102,
-            "end_date": 20240103,
+            "start_date": _date_to_epoch_day(date(2024, 1, 2)),
+            "end_date": _date_to_epoch_day(date(2024, 1, 3)),
         },
     )
 
@@ -354,16 +425,16 @@ def test_ws_get_security_history_returns_filtered_prices(
     _, payload = connection.sent[0]
 
     assert payload["security_uuid"] == "sec-1"
-    assert payload["start_date"] == 20240102
-    assert payload["end_date"] == 20240103
+    assert payload["start_date"] == _date_to_epoch_day(date(2024, 1, 2))
+    assert payload["end_date"] == _date_to_epoch_day(date(2024, 1, 3))
     assert payload["prices"] == [
         {
-            "date": 20240102,
+            "date": _date_to_epoch_day(date(2024, 1, 2)),
             "close": round_price(10.5, decimals=6),
             "close_raw": int(10.5 * 1e8),
         },
         {
-            "date": 20240103,
+            "date": _date_to_epoch_day(date(2024, 1, 3)),
             "close": round_price(10.75, decimals=6),
             "close_raw": int(10.75 * 1e8),
         },
@@ -422,8 +493,8 @@ def test_ws_get_security_history_supports_predefined_ranges(
     connection = StubConnection()
 
     # Align the range to the seeded dataset which ends on 2024-01-03.
-    end_date = 20240103
-    end_date_obj = _epoch_day_to_date(end_date)
+    end_date_obj = date(2024, 1, 3)
+    end_date = _date_to_epoch_day(end_date_obj)
     start_delta = timedelta(days=day_count - 1) if day_count > 0 else timedelta(0)
     start_date_obj = end_date_obj - start_delta
     start_date = _date_to_epoch_day(start_date_obj)
@@ -450,21 +521,94 @@ def test_ws_get_security_history_supports_predefined_ranges(
     assert payload.get("end_date") == end_date
     assert payload["prices"] == [
         {
-            "date": 20240101,
+            "date": _date_to_epoch_day(date(2024, 1, 1)),
             "close": round_price(10.0, decimals=6),
             "close_raw": int(10.0 * 1e8),
         },
         {
-            "date": 20240102,
+            "date": _date_to_epoch_day(date(2024, 1, 2)),
             "close": round_price(10.5, decimals=6),
             "close_raw": int(10.5 * 1e8),
         },
         {
-            "date": 20240103,
+            "date": _date_to_epoch_day(date(2024, 1, 3)),
             "close": round_price(10.75, decimals=6),
             "close_raw": int(10.75 * 1e8),
         },
     ]
+
+
+def test_ws_get_security_history_returns_transactions_with_prices(
+    seeded_history_db_with_transactions: Path,
+) -> None:
+    """Ensure transactions are filtered and expose per-share pricing."""
+    entry_id = "entry-tx"
+    hass = StubHass(
+        {DOMAIN: {entry_id: {"db_path": seeded_history_db_with_transactions}}}
+    )
+    connection = StubConnection()
+
+    _run_ws_get_security_history(
+        hass,
+        connection,
+        {
+            "id": 501,
+            "type": "pp_reader/get_security_history",
+            "entry_id": entry_id,
+            "security_uuid": "sec-1",
+            "start_date": _date_to_epoch_day(date(2024, 1, 2)),
+            "end_date": _date_to_epoch_day(date(2024, 1, 3)),
+        },
+    )
+
+    assert connection.errors == []
+    assert connection.sent, "no payload with transactions"
+    filtered_payload = connection.sent[-1][1]
+    transactions = filtered_payload.get("transactions")
+    assert isinstance(transactions, list)
+    assert len(transactions) == 2  # inbound/outbound outside range
+
+    buy_tx, sell_tx = transactions
+    assert buy_tx["uuid"] == "tx-buy"
+    assert buy_tx["type"] == 0
+    assert buy_tx["date"] == "2024-01-02"
+    assert buy_tx["portfolio"] == "portfolio-A"
+    assert buy_tx["currency_code"] == "EUR"
+    assert buy_tx["shares"] == pytest.approx(2.5)
+    assert buy_tx["price"] == pytest.approx(round_price(1234.56 / 2.5, decimals=4))
+    assert buy_tx["amount"] == 123456
+    assert buy_tx["fees"] == 0
+    assert buy_tx["taxes"] == 0
+    assert "net_price_eur" not in buy_tx
+
+    assert sell_tx["uuid"] == "tx-sell"
+    assert sell_tx["type"] == 1
+    assert sell_tx["date"] == "2024-01-03"
+    assert sell_tx["shares"] == pytest.approx(3.0)
+    assert sell_tx["price"] == pytest.approx(500.0)
+    assert sell_tx["amount"] == 150000
+    assert sell_tx["fees"] == 1000
+    assert sell_tx["taxes"] == 2000
+    assert sell_tx["net_price_eur"] == pytest.approx(490.0)
+
+    connection_all = StubConnection()
+    _run_ws_get_security_history(
+        hass,
+        connection_all,
+        {
+            "id": 502,
+            "type": "pp_reader/get_security_history",
+            "entry_id": entry_id,
+            "security_uuid": "sec-1",
+        },
+    )
+
+    assert connection_all.errors == []
+    assert connection_all.sent
+    all_transactions = connection_all.sent[-1][1].get("transactions")
+    assert all_transactions and {tx["type"] for tx in all_transactions} == {0, 1, 2, 3}
+    outbound = next(tx for tx in all_transactions if tx["uuid"] == "tx-outbound")
+    assert outbound["net_price_eur"] == pytest.approx(500.0)
 
 
 def test_ws_get_security_snapshot_success(seeded_history_db: Path) -> None:

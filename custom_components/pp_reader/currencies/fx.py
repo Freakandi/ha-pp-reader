@@ -132,9 +132,7 @@ def _save_rates_sync(
     if not rates:
         return
     with _WRITE_LOCK:
-        local_conn = conn or sqlite3.connect(
-            str(db_path), timeout=SQLITE_TIMEOUT
-        )
+        local_conn = conn or sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
         try:
             fetched_at = (
                 datetime.now(tz=UTC)

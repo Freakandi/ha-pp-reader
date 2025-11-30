@@ -59,6 +59,7 @@ export interface NormalizedPositionSnapshot {
   portfolio_uuid?: string;
   security_uuid?: string;
   name?: string;
+  ticker_symbol?: string | null;
   currency_code?: string | null;
   current_holdings?: number;
   purchase_value?: number;

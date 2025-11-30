@@ -17,7 +17,11 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - runtime fallback for type hints
     HomeAssistant = Any  # type: ignore[assignment]
 
-from custom_components.pp_reader.logic.securities import get_missing_fx_diagnostics
+from custom_components.pp_reader.logic.portfolio import normalize_shares
+from custom_components.pp_reader.logic.securities import (
+    SALE_TYPES,
+    get_missing_fx_diagnostics,
+)
 from custom_components.pp_reader.metrics.storage import load_latest_metric_batch
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import (
@@ -35,11 +39,12 @@ from .db_access import (
     PortfolioMetricRecord,
     Security,
     SecurityMetricRecord,
+    fetch_previous_close,
     get_accounts,
     get_portfolios,
     get_securities,
-    fetch_previous_close,
     get_security_snapshot,
+    get_security_transactions,
     iter_security_close_prices,
 )
 from .snapshot_writer import persist_normalization_result
@@ -102,6 +107,7 @@ class PositionSnapshot:
     average_cost: dict[str, Any]
     performance: dict[str, Any]
     aggregation: dict[str, Any]
+    ticker_symbol: str | None = None
     coverage_ratio: float | None = None
     provenance: str | None = None
     metric_run_uuid: str | None = None
@@ -320,12 +326,14 @@ async def async_fetch_security_history(
     *,
     start_date: int | None = None,
     end_date: int | None = None,
-) -> list[dict[str, Any]]:
-    """Return historical close prices for a security."""
+) -> dict[str, Any]:
+    """Return historical close prices and relevant transactions for a security."""
     resolved_path = Path(db_path)
 
-    def _collect_history() -> list[tuple[int, float | None, int | None]]:
-        return list(
+    def _collect_history() -> tuple[
+        list[tuple[int, float | None, int | None]], list[dict[str, Any]]
+    ]:
+        price_rows = list(
             iter_security_close_prices(
                 db_path=resolved_path,
                 security_uuid=security_uuid,
@@ -333,17 +341,93 @@ async def async_fetch_security_history(
                 end_date=end_date,
             )
         )
+        transactions = get_security_transactions(
+            resolved_path,
+            security_uuid,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return price_rows, transactions
 
-    rows = await async_run_executor_job(hass, _collect_history)
-    payload: list[dict[str, Any]] = []
-    for date_value, close_value, close_raw in rows:
+    price_rows, transaction_rows = await async_run_executor_job(hass, _collect_history)
+
+    prices: list[dict[str, Any]] = []
+    for date_value, close_value, close_raw in price_rows:
         entry: dict[str, Any] = {"date": date_value}
         if close_value is not None:
             entry["close"] = close_value
         if close_raw is not None:
             entry["close_raw"] = close_raw
-        payload.append(entry)
-    return payload
+        prices.append(entry)
+
+    transactions: list[dict[str, Any]] = []
+    for tx in transaction_rows:
+        shares_value = None
+        shares_raw = tx.get("shares")
+        if shares_raw is not None:
+            try:
+                shares_value = normalize_shares(int(shares_raw))
+            except (TypeError, ValueError):
+                shares_value = None
+
+        price_native = None
+        amount_raw = tx.get("amount")
+        if shares_value not in (None, 0) and amount_raw is not None:
+            gross_total = cent_to_eur(amount_raw, decimals=4, default=None)
+            if gross_total is not None:
+                try:
+                    price_native = round_price(
+                        gross_total / shares_value,
+                        decimals=4,
+                        default=None,
+                    )
+                except ZeroDivisionError:  # pragma: no cover - defensive
+                    price_native = None
+
+        entry: dict[str, Any] = {
+            "uuid": tx.get("uuid"),
+            "type": tx.get("type"),
+            "date": tx.get("date"),
+            "portfolio": tx.get("portfolio"),
+        }
+
+        currency_code = tx.get("currency_code")
+        if currency_code:
+            entry["currency_code"] = currency_code
+        if shares_value is not None:
+            entry["shares"] = shares_value
+        if price_native is not None:
+            entry["price"] = price_native
+
+        is_sale = tx.get("type") in SALE_TYPES
+        if is_sale and shares_value not in (None, 0):
+            fees_raw = tx.get("fees") or 0
+            taxes_raw = tx.get("taxes") or 0
+            net_total_cents = (amount_raw or 0) - fees_raw - taxes_raw
+            net_total_eur = cent_to_eur(net_total_cents, decimals=4, default=None)
+            if net_total_eur is not None:
+                try:
+                    net_price_eur = round_price(
+                        net_total_eur / shares_value,
+                        decimals=4,
+                        default=None,
+                    )
+                except ZeroDivisionError:  # pragma: no cover - defensive
+                    net_price_eur = None
+                if net_price_eur is not None:
+                    entry["net_price_eur"] = net_price_eur
+
+        for field_name in ("amount", "fees", "taxes"):
+            value = tx.get(field_name)
+            if value is not None:
+                entry[field_name] = value
+
+        transactions.append(entry)
+
+    return {
+        "prices": prices,
+        "transactions": transactions,
+    }
 
 
 def _normalize_snapshot_sync(
@@ -472,7 +556,9 @@ def _compose_portfolio_snapshots(
         if record.portfolio_uuid
     }
     context = position_context if include_positions else None
-    day_changes = _aggregate_portfolio_day_change(security_metrics, db_path, reference_date)
+    day_changes = _aggregate_portfolio_day_change(
+        security_metrics, db_path, reference_date
+    )
 
     snapshots: list[PortfolioSnapshot] = []
     for uuid, portfolio in portfolio_index.items():
@@ -504,7 +590,12 @@ def _build_position_context(
             security_metrics
         ).items()
     }
-    return _PositionContext(db_path=db_path, securities=securities, index=index, reference_date=reference_date)
+    return _PositionContext(
+        db_path=db_path,
+        securities=securities,
+        index=index,
+        reference_date=reference_date,
+    )
 
 
 def _build_portfolio_snapshot(
@@ -592,10 +683,17 @@ def _aggregate_portfolio_day_change(
 
         for record in records:
             try:
-                total_current_cents += int(getattr(record, "current_value_cents", 0) or 0)
+                total_current_cents += int(
+                    getattr(record, "current_value_cents", 0) or 0
+                )
             except (TypeError, ValueError):
                 total_current_cents += 0
 
+            currency_code = (
+                (getattr(record, "security_currency_code", None) or "EUR")
+                .strip()
+                .upper()
+            )
             holdings = _from_holdings_raw(getattr(record, "holdings_raw", 0))
             if holdings <= 0:
                 continue
@@ -614,10 +712,40 @@ def _aggregate_portfolio_day_change(
                 getattr(record, "last_price_native_raw", None),
                 decimals=4,
             )
-            has_prev_close = prev_native is not None and last_price_native is not None
+
+            last_price_eur = normalize_price_to_eur_sync(
+                getattr(record, "last_price_native_raw", None),
+                currency_code,
+                reference_date,
+                db_path,
+            )
+            prev_close_eur = (
+                normalize_price_to_eur_sync(
+                    prev_raw, currency_code, reference_date, db_path
+                )
+                if prev_raw is not None
+                else None
+            )
+            if currency_code == "EUR":
+                # Fallback to native values when no FX conversion is required.
+                last_price_eur = (
+                    last_price_eur if last_price_eur is not None else last_price_native
+                )
+                prev_close_eur = (
+                    prev_close_eur if prev_close_eur is not None else prev_native
+                )
+
+            has_prev_close = prev_close_eur is not None and last_price_eur is not None
             if has_prev_close:
-                price_change_native = last_price_native - prev_native
-                delta_eur = round_currency(price_change_native * holdings, default=None)
+                price_change_eur = round_price(
+                    last_price_eur - prev_close_eur,
+                    decimals=6,
+                    default=None,
+                )
+                delta_eur = round_currency(
+                    (price_change_eur or 0) * holdings,
+                    default=None,
+                )
             if delta_eur is None:
                 # Missing previous close: treat as 0 contribution but mark as missing.
                 rows_missing_change += 1
@@ -643,8 +771,7 @@ def _aggregate_portfolio_day_change(
         previous_close = current_value_eur - (day_change_value or 0)
         day_change_pct = (
             round_currency((day_change_value / previous_close) * 100, default=None)
-            if previous_close not in (None, 0)
-            and day_change_value is not None
+            if previous_close not in (None, 0) and day_change_value is not None
             else None
         )
 
@@ -884,7 +1011,11 @@ def _load_position_snapshots(
                 decimals=6,
                 default=None,
             )
-        if price_change_native is not None or price_change_eur is not None or change_pct is not None:
+        if (
+            price_change_native is not None
+            or price_change_eur is not None
+            or change_pct is not None
+        ):
             performance_payload["day_change"] = {
                 "price_change_native": price_change_native,
                 "price_change_eur": price_change_eur,
@@ -914,11 +1045,14 @@ def _load_position_snapshots(
                 "coverage_ratio": record.day_change_coverage,
             }
 
+        ticker_symbol = security_meta.ticker_symbol if security_meta else None
+
         snapshots.append(
             PositionSnapshot(
                 portfolio_uuid=portfolio_uuid,
                 security_uuid=security_uuid,
                 name=name,
+                ticker_symbol=ticker_symbol,
                 currency_code=currency_code,
                 current_holdings=holdings,
                 purchase_value=purchase_value,
@@ -1144,7 +1278,11 @@ def _build_security_snapshot_from_positions(
             decimals=6,
             default=None,
         )
-    if price_change_native is not None or price_change_eur is not None or change_pct is not None:
+    if (
+        price_change_native is not None
+        or price_change_eur is not None
+        or change_pct is not None
+    ):
         performance_payload["day_change"] = {
             "price_change_native": price_change_native,
             "price_change_eur": price_change_eur,
@@ -1153,8 +1291,11 @@ def _build_security_snapshot_from_positions(
             "coverage_ratio": coverage_ratio,
         }
 
+    ticker_symbol = _first_string(position.ticker_symbol for position in matched)
+
     return {
         "name": first.name,
+        "ticker_symbol": ticker_symbol,
         "currency_code": first.currency_code,
         "total_holdings": round_currency(
             total_holdings,

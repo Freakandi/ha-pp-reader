@@ -90,6 +90,7 @@ function mergePositionRecords(
     'portfolio_uuid',
     'security_uuid',
     'name',
+    'ticker_symbol',
     'currency_code',
     'current_holdings',
     'purchase_value',

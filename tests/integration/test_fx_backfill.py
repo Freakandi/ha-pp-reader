@@ -14,7 +14,9 @@ from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.data.fx_backfill import backfill_fx
 
 
-def _insert_ingestion_transaction(conn: sqlite3.Connection, currency: str, tx_date: str) -> None:
+def _insert_ingestion_transaction(
+    conn: sqlite3.Connection, currency: str, tx_date: str
+) -> None:
     conn.execute(
         """
         INSERT INTO ingestion_transactions (
@@ -44,7 +46,9 @@ def _insert_fx_rate(conn: sqlite3.Connection, record: FxRateRecord) -> None:
 
 
 @pytest.mark.asyncio
-async def test_backfill_fills_missing_fx_and_lookup_uses_nearest(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_backfill_fills_missing_fx_and_lookup_uses_nearest(
+    tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Backfill inserts missing FX rows and lookup uses nearest-on-or-before."""
     db_path = tmp_path / "fx_backfill.db"
     initialize_database_schema(db_path)

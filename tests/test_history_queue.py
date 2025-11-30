@@ -30,12 +30,18 @@ async def test_plan_jobs_overlap_backfills_recent_history(monkeypatch, tmp_path)
     """Jobs overlap the latest date to refill recent gaps."""
 
     monkeypatch.setattr(history_queue, "datetime", _FixedDateTime)
-    monkeypatch.setattr(history_queue, "_load_latest_history_epoch", lambda conn, uuid: 20378)
-    monkeypatch.setattr(history_queue, "price_history_job_exists", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        history_queue, "_load_latest_history_epoch", lambda conn, uuid: 20378
+    )
+    monkeypatch.setattr(
+        history_queue, "price_history_job_exists", lambda *args, **kwargs: False
+    )
 
     recorded: list[history_queue.NewPriceHistoryJob] = []
 
-    def _capture_enqueue(db_path: Path, job: history_queue.NewPriceHistoryJob, *, conn=None):
+    def _capture_enqueue(
+        db_path: Path, job: history_queue.NewPriceHistoryJob, *, conn=None
+    ):
         recorded.append(job)
         return 1
 

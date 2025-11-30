@@ -67,11 +67,17 @@ def test_upsert_fx_rates_chunked_inserts_all(tmp_path: pytest.TempPathFactory) -
 
     start_date = datetime(2024, 4, 1, tzinfo=UTC).date()
     records = [
-        _make_record("USD", (start_date + timedelta(days=offset)).isoformat(), 1.0 + offset * 0.01)
+        _make_record(
+            "USD",
+            (start_date + timedelta(days=offset)).isoformat(),
+            1.0 + offset * 0.01,
+        )
         for offset in range(10)
     ]
     # Duplicate last element with changed rate to exercise conflict update
-    records.append(_make_record("USD", (start_date + timedelta(days=5)).isoformat(), 2.5))
+    records.append(
+        _make_record("USD", (start_date + timedelta(days=5)).isoformat(), 2.5)
+    )
 
     upsert_fx_rates_chunked(db_path, records, chunk_size=3)
 

@@ -612,6 +612,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
         websocket_api.async_register_command(hass, websocket.ws_get_security_snapshot)
         websocket_api.async_register_command(hass, websocket.ws_get_security_history)
+        websocket_api.async_register_command(hass, websocket.ws_get_news_prompt)
         # _LOGGER.debug("Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
         _LOGGER.exception("Fehler bei der Registrierung der Websocket-Befehle")

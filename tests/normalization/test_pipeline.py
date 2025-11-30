@@ -60,7 +60,9 @@ def test_load_position_snapshots_preserves_purchase_totals(
     ]
 
     # Avoid FX lookups during the test run
-    monkeypatch.setattr(pipeline, "normalize_price_to_eur_sync", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        pipeline, "normalize_price_to_eur_sync", lambda *args, **kwargs: None
+    )
 
     snapshots = tuple(
         pipeline._load_position_snapshots(  # type: ignore[attr-defined]
@@ -279,7 +281,9 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     assert alpha.performance["gain_abs"] == pytest.approx(500.0)
     assert alpha.day_change_abs is None
     assert alpha.day_change_pct is None
-    assert "day_change" not in alpha.performance or alpha.performance["day_change"] is None
+    assert (
+        "day_change" not in alpha.performance or alpha.performance["day_change"] is None
+    )
     assert alpha.data_state.status == "ok"
     assert len(alpha.positions) == 1
 
@@ -290,7 +294,10 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     assert alpha_position.average_cost["security"] == pytest.approx(
         381.818182, rel=1e-6
     )
-    assert "day_change" not in alpha_position.performance or alpha_position.performance["day_change"] is None
+    assert (
+        "day_change" not in alpha_position.performance
+        or alpha_position.performance["day_change"] is None
+    )
 
     assert zeta.uuid == "portfolio-a"
     assert zeta.data_state.status == "error"

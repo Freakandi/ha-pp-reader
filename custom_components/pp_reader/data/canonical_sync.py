@@ -38,6 +38,7 @@ def _sync_ingestion_to_canonical(db_path: Path) -> None:
         _sync_securities(conn)
         _sync_portfolio_securities(conn, db_path)
         _sync_historical_prices(conn)
+        _sync_transactions(conn)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -153,6 +154,76 @@ def _sync_historical_prices(conn: sqlite3.Connection) -> None:
             "Fehler beim Synchronisieren der historischen Preise aus der Ingestion"
         )
         raise
+
+
+def _sync_transactions(conn: sqlite3.Connection) -> None:
+    """Mirror staged transactions plus units into canonical tables."""
+    conn.execute("DELETE FROM transaction_units")
+    conn.execute("DELETE FROM transactions")
+
+    conn.execute(
+        """
+        INSERT INTO transactions (
+            uuid,
+            type,
+            account,
+            portfolio,
+            other_account,
+            other_portfolio,
+            other_uuid,
+            other_updated_at,
+            date,
+            currency_code,
+            amount,
+            shares,
+            note,
+            security,
+            source,
+            updated_at
+        )
+        SELECT
+            uuid,
+            type,
+            account,
+            portfolio,
+            other_account,
+            other_portfolio,
+            other_uuid,
+            other_updated_at,
+            date,
+            currency_code,
+            amount,
+            shares,
+            note,
+            security,
+            source,
+            updated_at
+        FROM ingestion_transactions
+        """
+    )
+
+    conn.execute(
+        """
+        INSERT INTO transaction_units (
+            transaction_uuid,
+            type,
+            amount,
+            currency_code,
+            fx_amount,
+            fx_currency_code,
+            fx_rate_to_base
+        )
+        SELECT
+            transaction_uuid,
+            type,
+            amount,
+            currency_code,
+            fx_amount,
+            fx_currency_code,
+            fx_rate_to_base
+        FROM ingestion_transaction_units
+        """
+    )
 
 
 def _load_ingestion_transactions(conn: sqlite3.Connection) -> list[Transaction]:
@@ -470,9 +541,7 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
         currency_code = (row["currency_code"] or "").strip().upper()
         tx_date = row["date"] or ""
         security_currency = (
-            security_currency_map.get(security)
-            or currency_code
-            or "EUR"
+            security_currency_map.get(security) or currency_code or "EUR"
         )
 
         key = (portfolio, security)
@@ -494,12 +563,8 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
             security_total: float | None = None
             unit = tx_units.get(tx_uuid) if tx_uuid else None
             if unit:
-                unit_currency = (
-                    (unit.get("fx_currency_code") or "").strip().upper()
-                )
-                unit_total = cent_to_eur(
-                    unit.get("fx_amount"), default=None
-                )
+                unit_currency = (unit.get("fx_currency_code") or "").strip().upper()
+                unit_total = cent_to_eur(unit.get("fx_amount"), default=None)
                 if (
                     unit_total is not None
                     and unit_currency
@@ -526,15 +591,15 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
                         rate_security = _lookup_fx_rate(
                             conn, security_currency, tx_date
                         )
-                        rate_account = _lookup_fx_rate(
-                            conn, currency_code, tx_date
-                        )
+                        rate_account = _lookup_fx_rate(conn, currency_code, tx_date)
                         if (
                             rate_security
                             and rate_account
                             and rate_account not in (0, None)
                         ):
-                            security_total = (account_total / rate_account) * rate_security
+                            security_total = (
+                                account_total / rate_account
+                            ) * rate_security
 
             entry["security_currency_total"] += security_total or 0.0
 

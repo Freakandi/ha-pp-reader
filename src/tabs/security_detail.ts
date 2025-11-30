@@ -16,10 +16,11 @@ import {
   formatGainPct,
 } from '../content/elements';
 import { renderLineChart, updateLineChart } from '../content/charting';
-import type { LineChartOptions } from '../content/charting';
+import type { LineChartMarker, LineChartOptions } from '../content/charting';
 import {
   fetchSecuritySnapshotWS,
   fetchSecurityHistoryWS,
+  fetchNewsPromptWS,
 } from '../data/api';
 import {
   normalizeAverageCostPayload,
@@ -29,6 +30,7 @@ import type {
   SecuritySnapshotResponse,
   SecurityHistoryResponse,
   SecurityHistoryOptions,
+  SecurityHistoryTransaction,
 } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import type {
@@ -61,6 +63,10 @@ const RANGE_DAY_COUNTS: Record<SecurityHistoryRangeKey, number> = {
   '5Y': 1826,
   'ALL': Number.POSITIVE_INFINITY,
 };
+const PURCHASE_TYPES = new Set([0, 2]);
+const SALE_TYPES = new Set([1, 3]);
+const MARKER_COLOR_PURCHASE = 'var(--pp-reader-chart-marker-buy, #2e7d32)';
+const MARKER_COLOR_SALE = 'var(--pp-reader-chart-marker-sell, #c0392b)';
 
 type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'>> & {
   security_uuid?: string | null;
@@ -118,6 +124,10 @@ type LiveUpdateHandler = (event: Event) => void;
 const SECURITY_HISTORY_CACHE: HistoryCacheRegistry = new Map();
 const RANGE_STATE_REGISTRY: RangeStateRegistry = new Map();
 const SNAPSHOT_DETAIL_REGISTRY: SnapshotDetailRegistry = new Map();
+const SECURITY_HISTORY_MARKER_CACHE: Map<
+  string,
+  Map<SecurityHistoryRangeKey, LineChartMarker[]>
+> = new Map();
 const LIVE_UPDATE_EVENT = 'pp-reader:portfolio-positions-updated';
 const LIVE_UPDATE_HANDLERS = new Map<string, LiveUpdateHandler>();
 
@@ -134,6 +144,11 @@ export const __TEST_ONLY__ = {
   resolveAccountCurrencyCodeForTest: resolveAccountCurrencyCode,
   resolvePurchaseFxTimestampForTest: resolvePurchaseFxTimestamp,
   buildHeaderMetaForTest: buildHeaderMeta,
+  normaliseTransactionMarkersForTest: (
+    transactions: unknown,
+    fallbackCurrency: string | null | undefined,
+  ): LineChartMarker[] =>
+    normaliseTransactionMarkers(transactions, fallbackCurrency),
 };
 
 function buildCachedSnapshotNotice(params: {
@@ -206,6 +221,18 @@ function ensureHistoryCache(securityUuid: string): SecurityHistoryCache {
   return SECURITY_HISTORY_CACHE.get(securityUuid) as SecurityHistoryCache;
 }
 
+function ensureHistoryMarkerCache(
+  securityUuid: string,
+): Map<SecurityHistoryRangeKey, LineChartMarker[]> {
+  if (!SECURITY_HISTORY_MARKER_CACHE.has(securityUuid)) {
+    SECURITY_HISTORY_MARKER_CACHE.set(securityUuid, new Map());
+  }
+  return SECURITY_HISTORY_MARKER_CACHE.get(securityUuid) as Map<
+    SecurityHistoryRangeKey,
+    LineChartMarker[]
+  >;
+}
+
 function invalidateHistoryCache(securityUuid: string | null | undefined): void {
   if (!securityUuid) {
     return;
@@ -221,6 +248,16 @@ function invalidateHistoryCache(securityUuid: string | null | undefined): void {
       console.warn('invalidateHistoryCache: Konnte Cache nicht leeren', securityUuid, error);
     }
     SECURITY_HISTORY_CACHE.delete(securityUuid);
+  }
+
+  if (SECURITY_HISTORY_MARKER_CACHE.has(securityUuid)) {
+    try {
+      const markerCache = SECURITY_HISTORY_MARKER_CACHE.get(securityUuid);
+      markerCache?.clear();
+    } catch (error) {
+      console.warn('invalidateHistoryCache: Konnte Marker-Cache nicht leeren', securityUuid, error);
+    }
+    SECURITY_HISTORY_MARKER_CACHE.delete(securityUuid);
   }
 }
 
@@ -473,6 +510,27 @@ function parseHistoryDate(raw: unknown): Date | null {
   return null;
 }
 
+function parseTransactionDate(raw: unknown): Date | null {
+  const parsed = parseHistoryDate(raw);
+  if (parsed) {
+    return parsed;
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const isoParsed = Date.parse(trimmed);
+    if (Number.isFinite(isoParsed)) {
+      const candidate = new Date(isoParsed);
+      return Number.isNaN(candidate.getTime()) ? null : candidate;
+    }
+  }
+
+  return null;
+}
+
 function parseTimestamp(value: unknown): number | null {
   if (!value && value !== 0) {
     return null;
@@ -535,6 +593,72 @@ function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
       };
     })
     .filter((entry): entry is NormalizedHistoryEntry => Boolean(entry));
+}
+
+function normaliseTransactionMarkers(
+  transactions: unknown,
+  fallbackCurrency: string | null | undefined,
+): LineChartMarker[] {
+  if (!Array.isArray(transactions)) {
+    return [];
+  }
+
+  const markers: LineChartMarker[] = [];
+  const defaultCurrency = (fallbackCurrency || '').toUpperCase() || 'EUR';
+
+  (transactions as SecurityHistoryTransaction[]).forEach((tx, index) => {
+    const typeValue = typeof tx.type === 'number' ? tx.type : Number(tx.type);
+    const isPurchase = PURCHASE_TYPES.has(typeValue);
+    const isSale = SALE_TYPES.has(typeValue);
+    if (!isPurchase && !isSale) {
+      return;
+    }
+
+    const parsedDate = parseTransactionDate(tx.date);
+    const price = toFiniteNumber(tx.price);
+    if (!parsedDate || price == null) {
+      return;
+    }
+
+    const currency =
+      typeof tx.currency_code === 'string' && tx.currency_code.trim()
+        ? tx.currency_code.toUpperCase()
+        : defaultCurrency;
+    const shares = toFiniteNumber(tx.shares);
+    const netPriceEur = toFiniteNumber((tx as { net_price_eur?: unknown }).net_price_eur);
+
+    const typeLabel = isPurchase ? 'Kauf' : 'Verkauf';
+    const sharesPart = shares != null ? `${formatHoldings(shares)} @ ` : '';
+    const baseLabel = `${typeLabel} ${sharesPart}${formatPrice(price)} ${currency}`;
+    const label =
+      isSale && netPriceEur != null
+        ? `${baseLabel} (netto ${formatPrice(netPriceEur)} EUR)`
+        : baseLabel;
+
+    const color = isPurchase ? MARKER_COLOR_PURCHASE : MARKER_COLOR_SALE;
+    const markerId =
+      (typeof tx.uuid === 'string' && tx.uuid.trim()) ||
+      `${typeLabel}-${parsedDate.getTime()}-${index}`;
+
+    markers.push({
+      id: markerId,
+      x: parsedDate.getTime(),
+      y: price,
+      color,
+      label,
+      payload: {
+        type: typeLabel,
+        currency,
+        shares,
+        price,
+        netPriceEur,
+        date: parsedDate.toISOString(),
+        portfolio: tx.portfolio,
+      },
+    });
+  });
+
+  return markers;
 }
 
 function extractSnapshotLastPriceNative(
@@ -888,6 +1012,58 @@ function escapeAttribute(
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function resolveTickerSymbol(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+  securityUuid: string | null | undefined,
+): string {
+  const rawTicker = (snapshot as { ticker_symbol?: unknown } | null | undefined)?.ticker_symbol;
+  if (typeof rawTicker === 'string' && rawTicker.trim()) {
+    return rawTicker.trim();
+  }
+
+  const name = typeof snapshot?.name === 'string' ? snapshot.name.trim() : '';
+  if (name) {
+    return name;
+  }
+
+  return typeof securityUuid === 'string' ? securityUuid : '';
+}
+
+function buildNewsPromptButton(tickerSymbol: string): string {
+  const safeSymbol = escapeAttribute(tickerSymbol);
+  return `
+    <div class="news-prompt-container">
+      <button
+        type="button"
+        class="news-prompt-button"
+        data-symbol="${safeSymbol}"
+      >
+        Check recent news via ChatGPT
+      </button>
+    </div>
+  `;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }
 
 function resolveAccountCurrencyCode(
@@ -1389,7 +1565,12 @@ function getHistoryChartOptions(
   {
     currency,
     baseline,
-  }: { currency?: string | null | undefined; baseline?: number | null | undefined } = {},
+    markers,
+  }: {
+    currency?: string | null | undefined;
+    baseline?: number | null | undefined;
+    markers?: readonly LineChartMarker[];
+  } = {},
 ): LineChartOptions {
   const measuredWidth = host.clientWidth || host.offsetWidth || 0;
   const width = measuredWidth > 0 ? measuredWidth : 640;
@@ -1421,6 +1602,7 @@ function getHistoryChartOptions(
             value: baselineValue,
           }
         : null,
+    markers: Array.isArray(markers) ? markers : [],
   };
 }
 
@@ -1435,6 +1617,7 @@ function renderHistoryChart(
   options: {
     currency?: string | null | undefined;
     baseline?: number | null | undefined;
+    markers?: readonly LineChartMarker[];
   } = {},
 ): void {
   if (series.length === 0) {
@@ -1504,6 +1687,7 @@ function updateHistoryPlaceholder(
   options: {
     currency?: string | null | undefined;
     baseline?: number | null | undefined;
+    markers?: readonly LineChartMarker[];
   } = {},
 ): void {
   const placeholderContainer = root.querySelector('.security-detail-placeholder');
@@ -1556,6 +1740,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
     }
 
     const cache = ensureHistoryCache(securityUuid);
+    const markerCache = ensureHistoryMarkerCache(securityUuid);
     const initialBaseline = selectAveragePurchaseBaseline(snapshot);
     const shouldCacheInitial =
       Array.isArray(initialHistory) && initialHistoryState.status !== 'error';
@@ -1585,6 +1770,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       {
         currency: snapshot?.currency_code,
         baseline: initialBaseline,
+        markers: markerCache.get(initialRange) ?? [],
       },
     );
 
@@ -1602,6 +1788,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       }
 
       let historySeries = cache.get(rangeKey) ?? null;
+      let markers = markerCache.get(rangeKey) ?? null;
       let historyState: HistoryPlaceholderState | null = null;
       let displayHistorySeries: NormalizedHistoryEntry[] = [];
       if (!historySeries) {
@@ -1613,14 +1800,20 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
             securityUuid,
             rangeOptions,
           );
-            historySeries = normaliseHistorySeries(historyResponse.prices);
+          historySeries = normaliseHistorySeries(historyResponse.prices);
+          markers = normaliseTransactionMarkers(
+            historyResponse.transactions,
+            snapshot?.currency_code,
+          );
           cache.set(rangeKey, historySeries);
+          markerCache.set(rangeKey, markers || []);
           historyState = historySeries.length
             ? { status: 'loaded' }
             : { status: 'empty' };
         } catch (error) {
           console.error('Range-Wechsel: Historie konnte nicht geladen werden', error);
           historySeries = [];
+          markers = [];
           const message = normaliseHistoryError(error);
           historyState = {
             status: 'error',
@@ -1633,13 +1826,33 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         historyState = historySeries.length
           ? { status: 'loaded' }
           : { status: 'empty' };
-        }
+      }
 
-        displayHistorySeries = buildHistorySeriesWithSnapshotPrice(historySeries, snapshot);
-        if (historyState.status !== 'error') {
-          historyState = displayHistorySeries.length
-            ? { status: 'loaded' }
-            : { status: 'empty' };
+      if (!Array.isArray(markers)) {
+        try {
+          const rangeOptions = resolveRangeOptions(rangeKey);
+          const historyResponse = await fetchSecurityHistoryWS(
+            hass,
+            panelConfig,
+            securityUuid,
+            rangeOptions,
+          );
+          markers = normaliseTransactionMarkers(
+            historyResponse.transactions,
+            snapshot?.currency_code,
+          );
+          markerCache.set(rangeKey, markers || []);
+        } catch (markerError) {
+          console.error('Range-Wechsel: Transaktionsmarker konnten nicht geladen werden', markerError);
+          markers = [];
+        }
+      }
+
+      displayHistorySeries = buildHistorySeriesWithSnapshotPrice(historySeries, snapshot);
+      if (historyState.status !== 'error') {
+        historyState = displayHistorySeries.length
+          ? { status: 'loaded' }
+          : { status: 'empty' };
       }
 
       const snapshotLastPriceNative =
@@ -1648,6 +1861,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         displayHistorySeries,
         snapshotLastPriceNative,
       );
+      const safeMarkers = Array.isArray(markers) ? markers : [];
 
       setActiveRange(securityUuid, rangeKey);
       updateRangeButtons(rangeSelector, rangeKey);
@@ -1668,6 +1882,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         {
           currency: snapshot?.currency_code,
           baseline: rangeBaseline,
+          markers: safeMarkers,
         },
       );
     };
@@ -1682,6 +1897,63 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         return;
       }
         void handleRangeClick(range as SecurityHistoryRangeKey);
+    });
+  }, 0);
+}
+
+function scheduleNewsPromptSetup(options: {
+  root: HTMLElement;
+  hass: HomeAssistant | null | undefined;
+  panelConfig: PanelConfigLike | null | undefined;
+  tickerSymbol: string;
+}): void {
+  const { root, hass, panelConfig, tickerSymbol } = options;
+
+  setTimeout(() => {
+    const button = root.querySelector<HTMLButtonElement>('.news-prompt-button');
+    if (!button) {
+      return;
+    }
+
+    const handleClick = async (): Promise<void> => {
+      const symbol = (button.dataset.symbol || tickerSymbol || '').trim();
+      if (!symbol) {
+        console.warn('News-Prompt: Kein Ticker verfügbar');
+        return;
+      }
+      if (button.classList.contains('loading')) {
+        return;
+      }
+      button.disabled = true;
+      button.classList.add('loading');
+      try {
+        const response = await fetchNewsPromptWS(hass, panelConfig);
+        const placeholder = (response.placeholder || '').trim() || '{TICKER}';
+        const template = (response.prompt_template || '').trim();
+        const promptBody = template
+          ? (placeholder && template.includes(placeholder)
+            ? template.split(placeholder).join(symbol)
+            : `${template}\n\nTicker: ${symbol}`)
+          : `Ticker: ${symbol}`;
+
+        await copyTextToClipboard(promptBody);
+        if (response.link) {
+          try {
+            window.open(response.link, '_blank', 'noopener,noreferrer');
+          } catch (openError) {
+            console.warn('News-Prompt: Link konnte nicht geöffnet werden', openError);
+          }
+        }
+      } catch (error) {
+        console.error('News-Prompt: Kopiervorgang fehlgeschlagen', error);
+      } finally {
+        button.classList.remove('loading');
+        button.disabled = false;
+      }
+    };
+
+    button.addEventListener('click', () => {
+      void handleClick();
     });
   }, 0);
 }
@@ -1734,6 +2006,7 @@ export async function renderSecurityDetail(
       headerTitle,
       buildHeaderMeta(effectiveSnapshot),
     );
+    headerCard.classList.add('security-detail-header');
     return `
       ${headerCard.outerHTML}
       ${staleNotice}
@@ -1746,8 +2019,10 @@ export async function renderSecurityDetail(
 
   const activeRange = getActiveRange(securityUuid);
   const cache = ensureHistoryCache(securityUuid);
+  const markerCache = ensureHistoryMarkerCache(securityUuid);
   let historySeries = cache.has(activeRange) ? cache.get(activeRange) ?? null : null;
   let historyState: HistoryPlaceholderState = { status: 'empty' };
+  let markers = markerCache.has(activeRange) ? markerCache.get(activeRange) ?? null : null;
 
   if (Array.isArray(historySeries)) {
     historyState = historySeries.length
@@ -1763,8 +2038,13 @@ export async function renderSecurityDetail(
         securityUuid,
         rangeOptions,
       );
-        historySeries = normaliseHistorySeries(historyResponse.prices);
+      historySeries = normaliseHistorySeries(historyResponse.prices);
+      markers = normaliseTransactionMarkers(
+        historyResponse.transactions,
+        effectiveSnapshot?.currency_code,
+      );
       cache.set(activeRange, historySeries);
+      markerCache.set(activeRange, markers || []);
       historyState = historySeries.length
         ? { status: 'loaded' }
         : { status: 'empty' };
@@ -1783,6 +2063,35 @@ export async function renderSecurityDetail(
     }
   }
 
+  if (!Array.isArray(markers)) {
+    try {
+      const rangeOptions = resolveRangeOptions(activeRange);
+      const historyResponse = await fetchSecurityHistoryWS(
+        hass,
+        panelConfig,
+        securityUuid,
+        rangeOptions,
+      );
+      const refreshedSeries = normaliseHistorySeries(historyResponse.prices);
+      markers = normaliseTransactionMarkers(
+        historyResponse.transactions,
+        effectiveSnapshot?.currency_code,
+      );
+      cache.set(activeRange, refreshedSeries);
+      markerCache.set(activeRange, markers || []);
+      historySeries = refreshedSeries;
+      historyState = historySeries.length
+        ? { status: 'loaded' }
+        : { status: 'empty' };
+    } catch (historyError) {
+      console.error(
+        'renderSecurityDetail: Transaktionsmarker konnten nicht geladen werden',
+        historyError,
+      );
+      markers = [];
+    }
+  }
+
   const displayHistorySeries = buildHistorySeriesWithSnapshotPrice(
     historySeries,
     effectiveSnapshot,
@@ -1797,6 +2106,9 @@ export async function renderSecurityDetail(
     headerTitle,
     buildHeaderMeta(effectiveSnapshot),
   );
+  headerCard.classList.add('security-detail-header');
+  const tickerSymbol = resolveTickerSymbol(effectiveSnapshot, securityUuid);
+  const newsPromptButton = buildNewsPromptButton(tickerSymbol);
 
   const snapshotLastPriceNative = extractSnapshotLastPriceNative(effectiveSnapshot);
   const { priceChange, priceChangePct } = computePriceChangeMetrics(
@@ -1820,10 +2132,17 @@ export async function renderSecurityDetail(
     initialHistory: historySeries,
     initialHistoryState: historyState,
   });
+  scheduleNewsPromptSetup({
+    root,
+    hass,
+    panelConfig,
+    tickerSymbol,
+  });
 
   return `
     ${headerCard.outerHTML}
     ${staleNotice}
+    ${newsPromptButton}
     ${infoBar}
     ${buildRangeSelector(activeRange)}
     <div class="card security-detail-placeholder">

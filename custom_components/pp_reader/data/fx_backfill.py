@@ -270,9 +270,7 @@ def _parse_date(value: str | date | datetime) -> date:
     raise ValueError(message)
 
 
-async def _persist_fx_records(
-    db_path: Path, records: Sequence[FxRateRecord]
-) -> None:
+async def _persist_fx_records(db_path: Path, records: Sequence[FxRateRecord]) -> None:
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(
         None,
@@ -328,9 +326,11 @@ async def backfill_fx(  # noqa: PLR0913,PLR0915 - explicit keyword args for clar
             _LOGGER.debug("Skipping %s: no transaction date coverage", currency)
             continue
 
-        desired_start = _parse_date(start) if start else datetime.fromisoformat(
-            first_tx_date
-        ).date()
+        desired_start = (
+            _parse_date(start)
+            if start
+            else datetime.fromisoformat(first_tx_date).date()
+        )
         latest_fx_date = entry.get("latest_fx_date")
         if latest_fx_date:
             latest_known = _parse_date(latest_fx_date)

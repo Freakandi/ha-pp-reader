@@ -45,6 +45,7 @@ export type {
   PortfolioPositionsResponse,
   SecuritySnapshotResponse,
   SecurityHistoryPoint,
+  SecurityHistoryTransaction,
   SecurityHistoryResponse,
   LastFileUpdateResponse,
   SecurityHistoryOptions,

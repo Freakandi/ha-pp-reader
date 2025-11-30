@@ -12,7 +12,7 @@ import time
 from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -466,6 +466,181 @@ def get_transactions(
             conn.close()
 
 
+def _to_epoch_day(date_value: Any) -> int | None:
+    """Convert ISO date strings or numeric encodings into epoch-day integers."""
+    if isinstance(date_value, datetime):
+        parsed = (
+            date_value.replace(tzinfo=UTC)
+            if date_value.tzinfo is None
+            else date_value.astimezone(UTC)
+        )
+        return (parsed.date() - date(1970, 1, 1)).days
+
+    if isinstance(date_value, (int, float)):
+        try:
+            integer = int(date_value)
+        except (TypeError, ValueError):
+            return None
+        if integer < 0:
+            return None
+        # Epoch-day encoding (days since 1970-01-01)
+        if integer <= 100_000:
+            return integer
+        # YYYYMMDD encoding
+        if integer >= 1_000_000:
+            year = integer // 10_000
+            month = (integer % 10_000) // 100
+            day_value = integer % 100
+            try:
+                parsed = date(year, month, day_value)
+            except ValueError:
+                return None
+            return (parsed - date(1970, 1, 1)).days
+        return None
+
+    if not date_value:
+        return None
+
+    try:
+        parsed_dt = datetime.fromisoformat(str(date_value))
+    except (TypeError, ValueError):
+        return None
+
+    if parsed_dt.tzinfo is None:
+        parsed_dt = parsed_dt.replace(tzinfo=UTC)
+    else:
+        parsed_dt = parsed_dt.astimezone(UTC)
+
+    normalized = parsed_dt.date()
+    return (normalized - date(1970, 1, 1)).days
+
+
+def get_security_transactions(
+    db_path: Path,
+    security_uuid: str,
+    *,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> list[dict[str, Any]]:
+    """Return security-linked transactions with optional range filtering."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    if start_date is not None and not isinstance(start_date, int):
+        message = "start_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if end_date is not None and not isinstance(end_date, int):
+        message = "end_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if start_date is not None and end_date is not None and end_date < start_date:
+        message = "end_date muss größer oder gleich start_date sein"
+        raise ValueError(message)
+
+    start_epoch = _to_epoch_day(start_date) if start_date is not None else None
+    end_epoch = _to_epoch_day(end_date) if end_date is not None else None
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Öffnen der Datenbank für Transaktionen (security_uuid=%s)",
+            security_uuid,
+        )
+        return []
+
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                t.uuid,
+                t.type,
+                t.portfolio,
+                t.date,
+                t.currency_code,
+                t.amount,
+                t.shares,
+                COALESCE(SUM(CASE WHEN u.type = 2 THEN u.amount END), 0) AS fees,
+                COALESCE(SUM(CASE WHEN u.type = 1 THEN u.amount END), 0) AS taxes
+            FROM transactions AS t
+            LEFT JOIN transaction_units AS u
+              ON u.transaction_uuid = t.uuid
+             AND (u.currency_code IS NULL OR UPPER(u.currency_code) = UPPER(t.currency_code))
+            WHERE t.security = ?
+              AND t.type IN (0, 1, 2, 3)
+            GROUP BY
+                t.uuid,
+                t.type,
+                t.portfolio,
+                t.date,
+                t.currency_code,
+                t.amount,
+                t.shares
+            ORDER BY t.date ASC
+            """,
+            (security_uuid,),
+        )
+        rows = cursor.fetchall()
+    except sqlite3.Error:
+        _LOGGER.exception("Fehler beim Laden der Transaktionen für %s", security_uuid)
+        return []
+    finally:
+        with suppress(sqlite3.Error):
+            conn.close()
+
+    transactions: list[dict[str, Any]] = []
+    for row in rows:
+        epoch_day = _to_epoch_day(row["date"])
+        if epoch_day is None and (start_epoch is not None or end_epoch is not None):
+            continue
+        if start_epoch is not None and epoch_day is not None and epoch_day < start_epoch:
+            continue
+        if end_epoch is not None and epoch_day is not None and epoch_day > end_epoch:
+            continue
+
+        try:
+            tx_type = int(row["type"] or 0)
+        except (TypeError, ValueError):
+            tx_type = 0
+
+        try:
+            amount = int(row["amount"]) if row["amount"] is not None else None
+        except (TypeError, ValueError):
+            amount = None
+
+        try:
+            shares = int(row["shares"]) if row["shares"] is not None else None
+        except (TypeError, ValueError):
+            shares = None
+
+        try:
+            fees = int(row["fees"]) if row["fees"] not in (None, "") else None
+        except (TypeError, ValueError):
+            fees = None
+        try:
+            taxes = int(row["taxes"]) if row["taxes"] not in (None, "") else None
+        except (TypeError, ValueError):
+            taxes = None
+
+        currency_code = (row["currency_code"] or "").strip().upper()
+        transactions.append(
+            {
+                "uuid": row["uuid"],
+                "type": tx_type,
+                "portfolio": row["portfolio"],
+                "date": row["date"],
+                "currency_code": currency_code or None,
+                "amount": amount,
+                "shares": shares,
+                "fees": fees,
+                "taxes": taxes,
+            }
+        )
+
+    return transactions
+
+
 def get_securities(db_path: Path) -> dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
     conn = sqlite3.connect(str(db_path))
@@ -810,6 +985,7 @@ def _empty_security_snapshot(security_row: sqlite3.Row) -> dict[str, Any]:
     """Return the default empty snapshot payload."""
     return {
         "name": security_row["name"],
+        "ticker_symbol": security_row["ticker_symbol"],
         "currency_code": security_row["currency_code"] or "EUR",
         "total_holdings": 0.0,
         "last_price_native": None,
@@ -956,7 +1132,9 @@ def _build_snapshot_from_holdings(
         conn=conn,
         before_epoch_day=int(reference_date.timestamp() // 86400),
     )
-    if prev_date is None or (int(reference_date.timestamp() // 86400) - int(prev_date) > 7):
+    if prev_date is None or (
+        int(reference_date.timestamp() // 86400) - int(prev_date) > 7
+    ):
         raw_last_close = None
         last_close_native = None
     last_close_eur = None
@@ -981,6 +1159,7 @@ def _build_snapshot_from_holdings(
         if purchase_value_eur
         else 0.0
     )
+    ticker_symbol = security_row["ticker_symbol"]
 
     average_cost_payload = {
         "native": selection.native,
@@ -1011,6 +1190,7 @@ def _build_snapshot_from_holdings(
 
     return {
         "name": security_row["name"],
+        "ticker_symbol": ticker_symbol,
         "currency_code": currency_code,
         "total_holdings": total_holdings,
         "last_price_native": round_price(last_price_native, decimals=6),
@@ -1040,6 +1220,7 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
             """
             SELECT
                 name,
+                ticker_symbol,
                 currency_code,
                 last_price
             FROM securities
@@ -1227,7 +1408,9 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
                 conn=conn,
                 before_epoch_day=int(reference_date.timestamp() // 86400),
             )
-            if prev_date is None or (int(reference_date.timestamp() // 86400) - int(prev_date) > 7):
+            if prev_date is None or (
+                int(reference_date.timestamp() // 86400) - int(prev_date) > 7
+            ):
                 raw_last_close = None
                 last_close_native = None
             if raw_last_close is not None and last_close_native is None:
@@ -1274,6 +1457,7 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
 
         return {
             "name": security_row["name"],
+            "ticker_symbol": security_row["ticker_symbol"],
             "currency_code": currency_code,
             "total_holdings": round_currency(
                 total_holdings,
@@ -2755,17 +2939,15 @@ def _load_portfolio_day_changes(
                 rows_with_change += 1
 
             if rows_with_change == 0:
-                coverage_ratio = (
-                    0.0
-                    if rows_missing_change > 0
-                    else None
-                )
+                coverage_ratio = 0.0 if rows_missing_change > 0 else None
                 changes[portfolio_uuid] = (None, None, coverage_ratio)
                 continue
 
-            coverage_ratio = rows_with_change / (
-                rows_with_change + rows_missing_change
-            ) if rows_with_change + rows_missing_change > 0 else None
+            coverage_ratio = (
+                rows_with_change / (rows_with_change + rows_missing_change)
+                if rows_with_change + rows_missing_change > 0
+                else None
+            )
 
             current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
             day_change_pct = None
@@ -2855,11 +3037,7 @@ def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
             performance = entry.get("performance")
             if isinstance(performance, dict):
                 base_day_change = performance.get("day_change")
-                payload = (
-                    base_day_change
-                    if isinstance(base_day_change, dict)
-                    else {}
-                )
+                payload = base_day_change if isinstance(base_day_change, dict) else {}
                 payload = {
                     **payload,
                     "change_pct": day_change_pct,

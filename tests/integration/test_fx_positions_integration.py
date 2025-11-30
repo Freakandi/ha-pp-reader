@@ -19,7 +19,9 @@ from custom_components.pp_reader.data.normalization_pipeline import (
 from custom_components.pp_reader.metrics import securities as metric_securities
 
 
-def _insert_fx_rate(conn: sqlite3.Connection, *, date: str, currency: str, rate: float) -> None:
+def _insert_fx_rate(
+    conn: sqlite3.Connection, *, date: str, currency: str, rate: float
+) -> None:
     conn.execute(
         """
         INSERT INTO fx_rates (date, currency, rate)
@@ -29,7 +31,9 @@ def _insert_fx_rate(conn: sqlite3.Connection, *, date: str, currency: str, rate:
     )
 
 
-def _insert_security(conn: sqlite3.Connection, *, uuid: str, name: str, currency: str) -> None:
+def _insert_security(
+    conn: sqlite3.Connection, *, uuid: str, name: str, currency: str
+) -> None:
     conn.execute(
         """
         INSERT INTO securities (uuid, name, currency_code)

@@ -159,6 +159,7 @@ export function deserializePositionSnapshot(value: unknown): NormalizedPositionS
     portfolio_uuid: toStringValue(value.portfolio_uuid) ?? undefined,
     security_uuid: securityUuid,
     name,
+    ticker_symbol: toStringValue(value.ticker_symbol),
     currency_code: toStringValue(value.currency_code),
     current_holdings: currentHoldings,
     purchase_value: purchaseValue,

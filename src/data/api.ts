@@ -111,6 +111,9 @@ function mapPositionSnapshotToRecord(snapshot: NormalizedPositionSnapshot): Port
   if (snapshot.data_state) {
     position.data_state = snapshot.data_state;
   }
+  if (snapshot.ticker_symbol) {
+    position.ticker_symbol = snapshot.ticker_symbol;
+  }
   if (snapshot.portfolio_uuid) {
     position.portfolio_uuid = snapshot.portfolio_uuid;
   }
@@ -159,6 +162,7 @@ export interface SecuritySnapshotResponse {
   security_uuid: string;
   snapshot: {
     name?: string;
+    ticker_symbol?: string | null;
     currency_code?: string;
     total_holdings?: number;
     purchase_value_eur?: number;
@@ -187,11 +191,34 @@ export interface SecurityHistoryPoint {
   [key: string]: unknown;
 }
 
+export interface SecurityHistoryTransaction {
+  uuid?: string | null;
+  type?: number | null;
+  date?: string | number | null;
+  portfolio?: string | null;
+  currency_code?: string | null;
+  shares?: number | null;
+  price?: number | null;
+  net_price_eur?: number | null;
+  amount?: number | null;
+  fees?: number | null;
+  taxes?: number | null;
+  [key: string]: unknown;
+}
+
 export interface SecurityHistoryResponse {
   security_uuid: string;
   prices: SecurityHistoryPoint[];
+  transactions?: SecurityHistoryTransaction[];
   start_date?: number | null;
   end_date?: number | null;
+  [key: string]: unknown;
+}
+
+export interface NewsPromptResponse {
+  link: string;
+  prompt_template: string;
+  placeholder?: string | null;
   [key: string]: unknown;
 }
 
@@ -514,6 +541,25 @@ export async function fetchSecuritySnapshotWS(
   });
 }
 
+export async function fetchNewsPromptWS(
+  hass: HomeAssistant | null | undefined,
+  panelConfig: PanelConfigLike | null | undefined,
+): Promise<NewsPromptResponse> {
+  if (!hass) {
+    throw new Error("fetchNewsPromptWS: fehlendes hass");
+  }
+
+  const entryId = deriveEntryId(hass, panelConfig);
+  if (!entryId) {
+    throw new Error("fetchNewsPromptWS: fehlendes entry_id");
+  }
+
+  return hass.connection.sendMessagePromise<NewsPromptResponse>({
+    type: "pp_reader/get_news_prompt",
+    entry_id: entryId,
+  });
+}
+
 // Historical prices for detail tab charting
 export async function fetchSecurityHistoryWS(
   hass: HomeAssistant | null | undefined,
@@ -553,5 +599,13 @@ export async function fetchSecurityHistoryWS(
     payload.end_date = resolvedEnd;
   }
 
-  return hass.connection.sendMessagePromise<SecurityHistoryResponse>(payload);
+  const response = await hass.connection.sendMessagePromise<SecurityHistoryResponse>(payload);
+  if (!Array.isArray(response.prices)) {
+    response.prices = [];
+  }
+  if (!Array.isArray(response.transactions)) {
+    response.transactions = [];
+  }
+
+  return response;
 }

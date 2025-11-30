@@ -364,7 +364,14 @@ def test_sync_historical_prices_populates_canonical(tmp_path: Path) -> None:
             INSERT INTO ingestion_historical_prices (security_uuid, date, close, high, low, volume)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("sec-hist", 20240101, 123_450_000_000, 124_000_000_000, 122_000_000_000, 10_000),
+            (
+                "sec-hist",
+                20240101,
+                123_450_000_000,
+                124_000_000_000,
+                122_000_000_000,
+                10_000,
+            ),
         )
         conn.commit()
 
@@ -386,5 +393,154 @@ def test_sync_historical_prices_populates_canonical(tmp_path: Path) -> None:
         assert row["data_source"] == "portfolio"
         assert row["provider"] == "portfolio"
         assert row["fetched_at"] is None
+    finally:
+        conn.close()
+
+
+def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
+    """Staged transaction rows should populate canonical tables."""
+    db_path = tmp_path / "tx.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE ingestion_transactions (
+                uuid TEXT,
+                type INTEGER,
+                account TEXT,
+                portfolio TEXT,
+                other_account TEXT,
+                other_portfolio TEXT,
+                other_uuid TEXT,
+                other_updated_at TEXT,
+                date TEXT,
+                currency_code TEXT,
+                amount INTEGER,
+                shares INTEGER,
+                note TEXT,
+                security TEXT,
+                source TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE transactions (
+                uuid TEXT,
+                type INTEGER,
+                account TEXT,
+                portfolio TEXT,
+                other_account TEXT,
+                other_portfolio TEXT,
+                other_uuid TEXT,
+                other_updated_at TEXT,
+                date TEXT,
+                currency_code TEXT,
+                amount INTEGER,
+                shares INTEGER,
+                note TEXT,
+                security TEXT,
+                source TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE ingestion_transaction_units (
+                transaction_uuid TEXT,
+                type INTEGER,
+                amount INTEGER,
+                currency_code TEXT,
+                fx_amount INTEGER,
+                fx_currency_code TEXT,
+                fx_rate_to_base INTEGER
+            );
+            CREATE TABLE transaction_units (
+                transaction_uuid TEXT,
+                type INTEGER,
+                amount INTEGER,
+                currency_code TEXT,
+                fx_amount INTEGER,
+                fx_currency_code TEXT,
+                fx_rate_to_base INTEGER
+            );
+            """
+        )
+
+        conn.executemany(
+            """
+            INSERT INTO ingestion_transactions (
+                uuid, type, portfolio, date, currency_code, amount, shares, security
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "tx-a",
+                    0,
+                    "portfolio-1",
+                    "2024-01-02",
+                    "EUR",
+                    12_345,
+                    250_000_000,
+                    "sec-1",
+                ),
+                (
+                    "tx-b",
+                    1,
+                    "portfolio-1",
+                    "2024-02-03",
+                    "USD",
+                    45_600,
+                    300_000_000,
+                    "sec-1",
+                ),
+            ],
+        )
+        conn.executemany(
+            """
+            INSERT INTO ingestion_transaction_units (
+                transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code, fx_rate_to_base
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("tx-b", 2, 1_000, "USD", None, None, None),
+                ("tx-b", 1, 2_000, "USD", 1_800, "EUR", 10789),
+            ],
+        )
+        conn.execute(
+            """
+            INSERT INTO transactions (uuid, type, portfolio, date, currency_code, amount, shares, security)
+            VALUES ('stale', 3, 'old', '2024-01-01', 'EUR', 1, 1, 'old-sec')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO transaction_units (transaction_uuid, type, amount, currency_code)
+            VALUES ('stale', 2, 5, 'EUR')
+            """
+        )
+        conn.commit()
+
+        canonical_sync._sync_transactions(conn)
+
+        rows = conn.execute(
+            """
+            SELECT uuid, type, portfolio, date, currency_code, amount, shares, security
+            FROM transactions
+            ORDER BY uuid
+            """
+        ).fetchall()
+        assert [row["uuid"] for row in rows] == ["tx-a", "tx-b"]
+        assert rows[0]["shares"] == 250_000_000
+        assert rows[1]["amount"] == 45_600
+
+        unit_rows = conn.execute(
+            """
+            SELECT transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code, fx_rate_to_base
+            FROM transaction_units
+            ORDER BY transaction_uuid, type
+            """
+        ).fetchall()
+        assert len(unit_rows) == 2
+        by_type = {(row["transaction_uuid"], row["type"]): row for row in unit_rows}
+        assert by_type[("tx-b", 2)]["amount"] == 1_000
+        tax_row = by_type[("tx-b", 1)]
+        assert tax_row["fx_amount"] == 1_800
+        assert tax_row["fx_currency_code"] == "EUR"
     finally:
         conn.close()

@@ -81,7 +81,9 @@ def test_backfill_populates_eur_amount(tmp_path: Path) -> None:
     assert row == (11000, 10000)
 
 
-def test_backfill_skips_missing_rate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_backfill_skips_missing_rate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Leaves EUR amount NULL when no FX rate exists and logs once."""
     db_path = tmp_path / "missing.db"
     initialize_database_schema(db_path)

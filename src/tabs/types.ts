@@ -120,6 +120,7 @@ export interface SecurityHistoryRangeState {
 export interface SecuritySnapshotLike {
   security_uuid: string;
   name: string;
+  ticker_symbol?: string | null;
   currency_code?: string | null;
   total_holdings: number;
   purchase_value_eur: number;
@@ -156,6 +157,7 @@ export interface HoldingsAggregationPayload {
 export interface PortfolioPosition {
   security_uuid: string;
   name: string;
+  ticker_symbol?: string | null;
   current_holdings: number;
   purchase_value: number;
   current_value: number;

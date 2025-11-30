@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+NEWS_PROMPT_PLACEHOLDER = "{TICKER}"
+NEWS_PROMPT_PATH = Path(__file__).resolve().parent.parent / "util" / "search_news.md"
 DOMAIN = "pp_reader"
 
 
@@ -61,6 +63,25 @@ def _resolve_db_path(entry_data: Mapping[str, Any]) -> Path:
         message = "db_path für den Config Entry fehlt"
         raise ValueError(message)
     return Path(db_path_raw)
+
+
+def _load_news_prompt_template() -> tuple[str, str]:
+    """Return the news prompt link and template body."""
+    if not NEWS_PROMPT_PATH.exists():
+        message = f"Prompt-Template fehlt: {NEWS_PROMPT_PATH}"
+        raise FileNotFoundError(message)
+
+    content = NEWS_PROMPT_PATH.read_text(encoding="utf-8")
+    link = ""
+    body_lines: list[str] = []
+    for line in content.splitlines():
+        if not link and line.lower().startswith("link:"):
+            link = line.split(":", 1)[-1].strip()
+            continue
+        body_lines.append(line)
+
+    body = "\n".join(body_lines).strip()
+    return link, body
 
 
 def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
@@ -750,7 +771,7 @@ async def ws_get_security_history(
     end_date = msg.get("end_date")
 
     try:
-        payload = await async_fetch_security_history(
+        history_payload = await async_fetch_security_history(
             hass,
             db_path,
             security_uuid,
@@ -772,10 +793,21 @@ async def ws_get_security_history(
         )
         return
 
+    prices: list[dict[str, Any]]
+    transactions: list[dict[str, Any]]
+    if isinstance(history_payload, Mapping):
+        prices = list(history_payload.get("prices") or [])
+        transactions = list(history_payload.get("transactions") or [])
+    else:  # pragma: no cover - defensive fallback for legacy return shapes
+        prices = list(history_payload or [])
+        transactions = []
+
     response: dict[str, Any] = {
         "security_uuid": security_uuid,
-        "prices": payload,
+        "prices": prices,
     }
+    if transactions:
+        response["transactions"] = transactions
     if start_date is not None:
         response["start_date"] = start_date
     if end_date is not None:
@@ -862,6 +894,65 @@ async def ws_get_security_snapshot(  # noqa: PLR0911
 
 
 ws_get_security_snapshot = _wrap_with_loop_fallback(ws_get_security_snapshot)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_news_prompt",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_news_prompt(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the latest news prompt template for chat interactions."""
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+
+    if not entry_id:
+        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
+        return
+
+    try:
+        _get_entry_data(hass, entry_id)
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
+        return
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Validieren des entry_id für News-Prompt"
+        )
+        connection.send_error(
+            msg_id, "db_error", "News-Prompt konnte nicht geladen werden"
+        )
+        return
+
+    try:
+        link, template = await async_run_executor_job(hass, _load_news_prompt_template)
+    except FileNotFoundError as err:
+        connection.send_error(msg_id, "not_found", str(err))
+        return
+    except Exception:
+        _LOGGER.exception("WebSocket: Fehler beim Laden des News-Prompt-Templates")
+        connection.send_error(
+            msg_id, "file_error", "News-Prompt konnte nicht geladen werden"
+        )
+        return
+
+    connection.send_result(
+        msg_id,
+        {
+            "link": link,
+            "prompt_template": template,
+            "placeholder": NEWS_PROMPT_PLACEHOLDER,
+        },
+    )
+
+
+ws_get_news_prompt = _wrap_with_loop_fallback(ws_get_news_prompt)
 
 
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen

@@ -107,6 +107,8 @@ export interface LineChartOptions {
   xFormatter?: LineChartFormatter;
   yFormatter?: LineChartFormatter;
   tooltipRenderer?: LineChartTooltipRenderer;
+  markers?: LineChartMarker[];
+  markerTooltipRenderer?: LineChartMarkerTooltipRenderer;
   color?: string;
   areaColor?: string;
   baseline?: LineChartBaselineOptions | null;
@@ -145,6 +147,9 @@ interface LineChartInternalState extends ChartDimensions {
   focusCircle: SVGCircleElement | null;
   overlay: SVGRectElement | null;
   tooltip: HTMLDivElement | null;
+  markerOverlay: HTMLDivElement | null;
+  markerLayer: SVGGElement | null;
+  markerTooltip: HTMLDivElement | null;
   xAxis?: HTMLDivElement;
   yAxis?: HTMLDivElement;
   series: LineChartInputDatum[];
@@ -155,16 +160,44 @@ interface LineChartInternalState extends ChartDimensions {
   xFormatter: LineChartFormatter;
   yFormatter: LineChartFormatter;
   tooltipRenderer: LineChartTooltipRenderer;
+  markerTooltipRenderer: LineChartMarkerTooltipRenderer;
   color: string;
   areaColor: string;
   baseline: LineChartBaselineOptions | null;
   handlersAttached: boolean;
   handlePointerMove?: (event: PointerEvent) => void;
   handlePointerLeave?: (event: PointerEvent) => void;
+  markers: LineChartMarker[];
+  markerPositions: MarkerRenderEntry[];
 }
+
+export interface LineChartMarker {
+  id: string;
+  x: number;
+  y: number;
+  color?: string;
+  label?: string;
+  payload?: unknown;
+}
+
+export interface LineChartMarkerTooltipPayload {
+  marker: LineChartMarker;
+  xFormatted: string;
+  yFormatted: string;
+}
+
+export type LineChartMarkerTooltipRenderer = (
+  payload: LineChartMarkerTooltipPayload,
+) => string;
 
 interface LineChartContainerElement extends HTMLDivElement {
   __chartState?: LineChartInternalState;
+}
+
+interface MarkerRenderEntry {
+  marker: LineChartMarker;
+  x: number;
+  y: number;
 }
 
 function createSvgElement<K extends keyof SVGElementTagNameMap>(
@@ -267,6 +300,18 @@ const defaultTooltipRenderer: LineChartTooltipRenderer = ({ xFormatted, yFormatt
     <div class="chart-tooltip-value">${yFormatted}&nbsp;€</div>
   `;
 
+const defaultMarkerTooltipRenderer: LineChartMarkerTooltipRenderer = ({
+  marker,
+  xFormatted,
+  yFormatted,
+}) => {
+  const label = typeof marker.label === 'string' ? marker.label : null;
+  return `
+    <div class="chart-tooltip-date">${label || xFormatted}</div>
+    <div class="chart-tooltip-value">${yFormatted}</div>
+  `;
+};
+
 function ensureChartState(container: LineChartContainerElement): LineChartInternalState {
   if (!container.__chartState) {
     container.__chartState = {
@@ -278,6 +323,9 @@ function ensureChartState(container: LineChartContainerElement): LineChartIntern
       focusCircle: null,
       overlay: null,
       tooltip: null,
+      markerOverlay: null,
+      markerLayer: null,
+      markerTooltip: null,
       width: DEFAULT_WIDTH,
       height: DEFAULT_HEIGHT,
       margin: { ...DEFAULT_MARGIN },
@@ -289,10 +337,13 @@ function ensureChartState(container: LineChartContainerElement): LineChartIntern
       xFormatter: defaultXFormatter,
       yFormatter: defaultYFormatter,
       tooltipRenderer: defaultTooltipRenderer,
+      markerTooltipRenderer: defaultMarkerTooltipRenderer,
       color: DEFAULT_COLOR,
       areaColor: DEFAULT_AREA,
       baseline: null,
       handlersAttached: false,
+      markers: [],
+      markerPositions: [],
     };
   }
   return container.__chartState;
@@ -495,6 +546,72 @@ function computePoints(
   };
 }
 
+function renderMarkers(state: LineChartInternalState): void {
+  const { markerLayer, markerOverlay, markers, range, margin, markerTooltip } = state;
+  state.markerPositions = [];
+  hideMarkerTooltip(state);
+
+  if (!markerLayer || !markerOverlay) {
+    return;
+  }
+
+  while (markerLayer.firstChild) {
+    markerLayer.removeChild(markerLayer.firstChild);
+  }
+  while (markerOverlay.firstChild) {
+    markerOverlay.removeChild(markerOverlay.firstChild);
+  }
+
+  if (!range || !Array.isArray(markers) || markers.length === 0) {
+    return;
+  }
+
+  const rangeX = range.maxX - range.minX || 1;
+  const rangeY = range.maxY - range.minY || 1;
+
+  markers.forEach((marker, index) => {
+    const rawX = toTimestamp(marker.x, index);
+    const rawY = toNumber(marker.y, Number.NaN);
+    const yValue = Number(rawY);
+    if (!Number.isFinite(rawX) || !Number.isFinite(yValue)) {
+      return;
+    }
+
+    const ratioX = rangeX === 0 ? 0.5 : clamp((rawX - range.minX) / rangeX, 0, 1);
+    const ratioY = rangeY === 0 ? 0.5 : clamp((yValue - range.minY) / rangeY, 0, 1);
+    const x = margin.left + ratioX * range.boundedWidth;
+    const y = margin.top + (1 - ratioY) * range.boundedHeight;
+
+    const group = createSvgElement('g', {
+      class: 'line-chart-marker',
+      transform: `translate(${x.toFixed(2)} ${y.toFixed(2)})`,
+      'data-marker-id': marker.id,
+    });
+
+    const circle = createSvgElement('circle', {
+      r: 5,
+      fill: marker.color || state.color,
+      stroke: '#fff',
+      'stroke-width': 2,
+      opacity: 0.95,
+    });
+
+    group.appendChild(circle);
+    markerLayer.appendChild(group);
+
+    state.markerPositions.push({
+      marker,
+      x,
+      y,
+    });
+  });
+
+  if (markerTooltip) {
+    markerTooltip.style.opacity = '0';
+    markerTooltip.style.visibility = 'hidden';
+  }
+}
+
 function assignDimensions(
   state: LineChartInternalState,
   width: number | undefined,
@@ -568,6 +685,100 @@ function hideTooltip(state: LineChartInternalState): void {
   }
 }
 
+function formatMarkerTooltip(
+  state: LineChartInternalState,
+  entry: MarkerRenderEntry,
+): string {
+  const { marker } = entry;
+  const xFormatted = state.xFormatter(entry.marker.x, marker, -1);
+  const yFormatted = state.yFormatter(entry.marker.y, marker, -1);
+  return state.markerTooltipRenderer({
+    marker,
+    xFormatted,
+    yFormatted,
+  });
+}
+
+function updateMarkerTooltipPosition(
+  state: LineChartInternalState,
+  entry: MarkerRenderEntry,
+  pointerY: number | null,
+): void {
+  const { markerTooltip, width, margin, height, tooltip } = state;
+  if (!markerTooltip) {
+    return;
+  }
+
+  const baselineY = height - margin.bottom;
+  markerTooltip.style.visibility = 'visible';
+  markerTooltip.style.opacity = '1';
+  const tooltipWidth = markerTooltip.offsetWidth || 0;
+  const tooltipHeight = markerTooltip.offsetHeight || 0;
+  const horizontal = clamp(entry.x - tooltipWidth / 2, margin.left, width - margin.right - tooltipWidth);
+  const maxVertical = Math.max(baselineY - tooltipHeight, 0);
+  const padding = 10;
+
+  const priceTooltipRect = tooltip?.getBoundingClientRect();
+  const svgRect = state.svg?.getBoundingClientRect();
+  const priceTop = priceTooltipRect && svgRect ? priceTooltipRect.top - svgRect.top : null;
+  const priceBottom =
+    priceTooltipRect && svgRect ? priceTooltipRect.bottom - svgRect.top : null;
+
+  const anchorY = Number.isFinite(pointerY)
+    ? clamp(pointerY ?? entry.y, margin.top, baselineY)
+    : entry.y;
+
+  let vertical: number;
+  if (priceTop != null && priceBottom != null) {
+    const priceAbovePointer = priceTop <= anchorY;
+    if (priceAbovePointer) {
+      vertical = priceTop - tooltipHeight - padding;
+    } else {
+      vertical = priceBottom + padding;
+    }
+  } else {
+    vertical = anchorY - tooltipHeight - padding;
+    if (vertical < margin.top) {
+      vertical = anchorY + padding;
+    }
+  }
+
+  vertical = clamp(vertical, 0, maxVertical);
+  const translateX = px(Math.round(horizontal));
+  const translateY = px(Math.round(vertical));
+  markerTooltip.style.transform = `translate(${translateX}, ${translateY})`;
+}
+
+function hideMarkerTooltip(state: LineChartInternalState): void {
+  const { markerTooltip } = state;
+  if (markerTooltip) {
+    markerTooltip.style.opacity = '0';
+    markerTooltip.style.visibility = 'hidden';
+  }
+}
+
+function findNearestMarker(
+  state: LineChartInternalState,
+  pointerX: number,
+  pointerY: number,
+): MarkerRenderEntry | null {
+  const tolerance = 24;
+  let closest: MarkerRenderEntry | null = null;
+  let minDistanceSq = tolerance * tolerance;
+
+  for (const entry of state.markerPositions) {
+    const dx = entry.x - pointerX;
+    const dy = entry.y - pointerY;
+    const distanceSq = dx * dx + dy * dy;
+    if (distanceSq <= minDistanceSq) {
+      closest = entry;
+      minDistanceSq = distanceSq;
+    }
+  }
+
+  return closest;
+}
+
 function attachPointerHandlers(
   container: LineChartContainerElement,
   state: LineChartInternalState,
@@ -579,6 +790,7 @@ function attachPointerHandlers(
   const handlePointerMove = (event: PointerEvent) => {
     if (state.points.length === 0 || !state.svg) {
       hideTooltip(state);
+      hideMarkerTooltip(state);
       return;
     }
 
@@ -618,10 +830,19 @@ function attachPointerHandlers(
       state.tooltip.innerHTML = formatTooltip(state, closest);
       updateTooltipPosition(state, closest, pointerY);
     }
+
+    const markerHit = findNearestMarker(state, pointerX, pointerY);
+    if (markerHit && state.markerTooltip) {
+      state.markerTooltip.innerHTML = formatMarkerTooltip(state, markerHit);
+      updateMarkerTooltipPosition(state, markerHit, pointerY);
+    } else {
+      hideMarkerTooltip(state);
+    }
   };
 
   const handlePointerLeave = () => {
     hideTooltip(state);
+    hideMarkerTooltip(state);
   };
 
   state.overlay.addEventListener('pointermove', handlePointerMove);
@@ -694,6 +915,10 @@ export function renderLineChart(
     opacity: 0,
   });
 
+  const markerLayer = createSvgElement('g', {
+    class: 'line-chart-markers',
+  });
+
   const overlay = createSvgElement('rect', {
     class: 'line-chart-overlay',
     fill: 'transparent',
@@ -708,6 +933,7 @@ export function renderLineChart(
   svg.appendChild(linePath);
   svg.appendChild(focusLine);
   svg.appendChild(focusCircle);
+  svg.appendChild(markerLayer);
   svg.appendChild(overlay);
 
   container.appendChild(svg);
@@ -722,6 +948,28 @@ export function renderLineChart(
   tooltip.style.visibility = 'hidden';
   container.appendChild(tooltip);
 
+  const markerOverlay = document.createElement('div');
+  markerOverlay.className = 'line-chart-marker-overlay';
+  markerOverlay.style.position = 'absolute';
+  markerOverlay.style.top = '0';
+  markerOverlay.style.left = '0';
+  markerOverlay.style.width = '100%';
+  markerOverlay.style.height = '100%';
+  markerOverlay.style.pointerEvents = 'none';
+  markerOverlay.style.overflow = 'visible';
+  markerOverlay.style.zIndex = '2';
+  container.appendChild(markerOverlay);
+
+  const markerTooltip = document.createElement('div');
+  markerTooltip.className = 'chart-tooltip chart-tooltip--marker';
+  markerTooltip.style.position = 'absolute';
+  markerTooltip.style.top = '0';
+  markerTooltip.style.left = '0';
+  markerTooltip.style.pointerEvents = 'none';
+  markerTooltip.style.opacity = '0';
+  markerTooltip.style.visibility = 'hidden';
+  container.appendChild(markerTooltip);
+
   root.appendChild(container);
 
   const state = ensureChartState(container);
@@ -733,15 +981,21 @@ export function renderLineChart(
   state.focusCircle = focusCircle;
   state.overlay = overlay;
   state.tooltip = tooltip;
+  state.markerOverlay = markerOverlay;
+  state.markerLayer = markerLayer;
+  state.markerTooltip = markerTooltip;
   state.xAccessor = options.xAccessor ?? defaultXAccessor;
   state.yAccessor = options.yAccessor ?? defaultYAccessor;
   state.xFormatter = options.xFormatter ?? defaultXFormatter;
   state.yFormatter = options.yFormatter ?? defaultYFormatter;
   state.tooltipRenderer = options.tooltipRenderer ?? defaultTooltipRenderer;
+  state.markerTooltipRenderer =
+    options.markerTooltipRenderer ?? defaultMarkerTooltipRenderer;
   state.color = options.color ?? DEFAULT_COLOR;
   state.areaColor = options.areaColor ?? DEFAULT_AREA;
   state.baseline = options.baseline ?? null;
   state.handlersAttached = false;
+  state.markers = Array.isArray(options.markers) ? options.markers.slice() : [];
 
   if (!state.xAxis) {
     const xAxis = document.createElement('div');
@@ -816,6 +1070,9 @@ export function updateLineChart(
   if (options.tooltipRenderer) {
     state.tooltipRenderer = options.tooltipRenderer;
   }
+  if (options.markerTooltipRenderer) {
+    state.markerTooltipRenderer = options.markerTooltipRenderer;
+  }
   if (options.color) {
     state.color = options.color;
     state.linePath.setAttribute('stroke', state.color);
@@ -835,6 +1092,10 @@ export function updateLineChart(
 
   if (Object.prototype.hasOwnProperty.call(options, 'baseline')) {
     state.baseline = options.baseline ?? null;
+  }
+
+  if (Array.isArray(options.markers)) {
+    state.markers = options.markers.slice();
   }
 
   applyBaselineAppearance(state);
@@ -868,6 +1129,7 @@ export function updateLineChart(
       state.areaPath.setAttribute('d', '');
     }
     hideTooltip(state);
+    renderMarkers(state);
     updateAxes(state);
     updateBaselineLine(state);
     return;
@@ -894,6 +1156,7 @@ export function updateLineChart(
     }
     updateAxes(state);
     updateBaselineLine(state);
+    renderMarkers(state);
     return;
   }
 
@@ -908,6 +1171,7 @@ export function updateLineChart(
 
   updateAxes(state);
   updateBaselineLine(state);
+  renderMarkers(state);
 }
 
 function updateAxes(state: LineChartInternalState): void {
