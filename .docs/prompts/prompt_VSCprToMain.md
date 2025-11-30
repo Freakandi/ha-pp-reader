@@ -16,7 +16,7 @@ You are Codex, the coding assistant for the Home Assistant integration Portfolio
 ## Workflow
 1) **Sanity check**: `git status` (must be clean). `git fetch origin`, `git switch dev`, `git pull --ff-only`.
 2) **Release version**: read the top `CHANGELOG.md` entry; call it `<release_version>`. If missing/ambiguous, report a blocker and stop.
-3) **Branch**: create and switch to `release/pp-reader-v<release_version>` from `dev` (use a unique suffix if the name already exists).
+3) **Branch**: create and switch to `v<release_version>` from `dev` (use a unique suffix if the name already exists).
 4) **Version alignment**: ensure `manifest.json` and `hacs.json` `version` fields equal `<release_version>`; update them here if needed.
 5) **Environment**: activate `venv-ha`; ensure Node deps are present (`npm install` if `node_modules/` is missing or stale).
 6) **Build + promote**: run `npm run build`, then execute `./scripts/prepare_main_pr.sh dev main` to sync release-ready artifacts.
