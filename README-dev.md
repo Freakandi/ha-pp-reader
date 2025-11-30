@@ -19,27 +19,32 @@ This guide targets contributors working on the Portfolio Performance Reader inte
 3. Install contributor extras before running tests: `pip install -r requirements-dev.txt`.
 4. Install Node.js **18.18+** / npm **10+**, then execute `npm install` for the frontend toolchain.
 5. For bare environments without virtualenv support, `./scripts/environment_setup` installs the Python dependencies globally.
-6. Verify the pinned Home Assistant version when debugging core issues: `python -c "import homeassistant.const as c; print(c.__version__)"` should output `2025.2.4`.
+6. Verify the pinned Home Assistant version when debugging core issues: `python -c "import homeassistant.const as c; print(c.__version__)"` should output `2025.11.1`.
 
 Additional platform-specific hints (Windows, devcontainers, Codex) live in [TESTING.md §2](TESTING.md).
+
+### Tooling versions
+- Python 3.13.3 (installed by `scripts/setup_container` when `pyenv` is available).
+- Home Assistant `2025.11.1` (from `requirements.txt`).
+- Node.js **18.18+** / npm **10+** for frontend tooling.
 
 ### Useful scripts
 | Command | Description |
 | --- | --- |
 | `./scripts/develop` | Starts Home Assistant against the local integration, ensures `/config` is linked, and streams dashboard assets for live reload. |
-| `./scripts/develop_VSC` / `./scripts/codex_develop` | Variants that wrap the launcher for VSCode or Codex shells where activating `.venv` is inconvenient. |
+| `./scripts/develop_VSC` | Variant launcher for VSCode shells where activating `.venv` is inconvenient. |
 | `./scripts/lint` | Runs `ruff format .` followed by `ruff check . --fix`. |
 | `./scripts/enrichment_smoketest.py` | Replays parser → enrichment → metrics against a sample archive, refreshing FX/Yahoo data before dumping diagnostics (including `metric_runs`) to stdout/logs. |
-| `./scripts/diagnostics_dump.py` | Dumps the canonical snapshot & metric tables (`account_snapshots`, `portfolio_snapshots`, `metric_runs`, `*_metrics`) as JSON so you can compare SQLite contents with Home Assistant sensor/websocket payloads. |
+| `./scripts/diagnostics_dump.py` | Dumps canonical snapshots & metric tables (`account_snapshots`, `portfolio_snapshots`, `metric_runs`, `*_metrics`) as JSON so you can compare SQLite contents with HA payloads. |
 | `npm run dev` | Launches Vite (`http://127.0.0.1:5173`) for hot-module dashboard development alongside Home Assistant. |
 | `npm run build` | Builds production bundles and refreshes `dashboard.module.js` via `scripts/update_dashboard_module.mjs`. |
 | `npm test` | Executes the TypeScript smoke tests through `scripts/run_ts_tests.mjs`. |
-| `./scripts/prepare_main_pr.sh` | Generates a clean worktree with release artefacts when preparing pull requests against `main`. |
+| `./scripts/prepare_main_pr.sh dev main` | Generates a clean worktree with release artefacts when preparing pull requests against `main` (defaults to `main-release` if omitted). |
 
 ## Backend development notes
 - Integration state is stored under `hass.data[DOMAIN][entry_id]`; the coordinator now exposes telemetry only and every consumer loads canonical data through `custom_components.pp_reader.data.normalized_store` (e.g., `async_load_latest_snapshot_bundle`, `async_load_metric_summary`). Avoid reintroducing caches under `coordinator.data`.
-- Live pricing uses `yahooquery` with a minimum polling interval of 300 seconds. Respect the coordinator locks and logging hooks when adjusting the price service.
-- The enrichment pipeline is orchestrated by `custom_components.pp_reader.data.coordinator.PPReaderCoordinator`: it calls `currencies.fx.ensure_exchange_rates_for_dates` to refresh cached rates and hands parsed securities to `prices.history_queue.HistoryQueueManager` for Yahoo history ingestion. Keep persisted provenance fields intact when touching `fx_rates` or `price_history_queue`.
+- Live pricing uses `yahooquery` with a minimum polling interval of 300 seconds and batches up to 30 symbols per request (30 s timeout). The price cycle revalues portfolios, pushes compact events, and schedules a metrics + normalization refresh after price changes.
+- The enrichment pipeline is orchestrated by `custom_components.pp_reader.data.coordinator.PPReaderCoordinator`: it calls `currencies.fx.ensure_exchange_rates_for_dates` to refresh cached rates and hands parsed securities to `prices.history_queue.HistoryQueueManager` for Yahoo history ingestion. FX refresh/backfill is also scheduled periodically via `fx_update_interval_seconds`, and a history drain runs at 02:00/14:00 local time plus once at startup. Keep persisted provenance fields intact when touching `fx_rates` or `price_history_queue`.
 - Feature flag helpers (`feature_flags.snapshot` / `feature_flags.is_enabled`) remain available for future experiments, but enrichment, metrics, and normalization always run and are no longer configurable via the options flow.
 - FX refresh cadence is configurable via the options flow (`fx_update_interval_seconds`, default six hours, minimum 15 minutes). Update `tests/integration/test_enrichment_pipeline.py` if you adjust the defaults or scheduling semantics.
 - SQLite persists staging (`ingestion_*`), canonical metrics, and snapshot tables. The parser writes typed entities via `data/ingestion_writer`, metrics persist through `metrics/storage`, and normalization serializes payloads into `portfolio_snapshots` / `account_snapshots`. Automatic backups still run every six hours, and the `pp_reader.trigger_backup_debug` service exposes manual backups for testing. Staged transactions now carry `amount_eur_cents` (EUR cents derived from FX) alongside the native `amount` field; legacy rows remain NULL until backfilled. Run the backfill after upgrading or importing old data via `python -m custom_components.pp_reader.data.backfill_fx_tx --db config/pp_reader.db [--currency USD] [--dry-run]` and watch for FX warnings from `ingestion_writer` / `canonical_sync` to catch missing rates.
@@ -113,12 +118,13 @@ See [TESTING.md](TESTING.md) for expanded instructions, fixture details, and CI 
 
 ## Release workflow
 1. Develop features on topic branches and open pull requests against `dev`. Maintainers promote `dev` to `main` for releases.
-2. Run `npm run build` and `./scripts/prepare_main_pr.sh` before raising a release PR so bundled assets and artefacts are refreshed.
+2. Run `npm run build` and `./scripts/prepare_main_pr.sh dev main` (defaults to `main-release` when omitted) before raising a release PR so bundled assets and artefacts are refreshed.
 3. Bump the integration version in `custom_components/pp_reader/manifest.json` and update `CHANGELOG.md` as part of the release commit.
 
 ## Architecture highlights
 - Canonical payloads come from the persisted snapshots: use `normalized_store.SnapshotBundle` / `MetricSummary` in sensors, WebSocket responses, coordinator events, and dashboard utilities.
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) must handle coordinator fallbacks and return data sourced from SQLite.
+- FX refresh/backfill and price-history jobs are scheduled: FX cadence comes from the options flow, history drains run at 02:00/14:00 local time plus after imports/startup.
 - Daily close history stored during sync powers security charts. Database migrations must keep historic data and backups restorable.
 - The shared `performance` payload (gain, percentage, and optional `day_change` details) now originates from the persisted metric tables; it travels unchanged from the metric engine (`metrics/common`, `metrics/storage`) through database serializers, events, and frontend caches. Update all consumers together if the structure evolves.
 

@@ -6,31 +6,27 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+_Noch keine Einträge._
+
+## [0.15.0] - 2025-11-30
+
 ### Added
 - Per-transaction EUR purchase values are persisted during ingestion and can be backfilled via `python -m custom_components.pp_reader.data.backfill_fx_tx --db <path> [--currency USD] [--dry-run]` so portfolio aggregates, metrics, and websocket payloads expose accurate EUR and native totals.
+- Documented the persisted metrics engine, diagnostics surface, and CLI smoke test so operators and contributors can inspect `metric_runs` snapshots and replay the parser → enrichment → metrics pipeline outside Home Assistant.【F:README.md†L34-L120】【F:README-dev.md†L16-L120】【F:.docs/qa_docs_comms.md†L1-L72】
 
 ### Changed
 - Config flow validation now streams `.portfolio` archives through `parser_pipeline.async_parse_portfolio` (via a no-op writer) so upload errors reuse the canonical parser instead of the deprecated protobuf helper.
 - `scripts/enrichment_smoketest.py` runs parser → ingestion → metrics → normalization exclusively, removing the redundant diff-sync staging step.
 - The normalized ingestion/dashboard pipeline now runs unconditionally; config entries migrate to version 3 and drop the legacy feature-flag options so diagnostics, sensors, and websockets always read the canonical snapshots.
-- Live price fetch batches now use chunk size 50 (up from 10) to reduce cycle duration and avoid watchdog warnings on larger symbol sets.
-
-### Removed
-- Deleted `custom_components/pp_reader/data/sync_from_pclient.py`, the deprecated `data/reader.py` shim, and the associated pytest suites; canonical ingestion, metrics, and normalization tables are now the only runtime persistence paths.
-- Dropped the `pp_reader` namespace alias and the normalized feature flag toggles now that the canonical pipeline is mandatory.
-- Removed the legacy runtime schema migrations (`db_init.py` helpers, `data/migrations/cleanup.py`) together with `tests/test_migration.py` / `tests/test_price_persistence_fields.py`; database initialization now relies solely on the canonical schema.
-
-## [0.15.0] - 2025-02-18
-
-### Added
-- Documented the persisted metrics engine, diagnostics surface, and CLI smoke test so operators and contributors can inspect `metric_runs` snapshots and replay the parser → enrichment → metrics pipeline outside Home Assistant.【F:README.md†L34-L120】【F:README-dev.md†L16-L120】【F:.docs/qa_docs_comms.md†L1-L72】
-
-### Changed
+- Live price fetch batches now use chunk size 30 (up from 10) to reduce cycle duration and avoid watchdog warnings on larger symbol sets.
 - Finalized the normalized frontend adapter rollout: dashboard API helpers (`src/data/api.ts`), stores (`src/lib/store/portfolioStore.ts` / `src/lib/store/selectors/portfolio.ts`), and live update handlers (`src/data/updateConfigsWS.ts`) now exclusively consume the canonical `Normalized*Snapshot` payloads emitted by `custom_components/pp_reader/data/event_push.py`. There is no fallback path to the legacy DOM adapters, so any custom dashboard builds must be rebuilt (`npm run build`) or refreshed via HACS after upgrading. The canonical payload contract lives in `pp_reader_dom_reference.md`, ensuring websocket pushes and UI stores stay aligned.
 - Rebuilt the production dashboard bundles (`custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.CeqyI7r9.js` + `dashboard.module.js`) after clearing `node_modules/.vite`, then ran `npm run build`, `node scripts/update_dashboard_module.mjs`, and `scripts/prepare_main_pr.sh dev main` so the hashed artefacts shipped in HACS match the normalized adapter release.
 - Feature flags `normalized_pipeline` and `normalized_dashboard_adapter` now default to **on** for every config entry. Existing installations migrate automatically (config-entry version 2) so diagnostics, sensors, and websocket payloads always read from the normalization snapshot.
 
 ### Removed
+- Deleted `custom_components/pp_reader/data/sync_from_pclient.py`, the deprecated `data/reader.py` shim, and the associated pytest suites; canonical ingestion, metrics, and normalization tables are now the only runtime persistence paths.
+- Dropped the `pp_reader` namespace alias and the normalized feature flag toggles now that the canonical pipeline is mandatory.
+- Removed the legacy runtime schema migrations (`db_init.py` helpers, `data/migrations/cleanup.py`) together with `tests/test_migration.py` / `tests/test_price_persistence_fields.py`; database initialization now relies solely on the canonical schema.
 - Dropped the temporary `custom_components/pp_reader/data/performance.py` shim in favour of importing helpers directly from `custom_components/pp_reader/metrics/common.py`, completing the metric-engine cleanup.
 - Retired the bespoke `_normalize_portfolio_row` payload builders, websocket patches, and coordinator-managed portfolio caches; Home Assistant now serves dashboard/events from cached `NormalizationResult` snapshots via `data/normalization_pipeline.py`, `data/websocket.py`, and `data/coordinator.py`.【F:custom_components/pp_reader/data/normalization_pipeline.py†L1-L220】【F:custom_components/pp_reader/data/websocket.py†L243-L318】【F:custom_components/pp_reader/data/coordinator.py†L766-L868】
 

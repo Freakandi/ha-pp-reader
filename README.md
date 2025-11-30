@@ -1,133 +1,76 @@
 # Portfolio Performance Reader for Home Assistant
 
-Portfolio Performance Reader keeps your Home Assistant instance in sync with the data from your local [Portfolio Performance](https://www.portfolio-performance.info/) `.portfolio` file. The integration watches your export, mirrors accounts and portfolios into a dedicated SQLite database, refreshes live prices, and ships a purpose-built dashboard panel so automations and the UI all rely on the same dataset.
+Portfolio Performance Reader keeps your Home Assistant instance in sync with a local [Portfolio Performance](https://www.portfolio-performance.info/) `.portfolio` file. It imports your data into SQLite, refreshes live prices, and serves a purpose-built dashboard so automations, sensors, and the UI share one source of truth.
 
-## Overview
-- Imports accounts, portfolios, transactions, and historic closes whenever the `.portfolio` file changes.
-- Stores the latest quote per security and recalculates portfolio totals from SQLite so sensors, WebSocket clients, and the dashboard all see the same figures.
-- Exposes structured payloads for holdings (`aggregation`/`average_cost`) and performance metrics that power sensors, WebSocket responses, and dashboard tables.
-- Persists aggregated portfolio, account, and security metrics (plus run metadata) in dedicated SQLite tables so diagnostics, events, and WebSocket consumers reuse a single source of truth.
-- Normalises every metric run into canonical snapshots stored in the `portfolio_snapshots` and `account_snapshots` tables, so downstream consumers fetch a consistent structure even after Home Assistant restarts.
-- Runs entirely on your Home Assistant host; the only outbound traffic comes from optional pricing providers such as Yahoo Finance or the Frankfurter FX API.
-- Queues enrichment jobs after each import: FX rates are cached in SQLite, and Yahoo history fetches populate the `historical_prices` table for offline dashboards.
-
-## Canonical ingestion pipeline
-Portfolio Performance Reader no longer ships the protobuf diff-sync flow. Every import follows the same canonical chain and only the persisted snapshot tables feed runtime consumers:
-
-1. **Parser → staging (`ingestion_*`)** – `custom_components/pp_reader/services/parser_pipeline.py` streams `.portfolio` data into typed ingestion tables through `data/ingestion_writer.py`, capturing parser metadata per run for diagnostics and CLI tools.
-2. **Metrics persistence** – `custom_components/pp_reader/metrics/pipeline.py` aggregates coverage/gain data for accounts, portfolios, and securities, storing results inside `metric_runs`, `portfolio_metrics`, `account_metrics`, and `security_metrics` via `metrics/storage.py`.
-3. **Normalization snapshots** – `custom_components/pp_reader/data/normalization_pipeline.py` serializes each `NormalizationResult` into `portfolio_snapshots` and `account_snapshots`. The async helpers in `data/normalized_store.py` expose `async_load_latest_snapshot_bundle` and `async_load_metric_summary` so every coordinator consumer rehydrates the same persisted payloads without touching coordinator caches.
-4. **Consumers** – Sensors, WebSocket handlers, diagnostics, CLI scripts, and dispatcher events all read from `normalized_store` (or directly from the canonical tables) which makes HA restarts and dashboard reloads deterministic.
-
-No other pipeline persists runtime state; the snapshot and metric tables are the single source of truth for sensors, events, and the dashboard.
-
-## Features
-- **Automatic portfolio sync:** Watches the configured `.portfolio` file, normalises identifiers, and mirrors portfolio/account balances as Home Assistant entities.
-- **Shared performance metrics:** An asynchronous metrics pipeline (under `custom_components/pp_reader/metrics/`) aggregates gains, day-change deltas, coverage, and provenance into dedicated tables so automations, events, and the dashboard all read the exact snapshot that was persisted.
-- **Security drilldowns:** Dashboard tabs provide daily close charts, performance breakdowns, and snapshot metrics for every security with stored history.
-- **Built-in dashboard panel:** Adds a persistent "Portfolio Dashboard" sidebar entry with live updates, expandable tables, and navigation to per-security details.
-- **Resilient storage:** Maintains six-hour rolling backups of the integration database and exposes a manual service for on-demand snapshots.
-- **Asynchronous enrichment pipeline:** Refreshes Frankfurter FX rates and Yahoo price history in the background, persisting provenance metadata so charts and metrics keep working when the upstream APIs are temporarily unavailable.
-
-## Canonical snapshots & events
-Portfolio Performance Reader now delivers sensor, WebSocket, and dashboard payloads from a normalization layer housed in `custom_components/pp_reader/data/normalization_pipeline.py`.
-
-- Every metrics run persists canonical `PortfolioSnapshot` and `AccountSnapshot` payloads into `portfolio_snapshots` and `account_snapshots`, keyed by the originating `metric_run_uuid`. The snapshots contain the same rounded figures, coverage metadata, and provenance strings presented in the UI, which makes replays and diagnostics deterministic.
-- WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_accounts`, `pp_reader/get_portfolio_data`, `pp_reader/get_portfolio_positions`, `pp_reader/get_security_snapshot`, and `pp_reader/get_security_history`) hydrate their responses from these snapshots, so the dashboard always receives the same schema regardless of which backend module requested the data.
-- Event push helpers (`custom_components/pp_reader/data/event_push.py`) broadcast incremental updates over Home Assistant's `EVENT_PANELS_UPDATED` bus topic with a `data_type` discriminator (`accounts`, `portfolio_values`, `portfolio_positions`, `security_snapshot`, or `security_history`). The dashboard subscribes to those events and patches tables without polling.
-- Diagnostics now include a `normalized_payload` entry that mirrors the serialized normalization result for the last metric run, making it easy to compare backend payloads with what the UI renders or what CLI tools fetch.
-
-### Normalized frontend adapter
-- The bundled dashboard consumes the canonical snapshots directly. `src/data/api.ts` deserializes the WebSocket responses into `NormalizedAccountSnapshot` / `NormalizedPortfolioSnapshot` records (see `src/lib/api/portfolio/`) and seeds the in-memory store implemented in `src/lib/store/portfolioStore.ts`. The store clones nested payloads and coerces optional fields so selectors always see the contract defined in `pp_reader_dom_reference.md`.
-- All views subscribe to selectors under `src/lib/store/selectors/portfolio.ts`, which compute overview cards, account badges, coverage/provenance chips, and security drilldown rows from the normalized store. This removes the legacy `window.__ppReader*` overrides: the UI renders the payload persisted by the backend, including `metric_run_uuid`, provenance, and coverage metadata for every table and badge.
-- Live updates arrive through `EVENT_PANELS_UPDATED`. `src/data/updateConfigsWS.ts` listens for the push payloads emitted by `custom_components/pp_reader/data/event_push.py`, applies the same deserializers, and merges the results back into the store (plus diagnostics via `DASHBOARD_DIAGNOSTICS_EVENT`). Because WebSocket push and the initial fetch share one adapter, overview, accounts, and per-security tabs stay in sync even after Home Assistant restarts or the dashboard reloads.
+## Highlights
+- **Automatic sync**: Watches the `.portfolio` file, parses accounts/portfolios/transactions, and stores them in SQLite.
+- **Shared metrics**: Aggregates gains, day-change deltas, coverage, and provenance into canonical snapshots used by sensors, events, and WebSocket responses.
+- **Live pricing**: Fetches Yahoo Finance quotes (30-symbol batches, 30 s timeout) and revalues portfolios; FX refresh/backfill keeps EUR conversions current.
+- **History-aware dashboard**: Twice-daily price-history jobs and dev-server override keep charts and drilldowns in sync with stored candles.
+- **Resilience**: Six-hour rolling backups plus a service to trigger manual snapshots.
 
 ## Requirements
-- Home Assistant **2025.4.1** or newer when installed via HACS (matches the integration manifest).
-- Portfolio Performance Reader **0.14.0** or later.
-- Access to at least one Portfolio Performance `.portfolio` file on the Home Assistant host.
-- Optional outbound internet access if you enable live quotes via Yahoo Finance (`yahooquery`) or the Frankfurter EUR FX API (see [`docs/network-access.md`](docs/network-access.md)).
+- Home Assistant core matching `requirements.txt` (pinned to **2025.11.1** for development/testing).
+- Integration version **0.15.0** or newer.
+- Access to the `.portfolio` file on the Home Assistant host.
+- Optional internet access for Yahoo Finance quotes and the Frankfurter EUR FX API (see [`docs/network-access.md`](docs/network-access.md)).
 
 ## Installation
 ### HACS (recommended)
-1. In HACS → **Integrations**, add `Freakandi/ha-pp-reader` as a custom repository if needed.
+1. In HACS → **Integrations**, add `Freakandi/ha-pp-reader` as a custom repository if required.
 2. Install **Portfolio Performance Reader**.
-3. Restart Home Assistant, then go to **Settings → Devices & Services → Add Integration** and search for "Portfolio Performance Reader".
+3. Restart Home Assistant and add the integration via **Settings → Devices & Services → Add Integration**.
 
 ### Manual install
-1. Download the latest release archive from GitHub.
+1. Download the latest release archive.
 2. Copy `custom_components/pp_reader/` into `config/custom_components/` on your Home Assistant instance.
-3. Restart Home Assistant and add the integration through **Settings → Devices & Services**.
+3. Restart Home Assistant and complete the config flow.
 
 ### Building dashboard assets from source
-Release packages include pre-built dashboard bundles. When working from a git checkout:
-1. Install Node.js **18.18+** and npm **10+**.
-2. Run `npm install` once to install the frontend toolchain.
-3. Use `npm run build` to compile the dashboard into `custom_components/pp_reader/www/` or `npm run dev` for a watch build while Home Assistant runs.
+Release builds ship bundled assets. From a git checkout:
+1. Install Node.js **18.18+** / npm **10+**, then run `npm install`.
+2. Build once with `npm run build` (outputs to `custom_components/pp_reader/www/pp_reader_dashboard/js/` and rewrites `dashboard.module.js`).
+3. For live edits while HA runs, use `npm run dev` and open `http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http://127.0.0.1:5173`.
 
 ## Configuration
-1. Start the config flow and supply the absolute path to your `.portfolio` file. The wizard validates the file before continuing.
-2. Accept the default database path (`pp_reader_data/<portfolio>.db` inside your Home Assistant config directory, resolved via `hass.config.path(...)`) or choose a custom directory.
-3. Finish the setup and review the options (accessible after onboarding):
-   - **Live price interval** – `price_update_interval_seconds` (default 900 seconds, minimum 300 seconds).
-   - **FX refresh interval** – `fx_update_interval_seconds` (default 6 hours, minimum 15 minutes) controls how often cached FX rates are refreshed for non-EUR accounts and purchases.
-   - **Price debug logging** – `enable_price_debug` narrows verbose logs to the pricing namespace.
+1. Start the config flow and select your `.portfolio` file. The wizard validates it with the canonical parser.
+2. Accept the default database location (`pp_reader_data/<portfolio>.db` under the HA config directory) or choose a custom path.
+3. Adjust options any time:
+   - `price_update_interval_seconds` (default 900, min 300).
+   - `fx_update_interval_seconds` (default 6 h, min 15 m) to refresh cached FX rates.
+   - `enable_price_debug` to raise price-service logging to DEBUG.
 
 ### Services
-- `pp_reader.trigger_backup_debug` — run from **Developer Tools → Services** to create an immediate database backup (mirrors the six-hour rolling snapshots).
+- `pp_reader.trigger_backup_debug` — run from **Developer Tools → Services** to create an immediate backup (mirrors the six-hour cadence).
 
 ## Usage
 ### Sensors and entities
-- Portfolio sensors expose current value, purchase sums, unrealised gains, and day-change metrics sourced from the persisted `portfolio_metrics` rows referenced by the shared `performance` payload.
-- Account sensors mirror account balances from the `.portfolio` file.
-- Status sensors surface the last successful import, last backup timestamp, and database path for automations.
+- Portfolio sensors expose purchase sums, current values, gains, and day-change metrics from persisted snapshots.
+- Account sensors mirror balances from the `.portfolio` file.
+- Status/diagnostic entities surface last import, backup timestamp, and database path.
 
 ### Dashboard panel
-- The sidebar entry **Portfolio Dashboard** lists all portfolios with live updates, totals, and highlight effects when rows change.
-- Selecting a position opens a security detail tab with range selectors (`1W`…`ALL`), performance deltas, and SVG charts generated from the stored daily closes.
+- Sidebar entry **Portfolio Dashboard** with live updates, highlighted changes, and per-security drilldowns.
+- Security detail tabs show cached price history, performance deltas, and FX metadata derived from stored `historical_prices` and snapshots.
 
-### Canonical normalization defaults
-- The normalized ingestion + dashboard adapter path is mandatory. Every install runs parser → ingestion → metrics → normalization after each import so sensors, WebSocket clients, and the bundled dashboard always consume the persisted snapshot.
-- Custom clients must deserialize the structured payloads documented in `pp_reader_dom_reference.md` and `src/lib/api/portfolio/types.ts`. Deprecated flat fields (`gain_abs`, `avg_price_*`, `day_price_change_*`) are no longer surfaced by sensors, events, or WebSocket responses.
-
-### Automations & data consumers
-- WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) deliver the same structured payloads used by the dashboard. Custom cards or automations can subscribe to identical gain, day-change, and average-cost metrics without reimplementing calculations.
-- Legacy flat fields (`avg_price_security`, `avg_price_account`, `gain_abs`, `gain_pct`, `day_price_change_*`) were removed in v0.14.0. Update custom automations to rely on the `average_cost` and `performance` blocks instead.
-
-### FX & price enrichment
-- After every import the coordinator schedules an FX refresh (Frankfurter) and queues Yahoo price-history jobs. Rates are persisted in the `fx_rates` table with provenance metadata; completed candles land in `historical_prices` and surface on the dashboard without additional API calls.
-- Enrichment telemetry is exposed under **Settings → Devices & Services → Portfolio Performance Reader → Diagnostics**. The JSON download lists the latest FX fetch, queued jobs, recent failures, and the most recent metrics run (including processed counts and coverage summaries) to aid troubleshooting.
-- Adjust the FX cadence from the options flow if you need more frequent updates during trading hours or slower refreshes for offline environments.
-
-### Metrics diagnostics & CLI tooling
-- Download diagnostics after an import to inspect `metrics.latest_run`, `metrics.recent_runs`, and coverage summaries for `portfolio_metrics`, `account_metrics`, and `security_metrics`. Use this data to verify that dashboard totals match the stored snapshot before debugging automations or UI regressions.
-- `python scripts/enrichment_smoketest.py --portfolio <path> --database <path>` replays the parser → enrichment → metrics pipeline outside of Home Assistant. The script prints progress per stage, stores the resulting metrics tables, and dumps diagnostics so you can spot ingestion or coverage issues quickly.
-
-### Historical data & backups
-- Daily close prices for tracked securities are persisted on every import so charts and WebSocket consumers work offline once data is captured.
-- The integration keeps rolling backups of the SQLite database under `pp_reader_data/backups` inside the Home Assistant config directory (e.g., `/config/pp_reader_data/backups` in the official container). Trigger `pp_reader.trigger_backup_debug` before risky maintenance to capture an additional snapshot.
-
-### Dashboard asset rebuilds
-- Production builds ship hashed bundles under `custom_components/pp_reader/www/pp_reader_dashboard/js/` and a rewritten `dashboard.module.js`. When you edit the dashboard locally or maintain a fork, run `npm ci && npm run build && node scripts/update_dashboard_module.mjs` to regenerate those assets.
-- After rebuilding, reload the Portfolio Performance Reader integration (or restart Home Assistant) so the panel picks up the new bundle hash. Operators promoting the release to `main` must also run `scripts/prepare_main_pr.sh dev main` to copy the refreshed assets into the release worktree.
-- Clear `node_modules/.vite` before `npm run build` if Vite cached an older dependency set; the release checklist (`.docs/qa_docs_comms.md`) documents the expected sequence.
+### Data & automations
+- WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_accounts`, `pp_reader/get_portfolio_data`, `pp_reader/get_portfolio_positions`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) return the same structured payloads the dashboard consumes. Custom cards should read `average_cost` and `performance` instead of legacy flat fields.
+- FX refresh/backfill runs on schedule and after imports; Yahoo history jobs drain twice daily and after imports to keep charts current.
 
 ## Troubleshooting
 | Symptom | Suggested action |
 | --- | --- |
-| Config flow reports "file not found" or "parse failed" | Confirm the Home Assistant host can access the path, the `.portfolio` export is recent, and Portfolio Performance is closed while Home Assistant reads the file. |
-| Live prices stop updating | Check the options flow for the polling interval (minimum 300 seconds) and inspect logs for Yahoo Finance warnings before lowering the interval. |
-| Dashboard totals or charts look stale | Ensure Home Assistant is running (price tasks trigger on schedule) and review the logs for database errors or WebSocket warnings. Restarting Home Assistant reschedules the price coordinator. |
-| Security detail tab shows empty charts | Verify that the integration has completed at least one import since upgrading and that the Portfolio Performance file contains securities with historical data. |
-| Automations no longer see `gain_abs` or `avg_price_*` fields | Update automations to consume the structured `performance` and `average_cost` payloads exposed by sensors, WebSocket responses, and events. |
-| FX diagnostics show no recent refresh | Download the integration diagnostics and confirm `fx.last_refresh` updates after the scheduled interval. Reduce the FX interval or check network access to `api.frankfurter.app` if the timestamp stays `null`. |
-| Price history queue reports failures | Diagnostics include the last five failed jobs. Clean up invalid symbols in Portfolio Performance or temporarily disable Yahoo updates until the upstream responds again. |
+| Config flow fails | Verify file path/permissions and ensure the `.portfolio` file is closed while HA reads it. |
+| Prices not updating | Check polling interval (min 300 s) and logs for Yahoo warnings; ensure internet access. |
+| Charts empty or stale | Let at least one import finish, confirm history jobs are not failing in diagnostics, and restart HA to reschedule tasks. |
+| FX data missing | Lower `fx_update_interval_seconds` or confirm access to `api.frankfurter.app`; review diagnostics. |
+| Legacy fields unavailable | Update automations to consume `performance` and `average_cost` blocks; flat `gain_abs`/`avg_price_*` are removed. |
 
-## Further documentation & support
-- [Developer guide](README-dev.md) — environment setup, contribution workflow, and release process.
-- [Architecture](ARCHITECTURE.md) — module responsibilities and data flow.
-- [Testing guide](TESTING.md) — QA workflows and fixtures.
-- [Changelog](CHANGELOG.md) — version history and behaviour changes.
-- [Network access](docs/network-access.md) — overview of optional outbound requests.
+## Further documentation
+- [Developer guide](README-dev.md)
+- [Architecture](ARCHITECTURE.md)
+- [Testing](TESTING.md)
+- [Changelog](CHANGELOG.md)
+- [Network access](docs/network-access.md)
 
-Need help or spotted an issue? Open a ticket on the [project repository](https://github.com/Freakandi/ha-pp-reader/issues).
+Need help or found a bug? Open an issue on the [project repository](https://github.com/Freakandi/ha-pp-reader/issues).

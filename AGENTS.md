@@ -2,7 +2,7 @@
 
 This repository hosts the Home Assistant integration **Portfolio Performance Reader**. Runtime Python lives under `custom_components/pp_reader/`, the dashboard source is in `src/`, and tests (Python + frontend) sit under `tests/`.
 
-Backend tooling must run inside the project virtual environment populated from `requirements.txt` (pins Home Assistant **2025.2.4**). Frontend tooling requires Node.js **18.18+** (or newer 20.x) with npm **10+**.
+Backend tooling must run inside the project virtual environment populated from `requirements.txt` (pins Home Assistant **2025.11.1**). Frontend tooling requires Node.js **18.18+** (or newer 20.x) with npm **10+**.
 
 ## Development setup
 - Preferred bootstrap: `./scripts/setup_container`. The script installs the required system packages (ffmpeg, libturbojpeg, libpcap-dev, libsqlite3-dev, python3-venv), ensures Python 3.13.3 via `pyenv` when available, creates `.venv`, upgrades `pip`, installs `requirements.txt`, and prepares `config/` plus the `/config` symlink.
@@ -26,5 +26,5 @@ Backend tooling must run inside the project virtual environment populated from `
 
 ## Release workflow
 - Develop features on topic branches and open pull requests targeting `dev`. Maintainers promote `dev` to the release branch (`main` unless otherwise noted) when cutting a release.
-- Before opening a release PR, run `npm run build` and `./scripts/prepare_main_pr.sh dev main` so bundled assets and the generated worktree stay in sync with the branch targeting `main`.
+- Before opening a release PR, run `npm run build` and `./scripts/prepare_main_pr.sh dev main` so bundled assets and the generated worktree stay in sync with the branch targeting `main` (the script defaults to `main-release` when no target is provided).
 - Bump the integration version in `custom_components/pp_reader/manifest.json` and update `CHANGELOG.md` as part of the release work.
