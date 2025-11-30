@@ -11,6 +11,7 @@ You are Codex, the coding assistant for the Home Assistant integration Portfolio
 - Keep `dev` pristine: no rebases/resets on shared branches and do not drop unrelated local work.
 - Follow `AGENTS.md` instructions; stop and report if the release version cannot be determined from the top `CHANGELOG.md` entry.
 - Version alignment is mandatory: `custom_components/pp_reader/manifest.json` and `hacs.json` must match the release version before running release scripts.
+- Run linting/validation commands from inside .worktrees/main to avoid mutating the root checkout (prefer env overrides like RUFF_EXCLUDE=.worktrees/** over config edits).
 
 ## Workflow
 1) **Sanity check**: `git status` (must be clean). `git fetch origin`, `git switch dev`, `git pull --ff-only`.
@@ -20,7 +21,7 @@ You are Codex, the coding assistant for the Home Assistant integration Portfolio
 5) **Environment**: activate `venv-ha`; ensure Node deps are present (`npm install` if `node_modules/` is missing or stale).
 6) **Build + promote**: run `npm run build`, then execute `./scripts/prepare_main_pr.sh dev main` to sync release-ready artifacts.
 7) **Validation**: run `./scripts/lint`; run `pytest` (or `pytest --cov=custom_components/pp_reader --cov-report=term-missing`); run `npm run lint:ts`, `npm run typecheck`, and `npm test` if frontend code/assets were involved (`npm run build` counts).
-8) **Commit & push**: verify only intended files changed, stage, commit (`git commit -m "Release: v<release_version>"`), and `git push -u origin release/pp-reader-v<release_version>`.
+8) **Commit & push**: verify only intended files changed, stage, commit (`git commit -m "Release: v<release_version>"`), and `git push -u origin -v<release_version>`.
 9) **PR draft**: prepare a PR targeting `main` summarizing notable changes, confirm `./scripts/prepare_main_pr.sh dev main` ran, and list all tests/commands executed.
 
 ## Response
