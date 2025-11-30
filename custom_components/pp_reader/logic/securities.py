@@ -346,24 +346,12 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
 
     for entry in entries:
         unit_type_raw = entry.get("type")
-
-        try:
-            unit_type = int(unit_type_raw)
-        except (TypeError, ValueError):
-            continue
-
+        unit_type = _safe_int(unit_type_raw)
         if unit_type != UNIT_TYPE_NATIVE:
             continue
 
-        raw_amount = entry.get("amount")
-        converted_account = cent_to_eur(raw_amount)
-        if converted_account is not None:
-            account_amount = converted_account
-
-        fx_amount = entry.get("fx_amount")
-        converted_native = cent_to_eur(fx_amount)
-        if converted_native is not None:
-            native_amount = converted_native
+        account_amount = _apply_cent_value(entry.get("amount"), account_amount)
+        native_amount = _apply_cent_value(entry.get("fx_amount"), native_amount)
 
         currency = entry.get("fx_currency_code")
         if isinstance(currency, str):
@@ -384,11 +372,28 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
                 native_currency = currency
 
         if account_amount is None:
-            converted_account = cent_to_eur(fallback_unit.get("amount"))
-            if converted_account is not None:
-                account_amount = converted_account
+            account_amount = _apply_cent_value(
+                fallback_unit.get("amount"),
+                account_amount,
+            )
 
     return native_amount, native_currency, account_amount
+
+
+def _apply_cent_value(value: Any, current: float | None) -> float | None:
+    """Convert an optional cent value to EUR, preserving an existing value."""
+    if current is not None:
+        return current
+    converted = cent_to_eur(value)
+    return converted if converted is not None else current
+
+
+def _safe_int(value: Any) -> int | None:
+    """Best-effort int conversion."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mirrors business rules

@@ -345,9 +345,7 @@ def _coerce_timestamp(value: object) -> datetime:
     """Convert yahooquery timestamp payloads to timezone-aware datetimes."""
     result: datetime | None = None
 
-    if isinstance(value, datetime):
-        result = _normalize_datetime(value)
-    elif isinstance(value, date):
+    if isinstance(value, (datetime, date)):
         result = _normalize_datetime(value)
     elif value is None:
         result = None

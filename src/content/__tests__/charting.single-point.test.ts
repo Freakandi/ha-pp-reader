@@ -11,10 +11,13 @@ test('renderLineChart draws a visible path for single-point series', () => {
 
   const previousWindow = globalThis.window;
   const previousDocument = globalThis.document;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).window = dom.window;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).document = dom.window.document;
+  const jsdomWindow = dom.window as unknown as Window & typeof globalThis;
+  const globalWithDom = globalThis as typeof globalThis & {
+    window: Window & typeof globalThis;
+    document: Document;
+  };
+  globalWithDom.window = jsdomWindow;
+  globalWithDom.document = dom.window.document as unknown as Document;
 
   try {
     const host = dom.window.document.getElementById('host');
@@ -30,9 +33,7 @@ test('renderLineChart draws a visible path for single-point series', () => {
     assert.ok(d && d.trim().length > 0, 'line path should not be empty for single point');
   } finally {
     // Restore globals for isolation.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).window = previousWindow;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).document = previousDocument;
+    globalWithDom.window = previousWindow;
+    globalWithDom.document = previousDocument;
   }
 });

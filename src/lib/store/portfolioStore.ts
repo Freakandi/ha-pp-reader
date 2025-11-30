@@ -255,7 +255,10 @@ export function setPortfolioPositionsSnapshot(
     base: NormalizedPositionSnapshot | undefined,
     patch: NormalizedPositionSnapshot,
   ): NormalizedPositionSnapshot => {
-    const merged: NormalizedPositionSnapshot = base ? clonePositionSnapshot(base) : {} as NormalizedPositionSnapshot;
+    const merged: NormalizedPositionSnapshot = base
+      ? clonePositionSnapshot(base)
+      : ({} as NormalizedPositionSnapshot);
+    const mergedTarget = merged as Record<string, unknown>;
 
     const shallowKeys: (keyof NormalizedPositionSnapshot)[] = [
       'portfolio_uuid',
@@ -271,9 +274,10 @@ export function setPortfolioPositionsSnapshot(
       'metric_run_uuid',
     ];
 
-    shallowKeys.forEach(key => {
-      if (patch[key] !== undefined) {
-        (merged as any)[key] = patch[key];
+    shallowKeys.forEach((key) => {
+      const value = patch[key];
+      if (value !== undefined && value !== null) {
+        mergedTarget[key] = value;
       }
     });
 
@@ -284,9 +288,12 @@ export function setPortfolioPositionsSnapshot(
           base && base[field] && typeof base[field] === 'object'
             ? (base[field] as Record<string, unknown>)
             : {};
-        (merged as any)[field] = { ...baseObj, ...(value as Record<string, unknown>) };
-      } else if (value !== undefined) {
-        (merged as any)[field] = value;
+        mergedTarget[field] = {
+          ...baseObj,
+          ...(value as Record<string, unknown>),
+        };
+      } else if (value !== undefined && value !== null) {
+        mergedTarget[field] = value;
       }
     };
 

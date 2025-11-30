@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from custom_components.pp_reader.data.db_access import SecurityMetricRecord
 from custom_components.pp_reader.data import normalization_pipeline as nm
+from custom_components.pp_reader.data.db_access import SecurityMetricRecord
 
 
 def test_portfolio_day_change_uses_eur_converted_prices(monkeypatch: object) -> None:

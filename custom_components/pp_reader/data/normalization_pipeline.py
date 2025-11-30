@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -164,8 +165,44 @@ class _PositionContext:
     reference_date: datetime
 
 
-def _is_recent_close(date_epoch: int | None, reference_date: datetime) -> bool:
-    return True
+@dataclass(slots=True)
+class _PortfolioComposeContext:
+    """Context for composing portfolio snapshots."""
+
+    db_path: Path
+    reference_date: datetime
+    include_positions: bool
+    position_context: _PositionContext | None
+
+
+@dataclass(slots=True)
+class _DayChangeContext:
+    """Context for deriving day-change values."""
+
+    db_path: Path
+    currency_code: str
+    reference_date: datetime
+    reference_epoch_day: int
+
+
+@dataclass(slots=True)
+class _PositionSnapshotContext:
+    """Context bundle for building position snapshots."""
+
+    db_path: Path
+    reference_date: datetime
+    reference_epoch_day: int
+    securities: Mapping[str, Security]
+
+
+@dataclass(slots=True)
+class _PriceState:
+    """Container for price/close values."""
+
+    last_price_native: float | None
+    last_price_eur: float | None
+    last_close_native: float | None
+    last_close_eur: float | None
 
 
 async def async_normalize_snapshot(
@@ -351,83 +388,100 @@ async def async_fetch_security_history(
 
     price_rows, transaction_rows = await async_run_executor_job(hass, _collect_history)
 
-    prices: list[dict[str, Any]] = []
+    return {
+        "prices": _normalize_price_history_rows(price_rows),
+        "transactions": [_normalize_transaction_row(tx) for tx in transaction_rows],
+    }
+
+
+def _normalize_price_history_rows(
+    price_rows: list[tuple[int, float | None, int | None]],
+) -> list[dict[str, Any]]:
+    """Transform (epoch, close, raw) tuples into serializable dicts."""
+    normalized: list[dict[str, Any]] = []
     for date_value, close_value, close_raw in price_rows:
         entry: dict[str, Any] = {"date": date_value}
         if close_value is not None:
             entry["close"] = close_value
         if close_raw is not None:
             entry["close_raw"] = close_raw
-        prices.append(entry)
+        normalized.append(entry)
+    return normalized
 
-    transactions: list[dict[str, Any]] = []
-    for tx in transaction_rows:
-        shares_value = None
-        shares_raw = tx.get("shares")
-        if shares_raw is not None:
-            try:
-                shares_value = normalize_shares(int(shares_raw))
-            except (TypeError, ValueError):
-                shares_value = None
 
-        price_native = None
-        amount_raw = tx.get("amount")
-        if shares_value not in (None, 0) and amount_raw is not None:
-            gross_total = cent_to_eur(amount_raw, decimals=4, default=None)
-            if gross_total is not None:
-                try:
-                    price_native = round_price(
-                        gross_total / shares_value,
-                        decimals=4,
-                        default=None,
-                    )
-                except ZeroDivisionError:  # pragma: no cover - defensive
-                    price_native = None
-
-        entry: dict[str, Any] = {
-            "uuid": tx.get("uuid"),
-            "type": tx.get("type"),
-            "date": tx.get("date"),
-            "portfolio": tx.get("portfolio"),
-        }
-
-        currency_code = tx.get("currency_code")
-        if currency_code:
-            entry["currency_code"] = currency_code
-        if shares_value is not None:
-            entry["shares"] = shares_value
-        if price_native is not None:
-            entry["price"] = price_native
-
-        is_sale = tx.get("type") in SALE_TYPES
-        if is_sale and shares_value not in (None, 0):
-            fees_raw = tx.get("fees") or 0
-            taxes_raw = tx.get("taxes") or 0
-            net_total_cents = (amount_raw or 0) - fees_raw - taxes_raw
-            net_total_eur = cent_to_eur(net_total_cents, decimals=4, default=None)
-            if net_total_eur is not None:
-                try:
-                    net_price_eur = round_price(
-                        net_total_eur / shares_value,
-                        decimals=4,
-                        default=None,
-                    )
-                except ZeroDivisionError:  # pragma: no cover - defensive
-                    net_price_eur = None
-                if net_price_eur is not None:
-                    entry["net_price_eur"] = net_price_eur
-
-        for field_name in ("amount", "fees", "taxes"):
-            value = tx.get(field_name)
-            if value is not None:
-                entry[field_name] = value
-
-        transactions.append(entry)
-
-    return {
-        "prices": prices,
-        "transactions": transactions,
+def _normalize_transaction_row(tx: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a single transaction payload for history responses."""
+    shares_value, price_native, net_price_eur = _compute_transaction_pricing(tx)
+    entry: dict[str, Any] = {
+        "uuid": tx.get("uuid"),
+        "type": tx.get("type"),
+        "date": tx.get("date"),
+        "portfolio": tx.get("portfolio"),
     }
+
+    currency_code = tx.get("currency_code")
+    if currency_code:
+        entry["currency_code"] = currency_code
+    if shares_value is not None:
+        entry["shares"] = shares_value
+    if price_native is not None:
+        entry["price"] = price_native
+
+    if net_price_eur is not None:
+        entry["net_price_eur"] = net_price_eur
+
+    for field_name in ("amount", "fees", "taxes"):
+        value = tx.get(field_name)
+        if value is not None:
+            entry[field_name] = value
+
+    return entry
+
+
+def _compute_transaction_pricing(
+    tx: dict[str, Any],
+) -> tuple[float | None, float | None, float | None]:
+    """Return (shares, price_native, net_price_eur) for a transaction row."""
+    shares_value = None
+    shares_raw = tx.get("shares")
+    if shares_raw is not None:
+        try:
+            shares_value = normalize_shares(int(shares_raw))
+        except (TypeError, ValueError):
+            shares_value = None
+
+    price_native = None
+    amount_raw = tx.get("amount")
+    if shares_value not in (None, 0) and amount_raw is not None:
+        gross_total = cent_to_eur(amount_raw, decimals=4, default=None)
+        if gross_total is not None:
+            try:
+                price_native = round_price(
+                    gross_total / shares_value,
+                    decimals=4,
+                    default=None,
+                )
+            except ZeroDivisionError:  # pragma: no cover - defensive
+                price_native = None
+
+    net_price_eur = None
+    is_sale = tx.get("type") in SALE_TYPES
+    if is_sale and shares_value not in (None, 0):
+        fees_raw = tx.get("fees") or 0
+        taxes_raw = tx.get("taxes") or 0
+        net_total_cents = (amount_raw or 0) - fees_raw - taxes_raw
+        net_total_eur = cent_to_eur(net_total_cents, decimals=4, default=None)
+        if net_total_eur is not None:
+            try:
+                net_price_eur = round_price(
+                    net_total_eur / shares_value,
+                    decimals=4,
+                    default=None,
+                )
+            except ZeroDivisionError:  # pragma: no cover - defensive
+                net_price_eur = None
+
+    return shares_value, price_native, net_price_eur
 
 
 def _normalize_snapshot_sync(
@@ -453,14 +507,17 @@ def _normalize_snapshot_sync(
         )
 
     account_snapshots = _compose_account_snapshots(accounts, metric_batch.accounts)
+    snapshot_context = _PortfolioComposeContext(
+        db_path=db_path,
+        reference_date=reference_date,
+        include_positions=include_positions,
+        position_context=position_context,
+    )
     portfolio_snapshots = _compose_portfolio_snapshots(
         portfolios,
         metric_batch.portfolios,
         metric_batch.securities,
-        db_path,
-        reference_date,
-        include_positions=include_positions,
-        position_context=position_context,
+        snapshot_context,
     )
 
     result = NormalizationResult(
@@ -538,11 +595,7 @@ def _compose_portfolio_snapshots(
     portfolios: Sequence[Portfolio],
     portfolio_metrics: Sequence[PortfolioMetricRecord],
     security_metrics: Sequence[SecurityMetricRecord],
-    db_path: Path,
-    reference_date: datetime,
-    *,
-    include_positions: bool,
-    position_context: _PositionContext | None,
+    context: _PortfolioComposeContext,
 ) -> list[PortfolioSnapshot]:
     """Combine staged portfolios with persisted aggregate metrics."""
     portfolio_index = {
@@ -555,10 +608,8 @@ def _compose_portfolio_snapshots(
         for record in portfolio_metrics
         if record.portfolio_uuid
     }
-    context = position_context if include_positions else None
-    day_changes = _aggregate_portfolio_day_change(
-        security_metrics, db_path, reference_date
-    )
+    position_ctx = context.position_context if context.include_positions else None
+    day_changes = _aggregate_portfolio_day_change(security_metrics, context)
 
     snapshots: list[PortfolioSnapshot] = []
     for uuid, portfolio in portfolio_index.items():
@@ -567,8 +618,8 @@ def _compose_portfolio_snapshots(
             _build_portfolio_snapshot(
                 portfolio=portfolio,
                 metric=metric,
-                include_positions=include_positions,
-                position_context=context,
+                include_positions=context.include_positions,
+                position_context=position_ctx,
                 day_change=day_changes.get(uuid),
             )
         )
@@ -658,126 +709,160 @@ def _build_portfolio_snapshot(
     )
 
 
+def _safe_int(value: Any) -> int | None:
+    """Best-effort int conversion."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_fetch_previous_close(
+    db_path: Path, security_uuid: str, before_epoch_day: int
+) -> tuple[int | None, int | None, float | None]:
+    """Fetch previous close with defensive error handling."""
+    try:
+        return fetch_previous_close(
+            db_path,
+            security_uuid,
+            before_epoch_day=before_epoch_day,
+        )
+    except (sqlite3.Error, ValueError):
+        _LOGGER.exception(
+            "normalization_pipeline: fetch_previous_close fehlgeschlagen "
+            "(security_uuid=%s)",
+            security_uuid,
+        )
+        return None, None, None
+
+
+def _compute_security_day_change_delta(
+    record: SecurityMetricRecord,
+    context: _PortfolioComposeContext,
+    reference_epoch_day: int,
+) -> tuple[float | None, bool]:
+    """Compute day-change delta and whether a previous close was available."""
+    currency_code = (
+        (getattr(record, "security_currency_code", None) or "EUR").strip().upper()
+    )
+    holdings = _from_holdings_raw(getattr(record, "holdings_raw", 0))
+    if holdings <= 0:
+        return None, False
+
+    last_price_native = normalize_raw_price(
+        getattr(record, "last_price_native_raw", None),
+        decimals=4,
+    )
+    last_price_eur = normalize_price_to_eur_sync(
+        getattr(record, "last_price_native_raw", None),
+        currency_code,
+        context.reference_date,
+        context.db_path,
+    )
+    prev_date, prev_raw, prev_native = _safe_fetch_previous_close(
+        context.db_path,
+        record.security_uuid,
+        before_epoch_day=reference_epoch_day,
+    )
+    prev_close_eur = (
+        normalize_price_to_eur_sync(
+            prev_raw, currency_code, context.reference_date, context.db_path
+        )
+        if prev_raw is not None
+        else None
+    )
+    if currency_code == "EUR":
+        last_price_eur = (
+            last_price_eur if last_price_eur is not None else last_price_native
+        )
+        prev_close_eur = prev_close_eur if prev_close_eur is not None else prev_native
+
+    has_prev_close = prev_close_eur is not None and last_price_eur is not None
+    delta_eur = None
+    if has_prev_close:
+        price_change_eur = round_price(
+            last_price_eur - prev_close_eur,
+            decimals=6,
+            default=None,
+        )
+        delta_eur = round_currency((price_change_eur or 0) * holdings, default=None)
+    if delta_eur is None:
+        # Missing previous close: treat as 0 contribution but mark as missing.
+        delta_eur = 0.0
+    return delta_eur, has_prev_close
+
+
 def _aggregate_portfolio_day_change(
     security_metrics: Sequence[SecurityMetricRecord],
-    db_path: Path,
-    reference_date: datetime,
+    context: _PortfolioComposeContext,
 ) -> dict[str, tuple[float | None, float | None, float | None]]:
     """Aggregate portfolio-level day changes from security metrics."""
     if not security_metrics:
         return {}
 
-    grouped: dict[str, list[SecurityMetricRecord]] = {}
-    for record in security_metrics:
-        portfolio_uuid = getattr(record, "portfolio_uuid", None)
-        if not portfolio_uuid:
-            continue
-        grouped.setdefault(portfolio_uuid, []).append(record)
+    reference_epoch_day = int(context.reference_date.timestamp() // 86400)
+    grouped = _index_security_metrics_by_portfolio(security_metrics)
 
     aggregates: dict[str, tuple[float | None, float | None, float | None]] = {}
     for portfolio_uuid, records in grouped.items():
-        total_current_cents = 0
-        total_day_change_eur = 0.0
-        rows_with_change = 0
-        rows_missing_change = 0
-
-        for record in records:
-            try:
-                total_current_cents += int(
-                    getattr(record, "current_value_cents", 0) or 0
-                )
-            except (TypeError, ValueError):
-                total_current_cents += 0
-
-            currency_code = (
-                (getattr(record, "security_currency_code", None) or "EUR")
-                .strip()
-                .upper()
-            )
-            holdings = _from_holdings_raw(getattr(record, "holdings_raw", 0))
-            if holdings <= 0:
-                continue
-
-            delta_eur = None
-            try:
-                prev_date, prev_raw, prev_native = fetch_previous_close(
-                    db_path,
-                    record.security_uuid,
-                    before_epoch_day=int(reference_date.timestamp() // 86400),
-                )
-            except Exception:  # pragma: no cover - defensive
-                prev_date, prev_raw, prev_native = None, None, None
-
-            last_price_native = normalize_raw_price(
-                getattr(record, "last_price_native_raw", None),
-                decimals=4,
-            )
-
-            last_price_eur = normalize_price_to_eur_sync(
-                getattr(record, "last_price_native_raw", None),
-                currency_code,
-                reference_date,
-                db_path,
-            )
-            prev_close_eur = (
-                normalize_price_to_eur_sync(
-                    prev_raw, currency_code, reference_date, db_path
-                )
-                if prev_raw is not None
-                else None
-            )
-            if currency_code == "EUR":
-                # Fallback to native values when no FX conversion is required.
-                last_price_eur = (
-                    last_price_eur if last_price_eur is not None else last_price_native
-                )
-                prev_close_eur = (
-                    prev_close_eur if prev_close_eur is not None else prev_native
-                )
-
-            has_prev_close = prev_close_eur is not None and last_price_eur is not None
-            if has_prev_close:
-                price_change_eur = round_price(
-                    last_price_eur - prev_close_eur,
-                    decimals=6,
-                    default=None,
-                )
-                delta_eur = round_currency(
-                    (price_change_eur or 0) * holdings,
-                    default=None,
-                )
-            if delta_eur is None:
-                # Missing previous close: treat as 0 contribution but mark as missing.
-                rows_missing_change += 1
-                delta_eur = 0.0
-
-            total_day_change_eur += delta_eur
-            if has_prev_close:
-                rows_with_change += 1
-
-        if rows_with_change == 0:
-            coverage_ratio = 0.0 if rows_missing_change > 0 else None
-            aggregates[portfolio_uuid] = (None, None, coverage_ratio)
-            continue
-
-        coverage_ratio = (
-            rows_with_change / (rows_with_change + rows_missing_change)
-            if rows_with_change + rows_missing_change > 0
-            else None
+        aggregates[portfolio_uuid] = _aggregate_portfolio_day_change_for_portfolio(
+            records,
+            context,
+            reference_epoch_day,
         )
-
-        current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
-        day_change_value = round_currency(total_day_change_eur, default=None)
-        previous_close = current_value_eur - (day_change_value or 0)
-        day_change_pct = (
-            round_currency((day_change_value / previous_close) * 100, default=None)
-            if previous_close not in (None, 0) and day_change_value is not None
-            else None
-        )
-
-        aggregates[portfolio_uuid] = (day_change_value, day_change_pct, coverage_ratio)
 
     return aggregates
+
+
+def _aggregate_portfolio_day_change_for_portfolio(
+    records: Sequence[SecurityMetricRecord],
+    context: _PortfolioComposeContext,
+    reference_epoch_day: int,
+) -> tuple[float | None, float | None, float | None]:
+    """Aggregate day-change deltas for a single portfolio."""
+    total_current_cents = 0
+    total_day_change_eur = 0.0
+    rows_with_change = 0
+    rows_missing_change = 0
+
+    for record in records:
+        total_current_cents += _safe_int(getattr(record, "current_value_cents", 0)) or 0
+
+        holdings = _from_holdings_raw(getattr(record, "holdings_raw", 0))
+        if holdings <= 0:
+            continue
+
+        delta_eur, has_prev_close = _compute_security_day_change_delta(
+            record,
+            context,
+            reference_epoch_day,
+        )
+        total_day_change_eur += delta_eur or 0.0
+        if has_prev_close:
+            rows_with_change += 1
+        else:
+            rows_missing_change += 1
+
+    if rows_with_change == 0:
+        coverage_ratio = 0.0 if rows_missing_change > 0 else None
+        return None, None, coverage_ratio
+
+    coverage_ratio = (
+        rows_with_change / (rows_with_change + rows_missing_change)
+        if rows_with_change + rows_missing_change > 0
+        else None
+    )
+
+    current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
+    day_change_value = round_currency(total_day_change_eur, default=None)
+    previous_close = current_value_eur - (day_change_value or 0)
+    day_change_pct = (
+        round_currency((day_change_value / previous_close) * 100, default=None)
+        if previous_close not in (None, 0) and day_change_value is not None
+        else None
+    )
+
+    return day_change_value, day_change_pct, coverage_ratio
 
 
 def _metric_value(metric: PortfolioMetricRecord | None, field_name: str) -> float:
@@ -842,194 +927,260 @@ def _load_position_snapshots(
 
     snapshots: list[PositionSnapshot] = []
     reference_date = datetime.now(UTC)
+    reference_epoch_day = int(reference_date.timestamp() // 86400)
+    context = _PositionSnapshotContext(
+        db_path=db_path,
+        reference_date=reference_date,
+        reference_epoch_day=reference_epoch_day,
+        securities=securities,
+    )
     for record in metric_rows:
-        security_uuid = getattr(record, "security_uuid", None)
-        if not security_uuid:
-            continue
+        snapshot = _build_position_snapshot_entry(
+            record=record,
+            portfolio_uuid=portfolio_uuid,
+            context=context,
+        )
+        if snapshot:
+            snapshots.append(snapshot)
 
-        security_meta = securities.get(security_uuid)
-        raw_name = security_meta.name if security_meta and security_meta.name else ""
-        name = raw_name.strip() or security_uuid
+    snapshots.sort(key=lambda snapshot: snapshot.name.lower())
+    return snapshots
 
-        currency_code = (
-            (record.security_currency_code or "").strip()
-            or (security_meta.currency_code if security_meta else None)
-            or "EUR"
-        ).upper()
 
-        holdings = _from_holdings_raw(record.holdings_raw)
-        current_value = cent_to_eur(record.current_value_cents, default=0.0) or 0.0
-        purchase_value = cent_to_eur(record.purchase_value_cents, default=0.0) or 0.0
-        purchase_total_account = round_currency(
-            record.purchase_account_value_cents,
+def _build_position_snapshot_entry(
+    *,
+    record: SecurityMetricRecord,
+    portfolio_uuid: str,
+    context: _PositionSnapshotContext,
+) -> PositionSnapshot | None:
+    """Build a PositionSnapshot from a single metric record."""
+    security_uuid = getattr(record, "security_uuid", None)
+    if not security_uuid:
+        return None
+
+    security_meta = context.securities.get(security_uuid)
+    raw_name = security_meta.name if security_meta and security_meta.name else ""
+    name = raw_name.strip() or security_uuid
+
+    currency_code = (
+        (record.security_currency_code or "").strip()
+        or (security_meta.currency_code if security_meta else None)
+        or "EUR"
+    ).upper()
+
+    holdings = _from_holdings_raw(record.holdings_raw)
+    current_value = cent_to_eur(record.current_value_cents, default=0.0) or 0.0
+    purchase_value = cent_to_eur(record.purchase_value_cents, default=0.0) or 0.0
+    purchase_total_account = round_currency(
+        record.purchase_account_value_cents,
+        default=None,
+    )
+    purchase_total_security = round_currency(
+        record.purchase_security_value_raw,
+        decimals=6,
+        default=None,
+    )
+
+    average_cost_payload = {
+        "eur": (
+            round_currency(purchase_value / holdings, default=None)
+            if holdings
+            else None
+        ),
+        "security": (
+            round_price(
+                purchase_total_security / holdings,
+                decimals=6,
+                default=None,
+            )
+            if holdings and purchase_total_security not in (None, 0.0)
+            else None
+        ),
+        "account": (
+            round_currency(purchase_total_account / holdings, default=None)
+            if holdings and purchase_total_account not in (None, 0.0)
+            else None
+        ),
+    }
+
+    gain_abs = cent_to_eur(record.gain_abs_cents, default=0.0) or 0.0
+    total_change_eur = (
+        cent_to_eur(record.total_change_eur_cents, default=None) or gain_abs or 0.0
+    )
+    performance_payload: dict[str, Any] = {
+        "gain_abs": gain_abs,
+        "gain_pct": record.gain_pct,
+        "total_change_eur": total_change_eur,
+        "total_change_pct": record.total_change_pct,
+        "source": record.source or "metrics",
+        "coverage_ratio": record.coverage_ratio,
+    }
+    if record.provenance:
+        performance_payload["provenance"] = record.provenance
+
+    aggregation_payload: dict[str, Any] = {
+        "total_holdings": holdings,
+        "purchase_value_eur": purchase_value,
+        "purchase_total_account": purchase_total_account,
+        "purchase_total_security": purchase_total_security,
+        "coverage_ratio": record.coverage_ratio,
+    }
+
+    last_price_native = normalize_raw_price(
+        record.last_price_native_raw,
+        decimals=4,
+    )
+    price_state = _PriceState(
+        last_price_native=last_price_native,
+        last_price_eur=normalize_price_to_eur_sync(
+            record.last_price_native_raw,
+            currency_code,
+            context.reference_date,
+            context.db_path,
+        ),
+        last_close_native=normalize_raw_price(
+            record.last_close_native_raw,
+            decimals=4,
+        ),
+        last_close_eur=normalize_price_to_eur_sync(
+            record.last_close_native_raw,
+            currency_code,
+            context.reference_date,
+            context.db_path,
+        ),
+    )
+    day_change_context = _DayChangeContext(
+        db_path=context.db_path,
+        currency_code=currency_code,
+        reference_date=context.reference_date,
+        reference_epoch_day=context.reference_epoch_day,
+    )
+    day_change_payload, price_state = _derive_day_change_payload(
+        record=record,
+        context=day_change_context,
+        price_state=price_state,
+    )
+    if day_change_payload:
+        performance_payload["day_change"] = day_change_payload
+
+    ticker_symbol = security_meta.ticker_symbol if security_meta else None
+
+    return PositionSnapshot(
+        portfolio_uuid=portfolio_uuid,
+        security_uuid=security_uuid,
+        name=name,
+        ticker_symbol=ticker_symbol,
+        currency_code=currency_code,
+        current_holdings=holdings,
+        purchase_value=purchase_value,
+        current_value=current_value,
+        average_cost=average_cost_payload,
+        performance=performance_payload,
+        aggregation=aggregation_payload,
+        coverage_ratio=record.coverage_ratio,
+        provenance=record.provenance,
+        metric_run_uuid=record.metric_run_uuid,
+        last_price_native=price_state.last_price_native,
+        last_price_eur=price_state.last_price_eur,
+        last_close_native=price_state.last_close_native,
+        last_close_eur=price_state.last_close_eur,
+    )
+
+
+def _derive_day_change_payload(
+    *,
+    record: SecurityMetricRecord,
+    context: _DayChangeContext,
+    price_state: _PriceState,
+) -> tuple[dict[str, Any] | None, _PriceState]:
+    """Recompute day-change payload using historical closes."""
+    _, prev_raw, prev_native = _safe_fetch_previous_close(
+        context.db_path,
+        record.security_uuid,
+        before_epoch_day=context.reference_epoch_day,
+    )
+    updated_state = price_state
+    if prev_native is not None and price_state.last_price_native is not None:
+        updated_state = _PriceState(
+            last_price_native=price_state.last_price_native,
+            last_price_eur=price_state.last_price_eur,
+            last_close_native=prev_native,
+            last_close_eur=price_state.last_close_eur,
+        )
+        if prev_raw is not None:
+            updated_state = _PriceState(
+                last_price_native=updated_state.last_price_native,
+                last_price_eur=updated_state.last_price_eur,
+                last_close_native=updated_state.last_close_native,
+                last_close_eur=normalize_price_to_eur_sync(
+                    prev_raw,
+                    context.currency_code,
+                    context.reference_date,
+                    context.db_path,
+                ),
+            )
+    else:
+        updated_state = _PriceState(
+            last_price_native=price_state.last_price_native,
+            last_price_eur=price_state.last_price_eur,
+            last_close_native=None,
+            last_close_eur=None,
+        )
+
+    price_change_native = None
+    price_change_eur = None
+    change_pct = None
+    if (
+        updated_state.last_price_native is not None
+        and updated_state.last_close_native is not None
+    ):
+        price_change_native = round_price(
+            updated_state.last_price_native - updated_state.last_close_native,
+            decimals=6,
             default=None,
         )
-        purchase_total_security = round_currency(
-            record.purchase_security_value_raw,
+        if updated_state.last_close_native:
+            change_pct = round_currency(
+                (price_change_native or 0) / updated_state.last_close_native * 100,
+                default=None,
+            )
+    if (
+        updated_state.last_price_eur is not None
+        and updated_state.last_close_eur is not None
+    ):
+        price_change_eur = round_price(
+            updated_state.last_price_eur - updated_state.last_close_eur,
             decimals=6,
             default=None,
         )
 
-        average_cost_payload = {
-            "eur": (
-                round_currency(purchase_value / holdings, default=None)
-                if holdings
-                else None
-            ),
-            "security": (
-                round_price(
-                    purchase_total_security / holdings,
-                    decimals=6,
-                    default=None,
-                )
-                if holdings and purchase_total_security not in (None, 0.0)
-                else None
-            ),
-            "account": (
-                round_currency(purchase_total_account / holdings, default=None)
-                if holdings and purchase_total_account not in (None, 0.0)
-                else None
-            ),
-        }
-
-        gain_abs = cent_to_eur(record.gain_abs_cents, default=0.0) or 0.0
-        total_change_eur = (
-            cent_to_eur(record.total_change_eur_cents, default=None) or gain_abs or 0.0
+    if (
+        price_change_native is not None
+        or price_change_eur is not None
+        or change_pct is not None
+    ):
+        coverage_ratio = (
+            record.day_change_coverage
+            if record.day_change_coverage not in (None, "")
+            else 1.0
         )
-        performance_payload: dict[str, Any] = {
-            "gain_abs": gain_abs,
-            "gain_pct": record.gain_pct,
-            "total_change_eur": total_change_eur,
-            "total_change_pct": record.total_change_pct,
-            "source": record.source or "metrics",
-            "coverage_ratio": record.coverage_ratio,
-        }
-        if record.provenance:
-            performance_payload["provenance"] = record.provenance
-
-        aggregation_payload: dict[str, Any] = {
-            "total_holdings": holdings,
-            "purchase_value_eur": purchase_value,
-            "purchase_total_account": purchase_total_account,
-            "purchase_total_security": purchase_total_security,
-            "coverage_ratio": record.coverage_ratio,
-        }
-
-        last_price_native = normalize_raw_price(
-            record.last_price_native_raw,
-            decimals=4,
-        )
-        last_close_native = normalize_raw_price(
-            record.last_close_native_raw,
-            decimals=4,
-        )
-        last_price_eur = normalize_price_to_eur_sync(
-            record.last_price_native_raw,
-            currency_code,
-            reference_date,
-            db_path,
-        )
-        last_close_eur = normalize_price_to_eur_sync(
-            record.last_close_native_raw,
-            currency_code,
-            reference_date,
-            db_path,
-        )
-
-        # Recompute day change from history to avoid stale or missing metric deltas.
-        price_change_native = None
-        price_change_eur = None
-        change_pct = None
-        try:
-            prev_date, prev_raw, prev_native = fetch_previous_close(
-                db_path,
-                security_uuid,
-                before_epoch_day=int(reference_date.timestamp() // 86400),
-            )
-        except Exception:  # pragma: no cover - defensive
-            prev_date, prev_raw, prev_native = None, None, None
-        if prev_native is not None and last_price_native is not None:
-            price_change_native = round_price(
-                last_price_native - prev_native,
-                decimals=6,
-                default=None,
-            )
-            if prev_native:
-                change_pct = round_currency(
-                    (price_change_native or 0) / prev_native * 100,
-                    default=None,
-                )
-            # Prefer recomputed close values
-            last_close_native = prev_native
-            if prev_raw is not None:
-                last_close_eur = normalize_price_to_eur_sync(
-                    prev_raw,
-                    currency_code,
-                    reference_date,
-                    db_path,
-                )
-        else:
-            # Stale or missing close: do not keep legacy close values
-            last_close_native = None
-            last_close_eur = None
-        if last_price_eur is not None and last_close_eur is not None:
-            price_change_eur = round_price(
-                last_price_eur - last_close_eur,
-                decimals=6,
-                default=None,
-            )
-        if (
-            price_change_native is not None
-            or price_change_eur is not None
-            or change_pct is not None
-        ):
-            performance_payload["day_change"] = {
+        return (
+            {
                 "price_change_native": price_change_native,
                 "price_change_eur": price_change_eur,
                 "change_pct": change_pct,
                 "source": "derived",
-                "coverage_ratio": record.coverage_ratio,
-            }
+                "coverage_ratio": coverage_ratio,
+            },
+            updated_state,
+        )
 
-        price_change_native = None
-        price_change_eur = None
-        change_pct = None
-        if last_price_native is not None and last_close_native is not None:
-            price_change_native = round_price(
-                last_price_native - last_close_native,
-                decimals=6,
-                default=None,
-            )
-            if last_close_native:
-                change_pct = round_currency(
-                    (price_change_native or 0) / last_close_native * 100,
-                    default=None,
-                )
-        if last_price_eur is not None and last_close_eur is not None:
-            price_change_eur = round_price(
-                last_price_eur - last_close_eur,
-                decimals=6,
-                default=None,
-            )
-        if (
-            price_change_native is not None
-            or price_change_eur is not None
-            or change_pct is not None
-        ):
-            performance_payload["day_change"] = {
-                "price_change_native": price_change_native,
-                "price_change_eur": price_change_eur,
-                "change_pct": change_pct,
-                "source": "derived",
-                "coverage_ratio": record.day_change_coverage
-                if record.day_change_coverage not in (None, "")
-                else 1.0,
-            }
-        elif any(
-            getattr(record, field) not in (None, "")
-            for field in ("day_change_native", "day_change_eur", "day_change_pct")
-        ):
-            performance_payload["day_change"] = {
+    if any(
+        getattr(record, field) not in (None, "")
+        for field in ("day_change_native", "day_change_eur", "day_change_pct")
+    ):
+        return (
+            {
                 "price_change_native": round_price(
                     record.day_change_native,
                     decimals=6,
@@ -1043,35 +1194,11 @@ def _load_position_snapshots(
                 "change_pct": record.day_change_pct,
                 "source": record.day_change_source or "metrics",
                 "coverage_ratio": record.day_change_coverage,
-            }
-
-        ticker_symbol = security_meta.ticker_symbol if security_meta else None
-
-        snapshots.append(
-            PositionSnapshot(
-                portfolio_uuid=portfolio_uuid,
-                security_uuid=security_uuid,
-                name=name,
-                ticker_symbol=ticker_symbol,
-                currency_code=currency_code,
-                current_holdings=holdings,
-                purchase_value=purchase_value,
-                current_value=current_value,
-                average_cost=average_cost_payload,
-                performance=performance_payload,
-                aggregation=aggregation_payload,
-                coverage_ratio=record.coverage_ratio,
-                provenance=record.provenance,
-                metric_run_uuid=record.metric_run_uuid,
-                last_price_native=last_price_native,
-                last_price_eur=last_price_eur,
-                last_close_native=last_close_native,
-                last_close_eur=last_close_eur,
-            )
+            },
+            updated_state,
         )
 
-    snapshots.sort(key=lambda snapshot: snapshot.name.lower())
-    return snapshots
+    return None, updated_state
 
 
 def load_portfolio_position_snapshots(

@@ -27,7 +27,7 @@ export type PortfolioPositionRecord = BasePositionSnapshot & {
   performance?: PerformanceMetricsPayload | null;
   gain_abs?: number | null;
   gain_pct?: number | null;
-   fx_unavailable?: boolean | null;
+  fx_unavailable?: boolean | null;
   [key: string]: unknown;
 };
 
@@ -84,7 +84,7 @@ function mergePositionRecords(
   base: PortfolioPositionRecord | undefined,
   patch: PortfolioPositionRecord,
 ): PortfolioPositionRecord {
-  const merged = base ? clonePosition(base) : {} as PortfolioPositionRecord;
+  const merged = base ? clonePosition(base) : ({} as PortfolioPositionRecord);
 
   const shallowKeys: (keyof PortfolioPositionRecord)[] = [
     'portfolio_uuid',
@@ -101,19 +101,34 @@ function mergePositionRecords(
     'fx_unavailable',
   ];
 
-  shallowKeys.forEach(key => {
-    if (patch[key] !== undefined) {
-      (merged as any)[key] = patch[key];
+  const assignIfDefined = (
+    target: PortfolioPositionRecord,
+    source: PortfolioPositionRecord,
+    key: keyof PortfolioPositionRecord,
+  ): void => {
+    const value = source[key];
+    if (value !== undefined) {
+      target[key] = value;
     }
+  };
+
+  shallowKeys.forEach(key => {
+    assignIfDefined(merged, patch, key);
   });
 
   const mergeObjectField = (field: keyof PortfolioPositionRecord) => {
     const value = patch[field];
     if (value && typeof value === 'object') {
-      const baseObj = (base && base[field] && typeof base[field] === 'object') ? base[field] as Record<string, unknown> : {};
-      (merged as any)[field] = { ...baseObj, ...(value as Record<string, unknown>) };
+      const baseObj =
+        base && base[field] && typeof base[field] === 'object'
+          ? (base[field] as Record<string, unknown>)
+          : {};
+      merged[field] = {
+        ...baseObj,
+        ...(value as Record<string, unknown>),
+      } as PortfolioPositionRecord[typeof field];
     } else if (value !== undefined) {
-      (merged as any)[field] = value;
+      merged[field] = value;
     }
   };
 

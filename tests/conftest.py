@@ -98,7 +98,7 @@ async def hass(
 
     # Register the pp_reader integration so loader lookups succeed during tests.
     try:
-        import custom_components  # noqa: PLC0415
+        import custom_components
     except ImportError:  # pragma: no cover - repository layout unexpected
         custom_components = None
 
@@ -114,12 +114,12 @@ async def hass(
 
         # Ensure the package exposes its module under the __init__ attribute so tests
         # using monkeypatch paths like ``custom_components.pp_reader.__init__`` work.
-        import custom_components.pp_reader as pp_reader_module  # noqa: PLC0415
+        import custom_components.pp_reader as pp_reader_module
 
         custom_components.pp_reader.__init__ = pp_reader_module
 
     # Avoid loading real portfolio data during tests; coordinator sync is patched to no-op.
-    from custom_components.pp_reader.data.coordinator import (  # noqa: PLC0415
+    from custom_components.pp_reader.data.coordinator import (
         PPReaderCoordinator,
     )
 

@@ -177,12 +177,16 @@ function buildPurchasePriceDisplay(
   ], position.currency_code ?? null);
 
   const accountCurrency =
-    resolveCurrencyFromPosition(record, [
-      'account_currency_code',
-      'account_currency',
-      'purchase_currency_code',
-      'currency_code',
-    ], securityCurrency === 'EUR' ? 'EUR' : null) ?? (securityCurrency === 'EUR' ? 'EUR' : null) ?? 'EUR';
+    resolveCurrencyFromPosition(
+      record,
+      [
+        'account_currency_code',
+        'account_currency',
+        'purchase_currency_code',
+        'currency_code',
+      ],
+      securityCurrency === 'EUR' ? 'EUR' : null,
+    ) ?? 'EUR';
 
   const averageNative = toNullableNumber(averageCost?.native);
   const averageSecurity = toNullableNumber(averageCost?.security);
@@ -191,7 +195,7 @@ function buildPurchasePriceDisplay(
 
   const nativeAverage = averageSecurity ?? averageNative;
   const eurAverage = averageEur ?? (accountCurrency === 'EUR' ? averageAccount : null);
-  const resolvedSecurityCurrency = securityCurrency ?? accountCurrency ?? 'EUR';
+  const resolvedSecurityCurrency = securityCurrency ?? accountCurrency;
   const isEurSecurity = resolvedSecurityCurrency === 'EUR';
 
   let primaryCurrency: string | null;
@@ -703,7 +707,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                 id="${detailId}"
                 role="region"
                 aria-label="Positionen für ${d.name}">
-      <td colspan="${cols.length}">
+      <td colspan="${cols.length.toString()}">
         <div class="positions-container">${expanded
         ? (hasPortfolioPositions(d.uuid)
           ? renderPositionsTable(getPortfolioPositions(d.uuid))
@@ -910,7 +914,7 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     const currentValue = readDatasetNumber(row.dataset.currentValue);
     const gainAbs = readDatasetNumber(row.dataset.gainAbs);
     const purchaseSum = readDatasetNumber(row.dataset.purchaseSum);
-    const dayChange = readDatasetNumber((row as Record<string, any>).dataset?.dayChange);
+    const dayChange = readDatasetNumber(row.dataset.dayChange);
 
     if (currentValue == null || gainAbs == null || purchaseSum == null) {
       allRowsComplete = false;

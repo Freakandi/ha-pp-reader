@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +28,6 @@ class _FixedDateTime(datetime):
 
 async def test_plan_jobs_overlap_backfills_recent_history(monkeypatch, tmp_path):
     """Jobs overlap the latest date to refill recent gaps."""
-
     monkeypatch.setattr(history_queue, "datetime", _FixedDateTime)
     monkeypatch.setattr(
         history_queue, "_load_latest_history_epoch", lambda conn, uuid: 20378

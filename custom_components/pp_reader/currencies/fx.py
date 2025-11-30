@@ -171,7 +171,7 @@ async def _load_rates_for_date(
     return await _execute_db(_load_rates_for_date_sync, db_path, date)
 
 
-async def _save_rates(
+async def _save_rates(  # noqa: PLR0913 - retries and db control are intentional
     db_path: Path,
     date: str,
     rates: dict[str, float],

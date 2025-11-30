@@ -313,7 +313,7 @@ function buildPortfolioRow(
   const currentValue = toFiniteNumber(snapshot.current_value);
   const purchaseSum =
     toFiniteNumber(snapshot.purchase_sum) ??
-    toFiniteNumber((snapshot as { purchase_value_eur?: unknown })?.purchase_value_eur) ??
+    toFiniteNumber((snapshot as { purchase_value_eur?: unknown }).purchase_value_eur) ??
     toFiniteNumber(snapshot.purchase_value) ??
     0;
   const dayChangeAbs =

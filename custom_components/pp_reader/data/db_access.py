@@ -41,6 +41,10 @@ _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 _MISSING_DB_RESOURCE_MESSAGE = "Entweder db_path oder conn muss angegeben werden."
 _EIGHT_DECIMAL_SCALE = 10**8
 _SCALED_INT_THRESHOLD = 10_000
+_EPOCH_START_DATE = date(1970, 1, 1)
+_MAX_EPOCH_DAY_VALUE = 100_000
+_YYYYMMDD_MIN_VALUE = 1_000_000
+_LAST_CLOSE_STALE_DAYS = 7
 
 
 def _from_eight_decimal(
@@ -116,6 +120,27 @@ def _decode_holdings_value(value: Any) -> float:
     if abs(numeric) >= _SCALED_INT_THRESHOLD:
         numeric = numeric / _EIGHT_DECIMAL_SCALE
     return round(numeric, 6)
+
+
+def _safe_int(value: Any) -> int | None:
+    """Best-effort int conversion that returns None on failure."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: Any) -> float | None:
+    """Best-effort float conversion that returns None on failure."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _epoch_day_from_date(value: date) -> int:
+    """Convert a date object into epoch-day."""
+    return (value - _EPOCH_START_DATE).days
 
 
 @dataclass
@@ -468,51 +493,56 @@ def get_transactions(
 
 def _to_epoch_day(date_value: Any) -> int | None:
     """Convert ISO date strings or numeric encodings into epoch-day integers."""
+    normalized_day: int | None = None
+
     if isinstance(date_value, datetime):
-        parsed = (
+        parsed_dt = (
             date_value.replace(tzinfo=UTC)
             if date_value.tzinfo is None
             else date_value.astimezone(UTC)
         )
-        return (parsed.date() - date(1970, 1, 1)).days
-
-    if isinstance(date_value, (int, float)):
+        normalized_day = _epoch_day_from_date(parsed_dt.date())
+    elif isinstance(date_value, (int, float)):
+        integer_value = _safe_int(date_value)
+        if integer_value is None or integer_value < 0:
+            return None
+        if integer_value <= _MAX_EPOCH_DAY_VALUE:
+            normalized_day = integer_value
+        elif integer_value >= _YYYYMMDD_MIN_VALUE:
+            year = integer_value // 10_000
+            month = (integer_value % 10_000) // 100
+            day_value = integer_value % 100
+            try:
+                parsed_date = date(year, month, day_value)
+            except ValueError:
+                normalized_day = None
+            else:
+                normalized_day = _epoch_day_from_date(parsed_date)
+    elif date_value:
         try:
-            integer = int(date_value)
+            parsed_dt = datetime.fromisoformat(str(date_value))
         except (TypeError, ValueError):
             return None
-        if integer < 0:
-            return None
-        # Epoch-day encoding (days since 1970-01-01)
-        if integer <= 100_000:
-            return integer
-        # YYYYMMDD encoding
-        if integer >= 1_000_000:
-            year = integer // 10_000
-            month = (integer % 10_000) // 100
-            day_value = integer % 100
-            try:
-                parsed = date(year, month, day_value)
-            except ValueError:
-                return None
-            return (parsed - date(1970, 1, 1)).days
-        return None
 
-    if not date_value:
-        return None
+        if parsed_dt.tzinfo is None:
+            parsed_dt = parsed_dt.replace(tzinfo=UTC)
+        else:
+            parsed_dt = parsed_dt.astimezone(UTC)
 
-    try:
-        parsed_dt = datetime.fromisoformat(str(date_value))
-    except (TypeError, ValueError):
-        return None
+        normalized_day = _epoch_day_from_date(parsed_dt.date())
 
-    if parsed_dt.tzinfo is None:
-        parsed_dt = parsed_dt.replace(tzinfo=UTC)
-    else:
-        parsed_dt = parsed_dt.astimezone(UTC)
+    return normalized_day
 
-    normalized = parsed_dt.date()
-    return (normalized - date(1970, 1, 1)).days
+
+def _is_in_epoch_range(
+    epoch_day: int | None, start_epoch: int | None, end_epoch: int | None
+) -> bool:
+    """Return True when epoch_day passes optional start/end bounds."""
+    if epoch_day is None:
+        return start_epoch is None and end_epoch is None
+    if start_epoch is not None and epoch_day < start_epoch:
+        return False
+    return not (end_epoch is not None and epoch_day > end_epoch)
 
 
 def get_security_transactions(
@@ -566,7 +596,10 @@ def get_security_transactions(
             FROM transactions AS t
             LEFT JOIN transaction_units AS u
               ON u.transaction_uuid = t.uuid
-             AND (u.currency_code IS NULL OR UPPER(u.currency_code) = UPPER(t.currency_code))
+             AND (
+                u.currency_code IS NULL
+                OR UPPER(u.currency_code) = UPPER(t.currency_code)
+            )
             WHERE t.security = ?
               AND t.type IN (0, 1, 2, 3)
             GROUP BY
@@ -592,36 +625,14 @@ def get_security_transactions(
     transactions: list[dict[str, Any]] = []
     for row in rows:
         epoch_day = _to_epoch_day(row["date"])
-        if epoch_day is None and (start_epoch is not None or end_epoch is not None):
-            continue
-        if start_epoch is not None and epoch_day is not None and epoch_day < start_epoch:
-            continue
-        if end_epoch is not None and epoch_day is not None and epoch_day > end_epoch:
+        if not _is_in_epoch_range(epoch_day, start_epoch, end_epoch):
             continue
 
-        try:
-            tx_type = int(row["type"] or 0)
-        except (TypeError, ValueError):
-            tx_type = 0
-
-        try:
-            amount = int(row["amount"]) if row["amount"] is not None else None
-        except (TypeError, ValueError):
-            amount = None
-
-        try:
-            shares = int(row["shares"]) if row["shares"] is not None else None
-        except (TypeError, ValueError):
-            shares = None
-
-        try:
-            fees = int(row["fees"]) if row["fees"] not in (None, "") else None
-        except (TypeError, ValueError):
-            fees = None
-        try:
-            taxes = int(row["taxes"]) if row["taxes"] not in (None, "") else None
-        except (TypeError, ValueError):
-            taxes = None
+        tx_type = _safe_int(row["type"]) or 0
+        amount = _safe_int(row["amount"])
+        shares = _safe_int(row["shares"])
+        fees = _safe_int(row["fees"])
+        taxes = _safe_int(row["taxes"])
 
         currency_code = (row["currency_code"] or "").strip().upper()
         transactions.append(
@@ -1108,6 +1119,7 @@ def _build_snapshot_from_holdings(
     )
 
     reference_date = datetime.now()  # noqa: DTZ005
+    reference_epoch_day = _epoch_day_from_date(reference_date.date())
     currency_code = security_row["currency_code"] or "EUR"
 
     last_price_native_raw = security_row["last_price"]
@@ -1130,10 +1142,10 @@ def _build_snapshot_from_holdings(
         db_path,
         security_uuid,
         conn=conn,
-        before_epoch_day=int(reference_date.timestamp() // 86400),
+        before_epoch_day=reference_epoch_day,
     )
     if prev_date is None or (
-        int(reference_date.timestamp() // 86400) - int(prev_date) > 7
+        reference_epoch_day - int(prev_date) > _LAST_CLOSE_STALE_DAYS
     ):
         raw_last_close = None
         last_close_native = None
@@ -1389,6 +1401,7 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
         )
 
         reference_date = datetime.now()  # noqa: DTZ005
+        reference_epoch_day = _epoch_day_from_date(reference_date.date())
         currency_code: str = security_row["currency_code"] or "EUR"
         last_price_native = normalize_raw_price(last_price_native_raw, decimals=4)
         if last_price_native is None:
@@ -1406,10 +1419,10 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
                 db_path,
                 security_uuid,
                 conn=conn,
-                before_epoch_day=int(reference_date.timestamp() // 86400),
+                before_epoch_day=reference_epoch_day,
             )
             if prev_date is None or (
-                int(reference_date.timestamp() // 86400) - int(prev_date) > 7
+                reference_epoch_day - int(prev_date) > _LAST_CLOSE_STALE_DAYS
             ):
                 raw_last_close = None
                 last_close_native = None
@@ -2686,7 +2699,8 @@ def fetch_previous_close(
     conn: sqlite3.Connection | None = None,
     before_epoch_day: int | None = None,
 ) -> tuple[int | None, int | None, float | None]:
-    """Fetch the most recent historical close price for a security.
+    """
+    Fetch the most recent historical close price for a security.
 
     Returns a tuple of (date_epoch, close_raw, close_native). If before_epoch_day
     is provided, only closes strictly older than that day are considered.
@@ -2881,6 +2895,61 @@ def _fallback_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
     return fallback_rows
 
 
+def _aggregate_portfolio_day_change(
+    rows: Sequence[sqlite3.Row],
+) -> tuple[float | None, float | None, float | None]:
+    """Compute aggregated day-change values for a portfolio."""
+    total_current_cents = 0
+    total_day_change_eur = 0.0
+    rows_with_change = 0
+    rows_missing_change = 0
+
+    for row in rows:
+        total_current_cents += _safe_int(row["current_value_cents"]) or 0
+
+        holdings = _from_holdings_raw(row["holdings_raw"])
+        if holdings <= 0:
+            continue
+
+        per_share_delta = _safe_float(row["day_change_eur"])
+        if per_share_delta is None:
+            rows_missing_change += 1
+            continue
+
+        delta_eur = round_currency(per_share_delta * holdings, default=None)
+        if delta_eur is None:
+            rows_missing_change += 1
+            continue
+
+        total_day_change_eur += delta_eur
+        rows_with_change += 1
+
+    if rows_with_change == 0:
+        coverage_ratio = 0.0 if rows_missing_change > 0 else None
+        return None, None, coverage_ratio
+
+    coverage_ratio = (
+        rows_with_change / (rows_with_change + rows_missing_change)
+        if rows_with_change + rows_missing_change > 0
+        else None
+    )
+
+    current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
+    previous_close_value = current_value_eur - total_day_change_eur
+    day_change_pct = None
+    if previous_close_value not in (None, 0):
+        day_change_pct = round_currency(
+            (total_day_change_eur / previous_close_value) * 100,
+            default=None,
+        )
+
+    return (
+        round_currency(total_day_change_eur, default=None),
+        day_change_pct,
+        coverage_ratio,
+    )
+
+
 def _load_portfolio_day_changes(
     db_path: Path, run_uuid: str, portfolio_ids: Sequence[str]
 ) -> dict[str, tuple[float | None, float | None, float | None]]:
@@ -2908,64 +2977,11 @@ def _load_portfolio_day_changes(
             ).fetchall()
             if not rows:
                 continue
-
-            total_current_cents = 0
-            total_day_change_eur = 0.0
-            rows_with_change = 0
-            rows_missing_change = 0
-
-            for row in rows:
-                try:
-                    total_current_cents += int(row["current_value_cents"] or 0)
-                except (TypeError, ValueError):
-                    total_current_cents += 0
-
-                holdings = _from_holdings_raw(row["holdings_raw"])
-                if holdings <= 0:
-                    continue
-
-                try:
-                    per_share_delta = float(row["day_change_eur"])
-                except (TypeError, ValueError):
-                    rows_missing_change += 1
-                    continue
-
-                delta_eur = round_currency(per_share_delta * holdings, default=None)
-                if delta_eur is None:
-                    rows_missing_change += 1
-                    continue
-
-                total_day_change_eur += delta_eur
-                rows_with_change += 1
-
-            if rows_with_change == 0:
-                coverage_ratio = 0.0 if rows_missing_change > 0 else None
-                changes[portfolio_uuid] = (None, None, coverage_ratio)
-                continue
-
-            coverage_ratio = (
-                rows_with_change / (rows_with_change + rows_missing_change)
-                if rows_with_change + rows_missing_change > 0
-                else None
-            )
-
-            current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
-            day_change_pct = None
-            previous_close_value = current_value_eur - total_day_change_eur
-            if previous_close_value not in (None, 0):
-                day_change_pct = round_currency(
-                    (total_day_change_eur / previous_close_value) * 100,
-                    default=None,
-                )
-
-            changes[portfolio_uuid] = (
-                round_currency(total_day_change_eur, default=None),
-                day_change_pct,
-                coverage_ratio,
-            )
+            changes[portfolio_uuid] = _aggregate_portfolio_day_change(rows)
     except Exception:  # pragma: no cover - defensive logging
         _LOGGER.exception(
-            "fetch_live_portfolios: day-change Aggregation fehlgeschlagen (run_uuid=%s)",
+            "fetch_live_portfolios: day-change Aggregation fehlgeschlagen "
+            "(run_uuid=%s)",
             run_uuid,
         )
     finally:
@@ -2979,84 +2995,88 @@ def _load_portfolio_day_changes(
 def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
     """Return latest persisted portfolio metrics for websocket/event consumers."""
     conn: sqlite3.Connection | None = None
+    result: list[dict[str, Any]] = []
     try:
         run_uuid = load_latest_completed_metric_run_uuid(db_path)
         if not run_uuid:
             _LOGGER.debug(
                 "fetch_live_portfolios: kein abgeschlossener Metric-Run gefunden"
             )
-            return _fallback_live_portfolios(db_path)
+            result = _fallback_live_portfolios(db_path)
+        else:
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT
+                    pm.metric_run_uuid,
+                    pm.portfolio_uuid AS uuid,
+                    p.name AS name,
+                    pm.current_value_cents,
+                    pm.purchase_value_cents,
+                    pm.gain_abs_cents,
+                    pm.gain_pct,
+                    pm.total_change_eur_cents,
+                    pm.total_change_pct,
+                    pm.source,
+                    pm.coverage_ratio,
+                    pm.position_count,
+                    pm.missing_value_positions,
+                    pm.provenance
+                FROM portfolio_metrics pm
+                JOIN portfolios p ON p.uuid = pm.portfolio_uuid
+                WHERE pm.metric_run_uuid = ?
+                ORDER BY p.name COLLATE NOCASE
+                """,
+                (run_uuid,),
+            )
+            rows = cursor.fetchall()
+            normalized = [_normalize_portfolio_row(row) for row in rows]
+            day_changes = _load_portfolio_day_changes(
+                db_path,
+                run_uuid,
+                [entry["uuid"] for entry in normalized if entry.get("uuid")],
+            )
+            for entry in normalized:
+                portfolio_uuid = entry.get("uuid")
+                if not portfolio_uuid:
+                    continue
+                day_change = day_changes.get(portfolio_uuid)
+                if not day_change:
+                    continue
 
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT
-                pm.metric_run_uuid,
-                pm.portfolio_uuid AS uuid,
-                p.name AS name,
-                pm.current_value_cents,
-                pm.purchase_value_cents,
-                pm.gain_abs_cents,
-                pm.gain_pct,
-                pm.total_change_eur_cents,
-                pm.total_change_pct,
-                pm.source,
-                pm.coverage_ratio,
-                pm.position_count,
-                pm.missing_value_positions,
-                pm.provenance
-            FROM portfolio_metrics pm
-            JOIN portfolios p ON p.uuid = pm.portfolio_uuid
-            WHERE pm.metric_run_uuid = ?
-            ORDER BY p.name COLLATE NOCASE
-            """,
-            (run_uuid,),
-        )
-        rows = cursor.fetchall()
-        normalized = [_normalize_portfolio_row(row) for row in rows]
-        day_changes = _load_portfolio_day_changes(
-            db_path,
-            run_uuid,
-            [entry["uuid"] for entry in normalized if entry.get("uuid")],
-        )
-        for entry in normalized:
-            portfolio_uuid = entry.get("uuid")
-            if not portfolio_uuid:
-                continue
-            day_change = day_changes.get(portfolio_uuid)
-            if not day_change:
-                continue
+                day_change_value, day_change_pct, coverage_ratio = day_change
+                if day_change_value is not None:
+                    entry["day_change_abs"] = day_change_value
+                if day_change_pct is not None:
+                    entry["day_change_pct"] = day_change_pct
 
-            day_change_value, day_change_pct, coverage_ratio = day_change
-            if day_change_value is not None:
-                entry["day_change_abs"] = day_change_value
-            if day_change_pct is not None:
-                entry["day_change_pct"] = day_change_pct
+                performance = entry.get("performance")
+                if isinstance(performance, dict):
+                    base_day_change = performance.get("day_change")
+                    payload = (
+                        base_day_change if isinstance(base_day_change, dict) else {}
+                    )
+                    payload = {
+                        **payload,
+                        "change_pct": day_change_pct,
+                        "value_change_eur": day_change_value,
+                        "coverage_ratio": (
+                            coverage_ratio
+                            if coverage_ratio is not None
+                            else payload.get("coverage_ratio")
+                        ),
+                        "source": payload.get("source") or "aggregated",
+                    }
+                    performance["day_change"] = payload
+                    entry["performance"] = performance
 
-            performance = entry.get("performance")
-            if isinstance(performance, dict):
-                base_day_change = performance.get("day_change")
-                payload = base_day_change if isinstance(base_day_change, dict) else {}
-                payload = {
-                    **payload,
-                    "change_pct": day_change_pct,
-                    "value_change_eur": day_change_value,
-                    "coverage_ratio": (
-                        coverage_ratio
-                        if coverage_ratio is not None
-                        else payload.get("coverage_ratio")
-                    ),
-                    "source": payload.get("source") or "aggregated",
-                }
-                performance["day_change"] = payload
-                entry["performance"] = performance
-
-        return normalized
+            result = normalized
     except Exception:
         _LOGGER.exception("fetch_live_portfolios fehlgeschlagen (db_path=%s)", db_path)
-        return []
+        result = []
     finally:
         if conn is not None:
             with suppress(Exception):
                 conn.close()  # type: ignore[has-type]
+    return result

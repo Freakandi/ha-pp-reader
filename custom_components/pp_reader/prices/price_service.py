@@ -29,15 +29,17 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_access import (
     Transaction as DbTransaction,
+)
+from custom_components.pp_reader.data.db_access import (
     fetch_live_portfolios,
 )
 from custom_components.pp_reader.data.event_push import _push_update
+from custom_components.pp_reader.data.normalization_pipeline import (
+    async_normalize_snapshot,
+)
 from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
-)
-from custom_components.pp_reader.data.normalization_pipeline import (
-    async_normalize_snapshot,
 )
 from custom_components.pp_reader.logic.securities import (
     db_calculate_current_holdings,
@@ -120,7 +122,10 @@ async def _schedule_metrics_after_price_change(
                 )
             except Exception:  # noqa: BLE001 - defensive logging
                 _LOGGER.debug(
-                    "prices_cycle: Live-Portfolio-Payload nach Metrics-Refresh fehlgeschlagen",
+                    (
+                        "prices_cycle: Live-Portfolio-Payload nach Metrics-Refresh "
+                        "fehlgeschlagen"
+                    ),
                     exc_info=True,
                 )
             else:
@@ -146,8 +151,6 @@ async def _schedule_metrics_after_price_change(
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from homeassistant.core import HomeAssistant
 
     from custom_components.pp_reader.prices.provider_base import Quote

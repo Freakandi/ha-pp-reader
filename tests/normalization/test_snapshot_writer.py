@@ -148,7 +148,7 @@ def test_persist_normalization_result_writes_account_and_portfolio_rows(
     conn = sqlite3.connect(str(db_path))
     try:
         account_rows = _fetch_all(conn, "account_snapshots")
-    portfolio_rows = _fetch_all(conn, "portfolio_snapshots")
+        portfolio_rows = _fetch_all(conn, "portfolio_snapshots")
     finally:
         conn.close()
 

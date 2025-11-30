@@ -15,7 +15,7 @@ test('parseHistoryDateForTest handles numeric YYYYMMDD inputs', () => {
   const parsed = parseHistoryDateForTest(20240103);
   assert.ok(parsed, 'expected parsed date for numeric YYYYMMDD');
   assert.strictEqual(
-    parsed?.toISOString().slice(0, 10),
+    parsed.toISOString().slice(0, 10),
     '2024-01-03',
     'numeric YYYYMMDD should map to a UTC date',
   );
@@ -25,7 +25,7 @@ test('parseHistoryDateForTest handles epoch-day numeric inputs', () => {
   const parsed = parseHistoryDateForTest(19725);
   assert.ok(parsed, 'expected parsed date for epoch-day numeric input');
   assert.strictEqual(
-    parsed?.toISOString().slice(0, 10),
+    parsed.toISOString().slice(0, 10),
     '2024-01-03',
     'epoch-day numeric should map to a UTC date',
   );
@@ -86,17 +86,17 @@ test('normaliseTransactionMarkersForTest filters, maps types, and formats labels
 
   const buyMarker = markers.find((entry) => entry.id === 'buy-1');
   assert.ok(buyMarker, 'expected buy marker');
-  assert.match(buyMarker?.label || '', /Kauf 20\b/, 'buy label should include share count');
-  assert.match(buyMarker?.label || '', /120,43 EUR/, 'buy label should include native price and currency');
+  assert.match(buyMarker.label ?? '', /Kauf 20\b/, 'buy label should include share count');
+  assert.match(buyMarker.label ?? '', /120,43 EUR/, 'buy label should include native price and currency');
 
   const sellMarker = markers.find((entry) => entry.id === 'sell-1');
   assert.ok(sellMarker, 'expected sell marker');
-  assert.match(sellMarker?.label || '', /Verkauf 5,50 @ 150,50 USD/, 'sell label should include price with fallback currency');
-  assert.match(sellMarker?.label || '', /\(netto 148,25 EUR\)/, 'sell label should append net EUR price when available');
+  assert.match(sellMarker.label ?? '', /Verkauf 5,50 @ 150,50 USD/, 'sell label should include price with fallback currency');
+  assert.match(sellMarker.label ?? '', /\(netto 148,25 EUR\)/, 'sell label should append net EUR price when available');
 
   const outboundMarker = markers.find((entry) => entry.id === 'outbound-1');
   assert.ok(outboundMarker, 'expected outbound delivery mapped to sale');
-  assert.match(outboundMarker?.label || '', /Verkauf/, 'delivery type 3 should map to sale label');
+  assert.match(outboundMarker.label ?? '', /Verkauf/, 'delivery type 3 should map to sale label');
 });
 
 void test('purchase markers are rendered after switching history ranges', async () => {
@@ -120,11 +120,11 @@ void test('purchase markers are rendered after switching history ranges', async 
       panels: {},
       connection: {
         sendMessage: () => undefined,
-        subscribeMessage: async () => () => undefined,
-        subscribeEvents: async () => () => undefined,
-        sendMessagePromise: async (payload: Record<string, unknown>) => {
+        subscribeMessage: () => Promise.resolve(() => undefined),
+        subscribeEvents: () => Promise.resolve(() => undefined),
+        sendMessagePromise: (payload: Record<string, unknown>) => {
           if (payload.type === 'pp_reader/get_security_history') {
-            return {
+            return Promise.resolve({
               security_uuid: payload.security_uuid,
               prices: [
                 { date: '2024-01-01', close: 100 },
@@ -140,24 +140,24 @@ void test('purchase markers are rendered after switching history ranges', async 
                   currency_code: 'USD',
                 },
               ],
-            };
+            });
           }
 
           if (payload.type === 'pp_reader/get_security_snapshot') {
-            return {
+            return Promise.resolve({
               security_uuid: payload.security_uuid,
               snapshot: {
                 name: 'Marker Test',
                 currency_code: 'USD',
                 last_price_native: 102,
               },
-            };
+            });
           }
 
           throw new Error(`Unexpected WebSocket payload: ${String(payload.type)}`);
         },
       },
-    } as const;
+    } as unknown as HomeAssistant;
 
     const { renderSecurityDetail } = await import('../security_detail');
 
@@ -166,7 +166,7 @@ void test('purchase markers are rendered after switching history ranges', async 
 
     const markup = await renderSecurityDetail(
       root,
-      hassStub as HomeAssistant,
+      hassStub,
       { entry_id: 'entry-1', config: { entry_id: 'entry-1' } },
       'security-markers',
     );
@@ -183,11 +183,12 @@ void test('purchase markers are rendered after switching history ranges', async 
 
     const chartContainer = root.querySelector<HTMLDivElement>('.line-chart-container');
     assert.ok(chartContainer, 'expected chart container after range change');
-    const markers = (chartContainer as HTMLDivElement & { __chartState?: { markers?: unknown } })
+    type ChartState = { markers?: { label?: string }[] };
+    const markers = (chartContainer as HTMLDivElement & { __chartState?: ChartState })
       .__chartState?.markers;
     assert.ok(Array.isArray(markers), 'chart state markers should be an array');
     assert.strictEqual(markers.length, 1, 'chart should retain purchase marker after range switch');
-    assert.match(markers[0]?.label ?? '', /Kauf/, 'marker label should describe purchase');
+    assert.match(markers[0].label ?? '', /Kauf/, 'marker label should describe purchase');
   } finally {
     globalThis.requestAnimationFrame = previousRequestAnimationFrame;
     globalThis.cancelAnimationFrame = previousCancelAnimationFrame;

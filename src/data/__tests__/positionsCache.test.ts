@@ -149,12 +149,12 @@ test("setPortfolioPositionsSnapshot merges patches to retain snapshot detail", (
 
   const snapshot = getPortfolioSnapshot("portfolio-1");
   assert(snapshot);
-  assert(snapshot?.positions);
-  assert.equal(snapshot?.positions?.length, 1);
-  const pos = snapshot?.positions?.[0];
-  assert.equal(pos?.name, "Alpha");
-  assert.equal(pos?.current_value, 130);
-  assert.equal(pos?.performance?.gain_abs, 30);
-  assert.equal(pos?.performance?.gain_pct, 10);
-  assert.equal(pos?.average_cost?.account, 5);
+  assert(snapshot.positions);
+  assert.equal(snapshot.positions.length, 1);
+  const pos = snapshot.positions[0];
+  assert.equal(pos.name, "Alpha");
+  assert.equal(pos.current_value, 130);
+  assert.equal(pos.performance?.gain_abs, 30);
+  assert.equal(pos.performance?.gain_pct, 10);
+  assert.equal(pos.average_cost?.account, 5);
 });

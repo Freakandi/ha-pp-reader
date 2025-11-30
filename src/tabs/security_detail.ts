@@ -638,7 +638,7 @@ function normaliseTransactionMarkers(
     const color = isPurchase ? MARKER_COLOR_PURCHASE : MARKER_COLOR_SALE;
     const markerId =
       (typeof tx.uuid === 'string' && tx.uuid.trim()) ||
-      `${typeLabel}-${parsedDate.getTime()}-${index}`;
+      `${typeLabel}-${parsedDate.getTime().toString()}-${index.toString()}`;
 
     markers.push({
       id: markerId,
@@ -1047,22 +1047,12 @@ function buildNewsPromptButton(tickerSymbol: string): string {
 }
 
 async function copyTextToClipboard(text: string): Promise<void> {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
+  if (typeof navigator === 'undefined') {
     return;
   }
 
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'absolute';
-  textarea.style.left = '-9999px';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
+  if ('clipboard' in navigator && typeof navigator.clipboard.writeText === 'function') {
+    await navigator.clipboard.writeText(text);
   }
 }
 
@@ -1258,7 +1248,7 @@ function composeAveragePurchaseTooltip(
     return null;
   }
 
-  const fxRate = (accountAverage as number) / (securityAverage as number);
+  const fxRate = accountAverage / securityAverage;
   if (!Number.isFinite(fxRate) || fxRate <= 0) {
     return null;
   }
@@ -1471,10 +1461,10 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     (
       currency !== 'EUR' ||
       !isFiniteNumber(averagePurchaseNativeRaw) ||
-      !areNumbersClose(averagePurchaseEurRaw as number, averagePurchaseNativeRaw)
+      !areNumbersClose(averagePurchaseEurRaw, averagePurchaseNativeRaw)
     )
   ) {
-    secondaryAverage = averagePurchaseEurRaw as number;
+    secondaryAverage = averagePurchaseEurRaw;
     secondaryCurrency = 'EUR';
   } else if (
     isFiniteNumber(resolvedAccountAverage) &&
@@ -1482,10 +1472,10 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     (
       !currency ||
       accountCurrency !== currency ||
-      !areNumbersClose(resolvedAccountAverage as number, averagePurchaseNativeRaw ?? NaN)
+      !areNumbersClose(resolvedAccountAverage, averagePurchaseNativeRaw ?? NaN)
     )
   ) {
-    secondaryAverage = resolvedAccountAverage as number;
+    secondaryAverage = resolvedAccountAverage;
     secondaryCurrency = accountCurrency;
   }
 
@@ -1806,7 +1796,8 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
             snapshot?.currency_code,
           );
           cache.set(rangeKey, historySeries);
-          markerCache.set(rangeKey, markers || []);
+          markers = Array.isArray(markers) ? markers : [];
+          markerCache.set(rangeKey, markers);
           historyState = historySeries.length
             ? { status: 'loaded' }
             : { status: 'empty' };
@@ -1841,7 +1832,8 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
             historyResponse.transactions,
             snapshot?.currency_code,
           );
-          markerCache.set(rangeKey, markers || []);
+          markers = Array.isArray(markers) ? markers : [];
+          markerCache.set(rangeKey, markers);
         } catch (markerError) {
           console.error('Range-Wechsel: Transaktionsmarker konnten nicht geladen werden', markerError);
           markers = [];
@@ -2044,7 +2036,8 @@ export async function renderSecurityDetail(
         effectiveSnapshot?.currency_code,
       );
       cache.set(activeRange, historySeries);
-      markerCache.set(activeRange, markers || []);
+      markers = Array.isArray(markers) ? markers : [];
+      markerCache.set(activeRange, markers);
       historyState = historySeries.length
         ? { status: 'loaded' }
         : { status: 'empty' };
@@ -2078,7 +2071,8 @@ export async function renderSecurityDetail(
         effectiveSnapshot?.currency_code,
       );
       cache.set(activeRange, refreshedSeries);
-      markerCache.set(activeRange, markers || []);
+      markers = Array.isArray(markers) ? markers : [];
+      markerCache.set(activeRange, markers);
       historySeries = refreshedSeries;
       historyState = historySeries.length
         ? { status: 'loaded' }
