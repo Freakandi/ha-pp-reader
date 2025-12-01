@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,7 @@ def test_load_position_snapshots_preserves_purchase_totals(
                     currency_code="USD",
                 )
             },
+            reference_date=datetime(2024, 3, 1, tzinfo=UTC),
         )
     )
 

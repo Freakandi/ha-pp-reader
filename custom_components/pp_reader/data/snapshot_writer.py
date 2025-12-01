@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from custom_components.pp_reader.data.migrations import ensure_snapshot_tables
 from custom_components.pp_reader.util.datetime import UTC
 
 if TYPE_CHECKING:
@@ -57,6 +58,7 @@ def persist_normalization_result(
     conn = sqlite3.connect(str(Path(db_path)))
     try:
         conn.execute("PRAGMA foreign_keys = ON")
+        ensure_snapshot_tables(conn)
         context = _SnapshotPersistenceContext(
             conn=conn,
             run_uuid=run_uuid,

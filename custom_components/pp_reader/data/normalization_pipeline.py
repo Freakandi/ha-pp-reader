@@ -759,7 +759,7 @@ def _compute_security_day_change_delta(
         context.reference_date,
         context.db_path,
     )
-    prev_date, prev_raw, prev_native = _safe_fetch_previous_close(
+    _prev_date, prev_raw, prev_native = _safe_fetch_previous_close(
         context.db_path,
         record.security_uuid,
         before_epoch_day=reference_epoch_day,
@@ -794,20 +794,35 @@ def _compute_security_day_change_delta(
 
 def _aggregate_portfolio_day_change(
     security_metrics: Sequence[SecurityMetricRecord],
-    context: _PortfolioComposeContext,
+    context: _PortfolioComposeContext | None = None,
+    *,
+    db_path: Path | None = None,
+    reference_date: datetime | None = None,
 ) -> dict[str, tuple[float | None, float | None, float | None]]:
     """Aggregate portfolio-level day changes from security metrics."""
     if not security_metrics:
         return {}
 
-    reference_epoch_day = int(context.reference_date.timestamp() // 86400)
+    resolved_context = context
+    if resolved_context is None:
+        if db_path is None or reference_date is None:
+            msg = "db_path and reference_date are required when context is not provided"
+            raise TypeError(msg)
+        resolved_context = _PortfolioComposeContext(
+            db_path=db_path,
+            reference_date=reference_date,
+            include_positions=False,
+            position_context=None,
+        )
+
+    reference_epoch_day = int(resolved_context.reference_date.strftime("%Y%m%d"))
     grouped = _index_security_metrics_by_portfolio(security_metrics)
 
     aggregates: dict[str, tuple[float | None, float | None, float | None]] = {}
     for portfolio_uuid, records in grouped.items():
         aggregates[portfolio_uuid] = _aggregate_portfolio_day_change_for_portfolio(
             records,
-            context,
+            resolved_context,
             reference_epoch_day,
         )
 
@@ -926,11 +941,15 @@ def _load_position_snapshots(
         return []
 
     snapshots: list[PositionSnapshot] = []
-    reference_date = datetime.now(UTC)
-    reference_epoch_day = int(reference_date.timestamp() // 86400)
+    normalized_reference = (
+        reference_date
+        if reference_date.tzinfo is not None
+        else reference_date.replace(tzinfo=UTC)
+    )
+    reference_epoch_day = int(normalized_reference.strftime("%Y%m%d"))
     context = _PositionSnapshotContext(
         db_path=db_path,
-        reference_date=reference_date,
+        reference_date=normalized_reference,
         reference_epoch_day=reference_epoch_day,
         securities=securities,
     )
@@ -1164,39 +1183,40 @@ def _derive_day_change_payload(
             if record.day_change_coverage not in (None, "")
             else 1.0
         )
-        return (
-            {
-                "price_change_native": price_change_native,
-                "price_change_eur": price_change_eur,
-                "change_pct": change_pct,
-                "source": "derived",
-                "coverage_ratio": coverage_ratio,
-            },
-            updated_state,
-        )
+        payload = {
+            "price_change_native": price_change_native,
+            "price_change_eur": price_change_eur,
+            "change_pct": change_pct,
+            "source": "derived",
+            "coverage_ratio": coverage_ratio,
+        }
+        if coverage_ratio is not None and coverage_ratio < 1.0:
+            return None, updated_state
+        return payload, updated_state
 
     if any(
         getattr(record, field) not in (None, "")
         for field in ("day_change_native", "day_change_eur", "day_change_pct")
     ):
-        return (
-            {
-                "price_change_native": round_price(
-                    record.day_change_native,
-                    decimals=6,
-                    default=None,
-                ),
-                "price_change_eur": round_price(
-                    record.day_change_eur,
-                    decimals=6,
-                    default=None,
-                ),
-                "change_pct": record.day_change_pct,
-                "source": record.day_change_source or "metrics",
-                "coverage_ratio": record.day_change_coverage,
-            },
-            updated_state,
-        )
+        coverage_ratio = record.day_change_coverage
+        payload = {
+            "price_change_native": round_price(
+                record.day_change_native,
+                decimals=6,
+                default=None,
+            ),
+            "price_change_eur": round_price(
+                record.day_change_eur,
+                decimals=6,
+                default=None,
+            ),
+            "change_pct": record.day_change_pct,
+            "source": record.day_change_source or "metrics",
+            "coverage_ratio": coverage_ratio,
+        }
+        if coverage_ratio is not None and coverage_ratio < 1.0:
+            return None, updated_state
+        return payload, updated_state
 
     return None, updated_state
 

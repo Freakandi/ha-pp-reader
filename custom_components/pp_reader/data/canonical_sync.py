@@ -665,9 +665,7 @@ def _resolve_security_total(
 ) -> float | None:
     """Resolve transaction amount in security currency."""
     unit = (
-        context.tx_units.get(amount_context.tx_uuid)
-        if amount_context.tx_uuid
-        else None
+        context.tx_units.get(amount_context.tx_uuid) if amount_context.tx_uuid else None
     )
     if unit:
         unit_currency = (unit.get("fx_currency_code") or "").strip().upper()

@@ -869,7 +869,7 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     (
                         portfolio_uuid,
                         security_uuid,
-                        _scale_quantity(current_holdings_val),
+                        current_holdings_val,
                         purchase_value_cents,
                         avg_price_native_val,
                         avg_price_security_val,

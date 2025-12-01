@@ -165,11 +165,12 @@ def _build_security_metric_record(
             else None
         )
 
-        prev_date, raw_last_close, last_close_native = fetch_previous_close(
+        reference_epoch_day = int(reference_date.strftime("%Y%m%d"))
+        _prev_date, raw_last_close, last_close_native = fetch_previous_close(
             db_path,
             security_uuid,
             conn=conn,
-            before_epoch_day=int(reference_date.timestamp() // 86400),
+            before_epoch_day=reference_epoch_day,
         )
 
         last_close_eur = None

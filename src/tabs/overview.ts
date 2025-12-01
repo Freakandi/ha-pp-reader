@@ -973,6 +973,32 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   const gainAbsHtml = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
   const gainPctHtml = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
 
+  const headerRow = table.tHead ? table.tHead.rows.item(0) : null;
+  const headerCellCount = headerRow ? headerRow.cells.length : 0;
+  const footerCellCount = footer.cells.length;
+  const layoutColumns = headerCellCount || footerCellCount;
+  const useCompactLayout = layoutColumns > 0 ? layoutColumns <= 5 : false;
+
+  const gainPctLabel =
+    totalsComplete && typeof sumGainPct === 'number' ? `${formatNumber(sumGainPct)} %` : '';
+  const gainPctSign =
+    totalsComplete && typeof sumGainPct === 'number'
+      ? sumGainPct > 0
+        ? 'positive'
+        : sumGainPct < 0
+          ? 'negative'
+          : 'neutral'
+      : 'neutral';
+
+  if (useCompactLayout) {
+    footer.innerHTML = `
+      <td>Summe</td>
+      <td class="align-right">${sumPositionsDisplay}</td>
+      <td class="align-right">${currentValueHtml}</td>
+      <td class="align-right">${gainAbsHtml}</td>
+      <td class="align-right gain-pct-cell">${gainPctHtml}</td>
+    `;
+  } else {
     footer.innerHTML = `
       <td>Summe</td>
       <td class="align-right">${sumPositionsDisplay}</td>
@@ -983,14 +1009,12 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
       <td class="align-right">${gainAbsHtml}</td>
       <td class="align-right">${gainPctHtml}</td>
     `;
-    const footerGainAbsCell = footer.cells.item(6);
+  }
+
+  const footerGainAbsCell = footer.cells.item(useCompactLayout ? 3 : 6);
   if (footerGainAbsCell) {
-    footerGainAbsCell.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number'
-      ? `${formatNumber(sumGainPct)} %`
-      : '—';
-    footerGainAbsCell.dataset.gainSign = totalsComplete && typeof sumGainPct === 'number'
-      ? (sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral')
-      : 'neutral';
+    footerGainAbsCell.dataset.gainPct = gainPctLabel || '—';
+    footerGainAbsCell.dataset.gainSign = gainPctSign;
   }
   footer.dataset.positionCount = String(Math.round(sumPositions));
   footer.dataset.currentValue = totalsComplete ? String(sumCurrent) : '';

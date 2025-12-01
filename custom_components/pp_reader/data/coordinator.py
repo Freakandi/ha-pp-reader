@@ -522,6 +522,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         await self._schedule_metrics_refresh(summary, errors=errors)
         await self._schedule_normalization_refresh(summary)
 
+        # Ensure progress events from earlier stages flush before emitting completion.
+        await asyncio.sleep(0)
         self._emit_enrichment_completed(summary)
         return summary
 
@@ -656,10 +658,9 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             while True:
                 iterations += 1
                 try:
-                    # Use a larger batch to drain startup history faster while the
-                    # executor concurrency guard inside the fetcher still keeps
-                    # Yahoo requests bounded.
-                    results = await manager.process_pending_jobs(limit=45)
+                    # Keep batches small to avoid long-running executor slots and
+                    # allow interleaving with other work.
+                    results = await manager.process_pending_jobs(limit=15)
                 except Exception:  # noqa: BLE001 - defensive logging
                     _LOGGER.warning(
                         (

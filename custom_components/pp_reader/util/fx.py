@@ -157,7 +157,7 @@ async def fetch_fx_range(
     missing_dates = sorted(expected_dates - observed_dates)
     if missing_dates:
         preview = ", ".join(missing_dates[:5])
-        _LOGGER.info(
+        _LOGGER.warning(
             (
                 "FX range for %s missing %d day(s) (likely weekend/holiday); "
                 "first gaps: %s"

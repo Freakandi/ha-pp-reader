@@ -244,10 +244,38 @@ def seeded_history_db(tmp_path: Path) -> Path:
     initialize_database_schema(db_path)
 
     price_rows = [
-        ("sec-1", _date_to_epoch_day(date(2024, 1, 1)), int(10.0 * 1e8), None, None, None),
-        ("sec-1", _date_to_epoch_day(date(2024, 1, 2)), int(10.5 * 1e8), None, None, None),
-        ("sec-1", _date_to_epoch_day(date(2024, 1, 3)), int(10.75 * 1e8), None, None, None),
-        ("sec-2", _date_to_epoch_day(date(2024, 1, 3)), int(99.999 * 1e8), None, None, None),
+        (
+            "sec-1",
+            _date_to_epoch_day(date(2024, 1, 1)),
+            int(10.0 * 1e8),
+            None,
+            None,
+            None,
+        ),
+        (
+            "sec-1",
+            _date_to_epoch_day(date(2024, 1, 2)),
+            int(10.5 * 1e8),
+            None,
+            None,
+            None,
+        ),
+        (
+            "sec-1",
+            _date_to_epoch_day(date(2024, 1, 3)),
+            int(10.75 * 1e8),
+            None,
+            None,
+            None,
+        ),
+        (
+            "sec-2",
+            _date_to_epoch_day(date(2024, 1, 3)),
+            int(99.999 * 1e8),
+            None,
+            None,
+            None,
+        ),
     ]
 
     conn = sqlite3.connect(str(db_path))

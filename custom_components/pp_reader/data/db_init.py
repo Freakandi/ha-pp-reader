@@ -43,6 +43,72 @@ def ensure_metric_tables(conn: sqlite3.Connection) -> None:
         conn.execute(ddl)
 
 
+def ensure_fx_enrichment_columns(conn: sqlite3.Connection) -> None:
+    """Add enrichment metadata columns to fx_rates when missing."""
+    try:
+        cursor = conn.execute("PRAGMA table_info('fx_rates')")
+        columns = {row[1] for row in cursor.fetchall()}
+    except sqlite3.Error:
+        _LOGGER.exception("Konnte Spalteninformationen für fx_rates nicht laden")
+        return
+
+    required = {
+        "fetched_at": "TEXT",
+        "data_source": "TEXT",
+        "provider": "TEXT",
+        "provenance": "TEXT",
+    }
+    for name, col_type in required.items():
+        if name in columns:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE fx_rates ADD COLUMN {name} {col_type}")
+        except sqlite3.Error:
+            _LOGGER.exception(
+                (
+                    "Migration fehlgeschlagen: fx_rates Spalte %s konnte nicht "
+                    "ergänzt werden"
+                ),
+                name,
+            )
+            raise
+
+
+def ensure_price_history_enrichment_columns(conn: sqlite3.Connection) -> None:
+    """Add enrichment metadata to historical price tables when missing."""
+    targets = ("historical_prices", "ingestion_historical_prices")
+    required = {
+        "fetched_at": "TEXT",
+        "data_source": "TEXT",
+        "provider": "TEXT",
+        "provenance": "TEXT",
+    }
+
+    for table in targets:
+        try:
+            cursor = conn.execute(f"PRAGMA table_info('{table}')")
+            columns = {row[1] for row in cursor.fetchall()}
+        except sqlite3.Error:
+            _LOGGER.exception("Konnte Spalteninformationen für %s nicht laden", table)
+            continue
+
+        for name, col_type in required.items():
+            if name in columns:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {col_type}")
+            except sqlite3.Error:
+                _LOGGER.exception(
+                    (
+                        "Migration fehlgeschlagen: %s Spalte %s konnte nicht "
+                        "ergänzt werden"
+                    ),
+                    table,
+                    name,
+                )
+                raise
+
+
 def initialize_database_schema(db_path: Path) -> None:
     """Initialisiert die SQLite Datenbank mit dem definierten Schema."""
     try:
@@ -77,6 +143,8 @@ def initialize_database_schema(db_path: Path) -> None:
             ensure_ingestion_tables(conn)
             ensure_metric_tables(conn)
             ensure_snapshot_tables(conn)
+            ensure_fx_enrichment_columns(conn)
+            ensure_price_history_enrichment_columns(conn)
 
             conn.commit()
 

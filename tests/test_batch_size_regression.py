@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sqlite3
 
@@ -48,7 +49,13 @@ async def test_batches_count_regression(tmp_path, monkeypatch, caplog):
     hass = type(
         "Hass",
         (),
-        {"data": {DOMAIN: {}}, "async_add_executor_job": lambda *a, **k: None},
+        {
+            "data": {DOMAIN: {}},
+            "async_add_executor_job": lambda *a, **k: None,
+            "async_create_task": lambda self, coro, name=None: asyncio.create_task(
+                coro, name=name
+            ),
+        },
     )()
     entry_id = "batch_reg"
     hass.data[DOMAIN][entry_id] = {"db_path": db_path}

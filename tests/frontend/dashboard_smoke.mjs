@@ -716,7 +716,11 @@ summary.diagnostics = {
   ingestionPortfolios: diagnosticsSummary.ingestion?.processed_entities?.portfolios ?? 0,
   ingestionTransactions: diagnosticsSummary.ingestion?.processed_entities?.transactions ?? 0,
   fxRateRows: diagnosticsSummary.enrichment?.fx?.latest_rate_fetch ? 1 : 0,
-  metricsStatus: diagnosticsSummary.metrics?.available ? 'available' : diagnosticsSummary.metrics?.reason ?? '',
+  metricsStatus: typeof diagnosticsSummary.metrics?.status === 'string'
+    ? diagnosticsSummary.metrics.status
+    : diagnosticsSummary.metrics?.available
+      ? 'available'
+      : diagnosticsSummary.metrics?.reason ?? '',
   metricsLatestRun: diagnosticsSummary.metrics?.latest_run?.run_uuid ?? '',
   normalizationStatus: diagnosticsSummary.normalized_payload?.available
     ? 'ok'

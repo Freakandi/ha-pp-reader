@@ -56,6 +56,10 @@ class FakeHass:
     def get_loop(self):
         return asyncio.get_running_loop()
 
+    def async_create_task(self, coro, *, name=None):
+        loop = asyncio.get_running_loop()
+        return loop.create_task(coro, name=name) if name else loop.create_task(coro)
+
     async def async_add_executor_job(self, func, *args):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, func, *args)
