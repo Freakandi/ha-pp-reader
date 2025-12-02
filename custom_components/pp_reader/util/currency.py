@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 from math import isfinite
 from typing import TYPE_CHECKING, Any
 
@@ -185,7 +187,7 @@ CACHED_FX_HELPERS: dict[str, Any] = {}
 def _load_fx_helper(name: str) -> Any:
     """Dynamically import FX helper functions on first access."""
     if name not in CACHED_FX_HELPERS:
-        from custom_components.pp_reader.currencies import fx
+        from custom_components.pp_reader.currencies import fx  # noqa: PLC0415
 
         CACHED_FX_HELPERS[name] = getattr(fx, name)
     return CACHED_FX_HELPERS[name]
@@ -199,7 +201,16 @@ def ensure_exchange_rates_for_dates_sync(
 ) -> None:
     """Proxy to the FX helper without importing it at module import time."""
     helper = _load_fx_helper("ensure_exchange_rates_for_dates_sync")
-    helper(dates, currencies, db_path, conn=conn)
+    result = helper(dates, currencies, db_path, conn=conn)
+    if asyncio.iscoroutine(result):
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(result)
+        finally:
+            asyncio.set_event_loop(None)
+            with suppress(Exception):
+                loop.close()
 
 
 def load_cached_rate_records_sync(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# ruff: noqa: PLC0415
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -150,7 +151,9 @@ def test_dns_error_handlers_disable_yahoo_fetch(monkeypatch) -> None:
         False,
     )
     assert history_handle_dns_error(Exception("Could not resolve host: guce.yahoo.com"))
-    from custom_components.pp_reader.prices import history_ingest as hist_mod
+    from custom_components.pp_reader.prices import (
+        history_ingest as hist_mod,
+    )
 
     assert hist_mod._YAHOOQUERY_IMPORT_ERROR is False
 
@@ -160,6 +163,8 @@ def test_dns_error_handlers_disable_yahoo_fetch(monkeypatch) -> None:
         False,
     )
     assert quotes_handle_dns_error(Exception("Could not resolve host: guce.yahoo.com"))
-    from custom_components.pp_reader.prices import yahooquery_provider as quotes_mod
+    from custom_components.pp_reader.prices import (
+        yahooquery_provider as quotes_mod,
+    )
 
     assert quotes_mod._YAHOOQUERY_IMPORT_ERROR is False

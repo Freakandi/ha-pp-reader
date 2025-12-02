@@ -34,6 +34,7 @@ from custom_components.pp_reader.data.normalization_pipeline import (
     serialize_position_snapshot,
 )
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.util.currency import cent_to_eur
 
 # HINWEIS (Item portfolio_aggregation_reuse):
 # Die Revaluation nutzt fetch_live_portfolios als Single Source of Truth und
@@ -255,4 +256,73 @@ async def _load_portfolio_positions(
         if payload:
             serialized[pid] = payload
 
-    return serialized or None
+    if serialized:
+        return serialized
+
+    return _fallback_portfolio_positions(db_path, affected)
+
+
+def _fallback_portfolio_positions(
+    db_path: Path, affected: set[str]
+) -> dict[str, list[dict[str, Any]]] | None:
+    """Build minimal live positions directly from portfolio_securities."""
+    if not affected:
+        return None
+
+    placeholders = ",".join("?" for _ in affected)
+    query_parts = (
+        "SELECT "
+        "ps.portfolio_uuid, "
+        "ps.security_uuid, "
+        "ps.current_holdings, "
+        "ps.purchase_value, "
+        "ps.current_value, "
+        "s.name, "
+        "s.currency_code "
+        "FROM portfolio_securities ps "
+        "LEFT JOIN securities s ON s.uuid = ps.security_uuid "
+        "WHERE ps.portfolio_uuid IN ("
+    )
+    query = query_parts + placeholders + ")"
+
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            cur = conn.execute(query, tuple(affected))
+            rows = cur.fetchall()
+    except sqlite3.Error:
+        _LOGGER.warning(
+            "revaluation: Fehler beim Laden fallback-Positionsdaten",
+            exc_info=True,
+        )
+        return None
+
+    if not rows:
+        return None
+
+    positions: dict[str, list[dict[str, Any]]] = {}
+    for (
+        portfolio_uuid,
+        security_uuid,
+        current_holdings,
+        purchase_value_cents,
+        current_value_cents,
+        name,
+        currency_code,
+    ) in rows:
+        entry: dict[str, Any] = {
+            "security_uuid": security_uuid,
+            "name": name,
+            "currency_code": currency_code,
+        }
+        if current_holdings is not None:
+            entry["current_holdings"] = float(current_holdings)
+        purchase_value = cent_to_eur(purchase_value_cents, default=None)
+        if purchase_value is not None:
+            entry["purchase_value"] = purchase_value
+        current_value = cent_to_eur(current_value_cents, default=None)
+        if current_value is not None:
+            entry["current_value"] = current_value
+
+        positions.setdefault(portfolio_uuid, []).append(entry)
+
+    return positions or None

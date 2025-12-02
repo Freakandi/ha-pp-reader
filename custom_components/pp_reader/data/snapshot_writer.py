@@ -11,6 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from custom_components.pp_reader.data.db_schema import (
+    ACCOUNT_SCHEMA,
+    METRIC_RUNS_SCHEMA,
+    PORTFOLIO_SCHEMA,
+)
 from custom_components.pp_reader.data.migrations import ensure_snapshot_tables
 from custom_components.pp_reader.util.datetime import UTC
 
@@ -58,7 +63,7 @@ def persist_normalization_result(
     conn = sqlite3.connect(str(Path(db_path)))
     try:
         conn.execute("PRAGMA foreign_keys = ON")
-        ensure_snapshot_tables(conn)
+        _ensure_snapshot_schema(conn)
         context = _SnapshotPersistenceContext(
             conn=conn,
             run_uuid=run_uuid,
@@ -239,3 +244,14 @@ def _persist_portfolio_snapshots(
 
 def _utc_now_isoformat() -> str:
     return datetime.now(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _ensure_snapshot_schema(conn: sqlite3.Connection) -> None:
+    """Provision minimal schema needed for snapshot persistence."""
+    try:
+        for ddl in (*ACCOUNT_SCHEMA, *PORTFOLIO_SCHEMA, *METRIC_RUNS_SCHEMA):
+            conn.execute(ddl)
+        ensure_snapshot_tables(conn)
+    except sqlite3.Error:
+        _LOGGER.exception("snapshot_writer: Schema-Initialisierung fehlgeschlagen")
+        raise

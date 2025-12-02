@@ -430,28 +430,54 @@ def ensure_exchange_rates_for_dates_sync(
     conn: sqlite3.Connection | None = None,
 ) -> None:
     """Ensure required exchange rates exist using a synchronous wrapper."""
+    if not currencies or not dates:
+        return
 
-    def run_async_task(
-        dates: list[datetime],
-        currencies: set[str],
-        db_path: Path,
-        conn: sqlite3.Connection | None = None,
-    ) -> None:
+    date_list = list(dates)
+    currency_set = set(currencies)
+
+    missing_currencies = set(currency_set)
+    if conn is not None:
+        for dt in date_list:
+            date_str = dt.strftime("%Y-%m-%d")
+            existing = _load_rates_for_date_sync(db_path, date_str, conn=conn)
+            missing_currencies -= set(existing.keys())
+        if not missing_currencies:
+            return
+
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    coroutine = ensure_exchange_rates_for_dates(
+        date_list,
+        missing_currencies,
+        db_path,
+        conn=None if running_loop else conn,
+    )
+
+    if running_loop is None:
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(
-                ensure_exchange_rates_for_dates(
-                    dates,
-                    currencies,
-                    db_path,
-                    conn=conn,
-                )
-            )
+            loop.run_until_complete(coroutine)
         finally:
             asyncio.set_event_loop(None)
             with suppress(Exception):
                 loop.close()
+        return
 
-    if currencies and dates:
-        run_async_task(dates, currencies, db_path, conn)
+    result: list[Exception] = []
+
+    def _run_in_thread() -> None:
+        try:
+            asyncio.run(coroutine)
+        except Exception as err:  # noqa: BLE001 - defensive wrapper
+            result.append(err)
+
+    thread = threading.Thread(target=_run_in_thread)
+    thread.start()
+    thread.join()
+    if result:
+        raise result[0]

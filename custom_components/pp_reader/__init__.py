@@ -287,7 +287,7 @@ async def _run_fx_refresh_once(
 ) -> None:
     """Ensure current FX rates are cached for active currencies."""
     fx_module = _get_fx_module()
-    from custom_components.pp_reader.data.fx_backfill import (
+    from custom_components.pp_reader.data.fx_backfill import (  # noqa: PLC0415
         backfill_fx,
     )
 

@@ -12,7 +12,7 @@ import time
 from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -2692,7 +2692,7 @@ def get_price_history_jobs_by_status(
             local_conn.close()
 
 
-def fetch_previous_close(
+def fetch_previous_close(  # noqa: PLR0912, PLR0915
     db_path: Path,
     security_uuid: str,
     *,
@@ -2703,7 +2703,9 @@ def fetch_previous_close(
     Fetch the most recent historical close price for a security.
 
     Returns a tuple of (date_epoch, close_raw, close_native). If before_epoch_day
-    is provided, only closes strictly older than that day are considered.
+    is provided, only closes strictly older than that day are considered. The
+    cutoff accepts epoch-day values and is internally converted to YYYYMMDD to
+    match the stored schema.
     """
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
@@ -2713,6 +2715,23 @@ def fetch_previous_close(
     if local_conn is None:
         local_conn = sqlite3.connect(str(db_path))
 
+    cutoff_yyyymmdd: int | None = None
+    if before_epoch_day is not None:
+        try:
+            normalized_cutoff = int(before_epoch_day)
+        except (TypeError, ValueError):
+            normalized_cutoff = None
+
+        if normalized_cutoff is not None:
+            if normalized_cutoff >= _YYYYMMDD_MIN_VALUE:
+                cutoff_yyyymmdd = normalized_cutoff
+            else:
+                try:
+                    cutoff_date = _EPOCH_START_DATE + timedelta(days=normalized_cutoff)
+                    cutoff_yyyymmdd = int(cutoff_date.strftime("%Y%m%d"))
+                except (OverflowError, ValueError):
+                    cutoff_yyyymmdd = None
+
     try:
         try:
             params: list[object] = [security_uuid]
@@ -2721,9 +2740,9 @@ def fetch_previous_close(
                 FROM historical_prices
                 WHERE security_uuid = ?
             """
-            if before_epoch_day is not None:
+            if cutoff_yyyymmdd is not None:
                 sql += " AND date < ?"
-                params.append(before_epoch_day)
+                params.append(cutoff_yyyymmdd)
             sql += " ORDER BY date DESC LIMIT 1"
 
             cursor = local_conn.execute(sql, params)
@@ -2740,6 +2759,7 @@ def fetch_previous_close(
 
         raw_close = row[0]
         date_value = row[1] if len(row) > 1 else None
+        prev_epoch_day = _to_epoch_day(date_value)
         if raw_close is None:
             return date_value, None, None
 
@@ -2755,7 +2775,7 @@ def fetch_previous_close(
             )
             close_native = None
 
-        return date_value, int(raw_close), close_native
+        return prev_epoch_day or date_value, int(raw_close), close_native
     finally:
         if conn is None:
             with suppress(sqlite3.Error):

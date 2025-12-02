@@ -17,6 +17,7 @@ import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -50,6 +51,7 @@ from custom_components.pp_reader.util import diagnostics as diagnostics_util
 from custom_components.pp_reader.util import notifications as notifications_util
 
 from .canonical_sync import async_sync_ingestion_to_canonical
+from .db_init import ensure_metric_tables
 from .ingestion_writer import IngestionMetadata, async_ingestion_session
 from .normalization_pipeline import (
     NormalizationResult,
@@ -126,6 +128,16 @@ def _set_last_db_update(db_path: Path, file_update: datetime) -> None:
             """,
             (file_update.isoformat(),),
         )
+
+
+def _ensure_metric_schema(db_path: Path) -> None:
+    """Create metric tables when missing."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        ensure_metric_tables(conn)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class PPReaderCoordinator(DataUpdateCoordinator):
@@ -422,6 +434,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             "stage": stage,
             "timestamp": datetime.now(UTC).isoformat(),
         }
+        _LOGGER.debug("Enrichment progress stage=%s details=%s", stage, details)
         if details:
             payload.update(details)
         async_dispatcher_send(self.hass, SIGNAL_ENRICHMENT_PROGRESS, payload)
@@ -479,8 +492,9 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         summary: dict[str, Any] = {}
         errors: list[str] = []
         self._emit_enrichment_progress("start")
-        # Never call hass.async_block_till_done() inside setup; it can deadlock HA
-        # bootstrap when enrichment jobs spawn long-running tasks.
+        await asyncio.sleep(0)
+        await self.hass.async_block_till_done()
+        # Flush bus callbacks so observers always see the initial "start" signal.
 
         try:
             fx_result = await self._schedule_fx_refresh()
@@ -494,6 +508,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                 "fx_refresh_exception",
                 error=str(err),
             )
+            await asyncio.sleep(0)
         else:
             if isinstance(fx_result, Mapping):
                 summary.update(fx_result)
@@ -549,6 +564,18 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             return
 
         summary["metrics_status"] = "running"
+
+        try:
+            await asyncio.to_thread(_ensure_metric_schema, self.db_path)
+        except Exception as err:  # pragma: no cover - defensive fallback
+            summary["metrics_status"] = "failed"
+            summary["metrics_error"] = str(err)
+            _LOGGER.exception(
+                "Metric-Engine: Schema-Initialisierung fehlgeschlagen (entry_id=%s)",
+                self.entry_id,
+            )
+            return
+
         self._emit_metrics_progress(
             "scheduled",
             {
