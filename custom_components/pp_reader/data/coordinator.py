@@ -493,8 +493,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         errors: list[str] = []
         self._emit_enrichment_progress("start")
         await asyncio.sleep(0)
-        await self.hass.async_block_till_done()
-        # Flush bus callbacks so observers always see the initial "start" signal.
+        # Avoid blocking Home Assistant bootstrap here; the initial sleep is
+        # enough to let queued listeners process the "start" event.
 
         try:
             fx_result = await self._schedule_fx_refresh()

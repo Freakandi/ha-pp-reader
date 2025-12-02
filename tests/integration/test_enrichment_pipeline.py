@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from types import SimpleNamespace
 from typing import Any
@@ -163,6 +164,54 @@ async def test_enrichment_pipeline_notifies_on_repeated_failures(
     assert notification["entry_id"] == "entry"
     assert "Enrichment" in notification["title"]
     assert "Price history job scheduling failed" in notification["message"]
+
+
+async def test_enrichment_pipeline_does_not_block_bootstrap(
+    hass, tmp_path, monkeypatch
+) -> None:
+    """Enrichment start should not block HA while other tasks run."""
+    coordinator = await _create_coordinator(hass, tmp_path)
+
+    # Simulate a long-running HA task that would stall async_block_till_done.
+    stall_event = asyncio.Event()
+    stall_task = hass.async_create_task(stall_event.wait())
+
+    async def _fx_stub(self) -> dict[str, Any]:
+        return {"fx_status": "skipped"}
+
+    async def _history_stub(self, _parsed_client) -> dict[str, Any]:
+        return {"history_status": "no_targets"}
+
+    async def _metrics_stub(self, summary: dict[str, Any], *, errors: Any) -> None:
+        summary["metrics_status"] = "skipped"
+
+    async def _normalization_stub(self, summary: dict[str, Any]) -> None:
+        summary["normalized_status"] = "skipped"
+
+    monkeypatch.setattr(PPReaderCoordinator, "_schedule_fx_refresh", _fx_stub)
+    monkeypatch.setattr(
+        PPReaderCoordinator, "_schedule_price_history_jobs", _history_stub
+    )
+    monkeypatch.setattr(PPReaderCoordinator, "_schedule_metrics_refresh", _metrics_stub)
+    monkeypatch.setattr(
+        PPReaderCoordinator,
+        "_schedule_normalization_refresh",
+        _normalization_stub,
+    )
+
+    parsed_client = SimpleNamespace(securities=["sec-001"])
+
+    # Should return promptly despite the pending HA task.
+    summary = await asyncio.wait_for(
+        coordinator._schedule_enrichment_jobs(parsed_client), timeout=1
+    )
+
+    stall_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await stall_task
+
+    assert summary["fx_status"] == "skipped"
+    assert summary["history_status"] == "no_targets"
 
 
 async def test_enrichment_pipeline_disabled_still_runs_metrics(
