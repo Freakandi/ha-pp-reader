@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from importlib import import_module
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -139,6 +139,10 @@ class YahooHistoryFetcher:
 
     source = YAHOO_SOURCE
 
+    def __init__(self, *, session: Any | None = None) -> None:
+        """Initialise the fetcher with an optional preconfigured session."""
+        self._session = session
+
     async def fetch(self, job: HistoryJob) -> list[HistoryCandle]:
         """Fetch history for a single job."""
         loop = asyncio.get_running_loop()
@@ -176,10 +180,21 @@ class YahooHistoryFetcher:
         start_str = job.start.strftime("%Y-%m-%d")
         end_str = job.end.strftime("%Y-%m-%d")
         ticker = None
+        session = self._session
 
         def _call_history() -> object:
             nonlocal ticker
-            ticker = ticker or ticker_factory(job.symbol, asynchronous=False)
+            if session is None:
+                ticker = ticker or ticker_factory(
+                    job.symbol,
+                    asynchronous=False,
+                )
+            else:
+                ticker = ticker or ticker_factory(
+                    job.symbol,
+                    asynchronous=False,
+                    session=session,
+                )
             return ticker.history(
                 interval=job.interval,
                 start=start_str,

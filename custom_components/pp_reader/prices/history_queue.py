@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -39,6 +40,8 @@ __all__ = [
     "SecurityHistoryTarget",
     "build_history_targets_from_parsed",
 ]
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from custom_components.pp_reader.models import parsed as parsed_models
@@ -231,11 +234,34 @@ class HistoryQueueManager:
 
         def _plan_jobs_sync() -> int:
             today = datetime.now(UTC).date()
-            start_floor = today - timedelta(days=lookback_days - 1)
+            history_end_date = today - timedelta(days=1)
+            start_floor = history_end_date - timedelta(days=lookback_days - 1)
             enqueued = 0
 
             conn = sqlite3.connect(str(self._db_path))
             try:
+                try:
+                    cutoff_epoch = _epoch_day(
+                        datetime(
+                            history_end_date.year,
+                            history_end_date.month,
+                            history_end_date.day,
+                            tzinfo=UTC,
+                        )
+                    )
+                    conn.execute(
+                        """
+                        DELETE FROM historical_prices
+                        WHERE data_source = 'yahoo' AND date > ?
+                        """,
+                        (cutoff_epoch,),
+                    )
+                    conn.commit()
+                except sqlite3.Error:
+                    _LOGGER.debug(
+                        "Pruning forward-dated Yahoo history failed", exc_info=True
+                    )
+
                 for target in targets:
                     if not target.security_uuid:
                         continue
@@ -260,10 +286,10 @@ class HistoryQueueManager:
                             latest_date - timedelta(days=overlap - 1),
                         )
 
-                    if job_start_date > today:
+                    if job_start_date > history_end_date:
                         continue
 
-                    job_end_date = today
+                    job_end_date = history_end_date
                     start_dt = datetime(
                         job_start_date.year,
                         job_start_date.month,
