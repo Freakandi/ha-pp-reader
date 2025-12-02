@@ -748,6 +748,7 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                 current_holdings_val = _normalize_scaled_quantity(
                     data.get("current_holdings", 0.0)
                 )
+                current_holdings_scaled = _scale_quantity(current_holdings_val)
                 purchase_value_eur = (
                     round_currency(data.get("purchase_value"), default=0.0) or 0.0
                 )
@@ -869,7 +870,7 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     (
                         portfolio_uuid,
                         security_uuid,
-                        current_holdings_val,
+                        current_holdings_scaled,
                         purchase_value_cents,
                         avg_price_native_val,
                         avg_price_security_val,

@@ -468,7 +468,8 @@ def test_refresh_impacted_portfolio_securities_uses_currency_helpers(
     ) = row
 
     expected_purchase_eur = round_currency(purchase_value, default=0.0)
-    assert current_holdings_db == pytest.approx(current_holdings)
+    expected_scaled_holdings = price_service._scale_quantity(current_holdings)
+    assert current_holdings_db == expected_scaled_holdings
     assert purchase_value_cents == eur_to_cent(expected_purchase_eur, default=0)
     assert avg_price_native_db == pytest.approx(avg_price_native, abs=1e-6)
     assert avg_price_security_db == pytest.approx(avg_price_security, abs=1e-6)
@@ -1293,6 +1294,8 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
     load_and_map_symbols(hass, entry_id, db_path)
 
     call_count = {"n": 0}
+    last_symbol = f"SYM{CHUNK_SIZE}"
+    last_security = f"sec{CHUNK_SIZE}"
 
     async def _fake_fetch(self, symbols):
         # Zwei Aufrufe erwartet: 1. Batch (CHUNK_SIZE Symbole), 2. Batch (1 Symbol)
@@ -1301,10 +1304,10 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
             # Simulierter Chunk-Fehler
             raise Exception("Simulierter Chunkfehler")
         # Zweiter Aufruf -> letztes Symbol
-        assert len(symbols) == 1 and symbols[0] == f"SYM{CHUNK_SIZE}"
+        assert len(symbols) == 1 and symbols[0] == last_symbol
         return {
-            f"SYM{CHUNK_SIZE}": Quote(
-                symbol=f"SYM{CHUNK_SIZE}",
+            last_symbol: Quote(
+                symbol=last_symbol,
                 price=999.99,
                 previous_close=500.0,
                 currency="EUR",
@@ -1320,9 +1323,9 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
 
     monkeypatch.setattr(YahooQueryProvider, "fetch", _fake_fetch)
 
-    # Revaluation nur für geänderte sec10
+    # Revaluation nur für geänderte letzte Security
     async def _fake_revalue_after_price_updates(hass_, conn, updated_security_uuids):
-        assert updated_security_uuids == {"sec10"}
+        assert updated_security_uuids == {last_security}
         return {
             "portfolio_values": {
                 "portCF": _make_portfolio_value_entry(
@@ -1332,8 +1335,8 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
             "portfolio_positions": {
                 "portCF": [
                     {
-                        "security_uuid": "sec10",
-                        "security_name": "Security 10",
+                        "security_uuid": last_security,
+                        "security_name": f"Security {CHUNK_SIZE}",
                         "shares": 2.0,
                         "price": 999.99,
                         "value": 1999.98,
@@ -1366,19 +1369,19 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
             SELECT uuid,last_price,last_price_source FROM securities
             WHERE uuid IN (%s)
             """
-            % ",".join(["?"] * 11),
-            tuple(f"sec{i}" for i in range(11)),
+            % ",".join(["?"] * (CHUNK_SIZE + 1)),
+            tuple(f"sec{i}" for i in range(CHUNK_SIZE + 1)),
         )
         rows = {r[0]: r[1:] for r in cur.fetchall()}
 
-    # Erste 10 Securities unverändert
-    for i in range(10):
+    # Erste CHUNK_SIZE Securities unverändert
+    for i in range(CHUNK_SIZE):
         assert rows[f"sec{i}"][0] == int((100 + i) * 1e8), (
             f"sec{i} wurde unerwartet geändert"
         )
     # Letzte Security aktualisiert
-    assert rows["sec10"][0] == round(999.99 * 1e8)
-    assert rows["sec10"][1] == "yahoo"
+    assert rows[last_security][0] == round(999.99 * 1e8)
+    assert rows[last_security][1] == "yahoo"
 
     # Events: portfolio_values zuerst, danach portfolio_positions
     assert len(pushed) >= 2

@@ -37,8 +37,8 @@ from .provider_base import PriceProvider, Quote
 
 _LOGGER = logging.getLogger(__name__)
 
-# Smaller chunk lowers per-request latency to reduce timeouts on slow links.
-CHUNK_SIZE = 10  # Sicherheitskonstante (primär durch Orchestrator genutzt)
+# Preferred Yahoo chunk size; orchestrator already chunks, this is a guardrail.
+CHUNK_SIZE = 50
 _YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
 _YAHOO_DNS_ERROR_TOKENS = (
     "Could not resolve host: guce.yahoo.com",
