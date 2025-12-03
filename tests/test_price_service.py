@@ -512,6 +512,96 @@ async def test_no_change_no_events(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_missing_current_value_refreshes_without_price_change(
+    monkeypatch, tmp_path
+):
+    hass = FakeHass()
+    entry_id = "missing-value"
+    db_path = tmp_path / "missing_value.db"
+    initialize_database_schema(db_path)
+
+    portfolio_uuid = "pf-missing"
+    security_uuid = "sec-missing"
+    symbol = "GOF"
+    price = 17.81
+    last_price_raw = round(price * 1e8)
+    holdings_scaled = int(40 * 1e8)
+    purchase_value_cents = 80500
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO portfolios (uuid, name, is_retired)
+            VALUES (?, ?, 0)
+            """,
+            (portfolio_uuid, "Depot"),
+        )
+        conn.execute(
+            """
+            INSERT INTO securities (uuid, name, ticker_symbol, currency_code, retired, last_price)
+            VALUES (?, ?, ?, ?, 0, ?)
+            """,
+            (security_uuid, "Greek Organisation of Football", symbol, "EUR", last_price_raw),
+        )
+        conn.execute(
+            """
+            INSERT INTO portfolio_securities (
+                portfolio_uuid,
+                security_uuid,
+                current_holdings,
+                purchase_value,
+                current_value
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                portfolio_uuid,
+                security_uuid,
+                holdings_scaled,
+                purchase_value_cents,
+                0,
+            ),
+        )
+        conn.commit()
+
+    _init_store(hass, entry_id, db_path, {symbol: [security_uuid]})
+
+    async def fake_fetch(self, symbols):
+        return {symbol: _make_quote(symbol, price, "EUR")}
+
+    async def fake_reval(hass_, conn, uuids):
+        return {"portfolio_values": {}, "portfolio_positions": None}
+
+    async def noop_metrics(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
+    monkeypatch.setattr(price_service, "_push_update", lambda *a, **k: None)
+    monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
+    monkeypatch.setattr(
+        price_service, "_schedule_metrics_after_price_change", noop_metrics
+    )
+
+    meta = await price_service._run_price_cycle(hass, entry_id)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        current_value, = conn.execute(
+            """
+            SELECT current_value
+            FROM portfolio_securities
+            WHERE portfolio_uuid = ? AND security_uuid = ?
+            """,
+            (portfolio_uuid, security_uuid),
+        ).fetchone()
+
+    holdings = holdings_scaled / price_service._EIGHT_DECIMAL_SCALE
+    expected_current_cents = eur_to_cent(
+        round_currency(price * holdings, default=0.0), default=0
+    )
+    assert current_value == expected_current_cents
+    assert meta["changed"] == 1
+
+
+@pytest.mark.asyncio
 async def test_fetch_uses_configured_timeout(monkeypatch, tmp_path):
     hass = FakeHass()
     entry_id = "timeout"

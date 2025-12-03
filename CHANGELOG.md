@@ -8,6 +8,12 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 _Noch keine Einträge._
 
+## [0.15.1] - 2025-12-03
+
+### Fixed
+- The “Check recent news via ChatGPT” button now copies the prompt reliably (including HA iOS WebView/Edge) and opens the ChatGPT link with multi-step fallbacks instead of silently failing.
+- Selecting a security with current value 0 now renders the zero value instead of a missing placeholder, keeping headers and summaries consistent.
+
 ## [0.15.0] - 2025-11-30
 
 ### Added

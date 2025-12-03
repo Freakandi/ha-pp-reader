@@ -1104,13 +1104,81 @@ function buildNewsPromptButton(tickerSymbol: string): string {
   `;
 }
 
-async function copyTextToClipboard(text: string): Promise<void> {
-  if (typeof navigator === 'undefined') {
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (error) {
+        console.warn('News-Prompt: Clipboard API unavailable, falling back', error);
+      }
+    }
+  }
+
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  const { body } = document;
+
+  // Legacy fallback for browsers / WebViews without the Clipboard API (e.g. HA iOS app).
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    body.appendChild(textarea);
+    textarea.select();
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    const successful = document.execCommand('copy');
+    body.removeChild(textarea);
+    return successful;
+  } catch (fallbackError) {
+    console.warn('News-Prompt: Legacy clipboard copy failed', fallbackError);
+  }
+
+  return false;
+}
+
+function openNewsLink(url: string): void {
+  if (typeof window === 'undefined') {
     return;
   }
 
-  if ('clipboard' in navigator && typeof navigator.clipboard.writeText === 'function') {
-    await navigator.clipboard.writeText(text);
+  try {
+    const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (newWindow) {
+      newWindow.opener = null;
+      return;
+    }
+  } catch (openError) {
+    console.warn('News-Prompt: Link konnte nicht geöffnet werden', openError);
+  }
+
+  if (typeof document !== 'undefined') {
+    try {
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.rel = 'noopener noreferrer';
+      anchor.target = '_blank';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      return;
+    } catch (anchorError) {
+      console.warn('News-Prompt: Anchor-Fallback fehlgeschlagen', anchorError);
+    }
+  }
+
+  try {
+    window.location.href = url;
+  } catch (locationError) {
+    console.warn('News-Prompt: Link-Fallback fehlgeschlagen', locationError);
   }
 }
 
@@ -2038,13 +2106,12 @@ function scheduleNewsPromptSetup(options: {
             : `${template}\n\nTicker: ${symbol}`)
           : `Ticker: ${symbol}`;
 
-        await copyTextToClipboard(promptBody);
+        const copied = await copyTextToClipboard(promptBody);
+        if (!copied) {
+          console.warn('News-Prompt: Clipboard unavailable – prompt could not be copied');
+        }
         if (response.link) {
-          try {
-            window.open(response.link, '_blank', 'noopener,noreferrer');
-          } catch (openError) {
-            console.warn('News-Prompt: Link konnte nicht geöffnet werden', openError);
-          }
+          openNewsLink(response.link);
         }
       } catch (error) {
         console.error('News-Prompt: Kopiervorgang fehlgeschlagen', error);
