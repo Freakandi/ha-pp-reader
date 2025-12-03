@@ -11,7 +11,7 @@ import {
   selectPortfolioOverviewRows,
 } from '../portfolio';
 
-test('selectAccountOverviewRows surfaces fx_unavailable state and coverage badges', (t) => {
+test('selectAccountOverviewRows surfaces fx_unavailable state without coverage badges', (t) => {
   t.after(() => {
     storeTestApi.reset();
   });
@@ -38,12 +38,14 @@ test('selectAccountOverviewRows surfaces fx_unavailable state and coverage badge
   assert.strictEqual(row.coverage_ratio, 0.42);
   assert.strictEqual(row.provenance, 'cache');
   assert.strictEqual(row.metric_run_uuid, 'run-fx');
-  assert.ok(row.badges.length >= 1, 'expected coverage badge');
-
-  const coverageBadge = row.badges.find((badge) => badge.key === 'account-coverage');
-  assert(coverageBadge, 'missing account coverage badge');
-  assert.strictEqual(coverageBadge.tone, 'danger');
-  assert.match(coverageBadge.label, /FX-Abdeckung 42%/);
+  assert.ok(
+    !row.badges.some((badge) => badge.key === 'account-coverage'),
+    'expected coverage badge to be suppressed',
+  );
+  assert.ok(
+    row.badges.some((badge) => badge.key.startsWith('provenance-')),
+    'expected provenance badge to remain available',
+  );
 });
 
 test('selectAccountOverviewRows flattens structured provenance payloads for badges', (t) => {
@@ -74,7 +76,7 @@ test('selectAccountOverviewRows flattens structured provenance payloads for badg
   assert.strictEqual(provenanceBadge.label, 'Quelle: FX (CAD, HKD)');
 });
 
-test('selectPortfolioOverviewRows flags partial coverage portfolios with no metrics', (t) => {
+test('selectPortfolioOverviewRows flags partial coverage portfolios without coverage badges', (t) => {
   t.after(() => {
     storeTestApi.reset();
   });
@@ -103,11 +105,12 @@ test('selectPortfolioOverviewRows flags partial coverage portfolios with no metr
   assert.strictEqual(row.fx_unavailable, true);
   assert.strictEqual(row.coverage_ratio, 0.76);
   assert.strictEqual(row.provenance, 'derived');
-
-  const coverageBadge = row.badges.find((badge) => badge.key === 'portfolio-coverage');
-  assert(coverageBadge, 'missing portfolio coverage badge');
-  assert.strictEqual(coverageBadge.tone, 'warning');
-  assert.match(coverageBadge.label, /Abdeckung 76%/);
+  assert.ok(
+    !row.badges.some((badge) => badge.key === 'portfolio-coverage'),
+    'coverage badge should not be surfaced',
+  );
+  const provenanceBadge = row.badges.find((badge) => badge.key.startsWith('provenance-'));
+  assert(provenanceBadge, 'missing portfolio provenance badge');
 });
 
 test('selectPortfolioOverviewRows prefers EUR purchase_sum over native purchase_value', (t) => {

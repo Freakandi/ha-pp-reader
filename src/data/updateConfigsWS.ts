@@ -150,6 +150,15 @@ function toNullableString(value: unknown): string | null | undefined {
   return toNonEmptyString(value);
 }
 
+type AccountBadgeList = AccountOverviewRow['badges'];
+
+function visibleAccountBadges(badges: AccountBadgeList | undefined): AccountBadgeList {
+  return (badges ?? []).filter(
+    (badge) =>
+      !badge.key.endsWith('-coverage') && !badge.key.startsWith('provenance-'),
+  );
+}
+
 function normalizePerformanceMetrics(
   position: PortfolioPositionRecord,
 ): PerformanceMetricsPayload | null {
@@ -578,7 +587,7 @@ function updateAccountTable(accounts: AccountOverviewRow[], root: QueryRoot): vo
 
   if (eurContainer) {
     const eurRows = eurAccounts.map(account => ({
-      name: renderNameWithBadges(account.name, account.badges, {
+      name: renderNameWithBadges(account.name, visibleAccountBadges(account.badges), {
         containerClass: 'account-name',
         labelClass: 'account-name__label',
       }),
@@ -614,7 +623,7 @@ function updateAccountTable(accounts: AccountOverviewRow[], root: QueryRoot): vo
         : '';
 
       return {
-        name: renderNameWithBadges(account.name, account.badges, {
+        name: renderNameWithBadges(account.name, visibleAccountBadges(account.badges), {
           containerClass: 'account-name',
           labelClass: 'account-name__label',
         }),

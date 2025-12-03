@@ -29,6 +29,15 @@ interface AccountPartitions {
   fx: AccountOverviewRow[];
 }
 
+type AccountBadgeList = AccountOverviewRow['badges'];
+
+function visibleAccountBadges(badges: AccountBadgeList | undefined): AccountBadgeList {
+  return (badges ?? []).filter(
+    (badge) =>
+      !badge.key.endsWith('-coverage') && !badge.key.startsWith('provenance-'),
+  );
+}
+
 function partitionAccounts(
   rows: AccountOverviewRow[],
 ): AccountPartitions {
@@ -162,7 +171,7 @@ function buildAccountsTables(
   fxAccounts: AccountOverviewRow[],
 ): { eurTable: string; fxTable: string } {
   const eurRows = eurAccounts.map((account) => ({
-    name: renderNameWithBadges(account.name, account.badges, {
+    name: renderNameWithBadges(account.name, visibleAccountBadges(account.badges), {
       containerClass: 'account-name',
       labelClass: 'account-name__label',
     }),
@@ -180,7 +189,7 @@ function buildAccountsTables(
   );
 
   const fxRows = fxAccounts.map((account) => ({
-    name: renderNameWithBadges(account.name, account.badges, {
+    name: renderNameWithBadges(account.name, visibleAccountBadges(account.badges), {
       containerClass: 'account-name',
       labelClass: 'account-name__label',
     }),

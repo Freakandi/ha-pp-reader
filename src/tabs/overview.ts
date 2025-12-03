@@ -99,6 +99,18 @@ type SortableTableElement = HTMLTableElement & {
   __ppReaderPortfolioFallbackBound?: boolean;
 };
 
+type OverviewBadgeList = AccountOverviewRow['badges'];
+
+function withoutCoverageBadges(badges: OverviewBadgeList | undefined): OverviewBadgeList {
+  return (badges ?? []).filter((badge) => !badge.key.endsWith('-coverage'));
+}
+
+function stripAccountBadges(badges: OverviewBadgeList | undefined): OverviewBadgeList {
+  return withoutCoverageBadges(badges).filter(
+    (badge) => !badge.key.startsWith('provenance-'),
+  );
+}
+
 // === Modul-weiter State für Expand/Collapse & Lazy Load ===
 // On-Demand Aggregation liefert frische Portfolio-Werte; nur Positionen bleiben Lazy-Loaded.
 let _hassRef: HomeAssistant | null = null;
@@ -666,7 +678,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
       gainAbsAttributes += ' data-partial="true"';
     }
 
-      html += `<tr class="portfolio-row"
+    html += `<tr class="portfolio-row"
                   data-portfolio="${d.uuid}"
                   data-position-count="${positionCountAttr}"
                   data-current-value="${escapeAttribute(datasetCurrentValue)}"
@@ -681,7 +693,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                 data-provenance="${escapeAttribute(datasetProvenance)}"
                 data-metric-run-uuid="${escapeAttribute(datasetMetricRunUuid)}">`;
     const safeName = escapeHtml(d.name);
-    const badgeMarkup = renderBadgeList(d.badges, { containerClass: 'portfolio-badges' });
+    const badgeMarkup = renderBadgeList(withoutCoverageBadges(d.badges), {
+      containerClass: 'portfolio-badges',
+    });
     html += `<td>
         <button type="button"
                 class="${toggleClass}"
@@ -1560,7 +1574,7 @@ export async function renderDashboard(
       <div class="scroll-container account-table">
         ${makeTable(
     eurAccounts.map(account => ({
-      name: renderNameWithBadges(account.name, account.badges, {
+      name: renderNameWithBadges(account.name, stripAccountBadges(account.badges), {
         containerClass: 'account-name',
         labelClass: 'account-name__label',
       }),
@@ -1590,7 +1604,7 @@ export async function renderDashboard(
         : '';
 
       return {
-        name: renderNameWithBadges(account.name, account.badges, {
+        name: renderNameWithBadges(account.name, stripAccountBadges(account.badges), {
           containerClass: 'account-name',
           labelClass: 'account-name__label',
         }),

@@ -87,7 +87,11 @@ test('normaliseTransactionMarkersForTest filters, maps types, and formats labels
   const buyMarker = markers.find((entry) => entry.id === 'buy-1');
   assert.ok(buyMarker, 'expected buy marker');
   assert.match(buyMarker.label ?? '', /Kauf 20\b/, 'buy label should include share count');
-  assert.match(buyMarker.label ?? '', /120,43 EUR/, 'buy label should include native price and currency');
+  assert.match(
+    buyMarker.label ?? '',
+    /120,43 USD/,
+    'buy label should include native price using the security currency',
+  );
 
   const sellMarker = markers.find((entry) => entry.id === 'sell-1');
   assert.ok(sellMarker, 'expected sell marker');
@@ -97,6 +101,37 @@ test('normaliseTransactionMarkersForTest filters, maps types, and formats labels
   const outboundMarker = markers.find((entry) => entry.id === 'outbound-1');
   assert.ok(outboundMarker, 'expected outbound delivery mapped to sale');
   assert.match(outboundMarker.label ?? '', /Verkauf/, 'delivery type 3 should map to sale label');
+});
+
+test('normaliseTransactionMarkersForTest converts account currency prices using snapshot FX', () => {
+  const snapshot = {
+    currency_code: 'USD',
+    aggregation: {
+      purchase_total_security: 1200,
+      purchase_total_account: 1000,
+    },
+  };
+
+  const markers = normaliseTransactionMarkersForTest(
+    [
+      {
+        uuid: 'fx-1',
+        type: 0,
+        date: '2024-01-02',
+        price: 100,
+        shares: 1,
+        currency_code: 'EUR',
+      },
+    ],
+    'USD',
+    snapshot,
+  );
+
+  assert.strictEqual(markers.length, 1);
+  const marker = markers[0];
+  assert.ok(marker);
+  assert.strictEqual(marker.y, 120);
+  assert.match(marker.label ?? '', /120,00 USD/);
 });
 
 void test('purchase markers are rendered after switching history ranges', async () => {

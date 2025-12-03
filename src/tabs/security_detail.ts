@@ -147,8 +147,9 @@ export const __TEST_ONLY__ = {
   normaliseTransactionMarkersForTest: (
     transactions: unknown,
     fallbackCurrency: string | null | undefined,
+    snapshot?: SecuritySnapshotDetail | null,
   ): LineChartMarker[] =>
-    normaliseTransactionMarkers(transactions, fallbackCurrency),
+    normaliseTransactionMarkers(transactions, fallbackCurrency, snapshot),
 };
 
 function buildCachedSnapshotNotice(params: {
@@ -393,6 +394,44 @@ function toUppercaseCode(value: unknown): string | null {
   return normalized ? normalized.toUpperCase() : null;
 }
 
+function resolveAccountToSecurityFxRate(
+  snapshot: SecuritySnapshotDetail | null | undefined,
+): number | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  const aggregation = normalizeAggregationPayload(snapshot.aggregation);
+  const purchaseTotalSecurity =
+    toFiniteNumber(aggregation?.purchase_total_security) ??
+    toFiniteNumber((aggregation as { security_currency_total?: unknown })?.security_currency_total);
+  const purchaseTotalAccount =
+    toFiniteNumber(aggregation?.purchase_total_account) ??
+    toFiniteNumber((aggregation as { account_currency_total?: unknown })?.account_currency_total);
+
+  if (isPositiveFinite(purchaseTotalSecurity) && isPositiveFinite(purchaseTotalAccount)) {
+    const rate = purchaseTotalSecurity / purchaseTotalAccount;
+    if (isPositiveFinite(rate)) {
+      return rate;
+    }
+  }
+
+  const averageCost = normalizeAverageCostPayload(snapshot.average_cost);
+  const securityAverage =
+    toFiniteNumber(averageCost?.native) ?? toFiniteNumber(averageCost?.security);
+  const accountAverage =
+    toFiniteNumber(averageCost?.account) ?? toFiniteNumber(averageCost?.eur);
+
+  if (isPositiveFinite(securityAverage) && isPositiveFinite(accountAverage)) {
+    const rate = securityAverage / accountAverage;
+    if (isPositiveFinite(rate)) {
+      return rate;
+    }
+  }
+
+  return null;
+}
+
 function formatErrorLabel(error: unknown, fallback = 'Unbekannter Fehler'): string {
   if (typeof error === 'string') {
     const trimmed = error.trim();
@@ -598,13 +637,16 @@ function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
 function normaliseTransactionMarkers(
   transactions: unknown,
   fallbackCurrency: string | null | undefined,
+  snapshot: SecuritySnapshotDetail | null | undefined = null,
 ): LineChartMarker[] {
   if (!Array.isArray(transactions)) {
     return [];
   }
 
   const markers: LineChartMarker[] = [];
-  const defaultCurrency = (fallbackCurrency || '').toUpperCase() || 'EUR';
+  const securityCurrency = toUppercaseCode(fallbackCurrency);
+  const defaultCurrency = securityCurrency || 'EUR';
+  const accountToSecurityRate = resolveAccountToSecurityFxRate(snapshot);
 
   (transactions as SecurityHistoryTransaction[]).forEach((tx, index) => {
     const typeValue = typeof tx.type === 'number' ? tx.type : Number(tx.type);
@@ -615,15 +657,22 @@ function normaliseTransactionMarkers(
     }
 
     const parsedDate = parseTransactionDate(tx.date);
-    const price = toFiniteNumber(tx.price);
+    let price = toFiniteNumber(tx.price);
     if (!parsedDate || price == null) {
       return;
     }
 
-    const currency =
-      typeof tx.currency_code === 'string' && tx.currency_code.trim()
-        ? tx.currency_code.toUpperCase()
-        : defaultCurrency;
+    const transactionCurrency = toUppercaseCode(tx.currency_code);
+    const currency = securityCurrency ?? transactionCurrency ?? defaultCurrency;
+    if (
+      transactionCurrency &&
+      securityCurrency &&
+      transactionCurrency !== securityCurrency &&
+      isPositiveFinite(accountToSecurityRate)
+    ) {
+      price *= accountToSecurityRate;
+    }
+
     const shares = toFiniteNumber(tx.shares);
     const netPriceEur = toFiniteNumber((tx as { net_price_eur?: unknown }).net_price_eur);
 
@@ -649,6 +698,7 @@ function normaliseTransactionMarkers(
       payload: {
         type: typeLabel,
         currency,
+        transactionCurrency,
         shares,
         price,
         netPriceEur,
@@ -1794,6 +1844,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
           markers = normaliseTransactionMarkers(
             historyResponse.transactions,
             snapshot?.currency_code,
+            snapshot,
           );
           cache.set(rangeKey, historySeries);
           markers = Array.isArray(markers) ? markers : [];
@@ -1831,6 +1882,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
           markers = normaliseTransactionMarkers(
             historyResponse.transactions,
             snapshot?.currency_code,
+            snapshot,
           );
           markers = Array.isArray(markers) ? markers : [];
           markerCache.set(rangeKey, markers);
@@ -2034,6 +2086,7 @@ export async function renderSecurityDetail(
       markers = normaliseTransactionMarkers(
         historyResponse.transactions,
         effectiveSnapshot?.currency_code,
+        effectiveSnapshot,
       );
       cache.set(activeRange, historySeries);
       markers = Array.isArray(markers) ? markers : [];
@@ -2069,6 +2122,7 @@ export async function renderSecurityDetail(
       markers = normaliseTransactionMarkers(
         historyResponse.transactions,
         effectiveSnapshot?.currency_code,
+        effectiveSnapshot,
       );
       cache.set(activeRange, refreshedSeries);
       markers = Array.isArray(markers) ? markers : [];

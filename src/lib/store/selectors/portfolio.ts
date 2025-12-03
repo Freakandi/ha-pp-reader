@@ -2,7 +2,7 @@
  * Selector helpers that expose normalized dashboard state for view controllers.
  *
  * These functions keep all overview tables in sync with the canonical store by
- * providing pre-digested rows plus coverage/provenance badges mirrored from
+ * providing pre-digested rows plus provenance badges mirrored from
  * the backend normalization pipeline.
  */
 
@@ -59,8 +59,6 @@ export interface PortfolioOverviewRow {
   badges: OverviewBadge[];
 }
 
-type CoverageScope = "account" | "portfolio";
-
 const FALLBACK_ACCOUNT_ID = "unknown-account";
 
 function toFiniteNumber(value: unknown): number | null {
@@ -101,44 +99,6 @@ function clampRatio(value: number | null): number | null {
     return 1;
   }
   return value;
-}
-
-function formatPercentageLabel(value: number): string {
-  const hasFraction = Math.abs(value % 1) > 0.01;
-  return value.toLocaleString("de-DE", {
-    minimumFractionDigits: hasFraction ? 1 : 0,
-    maximumFractionDigits: 1,
-  });
-}
-
-function composeCoverageBadge(
-  ratio: number | null,
-  scope: CoverageScope,
-): OverviewBadge | null {
-  const clamped = clampRatio(ratio);
-  if (clamped == null) {
-    return null;
-  }
-  const percentValue = Math.round(clamped * 1000) / 10;
-  let tone: OverviewBadgeTone = "info";
-  if (clamped < 0.5) {
-    tone = "danger";
-  } else if (clamped < 0.9) {
-    tone = "warning";
-  }
-
-  const labelPrefix = scope === "account" ? "FX-Abdeckung" : "Abdeckung";
-  const description =
-    scope === "account"
-      ? "Anteil der verfügbaren FX-Daten für diese Kontoumrechnung."
-      : "Anteil der verfügbaren Kennzahlen für dieses Depot.";
-
-  return {
-    key: `${scope}-coverage`,
-    label: `${labelPrefix} ${formatPercentageLabel(percentValue)}%`,
-    tone,
-    description,
-  };
 }
 
 function titleCase(value: string): string {
@@ -264,10 +224,6 @@ function buildAccountRow(
   const fxRateTimestamp = toNonEmptyString(snapshot.fx_rate_timestamp);
 
   const badges: OverviewBadge[] = [];
-  const coverageBadge = composeCoverageBadge(coverageRatio, "account");
-  if (coverageBadge) {
-    badges.push(coverageBadge);
-  }
   const provenanceBadge = composeProvenanceBadge(provenance);
   if (provenanceBadge) {
     badges.push(provenanceBadge);
@@ -361,10 +317,6 @@ function buildPortfolioRow(
   const metricRunUuid = toNonEmptyString(snapshot.metric_run_uuid);
 
   const badges: OverviewBadge[] = [];
-  const coverageBadge = composeCoverageBadge(coverageRatio, "portfolio");
-  if (coverageBadge) {
-    badges.push(coverageBadge);
-  }
   const provenanceBadge = composeProvenanceBadge(provenance);
   if (provenanceBadge) {
     badges.push(provenanceBadge);
