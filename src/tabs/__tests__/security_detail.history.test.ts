@@ -134,6 +134,56 @@ test('normaliseTransactionMarkersForTest converts account currency prices using 
   assert.match(marker.label ?? '', /120,00 USD/);
 });
 
+test('transaction marker tooltips show type, shares, date, and currency', () => {
+  const env = installDomEnvironment();
+  try {
+    const host = env.document.createElement('div');
+    const markers = normaliseTransactionMarkersForTest(
+      [
+        {
+          uuid: 'tooltip-buy-1',
+          type: 0,
+          date: '2025-01-03',
+          price: 9,
+          shares: 150,
+          currency_code: 'EUR',
+        },
+      ],
+      'EUR',
+    );
+
+    const options = __TEST_ONLY__.getHistoryChartOptionsForTest(
+      host,
+      [{ date: new Date('2025-01-03T00:00:00Z'), close: 9 }],
+      { currency: 'EUR', markers },
+    );
+
+    const marker = markers[0];
+    assert.ok(marker, 'expected marker to build tooltip');
+    const xFormatted = new Date('2025-01-03T00:00:00Z').toLocaleDateString('de-DE');
+    const escapedDate = xFormatted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const yFormatted =
+      typeof options.yFormatter === 'function'
+        ? options.yFormatter(marker.y, marker, 0)
+        : '';
+    const tooltip =
+      options.markerTooltipRenderer?.({ marker, xFormatted, yFormatted }) ?? '';
+
+    assert.match(
+      tooltip,
+      new RegExp(`Kauf\\s+150\\s+Stück\\s+am\\s+${escapedDate}`),
+      'tooltip caption should include type, shares, and date',
+    );
+    assert.match(
+      tooltip,
+      /9,00(?:&nbsp;|\s)EUR/,
+      'tooltip value should include price and currency',
+    );
+  } finally {
+    env.restore();
+  }
+});
+
 void test('purchase markers are rendered after switching history ranges', async () => {
   const env = installDomEnvironment();
   const previousRequestAnimationFrame = globalThis.requestAnimationFrame;

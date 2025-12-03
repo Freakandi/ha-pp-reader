@@ -1620,6 +1620,55 @@ function getHistoryChartOptions(
   const marginLeft = Math.max(48, Math.min(72, Math.round(width * 0.075)));
   const marginRight = Math.max(28, Math.min(56, Math.round(width * 0.05)));
   const marginBottom = Math.max(40, Math.min(64, Math.round(height * 0.14)));
+  const markerTooltipRenderer = ({
+    marker,
+    xFormatted,
+    yFormatted,
+  }: {
+    marker: LineChartMarker;
+    xFormatted: string;
+    yFormatted: string;
+  }): string => {
+    const payload = (marker?.payload ?? {}) as {
+      type?: unknown;
+      shares?: unknown;
+      currency?: unknown;
+      price?: unknown;
+    };
+
+    const typeLabel = toNonEmptyTrimmedString(payload.type);
+    const sharesValue = toFiniteNumber(payload.shares);
+    const sharesLabel = sharesValue != null ? formatHoldings(sharesValue) : null;
+    const currencyLabel = toUppercaseCode(payload.currency) ?? safeCurrency;
+
+    const captionParts: string[] = [];
+    if (typeLabel) {
+      captionParts.push(typeLabel);
+    }
+    if (sharesLabel) {
+      captionParts.push(`${sharesLabel} Stück`);
+    }
+    if (xFormatted) {
+      captionParts.push(`am ${xFormatted}`);
+    }
+
+    const caption =
+      captionParts.join(' ').trim() ||
+      (typeof marker.label === 'string' ? marker.label : xFormatted);
+
+    const priceLabel =
+      typeof yFormatted === 'string' && yFormatted.trim()
+        ? yFormatted.trim()
+        : formatPrice(payload.price);
+    const valueLine = priceLabel
+      ? `${priceLabel}${currencyLabel ? `&nbsp;${currencyLabel}` : ''}`
+      : currencyLabel ?? '';
+
+    return `
+      <div class="chart-tooltip-date">${caption}</div>
+      <div class="chart-tooltip-value">${valueLine}</div>
+    `;
+  };
 
   return {
     width,
@@ -1636,6 +1685,7 @@ function getHistoryChartOptions(
       <div class="chart-tooltip-date">${xFormatted}</div>
       <div class="chart-tooltip-value">${yFormatted}&nbsp;${safeCurrency}</div>
     `,
+    markerTooltipRenderer,
     baseline:
       baselineValue != null
         ? {

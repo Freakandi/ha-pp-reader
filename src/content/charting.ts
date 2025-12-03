@@ -97,6 +97,12 @@ interface ChartDimensions {
   margin: ChartMargin;
 }
 
+interface ChartClientGeometry {
+  scaleX: number;
+  scaleY: number;
+  rect: DOMRect | null;
+}
+
 export interface LineChartOptions {
   series?: readonly LineChartInputDatum[];
   width?: number;
@@ -644,26 +650,35 @@ function updateTooltipPosition(
   state: LineChartInternalState,
   point: LineChartComputedPoint,
   pointerY: number | null,
+  geometry: ChartClientGeometry | null = null,
 ): void {
   const { tooltip, width, margin, height } = state;
   if (!tooltip) {
     return;
   }
 
+  const scaleX = geometry && Number.isFinite(geometry.scaleX) && geometry.scaleX > 0 ? geometry.scaleX : 1;
+  const scaleY = geometry && Number.isFinite(geometry.scaleY) && geometry.scaleY > 0 ? geometry.scaleY : 1;
   const baselineY = height - margin.bottom;
   tooltip.style.visibility = 'visible';
   tooltip.style.opacity = '1';
   const tooltipWidth = tooltip.offsetWidth || 0;
   const tooltipHeight = tooltip.offsetHeight || 0;
-  const horizontal = clamp(point.x - tooltipWidth / 2, margin.left, width - margin.right - tooltipWidth);
-  const maxVertical = Math.max(baselineY - tooltipHeight, 0);
+  const pointXClient = point.x * scaleX;
+  const horizontal = clamp(
+    pointXClient - tooltipWidth / 2,
+    margin.left * scaleX,
+    (width - margin.right) * scaleX - tooltipWidth,
+  );
+  const maxVertical = Math.max(baselineY * scaleY - tooltipHeight, 0);
   const padding = 12;
   const anchorY = Number.isFinite(pointerY)
     ? clamp(pointerY ?? 0, margin.top, baselineY)
     : point.y;
-  let vertical = anchorY - tooltipHeight - padding;
-  if (vertical < margin.top) {
-    vertical = anchorY + padding;
+  const anchorYClient = anchorY * scaleY;
+  let vertical = anchorYClient - tooltipHeight - padding;
+  if (vertical < margin.top * scaleY) {
+    vertical = anchorYClient + padding;
   }
   vertical = clamp(vertical, 0, maxVertical);
   const translateX = px(Math.round(horizontal));
@@ -703,19 +718,27 @@ function updateMarkerTooltipPosition(
   state: LineChartInternalState,
   entry: MarkerRenderEntry,
   pointerY: number | null,
+  geometry: ChartClientGeometry | null = null,
 ): void {
   const { markerTooltip, width, margin, height, tooltip } = state;
   if (!markerTooltip) {
     return;
   }
 
+  const scaleX = geometry && Number.isFinite(geometry.scaleX) && geometry.scaleX > 0 ? geometry.scaleX : 1;
+  const scaleY = geometry && Number.isFinite(geometry.scaleY) && geometry.scaleY > 0 ? geometry.scaleY : 1;
   const baselineY = height - margin.bottom;
   markerTooltip.style.visibility = 'visible';
   markerTooltip.style.opacity = '1';
   const tooltipWidth = markerTooltip.offsetWidth || 0;
   const tooltipHeight = markerTooltip.offsetHeight || 0;
-  const horizontal = clamp(entry.x - tooltipWidth / 2, margin.left, width - margin.right - tooltipWidth);
-  const maxVertical = Math.max(baselineY - tooltipHeight, 0);
+  const entryXClient = entry.x * scaleX;
+  const horizontal = clamp(
+    entryXClient - tooltipWidth / 2,
+    margin.left * scaleX,
+    (width - margin.right) * scaleX - tooltipWidth,
+  );
+  const maxVertical = Math.max(baselineY * scaleY - tooltipHeight, 0);
   const padding = 10;
 
   const priceTooltipRect = tooltip?.getBoundingClientRect();
@@ -727,19 +750,20 @@ function updateMarkerTooltipPosition(
   const anchorY = Number.isFinite(pointerY)
     ? clamp(pointerY ?? entry.y, margin.top, baselineY)
     : entry.y;
+  const anchorYClient = anchorY * scaleY;
 
   let vertical: number;
   if (priceTop != null && priceBottom != null) {
-    const priceAbovePointer = priceTop <= anchorY;
+    const priceAbovePointer = priceTop <= anchorYClient;
     if (priceAbovePointer) {
       vertical = priceTop - tooltipHeight - padding;
     } else {
       vertical = priceBottom + padding;
     }
   } else {
-    vertical = anchorY - tooltipHeight - padding;
-    if (vertical < margin.top) {
-      vertical = anchorY + padding;
+    vertical = anchorYClient - tooltipHeight - padding;
+    if (vertical < margin.top * scaleY) {
+      vertical = anchorYClient + padding;
     }
   }
 
@@ -795,8 +819,25 @@ function attachPointerHandlers(
     }
 
     const rect = state.svg.getBoundingClientRect();
-    const pointerX = event.clientX - rect.left;
-    const pointerY = event.clientY - rect.top;
+    const viewBoxWidth = state.width || DEFAULT_WIDTH;
+    const viewBoxHeight = state.height || DEFAULT_HEIGHT;
+    const scaleX =
+      rect.width && Number.isFinite(rect.width) && Number.isFinite(viewBoxWidth) && viewBoxWidth > 0
+        ? rect.width / viewBoxWidth
+        : 1;
+    const scaleY =
+      rect.height && Number.isFinite(rect.height) && Number.isFinite(viewBoxHeight) && viewBoxHeight > 0
+        ? rect.height / viewBoxHeight
+        : 1;
+    const clientToViewBoxX = scaleX > 0 ? 1 / scaleX : 1;
+    const clientToViewBoxY = scaleY > 0 ? 1 / scaleY : 1;
+    const pointerX = (event.clientX - rect.left) * clientToViewBoxX;
+    const pointerY = (event.clientY - rect.top) * clientToViewBoxY;
+    const geometry: ChartClientGeometry = {
+      rect,
+      scaleX,
+      scaleY,
+    };
     let closest = state.points[0];
     let minDistance = Math.abs(pointerX - closest.x);
 
@@ -828,13 +869,13 @@ function attachPointerHandlers(
 
     if (state.tooltip) {
       state.tooltip.innerHTML = formatTooltip(state, closest);
-      updateTooltipPosition(state, closest, pointerY);
+      updateTooltipPosition(state, closest, pointerY, geometry);
     }
 
     const markerHit = findNearestMarker(state, pointerX, pointerY);
     if (markerHit && state.markerTooltip) {
       state.markerTooltip.innerHTML = formatMarkerTooltip(state, markerHit);
-      updateMarkerTooltipPosition(state, markerHit, pointerY);
+      updateMarkerTooltipPosition(state, markerHit, pointerY, geometry);
     } else {
       hideMarkerTooltip(state);
     }
