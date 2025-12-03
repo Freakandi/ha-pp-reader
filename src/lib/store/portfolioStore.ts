@@ -281,23 +281,39 @@ export function setPortfolioPositionsSnapshot(
       }
     });
 
-    const mergeObjectField = (field: keyof NormalizedPositionSnapshot) => {
-      const value = patch[field];
-      if (value && typeof value === 'object') {
-        const baseObj =
-          base && base[field] && typeof base[field] === 'object'
-            ? (base[field] as Record<string, unknown>)
-            : {};
-        mergedTarget[field] = {
-          ...baseObj,
-          ...(value as Record<string, unknown>),
-        };
-      } else if (value !== undefined && value !== null) {
-        mergedTarget[field] = value;
+    const mergeObjectField = (
+      field: keyof NormalizedPositionSnapshot,
+      preserveKeys: readonly string[] = [],
+    ) => {
+      const value = patch[field] as Record<string, unknown> | null | undefined;
+      const baseValue =
+        base && base[field] && typeof base[field] === 'object'
+          ? (base[field] as Record<string, unknown>)
+          : undefined;
+
+      if (!value || typeof value !== 'object') {
+        if (value !== undefined) {
+          mergedTarget[field] = value;
+        }
+        return;
       }
+
+      const mergedValue: Record<string, unknown> = {
+        ...(baseValue ?? {}),
+        ...value,
+      };
+
+      preserveKeys.forEach((key) => {
+        const preserved = baseValue?.[key];
+        if (preserved !== undefined && preserved !== null) {
+          mergedValue[key] = preserved;
+        }
+      });
+
+      mergedTarget[field] = mergedValue;
     };
 
-    mergeObjectField('performance');
+    mergeObjectField('performance', ['gain_pct', 'total_change_pct']);
     mergeObjectField('aggregation');
     mergeObjectField('average_cost');
     mergeObjectField('data_state');

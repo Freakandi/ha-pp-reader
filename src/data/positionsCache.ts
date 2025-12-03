@@ -80,6 +80,30 @@ function clonePosition(position: PortfolioPositionRecord): PortfolioPositionReco
   return clone;
 }
 
+function mergeObjectWithPreservedKeys(
+  base: Record<string, unknown> | undefined,
+  patch: Record<string, unknown> | null,
+  preserveKeys: readonly string[] = [],
+): Record<string, unknown> | null {
+  if (!patch || typeof patch !== 'object') {
+    return patch;
+  }
+
+  const merged = {
+    ...(base && typeof base === 'object' ? base : {}),
+    ...patch,
+  };
+
+  preserveKeys.forEach(key => {
+    const value = base?.[key];
+    if (value !== undefined && value !== null) {
+      (merged as Record<string, unknown>)[key] = value;
+    }
+  });
+
+  return merged;
+}
+
 function mergePositionRecords(
   base: PortfolioPositionRecord | undefined,
   patch: PortfolioPositionRecord,
@@ -132,7 +156,19 @@ function mergePositionRecords(
     }
   };
 
-  mergeObjectField('performance');
+  const performancePatch = patch.performance as Record<string, unknown> | null | undefined;
+  const basePerformance =
+    base && base.performance && typeof base.performance === 'object'
+      ? (base.performance as Record<string, unknown>)
+      : undefined;
+
+  if (performancePatch !== undefined) {
+    merged.performance = mergeObjectWithPreservedKeys(basePerformance, performancePatch, [
+      'gain_pct',
+      'total_change_pct',
+    ]) as PortfolioPositionRecord['performance'];
+  }
+
   mergeObjectField('aggregation');
   mergeObjectField('average_cost');
   mergeObjectField('data_state');
