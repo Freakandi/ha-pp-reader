@@ -404,10 +404,18 @@ function resolveAccountToSecurityFxRate(
   const aggregation = normalizeAggregationPayload(snapshot.aggregation);
   const purchaseTotalSecurity =
     toFiniteNumber(aggregation?.purchase_total_security) ??
-    toFiniteNumber((aggregation as { security_currency_total?: unknown }).security_currency_total);
+    (aggregation
+      ? toFiniteNumber(
+          (aggregation as { security_currency_total?: unknown }).security_currency_total,
+        )
+      : null);
   const purchaseTotalAccount =
     toFiniteNumber(aggregation?.purchase_total_account) ??
-    toFiniteNumber((aggregation as { account_currency_total?: unknown }).account_currency_total);
+    (aggregation
+      ? toFiniteNumber(
+          (aggregation as { account_currency_total?: unknown }).account_currency_total,
+        )
+      : null);
 
   if (isPositiveFinite(purchaseTotalSecurity) && isPositiveFinite(purchaseTotalAccount)) {
     const rate = purchaseTotalSecurity / purchaseTotalAccount;

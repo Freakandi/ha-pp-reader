@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from custom_components.pp_reader.const import (
@@ -39,6 +40,7 @@ async def test_enrichment_pipeline_runs_stages(hass, tmp_path, monkeypatch) -> N
     progress_events: list[dict[str, Any]] = []
     completed_payloads: list[dict[str, Any]] = []
 
+    @callback
     def _capture_event(event) -> None:
         progress_events.append(event.data)
 
@@ -89,6 +91,7 @@ async def test_enrichment_pipeline_records_fx_errors(
 
     progress_events: list[dict[str, Any]] = []
 
+    @callback
     def _capture_event(event) -> None:
         progress_events.append(event.data)
 
@@ -259,6 +262,7 @@ async def test_enrichment_pipeline_disabled_still_runs_metrics(
 
     stages: list[str] = []
 
+    @callback
     def _capture_event(event) -> None:
         stages.append(event.data["stage"])
 
