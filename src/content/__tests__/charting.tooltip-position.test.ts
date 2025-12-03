@@ -76,21 +76,21 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
       configurable: true,
     });
 
-    overlay.dispatchEvent(
-      new dom.window.PointerEvent('pointermove', {
-        clientX: lastPoint.x * scaleX,
-        clientY: lastPoint.y * scaleY,
-        bubbles: true,
-      }),
-    );
+    const pointerMoveEvent = new jsdomWindow.PointerEvent('pointermove', {
+      clientX: lastPoint.x * scaleX,
+      clientY: lastPoint.y * scaleY,
+      bubbles: true,
+    });
+    overlay.dispatchEvent(pointerMoveEvent);
 
     const tooltip: HTMLElement | null = state.tooltip ?? null;
     assert.ok(tooltip, 'expected tooltip element');
 
     const transform = tooltip.style.transform;
     const match = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(transform);
-    assert.ok(match && match[1], 'tooltip transform should be set after pointer move');
-    const translateX = Number.parseFloat(match[1] ?? 'NaN');
+    const translateXRaw = match?.[1];
+    assert.ok(translateXRaw, 'tooltip transform should be set after pointer move');
+    const translateX = Number.parseFloat(translateXRaw);
     const tooltipWidth = tooltip.offsetWidth || 0;
     const tooltipCenter = translateX + tooltipWidth / 2;
 
@@ -101,7 +101,9 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
     );
     assert.ok(
       Math.abs(tooltipCenter - expectedCenterX) < 1,
-      `tooltip center ${tooltipCenter} should align with scaled point ${expectedCenterX}`,
+      `tooltip center ${String(tooltipCenter)} should align with scaled point ${String(
+        expectedCenterX,
+      )}`,
     );
   } finally {
     globalWithDom.window = previousWindow;
