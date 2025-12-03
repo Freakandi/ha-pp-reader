@@ -11,7 +11,8 @@ You are Codex, the coding assistant for the Home Assistant integration Portfolio
 - Keep `dev` pristine: no rebases/resets on shared branches and do not drop unrelated local work.
 - Follow `AGENTS.md` instructions; stop and report if the release version cannot be determined from the top `CHANGELOG.md` entry.
 - Version alignment is mandatory: `custom_components/pp_reader/manifest.json` and `hacs.json` must match the release version before running release scripts.
-- Run linting/validation commands from inside .worktrees/main to avoid mutating the root checkout (prefer env overrides like RUFF_EXCLUDE=.worktrees/** over config edits).
+- Run linting/tests on the full release branch **before** trimming; after trimming, only re-run commands that still make sense on the reduced tree.
+- Do not have the source branch checked out when calling `./scripts/prepare_main_pr.sh` (create/switch away first) so the worktree attach succeeds.
 
 ## Workflow
 1) **Sanity check**: `git status` (must be clean). `git fetch origin`, `git switch dev`, `git pull --ff-only`.
@@ -19,14 +20,17 @@ You are Codex, the coding assistant for the Home Assistant integration Portfolio
 3) **Branch**: create and switch to `v<release_version>` from `dev` (use a unique suffix if the name already exists).
 4) **Version alignment**: ensure `manifest.json` and `hacs.json` `version` fields equal `<release_version>`; update them here if needed.
 5) **Environment**: activate `venv-ha`; ensure Node deps are present (`npm install` if `node_modules/` is missing or stale).
-6) **Build + promote**: run `npm run build`, then execute `./scripts/prepare_main_pr.sh dev main` to sync release-ready artifacts.
-7) **Validation**: run `./scripts/lint`; run `pytest` (or `pytest --cov=custom_components/pp_reader --cov-report=term-missing`); run `npm run lint:ts`, `npm run typecheck`, and `npm test` if frontend code/assets were involved (`npm run build` counts).
-8) **Commit & push**: verify only intended files changed, stage, commit (`git commit -m "Release: v<release_version>"`), and `git push -u origin -v<release_version>`.
-9) **PR draft**: prepare a PR targeting `main` summarizing notable changes, confirm `./scripts/prepare_main_pr.sh dev main` ran, and list all tests/commands executed.
+6) **Build**: run `npm run build` to refresh bundled assets.
+7) **Validation (full tree)**: run `./scripts/lint`; run `pytest` (or `pytest --cov=custom_components/pp_reader --cov-report=term-missing`); run `npm run lint:ts`, `npm run typecheck`, and `npm test` (frontend build counts as touching UI).
+8) **Release-branch commit**: verify changes, stage, and commit on `v<release_version>` (`git commit -m "Release prep: v<release_version>"`).
+9) **Trimmed PR branch**: switch off `v<release_version>` (back to `dev`), then create the trimmed PR branch via `./scripts/prepare_main_pr.sh v<release_version> v<release_version>-main` (worktree lands in `.worktrees/v<release_version>-main` with only release-relevant files).
+10) **Finalize in worktree**: inside `.worktrees/v<release_version>-main`, review the trimmed diff, rerun any safe validations that still apply to the reduced tree (skip commands that require stripped paths), and stage changes.
+11) **Commit & publish PR branch**: commit in the worktree (`git commit -m "Release: v<release_version>"`) and push (`git push -u origin v<release_version>-main`).
+12) **PR to main**: create the PR from `v<release_version>-main` to `main` (e.g., `gh pr create --fill --base main --head v<release_version>-main`), summarizing notable changes, confirming `./scripts/prepare_main_pr.sh` ran, listing all tests/commands executed, and tag `@codex` in the PR body so it lands in automated review.
 
 ## Response
 - State whether version alignment succeeded and note any updates made.
 - List commands executed (call out skips/failures).
-- Provide branch name, commit SHA (if created), and push status.
-- Supply a ready-to-use PR title and body for the `dev` to `main` release.
+- Provide branch names, commit SHAs (if created), push status, and PR link/status targeting `main`.
+- Supply a ready-to-use PR title and body for the `v<release_version>-main` to `main` release (or the text used if already created), including the `@codex` tag.
 - Mention any blockers or follow-ups needed.
