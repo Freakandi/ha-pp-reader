@@ -510,6 +510,35 @@ def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
     return {k: v for k, v in updates.items() if isinstance(v, int) and v > 0}
 
 
+def _load_securities_missing_current_value(db_path: Path) -> set[str]:
+    """
+    Find positions with holdings and a price but missing current value.
+
+    These entries are otherwise never refreshed when prices stay unchanged,
+    leading to market-value=0 in snapshots.
+    """
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            cur = conn.execute(
+                """
+                SELECT ps.security_uuid
+                FROM portfolio_securities ps
+                JOIN securities s ON s.uuid = ps.security_uuid
+                WHERE ps.current_holdings > 0
+                  AND (ps.current_value IS NULL OR ps.current_value = 0)
+                  AND s.last_price IS NOT NULL
+                  AND s.last_price != 0
+                """
+            )
+            return {row[0] for row in cur.fetchall() if row[0]}
+    except sqlite3.Error:
+        _LOGGER.debug(
+            "prices_cycle: missing current_value Lookup fehlgeschlagen",
+            exc_info=True,
+        )
+        return set()
+
+
 def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR0915 - SQL refresh mirrors legacy flow
     db_path: Path, scaled_updates: dict[str, int]
 ) -> set[str]:
@@ -1164,6 +1193,20 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 )
                 _LOGGER.warning(warn_msg, exc_info=True)
 
+            missing_current_values: set[str] = set()
+            if db_path:
+                try:
+                    missing_current_values = await async_run_executor_job(
+                        hass,
+                        _load_securities_missing_current_value,
+                        Path(db_path),
+                    )
+                except Exception:  # noqa: BLE001 - defensive logging
+                    _LOGGER.debug(
+                        "prices_cycle: missing current_value Scan fehlgeschlagen",
+                        exc_info=True,
+                    )
+
             # Drift
             _process_currency_drift_skip_none(
                 hass,
@@ -1188,9 +1231,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
 
             if scaled_updates and db_path:
                 scaled_updates = _filter_invalid_updates(scaled_updates)
-                if not scaled_updates:
-                    changed_count = 0
-                else:
+                if scaled_updates:
                     fetched_at = _utc_now_iso()
                     updated_rows = await async_run_executor_job(
                         hass,
@@ -1210,47 +1251,52 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             detected_changes,
                             updated_rows,
                         )
-                    if updated_rows > 0:
-                        try:
-                            await async_run_executor_job(
-                                hass,
-                                _refresh_impacted_portfolio_securities,
-                                db_path,
-                                scaled_updates,
-                            )
-                        except Exception:  # noqa: BLE001 - Logging für Diagnose
-                            _LOGGER.debug(
-                                (
-                                    "prices_cycle: Refresh portfolio_securities "
-                                    "fehlgeschlagen"
-                                ),
-                                exc_info=True,
-                            )
-                    changed_count = updated_rows
-            else:
-                changed_count = 0
 
+            valuation_refresh_targets: set[str] = (
+                set(scaled_updates.keys()) if scaled_updates else set()
+            )
+            if missing_current_values:
+                valuation_refresh_targets.update(missing_current_values)
+
+            refresh_trigger_count = len(valuation_refresh_targets)
+
+            if valuation_refresh_targets and db_path:
+                try:
+                    await async_run_executor_job(
+                        hass,
+                        _refresh_impacted_portfolio_securities,
+                        db_path,
+                        {
+                            sec_id: scaled_updates.get(sec_id, 0)
+                            if scaled_updates
+                            else 0
+                            for sec_id in valuation_refresh_targets
+                        },
+                    )
+                except Exception:  # noqa: BLE001 - Logging für Diagnose
+                    _LOGGER.debug(
+                        ("prices_cycle: Refresh portfolio_securities fehlgeschlagen"),
+                        exc_info=True,
+                    )
+
+            updated_security_uuids_final = valuation_refresh_targets
             revaluation_result = {"portfolio_values": None, "portfolio_positions": None}
             snapshot_bundle: SnapshotBundle | None = None
             snapshot_lookup: dict[str, dict[str, Any]] = {}
 
-            if changed_count > 0:
-                updated_security_uuids_final = (
-                    set(scaled_updates.keys()) if scaled_updates else set()
-                )
-                if updated_security_uuids_final:
-                    try:
-                        with sqlite3.connect(str(db_path)) as reval_conn:
-                            revaluation_result = await revalue_after_price_updates(
-                                hass, reval_conn, updated_security_uuids_final
-                            )
-                    except sqlite3.Error:
-                        _LOGGER.warning(
-                            "prices_cycle: Fehler bei partieller Revaluation",
-                            exc_info=True,
+            if refresh_trigger_count > 0 and updated_security_uuids_final:
+                try:
+                    with sqlite3.connect(str(db_path)) as reval_conn:
+                        revaluation_result = await revalue_after_price_updates(
+                            hass, reval_conn, updated_security_uuids_final
                         )
+                except sqlite3.Error:
+                    _LOGGER.warning(
+                        "prices_cycle: Fehler bei partieller Revaluation",
+                        exc_info=True,
+                    )
             # Events
-            if changed_count > 0:
+            if refresh_trigger_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
 
                 if pv_dict:
@@ -1298,7 +1344,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                                     "changed_secs=%d payload=%s"
                                 ),
                                 len(pv_payload),
-                                detected_changes,
+                                len(updated_security_uuids_final),
                                 pv_payload,
                             )
                             _push_update(hass, entry_id, "portfolio_values", pv_payload)
@@ -1308,7 +1354,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                                     "prices_cycle: Geänderte Preise (%s) aber leere "
                                     "pv_payload nach Transformation"
                                 ),
-                                changed_count,
+                                refresh_trigger_count,
                             )
                     except (HomeAssistantError, ValueError):
                         _LOGGER.warning(
@@ -1322,7 +1368,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             "prices_cycle: Keine portfolio_values (revaluation leer) "
                             "obwohl changed=%s"
                         ),
-                        changed_count,
+                        refresh_trigger_count,
                     )
 
                 # Positions: reuse falls vorhanden, sonst load
@@ -1350,7 +1396,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     else:
                         _LOGGER.debug(
                             "prices_cycle: Keine positions_map (skip push) changed=%s",
-                            changed_count,
+                            refresh_trigger_count,
                         )
                 except (HomeAssistantError, sqlite3.Error, ValueError):
                     _LOGGER.warning(
@@ -1359,7 +1405,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     )
             quotes_returned = len(all_quotes)
             await _schedule_metrics_after_price_change(
-                hass, entry_id, db_path, changed_count
+                hass, entry_id, db_path, refresh_trigger_count
             )
             if quotes_returned > 0:
                 if chunk_failure_count == 0:
@@ -1377,7 +1423,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 "symbols_total": len(symbols),
                 "batches": batches_count,
                 "quotes_returned": quotes_returned,
-                "changed": changed_count,
+                "changed": refresh_trigger_count,
                 "errors": store.get("price_error_counter", 0),
                 "duration_ms": int((time.time() - cycle_start_ts) * 1000),
                 "skipped_running": skipped_running,
