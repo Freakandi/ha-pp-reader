@@ -12,7 +12,7 @@ _Noch keine Einträge._
 
 ### Fixed
 - The “Check recent news via ChatGPT” button now copies the prompt reliably (including HA iOS WebView/Edge) and opens the ChatGPT link with multi-step fallbacks instead of silently failing.
-- Selecting a security with current value 0 now renders the zero value instead of a missing placeholder, keeping headers and summaries consistent.
+- Some positions were shown with a value of 0 in the overview tab, despite a price being available, this has been fixed.
 
 ## [0.15.0] - 2025-11-30
 
