@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -25,19 +24,30 @@ from homeassistant.components.panel_custom import (
 )
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_time_change,
+    async_track_time_interval,
+)
 
 from .const import (
     CONF_DB_PATH,
     CONF_FILE_PATH,
+    CONF_FX_UPDATE_INTERVAL_SECONDS,
     CONF_HISTORY_RETENTION_YEARS,
+    CONFIG_ENTRY_VERSION,
+    DEFAULT_DB_SUBDIR,
+    DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
     DOMAIN,
+    MIN_FX_UPDATE_INTERVAL_SECONDS,
 )
+from .currencies import fx as fx_module
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
 from .data import websocket as websocket_module
+from .prices import price_service as price_service_module
 from .util import async_run_executor_job
+from .util.paths import resolve_storage_path
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -52,9 +62,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.typing import ConfigType
-
-_NAMESPACE_ALIAS = "pp_reader"
-sys.modules[_NAMESPACE_ALIAS] = sys.modules[__name__]
 
 PRICE_LOGGER_NAMES = [
     "custom_components.pp_reader.prices",
@@ -77,9 +84,12 @@ CANCEL_EXCEPTIONS: tuple[type[Exception], ...] = (
 
 def _get_price_service_module() -> ModuleType:
     """Return the price service module on demand."""
-    from .prices import price_service as price_service_module
-
     return price_service_module
+
+
+def _get_fx_module() -> ModuleType:
+    """Return the FX helper module on demand."""
+    return fx_module
 
 
 def _build_panel_config(
@@ -131,6 +141,40 @@ def _extract_feature_flag_options(options: Mapping[str, Any]) -> dict[str, bool]
         normalized[name] = bool(raw_value)
 
     return normalized
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Handle config entry migrations."""
+    version = entry.version or 1
+    if version >= CONFIG_ENTRY_VERSION:
+        return True
+
+    _LOGGER.info(
+        "Migriere Config Entry %s von Version %s -> %s",
+        entry.entry_id,
+        version,
+        CONFIG_ENTRY_VERSION,
+    )
+
+    new_options = dict(entry.options or {})
+    options_changed = False
+    if "feature_flags" in new_options:
+        new_options.pop("feature_flags")
+        options_changed = True
+
+    if options_changed:
+        hass.config_entries.async_update_entry(
+            entry,
+            version=CONFIG_ENTRY_VERSION,
+            options=new_options,
+        )
+    else:
+        hass.config_entries.async_update_entry(
+            entry,
+            version=CONFIG_ENTRY_VERSION,
+        )
+
+    return True
 
 
 def _store_feature_flags(
@@ -194,6 +238,20 @@ def _get_price_interval_seconds(options: Mapping[str, Any]) -> int:
     return interval
 
 
+def _get_fx_interval_seconds(options: Mapping[str, Any]) -> int:
+    """Normalize the configured FX refresh interval with sane defaults."""
+    raw_interval = options.get(
+        CONF_FX_UPDATE_INTERVAL_SECONDS, DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+    )
+    try:
+        interval = int(raw_interval)
+    except (TypeError, ValueError):
+        return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+    if interval < MIN_FX_UPDATE_INTERVAL_SECONDS:
+        return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+    return interval
+
+
 def _schedule_price_interval(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -216,6 +274,132 @@ def _schedule_price_interval(
     store["price_interval_applied"] = interval
     _LOGGER.debug(
         "Preis-Service Intervall-Task geplant: every %ss (entry_id=%s)",
+        interval,
+        entry.entry_id,
+    )
+    return remove_listener
+
+
+async def _run_fx_refresh_once(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+) -> None:
+    """Ensure current FX rates are cached for active currencies."""
+    fx_module = _get_fx_module()
+    from custom_components.pp_reader.data.fx_backfill import (  # noqa: PLC0415
+        backfill_fx,
+    )
+
+    db_path = store.get("db_path")
+    if db_path is None:
+        _LOGGER.debug(
+            "FX-Refresh: Kein db_path im Store gefunden (entry_id=%s)",
+            entry.entry_id,
+        )
+        return
+    if not isinstance(db_path, Path):
+        db_path = Path(db_path)
+        store["db_path"] = db_path
+
+    fx_lock = store.get("fx_lock")
+    if not isinstance(fx_lock, asyncio.Lock):
+        fx_lock = asyncio.Lock()
+        store["fx_lock"] = fx_lock
+
+    if fx_lock.locked():
+        _LOGGER.debug(
+            "FX-Refresh: Vorheriger Lauf noch aktiv, Skip (entry_id=%s)",
+            entry.entry_id,
+        )
+        return
+
+    async with fx_lock:
+        try:
+            currencies = await hass.async_add_executor_job(
+                fx_module.discover_active_currencies,
+                db_path,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Refresh: Fehler beim Ermitteln aktiver Währungen (entry_id=%s)",
+                entry.entry_id,
+                exc_info=True,
+            )
+            return
+
+        if not currencies:
+            _LOGGER.debug(
+                "FX-Refresh: Keine Nicht-EUR Währungen aktiv (entry_id=%s)",
+                entry.entry_id,
+            )
+            store["fx_last_refresh"] = datetime.now(UTC)
+            return
+
+        reference = datetime.now(UTC)
+        try:
+            backfill_summary = await backfill_fx(
+                db_path=db_path,
+                currencies=currencies,
+                end=reference,
+            )
+            inserted_total = sum(backfill_summary.values())
+            if inserted_total:
+                _LOGGER.info(
+                    "FX-Refresh: Backfill eingefügt=%d für %s (entry_id=%s)",
+                    inserted_total,
+                    sorted(backfill_summary.keys()),
+                    entry.entry_id,
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Refresh: Backfill fehlgeschlagen (entry_id=%s)",
+                entry.entry_id,
+                exc_info=True,
+            )
+
+        # Keep the latest-day fetch to refresh today's rate even after backfill.
+        try:
+            await fx_module.ensure_exchange_rates_for_dates(
+                [reference],
+                currencies,
+                db_path,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Refresh: Fehler beim Aktualisieren der Wechselkurse (entry_id=%s)",
+                entry.entry_id,
+                exc_info=True,
+            )
+        else:
+            store["fx_last_refresh"] = reference
+            _LOGGER.debug(
+                "FX-Refresh: Aktualisiert für %s (entry_id=%s)",
+                sorted(currencies),
+                entry.entry_id,
+            )
+
+
+def _schedule_fx_interval(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+    interval: int,
+) -> Callable[[], None]:
+    """Schedule recurring FX cache refresh."""
+
+    async def _scheduled_fx_cycle(_now: datetime) -> None:
+        await _run_fx_refresh_once(hass, entry, store)
+
+    remove_listener = async_track_time_interval(
+        hass,
+        _scheduled_fx_cycle,
+        timedelta(seconds=interval),
+    )
+    store["fx_task_cancel"] = remove_listener
+    store["fx_interval_applied"] = interval
+    _LOGGER.debug(
+        "FX-Service Intervall-Task geplant: every %ss (entry_id=%s)",
         interval,
         entry.entry_id,
     )
@@ -271,15 +455,15 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
         if inspect.isawaitable(register_result):
             await register_result
         _LOGGER.info(
-            "✅ Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
+            "Custom Panel 'ppreader' registriert (cache_bust=%s, entry_id=%s)",
             cache_bust,
             entry.entry_id,
         )
     except ValueError:
-        _LOGGER.exception("❌ Fehler bei der Registrierung des Panels")
+        _LOGGER.exception("Fehler bei der Registrierung des Panels")
     except AttributeError:
         _LOGGER.exception(
-            "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+            "panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
         )
 
 
@@ -316,10 +500,10 @@ async def _ensure_placeholder_panel(hass: HomeAssistant) -> None:
             await register_result
         _LOGGER.debug("Panel-Placeholder 'ppreader' registriert")
     except ValueError:
-        _LOGGER.exception("❌ Fehler bei der Registrierung des Panel-Platzhalters")
+        _LOGGER.exception("Fehler bei der Registrierung des Panel-Platzhalters")
     except AttributeError:
         _LOGGER.exception(
-            "❌ panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
+            "panel_custom.async_register_panel nicht verfügbar (HA-Version prüfen)"
         )
 
 
@@ -340,6 +524,60 @@ def _initialize_price_tasks(
     if not store.get("price_task_cancel"):
         interval = _get_price_interval_seconds(options)
         _schedule_price_interval(hass, entry, store, interval)
+
+
+def _initialize_fx_tasks(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+    options: Mapping[str, Any],
+) -> None:
+    """Ensure FX refresh scheduling is active."""
+    store.setdefault("fx_task_cancel", None)
+    store.setdefault("fx_interval_applied", None)
+    if not isinstance(store.get("fx_lock"), asyncio.Lock):
+        store["fx_lock"] = asyncio.Lock()
+
+    if not store.get("fx_task_cancel"):
+        interval = _get_fx_interval_seconds(options)
+        _schedule_fx_interval(hass, entry, store, interval)
+
+    hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
+
+
+def _initialize_history_tasks(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    store: dict[str, Any],
+) -> None:
+    """Schedule periodic processing of price history jobs."""
+
+    async def _run_history_queue(_now: datetime) -> None:
+        coordinator: Any = store.get("coordinator")
+        if coordinator is None:
+            return
+        hass.async_create_task(
+            coordinator._plan_and_process_history_jobs(reason="scheduled")  # noqa: SLF001
+        )
+
+    remove_listener = async_track_time_change(
+        hass,
+        _run_history_queue,
+        hour=[2, 14],
+        minute=0,
+        second=0,
+    )
+    store["history_task_cancel"] = remove_listener
+    _LOGGER.debug(
+        "Price-History Scheduler aktiviert (02:00/14:00 lokal) entry_id=%s",
+        entry.entry_id,
+    )
+
+    coordinator: Any = store.get("coordinator")
+    if coordinator is not None:
+        hass.async_create_task(
+            coordinator._plan_and_process_history_jobs(reason="startup")  # noqa: SLF001
+        )
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
@@ -374,9 +612,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         websocket_api.async_register_command(hass, websocket.ws_get_portfolio_positions)
         websocket_api.async_register_command(hass, websocket.ws_get_security_snapshot)
         websocket_api.async_register_command(hass, websocket.ws_get_security_history)
-        # _LOGGER.debug("✅ Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
+        websocket_api.async_register_command(hass, websocket.ws_get_news_prompt)
+        # _LOGGER.debug("Websocket-Befehle erfolgreich registriert.")  # noqa: ERA001
     except TypeError:
-        _LOGGER.exception("❌ Fehler bei der Registrierung der Websocket-Befehle")
+        _LOGGER.exception("Fehler bei der Registrierung der Websocket-Befehle")
 
     return True
 
@@ -435,6 +674,20 @@ async def _async_reload_entry_on_update(
                 exc_info=True,
             )
 
+    fx_cancel = store.get("fx_task_cancel")
+    fx_interval = store.get("fx_interval_applied")
+    if fx_cancel:
+        try:
+            fx_cancel()
+        except CANCEL_EXCEPTIONS:  # pragma: no cover (defensiv)
+            _LOGGER.warning(
+                "FX-Service: Fehler beim Cancel des alten Intervall-Tasks (Reload)",
+                exc_info=True,
+            )
+
+    if not isinstance(store.get("fx_lock"), asyncio.Lock):
+        store["fx_lock"] = asyncio.Lock()
+
     price_service.initialize_price_state(hass, entry.entry_id)
 
     new_interval = _get_price_interval_seconds(options)
@@ -461,6 +714,25 @@ async def _async_reload_entry_on_update(
         "Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id
     )
 
+    new_fx_interval = _get_fx_interval_seconds(options)
+    _schedule_fx_interval(hass, entry, store, new_fx_interval)
+
+    if fx_interval is not None and fx_interval != new_fx_interval:
+        _LOGGER.info(
+            "FX-Service: Intervall geändert alt=%ss neu=%ss (entry_id=%s)",
+            fx_interval,
+            new_fx_interval,
+            entry.entry_id,
+        )
+    else:
+        _LOGGER.debug(
+            "FX-Service: Intervall (re)gesetzt=%ss (entry_id=%s)",
+            new_fx_interval,
+            entry.entry_id,
+        )
+
+    hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Portfolio Performance Reader from a config entry."""
@@ -474,22 +746,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         initialize_database_schema = db_init_module.initialize_database_schema
 
         options = _get_entry_options(entry)
-        file_path = entry.data[CONF_FILE_PATH]
-        db_path = Path(entry.data[CONF_DB_PATH])
+        stored_file_path = entry.data[CONF_FILE_PATH]
+        resolved_file_path = resolve_storage_path(hass, stored_file_path)
+        portfolio_file = Path(resolved_file_path)
+        portfolio_stem = portfolio_file.stem
+        default_db_relative = Path(DEFAULT_DB_SUBDIR) / f"{portfolio_stem}.db"
+        db_path = resolve_storage_path(
+            hass,
+            entry.data.get(CONF_DB_PATH),
+            default_relative=default_db_relative,
+        )
 
         try:
-            _LOGGER.info("📁 Initialisiere Datenbank falls notwendig: %s", db_path)
+            _LOGGER.info("Initialisiere Datenbank falls notwendig: %s", db_path)
             await async_run_executor_job(hass, initialize_database_schema, db_path)
         except Exception as exc:
-            _LOGGER.exception("❌ Fehler bei der DB-Initialisierung")
+            _LOGGER.exception("Fehler bei der DB-Initialisierung")
             msg = "Datenbank konnte nicht initialisiert werden"
             raise ConfigEntryNotReady(msg) from exc
 
         hass.data.setdefault(DOMAIN, {})
-        store: dict[str, Any] = {
-            "file_path": str(file_path),
-            "db_path": db_path,
-        }
+        store: dict[str, Any] = {"file_path": str(portfolio_file), "db_path": db_path}
         hass.data[DOMAIN][entry.entry_id] = store
 
         flag_overrides = _extract_feature_flag_options(options)
@@ -504,7 +781,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = coordinator_cls(
             hass,
             db_path=db_path,
-            file_path=Path(file_path),
+            file_path=portfolio_file,
             entry_id=entry.entry_id,
         )
         await coordinator.async_config_entry_first_refresh()
@@ -513,13 +790,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
         _initialize_price_tasks(hass, entry, store, options)
+        _initialize_fx_tasks(hass, entry, store, options)
+        _initialize_history_tasks(hass, entry, store)
 
         entry.async_on_unload(entry.add_update_listener(_async_reload_entry_on_update))
 
         try:
             await setup_backup_system(hass, db_path)
         except Exception:
-            _LOGGER.exception("❌ Fehler beim Setup des Backup-Systems")
+            _LOGGER.exception("Fehler beim Setup des Backup-Systems")
 
         return True  # noqa: TRY300
 
@@ -530,7 +809,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  # noqa: PLR0912
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
@@ -570,6 +849,46 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 exc_info=True,
             )
         # ----------------------------------------------------------------------
+        try:
+            fx_cancel = store.get("fx_task_cancel")
+            if fx_cancel:
+                try:
+                    fx_cancel()
+                    _LOGGER.debug(
+                        "FX-Service: Intervall-Task gecancelt (entry_id=%s)",
+                        entry.entry_id,
+                    )
+                except CANCEL_EXCEPTIONS:
+                    _LOGGER.warning(
+                        "FX-Service: Fehler beim Cancel des Intervall-Tasks",
+                        exc_info=True,
+                    )
+            fx_keys = [k for k in list(store.keys()) if k.startswith("fx_")]
+            for key in fx_keys:
+                store.pop(key, None)
+            if fx_keys:
+                _LOGGER.debug(
+                    (
+                        "FX-Service: State-Cleanup abgeschlossen "
+                        "removed_keys=%s entry_id=%s"
+                    ),
+                    fx_keys,
+                    entry.entry_id,
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "FX-Service: Unerwarteter Fehler beim Unload-Cleanup",
+                exc_info=True,
+            )
+        try:
+            cancel_history = store.get("history_task_cancel")
+            if cancel_history:
+                cancel_history()
+                _LOGGER.debug(
+                    "Price-History Scheduler gestoppt (entry_id=%s)", entry.entry_id
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("History-Scheduler: Fehler beim Cleanup", exc_info=True)
 
     # Gesamten Entry-State löschen wenn Plattformen entladen
     if unload_ok:

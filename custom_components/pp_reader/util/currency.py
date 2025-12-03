@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 from math import isfinite
 from typing import TYPE_CHECKING, Any
 
-from custom_components.pp_reader.currencies.fx import (
-    ensure_exchange_rates_for_dates_sync,
-    load_latest_rates_sync,
-)
-
 if TYPE_CHECKING:
+    import sqlite3
+    from collections.abc import Iterable, Mapping
     from datetime import datetime
     from pathlib import Path
 
@@ -20,7 +19,9 @@ __all__ = [
     "CURRENCY_DECIMALS",
     "PRICE_DECIMALS",
     "cent_to_eur",
+    "ensure_exchange_rates_for_dates_sync",
     "eur_to_cent",
+    "load_cached_rate_records_sync",
     "normalize_price_to_eur_sync",
     "normalize_raw_price",
     "round_currency",
@@ -153,28 +154,68 @@ def normalize_price_to_eur_sync(
         ensure_exchange_rates_for_dates_sync(
             [reference_date], {normalized_currency}, db_path
         )
-        fx_rates: dict[str, Any] = load_latest_rates_sync(reference_date, db_path)
+        fx_records = load_cached_rate_records_sync(reference_date, db_path)
     except Exception:  # pragma: no cover - defensive
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
         return None
 
-    rate = fx_rates.get(normalized_currency)
-    if not rate:
+    record = fx_records.get(normalized_currency)
+    if record is None:
         _LOGGER.warning(
-            "⚠️ Kein Wechselkurs für %s (%s)",
+            "Kein Wechselkurs für %s (%s)",
             normalized_currency,
             reference_date.strftime("%Y-%m-%d"),
         )
         return None
 
     try:
-        normalized = price_native / float(rate)
+        normalized = price_native / float(record.rate)
     except (TypeError, ValueError, ZeroDivisionError):
         _LOGGER.warning(
-            "⚠️ Ungültiger Wechselkurs für %s (%s)",
+            "Ungültiger Wechselkurs für %s (%s)",
             normalized_currency,
             reference_date.strftime("%Y-%m-%d"),
         )
         return None
 
     return round_price(normalized, decimals=decimals)
+
+
+CACHED_FX_HELPERS: dict[str, Any] = {}
+
+
+def _load_fx_helper(name: str) -> Any:
+    """Dynamically import FX helper functions on first access."""
+    if name not in CACHED_FX_HELPERS:
+        from custom_components.pp_reader.currencies import fx  # noqa: PLC0415
+
+        CACHED_FX_HELPERS[name] = getattr(fx, name)
+    return CACHED_FX_HELPERS[name]
+
+
+def ensure_exchange_rates_for_dates_sync(
+    dates: Iterable[datetime],
+    currencies: set[str],
+    db_path: Path,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Proxy to the FX helper without importing it at module import time."""
+    helper = _load_fx_helper("ensure_exchange_rates_for_dates_sync")
+    result = helper(dates, currencies, db_path, conn=conn)
+    if asyncio.iscoroutine(result):
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(result)
+        finally:
+            asyncio.set_event_loop(None)
+            with suppress(Exception):
+                loop.close()
+
+
+def load_cached_rate_records_sync(
+    reference_date: datetime, db_path: Path
+) -> Mapping[str, Any]:
+    """Proxy to the FX cache reader while avoiding circular imports."""
+    helper = _load_fx_helper("load_cached_rate_records_sync")
+    return helper(reference_date, db_path)

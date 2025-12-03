@@ -17,14 +17,46 @@ from homeassistant.config_entries import (
     OptionsFlow,  # NEU: OptionsFlow import
 )
 
-from .const import CONF_DB_PATH, CONF_FILE_PATH, DOMAIN
-from .data.reader import parse_data_portfolio
+from .const import (
+    CONF_DB_PATH,
+    CONF_FILE_PATH,
+    CONF_FX_UPDATE_INTERVAL_SECONDS,
+    CONFIG_ENTRY_VERSION,
+    DEFAULT_DB_SUBDIR,
+    DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
+    DOMAIN,
+    MIN_FX_UPDATE_INTERVAL_SECONDS,
+)
+from .services import (
+    PortfolioParseError,
+    PortfolioValidationError,
+    parser_pipeline,
+)
+from .util.paths import default_database_path, resolve_storage_path
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_DB_DIR = "/config/pp_reader_data"
 DEFAULT_OPTIONS_PRICE_UPDATE_INTERVAL = 900
 MIN_OPTIONS_PRICE_UPDATE_INTERVAL = 300
+
+
+class _ValidationWriter:
+    """No-op writer used to validate portfolio uploads."""
+
+    def write_accounts(self, _accounts: list[Any]) -> None:
+        return None
+
+    def write_portfolios(self, _portfolios: list[Any]) -> None:
+        return None
+
+    def write_securities(self, _securities: list[Any]) -> None:
+        return None
+
+    def write_transactions(self, _transactions: list[Any]) -> None:
+        return None
+
+
+_VALIDATION_WRITER = _ValidationWriter()
 
 
 class PPReaderConfigFlowContext(ConfigFlowContext):
@@ -37,7 +69,7 @@ class PPReaderConfigFlowContext(ConfigFlowContext):
 class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow handler for the pp_reader Home Assistant custom component."""
 
-    VERSION = 1
+    VERSION = CONFIG_ENTRY_VERSION
     context: PPReaderConfigFlowContext  # Use the custom context type
 
     async def async_step_user(
@@ -60,42 +92,55 @@ class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            file_path = user_input[CONF_FILE_PATH]
+            file_path_input = user_input[CONF_FILE_PATH]
             db_use_default = user_input.get("db_use_default", True)
 
-            if not Path(file_path).is_file():
+            resolved_file_path: Path | None = None
+            try:
+                resolved_file_path = resolve_storage_path(self.hass, file_path_input)
+            except ValueError:
                 errors["base"] = "file_not_found"
             else:
+                if not resolved_file_path.is_file():
+                    errors["base"] = "file_not_found"
+
+            if not errors and resolved_file_path is not None:
                 try:
-                    parsed = await self.hass.async_add_executor_job(
-                        parse_data_portfolio, file_path
+                    await parser_pipeline.async_parse_portfolio(
+                        hass=self.hass,
+                        path=str(resolved_file_path),
+                        writer=_VALIDATION_WRITER,
+                        fire_progress=False,
+                    )
+                except (PortfolioParseError, PortfolioValidationError) as err:
+                    _LOGGER.warning(
+                        "Portfolio-Validierung fehlgeschlagen: %s",
+                        err,
+                    )
+                    errors["base"] = "parse_failed"
+                except Exception:
+                    _LOGGER.exception("Unbekannter Fehler beim Parserlauf")
+                    errors["base"] = "unknown"
+                else:
+                    self.context.update(
+                        {
+                            "file_path": str(resolved_file_path),
+                            "db_use_default": db_use_default,
+                        }
                     )
 
-                    if parsed is None:
-                        errors["base"] = "parse_failed"
-                    else:
-                        self.context.update(
-                            {
-                                "file_path": file_path,
-                                "db_use_default": db_use_default,
-                            }
+                    if db_use_default:
+                        portfolio_stem = resolved_file_path.stem
+                        db_path = default_database_path(self.hass, portfolio_stem)
+
+                        return self.async_create_entry(
+                            title=resolved_file_path.name,
+                            data={
+                                CONF_FILE_PATH: str(resolved_file_path),
+                                CONF_DB_PATH: str(db_path),
+                            },
                         )
-
-                        if db_use_default:
-                            portfolio_stem = Path(file_path).stem
-                            db_path = Path(DEFAULT_DB_DIR) / f"{portfolio_stem}.db"
-
-                            return self.async_create_entry(
-                                title=Path(file_path).name,
-                                data={
-                                    CONF_FILE_PATH: file_path,
-                                    CONF_DB_PATH: str(db_path),
-                                },
-                            )
-                        return await self.async_step_db_path()
-                except Exception:
-                    _LOGGER.exception("Unbekannter Fehler")
-                    errors["base"] = "unknown"
+                    return await self.async_step_db_path()
 
         data_schema = vol.Schema(
             {
@@ -129,25 +174,34 @@ class PortfolioConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             db_custom_path = user_input.get("db_custom_path", "").strip()
-            db_dir = Path(db_custom_path)
 
-            if not db_dir.exists() or not db_dir.is_dir():
+            if not db_custom_path:
                 errors["base"] = "invalid_custom_db_path"
             else:
-                portfolio_stem = Path(self.context["file_path"]).stem
-                db_path = db_dir / f"{portfolio_stem}.db"
+                try:
+                    db_dir = resolve_storage_path(self.hass, db_custom_path)
+                except ValueError:
+                    errors["base"] = "invalid_custom_db_path"
+                else:
+                    if not db_dir.exists() or not db_dir.is_dir():
+                        errors["base"] = "invalid_custom_db_path"
+                    else:
+                        portfolio_stem = Path(self.context["file_path"]).stem
+                        db_path = db_dir / f"{portfolio_stem}.db"
 
-                return self.async_create_entry(
-                    title=Path(self.context["file_path"]).name,
-                    data={
-                        CONF_FILE_PATH: self.context["file_path"],
-                        CONF_DB_PATH: str(db_path),
-                    },
-                )
+                        return self.async_create_entry(
+                            title=Path(self.context["file_path"]).name,
+                            data={
+                                CONF_FILE_PATH: self.context["file_path"],
+                                CONF_DB_PATH: str(db_path),
+                            },
+                        )
 
         data_schema = vol.Schema(
             {
-                vol.Required("db_custom_path"): str,
+                vol.Required(
+                    "db_custom_path", default=self.hass.config.path(DEFAULT_DB_SUBDIR)
+                ): str,
             }
         )
 
@@ -198,6 +252,21 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
         except (TypeError, ValueError):
             return False
 
+    def _current_fx_interval(self) -> int:
+        """Aktuell gesetztes FX-Intervall oder Default liefern."""
+        try:
+            val = int(
+                self._entry.options.get(
+                    CONF_FX_UPDATE_INTERVAL_SECONDS,
+                    DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
+                )
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+        if val < MIN_FX_UPDATE_INTERVAL_SECONDS:
+            return DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+        return val
+
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Initialer Options-Schritt (Intervall + Debug)."""
         errors: dict[str, str] = {}
@@ -216,6 +285,18 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
             ):
                 errors["price_update_interval_seconds"] = "invalid_interval"
 
+            fx_interval = user_input.get(CONF_FX_UPDATE_INTERVAL_SECONDS)
+            if fx_interval is None:
+                user_input[CONF_FX_UPDATE_INTERVAL_SECONDS] = (
+                    DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+                )
+                fx_interval = DEFAULT_FX_UPDATE_INTERVAL_SECONDS
+            if (
+                not isinstance(fx_interval, int)
+                or fx_interval < MIN_FX_UPDATE_INTERVAL_SECONDS
+            ):
+                errors[CONF_FX_UPDATE_INTERVAL_SECONDS] = "invalid_interval"
+
             # Debug Flag defensiv normieren
             user_input["enable_price_debug"] = bool(
                 user_input.get("enable_price_debug", False)
@@ -231,6 +312,10 @@ class PPReaderOptionsFlowHandler(OptionsFlow):
                     "price_update_interval_seconds",
                     default=self._current_interval(),
                 ): vol.All(int, vol.Range(min=MIN_OPTIONS_PRICE_UPDATE_INTERVAL)),
+                vol.Optional(
+                    CONF_FX_UPDATE_INTERVAL_SECONDS,
+                    default=self._current_fx_interval(),
+                ): vol.All(int, vol.Range(min=MIN_FX_UPDATE_INTERVAL_SECONDS)),
                 vol.Optional(
                     "enable_price_debug",
                     default=self._current_debug(),

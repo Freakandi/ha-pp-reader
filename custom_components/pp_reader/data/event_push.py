@@ -10,6 +10,7 @@ from typing import Any
 
 from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.util import dt as dt_util
 
 from custom_components.pp_reader.const import DOMAIN
 
@@ -35,179 +36,127 @@ def _estimate_event_size(payload: dict[str, Any]) -> int:
     return len(encoded.encode("utf-8"))
 
 
-def _normalize_portfolio_value_entry(item: Mapping[str, Any]) -> dict[str, Any] | None:
-    """Forward canonical portfolio aggregates without recomputation."""
-    uuid = item.get("uuid") or item.get("portfolio_uuid")
-    if not uuid:
-        return None
+def _ensure_serializable(value: Any) -> Any:
+    """Convert payloads into JSON-serializable primitives without dropping metadata."""
+    if is_dataclass(value):
+        return _ensure_serializable(asdict(value))
 
-    normalized: dict[str, Any] = {"uuid": str(uuid)}
+    if isinstance(value, Mapping):
+        return {key: _ensure_serializable(val) for key, val in value.items()}
 
-    position_count = item.get("position_count")
-    if position_count is None and "count" in item:
-        position_count = item.get("count")
-    if position_count is not None:
-        normalized["position_count"] = position_count
+    if _is_sequence(value):
+        return [_ensure_serializable(item) for item in value]
 
-    for key in (
-        "name",
-        "current_value",
-        "purchase_sum",
-        "performance",
-        "missing_value_positions",
-    ):
-        if key in item:
-            normalized[key] = item[key]
-
-    return normalized
+    return value
 
 
-def _compact_portfolio_values_payload(data: Any) -> Any:
-    """Remove unused fields from portfolio value updates to keep payloads small."""
-
-    def _compact_items(items: Sequence[Any]) -> list[dict[str, Any]]:
-        compacted: list[dict[str, Any]] = []
-        for item in items:
-            if isinstance(item, Mapping):
-                normalized = _normalize_portfolio_value_entry(item)
-                if normalized is not None:
-                    compacted.append(normalized)
-        return compacted
-
-    if isinstance(data, Mapping):
-        result: dict[str, Any] = {}
-        portfolios = data.get("portfolios")
-        if _is_sequence(portfolios):
-            result["portfolios"] = _compact_items(portfolios)
-        else:
-            normalized = _normalize_portfolio_value_entry(data)
-            if normalized is not None:
-                result["portfolios"] = [normalized]
-
-        for optional_key in ("error",):
-            if optional_key in data:
-                result[optional_key] = data[optional_key]
-        return result
-
+def _compact_event_data(_data_type: str, data: Any) -> Any:
+    """Return an event payload with canonical structures preserved."""
     if _is_sequence(data):
-        return _compact_items(data)
-
-    return data
-
-
-def _normalize_position_entry(  # noqa: PLR0912
-    item: Mapping[str, Any],
-) -> dict[str, Any] | None:
-    """Keep only the fields required for position updates."""
-    security_uuid = item.get("security_uuid")
-    if not security_uuid:
-        return None
-
-    aggregation_payload: dict[str, Any] | None = None
-    raw_aggregation = item.get("aggregation")
-    if isinstance(raw_aggregation, Mapping):
-        aggregation_payload = dict(raw_aggregation)
-    elif is_dataclass(raw_aggregation):
-        aggregation_payload = asdict(raw_aggregation)
-
-    if aggregation_payload is not None:
-        aggregation_payload.pop("average_purchase_price_native", None)
-
-    average_cost_payload: dict[str, Any] | None = None
-    raw_average_cost = item.get("average_cost")
-    if isinstance(raw_average_cost, Mapping):
-        average_cost_payload = dict(raw_average_cost)
-    elif is_dataclass(raw_average_cost):
-        average_cost_payload = asdict(raw_average_cost)
-
-    performance_payload: dict[str, Any] | None = None
-    raw_performance = item.get("performance")
-    if isinstance(raw_performance, Mapping):
-        performance_payload = dict(raw_performance)
-        day_change_raw = performance_payload.get("day_change")
-        if isinstance(day_change_raw, Mapping):
-            performance_payload["day_change"] = dict(day_change_raw)
-        elif is_dataclass(day_change_raw):
-            performance_payload["day_change"] = asdict(day_change_raw)
-    elif is_dataclass(raw_performance):
-        performance_payload = asdict(raw_performance)
-
-    def _resolve_from_sources(*keys: str) -> Any | None:
-        for key in keys:
-            value = item.get(key)
-            if value not in (None, ""):
-                return value
-        if aggregation_payload is None:
-            return None
-        for key in keys:
-            value = aggregation_payload.get(key)
-            if value not in (None, ""):
-                return value
-        return None
-
-    normalized: dict[str, Any] = {
-        "security_uuid": str(security_uuid),
-        "name": item.get("name"),
-        "current_holdings": _resolve_from_sources("current_holdings", "total_holdings"),
-        "purchase_value": _resolve_from_sources("purchase_value", "purchase_value_eur"),
-        "current_value": item.get("current_value"),
-    }
-
-    normalized = {key: value for key, value in normalized.items() if value is not None}
-
-    if aggregation_payload:
-        normalized["aggregation"] = aggregation_payload
-
-    if average_cost_payload:
-        normalized["average_cost"] = average_cost_payload
-
-    if performance_payload:
-        normalized["performance"] = performance_payload
-
-    return normalized
+        return [_ensure_serializable(item) for item in data]
+    return _ensure_serializable(data)
 
 
-def _compact_portfolio_positions_payload(data: Any) -> Any:
-    """Ensure position updates only transport the necessary keys."""
-    if isinstance(data, Mapping):
-        positions = data.get("positions")
-        compacted: list[dict[str, Any]] = []
-        if _is_sequence(positions):
-            for item in positions:
-                if isinstance(item, Mapping):
-                    normalized = _normalize_position_entry(item)
-                    if normalized is not None:
-                        compacted.append(normalized)
+def _chunk_sequence_payload(
+    base_payload: dict[str, Any],
+    items: Sequence[Any],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    """Split a sequence payload into recorder-safe chunks."""
+    if not items:
+        return []
 
-        result: dict[str, Any] = {
-            "portfolio_uuid": data.get("portfolio_uuid"),
-            "positions": compacted,
-        }
-        if "error" in data:
-            result["error"] = data["error"]
-        return result
+    chunks: list[dict[str, Any]] = []
+    current: list[Any] = []
 
-    if _is_sequence(data):
-        compacted_items: list[dict[str, Any]] = []
-        for item in data:
-            if isinstance(item, Mapping):
-                compacted_item = _compact_portfolio_positions_payload(item)
-                if compacted_item:
-                    compacted_items.append(compacted_item)
-        return compacted_items
+    for item in items:
+        current.append(item)
+        candidate = dict(base_payload)
+        candidate["data"] = list(current)
 
-    return data
+        if _estimate_event_size(candidate) > max_bytes:
+            # If a single item already exceeds the limit, emit it as-is so the
+            # consumer still receives the update (recorder may still drop it).
+            if len(current) == 1:
+                chunks.append(candidate)
+                current = []
+                continue
+
+            # Flush the previous chunk without the oversized item.
+            current.pop()
+            chunks.append(
+                {**base_payload, "data": list(current)},
+            )
+            current = [item]
+
+    if current:
+        chunks.append({**base_payload, "data": list(current)})
+
+    return chunks
 
 
-def _compact_event_data(data_type: str, data: Any) -> Any:
-    """Return an event payload with redundant fields stripped out."""
-    if data_type == "portfolio_values":
-        return _compact_portfolio_values_payload(data)
+def _chunk_positions_entry_payloads(
+    base_payload: dict[str, Any],
+    entries: Sequence[Any],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    """Split portfolio_positions entries into recorder-safe chunks."""
+    chunked_payloads: list[dict[str, Any]] = []
 
-    if data_type == "portfolio_positions":
-        return _compact_portfolio_positions_payload(data)
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
 
-    return data
+        positions = entry.get("positions")
+        if not _is_sequence(positions):
+            continue
+
+        entry_base = {k: v for k, v in entry.items() if k != "positions"}
+        pos_list = list(positions)
+        if not pos_list:
+            continue
+
+        position_chunks: list[list[Any]] = []
+        current: list[Any] = []
+
+        for position in pos_list:
+            current.append(position)
+            candidate_entry = {**entry_base, "positions": list(current)}
+            candidate_payload = {**base_payload, "data": [candidate_entry]}
+            if _estimate_event_size(candidate_payload) > max_bytes:
+                if len(current) == 1:
+                    # Single position already exceeds the limit, emit as-is.
+                    position_chunks.append(list(current))
+                    current = []
+                    continue
+
+                # Flush previous chunk without the oversized item.
+                current.pop()
+                position_chunks.append(list(current))
+                current = [position]
+
+        if current:
+            position_chunks.append(list(current))
+
+        if not position_chunks:
+            continue
+
+        if len(position_chunks) == 1:
+            chunk_entry = {**entry_base, "positions": position_chunks[0]}
+            chunked_payloads.append({**base_payload, "data": [chunk_entry]})
+            continue
+
+        chunk_count = len(position_chunks)
+        for idx, chunk in enumerate(position_chunks, start=1):
+            chunk_entry = {
+                **entry_base,
+                "positions": chunk,
+                "chunk_index": idx,
+                "chunk_count": chunk_count,
+            }
+            chunked_payloads.append({**base_payload, "data": [chunk_entry]})
+
+    return chunked_payloads
 
 
 @callback
@@ -222,14 +171,85 @@ def _push_update(
         return
 
     compact_data = _compact_event_data(data_type, data)
-    payload = {
+    base_payload = {
         "domain": DOMAIN,
         "entry_id": entry_id,
         "data_type": data_type,
-        "data": compact_data,
+        "synced_at": dt_util.utcnow().isoformat(timespec="seconds"),
     }
+    payload = {**base_payload, "data": compact_data}
 
     payload_size = _estimate_event_size(payload)
+    if payload_size > EVENT_DATA_MAX_BYTES and data_type == "portfolio_positions":
+        chunk_payloads = _chunk_positions_entry_payloads(
+            base_payload,
+            compact_data if _is_sequence(compact_data) else [compact_data],
+            EVENT_DATA_MAX_BYTES - _EVENT_SIZE_MARGIN,
+        )
+        if chunk_payloads:
+            _LOGGER.warning(
+                (
+                    "Event payload for %s exceeds recorder limit (%d > %d bytes). "
+                    "Split portfolio_positions into %d chunk(s)."
+                ),
+                data_type,
+                payload_size,
+                EVENT_DATA_MAX_BYTES,
+                len(chunk_payloads),
+            )
+            for chunk_payload in chunk_payloads:
+                chunk_size = _estimate_event_size(chunk_payload)
+                if chunk_size > EVENT_DATA_MAX_BYTES:
+                    _LOGGER.warning(
+                        (
+                            "Chunked %s payload still exceeds recorder limit "
+                            "(%d bytes) - event data may be dropped"
+                        ),
+                        data_type,
+                        chunk_size,
+                    )
+                hass.loop.call_soon_threadsafe(
+                    hass.bus.fire,
+                    EVENT_PANELS_UPDATED,
+                    chunk_payload,
+                )
+            return
+
+    if payload_size > EVENT_DATA_MAX_BYTES and _is_sequence(compact_data):
+        chunk_payloads = _chunk_sequence_payload(
+            base_payload,
+            list(compact_data),
+            EVENT_DATA_MAX_BYTES - _EVENT_SIZE_MARGIN,
+        )
+        if len(chunk_payloads) > 1:
+            _LOGGER.warning(
+                (
+                    "Event payload for %s exceeds recorder limit (%d > %d bytes). "
+                    "Split into %d chunk(s) to keep events recorder-safe."
+                ),
+                data_type,
+                payload_size,
+                EVENT_DATA_MAX_BYTES,
+                len(chunk_payloads),
+            )
+            for chunk in chunk_payloads:
+                chunk_size = _estimate_event_size(chunk)
+                if chunk_size > EVENT_DATA_MAX_BYTES:
+                    _LOGGER.warning(
+                        (
+                            "Chunked %s payload still exceeds recorder limit "
+                            "(%d bytes) - event data may be dropped"
+                        ),
+                        data_type,
+                        chunk_size,
+                    )
+                hass.loop.call_soon_threadsafe(
+                    hass.bus.fire,
+                    EVENT_PANELS_UPDATED,
+                    chunk,
+                )
+            return
+
     if payload_size > EVENT_DATA_MAX_BYTES:
         _LOGGER.warning(
             (

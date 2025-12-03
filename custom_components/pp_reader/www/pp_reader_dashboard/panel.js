@@ -118,7 +118,7 @@ function resolveDevServerUrl() {
 async function bootViaDevServer(devServerUrl) {
   const base = devServerUrl.replace(/\/$/, '');
   await import(/* @vite-ignore */ `${base}/@vite/client`);
-  await import(/* @vite-ignore */ `${base}/src/panel.ts`);
+  return import(/* @vite-ignore */ `${base}/src/panel.ts`);
 }
 
 function resolveModuleUrl(specifier) {
@@ -142,9 +142,9 @@ async function loadDashboardModule() {
   const devServerUrl = resolveDevServerUrl();
   if (devServerUrl) {
     try {
-      await bootViaDevServer(devServerUrl);
+      const mod = await bootViaDevServer(devServerUrl);
       console.info('[pp_reader] Hot-Reload aktiv über Vite Dev-Server:', devServerUrl);
-      return;
+      return mod;
     } catch (error) {
       console.warn(
         '[pp_reader] Dev-Server konnte nicht geladen werden, falle auf Bundle zurück.',
@@ -156,14 +156,28 @@ async function loadDashboardModule() {
 
   try {
     const bundledModuleUrl = resolveModuleUrl(DASHBOARD_MODULE_SPECIFIER);
-    await import(/* @vite-ignore */ bundledModuleUrl);
+    return await import(/* @vite-ignore */ bundledModuleUrl);
   } catch (error) {
     console.error('[pp_reader] Konnte gebündeltes Dashboard nicht laden.', error);
     throw error;
   }
 }
 
-await loadDashboardModule();
+const dashboardModule = await loadDashboardModule();
+
+const registryApi = dashboardModule && typeof dashboardModule === 'object' ? dashboardModule : {};
+const registerDashboardElement = typeof registryApi.registerDashboardElement === 'function'
+  ? registryApi.registerDashboardElement
+  : null;
+const unregisterDashboardElement = typeof registryApi.unregisterDashboardElement === 'function'
+  ? registryApi.unregisterDashboardElement
+  : null;
+const registerPanelHost = typeof registryApi.registerPanelHost === 'function'
+  ? registryApi.registerPanelHost
+  : null;
+const unregisterPanelHost = typeof registryApi.unregisterPanelHost === 'function'
+  ? registryApi.unregisterPanelHost
+  : null;
 
 const PANEL_URL = new URL(import.meta.url);
 const ASSET_BASE_URL = new URL('./', PANEL_URL);
@@ -205,23 +219,21 @@ class PPReaderPanel extends HTMLElement {
       console.error("[pp_reader] Dashboard Element nicht gefunden – Rendering unmöglich.");
     } else {
       console.debug("[pp_reader] Dashboard Element referenziert.");
-      try {
-        if (!window.__ppReaderDashboardElements) {
-          window.__ppReaderDashboardElements = new Set();
+      if (registerDashboardElement) {
+        try {
+          registerDashboardElement(this._dashboardEl);
+        } catch (error) {
+          console.warn('[pp_reader] Konnte Dashboard-Referenz nicht registrieren', error);
         }
-        window.__ppReaderDashboardElements.add(this._dashboardEl);
-      } catch (error) {
-        console.warn('[pp_reader] Konnte Dashboard-Referenz nicht registrieren', error);
       }
     }
 
-    try {
-      if (!window.__ppReaderPanelHosts) {
-        window.__ppReaderPanelHosts = new Set();
+    if (registerPanelHost) {
+      try {
+        registerPanelHost(this);
+      } catch (error) {
+        console.warn('[pp_reader] Konnte Panel-Instanz nicht verfolgen', error);
       }
-      window.__ppReaderPanelHosts.add(this);
-    } catch (error) {
-      console.warn('[pp_reader] Konnte Panel-Instanz nicht verfolgen', error);
     }
 
     container.querySelector('.menu-button').addEventListener('click', () => {
@@ -320,11 +332,19 @@ class PPReaderPanel extends HTMLElement {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
     }
-    if (window.__ppReaderPanelHosts instanceof Set) {
-      window.__ppReaderPanelHosts.delete(this);
+    if (unregisterPanelHost) {
+      try {
+        unregisterPanelHost(this);
+      } catch (error) {
+        console.warn('[pp_reader] Konnte Panel-Instanz nicht deregistrieren', error);
+      }
     }
-    if (window.__ppReaderDashboardElements instanceof Set && this._dashboardEl) {
-      window.__ppReaderDashboardElements.delete(this._dashboardEl);
+    if (unregisterDashboardElement && this._dashboardEl) {
+      try {
+        unregisterDashboardElement(this._dashboardEl);
+      } catch (error) {
+        console.warn('[pp_reader] Konnte Dashboard-Referenz nicht deregistrieren', error);
+      }
     }
   }
 

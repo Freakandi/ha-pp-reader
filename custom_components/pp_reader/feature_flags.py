@@ -10,7 +10,9 @@ if TYPE_CHECKING:
 
 from .const import DOMAIN
 
-_DEFAULT_FLAGS: dict[str, bool] = {}
+_DEFAULT_FLAGS: dict[str, bool] = {
+    "notify_parser_failures": False,
+}
 
 
 def _normalize_name(name: str) -> str:

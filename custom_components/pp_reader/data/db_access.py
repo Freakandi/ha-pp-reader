@@ -5,13 +5,14 @@ Handle transactions, securities, accounts, portfolios,
 and related data in a SQLite database.
 """
 
+import json
 import logging
 import sqlite3
-from collections.abc import Iterator
+import time
+from collections.abc import Iterator, Sequence
 from contextlib import suppress
-from dataclasses import asdict, dataclass
-from datetime import datetime
-from math import isclose
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,10 @@ from custom_components.pp_reader.data.aggregations import (
     compute_holdings_aggregation,
     select_average_cost,
 )
-from custom_components.pp_reader.data.performance import select_performance_metrics
+from custom_components.pp_reader.metrics.common import (
+    compose_performance_payload,
+    select_performance_metrics,
+)
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     normalize_price_to_eur_sync,
@@ -29,11 +33,114 @@ from custom_components.pp_reader.util.currency import (
     round_currency,
     round_price,
 )
+from custom_components.pp_reader.util.datetime import UTC
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
 
 _MISSING_DB_RESOURCE_MESSAGE = "Entweder db_path oder conn muss angegeben werden."
+_EIGHT_DECIMAL_SCALE = 10**8
+_SCALED_INT_THRESHOLD = 10_000
+_EPOCH_START_DATE = date(1970, 1, 1)
+_MAX_EPOCH_DAY_VALUE = 100_000
+_YYYYMMDD_MIN_VALUE = 1_000_000
+_LAST_CLOSE_STALE_DAYS = 7
+
+
+def _from_eight_decimal(
+    value: Any,
+    *,
+    decimals: int = 4,
+    default: float | None = None,
+) -> float | None:
+    """Convert a stored 10^-8 fixed-point value into a float."""
+    if value in (None, ""):
+        return default
+
+    try:
+        numeric = float(value) / _EIGHT_DECIMAL_SCALE
+    except (TypeError, ValueError):
+        return default
+
+    return round_currency(numeric, decimals=decimals, default=default)
+
+
+def _from_holdings_raw(value: Any) -> float:
+    """Convert stored holdings (10^-8 shares) to a float."""
+    normalized = _from_eight_decimal(value, decimals=8, default=0.0)
+    return normalized or 0.0
+
+
+def _first_value(*values: Any) -> Any | None:
+    """Return the first value that is not None or empty string."""
+    for candidate in values:
+        if candidate not in (None, ""):
+            return candidate
+    return None
+
+
+def _compute_avg_price_cents(
+    purchase_value_cents: Any,
+    holdings: float | None,
+) -> float | None:
+    """Return the average purchase price (cents) per share."""
+    if holdings in (None, 0):
+        return None
+    try:
+        return float(purchase_value_cents) / float(holdings)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _decode_scaled_currency(
+    value: Any,
+    *,
+    decimals: int = 6,
+) -> float | None:
+    """Decode values that may already be floats or stored as 10^-8 integers."""
+    if value in (None, ""):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if abs(numeric) >= _SCALED_INT_THRESHOLD:
+        numeric = numeric / _EIGHT_DECIMAL_SCALE
+    return round(numeric, decimals)
+
+
+def _decode_holdings_value(value: Any) -> float:
+    """Normalize holdings that may already be real numbers or scaled integers."""
+    if value in (None, ""):
+        return 0.0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if abs(numeric) >= _SCALED_INT_THRESHOLD:
+        numeric = numeric / _EIGHT_DECIMAL_SCALE
+    return round(numeric, 6)
+
+
+def _safe_int(value: Any) -> int | None:
+    """Best-effort int conversion that returns None on failure."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: Any) -> float | None:
+    """Best-effort float conversion that returns None on failure."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _epoch_day_from_date(value: date) -> int:
+    """Convert a date object into epoch-day."""
+    return (value - _EPOCH_START_DATE).days
 
 
 @dataclass
@@ -59,6 +166,7 @@ class Transaction:
     amount: int  # Cent-Betrag
     shares: int | None  # *10^8 für Genauigkeit
     security: str | None  # Security UUID
+    amount_eur_cents: int | None = None
 
 
 @dataclass
@@ -115,6 +223,165 @@ class PortfolioSecurity:
         None  # Durchschnittlicher Kaufpreis in nativer Währung
     )
     current_value: float | None = None  # Aktueller Wert des Bestands in Cent
+
+
+def _deserialize_portfolio_security_row(row: sqlite3.Row) -> PortfolioSecurity:
+    """Map a sqlite row to PortfolioSecurity with normalized averages."""
+    holdings = _decode_holdings_value(row["current_holdings"])
+    purchase_value = int(row["purchase_value"] or 0)
+    avg_price_cents = _compute_avg_price_cents(purchase_value, holdings)
+    avg_price_native = _decode_scaled_currency(row["avg_price_native"])
+
+    current_value_raw = row["current_value"]
+    current_value = current_value_raw
+    return PortfolioSecurity(
+        portfolio_uuid=row["portfolio_uuid"],
+        security_uuid=row["security_uuid"],
+        current_holdings=holdings,
+        purchase_value=purchase_value,
+        avg_price=avg_price_cents,
+        avg_price_native=avg_price_native,
+        current_value=current_value,
+    )
+
+
+@dataclass
+class FxRateRecord:
+    """Persisted FX rate metadata."""
+
+    date: str
+    currency: str
+    rate: float
+    fetched_at: str | None = None
+    data_source: str | None = None
+    provider: str | None = None
+    provenance: str | None = None
+
+
+@dataclass
+class PriceHistoryJob:
+    """Persisted job entry in the price history queue."""
+
+    id: int
+    security_uuid: str
+    requested_date: int | None
+    status: str
+    priority: int
+    attempts: int
+    scheduled_at: str | None
+    started_at: str | None
+    finished_at: str | None
+    last_error: str | None
+    data_source: str | None
+    provenance: str | None
+    created_at: str
+    updated_at: str | None
+
+
+@dataclass
+class NewPriceHistoryJob:
+    """Payload for enqueuing a new price history job."""
+
+    security_uuid: str
+    requested_date: int | None
+    status: str = "pending"
+    priority: int = 0
+    scheduled_at: str | None = None
+    data_source: str | None = None
+    provenance: str | None = None
+
+
+@dataclass
+class MetricRunMetadata:
+    """Record describing a persisted metric run."""
+
+    run_uuid: str
+    status: str
+    trigger: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_ms: int | None = None
+    total_entities: int | None = None
+    processed_portfolios: int | None = None
+    processed_accounts: int | None = None
+    processed_securities: int | None = None
+    error_message: str | None = None
+    provenance: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class PortfolioMetricRecord:
+    """Record describing portfolio level performance metrics."""
+
+    metric_run_uuid: str
+    portfolio_uuid: str
+    valuation_currency: str = "EUR"
+    current_value_cents: int = 0
+    purchase_value_cents: int = 0
+    gain_abs_cents: int = 0
+    gain_pct: float | None = None
+    total_change_eur_cents: int = 0
+    total_change_pct: float | None = None
+    source: str | None = None
+    coverage_ratio: float | None = None
+    position_count: int | None = None
+    missing_value_positions: int | None = None
+    provenance: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class AccountMetricRecord:
+    """Record describing account valuation metrics."""
+
+    metric_run_uuid: str
+    account_uuid: str
+    currency_code: str
+    valuation_currency: str = "EUR"
+    balance_native_cents: int = 0
+    balance_eur_cents: int | None = None
+    fx_rate: float | None = None
+    fx_rate_source: str | None = None
+    fx_rate_timestamp: str | None = None
+    coverage_ratio: float | None = None
+    provenance: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class SecurityMetricRecord:
+    """Record describing security level metrics within a portfolio."""
+
+    metric_run_uuid: str
+    portfolio_uuid: str
+    security_uuid: str
+    valuation_currency: str = "EUR"
+    security_currency_code: str = "EUR"
+    holdings_raw: int = 0
+    current_value_cents: int = 0
+    purchase_value_cents: int = 0
+    purchase_security_value_raw: int | None = None
+    purchase_account_value_cents: int | None = None
+    gain_abs_cents: int = 0
+    gain_pct: float | None = None
+    total_change_eur_cents: int = 0
+    total_change_pct: float | None = None
+    source: str | None = None
+    coverage_ratio: float | None = None
+    day_change_native: float | None = None
+    day_change_eur: float | None = None
+    day_change_pct: float | None = None
+    day_change_source: str | None = None
+    day_change_coverage: float | None = None
+    last_price_native_raw: int | None = None
+    last_close_native_raw: int | None = None
+    provenance: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 def _resolve_average_cost_totals(
@@ -222,6 +489,167 @@ def get_transactions(
     finally:
         if db_path is not None:  # Verbindung nur schließen, wenn hier geöffnet wurde
             conn.close()
+
+
+def _to_epoch_day(date_value: Any) -> int | None:
+    """Convert ISO date strings or numeric encodings into epoch-day integers."""
+    normalized_day: int | None = None
+
+    if isinstance(date_value, datetime):
+        parsed_dt = (
+            date_value.replace(tzinfo=UTC)
+            if date_value.tzinfo is None
+            else date_value.astimezone(UTC)
+        )
+        normalized_day = _epoch_day_from_date(parsed_dt.date())
+    elif isinstance(date_value, (int, float)):
+        integer_value = _safe_int(date_value)
+        if integer_value is None or integer_value < 0:
+            return None
+        if integer_value <= _MAX_EPOCH_DAY_VALUE:
+            normalized_day = integer_value
+        elif integer_value >= _YYYYMMDD_MIN_VALUE:
+            year = integer_value // 10_000
+            month = (integer_value % 10_000) // 100
+            day_value = integer_value % 100
+            try:
+                parsed_date = date(year, month, day_value)
+            except ValueError:
+                normalized_day = None
+            else:
+                normalized_day = _epoch_day_from_date(parsed_date)
+    elif date_value:
+        try:
+            parsed_dt = datetime.fromisoformat(str(date_value))
+        except (TypeError, ValueError):
+            return None
+
+        if parsed_dt.tzinfo is None:
+            parsed_dt = parsed_dt.replace(tzinfo=UTC)
+        else:
+            parsed_dt = parsed_dt.astimezone(UTC)
+
+        normalized_day = _epoch_day_from_date(parsed_dt.date())
+
+    return normalized_day
+
+
+def _is_in_epoch_range(
+    epoch_day: int | None, start_epoch: int | None, end_epoch: int | None
+) -> bool:
+    """Return True when epoch_day passes optional start/end bounds."""
+    if epoch_day is None:
+        return start_epoch is None and end_epoch is None
+    if start_epoch is not None and epoch_day < start_epoch:
+        return False
+    return not (end_epoch is not None and epoch_day > end_epoch)
+
+
+def get_security_transactions(
+    db_path: Path,
+    security_uuid: str,
+    *,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> list[dict[str, Any]]:
+    """Return security-linked transactions with optional range filtering."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    if start_date is not None and not isinstance(start_date, int):
+        message = "start_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if end_date is not None and not isinstance(end_date, int):
+        message = "end_date muss vom Typ int oder None sein"
+        raise TypeError(message)
+    if start_date is not None and end_date is not None and end_date < start_date:
+        message = "end_date muss größer oder gleich start_date sein"
+        raise ValueError(message)
+
+    start_epoch = _to_epoch_day(start_date) if start_date is not None else None
+    end_epoch = _to_epoch_day(end_date) if end_date is not None else None
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Öffnen der Datenbank für Transaktionen (security_uuid=%s)",
+            security_uuid,
+        )
+        return []
+
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                t.uuid,
+                t.type,
+                t.portfolio,
+                t.date,
+                t.currency_code,
+                t.amount,
+                t.shares,
+                COALESCE(SUM(CASE WHEN u.type = 2 THEN u.amount END), 0) AS fees,
+                COALESCE(SUM(CASE WHEN u.type = 1 THEN u.amount END), 0) AS taxes
+            FROM transactions AS t
+            LEFT JOIN transaction_units AS u
+              ON u.transaction_uuid = t.uuid
+             AND (
+                u.currency_code IS NULL
+                OR UPPER(u.currency_code) = UPPER(t.currency_code)
+            )
+            WHERE t.security = ?
+              AND t.type IN (0, 1, 2, 3)
+            GROUP BY
+                t.uuid,
+                t.type,
+                t.portfolio,
+                t.date,
+                t.currency_code,
+                t.amount,
+                t.shares
+            ORDER BY t.date ASC
+            """,
+            (security_uuid,),
+        )
+        rows = cursor.fetchall()
+    except sqlite3.Error:
+        _LOGGER.exception("Fehler beim Laden der Transaktionen für %s", security_uuid)
+        return []
+    finally:
+        with suppress(sqlite3.Error):
+            conn.close()
+
+    transactions: list[dict[str, Any]] = []
+    for row in rows:
+        epoch_day = _to_epoch_day(row["date"])
+        if not _is_in_epoch_range(epoch_day, start_epoch, end_epoch):
+            continue
+
+        tx_type = _safe_int(row["type"]) or 0
+        amount = _safe_int(row["amount"])
+        shares = _safe_int(row["shares"])
+        fees = _safe_int(row["fees"])
+        taxes = _safe_int(row["taxes"])
+
+        currency_code = (row["currency_code"] or "").strip().upper()
+        transactions.append(
+            {
+                "uuid": row["uuid"],
+                "type": tx_type,
+                "portfolio": row["portfolio"],
+                "date": row["date"],
+                "currency_code": currency_code or None,
+                "amount": amount,
+                "shares": shares,
+                "fees": fees,
+                "taxes": taxes,
+            }
+        )
+
+    return transactions
 
 
 def get_securities(db_path: Path) -> dict[str, Security]:
@@ -465,6 +893,7 @@ def get_portfolio_securities(
 ) -> list[PortfolioSecurity]:
     """Lädt alle Wertpapiere eines Depots aus der Tabelle portfolio_securities."""
     conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
     try:
         _LOGGER.debug("Lese portfolio_securities für portfolio_uuid=%s", portfolio_uuid)
         cur = conn.execute(
@@ -476,7 +905,8 @@ def get_portfolio_securities(
         """,
             (portfolio_uuid,),
         )
-        return [PortfolioSecurity(*row) for row in cur.fetchall()]
+        rows = cur.fetchall()
+        return [_deserialize_portfolio_security_row(row) for row in rows]
     except sqlite3.Error:
         _LOGGER.exception(
             "Fehler beim Laden der Wertpapiere für das Depot %s", portfolio_uuid
@@ -489,13 +919,14 @@ def get_portfolio_securities(
 def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
     """Lädt alle Einträge aus der Tabelle portfolio_securities."""
     conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
     try:
         cur = conn.execute("""
             SELECT portfolio_uuid, security_uuid, current_holdings,
                    purchase_value, avg_price, avg_price_native, current_value
             FROM portfolio_securities
         """)
-        return [PortfolioSecurity(*row) for row in cur.fetchall()]
+        return [_deserialize_portfolio_security_row(row) for row in cur.fetchall()]
     except sqlite3.Error:
         _LOGGER.exception(
             "Fehler beim Laden aller Wertpapiere aus portfolio_securities"
@@ -505,10 +936,291 @@ def get_all_portfolio_securities(db_path: Path) -> list[PortfolioSecurity]:
         conn.close()
 
 
+def _normalize_security_holding_row(row: sqlite3.Row) -> dict[str, Any]:
+    """Return a normalized dict for holdings aggregation."""
+    return {
+        "portfolio_uuid": row["portfolio_uuid"],
+        "security_uuid": row["security_uuid"],
+        "current_holdings": _decode_holdings_value(row["current_holdings"]),
+        "purchase_value": row["purchase_value"],
+        "avg_price_native": _decode_scaled_currency(row["avg_price_native"]),
+        "avg_price_security": _decode_scaled_currency(row["avg_price_security"]),
+        "avg_price_account": _decode_scaled_currency(row["avg_price_account"]),
+        "security_currency_total": _decode_scaled_currency(
+            row["security_currency_total"],
+            decimals=6,
+        )
+        or 0.0,
+        "account_currency_total": _decode_scaled_currency(
+            row["account_currency_total"],
+            decimals=6,
+        )
+        or 0.0,
+    }
+
+
+def _load_security_holdings(
+    conn: sqlite3.Connection,
+    security_uuid: str,
+) -> list[dict[str, Any]]:
+    """Fetch portfolio holdings for a given security."""
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                portfolio_uuid,
+                security_uuid,
+                current_holdings,
+                purchase_value,
+                avg_price_native,
+                avg_price_security,
+                avg_price_account,
+                security_currency_total,
+                account_currency_total
+            FROM portfolio_securities
+            WHERE security_uuid = ?
+            """,
+            (security_uuid,),
+        )
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Laden der Holdings für security_uuid=%s",
+            security_uuid,
+        )
+        return []
+
+    return [_normalize_security_holding_row(row) for row in cursor.fetchall()]
+
+
+def _empty_security_snapshot(security_row: sqlite3.Row) -> dict[str, Any]:
+    """Return the default empty snapshot payload."""
+    return {
+        "name": security_row["name"],
+        "ticker_symbol": security_row["ticker_symbol"],
+        "currency_code": security_row["currency_code"] or "EUR",
+        "total_holdings": 0.0,
+        "last_price_native": None,
+        "last_price_eur": None,
+        "market_value_eur": 0.0,
+        "purchase_value_eur": 0.0,
+        "average_cost": {
+            "eur": None,
+            "security": None,
+            "account": None,
+            "native": None,
+            "source": "unavailable",
+            "coverage_ratio": None,
+        },
+        "aggregation": {
+            "total_holdings": 0.0,
+            "purchase_value_eur": 0.0,
+            "purchase_total_security": None,
+            "purchase_total_account": None,
+        },
+        "last_close_native": None,
+        "last_close_eur": None,
+        "performance": {
+            "gain_abs": 0.0,
+            "gain_pct": 0.0,
+            "total_change_eur": 0.0,
+            "total_change_pct": 0.0,
+            "source": "metrics",
+            "coverage_ratio": None,
+            "day_change": {
+                "price_change_native": None,
+                "price_change_eur": None,
+                "change_pct": None,
+                "source": "unavailable",
+                "coverage_ratio": 0.0,
+            },
+        },
+    }
+
+
+def _build_day_change_payload(
+    *,
+    last_price_native: float | None,
+    last_price_eur: float | None,
+    last_close_native: float | None,
+    last_close_eur: float | None,
+) -> dict[str, Any]:
+    """Return the structured day change payload."""
+    if (
+        last_price_native is None
+        or last_close_native is None
+        or last_price_eur is None
+        or last_close_eur is None
+    ):
+        return {
+            "price_change_native": None,
+            "price_change_eur": None,
+            "change_pct": None,
+            "source": "unavailable",
+            "coverage_ratio": 0.5,
+        }
+
+    price_change_native = round_price(
+        last_price_native - last_close_native,
+        decimals=6,
+    )
+    price_change_eur = round_price(
+        last_price_eur - last_close_eur,
+        decimals=6,
+    )
+    change_pct = (
+        round_currency(
+            (price_change_native / last_close_native) * 100,
+            default=None,
+        )
+        if last_close_native
+        else None
+    )
+    return {
+        "price_change_native": price_change_native,
+        "price_change_eur": price_change_eur,
+        "change_pct": change_pct,
+        "source": "native",
+        "coverage_ratio": 1.0,
+    }
+
+
+def _build_snapshot_from_holdings(
+    db_path: Path,
+    conn: sqlite3.Connection,
+    security_uuid: str,
+    security_row: sqlite3.Row,
+) -> dict[str, Any]:
+    """Construct a snapshot from portfolio_securities when metrics are unavailable."""
+    holdings_rows = _load_security_holdings(conn, security_uuid)
+    if not holdings_rows:
+        return _empty_security_snapshot(security_row)
+
+    aggregation = compute_holdings_aggregation(holdings_rows)
+    (
+        selection,
+        purchase_value_eur,
+        purchase_total_security,
+        purchase_total_account,
+    ) = _resolve_average_cost_totals(aggregation)
+
+    purchase_value_eur = round_currency(purchase_value_eur, default=0.0) or 0.0
+    purchase_total_security = (
+        round_currency(purchase_total_security, default=0.0) or 0.0
+    )
+    purchase_total_account = round_currency(purchase_total_account, default=0.0) or 0.0
+
+    total_holdings = (
+        round_currency(
+            aggregation.total_holdings,
+            decimals=6,
+            default=0.0,
+        )
+        or 0.0
+    )
+
+    reference_date = datetime.now()  # noqa: DTZ005
+    reference_epoch_day = _epoch_day_from_date(reference_date.date())
+    currency_code = security_row["currency_code"] or "EUR"
+
+    last_price_native_raw = security_row["last_price"]
+    last_price_native = normalize_raw_price(last_price_native_raw, decimals=4)
+    last_price_eur = None
+    if last_price_native_raw is not None:
+        last_price_eur = normalize_price_to_eur_sync(
+            last_price_native_raw,
+            currency_code,
+            reference_date,
+            db_path,
+        )
+    market_value_eur = 0.0
+    if last_price_eur is not None and total_holdings:
+        market_value_eur = (
+            round_currency(last_price_eur * total_holdings, default=0.0) or 0.0
+        )
+
+    prev_date, raw_last_close, last_close_native = fetch_previous_close(
+        db_path,
+        security_uuid,
+        conn=conn,
+        before_epoch_day=reference_epoch_day,
+    )
+    if prev_date is None or (
+        reference_epoch_day - int(prev_date) > _LAST_CLOSE_STALE_DAYS
+    ):
+        raw_last_close = None
+        last_close_native = None
+    last_close_eur = None
+    if raw_last_close is not None:
+        last_close_eur = normalize_price_to_eur_sync(
+            raw_last_close,
+            currency_code,
+            reference_date,
+            db_path,
+        )
+
+    day_change_payload = _build_day_change_payload(
+        last_price_native=last_price_native,
+        last_price_eur=last_price_eur,
+        last_close_native=last_close_native,
+        last_close_eur=last_close_eur,
+    )
+
+    gain_abs = round_currency(market_value_eur - purchase_value_eur, default=0.0) or 0.0
+    gain_pct = (
+        round_currency((gain_abs / purchase_value_eur) * 100, default=0.0)
+        if purchase_value_eur
+        else 0.0
+    )
+    ticker_symbol = security_row["ticker_symbol"]
+
+    average_cost_payload = {
+        "native": selection.native,
+        "security": selection.security,
+        "account": selection.account,
+        "eur": selection.eur,
+        "source": selection.source,
+        "coverage_ratio": selection.coverage_ratio,
+    }
+
+    aggregation_payload = {
+        "total_holdings": total_holdings,
+        "purchase_value_eur": purchase_value_eur,
+        "purchase_total_security": purchase_total_security,
+        "purchase_total_account": purchase_total_account,
+        "purchase_value_cents": int(aggregation.purchase_value_cents or 0),
+    }
+
+    performance_payload = {
+        "gain_abs": gain_abs,
+        "gain_pct": gain_pct,
+        "total_change_eur": gain_abs,
+        "total_change_pct": gain_pct,
+        "source": "calculated",
+        "coverage_ratio": 1.0 if total_holdings or purchase_value_eur else 0.0,
+        "day_change": day_change_payload,
+    }
+
+    return {
+        "name": security_row["name"],
+        "ticker_symbol": ticker_symbol,
+        "currency_code": currency_code,
+        "total_holdings": total_holdings,
+        "last_price_native": round_price(last_price_native, decimals=6),
+        "last_price_eur": round_price(last_price_eur, decimals=6),
+        "market_value_eur": market_value_eur,
+        "purchase_value_eur": purchase_value_eur,
+        "average_cost": average_cost_payload,
+        "aggregation": aggregation_payload,
+        "last_close_native": round_price(last_close_native, decimals=6),
+        "last_close_eur": round_price(last_close_eur, decimals=6),
+        "performance": performance_payload,
+    }
+
+
 def get_security_snapshot(  # noqa: PLR0912, PLR0915
     db_path: Path, security_uuid: str
 ) -> dict[str, Any]:
-    """Aggregate holdings and pricing information for a security."""
+    """Load aggregated security metrics from persisted metric tables."""
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
         raise ValueError(message)
@@ -516,166 +1228,1485 @@ def get_security_snapshot(  # noqa: PLR0912, PLR0915
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
-        cursor = conn.execute(
+        security_row = conn.execute(
             """
-            SELECT name, currency_code, COALESCE(last_price, 0) AS last_price
+            SELECT
+                name,
+                ticker_symbol,
+                currency_code,
+                last_price
             FROM securities
             WHERE uuid = ?
             """,
             (security_uuid,),
-        )
-        security_row = cursor.fetchone()
+        ).fetchone()
         if security_row is None:
             unknown_message = f"Unbekannte security_uuid: {security_uuid}"
             raise LookupError(unknown_message)
 
-        holdings_cursor = conn.execute(
+        run_uuid = load_latest_completed_metric_run_uuid(db_path, conn=conn)
+        if not run_uuid:
+            return _build_snapshot_from_holdings(
+                db_path,
+                conn,
+                security_uuid,
+                security_row,
+            )
+
+        rows = conn.execute(
             """
             SELECT
-                current_holdings,
-                purchase_value,
-                avg_price_native,
-                security_currency_total,
-                account_currency_total,
-                avg_price_account
-            FROM portfolio_securities
-            WHERE security_uuid = ?
+                holdings_raw,
+                current_value_cents,
+                purchase_value_cents,
+                purchase_security_value_raw,
+                purchase_account_value_cents,
+                gain_abs_cents,
+                gain_pct,
+                total_change_eur_cents,
+                total_change_pct,
+                source,
+                coverage_ratio,
+                day_change_native,
+                day_change_eur,
+                day_change_pct,
+                day_change_source,
+                day_change_coverage,
+                last_price_native_raw,
+                last_close_native_raw,
+                provenance
+            FROM security_metrics
+            WHERE metric_run_uuid = ?
+              AND security_uuid = ?
             """,
-            (security_uuid,),
-        )
-        holdings_rows = holdings_cursor.fetchall()
-        aggregation = compute_holdings_aggregation(holdings_rows)
+            (run_uuid, security_uuid),
+        ).fetchall()
 
-        raw_price = security_row["last_price"]
-        currency_code: str = security_row["currency_code"] or "EUR"
-        reference_date = datetime.now()  # noqa: DTZ005
-        last_price_native = None
-        if raw_price:
-            try:
-                last_price_native = normalize_raw_price(raw_price, decimals=4)
-            except (TypeError, ValueError):  # pragma: no cover - defensive
-                last_price_native = None
-        last_price_eur = normalize_price_to_eur_sync(
-            raw_price, currency_code, reference_date, db_path
-        )
-        last_price_eur_value = (
-            round_price(last_price_eur, decimals=4)
-            if last_price_eur is not None
-            else None
-        )
-        total_holdings = aggregation.total_holdings
-        market_value_eur = (
-            round_currency(total_holdings * last_price_eur)
-            if last_price_eur is not None
-            else None
-        )
+        if not rows:
+            return _build_snapshot_from_holdings(
+                db_path,
+                conn,
+                security_uuid,
+                security_row,
+            )
 
-        (
-            average_cost,
-            purchase_value_eur,
-            purchase_total_security_value,
-            purchase_total_account_value,
-        ) = _resolve_average_cost_totals(
-            aggregation,
-            holdings_override=total_holdings if total_holdings > 0 else None,
-        )
-
-        if purchase_value_eur is None:
-            purchase_value_eur = 0.0
-        if purchase_total_security_value is None:
-            purchase_total_security_value = 0.0
-        if purchase_total_account_value is None:
-            purchase_total_account_value = 0.0
-        avg_price_account_value = aggregation.avg_price_account
-        if avg_price_account_value is None:
-            avg_price_account_value = average_cost.account
-            if avg_price_account_value == 0.0 and purchase_total_account_value in (
-                0.0,
-                None,
-            ):
-                avg_price_account_value = None
-
-        average_cost_payload = asdict(average_cost)
-        if average_cost_payload[
-            "security"
-        ] == 0.0 and purchase_total_security_value in (0.0, None):
-            average_cost_payload["security"] = None
-        if average_cost_payload["account"] == 0.0 and avg_price_account_value is None:
-            average_cost_payload["account"] = None
-
-        raw_last_close, last_close_native = fetch_previous_close(
-            db_path,
-            security_uuid,
-            conn=conn,
-        )
-        last_close_eur = None
-        if raw_last_close is not None:
-            try:
-                last_close_eur = normalize_price_to_eur_sync(
-                    raw_last_close,
-                    currency_code,
-                    reference_date,
-                    db_path,
-                )
-                if last_close_eur is not None:
-                    last_close_eur = round_price(last_close_eur, decimals=4)
-            except (TypeError, ValueError):  # pragma: no cover - defensive
-                last_close_eur = None
-
-        fx_rate = None
-        if last_price_native not in (None, 0) and last_price_eur_value not in (None, 0):
-            fx_rate = last_price_native / last_price_eur_value
-        elif last_close_native not in (None, 0) and last_close_eur not in (None, 0):
-            fx_rate = last_close_native / last_close_eur
-
-        performance_metrics, day_change_metrics = select_performance_metrics(
-            current_value=market_value_eur,
-            purchase_value=purchase_value_eur,
-            holdings=total_holdings,
-            last_price_native=last_price_native,
-            last_close_native=last_close_native,
-            fx_rate=fx_rate,
-        )
-        performance_payload = asdict(performance_metrics)
-        day_change_payload = asdict(day_change_metrics)
-        performance_payload["day_change"] = day_change_payload
-
-        aggregation_payload = {
-            "total_holdings": total_holdings,
-            "positive_holdings": aggregation.positive_holdings,
-            "purchase_value_cents": aggregation.purchase_value_cents,
-            "purchase_value_eur": purchase_value_eur,
-            "security_currency_total": purchase_total_security_value,
-            "account_currency_total": purchase_total_account_value,
-            "purchase_total_security": purchase_total_security_value,
-            "purchase_total_account": purchase_total_account_value,
+        totals = {
+            "holdings_raw": 0,
+            "current_value_cents": 0,
+            "purchase_value_cents": 0,
+            "purchase_account_value_cents": 0.0,
+            "purchase_security_value_raw": 0.0,
+            "gain_abs_cents": 0,
+            "total_change_eur_cents": 0,
         }
+        coverage_values: list[float] = []
+        provenance_values: list[str] = []
+        day_change_source = None
+        day_change_coverage = None
+        day_change_native = None
+        day_change_eur = None
+        day_change_pct = None
+        last_price_native_raw = None
+        last_close_native_raw = None
+
+        for row in rows:
+            row_data = dict(row)
+            totals["holdings_raw"] += int(row_data.get("holdings_raw") or 0)
+            totals["current_value_cents"] += int(
+                row_data.get("current_value_cents") or 0
+            )
+            totals["purchase_value_cents"] += int(
+                row_data.get("purchase_value_cents") or 0
+            )
+            totals["purchase_account_value_cents"] += float(
+                row_data.get("purchase_account_value_cents") or 0
+            )
+            totals["purchase_security_value_raw"] += float(
+                row_data.get("purchase_security_value_raw") or 0
+            )
+            totals["gain_abs_cents"] += int(row_data.get("gain_abs_cents") or 0)
+            totals["total_change_eur_cents"] += int(
+                row_data.get("total_change_eur_cents") or 0
+            )
+
+            coverage = row_data.get("coverage_ratio")
+            if coverage not in (None, ""):
+                coverage_values.append(float(coverage))
+
+            provenance = row_data.get("provenance")
+            if provenance:
+                provenance_values.append(str(provenance))
+
+            if day_change_native is None and row_data.get("day_change_native"):
+                day_change_native = row_data.get("day_change_native")
+                day_change_eur = row_data.get("day_change_eur")
+                day_change_pct = row_data.get("day_change_pct")
+                day_change_source = row_data.get("day_change_source")
+                day_change_coverage = row_data.get("day_change_coverage")
+
+            if last_price_native_raw is None and row_data.get("last_price_native_raw"):
+                last_price_native_raw = row_data.get("last_price_native_raw")
+            if last_close_native_raw is None and row_data.get("last_close_native_raw"):
+                last_close_native_raw = row_data.get("last_close_native_raw")
+
+        total_holdings = _from_holdings_raw(totals["holdings_raw"])
+        current_value_eur = (
+            cent_to_eur(totals["current_value_cents"], default=0.0) or 0.0
+        )
+        purchase_value_eur = (
+            cent_to_eur(totals["purchase_value_cents"], default=0.0) or 0.0
+        )
+        purchase_total_account = round_currency(
+            totals["purchase_account_value_cents"], default=None
+        )
+        purchase_total_security = round_currency(
+            totals["purchase_security_value_raw"],
+            decimals=6,
+            default=None,
+        )
+
+        average_cost_eur = (
+            round_currency(purchase_value_eur / total_holdings, default=None)
+            if total_holdings
+            else None
+        )
+        average_cost_security = (
+            round_price(
+                purchase_total_security / total_holdings,
+                decimals=6,
+                default=None,
+            )
+            if total_holdings and purchase_total_security not in (None, 0.0)
+            else None
+        )
+        average_cost_account = (
+            round_currency(purchase_total_account / total_holdings, default=None)
+            if total_holdings and purchase_total_account not in (None, 0.0)
+            else None
+        )
+
+        gain_abs_eur = cent_to_eur(totals["gain_abs_cents"], default=0.0) or 0.0
+        gain_pct = (
+            round_currency((gain_abs_eur / purchase_value_eur) * 100, default=0.0)
+            if purchase_value_eur
+            else 0.0
+        )
+        total_change_eur = (
+            cent_to_eur(totals["total_change_eur_cents"], default=None) or gain_abs_eur
+        )
+        total_change_pct = (
+            round_currency((total_change_eur / purchase_value_eur) * 100, default=0.0)
+            if purchase_value_eur
+            else 0.0
+        )
+
+        reference_date = datetime.now()  # noqa: DTZ005
+        reference_epoch_day = _epoch_day_from_date(reference_date.date())
+        currency_code: str = security_row["currency_code"] or "EUR"
+        last_price_native = normalize_raw_price(last_price_native_raw, decimals=4)
+        if last_price_native is None:
+            last_price_native = normalize_raw_price(security_row["last_price"])
+        last_price_eur = normalize_price_to_eur_sync(
+            last_price_native_raw,
+            currency_code,
+            reference_date,
+            db_path,
+        )
+        last_close_native = normalize_raw_price(last_close_native_raw, decimals=4)
+        raw_last_close = None
+        if last_close_native_raw is None:
+            prev_date, raw_last_close, last_close_native = fetch_previous_close(
+                db_path,
+                security_uuid,
+                conn=conn,
+                before_epoch_day=reference_epoch_day,
+            )
+            if prev_date is None or (
+                reference_epoch_day - int(prev_date) > _LAST_CLOSE_STALE_DAYS
+            ):
+                raw_last_close = None
+                last_close_native = None
+            if raw_last_close is not None and last_close_native is None:
+                last_close_native = normalize_raw_price(raw_last_close, decimals=4)
+        last_close_eur = normalize_price_to_eur_sync(
+            raw_last_close or last_close_native_raw,
+            currency_code,
+            reference_date,
+            db_path,
+        )
+
+        coverage_ratio = None
+        if coverage_values:
+            coverage_ratio = round_currency(
+                sum(coverage_values) / len(coverage_values),
+                decimals=4,
+                default=None,
+            )
+
+        day_change_payload: dict[str, Any] | None = None
+        if any(
+            value not in (None, "") for value in (day_change_native, day_change_pct)
+        ):
+            day_change_payload = {
+                "price_change_native": round_price(day_change_native, decimals=6),
+                "price_change_eur": round_price(day_change_eur, decimals=6),
+                "change_pct": day_change_pct,
+                "source": day_change_source or "metrics",
+                "coverage_ratio": day_change_coverage,
+            }
+
+        performance_payload: dict[str, Any] = {
+            "gain_abs": round_currency(gain_abs_eur, default=0.0) or 0.0,
+            "gain_pct": gain_pct or 0.0,
+            "total_change_eur": round_currency(total_change_eur, default=0.0) or 0.0,
+            "total_change_pct": total_change_pct or 0.0,
+            "source": "metrics",
+            "coverage_ratio": coverage_ratio,
+        }
+        if provenance_values:
+            performance_payload["provenance"] = provenance_values[0]
+        if day_change_payload:
+            performance_payload["day_change"] = day_change_payload
 
         return {
             "name": security_row["name"],
+            "ticker_symbol": security_row["ticker_symbol"],
             "currency_code": currency_code,
-            "total_holdings": total_holdings,
-            "last_price_native": last_price_native,
-            "last_price_eur": last_price_eur_value,
-            "market_value_eur": market_value_eur,
-            "purchase_value_eur": purchase_value_eur,
-            "average_cost": average_cost_payload,
-            "aggregation": aggregation_payload,
-            "last_close_native": last_close_native,
-            "last_close_eur": last_close_eur,
+            "total_holdings": round_currency(
+                total_holdings,
+                decimals=6,
+                default=0.0,
+            )
+            or 0.0,
+            "last_price_native": round_price(last_price_native, decimals=6),
+            "last_price_eur": round_price(last_price_eur, decimals=6),
+            "market_value_eur": round_currency(current_value_eur, default=0.0) or 0.0,
+            "purchase_value_eur": round_currency(purchase_value_eur, default=0.0)
+            or 0.0,
+            "average_cost": {
+                "eur": average_cost_eur,
+                "security": average_cost_security,
+                "account": average_cost_account,
+            },
+            "aggregation": {
+                "total_holdings": total_holdings,
+                "purchase_value_eur": purchase_value_eur,
+                "purchase_total_security": purchase_total_security,
+                "purchase_total_account": purchase_total_account,
+            },
+            "last_close_native": round_price(last_close_native, decimals=6),
+            "last_close_eur": round_price(last_close_eur, decimals=6),
             "performance": performance_payload,
         }
     finally:
         conn.close()
 
 
-def fetch_previous_close(
+def _utc_now_isoformat() -> str:
+    """Return the current UTC timestamp in ISO8601 notation."""
+    return datetime.now(tz=UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _row_to_metric_run(row: sqlite3.Row) -> MetricRunMetadata:
+    """Convert a sqlite row into a MetricRunMetadata record."""
+    return MetricRunMetadata(
+        run_uuid=row["run_uuid"],
+        status=row["status"],
+        trigger=row["trigger"],
+        started_at=row["started_at"],
+        finished_at=row["finished_at"],
+        duration_ms=row["duration_ms"],
+        total_entities=row["total_entities"],
+        processed_portfolios=row["processed_portfolios"],
+        processed_accounts=row["processed_accounts"],
+        processed_securities=row["processed_securities"],
+        error_message=row["error_message"],
+        provenance=row["provenance"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def upsert_metric_run_metadata(
+    db_path: Path,
+    run: MetricRunMetadata,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update metadata for a metric run."""
+    if not run.run_uuid:
+        message = "run_uuid darf nicht leer sein"
+        raise ValueError(message)
+    if not run.status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    timestamp = _utc_now_isoformat()
+    started_at = run.started_at or timestamp
+    created_at = run.created_at or timestamp
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            local_conn.execute(
+                """
+                INSERT INTO metric_runs (
+                    run_uuid,
+                    status,
+                    trigger,
+                    started_at,
+                    finished_at,
+                    duration_ms,
+                    total_entities,
+                    processed_portfolios,
+                    processed_accounts,
+                    processed_securities,
+                    error_message,
+                    provenance,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_uuid) DO UPDATE SET
+                    status = excluded.status,
+                    trigger = excluded.trigger,
+                    started_at = excluded.started_at,
+                    finished_at = excluded.finished_at,
+                    duration_ms = excluded.duration_ms,
+                    total_entities = excluded.total_entities,
+                    processed_portfolios = excluded.processed_portfolios,
+                    processed_accounts = excluded.processed_accounts,
+                    processed_securities = excluded.processed_securities,
+                    error_message = excluded.error_message,
+                    provenance = excluded.provenance,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    run.run_uuid,
+                    run.status,
+                    run.trigger,
+                    started_at,
+                    run.finished_at,
+                    run.duration_ms,
+                    run.total_entities,
+                    run.processed_portfolios,
+                    run.processed_accounts,
+                    run.processed_securities,
+                    run.error_message,
+                    run.provenance,
+                    created_at,
+                    timestamp,
+                ),
+            )
+            if conn is None:
+                local_conn.commit()
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Speichern des Metric-Runs (run_uuid=%s)",
+                run.run_uuid,
+            )
+            raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def load_metric_run(
+    db_path: Path,
+    run_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> MetricRunMetadata | None:
+    """Load a specific metric run by its UUID."""
+    if not run_uuid:
+        message = "run_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+    try:
+        cursor = local_conn.execute(
+            """
+            SELECT
+                run_uuid,
+                status,
+                trigger,
+                started_at,
+                finished_at,
+                duration_ms,
+                total_entities,
+                processed_portfolios,
+                processed_accounts,
+                processed_securities,
+                error_message,
+                provenance,
+                created_at,
+                updated_at
+            FROM metric_runs
+            WHERE run_uuid = ?
+            """,
+            (run_uuid,),
+        )
+        row = cursor.fetchone()
+        return _row_to_metric_run(row) if row else None
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def load_latest_completed_metric_run_uuid(
+    db_path: Path,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> str | None:
+    """Return the most recent completed metric run uuid or None."""
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        cursor = local_conn.execute(
+            """
+            SELECT run_uuid
+            FROM metric_runs
+            WHERE status = 'completed'
+            ORDER BY
+                COALESCE(finished_at, started_at) DESC,
+                started_at DESC
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return row[0]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def list_metric_runs(
+    db_path: Path,
+    *,
+    limit: int = 20,
+    conn: sqlite3.Connection | None = None,
+) -> list[MetricRunMetadata]:
+    """Return the most recent metric runs ordered by start time descending."""
+    if limit <= 0:
+        message = "limit muss größer als 0 sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+    try:
+        cursor = local_conn.execute(
+            """
+            SELECT
+                run_uuid,
+                status,
+                trigger,
+                started_at,
+                finished_at,
+                duration_ms,
+                total_entities,
+                processed_portfolios,
+                processed_accounts,
+                processed_securities,
+                error_message,
+                provenance,
+                created_at,
+                updated_at
+            FROM metric_runs
+            ORDER BY started_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        return [_row_to_metric_run(row) for row in rows]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def delete_metric_run(
+    db_path: Path,
+    run_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Delete a metric run and cascade associated metric records."""
+    if not run_uuid:
+        message = "run_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        local_conn.execute(
+            "DELETE FROM metric_runs WHERE run_uuid = ?",
+            (run_uuid,),
+        )
+        if conn is None:
+            local_conn.commit()
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Löschen des Metric-Runs (run_uuid=%s)",
+            run_uuid,
+        )
+        raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def _row_to_portfolio_metric(row: sqlite3.Row) -> PortfolioMetricRecord:
+    """Convert a sqlite row into a PortfolioMetricRecord."""
+    return PortfolioMetricRecord(
+        metric_run_uuid=row["metric_run_uuid"],
+        portfolio_uuid=row["portfolio_uuid"],
+        valuation_currency=row["valuation_currency"],
+        current_value_cents=row["current_value_cents"],
+        purchase_value_cents=row["purchase_value_cents"],
+        gain_abs_cents=row["gain_abs_cents"],
+        gain_pct=row["gain_pct"],
+        total_change_eur_cents=row["total_change_eur_cents"],
+        total_change_pct=row["total_change_pct"],
+        source=row["source"],
+        coverage_ratio=row["coverage_ratio"],
+        position_count=row["position_count"],
+        missing_value_positions=row["missing_value_positions"],
+        provenance=row["provenance"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_account_metric(row: sqlite3.Row) -> AccountMetricRecord:
+    """Convert a sqlite row into an AccountMetricRecord."""
+    return AccountMetricRecord(
+        metric_run_uuid=row["metric_run_uuid"],
+        account_uuid=row["account_uuid"],
+        currency_code=row["currency_code"],
+        valuation_currency=row["valuation_currency"],
+        balance_native_cents=row["balance_native_cents"],
+        balance_eur_cents=row["balance_eur_cents"],
+        fx_rate=row["fx_rate"],
+        fx_rate_source=row["fx_rate_source"],
+        fx_rate_timestamp=row["fx_rate_timestamp"],
+        coverage_ratio=row["coverage_ratio"],
+        provenance=row["provenance"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_security_metric(row: sqlite3.Row) -> SecurityMetricRecord:
+    """Convert a sqlite row into a SecurityMetricRecord."""
+    return SecurityMetricRecord(
+        metric_run_uuid=row["metric_run_uuid"],
+        portfolio_uuid=row["portfolio_uuid"],
+        security_uuid=row["security_uuid"],
+        valuation_currency=row["valuation_currency"],
+        security_currency_code=row["security_currency_code"],
+        holdings_raw=row["holdings_raw"],
+        current_value_cents=row["current_value_cents"],
+        purchase_value_cents=row["purchase_value_cents"],
+        purchase_security_value_raw=row["purchase_security_value_raw"],
+        purchase_account_value_cents=row["purchase_account_value_cents"],
+        gain_abs_cents=row["gain_abs_cents"],
+        gain_pct=row["gain_pct"],
+        total_change_eur_cents=row["total_change_eur_cents"],
+        total_change_pct=row["total_change_pct"],
+        source=row["source"],
+        coverage_ratio=row["coverage_ratio"],
+        day_change_native=row["day_change_native"],
+        day_change_eur=row["day_change_eur"],
+        day_change_pct=row["day_change_pct"],
+        day_change_source=row["day_change_source"],
+        day_change_coverage=row["day_change_coverage"],
+        last_price_native_raw=row["last_price_native_raw"],
+        last_close_native_raw=row["last_close_native_raw"],
+        provenance=row["provenance"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def upsert_portfolio_metrics(
+    db_path: Path,
+    records: Sequence[PortfolioMetricRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update portfolio metrics for a run."""
+    if not records:
+        return
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        local_conn.executemany(
+            """
+            INSERT INTO portfolio_metrics (
+                metric_run_uuid,
+                portfolio_uuid,
+                valuation_currency,
+                current_value_cents,
+                purchase_value_cents,
+                gain_abs_cents,
+                gain_pct,
+                total_change_eur_cents,
+                total_change_pct,
+                source,
+                coverage_ratio,
+                position_count,
+                missing_value_positions,
+                provenance,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(metric_run_uuid, portfolio_uuid) DO UPDATE SET
+                valuation_currency = excluded.valuation_currency,
+                current_value_cents = excluded.current_value_cents,
+                purchase_value_cents = excluded.purchase_value_cents,
+                gain_abs_cents = excluded.gain_abs_cents,
+                gain_pct = excluded.gain_pct,
+                total_change_eur_cents = excluded.total_change_eur_cents,
+                total_change_pct = excluded.total_change_pct,
+                source = excluded.source,
+                coverage_ratio = excluded.coverage_ratio,
+                position_count = excluded.position_count,
+                missing_value_positions = excluded.missing_value_positions,
+                provenance = excluded.provenance,
+                updated_at = excluded.updated_at
+            """,
+            [
+                (
+                    record.metric_run_uuid,
+                    record.portfolio_uuid,
+                    record.valuation_currency or "EUR",
+                    record.current_value_cents,
+                    record.purchase_value_cents,
+                    record.gain_abs_cents,
+                    record.gain_pct,
+                    record.total_change_eur_cents,
+                    record.total_change_pct,
+                    record.source,
+                    record.coverage_ratio,
+                    record.position_count,
+                    record.missing_value_positions,
+                    record.provenance,
+                    record.created_at or timestamp,
+                    record.updated_at or timestamp,
+                )
+                for record in records
+            ],
+        )
+        if conn is None:
+            local_conn.commit()
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Speichern der Portfolio-Metriken (run_uuid=%s)",
+            records[0].metric_run_uuid,
+        )
+        raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def fetch_portfolio_metrics(
+    db_path: Path,
+    run_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> list[PortfolioMetricRecord]:
+    """Load portfolio metrics associated with a metric run."""
+    if not run_uuid:
+        message = "run_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+    try:
+        cursor = local_conn.execute(
+            """
+            SELECT
+                metric_run_uuid,
+                portfolio_uuid,
+                valuation_currency,
+                current_value_cents,
+                purchase_value_cents,
+                gain_abs_cents,
+                gain_pct,
+                total_change_eur_cents,
+                total_change_pct,
+                source,
+                coverage_ratio,
+                position_count,
+                missing_value_positions,
+                provenance,
+                created_at,
+                updated_at
+            FROM portfolio_metrics
+            WHERE metric_run_uuid = ?
+            ORDER BY portfolio_uuid
+            """,
+            (run_uuid,),
+        )
+        rows = cursor.fetchall()
+        return [_row_to_portfolio_metric(row) for row in rows]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_account_metrics(
+    db_path: Path,
+    records: Sequence[AccountMetricRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update account metrics for a run."""
+    if not records:
+        return
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        local_conn.executemany(
+            """
+            INSERT INTO account_metrics (
+                metric_run_uuid,
+                account_uuid,
+                currency_code,
+                valuation_currency,
+                balance_native_cents,
+                balance_eur_cents,
+                fx_rate,
+                fx_rate_source,
+                fx_rate_timestamp,
+                coverage_ratio,
+                provenance,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(metric_run_uuid, account_uuid) DO UPDATE SET
+                currency_code = excluded.currency_code,
+                valuation_currency = excluded.valuation_currency,
+                balance_native_cents = excluded.balance_native_cents,
+                balance_eur_cents = excluded.balance_eur_cents,
+                fx_rate = excluded.fx_rate,
+                fx_rate_source = excluded.fx_rate_source,
+                fx_rate_timestamp = excluded.fx_rate_timestamp,
+                coverage_ratio = excluded.coverage_ratio,
+                provenance = excluded.provenance,
+                updated_at = excluded.updated_at
+            """,
+            [
+                (
+                    record.metric_run_uuid,
+                    record.account_uuid,
+                    record.currency_code,
+                    record.valuation_currency or "EUR",
+                    record.balance_native_cents,
+                    record.balance_eur_cents,
+                    record.fx_rate,
+                    record.fx_rate_source,
+                    record.fx_rate_timestamp,
+                    record.coverage_ratio,
+                    record.provenance,
+                    record.created_at or timestamp,
+                    record.updated_at or timestamp,
+                )
+                for record in records
+            ],
+        )
+        if conn is None:
+            local_conn.commit()
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Speichern der Konto-Metriken (run_uuid=%s)",
+            records[0].metric_run_uuid,
+        )
+        raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def fetch_account_metrics(
+    db_path: Path,
+    run_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> list[AccountMetricRecord]:
+    """Load account metrics associated with a metric run."""
+    if not run_uuid:
+        message = "run_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+    try:
+        cursor = local_conn.execute(
+            """
+            SELECT
+                metric_run_uuid,
+                account_uuid,
+                currency_code,
+                valuation_currency,
+                balance_native_cents,
+                balance_eur_cents,
+                fx_rate,
+                fx_rate_source,
+                fx_rate_timestamp,
+                coverage_ratio,
+                provenance,
+                created_at,
+                updated_at
+            FROM account_metrics
+            WHERE metric_run_uuid = ?
+            ORDER BY account_uuid
+            """,
+            (run_uuid,),
+        )
+        rows = cursor.fetchall()
+        return [_row_to_account_metric(row) for row in rows]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_security_metrics(
+    db_path: Path,
+    records: Sequence[SecurityMetricRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update security metrics for a run."""
+    if not records:
+        return
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        local_conn.executemany(
+            """
+            INSERT INTO security_metrics (
+                metric_run_uuid,
+                portfolio_uuid,
+                security_uuid,
+                valuation_currency,
+                security_currency_code,
+                holdings_raw,
+                current_value_cents,
+                purchase_value_cents,
+                purchase_security_value_raw,
+                purchase_account_value_cents,
+                gain_abs_cents,
+                gain_pct,
+                total_change_eur_cents,
+                total_change_pct,
+                source,
+                coverage_ratio,
+                day_change_native,
+                day_change_eur,
+                day_change_pct,
+                day_change_source,
+                day_change_coverage,
+                last_price_native_raw,
+                last_close_native_raw,
+                provenance,
+                created_at,
+                updated_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(metric_run_uuid, portfolio_uuid, security_uuid) DO UPDATE SET
+                valuation_currency = excluded.valuation_currency,
+                security_currency_code = excluded.security_currency_code,
+                holdings_raw = excluded.holdings_raw,
+                current_value_cents = excluded.current_value_cents,
+                purchase_value_cents = excluded.purchase_value_cents,
+                purchase_security_value_raw = excluded.purchase_security_value_raw,
+                purchase_account_value_cents = excluded.purchase_account_value_cents,
+                gain_abs_cents = excluded.gain_abs_cents,
+                gain_pct = excluded.gain_pct,
+                total_change_eur_cents = excluded.total_change_eur_cents,
+                total_change_pct = excluded.total_change_pct,
+                source = excluded.source,
+                coverage_ratio = excluded.coverage_ratio,
+                day_change_native = excluded.day_change_native,
+                day_change_eur = excluded.day_change_eur,
+                day_change_pct = excluded.day_change_pct,
+                day_change_source = excluded.day_change_source,
+                day_change_coverage = excluded.day_change_coverage,
+                last_price_native_raw = excluded.last_price_native_raw,
+                last_close_native_raw = excluded.last_close_native_raw,
+                provenance = excluded.provenance,
+                updated_at = excluded.updated_at
+            """,
+            [
+                (
+                    record.metric_run_uuid,
+                    record.portfolio_uuid,
+                    record.security_uuid,
+                    record.valuation_currency or "EUR",
+                    record.security_currency_code or "EUR",
+                    record.holdings_raw,
+                    record.current_value_cents,
+                    record.purchase_value_cents,
+                    record.purchase_security_value_raw,
+                    record.purchase_account_value_cents,
+                    record.gain_abs_cents,
+                    record.gain_pct,
+                    record.total_change_eur_cents,
+                    record.total_change_pct,
+                    record.source,
+                    record.coverage_ratio,
+                    record.day_change_native,
+                    record.day_change_eur,
+                    record.day_change_pct,
+                    record.day_change_source,
+                    record.day_change_coverage,
+                    record.last_price_native_raw,
+                    record.last_close_native_raw,
+                    record.provenance,
+                    record.created_at or timestamp,
+                    record.updated_at or timestamp,
+                )
+                for record in records
+            ],
+        )
+        if conn is None:
+            local_conn.commit()
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Speichern der Wertpapier-Metriken (run_uuid=%s)",
+            records[0].metric_run_uuid,
+        )
+        raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def fetch_security_metrics(
+    db_path: Path,
+    run_uuid: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> list[SecurityMetricRecord]:
+    """Load security metrics associated with a metric run."""
+    if not run_uuid:
+        message = "run_uuid darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+    try:
+        cursor = local_conn.execute(
+            """
+            SELECT
+                metric_run_uuid,
+                portfolio_uuid,
+                security_uuid,
+                valuation_currency,
+                security_currency_code,
+                holdings_raw,
+                current_value_cents,
+                purchase_value_cents,
+                purchase_security_value_raw,
+                purchase_account_value_cents,
+                gain_abs_cents,
+                gain_pct,
+                total_change_eur_cents,
+                total_change_pct,
+                source,
+                coverage_ratio,
+                day_change_native,
+                day_change_eur,
+                day_change_pct,
+                day_change_source,
+                day_change_coverage,
+                last_price_native_raw,
+                last_close_native_raw,
+                provenance,
+                created_at,
+                updated_at
+            FROM security_metrics
+            WHERE metric_run_uuid = ?
+            ORDER BY portfolio_uuid, security_uuid
+            """,
+            (run_uuid,),
+        )
+        rows = cursor.fetchall()
+        return [_row_to_security_metric(row) for row in rows]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_fx_rate(
+    db_path: Path,
+    rate: FxRateRecord,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update an FX rate entry."""
+    if not rate.date:
+        message = "date darf nicht leer sein"
+        raise ValueError(message)
+    if not rate.currency:
+        message = "currency darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            local_conn.execute(
+                """
+                INSERT OR REPLACE INTO fx_rates (
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    rate.date,
+                    rate.currency,
+                    rate.rate,
+                    rate.fetched_at,
+                    rate.data_source,
+                    rate.provider,
+                    rate.provenance,
+                ),
+            )
+            if conn is None:
+                local_conn.commit()
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Speichern des Wechselkurses (date=%s, currency=%s)",
+                rate.date,
+                rate.currency,
+            )
+            raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_fx_rates_bulk(
+    db_path: Path,
+    rates: Sequence[FxRateRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update multiple FX rate entries in a single statement."""
+    if not rates:
+        return
+
+    for rate in rates:
+        if not rate.date:
+            message = "date darf nicht leer sein"
+            raise ValueError(message)
+        if not rate.currency:
+            message = "currency darf nicht leer sein"
+            raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            local_conn.executemany(
+                """
+                INSERT INTO fx_rates (
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date, currency) DO UPDATE SET
+                    rate = excluded.rate,
+                    fetched_at = excluded.fetched_at,
+                    data_source = excluded.data_source,
+                    provider = excluded.provider,
+                    provenance = excluded.provenance
+                """,
+                [
+                    (
+                        rate.date,
+                        rate.currency,
+                        rate.rate,
+                        rate.fetched_at,
+                        rate.data_source,
+                        rate.provider,
+                        rate.provenance,
+                    )
+                    for rate in rates
+                ],
+            )
+            if conn is None:
+                local_conn.commit()
+        except sqlite3.Error:
+            _LOGGER.exception("Fehler beim Bulk-Speichern von FX-Kursen")
+            raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def _iter_chunks(
+    items: Sequence[FxRateRecord],
+    size: int,
+) -> Iterator[Sequence[FxRateRecord]]:
+    """Yield non-overlapping chunks from a sequence."""
+    for idx in range(0, len(items), size):
+        yield items[idx : idx + size]
+
+
+def upsert_fx_rates_chunked(
+    db_path: Path,
+    rates: Sequence[FxRateRecord],
+    *,
+    chunk_size: int = 500,
+    retries: int = 3,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert multiple FX rates in chunks with simple retry on database locks."""
+    if not rates:
+        return
+    if chunk_size <= 0:
+        message = "chunk_size must be positive"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        for chunk in _iter_chunks(rates, chunk_size):
+            delay = 0.25
+            for attempt in range(retries):
+                try:
+                    upsert_fx_rates_bulk(
+                        db_path,
+                        chunk,
+                        conn=local_conn,
+                    )
+                    if conn is None:
+                        local_conn.commit()
+                    break
+                except sqlite3.OperationalError as err:
+                    is_locked = "database is locked" in str(err).lower()
+                    last_attempt = attempt >= retries - 1
+                    if not is_locked or last_attempt:
+                        _LOGGER.exception("Fehler beim chunked FX-Insert")
+                        raise
+                    time.sleep(delay)
+                    delay *= 2
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def load_fx_rates_for_date(
+    db_path: Path,
+    date: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> list[FxRateRecord]:
+    """Load all FX rates stored for a specific date."""
+    if not date:
+        message = "date darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                SELECT
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                FROM fx_rates
+                WHERE date = ?
+                """,
+                (date,),
+            )
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Laden der Wechselkurse (date=%s)",
+                date,
+            )
+            raise
+
+        rows = cursor.fetchall()
+        return [
+            FxRateRecord(
+                date=row[0],
+                currency=row[1],
+                rate=row[2],
+                fetched_at=row[3],
+                data_source=row[4],
+                provider=row[5],
+                provenance=row[6],
+            )
+            for row in rows
+        ]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def enqueue_price_history_job(
+    db_path: Path,
+    job: NewPriceHistoryJob,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> int:
+    """Insert a job into the price history queue and return its identifier."""
+    if not job.security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+    if not job.status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                INSERT INTO price_history_queue (
+                    security_uuid,
+                    requested_date,
+                    status,
+                    priority,
+                    scheduled_at,
+                    data_source,
+                    provenance,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.security_uuid,
+                    job.requested_date,
+                    job.status,
+                    job.priority,
+                    job.scheduled_at,
+                    job.data_source,
+                    job.provenance,
+                    timestamp,
+                ),
+            )
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Anlegen eines Price-History-Jobs (security_uuid=%s)",
+                job.security_uuid,
+            )
+            raise
+        else:
+            job_id = int(cursor.lastrowid)
+            if conn is None:
+                local_conn.commit()
+            return job_id
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def price_history_job_exists(
+    db_path: Path,
+    security_uuid: str,
+    *,
+    statuses: Sequence[str] = ("pending", "running"),
+) -> bool:
+    """Return True when a job for the security exists in one of the statuses."""
+    if not security_uuid:
+        message = "security_uuid darf nicht leer sein"
+        raise ValueError(message)
+    statuses_tuple = tuple(statuses)
+    if not statuses_tuple:
+        return False
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.execute(
+            """
+            SELECT status
+            FROM price_history_queue
+            WHERE security_uuid = ?
+            """,
+            (security_uuid,),
+        )
+        return any(row[0] in statuses_tuple for row in cursor.fetchall())
+    finally:
+        conn.close()
+
+
+def mark_price_history_job_started(db_path: Path, job_id: int) -> None:
+    """Transition a job into running status and increment attempts."""
+    timestamp = _utc_now_isoformat()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            UPDATE price_history_queue
+            SET status = 'running',
+                attempts = attempts + 1,
+                started_at = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (timestamp, timestamp, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def complete_price_history_job(
+    db_path: Path,
+    job_id: int,
+    *,
+    status: str,
+    last_error: str | None = None,
+    provenance_updates: dict[str, Any] | None = None,
+) -> None:
+    """Complete a job, updating optional error/provenance metadata."""
+    if not status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    timestamp = _utc_now_isoformat()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        provenance_fragment = None
+        if provenance_updates:
+            provenance_fragment = json.dumps(provenance_updates)
+
+        conn.execute(
+            """
+            UPDATE price_history_queue
+            SET status = ?,
+                finished_at = ?,
+                last_error = ?,
+                updated_at = ?,
+                provenance = COALESCE(?, provenance)
+            WHERE id = ?
+            """,
+            (status, timestamp, last_error, timestamp, provenance_fragment, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_price_history_jobs_by_status(
+    db_path: Path,
+    status: str,
+    *,
+    limit: int | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> list[PriceHistoryJob]:
+    """Return queue entries filtered by status ordered by priority descending."""
+    if not status:
+        message = "status darf nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        query = """
+            SELECT
+                id,
+                security_uuid,
+                requested_date,
+                status,
+                priority,
+                attempts,
+                scheduled_at,
+                started_at,
+                finished_at,
+                last_error,
+                data_source,
+                provenance,
+                created_at,
+                updated_at
+            FROM price_history_queue
+            WHERE status = ?
+            ORDER BY priority DESC, scheduled_at ASC, id ASC
+        """
+        params: list[Any] = [status]
+        if limit is not None:
+            if limit <= 0:
+                message = "limit muss größer als 0 sein"
+                raise ValueError(message)
+            query += " LIMIT ?"
+            params.append(limit)
+
+        try:
+            cursor = local_conn.execute(query, params)
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Lesen der Price-History-Jobs mit Status '%s'",
+                status,
+            )
+            raise
+
+        rows = cursor.fetchall()
+        return [
+            PriceHistoryJob(
+                id=row[0],
+                security_uuid=row[1],
+                requested_date=row[2],
+                status=row[3],
+                priority=row[4],
+                attempts=row[5],
+                scheduled_at=row[6],
+                started_at=row[7],
+                finished_at=row[8],
+                last_error=row[9],
+                data_source=row[10],
+                provenance=row[11],
+                created_at=row[12],
+                updated_at=row[13],
+            )
+            for row in rows
+        ]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def fetch_previous_close(  # noqa: PLR0912, PLR0915
     db_path: Path,
     security_uuid: str,
     *,
     conn: sqlite3.Connection | None = None,
-) -> tuple[int | None, float | None]:
-    """Fetch the most recent historical close price for a security."""
+    before_epoch_day: int | None = None,
+) -> tuple[int | None, int | None, float | None]:
+    """
+    Fetch the most recent historical close price for a security.
+
+    Returns a tuple of (date_epoch, close_raw, close_native). If before_epoch_day
+    is provided, only closes strictly older than that day are considered. The
+    cutoff accepts epoch-day values and is internally converted to YYYYMMDD to
+    match the stored schema.
+    """
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
         raise ValueError(message)
@@ -684,32 +2715,53 @@ def fetch_previous_close(
     if local_conn is None:
         local_conn = sqlite3.connect(str(db_path))
 
+    cutoff_yyyymmdd: int | None = None
+    if before_epoch_day is not None:
+        try:
+            normalized_cutoff = int(before_epoch_day)
+        except (TypeError, ValueError):
+            normalized_cutoff = None
+
+        if normalized_cutoff is not None:
+            if normalized_cutoff >= _YYYYMMDD_MIN_VALUE:
+                cutoff_yyyymmdd = normalized_cutoff
+            else:
+                try:
+                    cutoff_date = _EPOCH_START_DATE + timedelta(days=normalized_cutoff)
+                    cutoff_yyyymmdd = int(cutoff_date.strftime("%Y%m%d"))
+                except (OverflowError, ValueError):
+                    cutoff_yyyymmdd = None
+
     try:
         try:
-            cursor = local_conn.execute(
-                """
-                SELECT close
+            params: list[object] = [security_uuid]
+            sql = """
+                SELECT close, date
                 FROM historical_prices
                 WHERE security_uuid = ?
-                ORDER BY date DESC
-                LIMIT 1
-                """,
-                (security_uuid,),
-            )
+            """
+            if cutoff_yyyymmdd is not None:
+                sql += " AND date < ?"
+                params.append(cutoff_yyyymmdd)
+            sql += " ORDER BY date DESC LIMIT 1"
+
+            cursor = local_conn.execute(sql, params)
             row = cursor.fetchone()
         except sqlite3.Error:
             _LOGGER.exception(
                 "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
                 security_uuid,
             )
-            return None, None
+            return None, None, None
 
         if not row:
-            return None, None
+            return None, None, None
 
         raw_close = row[0]
+        date_value = row[1] if len(row) > 1 else None
+        prev_epoch_day = _to_epoch_day(date_value)
         if raw_close is None:
-            return None, None
+            return date_value, None, None
 
         close_native: float | None = None
         try:
@@ -723,326 +2775,328 @@ def fetch_previous_close(
             )
             close_native = None
 
-        return int(raw_close), close_native
+        return prev_epoch_day or date_value, int(raw_close), close_native
     finally:
         if conn is None:
             with suppress(sqlite3.Error):
                 local_conn.close()
 
 
-def get_portfolio_positions(  # noqa: PLR0912, PLR0915
-    db_path: Path, portfolio_uuid: str
-) -> list[dict[str, Any]]:
-    """
-    Liefert Depot-Positionen inklusive Kaufwert, aktuellem Wert und Performance.
-
-    Rückgabe:
-    [
-      {
-        "security_uuid": str,
-        "name": str,
-        "current_holdings": float,
-        "purchase_value": float,          # EUR
-        "current_value": float,           # EUR
-        "performance": dict[str, Any],
-        "aggregation": dict[str, Any],
-      },
-      ...
-    ]
-    """
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT
-                ps.security_uuid,
-                s.name,
-                ps.current_holdings,
-                ps.purchase_value,        -- Cent
-                ps.current_value,         -- Cent
-                ps.avg_price_native,
-                ps.security_currency_total,
-                ps.account_currency_total,
-                ps.avg_price_account
-            FROM portfolio_securities ps
-            JOIN securities s ON s.uuid = ps.security_uuid
-            WHERE ps.portfolio_uuid = ?
-            ORDER BY s.name ASC   -- Alphabetische Standardsortierung
-                                    -- (vorher: aktueller Wert DESC)
-            """,
-            (portfolio_uuid,),
-        )
-        rows = cur.fetchall()
-
-        positions: list[dict[str, Any]] = []
-        for (
-            security_uuid,
-            name,
-            current_holdings,
-            purchase_value_cents,
-            current_value_cents,
-            avg_price_native_raw,
-            security_total_raw,
-            account_total_raw,
-            avg_price_account_raw,
-        ) in rows:
-            aggregation = compute_holdings_aggregation(
-                [
-                    {
-                        "current_holdings": current_holdings,
-                        "purchase_value": purchase_value_cents,
-                        "avg_price_native": avg_price_native_raw,
-                        "security_currency_total": security_total_raw,
-                        "account_currency_total": account_total_raw,
-                        "avg_price_account": avg_price_account_raw,
-                    }
-                ]
-            )
-
-            (
-                average_cost,
-                purchase_value,
-                purchase_total_security_value,
-                purchase_total_account_value,
-            ) = _resolve_average_cost_totals(
-                aggregation,
-                holdings_override=aggregation.total_holdings
-                if aggregation.total_holdings > 0
-                else None,
-            )
-
-            if purchase_value is None:
-                purchase_value = 0.0
-            if purchase_total_security_value is None:
-                purchase_total_security_value = 0.0
-            if purchase_total_account_value is None:
-                purchase_total_account_value = 0.0
-
-            average_purchase_price_native = (
-                aggregation.average_purchase_price_native
-                if aggregation.average_purchase_price_native is not None
-                else average_cost.native
-            )
-            avg_price_account_value = aggregation.avg_price_account
-            if avg_price_account_value is None:
-                avg_price_account_value = average_cost.account
-                if avg_price_account_value == 0.0 and purchase_total_account_value in (
-                    0.0,
-                    None,
-                ):
-                    avg_price_account_value = None
-
-            average_cost_payload = asdict(average_cost)
-            if average_cost_payload[
-                "security"
-            ] == 0.0 and purchase_total_security_value in (0.0, None):
-                average_cost_payload["security"] = None
-            if (
-                average_cost_payload["account"] == 0.0
-                and avg_price_account_value is None
-            ):
-                average_cost_payload["account"] = None
-
-            if aggregation.total_holdings not in (
-                None,
-                0,
-            ) and purchase_total_security_value not in (None, 0.0):
-                derived_security_avg = round_currency(
-                    purchase_total_security_value / aggregation.total_holdings,
-                    decimals=6,
-                    default=None,
-                )
-                if derived_security_avg is not None:
-                    security_average = average_cost_payload.get("security")
-                    if security_average is None or (
-                        isinstance(security_average, (int, float))
-                        and isclose(
-                            float(security_average),
-                            derived_security_avg,
-                            rel_tol=0.0,
-                            abs_tol=0.01,
-                        )
-                    ):
-                        average_cost_payload["security"] = derived_security_avg
-
-            if aggregation.total_holdings not in (
-                None,
-                0,
-            ) and purchase_total_account_value not in (None, 0.0):
-                derived_account_avg = round_currency(
-                    purchase_total_account_value / aggregation.total_holdings,
-                    decimals=6,
-                    default=None,
-                )
-                if derived_account_avg is not None:
-                    account_average = average_cost_payload.get("account")
-                    if account_average is None or (
-                        isinstance(account_average, (int, float))
-                        and isclose(
-                            float(account_average),
-                            derived_account_avg,
-                            rel_tol=0.0,
-                            abs_tol=0.01,
-                        )
-                    ):
-                        average_cost_payload["account"] = derived_account_avg
-                        avg_price_account_value = derived_account_avg
-
-            aggregation_dict = {
-                "total_holdings": aggregation.total_holdings,
-                "positive_holdings": aggregation.positive_holdings,
-                "purchase_value_cents": aggregation.purchase_value_cents,
-                "purchase_value_eur": purchase_value,
-                "security_currency_total": purchase_total_security_value,
-                "account_currency_total": purchase_total_account_value,
-                "average_purchase_price_native": average_purchase_price_native,
-                "purchase_total_security": purchase_total_security_value,
-                "purchase_total_account": purchase_total_account_value,
-            }
-
-            holdings = aggregation_dict["total_holdings"]
-            current_value = cent_to_eur(current_value_cents, default=0.0) or 0.0
-
-            performance_metrics, _ = select_performance_metrics(
-                current_value=current_value,
-                purchase_value=purchase_value,
-                holdings=holdings,
-            )
-            performance_payload = asdict(performance_metrics)
-            positions.append(
-                {
-                    "security_uuid": security_uuid,
-                    "name": name,
-                    "current_holdings": holdings,
-                    "purchase_value": purchase_value,
-                    "current_value": current_value,
-                    "average_cost": average_cost_payload,
-                    "performance": performance_payload,
-                    "aggregation": aggregation_dict,
-                }
-            )
-
-    except Exception:
-        _LOGGER.exception(
-            "get_portfolio_positions: Fehler beim Laden der Positionen für "
-            "Portfolio %s",
-            portfolio_uuid,
-        )
-        return []
-    else:
-        return positions
-    finally:
-        conn.close()
-
-
 def _normalize_portfolio_row(row: sqlite3.Row) -> dict[str, Any]:
     """
     Map a sqlite3.Row to the unified portfolio dict format.
 
-    Expected columns (query responsibility):
-      - uuid
-      - name
-      - current_value (Cent)
-      - purchase_sum (Cent)
+    Expected columns:
+      - current_value_cents
+      - purchase_value_cents
+      - gain_abs_cents
+      - total_change_eur_cents
+      - gain_pct
+      - total_change_pct
+      - source
+      - coverage_ratio
       - position_count
+      - missing_value_positions
+      - provenance
     """
-    current_value = cent_to_eur(row["current_value"], default=0.0) or 0.0
-    purchase_sum = cent_to_eur(row["purchase_sum"], default=0.0) or 0.0
-    missing_value_positions = 0
-    if "missing_value_positions" in row:
-        try:
-            missing_value_positions = int(row["missing_value_positions"] or 0)
-        except (TypeError, ValueError):
-            missing_value_positions = 0
+    current_value = cent_to_eur(row["current_value_cents"], default=0.0) or 0.0
+    purchase_sum = cent_to_eur(row["purchase_value_cents"], default=0.0) or 0.0
 
-    has_current_value = missing_value_positions == 0
+    try:
+        position_count = int(row["position_count"] or 0)
+    except (TypeError, ValueError):
+        position_count = 0
 
-    performance_metrics, _ = select_performance_metrics(
-        current_value=current_value,
-        purchase_value=purchase_sum,
-        holdings=row["position_count"],
-    )
-    performance_payload = asdict(performance_metrics)
-    return {
+    try:
+        missing_value_positions = int(row["missing_value_positions"] or 0)
+    except (TypeError, ValueError):
+        missing_value_positions = 0
+
+    performance_payload: dict[str, Any] = {
+        "gain_abs": cent_to_eur(row["gain_abs_cents"], default=0.0) or 0.0,
+        "gain_pct": row["gain_pct"],
+        "total_change_eur": cent_to_eur(
+            row["total_change_eur_cents"],
+            default=None,
+        )
+        or cent_to_eur(row["gain_abs_cents"], default=0.0)
+        or 0.0,
+        "total_change_pct": row["total_change_pct"],
+        "source": row["source"] or "metrics",
+        "coverage_ratio": row["coverage_ratio"],
+    }
+    if row["provenance"]:
+        performance_payload["provenance"] = row["provenance"]
+
+    normalized = {
         "uuid": row["uuid"],
         "name": row["name"],
         "current_value": current_value,
         "purchase_sum": purchase_sum,
         "performance": performance_payload,
-        "position_count": row["position_count"]
-        if row["position_count"] is not None
-        else 0,
+        "position_count": position_count,
         "missing_value_positions": missing_value_positions,
-        "has_current_value": has_current_value,
+        "has_current_value": missing_value_positions == 0,
+        "metric_run_uuid": row["metric_run_uuid"],
     }
+    coverage_ratio = row["coverage_ratio"]
+    if coverage_ratio is not None:
+        normalized["coverage_ratio"] = coverage_ratio
+    provenance = row["provenance"]
+    if provenance:
+        normalized["provenance"] = provenance
+    return normalized
 
 
-def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
-    """
-    Aggregiert aktuelle Portfoliodaten aus der SQLite-DB (Single Source of Truth).
+def _fallback_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
+    """Aggregate live portfolio values directly from portfolio_securities."""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.execute(
+            """
+            SELECT
+                p.uuid,
+                p.name,
+                COALESCE(SUM(ps.current_value), 0) AS current_value_cents,
+                COALESCE(SUM(ps.purchase_value), 0) AS purchase_value_cents,
+                SUM(
+                    CASE
+                        WHEN ps.current_holdings IS NOT NULL AND ps.current_holdings > 0
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS position_count
+            FROM portfolios p
+            LEFT JOIN portfolio_securities ps ON ps.portfolio_uuid = p.uuid
+            GROUP BY p.uuid, p.name
+            ORDER BY p.name COLLATE NOCASE
+            """
+        )
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
 
-    Rückgabeformat (vereinheitlicht - WebSocket & Event Konsum):
-        [
-          {
-            "uuid": <str>,
-            "name": <str>,
-            "current_value": <float>,    # EUR (2 Nachkommastellen)
-            "purchase_sum": <float>,     # EUR (2 Nachkommastellen)
-            "performance": <dict>,       # Gain & change metrics metadata
-            "position_count": <int>
-          },
-          ...
-        ]
+    fallback_rows: list[dict[str, Any]] = []
+    for row in rows:
+        current_value = cent_to_eur(row["current_value_cents"], default=0.0) or 0.0
+        purchase_sum = cent_to_eur(row["purchase_value_cents"], default=0.0) or 0.0
+        try:
+            position_count = int(row["position_count"] or 0)
+        except (TypeError, ValueError):
+            position_count = 0
 
-    Fehlerbehandlung:
-      - Bei beliebigem Fehler (SQLite / unerwartete Column Issues) wird eine leere Liste
-        zurückgegeben, der Fehler geloggt (exception Log). Dies verhindert einen
-        kompletten Ausfall des WebSocket Handlers und hält den Fallback deterministisch.
-        (Bewusst gewählt für On-Demand Pfad; Sensoren bleiben Coordinator-basiert.)
+        metrics_payload, day_change = select_performance_metrics(
+            current_value=current_value,
+            purchase_value=purchase_sum,
+            holdings=position_count,
+        )
+        performance_payload = compose_performance_payload(
+            None,
+            metrics=metrics_payload,
+            day_change=day_change,
+        )
 
-    Performance:
-      - Nutzung des Index `idx_portfolio_securities_portfolio` (siehe Schema).
-      - OPTIONAL (später): Mikro-Caching (≤5s) falls Messungen Bedarf zeigen.
-    """
+        entry: dict[str, Any] = {
+            "uuid": row["uuid"],
+            "name": row["name"],
+            "current_value": current_value,
+            "purchase_sum": purchase_sum,
+            "position_count": position_count,
+            "missing_value_positions": 0,
+            "has_current_value": position_count > 0 or current_value > 0,
+            "metric_run_uuid": None,
+            "performance": performance_payload,
+        }
+        coverage_ratio = performance_payload.get("coverage_ratio")
+        if coverage_ratio is not None:
+            entry["coverage_ratio"] = coverage_ratio
+        fallback_rows.append(entry)
+    return fallback_rows
+
+
+def _aggregate_portfolio_day_change(
+    rows: Sequence[sqlite3.Row],
+) -> tuple[float | None, float | None, float | None]:
+    """Compute aggregated day-change values for a portfolio."""
+    total_current_cents = 0
+    total_day_change_eur = 0.0
+    rows_with_change = 0
+    rows_missing_change = 0
+
+    for row in rows:
+        total_current_cents += _safe_int(row["current_value_cents"]) or 0
+
+        holdings = _from_holdings_raw(row["holdings_raw"])
+        if holdings <= 0:
+            continue
+
+        per_share_delta = _safe_float(row["day_change_eur"])
+        if per_share_delta is None:
+            rows_missing_change += 1
+            continue
+
+        delta_eur = round_currency(per_share_delta * holdings, default=None)
+        if delta_eur is None:
+            rows_missing_change += 1
+            continue
+
+        total_day_change_eur += delta_eur
+        rows_with_change += 1
+
+    if rows_with_change == 0:
+        coverage_ratio = 0.0 if rows_missing_change > 0 else None
+        return None, None, coverage_ratio
+
+    coverage_ratio = (
+        rows_with_change / (rows_with_change + rows_missing_change)
+        if rows_with_change + rows_missing_change > 0
+        else None
+    )
+
+    current_value_eur = cent_to_eur(total_current_cents, default=0.0) or 0.0
+    previous_close_value = current_value_eur - total_day_change_eur
+    day_change_pct = None
+    if previous_close_value not in (None, 0):
+        day_change_pct = round_currency(
+            (total_day_change_eur / previous_close_value) * 100,
+            default=None,
+        )
+
+    return (
+        round_currency(total_day_change_eur, default=None),
+        day_change_pct,
+        coverage_ratio,
+    )
+
+
+def _load_portfolio_day_changes(
+    db_path: Path, run_uuid: str, portfolio_ids: Sequence[str]
+) -> dict[str, tuple[float | None, float | None, float | None]]:
+    """Aggregate day-change deltas per portfolio from security metrics."""
+    if not portfolio_ids:
+        return {}
+
     conn: sqlite3.Connection | None = None
+    changes: dict[str, tuple[float | None, float | None, float | None]] = {}
     try:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
+        for portfolio_uuid in portfolio_ids:
+            rows = conn.execute(
+                """
+                SELECT
+                    holdings_raw,
+                    current_value_cents,
+                    day_change_eur
+                FROM security_metrics
+                WHERE metric_run_uuid = ?
+                  AND portfolio_uuid = ?
+                """,
+                (run_uuid, portfolio_uuid),
+            ).fetchall()
+            if not rows:
+                continue
+            changes[portfolio_uuid] = _aggregate_portfolio_day_change(rows)
+    except Exception:  # pragma: no cover - defensive logging
+        _LOGGER.exception(
+            "fetch_live_portfolios: day-change Aggregation fehlgeschlagen "
+            "(run_uuid=%s)",
+            run_uuid,
+        )
+    finally:
+        if conn is not None:
+            with suppress(Exception):
+                conn.close()
 
-        # NOTE: current_value & purchase_sum aggregieren die verknüpften
-        # Positionen.
-        # Nutzung last_price falls vorhanden erfolgt bereits beim Update der
-        # portfolio_securities Tabelle (Annahme lt. Architektur), daher hier
-        # direkte Summen.
-        # Falls zukünftig ein direkter JOIN zu securities.last_price nötig wäre,
-        # würde dies hier zentral ergänzt.
-        sql = """
-        SELECT
-            p.uuid AS uuid,
-            p.name AS name,
-            COALESCE(SUM(ps.current_value), 0) AS current_value,
-            COALESCE(SUM(ps.purchase_value), 0) AS purchase_sum,
-            COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count,
-            SUM(
-                CASE
-                    WHEN ps.current_holdings > 0 AND ps.current_value IS NULL THEN 1
-                    ELSE 0
-                END
-            ) AS missing_value_positions
-        FROM portfolios p
-        LEFT JOIN portfolio_securities ps
-          ON p.uuid = ps.portfolio_uuid
-        GROUP BY p.uuid, p.name
-        ORDER BY p.name COLLATE NOCASE
-        """
-        rows = cur.execute(sql).fetchall()
-        return [_normalize_portfolio_row(r) for r in rows]
+    return changes
+
+
+def fetch_live_portfolios(db_path: Path) -> list[dict[str, Any]]:
+    """Return latest persisted portfolio metrics for websocket/event consumers."""
+    conn: sqlite3.Connection | None = None
+    result: list[dict[str, Any]] = []
+    try:
+        run_uuid = load_latest_completed_metric_run_uuid(db_path)
+        if not run_uuid:
+            _LOGGER.debug(
+                "fetch_live_portfolios: kein abgeschlossener Metric-Run gefunden"
+            )
+            result = _fallback_live_portfolios(db_path)
+        else:
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT
+                    pm.metric_run_uuid,
+                    pm.portfolio_uuid AS uuid,
+                    p.name AS name,
+                    pm.current_value_cents,
+                    pm.purchase_value_cents,
+                    pm.gain_abs_cents,
+                    pm.gain_pct,
+                    pm.total_change_eur_cents,
+                    pm.total_change_pct,
+                    pm.source,
+                    pm.coverage_ratio,
+                    pm.position_count,
+                    pm.missing_value_positions,
+                    pm.provenance
+                FROM portfolio_metrics pm
+                JOIN portfolios p ON p.uuid = pm.portfolio_uuid
+                WHERE pm.metric_run_uuid = ?
+                ORDER BY p.name COLLATE NOCASE
+                """,
+                (run_uuid,),
+            )
+            rows = cursor.fetchall()
+            normalized = [_normalize_portfolio_row(row) for row in rows]
+            day_changes = _load_portfolio_day_changes(
+                db_path,
+                run_uuid,
+                [entry["uuid"] for entry in normalized if entry.get("uuid")],
+            )
+            for entry in normalized:
+                portfolio_uuid = entry.get("uuid")
+                if not portfolio_uuid:
+                    continue
+                day_change = day_changes.get(portfolio_uuid)
+                if not day_change:
+                    continue
+
+                day_change_value, day_change_pct, coverage_ratio = day_change
+                if day_change_value is not None:
+                    entry["day_change_abs"] = day_change_value
+                if day_change_pct is not None:
+                    entry["day_change_pct"] = day_change_pct
+
+                performance = entry.get("performance")
+                if isinstance(performance, dict):
+                    base_day_change = performance.get("day_change")
+                    payload = (
+                        base_day_change if isinstance(base_day_change, dict) else {}
+                    )
+                    payload = {
+                        **payload,
+                        "change_pct": day_change_pct,
+                        "value_change_eur": day_change_value,
+                        "coverage_ratio": (
+                            coverage_ratio
+                            if coverage_ratio is not None
+                            else payload.get("coverage_ratio")
+                        ),
+                        "source": payload.get("source") or "aggregated",
+                    }
+                    performance["day_change"] = payload
+                    entry["performance"] = performance
+
+            result = normalized
     except Exception:
         _LOGGER.exception("fetch_live_portfolios fehlgeschlagen (db_path=%s)", db_path)
-        return []
+        result = []
     finally:
         if conn is not None:
             with suppress(Exception):
                 conn.close()  # type: ignore[has-type]
+    return result

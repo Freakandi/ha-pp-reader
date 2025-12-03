@@ -1,4 +1,4 @@
-"""Performance metric helpers for Portfolio Performance Reader."""
+"""Shared performance metric helpers for Portfolio Performance Reader."""
 
 from __future__ import annotations
 

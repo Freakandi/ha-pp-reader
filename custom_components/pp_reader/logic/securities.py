@@ -27,6 +27,7 @@ from custom_components.pp_reader.util.currency import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_SCALED_INT_THRESHOLD = 10_000
 
 PURCHASE_TYPES = {0, 2}
 SALE_TYPES = {1, 3}
@@ -230,7 +231,7 @@ def _determine_exchange_rate(
             missing_logged.add(key)
             _record_rate_failure(transaction.currency_code, tx_date)
             _LOGGER.warning(
-                "⚠️ Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
+                "Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
                 tx_date.strftime("%Y-%m-%d"),
                 transaction.currency_code,
             )
@@ -326,7 +327,8 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
     if not units:
         return None, None, None
 
-    entries: list[dict[str, Any]]
+    entries: list[dict[str, Any]] = []
+    fallback_unit: dict[str, Any] | None = None
     if isinstance(units, list):
         entries = [entry for entry in units if isinstance(entry, dict)]
     elif isinstance(units, dict):
@@ -334,7 +336,7 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
         if isinstance(nested, list):
             entries = [entry for entry in nested if isinstance(entry, dict)]
         else:
-            return None, None, None
+            fallback_unit = units
     else:
         return None, None, None
 
@@ -344,24 +346,12 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
 
     for entry in entries:
         unit_type_raw = entry.get("type")
-
-        try:
-            unit_type = int(unit_type_raw)
-        except (TypeError, ValueError):
-            continue
-
+        unit_type = _safe_int(unit_type_raw)
         if unit_type != UNIT_TYPE_NATIVE:
             continue
 
-        raw_amount = entry.get("amount")
-        converted_account = cent_to_eur(raw_amount)
-        if converted_account is not None:
-            account_amount = converted_account
-
-        fx_amount = entry.get("fx_amount")
-        converted_native = cent_to_eur(fx_amount)
-        if converted_native is not None:
-            native_amount = converted_native
+        account_amount = _apply_cent_value(entry.get("amount"), account_amount)
+        native_amount = _apply_cent_value(entry.get("fx_amount"), native_amount)
 
         currency = entry.get("fx_currency_code")
         if isinstance(currency, str):
@@ -370,7 +360,40 @@ def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branchi
         if native_amount is not None and account_amount is not None:
             break
 
+    if native_amount is None and fallback_unit:
+        simple_fx_amount = fallback_unit.get("fx_amount")
+        converted_native = cent_to_eur(simple_fx_amount)
+        if converted_native is not None:
+            native_amount = converted_native
+
+        if native_currency is None:
+            currency = fallback_unit.get("fx_currency_code")
+            if isinstance(currency, str):
+                native_currency = currency
+
+        if account_amount is None:
+            account_amount = _apply_cent_value(
+                fallback_unit.get("amount"),
+                account_amount,
+            )
+
     return native_amount, native_currency, account_amount
+
+
+def _apply_cent_value(value: Any, current: float | None) -> float | None:
+    """Convert an optional cent value to EUR, preserving an existing value."""
+    if current is not None:
+        return current
+    converted = cent_to_eur(value)
+    return converted if converted is not None else current
+
+
+def _safe_int(value: Any) -> int | None:
+    """Best-effort int conversion."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mirrors business rules
@@ -428,7 +451,7 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mi
                     _record_missing_native_position(tx.portfolio, tx.security)
                     _LOGGER.warning(
                         (
-                            "⚠️ Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
+                            "Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
                             "(Transaktion %s). Bitte manuell prüfen."
                         ),
                         tx.portfolio,
@@ -452,8 +475,11 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mi
             security_total = native_amount
             security_currency = native_currency
             if security_total is None:
-                security_total = account_total
-                security_currency = security_currency or tx.currency_code
+                if native_currency and native_currency != tx.currency_code:
+                    security_total = None
+                else:
+                    security_total = account_total
+                    security_currency = security_currency or tx.currency_code
             security_price = (
                 security_total / shares
                 if security_total is not None and shares > 0
@@ -581,6 +607,12 @@ def db_calculate_holdings_value(
     # Berechne den aktuellen Wert für jede Position
     for (portfolio_uuid, security_uuid), data in current_hold_pur.items():
         holdings = data.get("current_holdings", 0)
+        # current_holdings kann bereits skaliert (10^-8) oder normalisiert sein.
+        if (
+            isinstance(holdings, (int, float))
+            and abs(holdings) >= _SCALED_INT_THRESHOLD
+        ):
+            holdings = holdings / 10**8
 
         # Hole den aktuellen Preis
         latest_price = normalize_raw_price(latest_prices.get(security_uuid, 0.0))
@@ -594,7 +626,7 @@ def db_calculate_holdings_value(
                 latest_price /= rate  # Wende den Wechselkurs an
             else:
                 _LOGGER.warning(
-                    "⚠️ Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
+                    "Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
                     currency_code,
                 )
                 data["current_value"] = None

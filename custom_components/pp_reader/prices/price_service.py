@@ -21,21 +21,32 @@ import sqlite3
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.pp_reader.const import DOMAIN
-from custom_components.pp_reader.data.db_access import Transaction as DbTransaction
+from custom_components.pp_reader.data.db_access import (
+    Transaction as DbTransaction,
+)
+from custom_components.pp_reader.data.db_access import (
+    fetch_live_portfolios,
+)
 from custom_components.pp_reader.data.event_push import _push_update
-from custom_components.pp_reader.data.sync_from_pclient import (
-    fetch_positions_for_portfolios,
+from custom_components.pp_reader.data.normalization_pipeline import (
+    async_normalize_snapshot,
+)
+from custom_components.pp_reader.data.normalized_store import (
+    SnapshotBundle,
+    async_load_latest_snapshot_bundle,
 )
 from custom_components.pp_reader.logic.securities import (
     db_calculate_current_holdings,
     db_calculate_holdings_value,
     db_calculate_sec_purchase_value,
 )
+from custom_components.pp_reader.metrics.pipeline import async_refresh_all
 from custom_components.pp_reader.prices import revaluation
 from custom_components.pp_reader.prices.yahooquery_provider import (
     CHUNK_SIZE,
@@ -48,6 +59,7 @@ from custom_components.pp_reader.util.currency import (
     eur_to_cent,
     round_currency,
 )
+from custom_components.pp_reader.util.scaling import SCALE
 
 
 async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -55,9 +67,90 @@ async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, An
     return await revaluation.revalue_after_price_updates(*args, **kwargs)
 
 
-if TYPE_CHECKING:
-    from pathlib import Path
+async def _schedule_metrics_after_price_change(
+    hass: HomeAssistant,
+    entry_id: str,
+    db_path: Path | str | None,
+    changed_count: int,
+) -> None:
+    """Kick off a metrics refresh after price updates so snapshots stay in sync."""
+    if changed_count <= 0 or not db_path:
+        return
 
+    store = hass.data[DOMAIN].get(entry_id, {})
+    existing_task: asyncio.Task | None = store.get("metrics_refresh_task")
+    if existing_task and not existing_task.done():
+        _LOGGER.debug(
+            "prices_cycle: Metrics-Refresh bereits aktiv (entry_id=%s)", entry_id
+        )
+        return
+
+    async def _run_metrics_refresh() -> None:
+        try:
+            _LOGGER.info(
+                "prices_cycle: Starte Metrics-Refresh (entry_id=%s, changed=%s)",
+                entry_id,
+                changed_count,
+            )
+            run = await async_refresh_all(
+                hass,
+                db_path,
+                trigger="price_cycle",
+            )
+            _LOGGER.debug(
+                "prices_cycle: Metrics-Refresh abgeschlossen run_uuid=%s status=%s",
+                getattr(run, "run_uuid", None),
+                getattr(run, "status", None),
+            )
+            try:
+                await async_normalize_snapshot(
+                    hass,
+                    Path(db_path),
+                    include_positions=False,
+                )
+            except Exception:  # noqa: BLE001 - defensive logging
+                _LOGGER.debug(
+                    "prices_cycle: Normalization nach Metrics-Refresh fehlgeschlagen",
+                    exc_info=True,
+                )
+
+            try:
+                portfolio_payload = await async_run_executor_job(
+                    hass,
+                    fetch_live_portfolios,
+                    Path(db_path),
+                )
+            except Exception:  # noqa: BLE001 - defensive logging
+                _LOGGER.debug(
+                    (
+                        "prices_cycle: Live-Portfolio-Payload nach Metrics-Refresh "
+                        "fehlgeschlagen"
+                    ),
+                    exc_info=True,
+                )
+            else:
+                if portfolio_payload is not None:
+                    _push_update(
+                        hass,
+                        entry_id,
+                        "portfolio_values",
+                        portfolio_payload,
+                    )
+        except Exception:  # noqa: BLE001 - defensive logging
+            _LOGGER.warning(
+                "prices_cycle: Metrics-Refresh nach Preis-Update fehlgeschlagen",
+                exc_info=True,
+            )
+        finally:
+            store.pop("metrics_refresh_task", None)
+
+    metrics_task = hass.async_create_task(
+        _run_metrics_refresh(), name="pp_reader_metrics_after_price_cycle"
+    )
+    store["metrics_refresh_task"] = metrics_task
+
+
+if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from custom_components.pp_reader.prices.provider_base import Quote
@@ -67,15 +160,88 @@ CONSECUTIVE_ERROR_THRESHOLD = 3
 INVALID_SCALED_PRICE_ERROR = (
     "Ungültiger skalierten Preis (ensure_no_extra_persist Guard)"
 )
+_SCALED_INT_THRESHOLD = 10_000
+_EIGHT_DECIMAL_SCALE = int(SCALE)
 ZERO_QUOTES_WARN_INTERVAL = 1_800
 # Yahoo Finance benötigt teils >10s für große Chunks -
-# 20s verhindern False-Timeouts.
-PRICE_FETCH_TIMEOUT = 20
+# größere Puffer reduzieren Timeout-Abbrüche.
+PRICE_FETCH_TIMEOUT = 30
 TRANSACTION_UNIT_CHUNK_SIZE = 500
 HOLDING_VALUE_MATCH_EPSILON = 1e-9
 TOTAL_VALUE_MATCH_EPSILON = 1e-6
 
 _LOGGER = logging.getLogger(__name__)
+
+_ALLOWED_PORTFOLIO_SNAPSHOT_FIELDS = {
+    "uuid",
+    "name",
+    "performance",
+    "coverage_ratio",
+    "provenance",
+    "metric_run_uuid",
+    "generated_at",
+    "position_count",
+    "missing_value_positions",
+    "has_current_value",
+    "current_value",
+    "purchase_value",
+    "purchase_sum",
+}
+_ALLOWED_POSITION_FIELDS = {
+    "security_uuid",
+    "name",
+    "currency_code",
+    "current_holdings",
+    "purchase_value",
+    "current_value",
+    "coverage_ratio",
+    "provenance",
+    "metric_run_uuid",
+    "data_state",
+    "fx_unavailable",
+}
+
+
+def _slim_position_payload(position: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a trimmed position payload suitable for live push events."""
+    slim: dict[str, Any] = {
+        key: value for key, value in position.items() if key in _ALLOWED_POSITION_FIELDS
+    }
+
+    performance = position.get("performance")
+    if isinstance(performance, Mapping):
+        slim["performance"] = {
+            key: performance.get(key)
+            for key in ("gain_abs", "gain_pct")
+            if performance.get(key) is not None
+        }
+
+    return slim
+
+
+def _normalize_scaled_quantity(value: Any) -> float:
+    """Interpret raw numeric values that may already be scaled by 1e8."""
+    if value in (None, ""):
+        return 0.0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+    if abs(numeric) >= _SCALED_INT_THRESHOLD:
+        return numeric / _EIGHT_DECIMAL_SCALE
+    return numeric
+
+
+def _scale_quantity(value: float | None) -> int:
+    """Return an integer representation using the canonical 1e8 scaling."""
+    if value in (None, ""):
+        return 0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return round(numeric * _EIGHT_DECIMAL_SCALE)
 
 
 def initialize_price_state(hass: HomeAssistant, entry_id: str) -> None:
@@ -104,6 +270,7 @@ def initialize_price_state(hass: HomeAssistant, entry_id: str) -> None:
     # Optional: zuletzt verwendete Symbol-Mappings (Debug / Diagnose)
     store.setdefault("price_last_symbol_count", 0)
     store.setdefault("price_last_cycle_meta", {})
+    store.setdefault("price_zero_quotes_warn_ts", None)
 
 
 def build_symbol_mapping(db_path: Path) -> tuple[list[str], dict[str, list[str]]]:
@@ -370,6 +537,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                                    current_holdings,
                                    purchase_value,
                                    avg_price_native,
+                                   avg_price_security,
+                                   avg_price_account,
                                    current_value,
                                    security_currency_total,
                                    account_currency_total
@@ -384,6 +553,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         cur_hold,
                         purch_val,
                         avg_native,
+                        avg_security,
+                        avg_account,
                         cur_val,
                         sec_total,
                         acc_total,
@@ -392,10 +563,20 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         impacted_pairs.add(key)
                         impacted_portfolios.add(portfolio_uuid)
                         existing_entries[key] = {
-                            "current_holdings": float(cur_hold or 0.0),
+                            "current_holdings": _normalize_scaled_quantity(
+                                cur_hold or 0.0
+                            ),
                             "purchase_value": int(purch_val or 0),
                             "avg_price_native": (
                                 float(avg_native) if avg_native is not None else None
+                            ),
+                            "avg_price_security": (
+                                float(avg_security)
+                                if avg_security is not None
+                                else None
+                            ),
+                            "avg_price_account": (
+                                float(avg_account) if avg_account is not None else None
                             ),
                             "current_value": int(cur_val or 0),
                             "security_currency_total": (
@@ -517,6 +698,8 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                 avg_price_native = metrics.avg_price_native if metrics else None
                 security_total = metrics.security_currency_total if metrics else None
                 account_total = metrics.account_currency_total if metrics else None
+                avg_price_security = metrics.avg_price_security if metrics else None
+                avg_price_account = metrics.avg_price_account if metrics else None
 
                 existing_entry = existing_entries.get(key)
                 if holdings is None and existing_entry:
@@ -527,6 +710,10 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     )
                 if avg_price_native is None and existing_entry:
                     avg_price_native = existing_entry.get("avg_price_native")
+                if avg_price_security is None and existing_entry:
+                    avg_price_security = existing_entry.get("avg_price_security")
+                if avg_price_account is None and existing_entry:
+                    avg_price_account = existing_entry.get("avg_price_account")
                 if security_total is None and existing_entry:
                     security_total = existing_entry.get("security_currency_total", 0.0)
                 if account_total is None and existing_entry:
@@ -535,12 +722,15 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                 if holdings is None:
                     continue
 
+                holdings = _normalize_scaled_quantity(holdings)
                 current_hold_pur[key] = {
                     "current_holdings": holdings,
                     "purchase_value": purchase_value or 0.0,
                     "avg_price_native": avg_price_native,
                     "security_currency_total": security_total or 0.0,
                     "account_currency_total": account_total or 0.0,
+                    "avg_price_security": avg_price_security,
+                    "avg_price_account": avg_price_account,
                 }
 
             if not current_hold_pur:
@@ -555,7 +745,10 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
             upserts: list[tuple] = []
             for key, data in holdings_values.items():
                 portfolio_uuid, security_uuid = key
-                current_holdings_val = float(data.get("current_holdings", 0.0) or 0.0)
+                current_holdings_val = _normalize_scaled_quantity(
+                    data.get("current_holdings", 0.0)
+                )
+                current_holdings_scaled = _scale_quantity(current_holdings_val)
                 purchase_value_eur = (
                     round_currency(data.get("purchase_value"), default=0.0) or 0.0
                 )
@@ -570,6 +763,18 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     avg_price_native_val: float | None = float(avg_price_native)
                 else:
                     avg_price_native_val = None
+
+                avg_price_security = data.get("avg_price_security")
+                if isinstance(avg_price_security, (int, float)):
+                    avg_price_security_val: float | None = float(avg_price_security)
+                else:
+                    avg_price_security_val = None
+
+                avg_price_account = data.get("avg_price_account")
+                if isinstance(avg_price_account, (int, float)):
+                    avg_price_account_val: float | None = float(avg_price_account)
+                else:
+                    avg_price_account_val = None
 
                 security_total = (
                     round_currency(data.get("security_currency_total"), default=0.0)
@@ -618,6 +823,36 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                         )
                     )
                     and current_value_matches
+                    and (
+                        (
+                            existing_entry.get("avg_price_security") is None
+                            and avg_price_security_val is None
+                        )
+                        or (
+                            existing_entry.get("avg_price_security") is not None
+                            and avg_price_security_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_security", 0.0))
+                                - avg_price_security_val
+                            )
+                            < TOTAL_VALUE_MATCH_EPSILON
+                        )
+                    )
+                    and (
+                        (
+                            existing_entry.get("avg_price_account") is None
+                            and avg_price_account_val is None
+                        )
+                        or (
+                            existing_entry.get("avg_price_account") is not None
+                            and avg_price_account_val is not None
+                            and abs(
+                                float(existing_entry.get("avg_price_account", 0.0))
+                                - avg_price_account_val
+                            )
+                            < TOTAL_VALUE_MATCH_EPSILON
+                        )
+                    )
                     and abs(
                         float(existing_entry.get("security_currency_total", 0.0))
                         - security_total
@@ -635,9 +870,11 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                     (
                         portfolio_uuid,
                         security_uuid,
-                        current_holdings_val,
+                        current_holdings_scaled,
                         purchase_value_cents,
                         avg_price_native_val,
+                        avg_price_security_val,
+                        avg_price_account_val,
                         security_total,
                         account_total,
                         current_value_cents,
@@ -657,10 +894,12 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
                             current_holdings,
                             purchase_value,
                             avg_price_native,
+                            avg_price_security,
+                            avg_price_account,
                             security_currency_total,
                             account_currency_total,
                             current_value
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     upserts,
                 )
@@ -738,40 +977,6 @@ def _process_currency_drift_mismatches(
             drift_logged.add(sym)
 
     store["price_currency_drift_logged"] = drift_logged
-
-
-def _build_portfolio_values_payload(pv_dict: dict[str, dict]) -> list[dict]:
-    """Convert revaluation aggregates into the canonical portfolio payload."""
-    payload: list[dict[str, Any]] = []
-    for pid, data in pv_dict.items():
-        if not isinstance(data, Mapping):
-            continue
-
-        uuid = data.get("uuid", pid)
-        if not uuid:
-            continue
-
-        entry: dict[str, Any] = {"uuid": str(uuid)}
-
-        position_count = data.get("position_count")
-        if position_count is None and "count" in data:
-            position_count = data.get("count")
-        if position_count is not None:
-            entry["position_count"] = position_count
-
-        for key in (
-            "name",
-            "current_value",
-            "purchase_sum",
-            "performance",
-            "missing_value_positions",
-        ):
-            if key in data:
-                entry[key] = data[key]
-
-        payload.append(entry)
-
-    return payload
 
 
 async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
@@ -860,7 +1065,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 )
                 try:
                     quotes_dict = await asyncio.wait_for(
-                        provider.fetch(batch_symbols), timeout=PRICE_FETCH_TIMEOUT
+                        provider.fetch(batch_symbols), PRICE_FETCH_TIMEOUT
                     )
                 except TimeoutError:
                     chunk_failure_count += 1
@@ -1026,6 +1231,9 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 changed_count = 0
 
             revaluation_result = {"portfolio_values": None, "portfolio_positions": None}
+            snapshot_bundle: SnapshotBundle | None = None
+            snapshot_lookup: dict[str, dict[str, Any]] = {}
+
             if changed_count > 0:
                 updated_security_uuids_final = (
                     set(scaled_updates.keys()) if scaled_updates else set()
@@ -1041,14 +1249,22 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             "prices_cycle: Fehler bei partieller Revaluation",
                             exc_info=True,
                         )
-
             # Events
             if changed_count > 0:
                 pv_dict = revaluation_result.get("portfolio_values") or {}
 
                 if pv_dict:
                     try:
-                        pv_payload = _build_portfolio_values_payload(pv_dict)
+                        if not snapshot_lookup:
+                            (
+                                snapshot_bundle,
+                                snapshot_lookup,
+                            ) = await _async_load_snapshot_bundle(hass, db_path)
+                        pv_payload = _compose_portfolio_payload_from_snapshots(
+                            pv_dict,
+                            snapshot_lookup,
+                            snapshot_bundle,
+                        )
 
                         # Diff-Logging (alter vs neuer Wert) - nur DEBUG
                         if _LOGGER.isEnabledFor(logging.DEBUG):
@@ -1112,24 +1328,24 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                 # Positions: reuse falls vorhanden, sonst load
                 try:
                     positions_map = revaluation_result.get("portfolio_positions")
-                    if not positions_map and pv_dict:
-                        # Fallback positions (synchroner Loader)
-                        affected = set(pv_dict.keys())
-                        positions_map = fetch_positions_for_portfolios(
-                            db_path, affected
-                        )
                     if positions_map:
+                        if not snapshot_lookup:
+                            (
+                                snapshot_bundle,
+                                snapshot_lookup,
+                            ) = await _async_load_snapshot_bundle(hass, db_path)
                         for pid, positions in positions_map.items():
+                            entry_payload = _build_positions_event_entry(
+                                pid,
+                                positions or [],
+                                snapshot_lookup,
+                                snapshot_bundle,
+                            )
                             _push_update(
                                 hass,
                                 entry_id,
                                 "portfolio_positions",
-                                [
-                                    {
-                                        "portfolio_uuid": pid,
-                                        "positions": positions,
-                                    }
-                                ],
+                                [entry_payload],
                             )
                     else:
                         _LOGGER.debug(
@@ -1142,6 +1358,9 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         exc_info=True,
                     )
             quotes_returned = len(all_quotes)
+            await _schedule_metrics_after_price_change(
+                hass, entry_id, db_path, changed_count
+            )
             if quotes_returned > 0:
                 if chunk_failure_count == 0:
                     if prev_error_counter > 0:
@@ -1235,3 +1454,145 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             }
         else:
             return meta
+
+
+def _snapshot_lookup_from_bundle(
+    bundle: SnapshotBundle | None,
+) -> dict[str, dict[str, Any]]:
+    if not bundle:
+        return {}
+    lookup: dict[str, dict[str, Any]] = {}
+    for entry in bundle.portfolios:
+        if isinstance(entry, Mapping):
+            uuid = entry.get("uuid")
+            if uuid:
+                lookup[str(uuid)] = dict(entry)
+    return lookup
+
+
+def _normalized_metadata(
+    entry: Mapping[str, Any] | None,
+    bundle: SnapshotBundle | None,
+) -> dict[str, Any] | None:
+    if entry is None and bundle is None:
+        return None
+
+    metadata: dict[str, Any] = {}
+    metric_run_uuid = (entry.get("metric_run_uuid") if entry else None) or (
+        bundle.metric_run_uuid if bundle else None
+    )
+    if metric_run_uuid:
+        metadata["metric_run_uuid"] = metric_run_uuid
+
+    generated_at = entry.get("generated_at") if entry else None
+    if not generated_at and bundle:
+        generated_at = bundle.snapshot_at
+    if generated_at:
+        metadata["generated_at"] = generated_at
+
+    coverage_ratio = entry.get("coverage_ratio") if entry else None
+    if isinstance(coverage_ratio, (int, float)):
+        metadata["coverage_ratio"] = coverage_ratio
+
+    provenance = entry.get("provenance") if entry else None
+    if isinstance(provenance, str) and provenance:
+        metadata["provenance"] = provenance
+
+    return metadata or None
+
+
+def _compose_portfolio_payload_from_snapshots(
+    pv_dict: Mapping[str, Mapping[str, Any]],
+    snapshot_map: Mapping[str, Mapping[str, Any]],
+    bundle: SnapshotBundle | None,
+) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for pid, data in pv_dict.items():
+        if not isinstance(data, Mapping):
+            continue
+
+        base = {
+            key: value
+            for key, value in dict(snapshot_map.get(pid, {})).items()
+            if key in _ALLOWED_PORTFOLIO_SNAPSHOT_FIELDS
+        }
+        uuid = data.get("uuid") or base.get("uuid") or pid
+        entry: dict[str, Any] = {"uuid": str(uuid)}
+        entry.update({k: v for k, v in base.items() if k not in entry})
+
+        for key in ("name", "performance", "coverage_ratio", "provenance"):
+            if key in data and data[key] is not None:
+                entry[key] = data[key]
+
+        position_count = data.get("position_count")
+        if position_count is None and "count" in data:
+            position_count = data.get("count")
+        if position_count is not None:
+            entry["position_count"] = position_count
+
+        if "missing_value_positions" in data:
+            entry["missing_value_positions"] = data["missing_value_positions"]
+
+        current_value = data.get("current_value")
+        if current_value is not None:
+            entry["current_value"] = current_value
+
+        purchase_value = data.get("purchase_sum", data.get("purchase_value"))
+        if purchase_value is not None:
+            entry["purchase_value"] = purchase_value
+            entry["purchase_sum"] = purchase_value
+
+        normalized_payload = _normalized_metadata(entry, bundle)
+        if normalized_payload:
+            entry["normalized_payload"] = normalized_payload
+
+        payload.append(entry)
+
+    return payload
+
+
+def _build_positions_event_entry(
+    portfolio_uuid: str,
+    positions: list[dict[str, Any]] | Any,
+    snapshot_map: Mapping[str, Mapping[str, Any]],
+    bundle: SnapshotBundle | None,
+) -> dict[str, Any]:
+    base = snapshot_map.get(portfolio_uuid, {})
+    payload_positions: list[dict[str, Any]] = []
+    if isinstance(positions, list):
+        for position in positions:
+            if not isinstance(position, Mapping):
+                continue
+            payload_positions.append(_slim_position_payload(position))
+    elif positions and isinstance(positions, Mapping):
+        payload_positions.append(_slim_position_payload(positions))
+    entry: dict[str, Any] = {
+        "portfolio_uuid": portfolio_uuid,
+        "positions": payload_positions,
+    }
+    normalized_payload = _normalized_metadata(base, bundle)
+    if normalized_payload:
+        entry["normalized_payload"] = normalized_payload
+        if normalized_payload.get("metric_run_uuid"):
+            entry["metric_run_uuid"] = normalized_payload["metric_run_uuid"]
+        if normalized_payload.get("coverage_ratio") is not None:
+            entry["coverage_ratio"] = normalized_payload["coverage_ratio"]
+        if normalized_payload.get("provenance"):
+            entry["provenance"] = normalized_payload["provenance"]
+    return entry
+
+
+async def _async_load_snapshot_bundle(
+    hass: HomeAssistant,
+    db_path: Path | str,
+) -> tuple[SnapshotBundle | None, dict[str, dict[str, Any]]]:
+    try:
+        bundle = await async_load_latest_snapshot_bundle(hass, db_path)
+    except Exception:  # noqa: BLE001 - diagnostics only
+        _LOGGER.debug(
+            "prices_cycle: Fehler beim Laden der Snapshot-Bundles (db_path=%s)",
+            db_path,
+            exc_info=True,
+        )
+        return None, {}
+    return bundle, _snapshot_lookup_from_bundle(bundle)

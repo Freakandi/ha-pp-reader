@@ -11,6 +11,7 @@ from .const import DOMAIN
 from .sensors.depot_sensors import PortfolioAccountSensor, PortfolioDepotSensor
 from .sensors.gain_sensors import PortfolioGainAbsSensor, PortfolioGainPctSensor
 from .sensors.purchase_sensors import PortfolioPurchaseSensor
+from .sensors.store import SnapshotSensorStore
 
 if TYPE_CHECKING:
     from .data.coordinator import PPReaderCoordinator
@@ -31,24 +32,27 @@ async def async_setup_entry(
         ]
 
         sensors = []
-        depot_sensors = []  # Liste für Depot-Sensoren
-        purchase_sensors = []  # Liste für Kaufsummen-Sensoren
+        depot_sensors = []
+        purchase_sensors = []
 
-        # 🔹 Kontostands-Sensoren erstellen
-        for account_uuid, account_data in coordinator.data["accounts"].items():
-            # Nur aktive Konten berücksichtigen
-            if not account_data.get("is_retired", False):
-                sensors.append(PortfolioAccountSensor(coordinator, account_uuid))
+        store = SnapshotSensorStore(hass, coordinator.db_path)
+        await store.async_ensure_snapshot(None)
+        hass.data[DOMAIN][config_entry.entry_id]["sensor_store"] = store
+
+        sensors.extend(
+            PortfolioAccountSensor(coordinator, store, account_uuid)
+            for account_uuid in store.account_ids
+        )
 
         # 🔸 Depot- und Kaufsummen-Sensoren erstellen
-        for portfolio_uuid in coordinator.data["portfolios"]:
-            # Depotwert-Sensor
-            depot_sensor = PortfolioDepotSensor(coordinator, portfolio_uuid)
+        for portfolio_uuid in store.portfolio_ids:
+            depot_sensor = PortfolioDepotSensor(coordinator, store, portfolio_uuid)
             sensors.append(depot_sensor)
             depot_sensors.append(depot_sensor)
 
-            # Kaufsumme-Sensor
-            purchase_sensor = PortfolioPurchaseSensor(coordinator, portfolio_uuid)
+            purchase_sensor = PortfolioPurchaseSensor(
+                coordinator, store, portfolio_uuid
+            )
             sensors.append(purchase_sensor)
             purchase_sensors.append(purchase_sensor)
 

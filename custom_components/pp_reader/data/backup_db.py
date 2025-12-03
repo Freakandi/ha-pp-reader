@@ -49,14 +49,12 @@ async def setup_backup_system(hass: HomeAssistant, db_path: Path) -> None:
             hass.services.async_register(
                 "pp_reader", "trigger_backup_debug", async_trigger_debug_backup
             )
-            _LOGGER.info(
-                "✅ Backup-Service registriert: pp_reader.trigger_backup_debug"
-            )
+            _LOGGER.info("Backup-Service registriert: pp_reader.trigger_backup_debug")
         except Exception:
-            _LOGGER.exception("❌ Fehler bei Service-Registrierung:")
+            _LOGGER.exception("Fehler bei Service-Registrierung:")
             raise
 
-    # 🧠 Hier innerhalb der Funktion prüfen und reagieren
+    # Hinweis: Registrierung abhängig vom HA-Laufzeitstatus durchführen
     if hass.is_running:
         await register_backup_service(Event("dummy_event", {}))
     else:
@@ -80,12 +78,12 @@ def run_backup_cycle(db_path: Path) -> None:
 
     """
     if not db_path.exists():
-        _LOGGER.warning("⚠️ Datenbankpfad existiert nicht: %s", db_path)
+        _LOGGER.warning("Datenbankpfad existiert nicht: %s", db_path)
         return
 
     if not is_sqlite_integrity_ok(str(db_path)):
         _LOGGER.error(
-            "❌ SQLite-Integritätscheck fehlgeschlagen. Versuche Wiederherstellung..."
+            "SQLite-Integritätscheck fehlgeschlagen. Versuche Wiederherstellung..."
         )
         restore_from_latest_backup(db_path)
         return
@@ -119,7 +117,7 @@ def is_sqlite_integrity_ok(db_path: str) -> bool:
         conn.close()
         return result[0].lower() == "ok"
     except Exception:
-        _LOGGER.exception("❌ Fehler beim Prüfen der DB-Integrität")
+        _LOGGER.exception("Fehler beim Prüfen der DB-Integrität")
         return False
 
 
@@ -141,7 +139,7 @@ def create_backup_if_valid(db_path: Path) -> None:
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_path = backup_dir / f"{db_path.stem}_{now}.db"
     shutil.copy2(db_path, backup_path)
-    _LOGGER.info("✅ Backup erstellt: %s", backup_path.name)
+    _LOGGER.info("Backup erstellt: %s", backup_path.name)
 
 
 # === Wiederherstellung ===
@@ -167,9 +165,9 @@ def restore_from_latest_backup(db_path: Path) -> bool:
     for backup in backups:
         if is_sqlite_integrity_ok(str(backup)):
             shutil.copy2(backup, db_path)
-            _LOGGER.warning("🛠️ Wiederherstellung aus Backup: %s", backup.name)
+            _LOGGER.warning("Wiederherstellung aus Backup: %s", backup.name)
             return True
-    _LOGGER.error("❌ Kein gültiges Backup zur Wiederherstellung gefunden")
+    _LOGGER.error("Kein gültiges Backup zur Wiederherstellung gefunden")
     return False
 
 
@@ -205,9 +203,7 @@ def cleanup_old_backups(backup_dir: Path) -> None:
     for b in backups:
         stem_parts = b.stem.rsplit("_", 2)
         if len(stem_parts) < EXPECTED_STEM_PARTS:
-            _LOGGER.debug(
-                "⏭️ Überspringe Backup mit unerwartetem Dateinamen: %s", b.name
-            )
+            _LOGGER.debug("Überspringe Backup mit unerwartetem Dateinamen: %s", b.name)
             continue
 
         dt_str = "_".join(stem_parts[-2:])  # 20250430_143000
@@ -216,7 +212,7 @@ def cleanup_old_backups(backup_dir: Path) -> None:
             dt = datetime.strptime(dt_str, "%Y%m%d_%H%M%S")  # noqa: DTZ007
         except ValueError as exc:
             _LOGGER.debug(
-                "⏭️ Überspringe Backup %s wegen ungültigem Zeitstempel '%s': %s",
+                "Überspringe Backup %s wegen ungültigem Zeitstempel '%s': %s",
                 b.name,
                 dt_str,
                 exc,
@@ -242,4 +238,4 @@ def cleanup_old_backups(backup_dir: Path) -> None:
     for b in backups:
         if b not in keep:
             b.unlink()
-            _LOGGER.info("🗑️ Backup gelöscht: %s", b.name)
+            _LOGGER.info("Backup gelöscht: %s", b.name)

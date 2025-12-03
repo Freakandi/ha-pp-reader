@@ -3,7 +3,7 @@ YahooQuery Provider für Live-Preise.
 
 Implementiert das PriceProvider-Protokoll mittels `yahooquery` (blocking API).
 Eigenschaften:
-- CHUNK_SIZE=10 (Orchestrator chunked Symbole vor Aufruf; doppelte Sicherheit).
+- CHUNK_SIZE=50 (Orchestrator chunked Symbole vor Aufruf; doppelte Sicherheit).
 - Lazy Import von `yahooquery` im Executor (ImportError wird geloggt und
   führt zu leerem Resultat).
 - Filter: Nur Quotes mit `regularMarketPrice > 0`.
@@ -37,8 +37,17 @@ from .provider_base import PriceProvider, Quote
 
 _LOGGER = logging.getLogger(__name__)
 
-CHUNK_SIZE = 10  # Sicherheitskonstante (primär durch Orchestrator genutzt)
+# Preferred Yahoo chunk size; orchestrator already chunks, this is a guardrail.
+CHUNK_SIZE = 50
 _YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
+_YAHOO_DNS_ERROR_TOKENS = (
+    "Could not resolve host: guce.yahoo.com",
+    "Could not resolve host: consent.yahoo.com",
+    "Could not resolve host: query2.finance.yahoo.com",
+    "Could not resolve host: finance.yahoo.com",
+)
+_YAHOOQUERY_DNS_WARNED: set[str] = set()
+_DNS_RETRY_DELAY = 0.4
 
 
 if TYPE_CHECKING:  # pragma: no cover - nur für Type Checker relevant
@@ -86,10 +95,21 @@ def _fetch_quotes_blocking(symbols: list[str]) -> dict:
     if len(symbols) > CHUNK_SIZE:
         symbols = symbols[:CHUNK_SIZE]
 
-    try:
+    def _fetch_once() -> dict:
         tk = ticker_factory(symbols, asynchronous=False)
         return getattr(tk, "quotes", {}) or {}
+
+    try:
+        return _fetch_once()
     except Exception as exc:  # noqa: BLE001 - yahooquery wirft diverse Exceptions
+        if _handle_yahoo_dns_error(exc):
+            time.sleep(_DNS_RETRY_DELAY)
+            try:
+                return _fetch_once()
+            except Exception as retry_exc:  # noqa: BLE001
+                if not _handle_yahoo_dns_error(retry_exc):
+                    _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", retry_exc)
+                return {}
         _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", exc)
         return {}
 
@@ -173,3 +193,20 @@ class YahooQueryProvider(PriceProvider):
                 )
 
         return result
+
+
+def _handle_yahoo_dns_error(exc: Exception) -> bool:
+    """Detect DNS failures hitting Yahoo consent hosts and log once."""
+    message = str(exc)
+
+    for token in _YAHOO_DNS_ERROR_TOKENS:
+        if token in message:
+            if token not in _YAHOOQUERY_DNS_WARNED:
+                _LOGGER.warning(
+                    "YahooQuery Quotes DNS-Fehler erkannt (%s). "
+                    "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
+                    token,
+                )
+                _YAHOOQUERY_DNS_WARNED.add(token)
+            return True
+    return False
