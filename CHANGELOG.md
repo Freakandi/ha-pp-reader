@@ -8,6 +8,13 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 _Noch keine Einträge._
 
+## [0.15.2] - 2025-12-04
+
+### Fixed
+- The “Check recent news via ChatGPT” button now preloads the prompt template and falls back to a default placeholder/link so copying and opening the AI helper works even when the prompt API is slow or unavailable.
+- Portfolio websocket updates keep purchase, current value, day-change, and gain cells aligned with the incoming payload (plus a regression test), preventing incorrect overview values after live events.
+- Removed the small-screen column suppression that hid portfolio metrics in the iPhone app’s portrait view so gain and day-change columns remain visible.
+
 ## [0.15.1] - 2025-12-03
 
 ### Fixed
