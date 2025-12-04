@@ -494,22 +494,6 @@ th {
     font-size: 0.9rem;
   }
 
-  .expandable-portfolio-table th:nth-child(5),
-  .expandable-portfolio-table td:nth-child(5),
-  .sortable-positions th:nth-child(6),
-  .sortable-positions td:nth-child(6) {
-    display: none;
-  }
-
-  .expandable-portfolio-table th:nth-child(4)::after,
-  .sortable-positions th:nth-child(5)::after {
-    content: '\a%';
-    white-space: pre;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--secondary-text-color);
-  }
-
   .expandable-portfolio-table td[data-gain-pct]::after,
   .sortable-positions td[data-gain-pct]::after {
     content: attr(data-gain-pct);

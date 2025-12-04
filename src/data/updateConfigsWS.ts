@@ -556,16 +556,21 @@ export function handleAccountUpdate(
   const portfolioTable = root.querySelector<HTMLTableElement>('.portfolio-table table');
   const portfolios = portfolioTable
     ? Array.from(
-        portfolioTable.querySelectorAll<HTMLTableRowElement>('tbody tr:not(.footer-row)'),
+        portfolioTable.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'),
       ).map(row => {
-        // Spalten: Name | position_count | current_value | gain_abs | gain_pct
-        const currentValueCell = row.cells.item(2);
-        const textContent = currentValueCell?.textContent ?? '';
-        const numeric = parseFloat(
-          textContent.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, ''),
-        );
+        // Spalten: Name | position_count | purchase_value | current_value | day_change_abs | day_change_pct | gain_abs | gain_pct
+        const datasetValue = row.dataset.currentValue;
+        const numeric = datasetValue ? Number.parseFloat(datasetValue) : Number.NaN;
+        if (Number.isFinite(numeric)) {
+          return {
+            current_value: numeric,
+          };
+        }
+
+        const currentValueCell = row.cells.item(3);
+        const fallback = parseNumLoose(currentValueCell?.textContent);
         return {
-          current_value: Number.isFinite(numeric) ? numeric : 0,
+          current_value: Number.isFinite(fallback) ? fallback : 0,
         };
       })
     : [];
@@ -774,16 +779,19 @@ export function handlePortfolioUpdate(
       continue;
     }
 
-    if (row.cells.length < 3) {
-      continue;
+    if (row.cells.length < 8) {
+      console.warn('handlePortfolioUpdate: Unerwartetes Spaltenlayout', row.cells.length);
     }
 
     const posCountCell = row.cells.item(1);
-    const curValCell = row.cells.item(2);
-    const gainAbsCell = row.cells.item(3);
-    const gainPctCell = row.cells.item(4);
+    const purchaseCell = row.cells.item(2);
+    const curValCell = row.cells.item(3);
+    const dayChangeAbsCell = row.cells.item(4);
+    const dayChangePctCell = row.cells.item(5);
+    const gainAbsCell = row.cells.item(6);
+    const gainPctCell = row.cells.item(7);
 
-    if (!posCountCell || !curValCell) {
+    if (!posCountCell || !purchaseCell || !curValCell) {
       continue;
     }
 
@@ -805,6 +813,40 @@ export function handlePortfolioUpdate(
         : typeof snapshot.purchase_value === 'number' && Number.isFinite(snapshot.purchase_value)
           ? snapshot.purchase_value
           : null;
+    const dayChangePayload = (performance?.day_change ?? null) as Record<string, unknown> | null;
+    const dayChangeAbsRaw =
+      toFiniteNumber(snapshot.day_change_abs) ??
+      toFiniteNumber(dayChangePayload?.value_change_eur) ??
+      toFiniteNumber(dayChangePayload?.price_change_eur);
+    const dayChangePctRaw =
+      toFiniteNumber(snapshot.day_change_pct) ??
+      toFiniteNumber(dayChangePayload?.change_pct);
+
+    let dayChangeAbs = dayChangeAbsRaw ?? null;
+    let dayChangePct = dayChangePctRaw ?? null;
+
+    if (dayChangeAbs == null && dayChangePct != null && currentValue != null) {
+      const baseline = currentValue / (1 + dayChangePct / 100);
+      if (baseline) {
+        dayChangeAbs = currentValue - baseline;
+      }
+    }
+
+    if (dayChangePct == null && dayChangeAbs != null && currentValue != null) {
+      const baseline = currentValue - dayChangeAbs;
+      if (baseline) {
+        dayChangePct = (dayChangeAbs / baseline) * 100;
+      }
+    }
+
+    const missingValuePositions =
+      typeof snapshot.missing_value_positions === 'number' && Number.isFinite(snapshot.missing_value_positions)
+        ? snapshot.missing_value_positions
+        : 0;
+
+    const hasValue = currentValue !== null;
+    const fxUnavailable =
+      snapshot.has_current_value === false || missingValuePositions > 0 || !hasValue;
 
     const oldCur = parseNumLoose(curValCell.textContent);
     const oldCnt = parseNumLoose(posCountCell.textContent);
@@ -812,15 +854,26 @@ export function handlePortfolioUpdate(
     if (oldCnt !== posCount) {
       posCountCell.textContent = formatPositionCount(posCount);
     }
-    const hasValue = currentValue !== null;
+
     const rowData = {
-      fx_unavailable: row.dataset.fxUnavailable === 'true',
+      fx_unavailable: fxUnavailable,
+      purchase_value: purchase,
       current_value: currentValue,
+      day_change_abs: dayChangeAbs,
+      day_change_pct: dayChangePct,
+      gain_abs: gainAbs,
+      gain_pct: gainPct,
       performance,
     };
-    const rowContext = { hasValue };
-    const currentMarkup = formatValue('current_value', rowData.current_value, rowData, rowContext);
-    const curValNumeric = currentValue ?? 0;
+    const valueContext = { hasValue };
+
+    const purchaseMarkup = formatValue('purchase_value', purchase, rowData, valueContext);
+    if (purchaseCell.innerHTML !== purchaseMarkup) {
+      purchaseCell.innerHTML = purchaseMarkup;
+    }
+
+    const currentMarkup = formatValue('current_value', rowData.current_value, rowData, valueContext);
+    const curValNumeric = typeof currentValue === 'number' ? currentValue : 0;
     if (Math.abs(oldCur - curValNumeric) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
       curValCell.innerHTML = currentMarkup;
       row.classList.add('flash-update');
@@ -828,8 +881,17 @@ export function handlePortfolioUpdate(
         row.classList.remove('flash-update');
       }, 800);
     }
+
+    if (dayChangeAbsCell) {
+      dayChangeAbsCell.innerHTML = formatValue('day_change_abs', dayChangeAbs, rowData, valueContext);
+    }
+
+    if (dayChangePctCell) {
+      dayChangePctCell.innerHTML = formatValue('day_change_pct', dayChangePct, rowData, valueContext);
+    }
+
     if (gainAbsCell) {
-      const gainMarkup = formatValue('gain_abs', gainAbs, rowData, rowContext);
+      const gainMarkup = formatValue('gain_abs', gainAbs, rowData, valueContext);
       gainAbsCell.innerHTML = gainMarkup;
       const hasGainPct = typeof gainPct === 'number' && Number.isFinite(gainPct);
       const pctValue = hasGainPct ? gainPct : null;
@@ -845,14 +907,18 @@ export function handlePortfolioUpdate(
         : 'neutral';
     }
     if (gainPctCell) {
-      gainPctCell.innerHTML = formatValue('gain_pct', gainPct, rowData, rowContext);
+      gainPctCell.innerHTML = formatValue('gain_pct', gainPct, rowData, valueContext);
     }
 
     row.dataset.positionCount = posCount.toString();
-    row.dataset.currentValue = hasValue ? curValNumeric.toString() : '';
     row.dataset.purchaseSum = purchase != null ? purchase.toString() : '';
+    row.dataset.currentValue = hasValue ? curValNumeric.toString() : '';
+    row.dataset.dayChange = hasValue && dayChangeAbs != null ? dayChangeAbs.toString() : '';
+    row.dataset.dayChangePct = hasValue && dayChangePct != null ? dayChangePct.toString() : '';
     row.dataset.gainAbs = gainAbs != null ? gainAbs.toString() : '';
     row.dataset.gainPct = gainPct != null ? gainPct.toString() : '';
+    row.dataset.hasValue = hasValue ? 'true' : 'false';
+    row.dataset.fxUnavailable = fxUnavailable ? 'true' : 'false';
     row.dataset.coverageRatio =
       typeof snapshot.coverage_ratio === 'number' && Number.isFinite(snapshot.coverage_ratio)
         ? snapshot.coverage_ratio.toString()

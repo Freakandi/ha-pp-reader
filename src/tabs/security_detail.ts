@@ -31,6 +31,7 @@ import type {
   SecurityHistoryResponse,
   SecurityHistoryOptions,
   SecurityHistoryTransaction,
+  NewsPromptResponse,
 } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import type {
@@ -67,6 +68,8 @@ const PURCHASE_TYPES = new Set([0, 2]);
 const SALE_TYPES = new Set([1, 3]);
 const MARKER_COLOR_PURCHASE = 'var(--pp-reader-chart-marker-buy, #2e7d32)';
 const MARKER_COLOR_SALE = 'var(--pp-reader-chart-marker-sell, #c0392b)';
+const NEWS_PROMPT_PLACEHOLDER_FALLBACK = '{TICKER}';
+const NEWS_PROMPT_FALLBACK_LINK = 'https://chatgpt.com/';
 
 type SecuritySnapshotDetail = Partial<Omit<SecuritySnapshotLike, 'security_uuid'>> & {
   security_uuid?: string | null;
@@ -2078,12 +2081,40 @@ function scheduleNewsPromptSetup(options: {
   tickerSymbol: string;
 }): void {
   const { root, hass, panelConfig, tickerSymbol } = options;
+  let cachedPrompt: NewsPromptResponse | null = null;
+  let promptPrefetchFailed = false;
+
+  const preloadPrompt = async (): Promise<void> => {
+    try {
+      cachedPrompt = await fetchNewsPromptWS(hass, panelConfig);
+    } catch (prefetchError) {
+      promptPrefetchFailed = true;
+      console.warn('News-Prompt: Prefetch fehlgeschlagen', prefetchError);
+    }
+  };
+
+  void preloadPrompt();
 
   setTimeout(() => {
     const button = root.querySelector<HTMLButtonElement>('.news-prompt-button');
     if (!button) {
       return;
     }
+
+    const buildPromptPayload = (symbol: string): { body: string; link: string } => {
+      const placeholder = (cachedPrompt?.placeholder || NEWS_PROMPT_PLACEHOLDER_FALLBACK).trim()
+        || NEWS_PROMPT_PLACEHOLDER_FALLBACK;
+      const template = (cachedPrompt?.prompt_template || '').trim();
+      const link = (cachedPrompt?.link || '').trim() || NEWS_PROMPT_FALLBACK_LINK;
+
+      const body = template
+        ? (template.includes(placeholder)
+          ? template.split(placeholder).join(symbol)
+          : `${template}\n\nTicker: ${symbol}`)
+        : `Ticker: ${symbol}`;
+
+      return { body, link };
+    };
 
     const handleClick = async (): Promise<void> => {
       const symbol = (button.dataset.symbol || tickerSymbol || '').trim();
@@ -2097,21 +2128,16 @@ function scheduleNewsPromptSetup(options: {
       button.disabled = true;
       button.classList.add('loading');
       try {
-        const response = await fetchNewsPromptWS(hass, panelConfig);
-        const placeholder = (response.placeholder || '').trim() || '{TICKER}';
-        const template = (response.prompt_template || '').trim();
-        const promptBody = template
-          ? (placeholder && template.includes(placeholder)
-            ? template.split(placeholder).join(symbol)
-            : `${template}\n\nTicker: ${symbol}`)
-          : `Ticker: ${symbol}`;
+        const { body, link } = buildPromptPayload(symbol);
 
-        const copied = await copyTextToClipboard(promptBody);
+        const copied = await copyTextToClipboard(body);
         if (!copied) {
           console.warn('News-Prompt: Clipboard unavailable – prompt could not be copied');
         }
-        if (response.link) {
-          openNewsLink(response.link);
+        openNewsLink(link);
+
+        if (!cachedPrompt && !promptPrefetchFailed) {
+          void preloadPrompt();
         }
       } catch (error) {
         console.error('News-Prompt: Kopiervorgang fehlgeschlagen', error);
