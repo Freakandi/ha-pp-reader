@@ -541,7 +541,13 @@ async def test_missing_current_value_refreshes_without_price_change(
             INSERT INTO securities (uuid, name, ticker_symbol, currency_code, retired, last_price)
             VALUES (?, ?, ?, ?, 0, ?)
             """,
-            (security_uuid, "Greek Organisation of Football", symbol, "EUR", last_price_raw),
+            (
+                security_uuid,
+                "Greek Organisation of Football",
+                symbol,
+                "EUR",
+                last_price_raw,
+            ),
         )
         conn.execute(
             """
@@ -584,7 +590,7 @@ async def test_missing_current_value_refreshes_without_price_change(
     meta = await price_service._run_price_cycle(hass, entry_id)
 
     with sqlite3.connect(str(db_path)) as conn:
-        current_value, = conn.execute(
+        (current_value,) = conn.execute(
             """
             SELECT current_value
             FROM portfolio_securities
