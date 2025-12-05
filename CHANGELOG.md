@@ -6,7 +6,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
-_Noch keine Einträge._
+- Fixed portfolio positions showing empty columns if a push event was received before the first lazy load by expanding a portfolio was triggered
 
 ## [0.15.2] - 2025-12-04
 
