@@ -40,8 +40,7 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
   const env = installDomEnvironment(POSITIONS_MARKUP);
 
   try {
-    (globalThis as typeof globalThis & { CustomEvent?: typeof CustomEvent }).CustomEvent =
-      env.window.CustomEvent as typeof CustomEvent;
+    globalThis.CustomEvent = env.window.CustomEvent;
 
     await import('../../tabs/overview');
 
@@ -113,21 +112,26 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
 
     const avgPriceCell = firstRow.cells.item(2);
     assert.ok(avgPriceCell);
+    const avgPriceText = avgPriceCell.textContent;
+    assert.ok(avgPriceText);
     assert.ok(
-      (avgPriceCell.textContent ?? '').includes('100'),
+      avgPriceText.includes('100'),
       'average price should be sourced from cached payload',
     );
 
     const dayChangeCell = firstRow.cells.item(5);
     assert.ok(dayChangeCell);
-    const dayChangeText = dayChangeCell.textContent ?? '';
+    const dayChangeText = dayChangeCell.textContent;
+    assert.ok(dayChangeText);
     assert.ok(!dayChangeText.includes('—'), 'day change should remain populated');
     assert.ok(dayChangeText.includes('€'));
 
     const gainPctCell = firstRow.cells.item(8);
     assert.ok(gainPctCell);
+    const gainPctText = gainPctCell.textContent;
+    assert.ok(gainPctText);
     assert.ok(
-      (gainPctCell.textContent ?? '').includes('%'),
+      gainPctText.includes('%'),
       'gain percentage should remain available',
     );
   } finally {
@@ -165,8 +169,7 @@ void test('collapsed portfolios skip partial push renders until expanded', () =>
   wsTestHelpers.clearPendingUpdates();
 
   const env = installDomEnvironment(COLLAPSED_MARKUP);
-  (globalThis as typeof globalThis & { CustomEvent?: typeof CustomEvent }).CustomEvent =
-    env.window.CustomEvent as typeof CustomEvent;
+  globalThis.CustomEvent = env.window.CustomEvent;
 
   try {
     const root = env.document.getElementById('root');

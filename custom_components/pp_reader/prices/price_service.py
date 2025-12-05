@@ -512,7 +512,7 @@ def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
 
 def _load_securities_missing_current_value(db_path: Path) -> set[str]:
     """
-    Finde Positionen mit Bestand, Preis aber fehlendem aktuellen Wert.
+    Find positions with holdings and a price but without a current value.
 
     Diese Einträge werden bei unveränderten Preisen sonst nie aktualisiert,
     was zu Market-Value=0 in den Snapshots führt.
@@ -1229,7 +1229,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             )
             detected_changes = len(changed_security_uuids)
 
-            changed_count = 0
             if scaled_updates and db_path:
                 scaled_updates = _filter_invalid_updates(scaled_updates)
                 if scaled_updates:
@@ -1252,7 +1251,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                             detected_changes,
                             updated_rows,
                         )
-                    changed_count = updated_rows
 
             valuation_refresh_targets: set[str] = (
                 set(scaled_updates.keys()) if scaled_updates else set()
