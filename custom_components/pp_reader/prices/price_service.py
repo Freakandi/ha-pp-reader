@@ -1275,10 +1275,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     )
                 except Exception:  # noqa: BLE001 - Logging für Diagnose
                     _LOGGER.debug(
-                        (
-                            "prices_cycle: Refresh portfolio_securities "
-                            "fehlgeschlagen"
-                        ),
+                        ("prices_cycle: Refresh portfolio_securities fehlgeschlagen"),
                         exc_info=True,
                     )
 
