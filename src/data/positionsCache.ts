@@ -179,19 +179,19 @@ function mergePositionRecords(
 export function setPortfolioPositions(
   portfolioUuid: string | null | undefined,
   positions: readonly PortfolioPositionRecord[] | null | undefined,
-): void {
+): PortfolioPositionRecord[] {
   if (!portfolioUuid) {
-    return;
+    return [];
   }
 
   if (!Array.isArray(positions)) {
     portfolioPositionsCache.delete(portfolioUuid);
-    return;
+    return [];
   }
 
   if (positions.length === 0) {
     portfolioPositionsCache.set(portfolioUuid, []);
-    return;
+    return [];
   }
 
   const existing = portfolioPositionsCache.get(portfolioUuid) ?? [];
@@ -211,6 +211,7 @@ export function setPortfolioPositions(
     .map(clonePosition);
 
   portfolioPositionsCache.set(portfolioUuid, merged);
+  return merged.map(clonePosition);
 }
 
 export function hasPortfolioPositions(portfolioUuid: string | null | undefined): boolean {

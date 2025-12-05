@@ -25,6 +25,7 @@ import {
   getPortfolioPositionsSnapshot,
   normalizePositionRecords,
   setPortfolioPositions,
+  hasPortfolioPositions,
   type PortfolioPositionRecord,
 } from './positionsCache';
 import {
@@ -1102,19 +1103,31 @@ function processPortfolioPositionsUpdate(
   const finalPositions = error ? normalizedPositions : mergedPositions ?? [];
   emitPortfolioPositionsDiagnostics(portfolioUuid, update);
 
-  if (!error) {
-    setPortfolioPositions(portfolioUuid, finalPositions);
-    setPortfolioPositionsSnapshot(portfolioUuid, finalPositions);
+  const hasCache = hasPortfolioPositions(portfolioUuid);
+  let renderPositions = finalPositions;
+
+  if (!error && hasCache) {
+    const mergedForCache = setPortfolioPositions(portfolioUuid, finalPositions);
+    setPortfolioPositionsSnapshot(portfolioUuid, mergedForCache);
+    renderPositions = mergedForCache;
   }
 
-  const result = applyPortfolioPositionsToDom(root, portfolioUuid, finalPositions, error);
+  const result = applyPortfolioPositionsToDom(root, portfolioUuid, renderPositions, error);
 
   if (result.applied) {
     pendingPortfolioUpdates.delete(portfolioUuid);
+    if (!error && !hasCache) {
+      const mergedForCache = setPortfolioPositions(portfolioUuid, renderPositions);
+      setPortfolioPositionsSnapshot(portfolioUuid, mergedForCache);
+    }
   } else {
-    pendingPortfolioUpdates.set(portfolioUuid, { positions: normalizedPositions, error });
-    if (result.reason !== 'hidden') {
+    const shouldPend = error || result.reason !== 'hidden' || hasCache;
+    if (shouldPend) {
+      pendingPortfolioUpdates.set(portfolioUuid, { positions: renderPositions, error });
       schedulePendingRetry(root, portfolioUuid);
+    } else {
+      pendingPortfolioUpdates.delete(portfolioUuid);
+      pendingRetryMetaMap.delete(portfolioUuid);
     }
   }
 
