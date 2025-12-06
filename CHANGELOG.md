@@ -6,6 +6,17 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.15.5] - 2025-12-06
+
+### Fixed
+- Day-change calculations now normalize price timestamps and stored history dates to epoch days, ensuring weekend/holiday live prices compare against the prior trading day even when historical closes are stored as epoch-day values.
+
+### Removed
+- Retired the Home Assistant sensor platform; the integration now surfaces data solely through the dashboard and WebSocket API without creating entity sensors at startup.
+
+### Internal
+- Updated the dashboard build tooling to Vite 5.2.1.
+
 ## [0.15.4] - 2025-12-06
 
 ### Fixed

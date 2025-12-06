@@ -1,10 +1,10 @@
 # Portfolio Performance Reader for Home Assistant
 
-Portfolio Performance Reader keeps your Home Assistant instance in sync with a local [Portfolio Performance](https://www.portfolio-performance.info/) `.portfolio` file. It imports your data into SQLite, refreshes live prices, and serves a purpose-built dashboard so automations, sensors, and the UI share one source of truth.
+Portfolio Performance Reader keeps your Home Assistant instance in sync with a local [Portfolio Performance](https://www.portfolio-performance.info/) `.portfolio` file. It imports your data into SQLite, refreshes live prices, and serves a purpose-built dashboard so automations and the UI share one source of truth.
 
 ## Highlights
 - **Automatic sync**: Watches the `.portfolio` file, parses accounts/portfolios/transactions, and stores them in SQLite.
-- **Shared metrics**: Aggregates gains, day-change deltas, coverage, and provenance into canonical snapshots used by sensors, events, and WebSocket responses.
+- **Shared metrics**: Aggregates gains, day-change deltas, coverage, and provenance into canonical snapshots used by events and WebSocket responses.
 - **Live pricing**: Fetches Yahoo Finance quotes (30-symbol batches, 30 s timeout) and revalues portfolios; FX refresh/backfill keeps EUR conversions current.
 - **History-aware dashboard**: Twice-daily price-history jobs and dev-server override keep charts and drilldowns in sync with stored candles.
 - **Resilience**: Six-hour rolling backups plus a service to trigger manual snapshots.
@@ -44,10 +44,7 @@ Release builds ship bundled assets. From a git checkout:
 - `pp_reader.trigger_backup_debug` — run from **Developer Tools → Services** to create an immediate backup (mirrors the six-hour cadence).
 
 ## Usage
-### Sensors and entities
-- Portfolio sensors expose purchase sums, current values, gains, and day-change metrics from persisted snapshots.
-- Account sensors mirror balances from the `.portfolio` file.
-- Status/diagnostic entities surface last import, backup timestamp, and database path.
+This integration no longer registers Home Assistant sensor entities; use the dashboard or WebSocket commands for data access.
 
 ### Dashboard panel
 - Sidebar entry **Portfolio Dashboard** with live updates, highlighted changes, and per-security drilldowns.

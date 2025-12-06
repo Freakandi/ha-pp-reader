@@ -30,13 +30,13 @@
 The custom component `pp_reader` integrates a local Portfolio Performance (`.portfolio`) file into Home Assistant. The integration:
 
 - Parses Portfolio Performance protobuf data with the vendored schema and mirrors it into a dedicated SQLite database placed next to Home Assistant’s configuration.
-- Exposes accounts, portfolios, transactions, and derived gains to Home Assistant sensors and a custom dashboard panel.
+- Exposes accounts, portfolios, transactions, and derived gains to a custom dashboard panel and WebSocket API.
 - Streams price updates from Yahoo Finance through `yahooquery`, persists the latest quotes, revalues affected portfolios, and emits compact Home Assistant events for live UI updates while optionally refreshing price history queues twice daily.
 - Provides automated six-hour backups plus a debug service for on-demand snapshots and integrity recovery.
 
 Key responsibilities are split across five areas:
 
-1. **Home Assistant lifecycle** – config flow, setup, option handling, and entity registration.
+1. **Home Assistant lifecycle** – config flow, setup, option handling, panel registration, and scheduler wiring.
 2. **Data ingestion** – streaming parser writes typed ingestion tables, metrics persist into dedicated tables, normalization serializes canonical snapshots, and runtime migrations keep the SQLite schema aligned with the canonical pipeline.
 3. **Price orchestration** – background task that updates quotes, tracks fetch health, triggers recalculations, and schedules a metrics refresh after successful price updates.
 4. **Foreign exchange & history** – on-demand FX caching plus scheduled refresh/backfill and a price-history queue to keep historical candles aligned with active Yahoo-backed securities.
@@ -53,7 +53,6 @@ custom_components/pp_reader/
   manifest.json              # Home Assistant metadata and runtime requirements
   const.py                   # Shared constants (domain, config keys)
   config_flow.py             # Config flow and options flow implementation
-  sensor.py                  # Sensor platform bootstrap
   services.yaml              # Service descriptions exposed to Home Assistant
   feature_flags.py           # Feature flag resolution helpers (backend entry store)
   util/
@@ -73,7 +72,7 @@ custom_components/pp_reader/
     backfill_fx_tx.py        # FX backfill for staged transactions
     backup_db.py             # Periodic backups + service registration
     canonical_sync.py        # Materialise ingestion tables into canonical tables
-    coordinator.py           # DataUpdateCoordinator for sensor snapshots
+    coordinator.py           # DataUpdateCoordinator exposing telemetry and cached normalization
     db_access.py             # Query helpers used by coordinator & WebSockets
     db_init.py               # Database bootstrap + runtime migrations
     db_schema.py             # CREATE TABLE definitions & indices
@@ -82,7 +81,7 @@ custom_components/pp_reader/
     ingestion_reader.py      # Read staged ingestion payloads
     ingestion_writer.py      # Stream parsed protobuf entities into staging tables
     normalization_pipeline.py # Normalize canonical tables into dashboard-ready payloads
-    normalized_store.py      # Cached snapshot loader shared by sensors/websockets
+    normalized_store.py      # Cached snapshot loader shared by WebSocket handlers and diagnostics
     snapshot_writer.py       # Persist normalized snapshots
     websocket.py             # WebSocket commands & payload builders
     migrations/              # Idempotent schema migrations
@@ -100,11 +99,6 @@ custom_components/pp_reader/
     yahooquery_provider.py   # Yahoo Finance implementation (yahooquery)
     revaluation.py           # Partial portfolio revaluation after price changes
     symbols.py               # Active symbol discovery from SQLite
-  sensors/
-    depot_sensors.py         # Portfolio value sensors
-    gain_sensors.py          # Gain sensors derived from other sensor data
-    purchase_sensors.py      # Purchase sum sensors
-    store.py                 # Snapshot cache shared across sensor entities
   translations/              # HA UI strings (de/en)
   www/pp_reader_dashboard/
     panel.js                 # Registers <pp-reader-panel>, loads hashed Vite bundles or dev server
@@ -141,7 +135,7 @@ Utility helpers live in `custom_components/pp_reader/util/`, which exposes `asyn
 | `pandas>=2.2.0`, `numpy>=1.26.0` | `manifest.json` | Reserved for future analytics and compatibility with upstream Portfolio Performance tooling | Currently not imported; retained to avoid breaking environments expecting them. |
 | `aiohttp` | Home Assistant core dependency | HTTP client for Frankfurter FX API | Used indirectly in `currencies/fx.py`. |
 | Frankfurter API (`https://api.frankfurter.app`) | Runtime service | Provides EUR exchange rates | Only queried when non-EUR accounts require conversions. |
-| Yahoo Finance | Runtime service via yahooquery | Provides market prices | Latest quotes feed sensors; a history queue persists daily closes for active Yahoo-backed securities. |
+| Yahoo Finance | Runtime service via yahooquery | Provides market prices | Latest quotes feed dashboard/event payloads; a history queue persists daily closes for active Yahoo-backed securities. |
 
 Developer tooling includes `ruff` and scripts under `scripts/` for linting and local Home Assistant startup.
 
@@ -163,7 +157,6 @@ Developer tooling includes `ruff` and scripts under `scripts/` for linting and l
   - Ensures the runtime migration for price columns runs alongside schema creation.
   - Applies the price debug logging option before creating runtime tasks.
   - Creates and stores a `PPReaderCoordinator` instance (see [Data ingestion](#data-ingestion--persistence)).
-  - Forwards platforms (currently sensors only).
   - Initializes price state (`prices.price_service.initialize_price_state`), schedules the recurring interval, and triggers the initial asynchronous cycle.
   - Schedules FX refresh/backfill using `fx_update_interval_seconds` (default six hours, minimum 15 minutes) and starts an immediate refresh guarded by `fx_lock`. Coverage is derived from canonical ingestion tables, and `fx_backfill.backfill_fx` fills historical gaps before fetching the latest Frankfurter rates.【F:custom_components/pp_reader/__init__.py†L212-L324】
   - Starts a twice-daily history queue drain at 02:00 and 14:00 local time and runs an initial drain at startup so pending Yahoo history jobs are processed promptly.
@@ -173,7 +166,6 @@ Developer tooling includes `ruff` and scripts under `scripts/` for linting and l
   - Registers the custom panel `<pp-reader-panel>` with a cache-busting query string if it is not already active.
 
 - `async_unload_entry`
-  - Unloads sensor entities.
   - Cancels the scheduled price interval task, FX refresh, and history drain, removes `price_*`/`fx_*` keys from `hass.data`, and clears domain state when the last entry unloads.
 
 ### `hass.data` contract
@@ -224,15 +216,6 @@ Keys prefixed with `price_` are initialised lazily by `initialize_price_state` a
   - Option changes trigger `_async_reload_entry_on_update`, which resets in-memory state, reschedules price/FX intervals, reapplies debug logging, and kicks off an immediate cycle.
   - Advanced overrides may include `history_retention_years`; `_normalize_history_retention_years` accepts positive integers or `"none"`/`"unlimited"` (case-insensitive) and stores `None` for unlimited retention. The option is persisted even though pruning is not yet enforced.【F:custom_components/pp_reader/__init__.py†L114-L149】
 
-### Sensor platform
-`sensor.py` instantiates coordinator-based entities:
-
-- `PortfolioAccountSensor` for each active account.
-- `PortfolioDepotSensor` and `PortfolioPurchaseSensor` per portfolio.
-- `PortfolioGainAbsSensor` and `PortfolioGainPctSensor` derived from the value/purchase sensors.
-
-Sensors hydrate from the canonical snapshot cache (`SnapshotSensorStore`) instead of `coordinator.data`. The cache uses `normalized_store.async_load_latest_snapshot_bundle` plus metric-run telemetry from `CoordinatorTelemetry` so every entity reads the same persisted portfolio/account payloads consumed by websockets and diagnostics.
-
 ### Services
 `data.backup_db.setup_backup_system` registers `pp_reader.trigger_backup_debug`. The service runs the same backup cycle that the periodic job executes (every six hours) and logs success or failures. Registration is deferred until Home Assistant has started to avoid missing the service in early boot phases.
 
@@ -276,9 +259,9 @@ The persisted metrics flow through `data.db_access`, `data.websocket`, and `data
 ### Performance and day-change metrics
 `metrics/common.py` centralises the gain and change calculations that previously lived across database, event, and WebSocket helpers. `select_performance_metrics` derives `PerformanceMetrics` and `DayChangeMetrics` dataclasses by combining current and purchase values with optional holdings and price inputs, rounding currency deltas with `util.currency` and annotating coverage metadata so downstream surfaces can expose source transparency.【F:custom_components/pp_reader/metrics/common.py†L1-L163】 `compose_performance_payload` merges these metrics back into existing payload fragments, preserving backend overrides while ensuring the nested `day_change` block only ships when real values are available.【F:custom_components/pp_reader/metrics/common.py†L170-L213】
 
-`data.db_access.get_security_snapshot` feeds the helper with persisted holdings, current EUR valuations, and the most recent native close to serialise unified `performance` and `average_cost` objects. The WebSocket layer strips the deprecated flat mirrors so coordinator caches and responses surface only the structured payloads without recomputing gains or rounding in multiple places.【F:custom_components/pp_reader/data/db_access.py†L612-L698】【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】 Portfolio aggregations reuse the helper to keep coordinator sensors and WebSocket responses aligned with the metrics stored in SQLite.【F:custom_components/pp_reader/data/db_access.py†L891-L968】
+`data.db_access.get_security_snapshot` feeds the helper with persisted holdings, current EUR valuations, and the most recent native close to serialise unified `performance` and `average_cost` objects. The WebSocket layer strips the deprecated flat mirrors so coordinator caches and responses surface only the structured payloads without recomputing gains or rounding in multiple places.【F:custom_components/pp_reader/data/db_access.py†L612-L698】【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】 Portfolio aggregations reuse the helper to keep coordinator caches and WebSocket responses aligned with the metrics stored in SQLite.【F:custom_components/pp_reader/data/db_access.py†L891-L968】
 
-Event payloads, price revaluation updates, and gain sensors rely on the shared helper when backend data does not already supply `performance`, preventing divergence from ad-hoc calculations and guaranteeing absolute and percentage changes always originate from the same rounding rules.【F:custom_components/pp_reader/data/event_push.py†L13-L132】【F:custom_components/pp_reader/prices/price_service.py†L780-L840】【F:custom_components/pp_reader/sensors/gain_sensors.py†L1-L120】
+Event payloads and price revaluation updates rely on the shared helper when backend data does not already supply `performance`, preventing divergence from ad-hoc calculations and guaranteeing absolute and percentage changes always originate from the same rounding rules.【F:custom_components/pp_reader/data/event_push.py†L13-L132】【F:custom_components/pp_reader/prices/price_service.py†L780-L840】
 
 ### Coordinator (`data.coordinator.PPReaderCoordinator`)
 - Polls every minute (minute-truncated file timestamp).
@@ -364,7 +347,7 @@ Security snapshots, price history, and portfolio positions reuse `async_normaliz
 
 The frontend adapter mirrors the canonical payloads one-to-one. `src/data/api.ts` invokes the commands above, passes responses through the normalizers in `src/lib/api/portfolio/`, and writes the resulting `NormalizedAccountSnapshot` / `NormalizedPortfolioSnapshot` records into the singleton store in `src/lib/store/portfolioStore.ts`. Selectors in `src/lib/store/selectors/portfolio.ts` expose derived tables for overview cards, account badges, and per-security drilldowns so view controllers never touch the raw WebSocket payloads. Incremental updates flow over `EVENT_PANELS_UPDATED` via `custom_components/pp_reader/data/event_push.py`; `src/data/updateConfigsWS.ts` listens for those events, applies the same deserializers, merges the patches into the store, and emits `DASHBOARD_DIAGNOSTICS_EVENT` entries when coverage, provenance, or `metric_run_uuid` metadata change. Sharing the adapter between initial fetch and push updates guarantees that dashboard state matches the snapshots stored in SQLite even after reloads, and the legacy DOM adapters (`window.__ppReader*`) have been removed as part of the normalized rollout.
 
-Portfolio and position responses merge any persisted `performance` payload with metrics derived from `select_performance_metrics`, ensuring gain/percentage totals and nested `day_change` values remain consistent with coordinator sensors and event payloads even when upstream caches omit fields. Deprecated flattenings (`gain_abs`, `gain_pct`, `day_price_change_*`, `avg_price_*`) are removed before the payload is emitted.【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】
+Portfolio and position responses merge any persisted `performance` payload with metrics derived from `select_performance_metrics`, ensuring gain/percentage totals and nested `day_change` values remain consistent with coordinator caches and event payloads even when upstream caches omit fields. Deprecated flattenings (`gain_abs`, `gain_pct`, `day_price_change_*`, `avg_price_*`) are removed before the payload is emitted.【F:custom_components/pp_reader/data/websocket.py†L200-L360】【F:custom_components/pp_reader/data/coordinator.py†L94-L166】
 
 Feature flags are resolved through `feature_flags.is_enabled`, which reads overrides from `hass.data[DOMAIN][entry_id]["feature_flags"]` seeded during `async_setup_entry`. While no flags are currently active, the infrastructure remains available for future experiments without impacting core commands like security history.
 
@@ -375,7 +358,7 @@ The custom panel lives under `www/pp_reader_dashboard`:
 - Security drill-down tabs originate from `src/tabs/security_detail.ts`, which fetches snapshots and historical series via the dedicated WebSocket commands and renders charts with cached range selectors.【F:src/tabs/security_detail.ts†L1-L120】【F:src/tabs/security_detail.ts†L198-L358】
 - CSS files (`base.css`, `cards.css`, `nav.css`) provide layout styling.
 
-Events emitted by `_push_update` follow the same contract as sensor snapshots, allowing the frontend to patch the DOM incrementally.
+Events emitted by `_push_update` follow the same contract as cached snapshots, allowing the frontend to patch the DOM incrementally.
 
 ---
 
@@ -463,9 +446,9 @@ Manual testing relies on the scripts in `scripts/` (`./scripts/develop`, `./scri
 |----------|---------|-------------|
 | Persist only the latest quote | Keeps database lean and avoids stale history | Historical analytics require external tooling. |
 | Use partial revaluation after price changes | Reduces processing time after each quote update | Ensures timely UI updates without reprocessing all portfolios. |
-| Sensors/WebSockets load canonical snapshots | Normalization pipeline persists deterministic payloads in SQLite | All consumers (`normalized_store`) read the same snapshot bundle; coordinator telemetry no longer exposes payload copies. |
+| WebSockets load canonical snapshots | Normalization pipeline persists deterministic payloads in SQLite | All consumers (`normalized_store`) read the same snapshot bundle; coordinator telemetry no longer exposes payload copies. |
 | Skip overlapping price cycles | Simplifies scheduling | Fast consecutive intervals may drop runs when the previous cycle is still executing. |
-| Store monetary values as integers | Ensures deterministic rounding | Formatting to two decimals happens in sensors/frontend. |
+| Store monetary values as integers | Ensures deterministic rounding | Formatting to two decimals happens in the frontend. |
 | Explicitly depend on `lxml>=5.2.1` | Avoids wheel compatibility issues in development containers | Slightly increases package footprint but stabilises builds. |
 | Compact event payloads before emission | Keeps `EVENT_PANELS_UPDATED` within recorder limits | New event types should route through `data.event_push` compaction helpers. |
 | Drop the `pp_reader` namespace alias | Legacy diff-sync shims are gone | Modules import via `custom_components.pp_reader.*`; no compatibility indirection remains. |
@@ -473,7 +456,6 @@ Manual testing relies on the scripts in `scripts/` (`./scripts/develop`, `./scri
 Extension points:
 
 - Implement additional price providers by extending `prices.provider_base.PriceProvider` and wiring them into `price_service`.
-- Add new entities by creating sensor classes under `sensors/` that load canonical snapshots via `normalized_store`; the coordinator exposes telemetry only.
 - Extend the database schema by appending SQL statements to `ALL_SCHEMAS` (idempotent) and exposing new query helpers in `db_access`.
 - Enhance the dashboard by updating assets in `www/pp_reader_dashboard` and adjusting WebSocket payloads (preserving backward compatibility where possible).
 - Regenerate the protobuf bindings by running `protoc` against `name/abuchen/portfolio/client.proto`, ensuring the package path remains `custom_components.pp_reader.name.abuchen.portfolio`.

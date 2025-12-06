@@ -15,7 +15,10 @@ from custom_components.pp_reader.metrics.securities import (
 
 
 @pytest.mark.asyncio
-async def test_previous_close_uses_price_date(hass, tmp_path, monkeypatch):
+@pytest.mark.parametrize("date_encoding", ["yyyymmdd", "epoch_day"])
+async def test_previous_close_uses_price_date(
+    hass, tmp_path, monkeypatch, date_encoding
+):
     """If price date is Friday, previous close resolves to Thursday."""
 
     class _FixedDatetime(datetime):
@@ -31,6 +34,12 @@ async def test_previous_close_uses_price_date(hass, tmp_path, monkeypatch):
     initialize_database_schema(db_path)
 
     friday_ts = int(datetime(2025, 12, 5, 21, 0, 1, tzinfo=UTC).timestamp())
+    friday_epoch_day = int(datetime(2025, 12, 5, tzinfo=UTC).timestamp() // 86400)
+    thursday_epoch_day = friday_epoch_day - 1
+    friday_date_value = 20251205 if date_encoding == "yyyymmdd" else friday_epoch_day
+    thursday_date_value = (
+        20251204 if date_encoding == "yyyymmdd" else thursday_epoch_day
+    )
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(
@@ -75,8 +84,8 @@ async def test_previous_close_uses_price_date(hass, tmp_path, monkeypatch):
             VALUES (?, ?, ?)
             """,
             [
-                ("sec1", 20251205, int(round(95.0 * 1e8))),  # Friday close
-                ("sec1", 20251204, int(round(90.0 * 1e8))),  # Thursday close
+                ("sec1", friday_date_value, int(round(95.0 * 1e8))),  # Friday close
+                ("sec1", thursday_date_value, int(round(90.0 * 1e8))),  # Thursday close
             ],
         )
         conn.commit()

@@ -12,7 +12,7 @@ import time
 from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -2692,7 +2692,7 @@ def get_price_history_jobs_by_status(
             local_conn.close()
 
 
-def fetch_previous_close(  # noqa: PLR0912, PLR0915
+def fetch_previous_close(  # noqa: PLR0912
     db_path: Path,
     security_uuid: str,
     *,
@@ -2702,10 +2702,11 @@ def fetch_previous_close(  # noqa: PLR0912, PLR0915
     """
     Fetch the most recent historical close price for a security.
 
-    Returns a tuple of (date_epoch, close_raw, close_native). If before_epoch_day
-    is provided, only closes strictly older than that day are considered. The
-    cutoff accepts epoch-day values and is internally converted to YYYYMMDD to
-    match the stored schema.
+    Returns a tuple of (date_epoch_day, close_raw, close_native). If
+    before_epoch_day is provided, only closes strictly older than that day are
+    considered. The cutoff is normalized to an epoch-day value, and stored
+    dates are normalized the same way so both YYYYMMDD and epoch-day storage are
+    supported.
     """
     if not security_uuid:
         message = "security_uuid darf nicht leer sein"
@@ -2715,38 +2716,21 @@ def fetch_previous_close(  # noqa: PLR0912, PLR0915
     if local_conn is None:
         local_conn = sqlite3.connect(str(db_path))
 
-    cutoff_yyyymmdd: int | None = None
+    cutoff_epoch_day: int | None = None
     if before_epoch_day is not None:
-        try:
-            normalized_cutoff = int(before_epoch_day)
-        except (TypeError, ValueError):
-            normalized_cutoff = None
-
-        if normalized_cutoff is not None:
-            if normalized_cutoff >= _YYYYMMDD_MIN_VALUE:
-                cutoff_yyyymmdd = normalized_cutoff
-            else:
-                try:
-                    cutoff_date = _EPOCH_START_DATE + timedelta(days=normalized_cutoff)
-                    cutoff_yyyymmdd = int(cutoff_date.strftime("%Y%m%d"))
-                except (OverflowError, ValueError):
-                    cutoff_yyyymmdd = None
+        cutoff_epoch_day = _to_epoch_day(before_epoch_day)
 
     try:
         try:
-            params: list[object] = [security_uuid]
-            sql = """
+            cursor = local_conn.execute(
+                """
                 SELECT close, date
                 FROM historical_prices
                 WHERE security_uuid = ?
-            """
-            if cutoff_yyyymmdd is not None:
-                sql += " AND date < ?"
-                params.append(cutoff_yyyymmdd)
-            sql += " ORDER BY date DESC LIMIT 1"
-
-            cursor = local_conn.execute(sql, params)
-            row = cursor.fetchone()
+                ORDER BY date DESC
+                """,
+                (security_uuid,),
+            )
         except sqlite3.Error:
             _LOGGER.exception(
                 "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
@@ -2754,14 +2738,28 @@ def fetch_previous_close(  # noqa: PLR0912, PLR0915
             )
             return None, None, None
 
-        if not row:
+        selected: tuple[int | None, Any] | None = None
+        selected_epoch_day: int | None = None
+        for row in cursor:
+            raw_close = row[0]
+            date_value = row[1] if len(row) > 1 else None
+            normalized_day = _to_epoch_day(date_value)
+            if normalized_day is None:
+                continue
+            if cutoff_epoch_day is not None and normalized_day >= cutoff_epoch_day:
+                continue
+
+            selected = (raw_close, date_value)
+            selected_epoch_day = normalized_day
+            break
+
+        if not selected:
             return None, None, None
 
-        raw_close = row[0]
-        date_value = row[1] if len(row) > 1 else None
-        prev_epoch_day = _to_epoch_day(date_value)
+        raw_close, date_value = selected
+        prev_epoch_day = selected_epoch_day
         if raw_close is None:
-            return date_value, None, None
+            return prev_epoch_day, None, None
 
         close_native: float | None = None
         try:
@@ -2775,7 +2773,11 @@ def fetch_previous_close(  # noqa: PLR0912, PLR0915
             )
             close_native = None
 
-        return prev_epoch_day or date_value, int(raw_close), close_native
+        return (
+            prev_epoch_day if prev_epoch_day is not None else date_value,
+            int(raw_close),
+            close_native,
+        )
     finally:
         if conn is None:
             with suppress(sqlite3.Error):
