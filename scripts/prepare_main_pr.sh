@@ -5,8 +5,31 @@ SOURCE_BRANCH=${1:-dev}
 TARGET_BRANCH=${2:-main-release}
 WORKTREE_DIR=${3:-".worktrees/${TARGET_BRANCH}"}
 
-ALLOWED_ROOT=(ARCHITECTURE.md CHANGELOG.md hacs.json LICENSE README.md)
-ALLOWED_DIR="custom_components"
+ALLOWED_ROOT=(
+  ARCHITECTURE.md
+  CHANGELOG.md
+  hacs.json
+  LICENSE
+  README.md
+  .ruff.toml
+  .gitignore
+  eslint.config.js
+  tsconfig.json
+  vite.config.mjs
+  pytest.ini
+  package.json
+  package-lock.json
+)
+
+ALLOWED_DIRS=(
+  custom_components
+  .github
+  scripts
+  src
+  tests
+)
+
+SCRIPT_PATH="scripts/prepare_main_pr.sh"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
@@ -29,17 +52,36 @@ pushd "${WORKTREE_DIR}" >/dev/null
 git checkout -B "${TARGET_BRANCH}" >/dev/null
 
 while IFS= read -r path; do
-  case "${path}" in
-    ${ALLOWED_DIR}/*) ;;
-    ${ALLOWED_ROOT[0]}|${ALLOWED_ROOT[1]}|${ALLOWED_ROOT[2]}|${ALLOWED_ROOT[3]}|${ALLOWED_ROOT[4]}) ;;
-    *)
-      git rm -r --cached --quiet "${path}" || true
-      rm -rf "${path}"
-      ;;
-  esac
+  keep_path=false
+
+  for allowed_dir in "${ALLOWED_DIRS[@]}"; do
+    if [[ "${path}" == "${allowed_dir}/"* ]]; then
+      keep_path=true
+      break
+    fi
+  done
+
+  if [[ "${keep_path}" == false ]]; then
+    for allowed_file in "${ALLOWED_ROOT[@]}"; do
+      if [[ "${path}" == "${allowed_file}" ]]; then
+        keep_path=true
+        break
+      fi
+    done
+  fi
+
+  if [[ "${keep_path}" == false ]]; then
+    git rm -r --cached --quiet "${path}" || true
+    rm -rf "${path}"
+  fi
 done < <(git ls-files)
 
 git clean -fdx >/dev/null
+
+if git ls-files --error-unmatch "${SCRIPT_PATH}" >/dev/null 2>&1; then
+  git rm --quiet -f "${SCRIPT_PATH}" || true
+fi
+rm -f "${SCRIPT_PATH}"
 
 echo "Worktree prepared. Review changes under ${WORKTREE_DIR} and commit when ready." >&2
 
