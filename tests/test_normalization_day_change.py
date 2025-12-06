@@ -56,7 +56,9 @@ def test_portfolio_day_change_uses_eur_converted_prices(monkeypatch: object) -> 
     assert coverage == 1.0
 
 
-@pytest.mark.parametrize("price_ts_encoding", ["epoch_seconds", "epoch_day", "yyyymmdd"])
+@pytest.mark.parametrize(
+    "price_ts_encoding", ["epoch_seconds", "epoch_day", "yyyymmdd"]
+)
 @pytest.mark.parametrize("date_encoding", ["yyyymmdd", "epoch_day"])
 def test_portfolio_day_change_uses_price_date_for_previous_close(
     tmp_path: Path, date_encoding: str, price_ts_encoding: str
