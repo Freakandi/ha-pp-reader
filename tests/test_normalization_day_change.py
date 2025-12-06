@@ -56,9 +56,10 @@ def test_portfolio_day_change_uses_eur_converted_prices(monkeypatch: object) -> 
     assert coverage == 1.0
 
 
+@pytest.mark.parametrize("price_ts_encoding", ["epoch_seconds", "epoch_day", "yyyymmdd"])
 @pytest.mark.parametrize("date_encoding", ["yyyymmdd", "epoch_day"])
 def test_portfolio_day_change_uses_price_date_for_previous_close(
-    tmp_path: Path, date_encoding: str
+    tmp_path: Path, date_encoding: str, price_ts_encoding: str
 ) -> None:
     """Normalization should derive the comparison close from the stored price date."""
     db_path = tmp_path / "norm.db"
@@ -71,6 +72,11 @@ def test_portfolio_day_change_uses_price_date_for_previous_close(
     thursday_date_value = (
         20251204 if date_encoding == "yyyymmdd" else thursday_epoch_day
     )
+    last_price_date = {
+        "epoch_seconds": friday_ts,
+        "epoch_day": friday_epoch_day,
+        "yyyymmdd": 20251205,
+    }[price_ts_encoding]
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(
@@ -78,7 +84,7 @@ def test_portfolio_day_change_uses_price_date_for_previous_close(
             INSERT INTO securities (uuid, name, ticker_symbol, currency_code, retired, last_price, last_price_date)
             VALUES (?, ?, ?, ?, 0, ?, ?)
             """,
-            ("sec1", "Sample", "SMP", "EUR", int(round(95.0 * 1e8)), friday_ts),
+            ("sec1", "Sample", "SMP", "EUR", int(round(95.0 * 1e8)), last_price_date),
         )
         conn.executemany(
             "INSERT INTO historical_prices (security_uuid, date, close) VALUES (?, ?, ?)",

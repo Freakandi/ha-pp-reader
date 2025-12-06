@@ -763,10 +763,25 @@ def _resolve_reference_day(
     if ts and isinstance(ts, (int, float)) and ts > 0:
         try:
             timestamp = int(ts)
-            if timestamp > 10**12:  # allow ms timestamps
+            # millisecond / second timestamps
+            if timestamp > 10**12:
                 timestamp = timestamp // 1000
-            ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
-            return ref_dt, int(ref_dt.timestamp() // 86400)
+                ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            if timestamp >= 10**9:
+                ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            # YYYYMMDD encoding
+            if 1_000_000 <= timestamp <= 99_999_999:
+                year = timestamp // 10_000
+                month = (timestamp % 10_000) // 100
+                day_value = timestamp % 100
+                ref_dt = datetime(year, month, day_value, tzinfo=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            # epoch-day encoding (days since Unix epoch)
+            if timestamp < 400_000:
+                ref_dt = datetime.fromtimestamp(timestamp * 86400, tz=UTC)
+                return ref_dt, timestamp
         except (OverflowError, OSError, ValueError):
             pass
     normalized_fallback = fallback if fallback.tzinfo else fallback.replace(tzinfo=UTC)

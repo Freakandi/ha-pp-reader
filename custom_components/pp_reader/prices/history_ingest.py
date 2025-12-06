@@ -16,7 +16,7 @@ import logging
 import math
 import time
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
@@ -178,7 +178,8 @@ class YahooHistoryFetcher:
             return []
 
         start_str = job.start.strftime("%Y-%m-%d")
-        end_str = job.end.strftime("%Y-%m-%d")
+        # yahooquery interprets the end date as exclusive; extend by one day to fetch the target day.
+        end_str = (job.end + timedelta(days=1)).strftime("%Y-%m-%d")
         ticker = None
         session = self._session
 
