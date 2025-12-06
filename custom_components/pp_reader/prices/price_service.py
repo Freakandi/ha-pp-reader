@@ -370,18 +370,33 @@ def _load_security_currencies(conn: sqlite3.Connection) -> dict[str, str | None]
     return dict(cur.fetchall())
 
 
+def _normalize_quote_timestamp(value: Any) -> int | None:
+    """Convert provider timestamp to int seconds, ignore missing/invalid values."""
+    try:
+        ts_val = float(value)
+    except (TypeError, ValueError):
+        return None
+    if ts_val <= 0:
+        return None
+    try:
+        return int(ts_val)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _detect_price_changes(
     quotes: list[Quote],
     symbol_map: dict[str, list[str]],
     existing_prices: dict[str, int],
-) -> tuple[dict[str, int], set[str]]:
+) -> tuple[dict[str, int], dict[str, int], set[str]]:
     """
     Ermittelt skalierte Preisänderungen (1e8) pro Security UUID.
 
     Rückgabe:
-        (updates_dict, set_changed_uuids)
+        (price_updates, price_date_updates, set_changed_uuids)
     """
     updates: dict[str, int] = {}
+    price_dates: dict[str, int] = {}
     changed: set[str] = set()
 
     # Gruppierung: Quote.symbol -> Quote Objekt
@@ -407,14 +422,17 @@ def _detect_price_changes(
         if scaled <= 0:
             # Defensive: sollte bereits vorher gefiltert sein
             continue
+        ts_val = _normalize_quote_timestamp(getattr(q, "ts", None))
 
         for sec_uuid in target_uuids:
             prev = existing_prices.get(sec_uuid)
             if prev != scaled:
                 updates[sec_uuid] = scaled
                 changed.add(sec_uuid)
+                if ts_val is not None:
+                    price_dates[sec_uuid] = ts_val
 
-    return updates, changed
+    return updates, price_dates, changed
 
 
 def _load_prices_and_currencies(
@@ -430,15 +448,16 @@ def _apply_price_updates(
     updates: dict[str, int],
     fetched_at: str | None = None,
     source: str | None = None,
+    price_dates: dict[str, int] | None = None,
 ) -> int:
     """
     Persistiert nur geänderte Preise (transaktional).
 
     WICHTIG (ensure_no_extra_persist):
     Diese Funktion ist der einzige Persistenz-Pfad für Live-Quotes und DARF
-    ausschließlich die drei freigegebenen Spalten der Tabelle 'securities'
-    schreiben:
+    ausschließlich die freigegebenen Spalten der Tabelle 'securities' schreiben:
         - last_price (int, 1e8 skaliert)
+        - last_price_date (int, Unix Sekunden, optional)
         - last_price_source (TEXT)
         - last_price_fetched_at (UTC ISO8601, YYYY-MM-DDTHH:MM:SSZ)
 
@@ -461,6 +480,9 @@ def _apply_price_updates(
         Optionaler Timestamp für last_price_fetched_at (ISO UTC).
     source : str | None
         Optionaler Quellname für last_price_source.
+    price_dates : dict[security_uuid, int] | None
+        Optionaler Markt-Timestamp (Unix Sekunden) je Security; ungültige oder
+        fehlende Werte werden ignoriert (fallback auf bestehendes Verhalten).
 
     Returns
     -------
@@ -477,19 +499,40 @@ def _apply_price_updates(
             message = f"{INVALID_SCALED_PRICE_ERROR} uuid={_sec} value={_val!r}"
             raise ValueError(message)
 
+    valid_price_dates = {
+        sec: ts
+        for sec, ts in (price_dates or {}).items()
+        if isinstance(ts, int) and ts > 0
+    }
+
     fetched_at = fetched_at or _utc_now_iso()
     source = source or "yahoo"
     updated_rows = 0
     with sqlite3.connect(str(db_path)) as conn:
         try:
             conn.execute("BEGIN")
-            stmt = """
+            stmt_base = """
                 UPDATE securities
                 SET last_price=?, last_price_source=?, last_price_fetched_at=?
                 WHERE uuid=? AND (last_price IS NULL OR last_price <> ?)
             """
+            stmt_with_date = (
+                "UPDATE securities "
+                "SET last_price=?, last_price_source=?, "
+                "last_price_fetched_at=?, last_price_date=? "
+                "WHERE uuid=? AND (last_price IS NULL OR last_price <> ?)"
+            )
             for sec_uuid, scaled in updates.items():
-                cur = conn.execute(stmt, (scaled, source, fetched_at, sec_uuid, scaled))
+                price_date = valid_price_dates.get(sec_uuid)
+                if price_date is not None:
+                    cur = conn.execute(
+                        stmt_with_date,
+                        (scaled, source, fetched_at, price_date, sec_uuid, scaled),
+                    )
+                else:
+                    cur = conn.execute(
+                        stmt_base, (scaled, source, fetched_at, sec_uuid, scaled)
+                    )
                 if cur.rowcount > 0:
                     updated_rows += 1
             conn.commit()
@@ -1224,7 +1267,11 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
             )
 
             # Change Detection
-            scaled_updates, changed_security_uuids = _detect_price_changes(
+            (
+                scaled_updates,
+                price_date_updates,
+                changed_security_uuids,
+            ) = _detect_price_changes(
                 all_quotes, store.get("price_symbol_to_uuids", {}), existing_prices
             )
             detected_changes = len(changed_security_uuids)
@@ -1240,6 +1287,7 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                         scaled_updates,
                         fetched_at,
                         "yahoo",
+                        price_date_updates,
                     )
                     if updated_rows != detected_changes:
                         debug_msg = (

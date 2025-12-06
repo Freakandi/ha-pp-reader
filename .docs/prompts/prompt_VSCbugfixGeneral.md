@@ -21,7 +21,7 @@ Supporting logs, console output, or reproduction steps (optional):
 - Immediately after the evaluation, pick and state the approach with the line `Approach: <implement now | staged plan | concept>` plus a one-sentence rationale.
 - Then execute according to the chosen approach:
   - `implement now`: proceed with coding the fix following Workflow steps 4–8 with no further user interaction.
-  - `staged plan`: produce a clear ToDo list in .docs/ (no code changes yet) that would be executed next and execute workflow step 8.
+  - `staged plan`: produce a clear ToDo list in .docs/ (no code changes yet) with Markdown checkboxes for every actionable item, then execute workflow step 8.
   - `concept`: draft the concept document in .docs/ outlining the refactor/architecture direction (no code changes yet) and execute workflow step 8.
 - Choose and state the path:
   - Implement now if scope is small/clear (1–2 modules/files in one layer), no contract/schema changes, expected diff ≤150 LoC, one toolchain, and existing tests can be extended.

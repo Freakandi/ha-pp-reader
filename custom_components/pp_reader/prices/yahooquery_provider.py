@@ -20,6 +20,7 @@ Feld-Mapping:
     fiftyTwoWeekHigh              -> high_52w
     fiftyTwoWeekLow               -> low_52w
     trailingAnnualDividendYield   -> dividend_yield
+    regularMarketTime             -> ts (fallback: Fetch-Timestamp)
 
 Nicht vorhandene Felder -> None.
 """
@@ -31,7 +32,7 @@ import logging
 import time
 from collections.abc import Callable
 from importlib import import_module
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .provider_base import PriceProvider, Quote
 
@@ -59,6 +60,22 @@ TickerFactory = Callable[..., "Ticker"]
 def has_import_error() -> bool:
     """Expose globalen Importfehler-Status für Orchestrator (Feature-Deaktivierung)."""
     return _YAHOOQUERY_IMPORT_ERROR
+
+
+def _select_quote_timestamp(raw_quote: dict[str, Any], fallback_ts: float) -> float:
+    """Pick a provider-supplied market timestamp if present; else fall back."""
+    candidates = (
+        raw_quote.get("regularMarketTime"),
+        raw_quote.get("postMarketTime"),
+    )
+    for candidate in candidates:
+        try:
+            ts_val = float(candidate)
+        except (TypeError, ValueError):
+            continue
+        if ts_val > 0:
+            return ts_val
+    return fallback_ts
 
 
 def _fetch_quotes_blocking(symbols: list[str]) -> dict:
@@ -146,7 +163,7 @@ class YahooQueryProvider(PriceProvider):
             return {}
 
         result: dict[str, Quote] = {}
-        now_ts = time.time()
+        fetch_ts = time.time()
 
         for sym in symbols:
             data = raw_quotes.get(sym)
@@ -171,7 +188,7 @@ class YahooQueryProvider(PriceProvider):
                 high_52w=data.get("fiftyTwoWeekHigh"),
                 low_52w=data.get("fiftyTwoWeekLow"),
                 dividend_yield=data.get("trailingAnnualDividendYield"),
-                ts=now_ts,
+                ts=_select_quote_timestamp(data, fetch_ts),
                 source=self.source,
             )
             result[sym] = quote

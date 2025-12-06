@@ -165,7 +165,10 @@ def _build_security_metric_record(
             else None
         )
 
-        reference_epoch_day = int(reference_date.strftime("%Y%m%d"))
+        ref_date_for_close, reference_epoch_day = _select_price_reference_day(
+            _coerce_optional_int(row["last_price_date"]),
+            reference_date,
+        )
         _prev_date, raw_last_close, last_close_native = fetch_previous_close(
             db_path,
             security_uuid,
@@ -193,7 +196,7 @@ def _build_security_metric_record(
                         "Metrics ggf. unvollständig"
                     ),
                     currency,
-                    reference_date.strftime("%Y-%m-%d"),
+                    ref_date_for_close.strftime("%Y-%m-%d"),
                 )
 
         day_change_eur_override = _compute_day_change_eur(
@@ -336,6 +339,20 @@ def _normalize_holdings_value(value: float | None) -> float:
     if abs(value) >= _SCALED_INT_THRESHOLD:
         return value / _EIGHT_DECIMAL_SCALE
     return value
+
+
+def _select_price_reference_day(
+    last_price_ts: int | None, fallback: datetime
+) -> tuple[datetime, int]:
+    """Derive a reference datetime/epoch-day from the market timestamp."""
+    if last_price_ts and isinstance(last_price_ts, int) and last_price_ts > 0:
+        try:
+            ref_dt = datetime.fromtimestamp(last_price_ts, tz=UTC)
+            return ref_dt, int(ref_dt.strftime("%Y%m%d"))
+        except (OverflowError, OSError, ValueError):
+            pass
+
+    return fallback, int(fallback.strftime("%Y%m%d"))
 
 
 def _normalize_currency_cents(value: int) -> int:

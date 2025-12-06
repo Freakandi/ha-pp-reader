@@ -137,6 +137,7 @@ def test_fx_backfill_flows_into_positions(tmp_path: Path) -> None:
             metric_rows=metric_records,
             securities=securities_map,
             reference_date=datetime(2024, 2, 2, tzinfo=UTC),
+            price_dates={},
         )
     )
     assert positions, "expected at least one position snapshot"

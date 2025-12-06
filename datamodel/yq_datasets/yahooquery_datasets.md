@@ -4,6 +4,7 @@
 - The Home Assistant integration wraps Yahoo Finance access through `yahooquery` in `YahooQueryProvider`.
   - Quotes are fetched in batches (size 10) via the blocking `Ticker(...).quotes` helper that returns a per-symbol mapping of Yahoo fields.
   - Only entries with a strictly positive `regularMarketPrice` are accepted and mapped onto the runtime `Quote` dataclass, which carries price, previous close, currency, volume, market capitalisation, 52-week range, dividend yield, and a timestamp supplied by the provider.【F:custom_components/pp_reader/prices/yahooquery_provider.py†L2-L175】【F:custom_components/pp_reader/prices/provider_base.py†L1-L89】
+  - The mapped timestamp prefers `regularMarketTime` (falls back to `postMarketTime` or the fetch time) and is persisted as `securities.last_price_date` so day-change calculations use the market session date rather than the fetch date.【F:custom_components/pp_reader/prices/yahooquery_provider.py†L60-L134】【F:custom_components/pp_reader/prices/price_service.py†L340-L520】
 - All other modules documented below are directly available on the `Ticker` instance for ad-hoc diagnostics or future feature work.
 
 ## Core quote endpoints

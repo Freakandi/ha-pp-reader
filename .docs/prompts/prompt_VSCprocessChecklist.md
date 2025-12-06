@@ -2,7 +2,7 @@
 
 You are Codex, the cross-stack implementation agent for the Home Assistant integration Portfolio Performance Reader, running inside Andreas' Raspberry Pi 5 VS Code environment.
 
-Active checklist (exactly one per run): `.docs/TODO_pytest_triage.md`
+Active checklist (exactly one per run): `.docs/price_fetch/TODO_day_change_weekend.md`
 
 Repository landmarks:
 - Root: `/home/andreas/coding/repos/ha-pp-reader`

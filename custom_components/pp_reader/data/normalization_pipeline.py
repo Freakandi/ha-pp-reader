@@ -116,6 +116,7 @@ class PositionSnapshot:
     last_price_eur: float | None = None
     last_close_native: float | None = None
     last_close_eur: float | None = None
+    last_price_date: int | None = None
     data_state: SnapshotDataState = field(default_factory=SnapshotDataState)
 
 
@@ -163,6 +164,7 @@ class _PositionContext:
     securities: Mapping[str, Security]
     index: Mapping[str, tuple[SecurityMetricRecord, ...]]
     reference_date: datetime
+    price_dates: Mapping[str, int]
 
 
 @dataclass(slots=True)
@@ -173,6 +175,7 @@ class _PortfolioComposeContext:
     reference_date: datetime
     include_positions: bool
     position_context: _PositionContext | None
+    price_dates: Mapping[str, int]
 
 
 @dataclass(slots=True)
@@ -182,7 +185,7 @@ class _DayChangeContext:
     db_path: Path
     currency_code: str
     reference_date: datetime
-    reference_epoch_day: int
+    price_dates: Mapping[str, int]
 
 
 @dataclass(slots=True)
@@ -191,8 +194,8 @@ class _PositionSnapshotContext:
 
     db_path: Path
     reference_date: datetime
-    reference_epoch_day: int
     securities: Mapping[str, Security]
+    price_dates: Mapping[str, int]
 
 
 @dataclass(slots=True)
@@ -203,6 +206,7 @@ class _PriceState:
     last_price_eur: float | None
     last_close_native: float | None
     last_close_eur: float | None
+    last_price_date: int | None
 
 
 async def async_normalize_snapshot(
@@ -317,7 +321,16 @@ def serialize_position_snapshot(snapshot: PositionSnapshot) -> dict[str, Any]:
         "aggregation": dict(snapshot.aggregation),
     }
 
-    optional_fields = ("coverage_ratio", "provenance", "metric_run_uuid")
+    optional_fields = (
+        "coverage_ratio",
+        "provenance",
+        "metric_run_uuid",
+        "last_price_native",
+        "last_price_eur",
+        "last_close_native",
+        "last_close_eur",
+        "last_price_date",
+    )
     for field_name in optional_fields:
         value = getattr(snapshot, field_name)
         if value not in (None, ""):
@@ -495,6 +508,7 @@ def _normalize_snapshot_sync(
 
     accounts = _safe_load(get_accounts, db_path, "accounts")
     portfolios = _safe_load(get_portfolios, db_path, "portfolios")
+    price_dates = _load_security_price_dates(db_path)
     position_context: _PositionContext | None = None
     reference_date = datetime.now(UTC)
     if include_positions:
@@ -504,6 +518,7 @@ def _normalize_snapshot_sync(
             metric_batch.securities,
             securities,
             reference_date,
+            price_dates,
         )
 
     account_snapshots = _compose_account_snapshots(accounts, metric_batch.accounts)
@@ -512,6 +527,7 @@ def _normalize_snapshot_sync(
         reference_date=reference_date,
         include_positions=include_positions,
         position_context=position_context,
+        price_dates=price_dates,
     )
     portfolio_snapshots = _compose_portfolio_snapshots(
         portfolios,
@@ -633,6 +649,7 @@ def _build_position_context(
     security_metrics: Sequence[SecurityMetricRecord],
     securities: Mapping[str, Security],
     reference_date: datetime,
+    price_dates: Mapping[str, int],
 ) -> _PositionContext:
     """Prepare the lookup tables required for loading position snapshots."""
     index = {
@@ -646,6 +663,7 @@ def _build_position_context(
         securities=securities,
         index=index,
         reference_date=reference_date,
+        price_dates=price_dates,
     )
 
 
@@ -688,6 +706,7 @@ def _build_portfolio_snapshot(
                 metric_rows=metric_rows,
                 securities=position_context.securities,
                 reference_date=position_context.reference_date,
+                price_dates=position_context.price_dates,
             )
         )
 
@@ -734,6 +753,20 @@ def _safe_fetch_previous_close(
             security_uuid,
         )
         return None, None, None
+
+
+def _resolve_reference_day(
+    price_dates: Mapping[str, int], security_uuid: str, fallback: datetime
+) -> tuple[datetime, int]:
+    """Return reference datetime and epoch day derived from stored price date."""
+    ts = price_dates.get(security_uuid)
+    if ts and isinstance(ts, int) and ts > 0:
+        try:
+            ref_dt = datetime.fromtimestamp(ts, tz=UTC)
+            return ref_dt, int(ref_dt.strftime("%Y%m%d"))
+        except (OverflowError, OSError, ValueError):
+            pass
+    return fallback, int(fallback.strftime("%Y%m%d"))
 
 
 def _compute_security_day_change_delta(
@@ -813,9 +846,9 @@ def _aggregate_portfolio_day_change(
             reference_date=reference_date,
             include_positions=False,
             position_context=None,
+            price_dates=_load_security_price_dates(db_path),
         )
 
-    reference_epoch_day = int(resolved_context.reference_date.strftime("%Y%m%d"))
     grouped = _index_security_metrics_by_portfolio(security_metrics)
 
     aggregates: dict[str, tuple[float | None, float | None, float | None]] = {}
@@ -823,7 +856,6 @@ def _aggregate_portfolio_day_change(
         aggregates[portfolio_uuid] = _aggregate_portfolio_day_change_for_portfolio(
             records,
             resolved_context,
-            reference_epoch_day,
         )
 
     return aggregates
@@ -832,7 +864,6 @@ def _aggregate_portfolio_day_change(
 def _aggregate_portfolio_day_change_for_portfolio(
     records: Sequence[SecurityMetricRecord],
     context: _PortfolioComposeContext,
-    reference_epoch_day: int,
 ) -> tuple[float | None, float | None, float | None]:
     """Aggregate day-change deltas for a single portfolio."""
     total_current_cents = 0
@@ -847,6 +878,11 @@ def _aggregate_portfolio_day_change_for_portfolio(
         if holdings <= 0:
             continue
 
+        _, reference_epoch_day = _resolve_reference_day(
+            context.price_dates,
+            record.security_uuid,
+            context.reference_date,
+        )
         delta_eur, has_prev_close = _compute_security_day_change_delta(
             record,
             context,
@@ -928,13 +964,14 @@ def _portfolio_data_state(missing_value_positions: int) -> SnapshotDataState:
     return SnapshotDataState()
 
 
-def _load_position_snapshots(
+def _load_position_snapshots(  # noqa: PLR0913 - aggregation helper needs context args
     *,
     db_path: Path,
     portfolio_uuid: str,
     metric_rows: Sequence[SecurityMetricRecord] | tuple[()] | None,
     securities: Mapping[str, Security],
     reference_date: datetime,
+    price_dates: Mapping[str, int],
 ) -> Iterable[PositionSnapshot]:
     """Convert persisted security metrics into PositionSnapshot dataclasses."""
     if not metric_rows:
@@ -946,12 +983,11 @@ def _load_position_snapshots(
         if reference_date.tzinfo is not None
         else reference_date.replace(tzinfo=UTC)
     )
-    reference_epoch_day = int(normalized_reference.strftime("%Y%m%d"))
     context = _PositionSnapshotContext(
         db_path=db_path,
         reference_date=normalized_reference,
-        reference_epoch_day=reference_epoch_day,
         securities=securities,
+        price_dates=price_dates,
     )
     for record in metric_rows:
         snapshot = _build_position_snapshot_entry(
@@ -1045,6 +1081,14 @@ def _build_position_snapshot_entry(
         "coverage_ratio": record.coverage_ratio,
     }
 
+    raw_price_ts = context.price_dates.get(security_uuid)
+    price_ts = int(raw_price_ts) if isinstance(raw_price_ts, (int, float)) else None
+    if price_ts is not None and price_ts <= 0:
+        price_ts = None
+    _, ref_epoch_day = _resolve_reference_day(
+        context.price_dates, security_uuid, context.reference_date
+    )
+
     last_price_native = normalize_raw_price(
         record.last_price_native_raw,
         decimals=4,
@@ -1067,17 +1111,19 @@ def _build_position_snapshot_entry(
             context.reference_date,
             context.db_path,
         ),
+        last_price_date=price_ts,
     )
     day_change_context = _DayChangeContext(
         db_path=context.db_path,
         currency_code=currency_code,
         reference_date=context.reference_date,
-        reference_epoch_day=context.reference_epoch_day,
+        price_dates=context.price_dates,
     )
     day_change_payload, price_state = _derive_day_change_payload(
         record=record,
         context=day_change_context,
         price_state=price_state,
+        reference_epoch_day=ref_epoch_day,
     )
     if day_change_payload:
         performance_payload["day_change"] = day_change_payload
@@ -1103,6 +1149,7 @@ def _build_position_snapshot_entry(
         last_price_eur=price_state.last_price_eur,
         last_close_native=price_state.last_close_native,
         last_close_eur=price_state.last_close_eur,
+        last_price_date=price_state.last_price_date,
     )
 
 
@@ -1111,12 +1158,13 @@ def _derive_day_change_payload(
     record: SecurityMetricRecord,
     context: _DayChangeContext,
     price_state: _PriceState,
+    reference_epoch_day: int,
 ) -> tuple[dict[str, Any] | None, _PriceState]:
     """Recompute day-change payload using historical closes."""
     _, prev_raw, prev_native = _safe_fetch_previous_close(
         context.db_path,
         record.security_uuid,
-        before_epoch_day=context.reference_epoch_day,
+        before_epoch_day=reference_epoch_day,
     )
     updated_state = price_state
     if prev_native is not None and price_state.last_price_native is not None:
@@ -1125,6 +1173,7 @@ def _derive_day_change_payload(
             last_price_eur=price_state.last_price_eur,
             last_close_native=prev_native,
             last_close_eur=price_state.last_close_eur,
+            last_price_date=price_state.last_price_date,
         )
         if prev_raw is not None:
             updated_state = _PriceState(
@@ -1137,6 +1186,7 @@ def _derive_day_change_payload(
                     context.reference_date,
                     context.db_path,
                 ),
+                last_price_date=price_state.last_price_date,
             )
     else:
         updated_state = _PriceState(
@@ -1144,6 +1194,7 @@ def _derive_day_change_payload(
             last_price_eur=price_state.last_price_eur,
             last_close_native=None,
             last_close_eur=None,
+            last_price_date=price_state.last_price_date,
         )
 
     price_change_native = None
@@ -1249,6 +1300,7 @@ def load_portfolio_position_snapshots(
 
     securities = _load_securities(resolved_path)
     grouped_metrics = _index_security_metrics_by_portfolio(security_metrics)
+    price_dates = _load_security_price_dates(resolved_path)
 
     snapshots: dict[str, tuple[PositionSnapshot, ...]] = {}
     reference_date = datetime.now(UTC)
@@ -1261,6 +1313,7 @@ def load_portfolio_position_snapshots(
                 metric_rows=rows,
                 securities=securities,
                 reference_date=reference_date,
+                price_dates=price_dates,
             )
         )
         snapshots[portfolio_uuid] = entries
@@ -1518,6 +1571,28 @@ def _load_securities(db_path: Path) -> dict[str, Security]:
         _LOGGER.exception(
             "normalization_pipeline: Fehler beim Laden der securities (db_path=%s)",
             db_path,
+        )
+        return {}
+
+
+def _load_security_price_dates(db_path: Path) -> dict[str, int]:
+    """Load last_price_date (Unix seconds) per security; ignore missing/invalid."""
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            cur = conn.execute(
+                "SELECT uuid, last_price_date FROM securities "
+                "WHERE last_price_date IS NOT NULL"
+            )
+            return {
+                sec_uuid: int(ts)
+                for sec_uuid, ts in cur.fetchall()
+                if sec_uuid and isinstance(ts, (int, float)) and int(ts) > 0
+            }
+    except sqlite3.Error:
+        _LOGGER.debug(
+            "normalization_pipeline: price_date Lookup fehlgeschlagen (db_path=%s)",
+            db_path,
+            exc_info=True,
         )
         return {}
 
