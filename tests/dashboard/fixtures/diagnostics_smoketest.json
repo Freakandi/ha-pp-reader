@@ -1,0 +1,124 @@
+{
+  "ingestion": {
+    "available": true,
+    "run_id": "run-ingestion-smoke",
+    "file_path": "config/pp_reader_data/S-Depot.portfolio",
+    "parsed_at": "2024-01-11T09:45:00Z",
+    "pp_version": 7,
+    "base_currency": "EUR",
+    "properties": {
+      "source": "normalization-smoketest"
+    },
+    "processed_entities": {
+      "accounts": 1,
+      "portfolios": 1,
+      "securities": 1,
+      "transactions": 2,
+      "transaction_units": 2,
+      "historical_prices": 1
+    }
+  },
+  "enrichment": {
+    "available": true,
+    "feature_flags": {},
+    "fx": {
+      "last_refresh": "2024-01-11T09:30:00Z",
+      "latest_rate_fetch": "2024-01-11T10:00:00Z"
+    },
+    "price_history_queue": {
+      "summary": null,
+      "recent_failures": null
+    }
+  },
+  "metrics": {
+    "available": true,
+    "status": "completed",
+    "latest_run": {
+      "run_uuid": "run-normalization-smoke",
+      "status": "completed",
+      "trigger": "smoketest",
+      "started_at": "2024-01-11T09:55:00Z",
+      "finished_at": "2024-01-11T09:55:05Z",
+      "duration_ms": 5000,
+      "total_entities": 3,
+      "processed_portfolios": 1,
+      "processed_accounts": 1,
+      "processed_securities": 1,
+      "error_message": null,
+      "provenance": "cli"
+    },
+    "recent_runs": [
+      {
+        "run_uuid": "run-normalization-smoke",
+        "status": "completed",
+        "trigger": "smoketest",
+        "started_at": "2024-01-11T09:55:00Z",
+        "finished_at": "2024-01-11T09:55:05Z",
+        "duration_ms": 5000,
+        "total_entities": 3,
+        "processed_portfolios": 1,
+        "processed_accounts": 1,
+        "processed_securities": 1,
+        "error_message": null,
+        "provenance": "cli"
+      }
+    ],
+    "coverage": {
+      "portfolios": {
+        "available": true,
+        "total": 1,
+        "with_coverage": 1,
+        "avg_coverage": 1.0
+      },
+      "accounts": {
+        "available": true,
+        "total": 1,
+        "with_coverage": 1,
+        "avg_coverage": 1.0
+      },
+      "securities": {
+        "available": true,
+        "total": 1,
+        "with_coverage": 1,
+        "avg_coverage": 1.0
+      }
+    }
+  },
+  "normalized_payload": {
+    "available": true,
+    "generated_at": "2024-01-11T10:00:00Z",
+    "metric_run_uuid": "run-normalization-smoke",
+    "accounts": [
+      {
+        "uuid": "acc-smoke",
+        "name": "Cash EUR",
+        "currency_code": "EUR",
+        "orig_balance": 500.0,
+        "balance": 500.0,
+        "fx_rate": 1.0,
+        "fx_rate_source": "fixtures",
+        "fx_rate_timestamp": "2024-01-11T10:00:00Z",
+        "coverage_ratio": 1.0,
+        "provenance": "snapshot"
+      }
+    ],
+    "account_count": 1,
+    "portfolios": [
+      {
+        "uuid": "port-smoke",
+        "name": "Retirement Depot",
+        "position_count": 1,
+        "current_value": 550.0,
+        "purchase_value": 500.0,
+        "missing_value_positions": 0,
+        "coverage_ratio": 1.0,
+        "provenance": "cached",
+        "performance": {
+          "gain_abs": 50.0,
+          "gain_pct": 10.0
+        }
+      }
+    ],
+    "portfolio_count": 1
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "accounts": [
+    {
+      "balance": 500.0,
+      "coverage_ratio": 1.0,
+      "currency_code": "EUR",
+      "fx_rate": 1.0,
+      "fx_rate_source": "fixtures",
+      "fx_rate_timestamp": "2024-01-11T10:00:00Z",
+      "metric_run_uuid": "run-normalization-smoke",
+      "name": "Smoke Brokerage",
+      "orig_balance": 500.0,
+      "provenance": "snapshot",
+      "uuid": "acc-smoke"
+    }
+  ],
+  "diagnostics": {
+    "coverage": 1.0,
+    "generated_at": "2024-01-11T10:00:00Z",
+    "missing_rates": []
+  },
+  "generated_at": "2024-01-11T10:00:00Z",
+  "metric_run_uuid": "run-normalization-smoke",
+  "portfolios": [
+    {
+      "coverage_ratio": 1.0,
+      "current_value": 550.0,
+      "has_current_value": true,
+      "metric_run_uuid": "run-normalization-smoke",
+      "missing_value_positions": 0,
+      "name": "Smoke Portfolio",
+      "performance": {
+        "coverage_ratio": 1.0,
+        "gain_abs": 50.0,
+        "gain_pct": 10.0,
+        "provenance": "cached",
+        "source": "snapshot",
+        "total_change_eur": 50.0,
+        "total_change_pct": 10.0
+      },
+      "position_count": 1,
+      "positions": [
+        {
+          "aggregation": {
+            "coverage_ratio": 1.0,
+            "purchase_total_account": 500.0,
+            "purchase_total_security": 500.0,
+            "purchase_value_eur": 500.0,
+            "total_holdings": 5.0
+          },
+          "average_cost": {
+            "account": 100.0,
+            "eur": 100.0,
+            "security": 100.0
+          },
+          "coverage_ratio": 1.0,
+          "currency_code": "USD",
+          "current_holdings": 5.0,
+          "current_value": 550.0,
+          "metric_run_uuid": "run-normalization-smoke",
+          "name": "Smoke Equity",
+          "performance": {
+            "coverage_ratio": 1.0,
+            "day_change": {
+              "change_pct": 0.95,
+              "coverage_ratio": 1.0,
+              "price_change_eur": 0.45,
+              "price_change_native": 0.5,
+              "source": "market"
+            },
+            "gain_abs": 50.0,
+            "gain_pct": 10.0,
+            "provenance": "snapshot",
+            "source": "snapshot",
+            "total_change_eur": 50.0,
+            "total_change_pct": 10.0
+          },
+          "portfolio_uuid": "port-smoke",
+          "provenance": "snapshot",
+          "purchase_value": 500.0,
+          "security_uuid": "sec-smoke"
+        }
+      ],
+      "provenance": "cached",
+      "purchase_value": 500.0,
+      "uuid": "port-smoke"
+    }
+  ]
+}

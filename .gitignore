@@ -1,0 +1,32 @@
+# artifacts
+__pycache__
+.pytest*
+*.egg-info
+*/build/*
+*/dist/*
+types/
+node_modules/
+
+# misc
+.coverage
+.vscode
+coverage.xml
+.ruff_cache
+
+# Home Assistant configuration
+config/*
+!config/configuration.yaml
+!config/enrichment_smoketest.log
+!config/pp_reader_data/S-Depot.portfolio
+!config/custom_components/
+config/custom_components/*
+!config/custom_components/__init__.py
+
+# Playwright artifacts and screenshots
+playwright-report/
+test-results/
+blob-report/
+tmp/playwright-report/
+tmp/playwright-results/
+tests/ui/playwright/*
+!tests/ui/playwright/AGENTS.md

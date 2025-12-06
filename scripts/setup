@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+python3 -m pip install --requirement requirements.txt
+
+CONFIG_DIR="${PWD}/config"
+if [ ! -d "${CONFIG_DIR}" ]; then
+    mkdir -p "${CONFIG_DIR}"
+fi
+
+if [ ! -e "/config" ]; then
+    ln -s "${CONFIG_DIR}" /config
+elif [ -L "/config" ]; then
+    current_target="$(readlink /config)"
+    if [ "${current_target}" != "${CONFIG_DIR}" ]; then
+        rm /config
+        ln -s "${CONFIG_DIR}" /config
+    fi
+elif [ ! -d "/config" ]; then
+    echo "Refusing to overwrite /config because it exists and is not a symlink" >&2
+    exit 1
+fi

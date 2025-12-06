@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Create config dir if not present
+CONFIG_DIR="${PWD}/config"
+if [[ ! -d "${CONFIG_DIR}" ]]; then
+    mkdir -p "${CONFIG_DIR}"
+    hass --config "${CONFIG_DIR}" --script ensure_config
+fi
+
+# Home Assistant integrations commonly expect the configuration directory to
+# be available at "/config" (matching the official container image).  Our
+# development checkout keeps the files under <repo>/config, so ensure a
+# symlink exists so absolute paths stored in config entries keep working.
+if [[ ! -e "/config" ]]; then
+    ln -s "${CONFIG_DIR}" /config
+elif [[ -L "/config" ]]; then
+    current_target="$(readlink /config)"
+    if [[ "${current_target}" != "${CONFIG_DIR}" ]]; then
+        rm /config
+        ln -s "${CONFIG_DIR}" /config
+    fi
+elif [[ ! -d "/config" ]]; then
+    echo "Refusing to overwrite /config because it exists and is not a symlink" >&2
+    exit 1
+fi
+
+# Set the path to custom_components
+## This let's us have the structure we want <root>/custom_components/pp_reader
+## while at the same time have Home Assistant configuration inside <root>/config
+## without resulting to symlinks.
+export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
+
+# Start Home Assistant
+hass --config "${PWD}/config" --debug

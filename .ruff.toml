@@ -1,0 +1,78 @@
+# The contents of this file is based on https://github.com/home-assistant/core/blob/dev/pyproject.toml
+
+target-version = "py313"
+
+extend-exclude = [
+    "custom_components/pp_reader/name/abuchen/portfolio/*",
+]
+
+[lint]
+select = [
+    "ALL",
+]
+
+ignore = [
+    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "D203", # no-blank-line-before-class (incompatible with formatter)
+    "D212", # multi-line-summary-first-line (incompatible with formatter)
+    "COM812", # incompatible with formatter
+    "ISC001", # incompatible with formatter
+]
+
+[lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[lint.pyupgrade]
+keep-runtime-typing = true
+
+[lint.mccabe]
+max-complexity = 25
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "ANN001",  # pytest fixtures rely on dynamically typed arguments
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN202",
+    "ANN204",
+    "ANN206",
+    "ARG001",  # unused fixture arguments are common in parametrised tests
+    "ARG005",
+    "D100",  # module docstrings are optional for tests
+    "D101",
+    "D102",
+    "D103",
+    "D107",
+    "D205",
+    "D400",
+    "D415",
+    "DTZ001",  # tests intentionally use naive datetimes
+    "DTZ005",
+    "E501",  # allow descriptive parametrisation strings
+    "EM101",
+    "ERA001",
+    "E402",
+    "INP001",
+    "N802",
+    "N818",
+    "PGH003",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR2004",
+    "PT011",
+    "PT018",
+    "RUF003",
+    "RUF046",
+    "S101",  # pytest-style asserts are expected in tests
+    "S603",
+    "S607",
+    "S608",
+    "SLF001",
+    "TC002",
+    "TC003",
+    "TRY002",
+    "TRY003",
+    "UP031",
+]
