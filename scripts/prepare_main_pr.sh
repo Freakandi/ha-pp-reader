@@ -11,6 +11,8 @@ ALLOWED_ROOT=(
   hacs.json
   LICENSE
   README.md
+  requirements.txt
+  requirements-dev.txt
   .ruff.toml
   .gitignore
   eslint.config.js
