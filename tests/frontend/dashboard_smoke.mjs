@@ -689,7 +689,7 @@ const normalizationPayload = {
 };
 
 if (canProcessUpdates) {
-  handlePortfolioPositionsUpdate(normalizationPayload, null);
+  handlePortfolioPositionsUpdate(normalizationPayload, document);
 }
 
 const cacheSnapshot = getCacheSnapshot();

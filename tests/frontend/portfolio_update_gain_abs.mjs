@@ -52,10 +52,18 @@ function createClassList(target) {
 function createCell({ text = '', html = null } = {}) {
   const cell = {
     tagName: 'TD',
-    dataset: {}
+    dataset: {},
+    children: []
   };
   const classList = createClassList(cell);
   cell.classList = classList;
+
+  cell.appendChild = (child) => {
+    if (child) {
+      cell.children.push(child);
+    }
+    return child;
+  };
 
   let innerValue = html ?? text;
   let textValue = html != null ? htmlToText(html) : text;
@@ -108,7 +116,18 @@ function createRow() {
     return cell;
   };
 
-  row.querySelector = () => null;
+  row.querySelector = (selector) => {
+    if (selector === '.positions-container') {
+      for (const cell of row.cells) {
+        for (const child of cell.children ?? []) {
+          if (child.classList?.contains('positions-container')) {
+            return child;
+          }
+        }
+      }
+    }
+    return null;
+  };
   row.querySelectorAll = () => [];
 
   Object.defineProperty(row, 'innerHTML', {
@@ -166,6 +185,9 @@ function createTBody() {
     }
     if (selector === 'tr.footer-row') {
       return body.rows.filter((row) => row.classList.contains('footer-row'));
+    }
+    if (selector === 'tr.portfolio-details') {
+      return body.rows.filter((row) => row.classList.contains('portfolio-details'));
     }
     if (selector === 'tr:not(.footer-row)') {
       return body.rows.filter((row) => !row.classList.contains('footer-row'));
@@ -294,6 +316,13 @@ function createDocumentSkeleton() {
       if (selector === 'tr.portfolio-row') {
         return tbody.querySelector('tr.portfolio-row');
       }
+      if (selector.startsWith('.portfolio-table .portfolio-details')) {
+        const detailsRow = tbody.querySelector('tr.portfolio-details');
+        if (selector.includes('.positions-container')) {
+          return detailsRow?.querySelector('.positions-container') ?? null;
+        }
+        return detailsRow;
+      }
       if (selector === '.account-table table' || selector === '.fx-account-table table') {
         return null;
       }
@@ -364,6 +393,8 @@ global.window = window;
 global.document = document;
 global.navigator = window.navigator;
 global.CustomEvent = window.CustomEvent;
+window.dispatchEvent = () => true;
+global.dispatchEvent = window.dispatchEvent;
 
 class HTMLElementStub {}
 
@@ -453,10 +484,11 @@ if (typeof updatePortfolioFooter !== 'function') {
 const canProcessUpdates = typeof handlePortfolioPositionsUpdate === 'function';
 
 const tbody = tableBody ?? document.querySelector('.portfolio-table table tbody');
+const portfolioUuid = 'portfolio-gain-struct';
 
 const row = document.createElement('tr');
 row.className = 'portfolio-row';
-row.dataset.portfolio = 'portfolio-1';
+row.dataset.portfolio = portfolioUuid;
 row.dataset.positionCount = '0';
 row.dataset.currentValue = '0';
 row.dataset.purchaseSum = '0';
@@ -464,7 +496,7 @@ row.dataset.gainAbs = '0';
 row.dataset.gainPct = '0';
 row.innerHTML = `
   <td>
-    <button type="button" class="portfolio-toggle" data-portfolio="portfolio-1">
+    <button type="button" class="portfolio-toggle" data-portfolio="${portfolioUuid}">
       <span class="caret">▶</span>
       <span class="portfolio-name">Test Portfolio</span>
     </button>
@@ -475,6 +507,17 @@ row.innerHTML = `
   <td class="align-right"><span class="positive">0,00\u00A0%</span></td>
 `;
 tbody.appendChild(row);
+
+const detailsRow = document.createElement('tr');
+detailsRow.className = 'portfolio-details';
+detailsRow.dataset.portfolio = portfolioUuid;
+const positionsCell = createCell();
+positionsCell.classList.add('positions-cell');
+const positionsContainer = document.createElement('div');
+positionsContainer.classList.add('positions-container');
+positionsCell.appendChild(positionsContainer);
+detailsRow.appendChild(positionsCell);
+tbody.appendChild(detailsRow);
 
 const footer = document.createElement('tr');
 footer.className = 'footer-row';
@@ -488,7 +531,7 @@ footer.innerHTML = `
 tbody.appendChild(footer);
 
 const updatePayload = {
-  uuid: 'portfolio-1',
+  uuid: portfolioUuid,
   position_count: 2,
   current_value: 1500 / 100,
   purchase_sum: 0
@@ -544,7 +587,7 @@ const summary = {
 };
 
 const normalizationPayload = {
-  portfolioUuid: 'portfolio-gain-struct',
+  portfolioUuid,
   positions: [
     {
       security_uuid: 'gain-struct-1',
@@ -567,7 +610,7 @@ const normalizationPayload = {
 };
 
 if (canProcessUpdates) {
-  handlePortfolioPositionsUpdate(normalizationPayload, null);
+  handlePortfolioPositionsUpdate(normalizationPayload, document);
 }
 
 const cacheSnapshot = getCacheSnapshot();
