@@ -514,8 +514,8 @@ def _load_securities_missing_current_value(db_path: Path) -> set[str]:
     """
     Find positions with holdings and a price but without a current value.
 
-    Diese Einträge werden bei unveränderten Preisen sonst nie aktualisiert,
-    was zu Market-Value=0 in den Snapshots führt.
+    These entries are otherwise never refreshed when prices stay unchanged,
+    leading to market-value=0 in snapshots.
     """
     try:
         with sqlite3.connect(str(db_path)) as conn:
