@@ -178,7 +178,8 @@ class YahooHistoryFetcher:
             return []
 
         start_str = job.start.strftime("%Y-%m-%d")
-        # yahooquery interprets the end date as exclusive; extend by one day to fetch the target day.
+        # yahooquery interprets the end date as exclusive; extend by one day
+        # so the target day is included.
         end_str = (job.end + timedelta(days=1)).strftime("%Y-%m-%d")
         ticker = None
         session = self._session

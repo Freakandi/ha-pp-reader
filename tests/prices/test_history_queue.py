@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import custom_components.pp_reader.prices.history_ingest as history_ingest
-
+from custom_components.pp_reader.prices import history_ingest
 from custom_components.pp_reader.prices.history_ingest import (
     _handle_yahoo_dns_error as history_handle_dns_error,
 )
@@ -150,7 +149,9 @@ def test_yahoo_history_fetcher_requests_inclusive_end(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
     class _StubTicker:
-        def __init__(self, symbol: str, *, asynchronous: bool = False, session: Any | None = None) -> None:
+        def __init__(
+            self, symbol: str, *, asynchronous: bool = False, session: Any | None = None
+        ) -> None:
             captured["symbol"] = symbol
             captured["async"] = asynchronous
             captured["session"] = session
@@ -188,7 +189,9 @@ def test_yahoo_history_fetcher_requests_inclusive_end(monkeypatch) -> None:
     candles = fetcher._fetch_blocking(job)  # type: ignore[attr-defined]
 
     assert captured["start"] == "2025-12-01"
-    assert captured["end"] == "2025-12-06", "end date should be extended to include the target day"
+    assert captured["end"] == "2025-12-06", (
+        "end date should be extended to include the target day"
+    )
     assert candles, "expected fetched candles to be normalized"
 
 
