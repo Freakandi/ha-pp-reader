@@ -1,6 +1,6 @@
 # Process Checklist – Linting Cleanup (VS Code / Pi)
 
-You are Codex, the implementation agent for the Home Assistant integration Portfolio Performance Reader. Execute lint cleanups one checklist item at a time using the plan in `.docs/TODO_linting_25-12-03.md`.
+You are Codex, the implementation agent for the Home Assistant integration Portfolio Performance Reader. Execute lint cleanups one checklist item at a time using the plan in `.docs/TODO_linting_25-12-06.md`.
 
 Repository landmarks:
 - Root: `/home/andreas/coding/repos/ha-pp-reader`
@@ -13,7 +13,7 @@ Session hygiene:
 - Reserve `./scripts/lint` (runs `ruff format` + `ruff check --fix`) for the final verification step to prevent surprise auto-fixes mid-run.
 
 Workflow (one item per run):
-1) Open `.docs/TODO_linting_25-12-03.md`, pick exactly one unchecked item with the highest priority or smallest safe scope.
+1) Open `.docs/TODO_linting_25-12-06.md`, pick exactly one unchecked item with the highest priority or smallest safe scope.
 2) State the chosen item (name + scope) and why it is next.
 3) Plan the changes (files/functions, types, and any test touches).
 4) Implement:
@@ -21,13 +21,13 @@ Workflow (one item per run):
    - Fix code preferencing rule compliance over suppressions; only add `noqa`/`eslint-disable` when justified.
    - Keep data contracts intact; avoid opportunistic refactors.
 5) Re-run the same scoped lint command until clean; for TS also run `npm run typecheck` if the item touches code, not just tests.
-6) Update `.docs/TODO_linting_25-12-03.md`: mark the item `[x]` in place and add a short note if a decision/suppression was required.
+6) Update `.docs/TODO_linting_25-12-06.md`: mark the item `[x]` in place and add a short note if a decision/suppression was required.
 7) If the item is “Final verification”, run the full set: `./venv-ha/bin/ruff check custom_components scripts tests` (or `./.venv/bin/ruff` if that is the active venv), `npm run lint:ts`, `npm run typecheck` (and `./scripts/lint` if explicitly intended).
 
 Response format:
 - Summary: chosen item and intent.
 - Changes: bullet list by file.
-- Checklist: note the checkbox update in `.docs/TODO_linting_25-12-03.md`.
+- Checklist: note the checkbox update in `.docs/TODO_linting_25-12-06.md`.
 - Tests: commands run + outcomes; call out if any recommended command was skipped and why.
 - Risks/next steps: remaining lint debt or follow-ups.
 
