@@ -532,6 +532,44 @@ tbody tr:hover {
   /* HA-Variable für Akzente */
 }
 
+/* Dashboard/Overview: disable hover highlight + text selection on summary tables */
+.portfolio-table,
+.portfolio-table table,
+.portfolio-table .positions-container,
+.account-table,
+.account-table table,
+.fx-account-table,
+.fx-account-table table,
+.portfolio-table table th,
+.account-table table th,
+.fx-account-table table th,
+.header-card,
+.header-card h1,
+.header-card h2,
+.card > h2 {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.portfolio-table table tbody tr:hover,
+.portfolio-table .positions-container table tbody tr:hover,
+.account-table table tbody tr:hover,
+.fx-account-table table tbody tr:hover {
+  background-color: transparent;
+}
+
+.portfolio-table table tbody tr:nth-child(odd):hover,
+.portfolio-table .positions-container table tbody tr:nth-child(odd):hover,
+.account-table table tbody tr:nth-child(odd):hover,
+.fx-account-table table tbody tr:nth-child(odd):hover {
+  background: var(--secondary-background-color, #fcfcfc);
+}
+
+.portfolio-table .portfolio-toggle:hover .portfolio-name {
+  text-decoration: none;
+}
+
 /* Visuelles Feedback bei Live-Updates */
 .expandable-portfolio-table tbody tr td {
   transition: background-color 0.3s ease;
@@ -554,6 +592,39 @@ tbody tr:hover {
 }
 
 /* ===== Security Detail Tab Styles ===== */
+.security-detail-header,
+.security-info-bar,
+.security-info-item,
+.security-meta-grid,
+.security-meta-item,
+.security-range-selector,
+.security-range-button,
+.news-prompt-container,
+.news-prompt-button,
+.security-detail-placeholder,
+.history-chart,
+.history-placeholder,
+.history-chart .line-chart-container,
+.history-chart .line-chart-axis,
+.history-chart .line-chart-axis-tick,
+.history-chart .line-chart-marker-bubble,
+.history-chart .chart-tooltip,
+.security-meta-item .value,
+.security-meta-item .label,
+.security-meta-item .value-row {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.security-detail-placeholder table tbody tr:hover {
+  background-color: transparent;
+}
+
+.security-detail-placeholder table tbody tr:nth-child(odd):hover {
+  background: var(--secondary-background-color, #fcfcfc);
+}
+
 .security-info-bar {
   display: flex;
   flex-wrap: wrap;
@@ -644,7 +715,7 @@ tbody tr:hover {
 
 .security-range-button:hover:not(.active):not(.loading),
 .news-prompt-button:hover:not(.loading) {
-  background: var(--secondary-background-color, rgba(0, 0, 0, 0.08));
+  background: var(--card-background-color);
 }
 
 .security-range-button:focus-visible,

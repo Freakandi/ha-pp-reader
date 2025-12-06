@@ -512,7 +512,7 @@ def _filter_invalid_updates(updates: dict[str, int]) -> dict[str, int]:
 
 def _load_securities_missing_current_value(db_path: Path) -> set[str]:
     """
-    Find positions with holdings and price but missing current value.
+    Find positions with holdings and a price but without a current value.
 
     These entries are otherwise never refreshed when prices stay unchanged,
     leading to market-value=0 in snapshots.

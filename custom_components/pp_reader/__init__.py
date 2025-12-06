@@ -44,6 +44,7 @@ from .currencies import fx as fx_module
 from .data import backup_db as backup_db_module
 from .data import coordinator as coordinator_module
 from .data import db_init as db_init_module
+from .data import fx_backfill as fx_backfill_module
 from .data import websocket as websocket_module
 from .prices import price_service as price_service_module
 from .util import async_run_executor_job
@@ -287,9 +288,7 @@ async def _run_fx_refresh_once(
 ) -> None:
     """Ensure current FX rates are cached for active currencies."""
     fx_module = _get_fx_module()
-    from custom_components.pp_reader.data.fx_backfill import (  # noqa: PLC0415
-        backfill_fx,
-    )
+    backfill_fx = fx_backfill_module.backfill_fx
 
     db_path = store.get("db_path")
     if db_path is None:

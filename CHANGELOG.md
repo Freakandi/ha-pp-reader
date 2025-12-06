@@ -6,7 +6,12 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
-_Noch keine Einträge._
+## [0.15.3] - 2025-12-06
+
+### Fixed
+- Disabled text selection and hover highlights on dashboard tables so taps consistently toggle rows and buttons on touch devices instead of selecting cells.
+- Websocket push updates received before the first lazy load no longer blank portfolio position metrics; cached positions merge correctly once a portfolio is expanded, keeping averages and gains populated.
+- Separated the security detail header metadata into its own card so the sticky header no longer crowds out charts in landscape phone layouts.
 
 ## [0.15.2] - 2025-12-04
 
