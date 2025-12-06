@@ -6,6 +6,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.15.4] - 2025-12-06
+
 ### Fixed
 - Live prices now persist the provider’s market timestamp (`regularMarketTime`/`postMarketTime`) into `last_price_date` and use it when selecting previous closes, so weekend/holiday day-change calculations compare against the prior trading day; added provider and unit coverage for the timestamp path.
 
