@@ -6,9 +6,12 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
-- Fixed item selection and highlighting functionality, which impacted the UI especially on touch screens
-- Fixed portfolio positions showing empty columns if a push event was received before the first lazy load by expanding a portfolio was triggered
-- Moved detail tab header meta into a separate card to avoid the display being full only by showing this, making it impossible to view charts in landscape mode on phone, previously
+## [0.15.3] - 2025-12-06
+
+### Fixed
+- Disabled text selection and hover highlights on dashboard tables so taps consistently toggle rows and buttons on touch devices instead of selecting cells.
+- Websocket push updates received before the first lazy load no longer blank portfolio position metrics; cached positions merge correctly once a portfolio is expanded, keeping averages and gains populated.
+- Separated the security detail header metadata into its own card so the sticky header no longer crowds out charts in landscape phone layouts.
 
 ## [0.15.2] - 2025-12-04
 
