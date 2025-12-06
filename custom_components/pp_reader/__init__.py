@@ -22,7 +22,6 @@ from homeassistant.components.panel_custom import (
     DEFAULT_EMBED_IFRAME,
     DEFAULT_TRUST_EXTERNAL,
 )
-from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.event import (
     async_track_time_change,
@@ -51,7 +50,6 @@ from .util import async_run_executor_job
 from .util.paths import resolve_storage_path
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 PANEL_SIDEBAR_TITLE: Final = "Portfolio Dashboard"
 PANEL_SIDEBAR_ICON: Final = "mdi:chart-line"
@@ -786,8 +784,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_config_entry_first_refresh()
         store["coordinator"] = coordinator
 
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
         _initialize_price_tasks(hass, entry, store, options)
         _initialize_fx_tasks(hass, entry, store, options)
         _initialize_history_tasks(hass, entry, store)
@@ -810,9 +806,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  # noqa: PLR0912
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    domain_entries = hass.data.get(DOMAIN)
+    store = domain_entries.get(entry.entry_id) if domain_entries else None
     if store:
         # --- NEU: Preis-Service Cleanup (unload_cleanup Item) -----------------
         try:
@@ -890,9 +885,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:  
             _LOGGER.debug("History-Scheduler: Fehler beim Cleanup", exc_info=True)
 
     # Gesamten Entry-State löschen wenn Plattformen entladen
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not hass.data[DOMAIN]:
+    if domain_entries is not None:
+        domain_entries.pop(entry.entry_id, None)
+        if not domain_entries:
             hass.data.pop(DOMAIN, None)
 
-    return unload_ok
+    return True

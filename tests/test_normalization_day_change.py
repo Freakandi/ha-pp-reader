@@ -56,14 +56,21 @@ def test_portfolio_day_change_uses_eur_converted_prices(monkeypatch: object) -> 
     assert coverage == 1.0
 
 
+@pytest.mark.parametrize("date_encoding", ["yyyymmdd", "epoch_day"])
 def test_portfolio_day_change_uses_price_date_for_previous_close(
-    tmp_path: Path,
+    tmp_path: Path, date_encoding: str
 ) -> None:
     """Normalization should derive the comparison close from the stored price date."""
     db_path = tmp_path / "norm.db"
     initialize_database_schema(db_path)
 
     friday_ts = int(datetime(2025, 12, 5, 21, 0, 1, tzinfo=UTC).timestamp())
+    friday_epoch_day = int(datetime(2025, 12, 5, tzinfo=UTC).timestamp() // 86400)
+    thursday_epoch_day = friday_epoch_day - 1
+    friday_date_value = 20251205 if date_encoding == "yyyymmdd" else friday_epoch_day
+    thursday_date_value = (
+        20251204 if date_encoding == "yyyymmdd" else thursday_epoch_day
+    )
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(
@@ -76,8 +83,8 @@ def test_portfolio_day_change_uses_price_date_for_previous_close(
         conn.executemany(
             "INSERT INTO historical_prices (security_uuid, date, close) VALUES (?, ?, ?)",
             [
-                ("sec1", 20251205, int(round(95.0 * 1e8))),  # Friday close
-                ("sec1", 20251204, int(round(90.0 * 1e8))),  # Thursday close
+                ("sec1", friday_date_value, int(round(95.0 * 1e8))),  # Friday close
+                ("sec1", thursday_date_value, int(round(90.0 * 1e8))),  # Thursday close
             ],
         )
         conn.commit()

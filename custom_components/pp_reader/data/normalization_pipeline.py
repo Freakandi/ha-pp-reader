@@ -760,13 +760,17 @@ def _resolve_reference_day(
 ) -> tuple[datetime, int]:
     """Return reference datetime and epoch day derived from stored price date."""
     ts = price_dates.get(security_uuid)
-    if ts and isinstance(ts, int) and ts > 0:
+    if ts and isinstance(ts, (int, float)) and ts > 0:
         try:
-            ref_dt = datetime.fromtimestamp(ts, tz=UTC)
-            return ref_dt, int(ref_dt.strftime("%Y%m%d"))
+            timestamp = int(ts)
+            if timestamp > 10**12:  # allow ms timestamps
+                timestamp = timestamp // 1000
+            ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
+            return ref_dt, int(ref_dt.timestamp() // 86400)
         except (OverflowError, OSError, ValueError):
             pass
-    return fallback, int(fallback.strftime("%Y%m%d"))
+    normalized_fallback = fallback if fallback.tzinfo else fallback.replace(tzinfo=UTC)
+    return normalized_fallback, int(normalized_fallback.timestamp() // 86400)
 
 
 def _compute_security_day_change_delta(

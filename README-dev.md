@@ -5,7 +5,7 @@ This guide targets contributors working on the Portfolio Performance Reader inte
 ## Repository layout
 | Path | Purpose |
 | --- | --- |
-| `custom_components/pp_reader/` | Integration entry points, config flow, pricing providers, SQLite helpers, WebSocket handlers, sensors, services, and compiled dashboard bundles. |
+| `custom_components/pp_reader/` | Integration entry points, config flow, pricing providers, SQLite helpers, WebSocket handlers, services, and compiled dashboard bundles. |
 | `src/` | TypeScript sources compiled into `custom_components/pp_reader/www/pp_reader_dashboard/`. |
 | `scripts/` | Helper scripts for environment bootstrap, running Home Assistant, linting, TypeScript tests, and release preparation. |
 | `tests/` | Pytest suite plus Node-based dashboard smoke tests. |
@@ -122,7 +122,7 @@ See [TESTING.md](TESTING.md) for expanded instructions, fixture details, and CI 
 3. Bump the integration version in `custom_components/pp_reader/manifest.json` and update `CHANGELOG.md` as part of the release commit.
 
 ## Architecture highlights
-- Canonical payloads come from the persisted snapshots: use `normalized_store.SnapshotBundle` / `MetricSummary` in sensors, WebSocket responses, coordinator events, and dashboard utilities.
+- Canonical payloads come from the persisted snapshots: use `normalized_store.SnapshotBundle` / `MetricSummary` in WebSocket responses, coordinator events, and dashboard utilities.
 - WebSocket commands (`pp_reader/get_dashboard_data`, `pp_reader/get_portfolio_data`, `pp_reader/get_accounts`, `pp_reader/get_security_snapshot`, `pp_reader/get_security_history`) must handle coordinator fallbacks and return data sourced from SQLite.
 - FX refresh/backfill and price-history jobs are scheduled: FX cadence comes from the options flow, history drains run at 02:00/14:00 local time plus after imports/startup.
 - Daily close history stored during sync powers security charts. Database migrations must keep historic data and backups restorable.

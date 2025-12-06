@@ -345,14 +345,18 @@ def _select_price_reference_day(
     last_price_ts: int | None, fallback: datetime
 ) -> tuple[datetime, int]:
     """Derive a reference datetime/epoch-day from the market timestamp."""
-    if last_price_ts and isinstance(last_price_ts, int) and last_price_ts > 0:
+    if last_price_ts and isinstance(last_price_ts, (int, float)) and last_price_ts > 0:
         try:
-            ref_dt = datetime.fromtimestamp(last_price_ts, tz=UTC)
-            return ref_dt, int(ref_dt.strftime("%Y%m%d"))
+            ts = int(last_price_ts)
+            if ts > 10**12:  # tolerate millisecond timestamps
+                ts = ts // 1000
+            ref_dt = datetime.fromtimestamp(ts, tz=UTC)
+            return ref_dt, int(ref_dt.timestamp() // 86400)
         except (OverflowError, OSError, ValueError):
             pass
 
-    return fallback, int(fallback.strftime("%Y%m%d"))
+    normalized_fallback = fallback if fallback.tzinfo else fallback.replace(tzinfo=UTC)
+    return normalized_fallback, int(normalized_fallback.timestamp() // 86400)
 
 
 def _normalize_currency_cents(value: int) -> int:
