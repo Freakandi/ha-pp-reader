@@ -8,6 +8,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 - Fixed item selection and highlighting functionality, which impacted the UI especially on touch screens
 - Fixed portfolio positions showing empty columns if a push event was received before the first lazy load by expanding a portfolio was triggered
+- Moved detail tab header meta into a separate card to avoid the display being full only by showing this, making it impossible to view charts in landscape mode on phone, previously
 
 ## [0.15.2] - 2025-12-04
 

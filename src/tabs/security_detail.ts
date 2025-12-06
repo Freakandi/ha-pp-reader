@@ -1657,6 +1657,16 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
   `;
 }
 
+function buildSnapshotMetaCard(snapshot: SecuritySnapshotDetail | null): string {
+  return `
+    <div class="card security-meta-card">
+      <div id="headerMeta" class="meta">
+        ${buildHeaderMeta(snapshot)}
+      </div>
+    </div>
+  `;
+}
+
 function normaliseHistoryError(error: unknown): string | null {
   if (!error) {
     return null;
@@ -2195,15 +2205,14 @@ export async function renderSecurityDetail(
       ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
       : '';
   const headerTitle = effectiveSnapshot?.name || 'Wertpapierdetails';
+  const headerCard = createHeaderCard(headerTitle, '', { includeMeta: false });
+  headerCard.classList.add('security-detail-header');
+  const snapshotMetaCard = buildSnapshotMetaCard(effectiveSnapshot);
 
   if (error) {
-    const headerCard = createHeaderCard(
-      headerTitle,
-      buildHeaderMeta(effectiveSnapshot),
-    );
-    headerCard.classList.add('security-detail-header');
     return `
       ${headerCard.outerHTML}
+      ${snapshotMetaCard}
       ${staleNotice}
       <div class="card error-card">
         <h2>Fehler beim Laden</h2>
@@ -2301,11 +2310,6 @@ export async function renderSecurityDetail(
       : { status: 'empty' };
   }
 
-  const headerCard = createHeaderCard(
-    headerTitle,
-    buildHeaderMeta(effectiveSnapshot),
-  );
-  headerCard.classList.add('security-detail-header');
   const tickerSymbol = resolveTickerSymbol(effectiveSnapshot, securityUuid);
   const newsPromptButton = buildNewsPromptButton(tickerSymbol);
 
@@ -2340,6 +2344,7 @@ export async function renderSecurityDetail(
 
   return `
     ${headerCard.outerHTML}
+    ${snapshotMetaCard}
     ${staleNotice}
     ${newsPromptButton}
     ${infoBar}

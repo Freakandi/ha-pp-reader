@@ -384,9 +384,18 @@ export function makeTable(
   return html;
 }
 
-export function createHeaderCard(headerTitle: string, meta: string): HTMLDivElement {
+export function createHeaderCard(
+  headerTitle: string,
+  meta: string,
+  options: { includeMeta?: boolean } = {},
+): HTMLDivElement {
+  const { includeMeta = true } = options;
   const headerCard = document.createElement('div');
   headerCard.className = 'header-card';
+
+  const metaSection = includeMeta
+    ? `<div id="headerMeta" class="meta">${meta}</div>`
+    : '';
 
   headerCard.innerHTML = `
     <div class="header-content">
@@ -402,7 +411,7 @@ export function createHeaderCard(headerTitle: string, meta: string): HTMLDivElem
         </svg>
       </button>
     </div>
-    <div id="headerMeta" class="meta">${meta}</div>
+    ${metaSection}
   `;
 
   return headerCard;
