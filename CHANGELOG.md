@@ -6,6 +6,11 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+## [0.15.6] - 2025-12-06
+
+### Fixed
+- Final fix for day-change calculations
+
 ## [0.15.5] - 2025-12-06
 
 ### Fixed

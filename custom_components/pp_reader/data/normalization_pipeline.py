@@ -68,6 +68,10 @@ __all__ = [
     "serialize_position_snapshot",
 ]
 
+_YMD_DATE_MIN = 1_000_000
+_YMD_DATE_MAX = 99_999_999
+_EPOCH_DAY_EARLY_BOUND = 400_000  # ~1095 years of epoch days, ample for market data
+
 
 @dataclass(slots=True)
 class SnapshotDataState:
@@ -763,10 +767,25 @@ def _resolve_reference_day(
     if ts and isinstance(ts, (int, float)) and ts > 0:
         try:
             timestamp = int(ts)
-            if timestamp > 10**12:  # allow ms timestamps
+            # millisecond / second timestamps
+            if timestamp > 10**12:
                 timestamp = timestamp // 1000
-            ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
-            return ref_dt, int(ref_dt.timestamp() // 86400)
+                ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            if timestamp >= 10**9:
+                ref_dt = datetime.fromtimestamp(timestamp, tz=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            # YYYYMMDD encoding
+            if _YMD_DATE_MIN <= timestamp <= _YMD_DATE_MAX:
+                year = timestamp // 10_000
+                month = (timestamp % 10_000) // 100
+                day_value = timestamp % 100
+                ref_dt = datetime(year, month, day_value, tzinfo=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            # epoch-day encoding (days since Unix epoch)
+            if timestamp < _EPOCH_DAY_EARLY_BOUND:
+                ref_dt = datetime.fromtimestamp(timestamp * 86400, tz=UTC)
+                return ref_dt, timestamp
         except (OverflowError, OSError, ValueError):
             pass
     normalized_fallback = fallback if fallback.tzinfo else fallback.replace(tzinfo=UTC)

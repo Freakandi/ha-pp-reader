@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.securities")
+_YMD_DATE_MIN = 1_000_000
+_YMD_DATE_MAX = 99_999_999
+_EPOCH_DAY_EARLY_BOUND = 400_000  # ~1095 years of epoch days, ample for market data
 _SCALED_INT_THRESHOLD = 10_000
 _EIGHT_DECIMAL_SCALE = 10**8
 _FX_GAP_WARNED: set[str] = set()
@@ -348,10 +351,25 @@ def _select_price_reference_day(
     if last_price_ts and isinstance(last_price_ts, (int, float)) and last_price_ts > 0:
         try:
             ts = int(last_price_ts)
-            if ts > 10**12:  # tolerate millisecond timestamps
+            # Accept millisecond and second timestamps.
+            if ts > 10**12:
                 ts = ts // 1000
-            ref_dt = datetime.fromtimestamp(ts, tz=UTC)
-            return ref_dt, int(ref_dt.timestamp() // 86400)
+                ref_dt = datetime.fromtimestamp(ts, tz=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            if ts >= 10**9:
+                ref_dt = datetime.fromtimestamp(ts, tz=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            # Accept YYYYMMDD encodings (e.g. 20251205).
+            if _YMD_DATE_MIN <= ts <= _YMD_DATE_MAX:
+                year = ts // 10_000
+                month = (ts % 10_000) // 100
+                day_value = ts % 100
+                ref_dt = datetime(year, month, day_value, tzinfo=UTC)
+                return ref_dt, int(ref_dt.timestamp() // 86400)
+            # Accept epoch-day encodings (e.g. 20426 for 2025-12-04).
+            if ts < _EPOCH_DAY_EARLY_BOUND:
+                ref_dt = datetime.fromtimestamp(ts * 86400, tz=UTC)
+                return ref_dt, ts
         except (OverflowError, OSError, ValueError):
             pass
 

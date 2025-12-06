@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from custom_components.pp_reader.prices import history_ingest
 from custom_components.pp_reader.prices.history_ingest import (
     _handle_yahoo_dns_error as history_handle_dns_error,
 )
@@ -141,6 +142,57 @@ def test_persist_candles_writes_historical_prices(tmp_path) -> None:
         assert '"BABA"' in row[9]
     finally:
         conn.close()
+
+
+def test_yahoo_history_fetcher_requests_inclusive_end(monkeypatch) -> None:
+    """Yahoo history requests should cover the target end date (inclusive)."""
+    captured: dict[str, Any] = {}
+
+    class _StubTicker:
+        def __init__(
+            self, symbol: str, *, asynchronous: bool = False, session: Any | None = None
+        ) -> None:
+            captured["symbol"] = symbol
+            captured["async"] = asynchronous
+            captured["session"] = session
+
+        def history(self, *, interval: str, start: str, end: str) -> dict:
+            captured["interval"] = interval
+            captured["start"] = start
+            captured["end"] = end
+            return {
+                "BABA": {
+                    "close": 10.0,
+                    "date": "2025-12-05",
+                    "high": 10.5,
+                    "low": 9.5,
+                    "open": 9.9,
+                    "volume": 1234,
+                }
+            }
+
+    class _StubModule:
+        def __init__(self) -> None:
+            self.Ticker = _StubTicker
+
+    monkeypatch.setattr(history_ingest, "_YAHOOQUERY_IMPORT_ERROR", False)
+    monkeypatch.setattr(history_ingest, "import_module", lambda name: _StubModule())
+
+    fetcher = history_ingest.YahooHistoryFetcher()
+    job = history_ingest.HistoryJob(
+        symbol="BABA",
+        start=datetime(2025, 12, 1, tzinfo=UTC),
+        end=datetime(2025, 12, 5, tzinfo=UTC),
+        interval="1d",
+    )
+
+    candles = fetcher._fetch_blocking(job)  # type: ignore[attr-defined]
+
+    assert captured["start"] == "2025-12-01"
+    assert captured["end"] == "2025-12-06", (
+        "end date should be extended to include the target day"
+    )
+    assert candles, "expected fetched candles to be normalized"
 
 
 def test_dns_error_handlers_disable_yahoo_fetch(monkeypatch) -> None:

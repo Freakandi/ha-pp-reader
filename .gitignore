@@ -12,6 +12,7 @@ node_modules/
 .vscode
 coverage.xml
 .ruff_cache
+.venv
 
 # Home Assistant configuration
 config/*
