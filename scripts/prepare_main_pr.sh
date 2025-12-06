@@ -5,8 +5,29 @@ SOURCE_BRANCH=${1:-dev}
 TARGET_BRANCH=${2:-main-release}
 WORKTREE_DIR=${3:-".worktrees/${TARGET_BRANCH}"}
 
-ALLOWED_ROOT=(ARCHITECTURE.md CHANGELOG.md hacs.json LICENSE README.md)
-ALLOWED_DIR="custom_components"
+ALLOWED_ROOT=(
+  ARCHITECTURE.md
+  CHANGELOG.md
+  hacs.json
+  LICENSE
+  README.md
+  .ruff.toml
+  .gitignore
+  eslint.config.js
+  tsconfig.json
+  vite.config.mjs
+  pytest.ini
+  package.json
+  package-lock.json
+  package*.json
+)
+ALLOWED_DIRS=(
+  custom_components
+  .github
+  scripts
+  src
+  tests
+)
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
@@ -30,8 +51,10 @@ git checkout -B "${TARGET_BRANCH}" >/dev/null
 
 while IFS= read -r path; do
   case "${path}" in
-    ${ALLOWED_DIR}/*) ;;
-    ${ALLOWED_ROOT[0]}|${ALLOWED_ROOT[1]}|${ALLOWED_ROOT[2]}|${ALLOWED_ROOT[3]}|${ALLOWED_ROOT[4]}) ;;
+    ${ALLOWED_DIRS[0]}/*|${ALLOWED_DIRS[1]}/*|${ALLOWED_DIRS[2]}/*|${ALLOWED_DIRS[3]}/*|${ALLOWED_DIRS[4]}/*)
+      ;;
+    ${ALLOWED_ROOT[0]}|${ALLOWED_ROOT[1]}|${ALLOWED_ROOT[2]}|${ALLOWED_ROOT[3]}|${ALLOWED_ROOT[4]}|${ALLOWED_ROOT[5]}|${ALLOWED_ROOT[6]}|${ALLOWED_ROOT[7]}|${ALLOWED_ROOT[8]}|${ALLOWED_ROOT[9]}|${ALLOWED_ROOT[10]}|${ALLOWED_ROOT[11]}|${ALLOWED_ROOT[12]}|${ALLOWED_ROOT[13]})
+      ;;
     *)
       git rm -r --cached --quiet "${path}" || true
       rm -rf "${path}"

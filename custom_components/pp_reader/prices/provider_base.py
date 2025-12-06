@@ -46,7 +46,8 @@ class Quote:
         market_cap: Marktkapitalisierung (optional).
         high_52w / low_52w: 52-Wochen Hoch/Tief.
         dividend_yield: Laufende oder trailing Dividendenrendite (raw).
-        ts: Epoch Sekunden (float) Zeitpunkt der Quote-Erhebung (Provider-Vergabe).
+        ts: Epoch Sekunden (float) - bevorzugt der vom Provider gelieferte
+            Markt-Timestamp; fallback ist der Zeitpunkt des Fetches.
         source: Kennzeichnung des Providers (z.B. 'yahoo').
 
     Hinweis:

@@ -78,6 +78,7 @@ def test_load_position_snapshots_preserves_purchase_totals(
                 )
             },
             reference_date=datetime(2024, 3, 1, tzinfo=UTC),
+            price_dates={},
         )
     )
 

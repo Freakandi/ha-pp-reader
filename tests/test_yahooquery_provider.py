@@ -56,6 +56,63 @@ async def test_accepts_positive_price(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_uses_provider_timestamp(monkeypatch):
+    """RegularMarketTime wird als ts übernommen (falls vorhanden)."""
+    market_ts = 1_735_055_201.0
+
+    def fake_blocking(symbols):
+        return {
+            "AAPL": {
+                "regularMarketPrice": 185.12,
+                "regularMarketTime": market_ts,
+            }
+        }
+
+    monkeypatch.setattr(yahooquery_provider, "_fetch_quotes_blocking", fake_blocking)
+    provider = YahooQueryProvider()
+    result = await provider.fetch(["AAPL"])
+    quote = result["AAPL"]
+    assert quote.ts == market_ts
+
+
+@pytest.mark.asyncio
+async def test_falls_back_to_fetch_time(monkeypatch):
+    """Fehlender/ungültiger Timestamp nutzt Fetch-Zeit als Fallback."""
+    fetch_ts = 1234.5
+
+    def fake_blocking(symbols):
+        return {"AAPL": {"regularMarketPrice": 10.0, "regularMarketTime": 0}}
+
+    monkeypatch.setattr(yahooquery_provider.time, "time", lambda: fetch_ts)
+    monkeypatch.setattr(yahooquery_provider, "_fetch_quotes_blocking", fake_blocking)
+    provider = YahooQueryProvider()
+    result = await provider.fetch(["AAPL"])
+    quote = result["AAPL"]
+    assert quote.ts == fetch_ts
+
+
+@pytest.mark.asyncio
+async def test_uses_post_market_time_when_regular_missing(monkeypatch):
+    """PostMarketTime wird als Backup-Timestamp genutzt."""
+    post_ts = 1_735_055_202.0
+
+    def fake_blocking(symbols):
+        return {
+            "AAPL": {
+                "regularMarketPrice": 185.12,
+                "regularMarketTime": None,
+                "postMarketTime": post_ts,
+            }
+        }
+
+    monkeypatch.setattr(yahooquery_provider, "_fetch_quotes_blocking", fake_blocking)
+    provider = YahooQueryProvider()
+    result = await provider.fetch(["AAPL"])
+    quote = result["AAPL"]
+    assert quote.ts == post_ts
+
+
+@pytest.mark.asyncio
 async def test_filters_invalid_price(monkeypatch):
     """Symbole mit Preis None oder <=0 werden verworfen."""
 

@@ -66,7 +66,12 @@ class FakeHass:
 
 
 def _create_db_with_security(
-    tmp_path: Path, uuid: str, ticker: str, currency: str | None, last_price: int | None
+    tmp_path: Path,
+    uuid: str,
+    ticker: str,
+    currency: str | None,
+    last_price: int | None,
+    last_price_date: int | None = None,
 ):
     db_path = tmp_path / "test.db"
     conn = sqlite3.connect(str(db_path))
@@ -91,8 +96,8 @@ def _create_db_with_security(
         """
     )
     conn.execute(
-        "INSERT OR REPLACE INTO securities (uuid,name,ticker_symbol,currency_code,retired,last_price,last_price_source,last_price_fetched_at) "
-        "VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT OR REPLACE INTO securities (uuid,name,ticker_symbol,currency_code,retired,last_price,last_price_source,last_price_fetched_at,last_price_date) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
         (
             uuid,
             "SecName",
@@ -102,6 +107,7 @@ def _create_db_with_security(
             last_price,
             "yahoo" if last_price is not None else None,
             None,
+            last_price_date,
         ),
     )
     conn.commit()
@@ -121,7 +127,9 @@ def _init_store(
     return store
 
 
-def _make_quote(symbol: str, price: float, currency: str | None = None) -> Quote:
+def _make_quote(
+    symbol: str, price: float, currency: str | None = None, ts: float = 0.0
+) -> Quote:
     return Quote(
         symbol=symbol,
         price=price,
@@ -132,7 +140,7 @@ def _make_quote(symbol: str, price: float, currency: str | None = None) -> Quote
         high_52w=None,
         low_52w=None,
         dividend_yield=None,
-        ts=0.0,
+        ts=ts,
         source="yahoo",
     )
 
@@ -288,6 +296,73 @@ async def test_price_cycle_adds_normalized_payload(monkeypatch, tmp_path):
         == "2024-03-01T00:00:00Z"
     )
     assert positions_event[0]["coverage_ratio"] == 0.85
+
+
+@pytest.mark.asyncio
+async def test_price_cycle_persists_market_timestamp(monkeypatch, tmp_path):
+    hass = FakeHass()
+    entry_id = "ts"
+    market_ts = 1_735_055_201
+    db_path = _create_db_with_security(tmp_path, "sec1", "AAPL", "USD", None)
+    _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
+
+    async def fake_fetch(self, symbols):
+        return {"AAPL": _make_quote("AAPL", 2.0, "USD", ts=float(market_ts))}
+
+    async def fake_reval(hass_, conn, uuids):
+        return {"portfolio_values": None, "portfolio_positions": None}
+
+    monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
+    monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
+    monkeypatch.setattr(price_service, "_push_update", lambda *args, **kwargs: None)
+
+    meta = await price_service._run_price_cycle(hass, entry_id)
+    assert meta["changed"] == 1
+
+    with sqlite3.connect(str(db_path)) as conn:
+        cur = conn.execute(
+            "SELECT last_price, last_price_date, last_price_fetched_at FROM securities WHERE uuid=?",
+            ("sec1",),
+        )
+        last_price, last_price_date, fetched_at = cur.fetchone()
+
+    assert last_price == 200_000_000  # 2.0 scaled
+    assert last_price_date == market_ts
+    assert isinstance(fetched_at, str) and fetched_at
+
+
+@pytest.mark.asyncio
+async def test_price_cycle_ignores_invalid_timestamp(monkeypatch, tmp_path):
+    hass = FakeHass()
+    entry_id = "ts-invalid"
+    existing_ts = 1_650_000_000
+    db_path = _create_db_with_security(
+        tmp_path, "sec1", "AAPL", "USD", 90_000_000, last_price_date=existing_ts
+    )
+    _init_store(hass, entry_id, db_path, {"AAPL": ["sec1"]})
+
+    async def fake_fetch(self, symbols):
+        return {"AAPL": _make_quote("AAPL", 1.05, "USD", ts=0.0)}
+
+    async def fake_reval(hass_, conn, uuids):
+        return {"portfolio_values": None, "portfolio_positions": None}
+
+    monkeypatch.setattr(price_service.YahooQueryProvider, "fetch", fake_fetch)
+    monkeypatch.setattr(price_service, "revalue_after_price_updates", fake_reval)
+    monkeypatch.setattr(price_service, "_push_update", lambda *args, **kwargs: None)
+
+    meta = await price_service._run_price_cycle(hass, entry_id)
+    assert meta["changed"] == 1
+
+    with sqlite3.connect(str(db_path)) as conn:
+        cur = conn.execute(
+            "SELECT last_price_date, last_price FROM securities WHERE uuid=?",
+            ("sec1",),
+        )
+        last_price_date, last_price = cur.fetchone()
+
+    assert last_price == 105_000_000  # updated price
+    assert last_price_date == existing_ts  # unchanged because timestamp invalid
 
 
 def test_refresh_impacted_portfolio_securities_uses_currency_helpers(

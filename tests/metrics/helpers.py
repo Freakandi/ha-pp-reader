@@ -69,7 +69,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "EUEQ",
                     "EUR",
                     int(round(105.25 * 1e8)),
-                    1_696_601_600,
+                    1_704_153_600,
                 ),
                 (
                     "sec-usd",
@@ -77,7 +77,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "USTK",
                     "USD",
                     int(round(100.00 * 1e8)),
-                    1_696_601_600,
+                    1_704_153_600,
                 ),
             ],
         )
