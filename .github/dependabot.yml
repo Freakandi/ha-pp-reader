@@ -13,3 +13,13 @@ updates:
     ignore:
       # Dependabot should not update Home Assistant as that should match the homeassistant key in hacs.json
       - dependency-name: "homeassistant"
+
+  # Keep Ruff aligned on dev as well (main config stays above for full dependency updates).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "dev"
+    allow:
+      - dependency-name: "ruff"
+      
