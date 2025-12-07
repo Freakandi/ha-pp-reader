@@ -247,7 +247,7 @@ export interface DailyWealthRecord {
 }
 
 export interface DailyWealthScopeRecord extends DailyWealthRecord {
-  scope_type: "account" | "portfolio" | string;
+  scope_type: "account" | "portfolio";
   scope_id: string;
   scope_name?: string | null;
 }
@@ -284,6 +284,16 @@ export interface DailyWealthRequest {
     [key: string]: unknown;
   };
   [key: string]: unknown;
+}
+
+export interface DailyWealthFetchOptions {
+  date?: string | null;
+  range?: DailyWealthRange | null;
+  includeSlices?: boolean;
+  includeScopes?: boolean;
+  limit?: number;
+  offset?: number;
+  scopes?: DailyWealthRequest["scopes"];
 }
 
 export interface SecurityHistoryOptions {
@@ -514,6 +524,200 @@ export async function fetchPortfoliosWS(
   return {
     portfolios,
     normalized_payload: normalizedPayload,
+  };
+}
+
+function normalizeWealthRange(
+  range: unknown,
+  fallbackDate: string | null | undefined,
+  fallbackRange: DailyWealthRange | null | undefined,
+): DailyWealthRange {
+  if (range && typeof range === "object") {
+    const start = toStringOrNull((range as Record<string, unknown>).start);
+    const end = toStringOrNull((range as Record<string, unknown>).end);
+    if (start && end) {
+      return { start, end };
+    }
+  }
+
+  if (fallbackRange?.start && fallbackRange.end) {
+    return { start: fallbackRange.start, end: fallbackRange.end };
+  }
+
+  if (fallbackDate) {
+    return { start: fallbackDate, end: fallbackDate };
+  }
+
+  throw new Error("fetchDailyWealthWS: fehlender Zeitraum");
+}
+
+function toFiniteNumberOrZero(value: unknown): number {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return numeric;
+}
+
+function toCoverageValue(value: unknown): number | null {
+  if (value === null) {
+    return null;
+  }
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeDailyWealthRecord(raw: UnknownRecord): DailyWealthRecord | null {
+  const date = toStringOrNull(raw.date);
+  if (!date) {
+    return null;
+  }
+
+  const record: DailyWealthRecord = {
+    date,
+    total_wealth_eur: toFiniteNumberOrZero(raw.total_wealth_eur),
+    portfolio_wealth_eur: toFiniteNumberOrZero(raw.portfolio_wealth_eur),
+    account_wealth_eur: toFiniteNumberOrZero(raw.account_wealth_eur),
+    dividends_eur: toFiniteNumberOrZero(raw.dividends_eur),
+    interest_eur: toFiniteNumberOrZero(raw.interest_eur),
+    inbound_transfers_eur: toFiniteNumberOrZero(raw.inbound_transfers_eur),
+    outbound_transfers_eur: toFiniteNumberOrZero(raw.outbound_transfers_eur),
+    performance_neutral_movements: toFiniteNumberOrZero(raw.performance_neutral_movements),
+    fees_eur: toFiniteNumberOrZero(raw.fees_eur),
+    taxes_eur: toFiniteNumberOrZero(raw.taxes_eur),
+    fx_coverage_ratio: toCoverageValue(raw.fx_coverage_ratio),
+    price_coverage_ratio: toCoverageValue(raw.price_coverage_ratio),
+    stale_price: raw.stale_price === true,
+  };
+
+  const provenance = toStringOrNull(raw.provenance);
+  if (provenance) {
+    record.provenance = provenance;
+  }
+
+  return record;
+}
+
+function normalizeDailyWealthScopeRecord(raw: UnknownRecord): DailyWealthScopeRecord | null {
+  const base = normalizeDailyWealthRecord(raw);
+  const scopeTypeRaw = toStringOrNull(raw.scope_type);
+  const scopeId = toStringOrNull(raw.scope_id);
+  if (!base || !scopeTypeRaw || !scopeId) {
+    return null;
+  }
+  if (scopeTypeRaw !== "portfolio" && scopeTypeRaw !== "account") {
+    return null;
+  }
+  const scopeRecord: DailyWealthScopeRecord = {
+    ...base,
+    scope_type: scopeTypeRaw,
+    scope_id: scopeId,
+  };
+  const scopeName = toStringOrNull(raw.scope_name);
+  if (scopeName) {
+    scopeRecord.scope_name = scopeName;
+  }
+  return scopeRecord;
+}
+
+function normalizeDailyWealthSlices(rawSlices: unknown): DailyWealthSlices | undefined {
+  if (!rawSlices || typeof rawSlices !== "object") {
+    return undefined;
+  }
+  const raw = rawSlices as Record<string, unknown>;
+  const accountsRaw = Array.isArray(raw.accounts) ? raw.accounts : [];
+  const portfoliosRaw = Array.isArray(raw.portfolios) ? raw.portfolios : [];
+
+  const accounts = accountsRaw
+    .map(item => (item && typeof item === "object" ? normalizeDailyWealthScopeRecord(item as UnknownRecord) : null))
+    .filter((entry): entry is DailyWealthScopeRecord => Boolean(entry));
+  const portfolios = portfoliosRaw
+    .map(item => (item && typeof item === "object" ? normalizeDailyWealthScopeRecord(item as UnknownRecord) : null))
+    .filter((entry): entry is DailyWealthScopeRecord => Boolean(entry));
+
+  if (accounts.length === 0 && portfolios.length === 0) {
+    return undefined;
+  }
+
+  return { accounts, portfolios };
+}
+
+export async function fetchDailyWealthWS(
+  hass: HomeAssistant | null | undefined,
+  panelConfig: PanelConfigLike | null | undefined,
+  options: DailyWealthFetchOptions,
+): Promise<DailyWealthResponse> {
+  if (!hass) {
+    throw new Error("fetchDailyWealthWS: fehlendes hass");
+  }
+
+  const entryId = deriveEntryId(hass, panelConfig);
+  if (!entryId) {
+    throw new Error("fetchDailyWealthWS: fehlendes entry_id");
+  }
+
+  const { date, range, includeSlices, includeScopes, scopes, limit, offset } = options;
+  const normalizedDate = toStringOrNull(date);
+  const normalizedRange =
+    range && typeof range === "object"
+      ? {
+          start: toStringOrNull(range.start) ?? "",
+          end: toStringOrNull(range.end) ?? "",
+        }
+      : null;
+
+  if (normalizedDate && normalizedRange && normalizedRange.start && normalizedRange.end) {
+    throw new Error("fetchDailyWealthWS: date und range sind gleichzeitig gesetzt");
+  }
+
+  const payload: DailyWealthRequest = {
+    type: "pp_reader/get_daily_wealth",
+    entry_id: entryId,
+  };
+
+  if (normalizedDate) {
+    payload.date = normalizedDate;
+  } else if (normalizedRange && normalizedRange.start && normalizedRange.end) {
+    payload.range = normalizedRange;
+  } else {
+    throw new Error("fetchDailyWealthWS: weder date noch range angegeben");
+  }
+
+  if (includeSlices !== undefined) {
+    payload.include_slices = includeSlices;
+  }
+  if (includeScopes !== undefined) {
+    payload.include_scopes = includeScopes;
+  }
+  if (Array.isArray(scopes?.accounts) || Array.isArray(scopes?.portfolios)) {
+    payload.scopes = {};
+    if (Array.isArray(scopes.accounts)) {
+      payload.scopes.accounts = scopes.accounts.filter((id): id is string => typeof id === "string" && id.length > 0);
+    }
+    if (Array.isArray(scopes.portfolios)) {
+      payload.scopes.portfolios = scopes.portfolios.filter(
+        (id): id is string => typeof id === "string" && id.length > 0,
+      );
+    }
+  }
+  if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+    payload.limit = limit;
+  }
+  if (typeof offset === "number" && Number.isFinite(offset) && offset >= 0) {
+    payload.offset = offset;
+  }
+
+  const raw = await hass.connection.sendMessagePromise<UnknownRecord>(payload);
+
+  const normalizedRangeOrFallback = normalizeWealthRange(raw.range, normalizedDate, normalizedRange);
+
+  const recordsRaw = Array.isArray(raw.records) ? raw.records : [];
+  const records = recordsRaw
+    .map(item => (item && typeof item === "object" ? normalizeDailyWealthRecord(item as UnknownRecord) : null))
+    .filter((entry): entry is DailyWealthRecord => Boolean(entry));
+
+  const slices = normalizeDailyWealthSlices(raw.slices);
+
+  return {
+    range: normalizedRangeOrFallback,
+    records,
+    ...(slices ? { slices } : {}),
   };
 }
 

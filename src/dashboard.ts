@@ -8,6 +8,7 @@ import {
   attachPortfolioToggleHandler,
   updatePortfolioFooterFromDom,
 } from './tabs/overview';
+import { renderAnalyse } from './tabs/analyse';
 import { registerSecurityDetailTab } from './tabs/security_detail';
 import {
   handleAccountUpdate,
@@ -106,10 +107,12 @@ interface DashboardElement extends HTMLElement {
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 const OVERVIEW_TAB_KEY = 'overview';
+const ANALYSE_TAB_KEY = 'analyse';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
+  { key: ANALYSE_TAB_KEY, title: 'Analyse', render: renderAnalyse },
 ];
 
 const detailTabRegistry = new Map<string, DashboardTabDescriptor>();
