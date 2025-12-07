@@ -3,12 +3,12 @@
 Derived from `.docs/wealth-backdating-plan.md` and related TODOs; focus on docs only.
 
 ## Checklist
-- [ ] Datamodel docs
-  - [ ] Add `daily_wealth` schema (fields, types, indexes, coverage semantics).
-  - [ ] Add per-scope slices schema (accounts/portfolios) with scope identifiers and metrics.
-  - [ ] Describe performance-neutral movements (if used) and how transfers/FX gaps are handled.
-  - [ ] Files: `datamodel/SQLite_data.md`, and a dedicated backdating section/link from `wealth-backdating-plan.md`/`concept.md`.
-  - [ ] Pitfalls: align column names/types with actual schema; include examples for coverage flags and date formats.
+- [x] Datamodel docs
+  - [x] Add `daily_wealth` schema (fields, types, indexes, coverage semantics).
+  - [x] Add per-scope slices schema (accounts/portfolios) with scope identifiers and metrics.
+  - [x] Describe performance-neutral movements (if used) and how transfers/FX gaps are handled.
+  - [x] Files: `datamodel/SQLite_data.md`, and a dedicated backdating section/link from `wealth-backdating-plan.md`/`concept.md`.
+  - [x] Pitfalls: align column names/types with actual schema; include examples for coverage flags and date formats.
 - [ ] API docs
   - [ ] Document `pp_reader/get_daily_wealth` request/response, range handling, slices, and coverage flags.
   - [ ] Include validation rules (date formats, range limits) and example payloads.

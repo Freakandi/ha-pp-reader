@@ -384,6 +384,55 @@ class SecurityMetricRecord:
     updated_at: str | None = None
 
 
+@dataclass
+class DailyWealthRecord:
+    """Record representing aggregated wealth metrics per day."""
+
+    date: str  # ISO date (YYYY-MM-DD)
+    total_wealth_eur: float = 0.0
+    portfolio_wealth_eur: float = 0.0
+    account_wealth_eur: float = 0.0
+    dividends_eur: float = 0.0
+    interest_eur: float = 0.0
+    inbound_transfers_eur: float = 0.0
+    outbound_transfers_eur: float = 0.0
+    performance_neutral_movements: float = 0.0
+    fees_eur: float = 0.0
+    taxes_eur: float = 0.0
+    fx_coverage_ratio: float | None = None
+    price_coverage_ratio: float | None = None
+    stale_price: bool = False
+    provenance: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class DailyWealthScopeRecord:
+    """Record representing scoped wealth metrics per day."""
+
+    scope_type: str  # account | portfolio
+    scope_id: str
+    date: str  # ISO date (YYYY-MM-DD)
+    scope_name: str | None = None
+    total_wealth_eur: float = 0.0
+    portfolio_wealth_eur: float = 0.0
+    account_wealth_eur: float = 0.0
+    dividends_eur: float = 0.0
+    interest_eur: float = 0.0
+    inbound_transfers_eur: float = 0.0
+    outbound_transfers_eur: float = 0.0
+    performance_neutral_movements: float = 0.0
+    fees_eur: float = 0.0
+    taxes_eur: float = 0.0
+    fx_coverage_ratio: float | None = None
+    price_coverage_ratio: float | None = None
+    stale_price: bool = False
+    provenance: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
 def _resolve_average_cost_totals(
     aggregation: HoldingsAggregation,
     *,
@@ -1828,6 +1877,61 @@ def _row_to_security_metric(row: sqlite3.Row) -> SecurityMetricRecord:
     )
 
 
+def _row_to_daily_wealth(row: sqlite3.Row) -> DailyWealthRecord:
+    """Convert a sqlite row into a DailyWealthRecord."""
+    return DailyWealthRecord(
+        date=row["date"],
+        total_wealth_eur=_safe_float(row["total_wealth_eur"]) or 0.0,
+        portfolio_wealth_eur=_safe_float(row["portfolio_wealth_eur"]) or 0.0,
+        account_wealth_eur=_safe_float(row["account_wealth_eur"]) or 0.0,
+        dividends_eur=_safe_float(row["dividends_eur"]) or 0.0,
+        interest_eur=_safe_float(row["interest_eur"]) or 0.0,
+        inbound_transfers_eur=_safe_float(row["inbound_transfers_eur"]) or 0.0,
+        outbound_transfers_eur=_safe_float(row["outbound_transfers_eur"]) or 0.0,
+        performance_neutral_movements=_safe_float(
+            row["performance_neutral_movements"]
+        )
+        or 0.0,
+        fees_eur=_safe_float(row["fees_eur"]) or 0.0,
+        taxes_eur=_safe_float(row["taxes_eur"]) or 0.0,
+        fx_coverage_ratio=_safe_float(row["fx_coverage_ratio"]),
+        price_coverage_ratio=_safe_float(row["price_coverage_ratio"]),
+        stale_price=bool(row["stale_price"]),
+        provenance=row["provenance"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_daily_wealth_scope(row: sqlite3.Row) -> DailyWealthScopeRecord:
+    """Convert a sqlite row into a DailyWealthScopeRecord."""
+    return DailyWealthScopeRecord(
+        scope_type=row["scope_type"],
+        scope_id=row["scope_id"],
+        date=row["date"],
+        scope_name=row["scope_name"],
+        total_wealth_eur=_safe_float(row["total_wealth_eur"]) or 0.0,
+        portfolio_wealth_eur=_safe_float(row["portfolio_wealth_eur"]) or 0.0,
+        account_wealth_eur=_safe_float(row["account_wealth_eur"]) or 0.0,
+        dividends_eur=_safe_float(row["dividends_eur"]) or 0.0,
+        interest_eur=_safe_float(row["interest_eur"]) or 0.0,
+        inbound_transfers_eur=_safe_float(row["inbound_transfers_eur"]) or 0.0,
+        outbound_transfers_eur=_safe_float(row["outbound_transfers_eur"]) or 0.0,
+        performance_neutral_movements=_safe_float(
+            row["performance_neutral_movements"]
+        )
+        or 0.0,
+        fees_eur=_safe_float(row["fees_eur"]) or 0.0,
+        taxes_eur=_safe_float(row["taxes_eur"]) or 0.0,
+        fx_coverage_ratio=_safe_float(row["fx_coverage_ratio"]),
+        price_coverage_ratio=_safe_float(row["price_coverage_ratio"]),
+        stale_price=bool(row["stale_price"]),
+        provenance=row["provenance"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
 def upsert_portfolio_metrics(
     db_path: Path,
     records: Sequence[PortfolioMetricRecord],
@@ -2240,6 +2344,300 @@ def fetch_security_metrics(
         )
         rows = cursor.fetchall()
         return [_row_to_security_metric(row) for row in rows]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_daily_wealth(
+    db_path: Path,
+    records: Sequence[DailyWealthRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update aggregated daily wealth rows."""
+    if not records:
+        return
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        local_conn.executemany(
+            """
+            INSERT INTO daily_wealth (
+                date,
+                total_wealth_eur,
+                portfolio_wealth_eur,
+                account_wealth_eur,
+                dividends_eur,
+                interest_eur,
+                inbound_transfers_eur,
+                outbound_transfers_eur,
+                performance_neutral_movements,
+                fees_eur,
+                taxes_eur,
+                fx_coverage_ratio,
+                price_coverage_ratio,
+                stale_price,
+                provenance,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(date) DO UPDATE SET
+                total_wealth_eur = excluded.total_wealth_eur,
+                portfolio_wealth_eur = excluded.portfolio_wealth_eur,
+                account_wealth_eur = excluded.account_wealth_eur,
+                dividends_eur = excluded.dividends_eur,
+                interest_eur = excluded.interest_eur,
+                inbound_transfers_eur = excluded.inbound_transfers_eur,
+                outbound_transfers_eur = excluded.outbound_transfers_eur,
+                performance_neutral_movements = excluded.performance_neutral_movements,
+                fees_eur = excluded.fees_eur,
+                taxes_eur = excluded.taxes_eur,
+                fx_coverage_ratio = excluded.fx_coverage_ratio,
+                price_coverage_ratio = excluded.price_coverage_ratio,
+                stale_price = excluded.stale_price,
+                provenance = excluded.provenance,
+                updated_at = excluded.updated_at
+            """,
+            [
+                (
+                    record.date,
+                    record.total_wealth_eur,
+                    record.portfolio_wealth_eur,
+                    record.account_wealth_eur,
+                    record.dividends_eur,
+                    record.interest_eur,
+                    record.inbound_transfers_eur,
+                    record.outbound_transfers_eur,
+                    record.performance_neutral_movements,
+                    record.fees_eur,
+                    record.taxes_eur,
+                    record.fx_coverage_ratio,
+                    record.price_coverage_ratio,
+                    1 if record.stale_price else 0,
+                    record.provenance,
+                    record.created_at or timestamp,
+                    record.updated_at or timestamp,
+                )
+                for record in records
+            ],
+        )
+        if conn is None:
+            local_conn.commit()
+    except sqlite3.Error:
+        _LOGGER.exception("Fehler beim Speichern der daily_wealth Werte")
+        raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def upsert_daily_wealth_scopes(
+    db_path: Path,
+    records: Sequence[DailyWealthScopeRecord],
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Insert or update scoped daily wealth rows."""
+    if not records:
+        return
+
+    timestamp = _utc_now_isoformat()
+    local_conn = conn or sqlite3.connect(str(db_path))
+    try:
+        local_conn.executemany(
+            """
+            INSERT INTO daily_wealth_scopes (
+                scope_type,
+                scope_id,
+                scope_name,
+                date,
+                total_wealth_eur,
+                portfolio_wealth_eur,
+                account_wealth_eur,
+                dividends_eur,
+                interest_eur,
+                inbound_transfers_eur,
+                outbound_transfers_eur,
+                performance_neutral_movements,
+                fees_eur,
+                taxes_eur,
+                fx_coverage_ratio,
+                price_coverage_ratio,
+                stale_price,
+                provenance,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(scope_type, scope_id, date) DO UPDATE SET
+                scope_name = excluded.scope_name,
+                total_wealth_eur = excluded.total_wealth_eur,
+                portfolio_wealth_eur = excluded.portfolio_wealth_eur,
+                account_wealth_eur = excluded.account_wealth_eur,
+                dividends_eur = excluded.dividends_eur,
+                interest_eur = excluded.interest_eur,
+                inbound_transfers_eur = excluded.inbound_transfers_eur,
+                outbound_transfers_eur = excluded.outbound_transfers_eur,
+                performance_neutral_movements = excluded.performance_neutral_movements,
+                fees_eur = excluded.fees_eur,
+                taxes_eur = excluded.taxes_eur,
+                fx_coverage_ratio = excluded.fx_coverage_ratio,
+                price_coverage_ratio = excluded.price_coverage_ratio,
+                stale_price = excluded.stale_price,
+                provenance = excluded.provenance,
+                updated_at = excluded.updated_at
+            """,
+            [
+                (
+                    record.scope_type,
+                    record.scope_id,
+                    record.scope_name,
+                    record.date,
+                    record.total_wealth_eur,
+                    record.portfolio_wealth_eur,
+                    record.account_wealth_eur,
+                    record.dividends_eur,
+                    record.interest_eur,
+                    record.inbound_transfers_eur,
+                    record.outbound_transfers_eur,
+                    record.performance_neutral_movements,
+                    record.fees_eur,
+                    record.taxes_eur,
+                    record.fx_coverage_ratio,
+                    record.price_coverage_ratio,
+                    1 if record.stale_price else 0,
+                    record.provenance,
+                    record.created_at or timestamp,
+                    record.updated_at or timestamp,
+                )
+                for record in records
+            ],
+        )
+        if conn is None:
+            local_conn.commit()
+    except sqlite3.Error:
+        _LOGGER.exception(
+            "Fehler beim Speichern der daily_wealth_scopes Werte "
+            "(scope_type=%s, scope_id=%s)",
+            records[0].scope_type if records else "",
+            records[0].scope_id if records else "",
+        )
+        raise
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def fetch_daily_wealth(
+    db_path: Path,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> list[DailyWealthRecord]:
+    """Load daily wealth rows optionally filtered by date range."""
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+
+    query = """
+        SELECT
+            date,
+            total_wealth_eur,
+            portfolio_wealth_eur,
+            account_wealth_eur,
+            dividends_eur,
+            interest_eur,
+            inbound_transfers_eur,
+            outbound_transfers_eur,
+            performance_neutral_movements,
+            fees_eur,
+            taxes_eur,
+            fx_coverage_ratio,
+            price_coverage_ratio,
+            stale_price,
+            provenance,
+            created_at,
+            updated_at
+        FROM daily_wealth
+        WHERE 1=1
+    """
+    params: list[str] = []
+    if start_date:
+        query += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND date <= ?"
+        params.append(end_date)
+    query += " ORDER BY date"
+
+    try:
+        cursor = local_conn.execute(query, params)
+        rows = cursor.fetchall()
+        return [_row_to_daily_wealth(row) for row in rows]
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
+def fetch_daily_wealth_scopes(
+    db_path: Path,
+    *,
+    scope_type: str | None = None,
+    scope_ids: Sequence[str] | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> list[DailyWealthScopeRecord]:
+    """Load scoped daily wealth rows filtered by optional scope and date constraints."""
+    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn.row_factory = sqlite3.Row
+
+    query = """
+        SELECT
+            scope_type,
+            scope_id,
+            scope_name,
+            date,
+            total_wealth_eur,
+            portfolio_wealth_eur,
+            account_wealth_eur,
+            dividends_eur,
+            interest_eur,
+            inbound_transfers_eur,
+            outbound_transfers_eur,
+            performance_neutral_movements,
+            fees_eur,
+            taxes_eur,
+            fx_coverage_ratio,
+            price_coverage_ratio,
+            stale_price,
+            provenance,
+            created_at,
+            updated_at
+        FROM daily_wealth_scopes
+        WHERE 1=1
+    """
+    params: list[str] = []
+    if scope_type:
+        query += " AND scope_type = ?"
+        params.append(scope_type)
+    if scope_ids:
+        placeholders = ", ".join("?" for _ in scope_ids)
+        query += f" AND scope_id IN ({placeholders})"
+        params.extend(scope_ids)
+    if start_date:
+        query += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND date <= ?"
+        params.append(end_date)
+    query += " ORDER BY date, scope_type, scope_id"
+
+    try:
+        cursor = local_conn.execute(query, params)
+        rows = cursor.fetchall()
+        return [_row_to_daily_wealth_scope(row) for row in rows]
     finally:
         if conn is None:
             local_conn.close()

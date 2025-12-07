@@ -5,6 +5,7 @@
 - Per-scope slices: include `scope_type`, `scope_id`, `scope_name` plus the same metrics as `daily_wealth` to support account/portfolio filtering and charting.
 - Optional: persist performance-neutral bucket if needed for UI mapping (net transfers, cash-neutral adjustments).
 - Indexes: PK on `date` for global; PK on `(scope_type, scope_id, date)` for slices; supporting indexes on `date` for range queries.
+- Datamodel reference: see `datamodel/SQLite_data.md` sections `daily_wealth` and `daily_wealth_scopes` for columns, defaults, and coverage semantics.
 
 ## Backend data handling / computation
 - Recompute historical days on every `.portfolio` ingestion (transactions can change retroactively): rebuild from earliest transaction date to “today” after each import.

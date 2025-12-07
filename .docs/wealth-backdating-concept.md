@@ -35,6 +35,7 @@ Purpose: Provide a new “Analyse” tab with an “Entwicklung” card that can
 - `interest_eur` (REAL)
 - `inbound_transfers_eur` (REAL) – manual additions
 - `outbound_transfers_eur` (REAL) – manual withdrawals
+- `performance_neutral_movements` (REAL) – net transfers/adjustments treated as performance-neutral
 - `fees_eur` (REAL)
 - `taxes_eur` (REAL)
 - `fx_coverage_ratio` (REAL) – 0..1 coverage across needed FX points
@@ -44,6 +45,8 @@ Purpose: Provide a new “Analyse” tab with an “Entwicklung” card that can
 - `created_at` / `updated_at` (TEXT)
 
 Indexes: PK on `date`; add per-scope tables or indexes `(scope_type, scope_id, date)` for per-account and per-portfolio slices to enable flexible sorting/filtering in the Analyse tab.
+
+Canonical definitions live in `datamodel/SQLite_data.md` sections `daily_wealth` and `daily_wealth_scopes`, which include coverage semantics and example values.
 
 ## Computation plan
 1) Inputs per date:

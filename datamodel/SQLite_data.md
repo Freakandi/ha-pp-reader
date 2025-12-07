@@ -237,6 +237,80 @@ This document describes every table stored in `config/pp_reader_data/S-Depot.db`
 | --- | --- | --- | --- |
 | idx_transaction_units_currency | transaction_fx_currency | non-unique | Facilitates FX lookups. |
 
+## daily_wealth
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Populated By | Source Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | date | string (TEXT, ISO 8601 date) | no (PRIMARY KEY) | — | Calendar date stored as `YYYY-MM-DD`. | Daily wealth backdating pipeline | string |
+| 2 | total_wealth_eur | real | no | 0.0 | Total wealth aggregated across portfolios and accounts in EUR. | Aggregation result per day | float |
+| 3 | portfolio_wealth_eur | real | no | 0.0 | Portion of total wealth attributable to portfolios. | Aggregation result per day | float |
+| 4 | account_wealth_eur | real | no | 0.0 | Portion of total wealth attributable to accounts. | Aggregation result per day | float |
+| 5 | dividends_eur | real | no | 0.0 | Cashflow bucket for dividends received that day. | Aggregation result per day | float |
+| 6 | interest_eur | real | no | 0.0 | Cashflow bucket for interest received that day. | Aggregation result per day | float |
+| 7 | inbound_transfers_eur | real | no | 0.0 | External cash moving into the system (excludes internal transfers). | Aggregation result per day | float |
+| 8 | outbound_transfers_eur | real | no | 0.0 | External cash leaving the system (excludes internal transfers). | Aggregation result per day | float |
+| 9 | performance_neutral_movements | real | no | 0.0 | Net transfers/adjustments treated as performance neutral (UI card bucket). | Aggregation result per day | float |
+| 10 | fees_eur | real | no | 0.0 | Fees booked that day. | Aggregation result per day | float |
+| 11 | taxes_eur | real | no | 0.0 | Taxes booked that day. | Aggregation result per day | float |
+| 12 | fx_coverage_ratio | real | yes | NULL | Ratio [0.0–1.0] indicating how much of the series used same-day FX. | Aggregation result per day | float |
+| 13 | price_coverage_ratio | real | yes | NULL | Ratio [0.0–1.0] indicating how much of the series used same-day prices. | Aggregation result per day | float |
+| 14 | stale_price | integer (0/1) | no | 0 | Flag if any value used stale prices. | Aggregation result per day (boolean persisted as integer) | int |
+| 15 | provenance | string (TEXT) | yes | — | Optional JSON metadata about the aggregation sources. | Aggregation metadata | string |
+| 16 | created_at | string (TEXT, ISO 8601 UTC) | no | `strftime('%Y-%m-%dT%H:%M:%SZ', 'now')` | Creation timestamp. | Database default | string |
+| 17 | updated_at | string (TEXT, ISO 8601 UTC) | yes | — | Update timestamp. | Upsert helper | string |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | date | unique | Backed by `sqlite_autoindex_daily_wealth_1`. |
+
+**Coverage semantics**
+- `fx_coverage_ratio` and `price_coverage_ratio` capture fraction of values using same-day FX/prices (1.0 = fully covered). `stale_price` flags any price fallback.
+- `performance_neutral_movements` stores net cash moves treated as neutral to performance (e.g., offsetting transfers or adjustments used for UI mapping).
+
+**Examples**
+- `date`: `2025-01-15`
+- Coverage flags: `fx_coverage_ratio=0.92`, `price_coverage_ratio=0.87`, `stale_price=1`
+
+## daily_wealth_scopes
+
+| Field Index | Column Name | Data Format | Null Allowed | Default | Description | Populated By | Source Format |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | scope_type | string (TEXT) | no (part of PRIMARY KEY) | — | Scope discriminator: `account` or `portfolio`. | Daily wealth backdating pipeline | string |
+| 2 | scope_id | string (TEXT, UUID) | no (part of PRIMARY KEY) | — | Scope identifier (account UUID or portfolio UUID). | Daily wealth backdating pipeline | string |
+| 3 | scope_name | string (TEXT) | yes | — | Best-effort display name for the scope. | Daily wealth backdating pipeline | string |
+| 4 | date | string (TEXT, ISO 8601 date) | no (part of PRIMARY KEY) | — | Calendar date stored as `YYYY-MM-DD`. | Daily wealth backdating pipeline | string |
+| 5 | total_wealth_eur | real | no | 0.0 | Total wealth for the scope in EUR. | Aggregation per scope/day | float |
+| 6 | portfolio_wealth_eur | real | no | 0.0 | Portfolio component for the scope (mirrors global columns). | Aggregation per scope/day | float |
+| 7 | account_wealth_eur | real | no | 0.0 | Account component for the scope (mirrors global columns). | Aggregation per scope/day | float |
+| 8 | dividends_eur | real | no | 0.0 | Dividends for the scope on the day. | Aggregation per scope/day | float |
+| 9 | interest_eur | real | no | 0.0 | Interest for the scope on the day. | Aggregation per scope/day | float |
+| 10 | inbound_transfers_eur | real | no | 0.0 | External inbound transfers for the scope. | Aggregation per scope/day | float |
+| 11 | outbound_transfers_eur | real | no | 0.0 | External outbound transfers for the scope. | Aggregation per scope/day | float |
+| 12 | performance_neutral_movements | real | no | 0.0 | Performance-neutral net transfers/adjustments for the scope. | Aggregation per scope/day | float |
+| 13 | fees_eur | real | no | 0.0 | Fees for the scope on the day. | Aggregation per scope/day | float |
+| 14 | taxes_eur | real | no | 0.0 | Taxes for the scope on the day. | Aggregation per scope/day | float |
+| 15 | fx_coverage_ratio | real | yes | NULL | Ratio [0.0–1.0] indicating same-day FX coverage for the scope. | Aggregation per scope/day | float |
+| 16 | price_coverage_ratio | real | yes | NULL | Ratio [0.0–1.0] indicating same-day price coverage for the scope. | Aggregation per scope/day | float |
+| 17 | stale_price | integer (0/1) | no | 0 | Flag if the scope used stale prices. | Aggregation per scope/day | int |
+| 18 | provenance | string (TEXT) | yes | — | Optional JSON metadata about the aggregation sources. | Aggregation metadata | string |
+| 19 | created_at | string (TEXT, ISO 8601 UTC) | no | `strftime('%Y-%m-%dT%H:%M:%SZ', 'now')` | Creation timestamp. | Database default | string |
+| 20 | updated_at | string (TEXT, ISO 8601 UTC) | yes | — | Update timestamp. | Upsert helper | string |
+
+**Indexes**
+
+| Index Name | Columns | Type | Notes |
+| --- | --- | --- | --- |
+| PRIMARY KEY | scope_type, scope_id, date | unique | Backed by `sqlite_autoindex_daily_wealth_scopes_1`. |
+| idx_daily_wealth_scopes_date | date | non-unique | Supports date range scans. |
+| idx_daily_wealth_scopes_scope | scope_type, scope_id | non-unique | Supports scoped series queries. |
+| idx_daily_wealth_scopes_scope_name | scope_name | non-unique | Assists sorting/search by display name. |
+
+**Notes**
+- `scope_type` is constrained in code to `account` or `portfolio`; schema stores TEXT for compatibility.
+- Coverage flags mirror global semantics; `stale_price` is persisted as integer but treated as boolean in accessors.
+
 ## fx_rates
 
 | Field Index | Column Name | Data Format | Null Allowed | Default | Description | Parsed Data Field | Parsed Data Format |
