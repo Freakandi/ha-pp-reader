@@ -227,6 +227,65 @@ export interface LastFileUpdateResponse {
   [key: string]: unknown;
 }
 
+export interface DailyWealthRecord {
+  date: string;
+  total_wealth_eur: number;
+  portfolio_wealth_eur: number;
+  account_wealth_eur: number;
+  dividends_eur: number;
+  interest_eur: number;
+  inbound_transfers_eur: number;
+  outbound_transfers_eur: number;
+  performance_neutral_movements: number;
+  fees_eur: number;
+  taxes_eur: number;
+  fx_coverage_ratio: number | null;
+  price_coverage_ratio: number | null;
+  stale_price: boolean;
+  provenance?: string | null;
+  [key: string]: unknown;
+}
+
+export interface DailyWealthScopeRecord extends DailyWealthRecord {
+  scope_type: "account" | "portfolio" | string;
+  scope_id: string;
+  scope_name?: string | null;
+}
+
+export interface DailyWealthSlices {
+  accounts: DailyWealthScopeRecord[];
+  portfolios: DailyWealthScopeRecord[];
+}
+
+export interface DailyWealthRange {
+  start: string;
+  end: string;
+}
+
+export interface DailyWealthResponse {
+  range: DailyWealthRange;
+  records: DailyWealthRecord[];
+  slices?: DailyWealthSlices;
+  [key: string]: unknown;
+}
+
+export interface DailyWealthRequest {
+  type: "pp_reader/get_daily_wealth";
+  entry_id: string;
+  date?: string;
+  range?: DailyWealthRange;
+  include_slices?: boolean;
+  include_scopes?: boolean;
+  limit?: number;
+  offset?: number;
+  scopes?: {
+    accounts?: string[];
+    portfolios?: string[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 export interface SecurityHistoryOptions {
   startDate?: number | null;
   endDate?: number | null;

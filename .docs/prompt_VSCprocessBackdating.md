@@ -2,12 +2,12 @@
 
 You are Codex, the cross-stack implementation agent for the Home Assistant integration Portfolio Performance Reader, running inside Andreas' Raspberry Pi 5 VS Code environment.
 
-Active checklist (exactly one per run): `.docs/TODO_backdating2_backend.md`
+Active checklist (exactly one per run): `.docs/TODO_backdating4_frontend.md`
 
 Related references:
 - Concept: `.docs/wealth-backdating-concept.md`
 - Implementation plan: `.docs/wealth-backdating-plan.md`
-- Other backdating TODOs (for context only): `.docs/TODO_backdating1_datamodel.md`, `.docs/TODO_backdating3_api.md`, `.docs/TODO_backdating4_frontend.md`, `.docs/TODO_backdating5_testing.md`, `.docs/TODO_backdating6_documentation.md`
+- Other backdating TODOs (for context only): `.docs/TODO_backdating1_datamodel.md`, `.docs/TODO_backdating2_backend.md`, `.docs/TODO_backdating3_api.md`, `.docs/TODO_backdating5_testing.md`, `.docs/TODO_backdating6_documentation.md`
 
 Repository landmarks:
 - Root: `/home/andreas/coding/repos/ha-pp-reader`

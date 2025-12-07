@@ -2535,6 +2535,8 @@ def fetch_daily_wealth(
     end_date: str | None = None,
     *,
     conn: sqlite3.Connection | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[DailyWealthRecord]:
     """Load daily wealth rows optionally filtered by date range."""
     local_conn = conn or sqlite3.connect(str(db_path))
@@ -2570,6 +2572,11 @@ def fetch_daily_wealth(
         query += " AND date <= ?"
         params.append(end_date)
     query += " ORDER BY date"
+    if limit is not None or offset is not None:
+        limit_value = -1 if limit is None else limit
+        offset_value = 0 if offset is None else offset
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit_value, offset_value])
 
     try:
         cursor = local_conn.execute(query, params)
@@ -2588,6 +2595,8 @@ def fetch_daily_wealth_scopes(
     start_date: str | None = None,
     end_date: str | None = None,
     conn: sqlite3.Connection | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[DailyWealthScopeRecord]:
     """Load scoped daily wealth rows filtered by optional scope and date constraints."""
     local_conn = conn or sqlite3.connect(str(db_path))
@@ -2633,6 +2642,11 @@ def fetch_daily_wealth_scopes(
         query += " AND date <= ?"
         params.append(end_date)
     query += " ORDER BY date, scope_type, scope_id"
+    if limit is not None or offset is not None:
+        limit_value = -1 if limit is None else limit
+        offset_value = 0 if offset is None else offset
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit_value, offset_value])
 
     try:
         cursor = local_conn.execute(query, params)

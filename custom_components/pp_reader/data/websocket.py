@@ -46,6 +46,36 @@ NEWS_PROMPT_PLACEHOLDER = "{TICKER}"
 NEWS_PROMPT_PATH = Path(__file__).resolve().parent.parent / "util" / "search_news.md"
 DOMAIN = "pp_reader"
 _MAX_DAILY_WEALTH_RANGE_DAYS = 366
+_DAILY_WEALTH_RANGE_SCHEMA = vol.Schema(
+    {
+        vol.Required("start"): str,
+        vol.Required("end"): str,
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+_DAILY_WEALTH_SCOPE_FILTER_SCHEMA = vol.Schema(
+    {
+        vol.Optional("accounts"): [str],
+        vol.Optional("portfolios"): [str],
+    },
+    extra=vol.PREVENT_EXTRA,
+)
+_WS_GET_DAILY_WEALTH_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Required("type"): "pp_reader/get_daily_wealth",
+            vol.Required("entry_id"): str,
+            vol.Optional("date"): str,
+            vol.Optional("range"): _DAILY_WEALTH_RANGE_SCHEMA,
+            vol.Optional("include_slices", default=False): bool,
+            vol.Optional("include_scopes"): bool,
+            vol.Optional("scopes"): _DAILY_WEALTH_SCOPE_FILTER_SCHEMA,
+            vol.Optional("limit"): vol.Coerce(int),
+            vol.Optional("offset", default=0): vol.Coerce(int),
+        },
+        extra=vol.ALLOW_EXTRA,
+    )
+)
 
 
 def _get_entry_data(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:
@@ -78,6 +108,19 @@ def _parse_iso_date(value: str | None) -> date | None:
         return datetime.fromisoformat(value).date()
     except ValueError:
         return None
+
+
+def _extract_scope_filters(
+    scopes: Mapping[str, Any] | None,
+) -> tuple[list[str], list[str]]:
+    """Return scope filter lists for accounts and portfolios."""
+    if not scopes:
+        return [], []
+    accounts_raw = scopes.get("accounts") if isinstance(scopes, Mapping) else None
+    portfolios_raw = scopes.get("portfolios") if isinstance(scopes, Mapping) else None
+    accounts = [item for item in accounts_raw or [] if isinstance(item, str)]
+    portfolios = [item for item in portfolios_raw or [] if isinstance(item, str)]
+    return accounts, portfolios
 
 
 def _load_news_prompt_template() -> tuple[str, str]:
@@ -1105,34 +1148,62 @@ async def ws_get_portfolio_positions(
     )
 
 
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "pp_reader/get_daily_wealth",
-        vol.Required("entry_id"): str,
-        vol.Required("start_date"): str,
-        vol.Optional("end_date"): str,
-        vol.Optional("include_scopes", default=False): bool,
-    }
-)
+@websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
 @websocket_api.async_response
 async def ws_get_daily_wealth(
     hass: HomeAssistant,
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return aggregated daily wealth records (and optional scope slices)."""
+    """Return aggregated daily wealth records (and optional per-scope slices)."""
     msg_id = msg.get("id")
     entry_id = msg.get("entry_id")
-    start_date_raw = msg.get("start_date")
-    end_date_raw = msg.get("end_date") or start_date_raw
-    include_scopes = bool(msg.get("include_scopes", False))
-
-    start_date = _parse_iso_date(start_date_raw)
-    end_date = _parse_iso_date(end_date_raw)
+    include_slices = bool(msg.get("include_slices", msg.get("include_scopes", False)))
+    requested_date = msg.get("date")
+    requested_range = msg.get("range")
+    requested_scopes = msg.get("scopes")
 
     if not entry_id:
         connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
         return
+    if requested_date and requested_range:
+        connection.send_error(
+            msg_id,
+            "invalid_format",
+            "date und range schließen sich aus",
+        )
+        return
+    if not requested_date and not requested_range:
+        connection.send_error(msg_id, "invalid_format", "date oder range erforderlich")
+        return
+
+    if requested_range is not None and not isinstance(requested_range, Mapping):
+        connection.send_error(msg_id, "invalid_format", "range muss start/end enthalten")
+        return
+    try:
+        validated_range = (
+            _DAILY_WEALTH_RANGE_SCHEMA(requested_range)
+            if requested_range is not None
+            else None
+        )
+    except vol.Invalid:
+        connection.send_error(msg_id, "invalid_format", "Ungültiger range")
+        return
+
+    if requested_date is not None and not isinstance(requested_date, str):
+        connection.send_error(msg_id, "invalid_format", "Ungültiges Datum")
+        return
+
+    if validated_range:
+        start_date_raw = validated_range.get("start")
+        end_date_raw = validated_range.get("end") or start_date_raw
+    else:
+        start_date_raw = requested_date
+        end_date_raw = requested_date
+
+    start_date = _parse_iso_date(start_date_raw)
+    end_date = _parse_iso_date(end_date_raw)
+
     if start_date is None or end_date is None:
         connection.send_error(msg_id, "invalid_format", "Ungültiges Datum")
         return
@@ -1142,6 +1213,42 @@ async def ws_get_daily_wealth(
     if (end_date - start_date).days > _MAX_DAILY_WEALTH_RANGE_DAYS:
         connection.send_error(msg_id, "range_too_large", "Datumsbereich zu groß")
         return
+
+    limit_raw = msg.get("limit")
+    offset_raw = msg.get("offset", 0)
+    if limit_raw is not None and (
+        not isinstance(limit_raw, int) or limit_raw <= 0
+    ):
+        connection.send_error(msg_id, "invalid_format", "limit ungültig")
+        return
+    if not isinstance(offset_raw, int) or offset_raw < 0:
+        connection.send_error(msg_id, "invalid_format", "offset ungültig")
+        return
+    if offset_raw and limit_raw is None:
+        connection.send_error(msg_id, "invalid_format", "offset erfordert limit")
+        return
+
+    limit = (
+        min(limit_raw, _MAX_DAILY_WEALTH_RANGE_DAYS) if limit_raw is not None else None
+    )
+    offset = offset_raw if (limit is not None or offset_raw) else None
+
+    validated_scopes = None
+    if requested_scopes is not None:
+        if not isinstance(requested_scopes, Mapping):
+            connection.send_error(msg_id, "invalid_format", "scopes ungültig")
+            return
+        try:
+            validated_scopes = _DAILY_WEALTH_SCOPE_FILTER_SCHEMA(requested_scopes)
+        except vol.Invalid:
+            connection.send_error(msg_id, "invalid_format", "scopes ungültig")
+            return
+    if validated_scopes and not include_slices:
+        connection.send_error(msg_id, "invalid_format", "scopes erfordern include_slices")
+        return
+
+    start_iso = start_date.isoformat()
+    end_iso = end_date.isoformat()
 
     try:
         entry_data = _get_entry_data(hass, entry_id)
@@ -1156,19 +1263,42 @@ async def ws_get_daily_wealth(
     try:
         totals = await async_run_executor_job(
             hass,
-            fetch_daily_wealth,
-            db_path,
-            start_date.isoformat(),
-            end_date.isoformat(),
+            lambda: fetch_daily_wealth(
+                db_path,
+                start_iso,
+                end_iso,
+                limit=limit,
+                offset=offset,
+            ),
         )
-        scopes: list[Any] = []
-        if include_scopes:
-            scopes = await async_run_executor_job(
+        if not totals:
+            message = f"Keine daily_wealth Daten im Zeitraum {start_iso}–{end_iso}"
+            connection.send_error(msg_id, "no_data", message)
+            return
+        account_filters, portfolio_filters = _extract_scope_filters(validated_scopes)
+        account_slices: list[Any] = []
+        portfolio_slices: list[Any] = []
+        if include_slices:
+            slice_start = totals[0].date if totals else start_iso
+            slice_end = totals[-1].date if totals else end_iso
+            account_slices = await async_run_executor_job(
                 hass,
                 lambda: fetch_daily_wealth_scopes(
                     db_path,
-                    start_date=start_date.isoformat(),
-                    end_date=end_date.isoformat(),
+                    scope_type="account",
+                    scope_ids=account_filters or None,
+                    start_date=slice_start,
+                    end_date=slice_end,
+                ),
+            )
+            portfolio_slices = await async_run_executor_job(
+                hass,
+                lambda: fetch_daily_wealth_scopes(
+                    db_path,
+                    scope_type="portfolio",
+                    scope_ids=portfolio_filters or None,
+                    start_date=slice_start,
+                    end_date=slice_end,
                 ),
             )
     except Exception:  # pragma: no cover - defensive logging
@@ -1180,15 +1310,14 @@ async def ws_get_daily_wealth(
         )
         return
 
-    payload: dict[str, Any] = {"records": [_serialize_daily_wealth(rec) for rec in totals]}
-    if include_scopes and scopes:
-        payload["scopes"] = {
-            "accounts": [
-                _serialize_daily_scope(rec) for rec in scopes if rec.scope_type == "account"
-            ],
-            "portfolios": [
-                _serialize_daily_scope(rec) for rec in scopes if rec.scope_type == "portfolio"
-            ],
+    payload: dict[str, Any] = {
+        "range": {"start": start_iso, "end": end_iso},
+        "records": [_serialize_daily_wealth(rec) for rec in totals],
+    }
+    if include_slices:
+        payload["slices"] = {
+            "accounts": [_serialize_daily_scope(rec) for rec in account_slices],
+            "portfolios": [_serialize_daily_scope(rec) for rec in portfolio_slices],
         }
 
     connection.send_result(msg_id, payload)
