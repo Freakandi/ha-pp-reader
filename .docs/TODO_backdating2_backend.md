@@ -3,58 +3,58 @@
 Derived from `.docs/wealth-backdating-plan.md` (Backend data handling / computation, API).
 
 ## Checklist
-- [ ] Recompute strategy
-  - [ ] Implement trigger on `.portfolio` ingestion to rebuild daily data from earliest transaction date to “today” (past transactions can change).
-  - [ ] Preserve incremental update path when past data unchanged between ingestions.
-  - [ ] Modules: `custom_components/pp_reader/data/coordinator.py` (import hooks), `metrics/pipeline.py` (stage orchestration).
-  - [ ] Pitfalls: avoid double-triggering runs; ensure rebuild runs after price/FX enrichment completes.
-- [ ] Holdings and prices
-  - [ ] Roll up transactions to holdings per (portfolio, security) as of each date.
-  - [ ] Resolve historical close per day; apply previous-trading-day fallback; flag `stale_price`.
-  - [ ] Convert holdings to EUR using same-day FX.
-  - [ ] Modules: `data/db_access.py` (transaction queries, historical prices), `logic/securities.py` (holding calc patterns), `prices/history_ingest.py` (price availability checks).
-  - [ ] Pitfalls: respect retired securities/portfolios; guard against missing price rows; ensure date math uses trading-day fallback not current date.
-- [ ] FX handling
-  - [ ] Fetch missing FX from Frankfurter during rebuild; start each currency series at its first transaction date.
-  - [ ] Compute `fx_coverage_ratio` for the day.
-  - [ ] Modules: `currencies/fx.py` helpers used in `metrics/accounts.py`; extend to bulk fetch date ranges.
-  - [ ] Pitfalls: cache rates to avoid repeated API calls; handle EUR as rate 1.0; log coverage gaps instead of failing hard.
-- [ ] Account balances
-  - [ ] Roll up account transactions to per-day balances; FX-convert non-EUR.
-  - [ ] Store `account_wealth_eur` and include in totals.
-  - [ ] Modules: `data/db_access.py` (account rollups), `metrics/accounts.py` patterns for FX conversion.
-  - [ ] Pitfalls: exclude internal transfers from global totals downstream; ensure balances use same-day FX with fallback coverage flag.
-- [ ] Cashflow buckets
-  - [ ] Derive dividends, interest from transaction types/notes.
-  - [ ] Derive inbound/outbound transfers; detect internal transfers via “other account” and exclude from global totals, include in per-account slices.
-  - [ ] Derive fees and taxes from transaction units/types.
+- [x] Recompute strategy
+  - [x] Implement trigger on `.portfolio` ingestion to rebuild daily data from earliest transaction date to “today” (past transactions can change).
+  - [x] Preserve incremental update path when past data unchanged between ingestions.
+  - [x] Modules: `custom_components/pp_reader/data/coordinator.py` (import hooks), `metrics/pipeline.py` (stage orchestration).
+  - [x] Pitfalls: avoid double-triggering runs; ensure rebuild runs after price/FX enrichment completes.
+- [x] Holdings and prices
+  - [x] Roll up transactions to holdings per (portfolio, security) as of each date.
+  - [x] Resolve historical close per day; apply previous-trading-day fallback; flag `stale_price`.
+  - [x] Convert holdings to EUR using same-day FX.
+  - [x] Modules: `data/db_access.py` (transaction queries, historical prices), `logic/securities.py` (holding calc patterns), `prices/history_ingest.py` (price availability checks).
+  - [x] Pitfalls: respect retired securities/portfolios; guard against missing price rows; ensure date math uses trading-day fallback not current date.
+- [x] FX handling
+  - [x] Fetch missing FX from Frankfurter during rebuild; start each currency series at its first transaction date.
+  - [x] Compute `fx_coverage_ratio` for the day.
+  - [x] Modules: `currencies/fx.py` helpers used in `metrics/accounts.py`; extend to bulk fetch date ranges.
+  - [x] Pitfalls: cache rates to avoid repeated API calls; handle EUR as rate 1.0; log coverage gaps instead of failing hard.
+- [x] Account balances
+  - [x] Roll up account transactions to per-day balances; FX-convert non-EUR.
+  - [x] Store `account_wealth_eur` and include in totals.
+  - [x] Modules: `data/db_access.py` (account rollups), `metrics/accounts.py` patterns for FX conversion.
+  - [x] Pitfalls: exclude internal transfers from global totals downstream; ensure balances use same-day FX with fallback coverage flag.
+- [x] Cashflow buckets
+  - [x] Derive dividends, interest from transaction types/notes.
+  - [x] Derive inbound/outbound transfers; detect internal transfers via “other account” and exclude from global totals, include in per-account slices.
+  - [x] Derive fees and taxes from transaction units/types.
   - [ ] (Optional) Compute performance-neutral movements (net transfers/adjustments) for UI mapping.
-  - [ ] Modules: `data/db_access.py` (transaction_units), `logic/accounting.py` transaction typing; follow existing enums/type markers.
-  - [ ] Pitfalls: classify by transaction type reliably; avoid double-counting internal transfers; ensure sign conventions are consistent (inbound positive, outbound negative).
+  - [x] Modules: `data/db_access.py` (transaction_units), `logic/accounting.py` transaction typing; follow existing enums/type markers.
+  - [x] Pitfalls: classify by transaction type reliably; avoid double-counting internal transfers; ensure sign conventions are consistent (inbound positive, outbound negative).
 - [ ] Coverage/provenance
-  - [ ] Compute `price_coverage_ratio`, `stale_price`, set `provenance` per run (e.g., metrics_pipeline vs backfill).
-  - [ ] Modules: backdating computation module (new helper) or `metrics/pipeline.py`; reuse `coverage_ratio` pattern from `metrics/common.py`.
-- [ ] Persistence
-  - [ ] Write `daily_wealth` rows per date with all metrics and coverage fields.
-  - [ ] Write per-scope slices (accounts, portfolios) with the same metrics and scope identifiers.
-  - [ ] Ensure idempotent upsert semantics (replace existing date rows on rebuild).
-  - [ ] Modules: `data/db_access.py` (insert/upsert/select helpers), `data/normalized_store.py` patterns for reading bundles.
-  - [ ] Pitfalls: wrap writes in a transaction; use UPSERT to replace existing rows; avoid locking hot tables.
-- [ ] API: websocket handler `pp_reader/get_daily_wealth`
-  - [ ] Validate inputs (single date or range, optional scope filters, flags for slices).
-  - [ ] Fetch daily records (and slices if requested) and serialize numbers/dates/flags.
-  - [ ] Support range responses and optional pagination/limits.
-  - [ ] Emit coverage warnings in payload (not silent nulls).
-  - [ ] Modules: `data/websocket.py` (command registration/handler), `data/api.ts` deserializer later for frontend.
-  - [ ] Pitfalls: do not break existing commands; keep payload shape stable; guard large ranges with limits.
+  - [x] Compute `price_coverage_ratio`, `stale_price`, set `provenance` per run (e.g., metrics_pipeline vs backfill).
+  - [x] Modules: backdating computation module (new helper) or `metrics/pipeline.py`; reuse `coverage_ratio` pattern from `metrics/common.py`.
+- [x] Persistence
+  - [x] Write `daily_wealth` rows per date with all metrics and coverage fields.
+  - [x] Write per-scope slices (accounts, portfolios) with the same metrics and scope identifiers.
+  - [x] Ensure idempotent upsert semantics (replace existing date rows on rebuild).
+  - [x] Modules: `data/db_access.py` (insert/upsert/select helpers), `data/normalized_store.py` patterns for reading bundles.
+  - [x] Pitfalls: wrap writes in a transaction; use UPSERT to replace existing rows; avoid locking hot tables.
+- [x] API: websocket handler `pp_reader/get_daily_wealth`
+  - [x] Validate inputs (single date or range, scope filters, flags for slices).
+  - [x] Fetch daily records (and slices if requested) and serialize numbers/dates/flags.
+  - [x] Support range responses and pagination/limits.
+  - [x] Emit coverage warnings in payload (not silent nulls).
+  - [x] Modules: `data/websocket.py` (command registration/handler), `data/api.ts` deserializer later for frontend.
+  - [x] Pitfalls: do not break existing commands; keep payload shape stable; guard large ranges with limits.
 - [ ] Wiring
-  - [ ] Hook computation into metrics pipeline after existing metrics finish.
-  - [ ] Ensure coordinator schedules rebuild on import completion.
-  - [ ] Modules: `metrics/pipeline.py` (invoke backdating stage after metrics persistence); `data/coordinator.py` (emit progress, schedule run).
-  - [ ] Pitfalls: avoid race with HA startup; ensure backdating stage can be disabled if needed (feature flag).
+  - [x] Hook computation into metrics pipeline after existing metrics finish.
+  - [x] Ensure coordinator schedules rebuild on import completion.
+  - [x] Modules: `metrics/pipeline.py` (invoke backdating stage after metrics persistence); `data/coordinator.py` (emit progress, schedule run).
+  - [x] Pitfalls: avoid race with HA startup
 - [ ] Tests (backend)
-  - [ ] Unit tests for holdings valuation with price fallback and FX coverage.
-  - [ ] Unit tests for cashflow buckets and internal transfer exclusion.
-  - [ ] Tests for per-scope slice generation.
-  - [ ] Tests for websocket handler responses (single date, range, with slices).
-  - [ ] Strategy: use SQLite fixtures similar to existing `tests/test_db_access.py`; mock FX fetch; add integration-style test for websocket handler using Home Assistant test harness if available.
+  - [x] Unit tests for holdings valuation with price fallback and FX coverage.
+  - [x] Unit tests for cashflow buckets and internal transfer exclusion.
+  - [x] Tests for per-scope slice generation.
+  - [x] Tests for websocket handler responses (single date, range, with slices).
+  - [x] Strategy: use SQLite fixtures similar to existing `tests/test_db_access.py`; mock FX fetch; add integration-style test for websocket handler using Home Assistant test harness if available.

@@ -16,9 +16,9 @@ import sqlite3
 import ssl
 import threading
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +58,15 @@ def _should_log_warning(date: str, currencies: set[str]) -> bool:
             return False
         logged.add(key)
     return True
+
+
+def _safe_float(value: Any) -> float | None:
+    """Best-effort float conversion for coverage calculations."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric
 
 
 # --- Hilfsfunktionen ---
@@ -481,3 +490,221 @@ def ensure_exchange_rates_for_dates_sync(
     thread.join()
     if result:
         raise result[0]
+
+
+# --- Backdating helpers ---
+
+
+def _parse_date_value(value: Any) -> date | None:
+    """Best-effort parsing for transaction date values stored as TEXT or int."""
+    if value in (None, ""):
+        return None
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+
+    if text_value.isdigit() and len(text_value) == 8:
+        try:
+            return date(
+                int(text_value[0:4]),
+                int(text_value[4:6]),
+                int(text_value[6:8]),
+            )
+        except ValueError:
+            return None
+
+    sanitized = text_value.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(sanitized).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(text_value[:10])
+        except ValueError:
+            return None
+
+
+def discover_currency_date_bounds(db_path: Path) -> dict[str, tuple[date, date]]:
+    """
+    Return earliest and latest transaction dates per non-EUR currency.
+
+    Dates stored as ISO strings or YYYYMMDD integers are normalized to date
+    objects; invalid rows are skipped.
+    """
+    bounds: dict[str, tuple[date, date]] = {}
+    with sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT
+                TRIM(UPPER(currency_code)) AS currency_code,
+                date
+            FROM transactions
+            WHERE currency_code IS NOT NULL
+              AND TRIM(currency_code) != ''
+            """
+        ).fetchall()
+
+    for row in rows:
+        currency = (row["currency_code"] or "").strip().upper()
+        if not currency or currency == "EUR":
+            continue
+
+        parsed = _parse_date_value(row["date"])
+        if parsed is None:
+            continue
+
+        if currency not in bounds:
+            bounds[currency] = (parsed, parsed)
+        else:
+            current_start, current_end = bounds[currency]
+            bounds[currency] = (
+                min(current_start, parsed),
+                max(current_end, parsed),
+            )
+
+    return bounds
+
+
+def _iter_dates(start: date, end: date) -> list[date]:
+    total_days = (end - start).days + 1
+    if total_days <= 0:
+        return []
+    return [start + timedelta(days=offset) for offset in range(total_days)]
+
+
+def build_fx_schedule_from_bounds(
+    bounds: Mapping[str, tuple[date, date]],
+    *,
+    until: date | None = None,
+) -> dict[date, set[str]]:
+    """
+    Build a date->currencies schedule from per-currency bounds.
+
+    Each currency is considered active from its start_date through the provided
+    `until` date (or its own end_date if `until` is earlier).
+    """
+    if not bounds:
+        return {}
+
+    effective_until = until or datetime.now(UTC).date()
+    schedule: dict[date, set[str]] = {}
+
+    for currency, (start_date, end_date) in bounds.items():
+        if start_date > effective_until:
+            continue
+        horizon = min(end_date, effective_until)
+        for day in _iter_dates(start_date, horizon):
+            schedule.setdefault(day, set()).add(currency)
+
+    return schedule
+
+
+def _compute_fx_coverage_ratio(
+    required_currencies: set[str],
+    rates: Mapping[str, Any],
+) -> float:
+    if not required_currencies:
+        return 1.0
+
+    covered = 0
+    for currency in required_currencies:
+        if currency == "EUR":
+            covered += 1
+            continue
+        if currency in rates and _safe_float(rates[currency]):
+            covered += 1
+    return round(covered / len(required_currencies), 3)
+
+
+async def async_ensure_exchange_rates_for_schedule(
+    hass: Any,
+    db_path: Path,
+    schedule: Mapping[date, set[str]],
+    *,
+    emit_progress: Callable[[str, Mapping[str, Any]], None] | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, float]:
+    """
+    Ensure FX rates exist for each date in the schedule and compute coverage.
+
+    The schedule maps a date to the set of non-EUR currencies active on that
+    day. Missing rates are fetched once per date across all currencies. The
+    returned mapping is ISO-date -> coverage ratio [0.0–1.0].
+    """
+    if not schedule:
+        return {}
+
+    coverage: dict[str, float] = {}
+
+    for day in sorted(schedule):
+        currencies = {code for code in schedule[day] if code and code != "EUR"}
+        date_str = day.isoformat()
+
+        if not currencies:
+            coverage[date_str] = 1.0
+            continue
+
+        existing = await _load_rates_for_date(db_path, date_str, conn=conn)
+        missing = currencies - set(existing.keys())
+
+        if missing:
+            try:
+                fetched = await _fetch_exchange_rates_with_retry(date_str, missing)
+                if fetched:
+                    await _save_rates(db_path, date_str, fetched, conn=conn)
+                elif _should_log_warning(date_str, missing):
+                    _LOGGER.warning(
+                        "Keine FX-Kurse erhalten für %s (Währungen: %s)",
+                        date_str,
+                        ", ".join(sorted(missing)),
+                    )
+            except Exception:  # noqa: BLE001 - defensive logging
+                _LOGGER.exception(
+                    "FX-Fetch für %s fehlgeschlagen (currencies=%s)",
+                    date_str,
+                    ", ".join(sorted(missing)),
+                )
+
+        refreshed = existing.copy()
+        if missing:
+            refreshed.update(await _load_rates_for_date(db_path, date_str, conn=conn))
+
+        coverage_ratio = _compute_fx_coverage_ratio(currencies, refreshed)
+        coverage[date_str] = coverage_ratio
+
+        if emit_progress is not None:
+            emit_progress(
+                "fx_schedule_day",
+                {
+                    "date": date_str,
+                    "currencies": sorted(currencies),
+                    "coverage_ratio": coverage_ratio,
+                },
+            )
+
+    return coverage
+
+
+async def async_prepare_exchange_rates_for_backdating(
+    hass: Any,
+    db_path: Path,
+    *,
+    until: date | None = None,
+    emit_progress: Callable[[str, Mapping[str, Any]], None] | None = None,
+) -> dict[str, float]:
+    """
+    Ensure FX coverage from first transaction per currency through `until`.
+
+    Returns ISO-date -> coverage ratio mapping for the planned window.
+    """
+    bounds = discover_currency_date_bounds(db_path)
+    if not bounds:
+        return {}
+
+    schedule = build_fx_schedule_from_bounds(bounds, until=until)
+    return await async_ensure_exchange_rates_for_schedule(
+        hass,
+        db_path,
+        schedule,
+        emit_progress=emit_progress,
+    )

@@ -1,0 +1,132 @@
+"""Aggregate backdating component snapshots into daily wealth records."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, timedelta
+from typing import Iterable, Mapping, Sequence
+
+from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot
+from custom_components.pp_reader.backdating.cashflows import DailyCashflowSnapshot
+from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot
+
+
+@dataclass(slots=True)
+class DailyWealthAggregate:
+    """Aggregated daily wealth record ready for persistence or serialization."""
+
+    date: str
+    total_wealth_eur: float
+    portfolio_wealth_eur: float
+    account_wealth_eur: float
+    dividends_eur: float
+    interest_eur: float
+    inbound_transfers_eur: float
+    outbound_transfers_eur: float
+    performance_neutral_movements: float
+    fees_eur: float
+    taxes_eur: float
+    fx_coverage_ratio: float | None
+    price_coverage_ratio: float | None
+    stale_price: bool
+    provenance: str | None = None
+
+
+def build_daily_wealth_records(
+    start_date: date,
+    end_date: date,
+    *,
+    holdings: Sequence[DailyHoldingsSnapshot] | None = None,
+    accounts: Sequence[DailyAccountSnapshot] | None = None,
+    cashflows: Sequence[DailyCashflowSnapshot] | None = None,
+    provenance: str | None = None,
+) -> list[DailyWealthAggregate]:
+    """
+    Combine component snapshots into per-day wealth records.
+
+    Missing components default to zeroed buckets and full coverage (1.0) to
+    keep aggregation resilient; coverage ratios are the minimum of available
+    component ratios to err on the side of caution.
+    """
+    if start_date > end_date:
+        message = "start_date must be on or before end_date"
+        raise ValueError(message)
+
+    holdings_by_date = {snap.date: snap for snap in holdings or ()}
+    accounts_by_date = {snap.date: snap for snap in accounts or ()}
+    cashflows_by_date = {snap.date: snap for snap in cashflows or ()}
+
+    records: list[DailyWealthAggregate] = []
+    cursor = start_date
+    while cursor <= end_date:
+        date_iso = cursor.isoformat()
+        holdings_snap = holdings_by_date.get(date_iso)
+        accounts_snap = accounts_by_date.get(date_iso)
+        cashflow_snap = cashflows_by_date.get(date_iso)
+
+        portfolio_wealth = holdings_snap.total_wealth_eur if holdings_snap else 0.0
+        account_wealth = accounts_snap.account_wealth_eur if accounts_snap else 0.0
+        dividends = cashflow_snap.dividends_eur if cashflow_snap else 0.0
+        interest = cashflow_snap.interest_eur if cashflow_snap else 0.0
+        inbound = cashflow_snap.inbound_transfers_eur if cashflow_snap else 0.0
+        outbound = cashflow_snap.outbound_transfers_eur if cashflow_snap else 0.0
+        fees = cashflow_snap.fees_eur if cashflow_snap else 0.0
+        taxes = cashflow_snap.taxes_eur if cashflow_snap else 0.0
+
+        total_wealth = round(portfolio_wealth + account_wealth, 6)
+
+        fx_ratios = _filter_ratios(
+            [
+                getattr(holdings_snap, "fx_coverage_ratio", None),
+                getattr(accounts_snap, "fx_coverage_ratio", None),
+                getattr(cashflow_snap, "fx_coverage_ratio", None),
+            ]
+        )
+        fx_coverage_ratio = min(fx_ratios) if fx_ratios else 1.0
+
+        price_ratios = _filter_ratios(
+            [getattr(holdings_snap, "price_coverage_ratio", None)]
+        )
+        price_coverage_ratio = min(price_ratios) if price_ratios else 1.0
+
+        stale_price = bool(getattr(holdings_snap, "stale_price", False))
+
+        records.append(
+            DailyWealthAggregate(
+                date=date_iso,
+                total_wealth_eur=total_wealth,
+                portfolio_wealth_eur=portfolio_wealth,
+                account_wealth_eur=account_wealth,
+                dividends_eur=round(dividends, 6),
+                interest_eur=round(interest, 6),
+                inbound_transfers_eur=round(inbound, 6),
+                outbound_transfers_eur=round(outbound, 6),
+                performance_neutral_movements=0.0,
+                fees_eur=round(fees, 6),
+                taxes_eur=round(taxes, 6),
+                fx_coverage_ratio=fx_coverage_ratio,
+                price_coverage_ratio=price_coverage_ratio,
+                stale_price=stale_price,
+                provenance=provenance,
+            )
+        )
+        cursor += timedelta(days=1)
+
+    return records
+
+
+def _filter_ratios(values: Iterable[float | None]) -> list[float]:
+    """Return valid coverage ratios within expected bounds."""
+    ratios: list[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric < 0 or numeric > 1:
+            continue
+        ratios.append(numeric)
+    return ratios
+

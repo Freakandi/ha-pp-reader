@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import replace
-from datetime import UTC, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from custom_components.pp_reader.backdating.pipeline import (
+    BackdatingResult,
+    async_run_backdating_rebuild,
+)
 from custom_components.pp_reader.data.db_access import (
     MetricRunMetadata,
     load_metric_run,
@@ -31,6 +35,14 @@ ProgressCallback = Callable[[str, Mapping[str, Any]], None]
 StageRunner = Callable[["HomeAssistant", Path, str], Awaitable[list[Any]]]
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.pipeline")
+
+
+@dataclass(slots=True)
+class MetricsPipelineResult:
+    """Aggregate metrics and optional backdating outcomes."""
+
+    metric_run: MetricRunMetadata
+    backdating: BackdatingResult | None = None
 
 
 async def async_refresh_all(
@@ -171,6 +183,37 @@ async def async_refresh_all(
             duration_ms=final_run.duration_ms,
         )
         return final_run
+
+
+async def async_refresh_all_with_backdating(
+    hass: HomeAssistant,
+    db_path: Path | str,
+    *,
+    trigger: str = "coordinator",
+    provenance: str | None = None,
+    emit_progress: ProgressCallback | None = None,
+    backdating_today: date | None = None,
+) -> MetricsPipelineResult:
+    """Run the metrics pipeline and then orchestrate a backdating rebuild."""
+    metric_run = await async_refresh_all(
+        hass,
+        db_path,
+        trigger=trigger,
+        provenance=provenance,
+        emit_progress=emit_progress,
+    )
+
+    backdating_result = await async_run_backdating_rebuild(
+        hass,
+        db_path,
+        trigger=trigger,
+        ingestion_run_uuid=provenance,
+        provenance=provenance,
+        emit_progress=emit_progress,
+        today=backdating_today,
+    )
+
+    return MetricsPipelineResult(metric_run=metric_run, backdating=backdating_result)
 
 
 def _utc_now_isoformat() -> str:

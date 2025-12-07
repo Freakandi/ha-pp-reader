@@ -36,7 +36,10 @@ from custom_components.pp_reader.const import (
 )
 from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.feature_flags import is_enabled
-from custom_components.pp_reader.metrics.pipeline import async_refresh_all
+from custom_components.pp_reader.metrics.pipeline import (
+    async_refresh_all,
+    async_refresh_all_with_backdating,
+)
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
     build_history_targets_from_parsed,
@@ -534,7 +537,11 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         self._process_enrichment_outcome(summary, errors)
 
-        await self._schedule_metrics_refresh(summary, errors=errors)
+        await self._schedule_metrics_refresh(
+            summary,
+            errors=errors,
+            backdating=True,
+        )
         await self._schedule_normalization_refresh(summary)
 
         # Ensure progress events from earlier stages flush before emitting completion.
@@ -547,6 +554,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         summary: dict[str, Any],
         *,
         errors: Iterable[str],
+        backdating: bool = False,
     ) -> None:
         """Trigger the metrics engine after enrichment tasks finished."""
         error_list = list(errors)
@@ -583,14 +591,26 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             },
         )
 
+        backdating_result = None
         try:
-            run = await async_refresh_all(
-                self.hass,
-                self.db_path,
-                trigger="coordinator",
-                provenance=self._last_ingestion_run_id,
-                emit_progress=self._emit_metrics_progress,
-            )
+            if backdating:
+                pipeline_result = await async_refresh_all_with_backdating(
+                    self.hass,
+                    self.db_path,
+                    trigger="coordinator",
+                    provenance=self._last_ingestion_run_id,
+                    emit_progress=self._emit_metrics_progress,
+                )
+                run = pipeline_result.metric_run
+                backdating_result = pipeline_result.backdating
+            else:
+                run = await async_refresh_all(
+                    self.hass,
+                    self.db_path,
+                    trigger="coordinator",
+                    provenance=self._last_ingestion_run_id,
+                    emit_progress=self._emit_metrics_progress,
+                )
         except Exception as err:  # pragma: no cover - defensive fallback
             summary["metrics_status"] = "failed"
             summary["metrics_error"] = str(err)
@@ -613,6 +633,32 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             summary["metrics_error"] = run.error_message
         else:
             summary.pop("metrics_error", None)
+        if backdating_result is not None:
+            summary.update(
+                {
+                    "backdating_status": backdating_result.status,
+                    "backdating_reason": backdating_result.reason,
+                }
+            )
+            if backdating_result.plan is not None:
+                summary["backdating_start_date"] = (
+                    backdating_result.plan.start_date.isoformat()
+                )
+                summary["backdating_end_date"] = (
+                    backdating_result.plan.end_date.isoformat()
+                )
+                if backdating_result.plan.ingestion_run_uuid:
+                    summary["backdating_ingestion_run_uuid"] = (
+                        backdating_result.plan.ingestion_run_uuid
+                    )
+            if backdating_result.error:
+                summary["backdating_error"] = backdating_result.error
+            if backdating_result.started_at:
+                summary["backdating_started_at"] = backdating_result.started_at
+            if backdating_result.finished_at:
+                summary["backdating_finished_at"] = backdating_result.finished_at
+            if backdating_result.provenance:
+                summary["backdating_provenance"] = backdating_result.provenance
 
     async def _schedule_normalization_refresh(self, summary: dict[str, Any]) -> None:
         """Run the normalization pipeline once metrics finished."""

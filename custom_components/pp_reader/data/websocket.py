@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Iterable, Mapping
-from datetime import datetime
+from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -21,6 +21,10 @@ from homeassistant.components import websocket_api
 from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
+)
+from custom_components.pp_reader.data.db_access import (
+    fetch_daily_wealth,
+    fetch_daily_wealth_scopes,
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
@@ -41,6 +45,7 @@ _LOGGER = logging.getLogger(__name__)
 NEWS_PROMPT_PLACEHOLDER = "{TICKER}"
 NEWS_PROMPT_PATH = Path(__file__).resolve().parent.parent / "util" / "search_news.md"
 DOMAIN = "pp_reader"
+_MAX_DAILY_WEALTH_RANGE_DAYS = 366
 
 
 def _get_entry_data(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:
@@ -63,6 +68,16 @@ def _resolve_db_path(entry_data: Mapping[str, Any]) -> Path:
         message = "db_path für den Config Entry fehlt"
         raise ValueError(message)
     return Path(db_path_raw)
+
+
+def _parse_iso_date(value: str | None) -> date | None:
+    """Parse an ISO date string (YYYY-MM-DD) into a date object."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
 
 
 def _load_news_prompt_template() -> tuple[str, str]:
@@ -464,6 +479,51 @@ def _wrap_with_loop_fallback(
 
     wrapper.__wrapped__ = original  # type: ignore[attr-defined]
     return wrapper
+
+
+def _serialize_daily_wealth(record: Any) -> dict[str, Any]:
+    """Convert a DailyWealthRecord into a JSON-friendly mapping."""
+    return {
+        "date": record.date,
+        "total_wealth_eur": record.total_wealth_eur,
+        "portfolio_wealth_eur": record.portfolio_wealth_eur,
+        "account_wealth_eur": record.account_wealth_eur,
+        "dividends_eur": record.dividends_eur,
+        "interest_eur": record.interest_eur,
+        "inbound_transfers_eur": record.inbound_transfers_eur,
+        "outbound_transfers_eur": record.outbound_transfers_eur,
+        "performance_neutral_movements": record.performance_neutral_movements,
+        "fees_eur": record.fees_eur,
+        "taxes_eur": record.taxes_eur,
+        "fx_coverage_ratio": record.fx_coverage_ratio,
+        "price_coverage_ratio": record.price_coverage_ratio,
+        "stale_price": bool(record.stale_price),
+        "provenance": record.provenance,
+    }
+
+
+def _serialize_daily_scope(record: Any) -> dict[str, Any]:
+    """Convert a DailyWealthScopeRecord into a JSON-friendly mapping."""
+    return {
+        "scope_type": record.scope_type,
+        "scope_id": record.scope_id,
+        "scope_name": record.scope_name,
+        "date": record.date,
+        "total_wealth_eur": record.total_wealth_eur,
+        "portfolio_wealth_eur": record.portfolio_wealth_eur,
+        "account_wealth_eur": record.account_wealth_eur,
+        "dividends_eur": record.dividends_eur,
+        "interest_eur": record.interest_eur,
+        "inbound_transfers_eur": record.inbound_transfers_eur,
+        "outbound_transfers_eur": record.outbound_transfers_eur,
+        "performance_neutral_movements": record.performance_neutral_movements,
+        "fees_eur": record.fees_eur,
+        "taxes_eur": record.taxes_eur,
+        "fx_coverage_ratio": record.fx_coverage_ratio,
+        "price_coverage_ratio": record.price_coverage_ratio,
+        "stale_price": bool(record.stale_price),
+        "provenance": record.provenance,
+    }
 
 
 # === Dashboard Websocket Test-Command ===
@@ -1045,8 +1105,101 @@ async def ws_get_portfolio_positions(
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_daily_wealth",
+        vol.Required("entry_id"): str,
+        vol.Required("start_date"): str,
+        vol.Optional("end_date"): str,
+        vol.Optional("include_scopes", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_get_daily_wealth(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return aggregated daily wealth records (and optional scope slices)."""
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+    start_date_raw = msg.get("start_date")
+    end_date_raw = msg.get("end_date") or start_date_raw
+    include_scopes = bool(msg.get("include_scopes", False))
+
+    start_date = _parse_iso_date(start_date_raw)
+    end_date = _parse_iso_date(end_date_raw)
+
+    if not entry_id:
+        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
+        return
+    if start_date is None or end_date is None:
+        connection.send_error(msg_id, "invalid_format", "Ungültiges Datum")
+        return
+    if end_date < start_date:
+        connection.send_error(msg_id, "invalid_format", "end_date < start_date")
+        return
+    if (end_date - start_date).days > _MAX_DAILY_WEALTH_RANGE_DAYS:
+        connection.send_error(msg_id, "range_too_large", "Datumsbereich zu groß")
+        return
+
+    try:
+        entry_data = _get_entry_data(hass, entry_id)
+        db_path = _resolve_db_path(entry_data)
+    except LookupError as err:
+        connection.send_error(msg_id, "not_found", str(err))
+        return
+    except ValueError as err:
+        connection.send_error(msg_id, "db_error", str(err))
+        return
+
+    try:
+        totals = await async_run_executor_job(
+            hass,
+            fetch_daily_wealth,
+            db_path,
+            start_date.isoformat(),
+            end_date.isoformat(),
+        )
+        scopes: list[Any] = []
+        if include_scopes:
+            scopes = await async_run_executor_job(
+                hass,
+                lambda: fetch_daily_wealth_scopes(
+                    db_path,
+                    start_date=start_date.isoformat(),
+                    end_date=end_date.isoformat(),
+                ),
+            )
+    except Exception:  # pragma: no cover - defensive logging
+        _LOGGER.exception("WebSocket: Fehler beim Laden der daily_wealth Daten")
+        connection.send_error(
+            msg_id,
+            "db_error",
+            "Fehler beim Laden der daily_wealth Daten",
+        )
+        return
+
+    payload: dict[str, Any] = {"records": [_serialize_daily_wealth(rec) for rec in totals]}
+    if include_scopes and scopes:
+        payload["scopes"] = {
+            "accounts": [
+                _serialize_daily_scope(rec) for rec in scopes if rec.scope_type == "account"
+            ],
+            "portfolios": [
+                _serialize_daily_scope(rec) for rec in scopes if rec.scope_type == "portfolio"
+            ],
+        }
+
+    connection.send_result(msg_id, payload)
+
+
+ws_get_daily_wealth = _wrap_with_loop_fallback(ws_get_daily_wealth)
+
+
 def async_register_commands(hass: HomeAssistant) -> None:
     """Registriert alle WebSocket-Commands dieses Modules."""
     websocket_api.async_register_command(hass, ws_get_portfolio_positions)
     websocket_api.async_register_command(hass, ws_get_security_history)
     websocket_api.async_register_command(hass, ws_get_security_snapshot)
+    websocket_api.async_register_command(hass, ws_get_daily_wealth)
