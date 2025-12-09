@@ -1,7 +1,7 @@
+import { FlatCompat } from "@eslint/eslintrc";
+import js from "@eslint/js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import js from "@eslint/js";
-import { FlatCompat } from "@eslint/eslintrc";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +14,7 @@ const compat = new FlatCompat({
 
 export default [
   {
-    ignores: ["custom_components/**", "dist/**", "node_modules/**"],
+    ignores: ["custom_components/**", "dist/**", "node_modules/**", "eslint.config.js"],
   },
   ...compat.config({
     env: {
@@ -23,7 +23,7 @@ export default [
     },
     parser: "@typescript-eslint/parser",
     parserOptions: {
-      project: ["./tsconfig.json"],
+      project: ["./tsconfig.json", "./tsconfig.test.json"],
       tsconfigRootDir: __dirname,
       sourceType: "module",
     },

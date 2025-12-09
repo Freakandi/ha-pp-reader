@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 const HA_USERNAME = process.env.PP_READER_HA_USERNAME ?? 'dev';
 const HA_PASSWORD = process.env.PP_READER_HA_PASSWORD ?? 'dev';
@@ -27,7 +27,7 @@ async function ensureSignedIn(page: Page): Promise<void> {
   const loginButton = page.getByRole('button', { name: /log in|anmelden/i });
   if (await loginButton.count()) {
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30_000 }).catch(() => {}),
+      page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {}),
       loginButton.first().click(),
     ]);
   } else {
