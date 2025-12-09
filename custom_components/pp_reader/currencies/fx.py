@@ -494,6 +494,9 @@ def ensure_exchange_rates_for_dates_sync(
 
 # --- Backdating helpers ---
 
+_COMPACT_DATE_LEN = 8
+MAX_EPOCH_DAY_CUTOFF = 100000
+
 
 def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
     """Best-effort parsing for transaction date values stored as TEXT or int."""
@@ -503,15 +506,20 @@ def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
     if not text_value:
         return None
 
-    if text_value.isdigit() and len(text_value) == _COMPACT_DATE_LEN:
-        try:
-            return date(
-                int(text_value[0:4]),
-                int(text_value[4:6]),
-                int(text_value[6:8]),
-            )
-        except ValueError:
-            return None
+    if text_value.isdigit():
+        if len(text_value) == _COMPACT_DATE_LEN:
+            try:
+                return date(
+                    int(text_value[0:4]),
+                    int(text_value[4:6]),
+                    int(text_value[6:8]),
+                )
+            except ValueError:
+                return None
+        # Handle epoch days (e.g. 19733 for 2024-01-12)
+        # 10000 days is around 1997. 50000 is 2106.
+        if 0 <= int(text_value) <= MAX_EPOCH_DAY_CUTOFF:
+            return date(1970, 1, 1) + timedelta(days=int(text_value))
 
     sanitized = text_value.replace("Z", "+00:00")
     try:
