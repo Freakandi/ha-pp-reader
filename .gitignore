@@ -31,3 +31,4 @@ tmp/playwright-report/
 tmp/playwright-results/
 tests/ui/playwright/*
 !tests/ui/playwright/AGENTS.md
+tests/ui/agent_scratchpad/

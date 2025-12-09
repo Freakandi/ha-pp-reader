@@ -14,6 +14,18 @@ Backend tooling must run inside the project virtual environment populated from `
   - `./scripts/environment_setup` installs the same dependencies globally (no virtualenv).
 - Install Node.js dependencies once after cloning: `npm install`.
 
+## UI Verification / Headless Testing (IMPORTANT)
+**Environment**: This workspace runs on a headless Raspberry Pi. **Do not** attempt to launch GUI browsers (Chrome/Firefox) directly via typical agent browser tools; they will fail or timeout.
+
+**Tooling**: Use Playwright via `npm run test:ui` (bundled with headless binaries).
+
+**Strategies**:
+1.  **Simple Visual Check**: Use the slash command `/verify-ui` (or see `.agent/workflows/verify-ui.md`) to capture a screenshot.
+2.  **Complex Interaction Testing**: Use the slash command `/verify-complex-interaction` (or see `.agent/workflows/verify-complex-interaction.md`).
+    *   **Method**: "Probe, Don't Guess". Write a temporary test in `tests/ui/agent_scratchpad/` to programmatically assert behavior (sorting, zooming, tooltips).
+    *   **Why**: Code assertions are more reliable than visual interpretation in a headless environment.
+    *   **Bugs**: If a scratchpad test reveals a bug, **promote it** to a permanent test in `tests/ui/`.
+
 ## Day-to-day workflow
 - Start the development Home Assistant instance with `./scripts/develop`. The script seeds `config/`, maintains the `/config` symlink, and exports `PYTHONPATH` so Home Assistant sees `custom_components/`.
 - Format and lint Python code with `./scripts/lint` (runs `ruff format .` then `ruff check . --fix`), available in venv-ha.
