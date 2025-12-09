@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
@@ -18,13 +19,13 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 
-from custom_components.pp_reader.data.normalized_store import (
-    SnapshotBundle,
-    async_load_latest_snapshot_bundle,
-)
 from custom_components.pp_reader.data.db_access import (
     fetch_daily_wealth,
     fetch_daily_wealth_scopes,
+)
+from custom_components.pp_reader.data.normalized_store import (
+    SnapshotBundle,
+    async_load_latest_snapshot_bundle,
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
@@ -1148,38 +1149,39 @@ async def ws_get_portfolio_positions(
     )
 
 
-@websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
-@websocket_api.async_response
-async def ws_get_daily_wealth(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
+@dataclass(slots=True)
+class DailyWealthRequestParams:
+    """Parsed and validated request parameters."""
+
+    entry_id: str
+    start_date: date
+    end_date: date
+    include_slices: bool
+    limit: int | None
+    offset: int | None
+    account_filters: list[str] | None
+    portfolio_filters: list[str] | None
+
+
+def _validate_daily_wealth_request(  # noqa: PLR0911, PLR0912
     msg: dict[str, Any],
-) -> None:
-    """Return aggregated daily wealth records (and optional per-scope slices)."""
-    msg_id = msg.get("id")
+) -> tuple[DailyWealthRequestParams | None, tuple[str, str] | None]:
+    """Validate the WebSocket request payload."""
     entry_id = msg.get("entry_id")
-    include_slices = bool(msg.get("include_slices", msg.get("include_scopes", False)))
+    if not entry_id:
+        return None, ("invalid_format", "entry_id erforderlich")
+
     requested_date = msg.get("date")
     requested_range = msg.get("range")
-    requested_scopes = msg.get("scopes")
 
-    if not entry_id:
-        connection.send_error(msg_id, "invalid_format", "entry_id erforderlich")
-        return
     if requested_date and requested_range:
-        connection.send_error(
-            msg_id,
-            "invalid_format",
-            "date und range schließen sich aus",
-        )
-        return
+        return None, ("invalid_format", "date und range schließen sich aus")
     if not requested_date and not requested_range:
-        connection.send_error(msg_id, "invalid_format", "date oder range erforderlich")
-        return
+        return None, ("invalid_format", "date oder range erforderlich")
 
     if requested_range is not None and not isinstance(requested_range, Mapping):
-        connection.send_error(msg_id, "invalid_format", "range muss start/end enthalten")
-        return
+        return None, ("invalid_format", "range muss start/end enthalten")
+
     try:
         validated_range = (
             _DAILY_WEALTH_RANGE_SCHEMA(requested_range)
@@ -1187,12 +1189,10 @@ async def ws_get_daily_wealth(
             else None
         )
     except vol.Invalid:
-        connection.send_error(msg_id, "invalid_format", "Ungültiger range")
-        return
+        return None, ("invalid_format", "Ungültiger range")
 
     if requested_date is not None and not isinstance(requested_date, str):
-        connection.send_error(msg_id, "invalid_format", "Ungültiges Datum")
-        return
+        return None, ("invalid_format", "Ungültiges Datum")
 
     if validated_range:
         start_date_raw = validated_range.get("start")
@@ -1205,53 +1205,114 @@ async def ws_get_daily_wealth(
     end_date = _parse_iso_date(end_date_raw)
 
     if start_date is None or end_date is None:
-        connection.send_error(msg_id, "invalid_format", "Ungültiges Datum")
-        return
+        return None, ("invalid_format", "Ungültiges Datum")
     if end_date < start_date:
-        connection.send_error(msg_id, "invalid_format", "end_date < start_date")
-        return
+        return None, ("invalid_format", "end_date < start_date")
     if (end_date - start_date).days > _MAX_DAILY_WEALTH_RANGE_DAYS:
-        connection.send_error(msg_id, "range_too_large", "Datumsbereich zu groß")
-        return
+        return None, ("range_too_large", "Datumsbereich zu groß")
 
     limit_raw = msg.get("limit")
     offset_raw = msg.get("offset", 0)
-    if limit_raw is not None and (
-        not isinstance(limit_raw, int) or limit_raw <= 0
-    ):
-        connection.send_error(msg_id, "invalid_format", "limit ungültig")
-        return
+
+    if limit_raw is not None and (not isinstance(limit_raw, int) or limit_raw <= 0):
+        return None, ("invalid_format", "limit ungültig")
     if not isinstance(offset_raw, int) or offset_raw < 0:
-        connection.send_error(msg_id, "invalid_format", "offset ungültig")
-        return
+        return None, ("invalid_format", "offset ungültig")
     if offset_raw and limit_raw is None:
-        connection.send_error(msg_id, "invalid_format", "offset erfordert limit")
-        return
+        return None, ("invalid_format", "offset erfordert limit")
 
     limit = (
         min(limit_raw, _MAX_DAILY_WEALTH_RANGE_DAYS) if limit_raw is not None else None
     )
     offset = offset_raw if (limit is not None or offset_raw) else None
 
+    requested_scopes = msg.get("scopes")
     validated_scopes = None
     if requested_scopes is not None:
         if not isinstance(requested_scopes, Mapping):
-            connection.send_error(msg_id, "invalid_format", "scopes ungültig")
-            return
+            return None, ("invalid_format", "scopes ungültig")
         try:
             validated_scopes = _DAILY_WEALTH_SCOPE_FILTER_SCHEMA(requested_scopes)
         except vol.Invalid:
-            connection.send_error(msg_id, "invalid_format", "scopes ungültig")
-            return
+            return None, ("invalid_format", "scopes ungültig")
+
+    include_slices = bool(msg.get("include_slices", msg.get("include_scopes", False)))
     if validated_scopes and not include_slices:
-        connection.send_error(msg_id, "invalid_format", "scopes erfordern include_slices")
+        return None, ("invalid_format", "scopes erfordern include_slices")
+
+    account_filters, portfolio_filters = _extract_scope_filters(validated_scopes)
+
+    return DailyWealthRequestParams(
+        entry_id=entry_id,
+        start_date=start_date,
+        end_date=end_date,
+        include_slices=include_slices,
+        limit=limit,
+        offset=offset,
+        account_filters=account_filters,
+        portfolio_filters=portfolio_filters,
+    ), None
+
+
+async def _fetch_daily_wealth_slices(
+    hass: HomeAssistant,
+    db_path: Path | str,
+    params: DailyWealthRequestParams,
+    totals: list[Any],
+) -> tuple[list[Any], list[Any]]:
+    """Fetch per-scope slices if requested."""
+    if not params.include_slices:
+        return [], []
+
+    slice_start = totals[0].date if totals else params.start_date.isoformat()
+    slice_end = totals[-1].date if totals else params.end_date.isoformat()
+
+    db_path_obj = Path(db_path)
+
+    account_slices = await async_run_executor_job(
+        hass,
+        lambda: fetch_daily_wealth_scopes(
+            db_path_obj,
+            scope_type="account",
+            scope_ids=params.account_filters or None,
+            start_date=slice_start,
+            end_date=slice_end,
+        ),
+    )
+    portfolio_slices = await async_run_executor_job(
+        hass,
+        lambda: fetch_daily_wealth_scopes(
+            db_path_obj,
+            scope_type="portfolio",
+            scope_ids=params.portfolio_filters or None,
+            start_date=slice_start,
+            end_date=slice_end,
+        ),
+    )
+    return account_slices, portfolio_slices
+
+
+@websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
+@websocket_api.async_response
+async def ws_get_daily_wealth(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return aggregated daily wealth records (and optional per-scope slices)."""
+    msg_id = msg.get("id")
+
+    params, error = _validate_daily_wealth_request(msg)
+    if error:
+        code, message = error
+        connection.send_error(msg_id, code, message)
         return
 
-    start_iso = start_date.isoformat()
-    end_iso = end_date.isoformat()
+    # params is guaranteed to be not None here due to error check
+    assert params is not None  # noqa: S101
 
     try:
-        entry_data = _get_entry_data(hass, entry_id)
+        entry_data = _get_entry_data(hass, params.entry_id)
         db_path = _resolve_db_path(entry_data)
     except LookupError as err:
         connection.send_error(msg_id, "not_found", str(err))
@@ -1260,6 +1321,9 @@ async def ws_get_daily_wealth(
         connection.send_error(msg_id, "db_error", str(err))
         return
 
+    start_iso = params.start_date.isoformat()
+    end_iso = params.end_date.isoformat()
+
     try:
         totals = await async_run_executor_job(
             hass,
@@ -1267,40 +1331,18 @@ async def ws_get_daily_wealth(
                 db_path,
                 start_iso,
                 end_iso,
-                limit=limit,
-                offset=offset,
+                limit=params.limit,
+                offset=params.offset,
             ),
         )
         if not totals:
-            message = f"Keine daily_wealth Daten im Zeitraum {start_iso}–{end_iso}"
+            message = f"Keine daily_wealth Daten im Zeitraum {start_iso}-{end_iso}"
             connection.send_error(msg_id, "no_data", message)
             return
-        account_filters, portfolio_filters = _extract_scope_filters(validated_scopes)
-        account_slices: list[Any] = []
-        portfolio_slices: list[Any] = []
-        if include_slices:
-            slice_start = totals[0].date if totals else start_iso
-            slice_end = totals[-1].date if totals else end_iso
-            account_slices = await async_run_executor_job(
-                hass,
-                lambda: fetch_daily_wealth_scopes(
-                    db_path,
-                    scope_type="account",
-                    scope_ids=account_filters or None,
-                    start_date=slice_start,
-                    end_date=slice_end,
-                ),
-            )
-            portfolio_slices = await async_run_executor_job(
-                hass,
-                lambda: fetch_daily_wealth_scopes(
-                    db_path,
-                    scope_type="portfolio",
-                    scope_ids=portfolio_filters or None,
-                    start_date=slice_start,
-                    end_date=slice_end,
-                ),
-            )
+
+        account_slices, portfolio_slices = await _fetch_daily_wealth_slices(
+            hass, db_path, params, totals
+        )
     except Exception:  # pragma: no cover - defensive logging
         _LOGGER.exception("WebSocket: Fehler beim Laden der daily_wealth Daten")
         connection.send_error(
@@ -1314,7 +1356,7 @@ async def ws_get_daily_wealth(
         "range": {"start": start_iso, "end": end_iso},
         "records": [_serialize_daily_wealth(rec) for rec in totals],
     }
-    if include_slices:
+    if params.include_slices:
         payload["slices"] = {
             "accounts": [_serialize_daily_scope(rec) for rec in account_slices],
             "portfolios": [_serialize_daily_scope(rec) for rec in portfolio_slices],

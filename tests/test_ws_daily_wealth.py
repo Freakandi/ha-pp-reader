@@ -351,7 +351,9 @@ async def test_ws_get_daily_wealth_rejects_date_and_range(tmp_path: Path) -> Non
     )
 
     assert connection.sent == []
-    assert connection.errors == [(5, "invalid_format", "date und range schließen sich aus")]
+    assert connection.errors == [
+        (5, "invalid_format", "date und range schließen sich aus")
+    ]
 
 
 @pytest.mark.asyncio
@@ -425,7 +427,7 @@ async def test_ws_get_daily_wealth_errors_when_no_data(tmp_path: Path) -> None:
 
     assert connection.sent == []
     assert connection.errors == [
-        (8, "no_data", "Keine daily_wealth Daten im Zeitraum 2024-02-01–2024-02-01")
+        (8, "no_data", "Keine daily_wealth Daten im Zeitraum 2024-02-01-2024-02-01")
     ]
 
 
@@ -455,7 +457,9 @@ async def test_ws_get_daily_wealth_rejects_invalid_limit(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_ws_get_daily_wealth_omits_slices_when_not_requested(tmp_path: Path) -> None:
+async def test_ws_get_daily_wealth_omits_slices_when_not_requested(
+    tmp_path: Path,
+) -> None:
     """Handler should not include slices unless requested."""
     entry_id = "entry-10"
     db_path = tmp_path / "ws_wealth_no_slices.db"
@@ -505,8 +509,12 @@ async def test_ws_get_daily_wealth_applies_limit_and_offset(tmp_path: Path) -> N
     assert connection.errors == []
     assert connection.sent[0][1]["records"][0]["date"] == "2024-01-10"
     assert len(connection.sent[0][1]["records"]) == 1
-    assert {rec["date"] for rec in connection.sent[0][1]["slices"]["accounts"]} == {"2024-01-10"}
-    assert {rec["date"] for rec in connection.sent[0][1]["slices"]["portfolios"]} == {"2024-01-10"}
+    assert {rec["date"] for rec in connection.sent[0][1]["slices"]["accounts"]} == {
+        "2024-01-10"
+    }
+    assert {rec["date"] for rec in connection.sent[0][1]["slices"]["portfolios"]} == {
+        "2024-01-10"
+    }
 
     connection_offset = StubConnection()
     await WS_GET_DAILY_WEALTH(
@@ -531,7 +539,9 @@ async def test_ws_get_daily_wealth_applies_limit_and_offset(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_ws_get_daily_wealth_preserves_null_and_bool_types(tmp_path: Path) -> None:
+async def test_ws_get_daily_wealth_preserves_null_and_bool_types(
+    tmp_path: Path,
+) -> None:
     """Handler should preserve numeric/boolean types and null coverage."""
     entry_id = "entry-12"
     db_path = tmp_path / "ws_wealth_types.db"

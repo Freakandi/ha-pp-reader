@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
-import sqlite3
-from datetime import date
-
 import pytest
 
-from custom_components.pp_reader.backdating.accounts import AccountValuation, DailyAccountSnapshot
+from custom_components.pp_reader.backdating.accounts import (
+    AccountValuation,
+    DailyAccountSnapshot,
+)
 from custom_components.pp_reader.backdating.aggregate import DailyWealthAggregate
-from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot, HoldingValuation
+from custom_components.pp_reader.backdating.holdings import (
+    DailyHoldingsSnapshot,
+    HoldingValuation,
+)
 from custom_components.pp_reader.backdating.persist import persist_daily_wealth
-from custom_components.pp_reader.data.db_access import fetch_daily_wealth, fetch_daily_wealth_scopes
+from custom_components.pp_reader.data.db_access import (
+    fetch_daily_wealth,
+    fetch_daily_wealth_scopes,
+)
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 
 

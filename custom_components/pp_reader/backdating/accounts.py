@@ -5,9 +5,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
-from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping
+    from pathlib import Path
 
 from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
@@ -17,8 +20,23 @@ from custom_components.pp_reader.util.currency import cent_to_eur
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.accounts")
 
-_CREDIT_TYPES = {1, 5, 6, 8, 9, 12, 14}  # SELL, TRANSFER_IN, DEPOSIT, DIVIDENDS, INTEREST, TAX_REFUND, FEES_REFUND
-_DEBIT_TYPES = {0, 5, 7, 10, 11, 13}  # BUY, TRANSFER_OUT, REMOVAL, INTEREST_CHARGE, TAXES, FEES
+_CREDIT_TYPES = {
+    1,
+    5,
+    6,
+    8,
+    9,
+    12,
+    14,
+}  # SELL, TRANSFER_IN, DEPOSIT, DIVIDENDS, INTEREST, TAX_REFUND, FEES_REFUND
+_DEBIT_TYPES = {
+    0,
+    5,
+    7,
+    10,
+    11,
+    13,
+}  # BUY, TRANSFER_OUT, REMOVAL, INTEREST_CHARGE, TAXES, FEES
 
 
 @dataclass(slots=True)
@@ -107,7 +125,11 @@ def _compute_daily_account_snapshots_sync(
         )
         fx_coverage_ratio = _compute_fx_coverage_ratio(accounts_snapshot)
         account_wealth = round(
-            sum(val.balance_eur for val in accounts_snapshot if val.balance_eur is not None),
+            sum(
+                val.balance_eur
+                for val in accounts_snapshot
+                if val.balance_eur is not None
+            ),
             6,
         )
 
@@ -231,8 +253,14 @@ def _transaction_deltas(
             credit_amount = int(tx.amount or 0)
             if tx_units:
                 unit = tx_units.get(tx.uuid)
-                dest_currency = accounts_currency_map.get(other_account_uuid, {}).get("currency")
-                if unit and unit.get("fx_amount") is not None and unit.get("fx_currency_code") == dest_currency:
+                dest_currency = accounts_currency_map.get(other_account_uuid, {}).get(
+                    "currency"
+                )
+                if (
+                    unit
+                    and unit.get("fx_amount") is not None
+                    and unit.get("fx_currency_code") == dest_currency
+                ):
                     credit_amount = int(unit["fx_amount"] or 0)
             deltas.append((other_account_uuid, credit_amount))
         return deltas
@@ -296,9 +324,7 @@ def _build_account_valuations(
 
 def _compute_fx_coverage_ratio(accounts: list[AccountValuation]) -> float:
     required_currencies = {
-        valuation.currency
-        for valuation in accounts
-        if valuation.balance_native != 0.0
+        valuation.currency for valuation in accounts if valuation.balance_native != 0.0
     }
     if not required_currencies:
         return 1.0
@@ -313,4 +339,3 @@ def _compute_fx_coverage_ratio(accounts: list[AccountValuation]) -> float:
         if valuation.balance_eur is not None:
             covered += 1
     return round(covered / len(required_currencies), 3)
-

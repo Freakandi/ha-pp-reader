@@ -30,7 +30,6 @@ from custom_components.pp_reader.data.db_access import (
     load_fx_rates_for_date,
     upsert_fx_rate,
 )
-from custom_components.pp_reader.util.datetime import UTC
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +45,7 @@ FETCH_BACKOFF_SECONDS = 1.0
 # Dedupe repeated warning logs for the same date/currency combination.
 _FAILED_WARNINGS: dict[str, set[frozenset[str]]] = defaultdict(set)
 _FAILED_WARNINGS_LOCK = threading.Lock()
+_COMPACT_DATE_LEN = 8
 
 
 def _should_log_warning(date: str, currencies: set[str]) -> bool:
@@ -495,7 +495,7 @@ def ensure_exchange_rates_for_dates_sync(
 # --- Backdating helpers ---
 
 
-def _parse_date_value(value: Any) -> date | None:
+def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
     """Best-effort parsing for transaction date values stored as TEXT or int."""
     if value in (None, ""):
         return None
@@ -503,7 +503,7 @@ def _parse_date_value(value: Any) -> date | None:
     if not text_value:
         return None
 
-    if text_value.isdigit() and len(text_value) == 8:
+    if text_value.isdigit() and len(text_value) == _COMPACT_DATE_LEN:
         try:
             return date(
                 int(text_value[0:4]),
@@ -617,7 +617,7 @@ def _compute_fx_coverage_ratio(
 
 
 async def async_ensure_exchange_rates_for_schedule(
-    hass: Any,
+    hass: Any,  # noqa: ARG001
     db_path: Path,
     schedule: Mapping[date, set[str]],
     *,
@@ -629,7 +629,7 @@ async def async_ensure_exchange_rates_for_schedule(
 
     The schedule maps a date to the set of non-EUR currencies active on that
     day. Missing rates are fetched once per date across all currencies. The
-    returned mapping is ISO-date -> coverage ratio [0.0–1.0].
+    returned mapping is ISO-date -> coverage ratio [0.0-1.0].
     """
     if not schedule:
         return {}
@@ -658,7 +658,7 @@ async def async_ensure_exchange_rates_for_schedule(
                         date_str,
                         ", ".join(sorted(missing)),
                     )
-            except Exception:  # noqa: BLE001 - defensive logging
+            except Exception:
                 _LOGGER.exception(
                     "FX-Fetch für %s fehlgeschlagen (currencies=%s)",
                     date_str,

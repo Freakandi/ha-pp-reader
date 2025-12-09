@@ -6,7 +6,7 @@ Backend tooling must run inside the project virtual environment populated from `
 
 ## Development setup
 - Preferred bootstrap: `./scripts/setup_container`. The script installs the required system packages (ffmpeg, libturbojpeg, libpcap-dev, libsqlite3-dev, python3-venv), ensures Python 3.13.3 via `pyenv` when available, creates `.venv`, upgrades `pip`, installs `requirements.txt`, and prepares `config/` plus the `/config` symlink.
-- Activate the virtual environment in every new shell with `source .venv/bin/activate`.
+- Activate the virtual environment in every new shell with `source venv-ha/bin/activate`.
 - When working inside Andreas' Raspberry Pi 5 VS Code environment, use the pre-created `venv-ha` instead: `source venv-ha/bin/activate`, then launch Home Assistant with `hass --config ~/coding/repos/ha-pp-reader/config`.
 - Install contributor extras when you plan to run tests or linting: `pip install -r requirements-dev.txt`.
 - Alternative bootstraps:

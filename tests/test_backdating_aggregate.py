@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from datetime import date
 
+from custom_components.pp_reader.backdating.accounts import (
+    AccountValuation,
+    DailyAccountSnapshot,
+)
 from custom_components.pp_reader.backdating.aggregate import build_daily_wealth_records
-from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot, AccountValuation
 from custom_components.pp_reader.backdating.cashflows import DailyCashflowSnapshot
-from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot, HoldingValuation
+from custom_components.pp_reader.backdating.holdings import (
+    DailyHoldingsSnapshot,
+    HoldingValuation,
+)
 
 
 def test_aggregate_combines_components_and_coverage():
@@ -125,4 +131,3 @@ def test_aggregate_defaults_to_conservative_coverage():
     assert record.price_coverage_ratio == 0.0
     assert record.stale_price is True
     assert record.total_wealth_eur == 0.0
-

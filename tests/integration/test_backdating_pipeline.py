@@ -104,4 +104,6 @@ async def test_backdating_computes_and_persists_daily_wealth(hass, tmp_path):
     assert result.reason is None
 
     totals = fetch_daily_wealth(db_path)
-    assert any(row.date == "2024-01-10" and row.total_wealth_eur == 50.0 for row in totals)
+    assert any(
+        row.date == "2024-01-10" and row.total_wealth_eur == 50.0 for row in totals
+    )

@@ -41,7 +41,15 @@ async def test_cashflow_buckets_with_internal_transfer_and_fx(tmp_path):
                 ("tx-tax", 11, "acct-usd", None, "2024-01-03", 300, "USD"),
                 ("tx-dep", 6, "acct-usd", None, "2024-01-03", 1000, "USD"),
                 ("tx-wd", 7, "acct-eur", None, "2024-01-03", 800, "EUR"),
-                ("tx-int-transfer", 5, "acct-eur", "acct-usd", "2024-01-03", 1000, "EUR"),
+                (
+                    "tx-int-transfer",
+                    5,
+                    "acct-eur",
+                    "acct-usd",
+                    "2024-01-03",
+                    1000,
+                    "EUR",
+                ),
             ],
         )
         conn.executemany(

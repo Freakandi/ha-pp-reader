@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict
-from datetime import date
-from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
-from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot
-from custom_components.pp_reader.backdating.aggregate import DailyWealthAggregate
-from custom_components.pp_reader.backdating.cashflows import DailyCashflowSnapshot
-from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot
 from custom_components.pp_reader.data import db_access
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+    from pathlib import Path
+
+    from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot
+    from custom_components.pp_reader.backdating.aggregate import DailyWealthAggregate
+    from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot
 
 
 def persist_daily_wealth(
@@ -73,7 +75,7 @@ def _persist_daily_totals(
     db_access.upsert_daily_wealth(db_path, records, conn=conn)
 
 
-def _persist_daily_scopes(
+def _persist_daily_scopes(  # noqa: PLR0913
     db_path: Path,
     conn: sqlite3.Connection,
     aggregates: Sequence[DailyWealthAggregate],

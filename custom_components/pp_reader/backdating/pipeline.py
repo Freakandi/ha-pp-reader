@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.backdating.accounts import (
     async_compute_daily_account_snapshots,
@@ -111,7 +112,7 @@ async def async_plan_backdating_window(
     )
 
 
-async def async_run_backdating_rebuild(
+async def async_run_backdating_rebuild(  # noqa: PLR0913
     hass: HomeAssistant,
     db_path: Path | str,
     *,
@@ -121,6 +122,8 @@ async def async_run_backdating_rebuild(
     emit_progress: ProgressCallback | None = None,
     today: date | None = None,
 ) -> BackdatingResult:
+    """Execute the backdating process for the calculated window."""
+
     def _emit(stage: str, **details: Any) -> None:
         if emit_progress is None:
             return
@@ -264,7 +267,7 @@ async def async_run_backdating_rebuild(
                 accounts,
                 provenance_value,
             )
-        except Exception as err:  # noqa: BLE001 - defensive logging
+        except Exception as err:
             finished_at = _utc_now_isoformat()
             _LOGGER.exception(
                 "Backdating failed (window=%s→%s trigger=%s)",
@@ -318,7 +321,7 @@ def _transaction_date_bounds(db_path: Path) -> tuple[date | None, date | None]:
     return start_date, end_date
 
 
-def _parse_date_value(value: Any) -> date | None:
+def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
     """Best-effort parsing for transaction date values stored as TEXT or int."""
     if value in (None, ""):
         return None
@@ -326,7 +329,7 @@ def _parse_date_value(value: Any) -> date | None:
     if not text_value:
         return None
 
-    if text_value.isdigit() and len(text_value) == 8:
+    if text_value.isdigit() and len(text_value) == 8:  # noqa: PLR2004
         try:
             return date(
                 int(text_value[0:4]),

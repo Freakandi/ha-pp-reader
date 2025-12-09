@@ -1888,9 +1888,7 @@ def _row_to_daily_wealth(row: sqlite3.Row) -> DailyWealthRecord:
         interest_eur=_safe_float(row["interest_eur"]) or 0.0,
         inbound_transfers_eur=_safe_float(row["inbound_transfers_eur"]) or 0.0,
         outbound_transfers_eur=_safe_float(row["outbound_transfers_eur"]) or 0.0,
-        performance_neutral_movements=_safe_float(
-            row["performance_neutral_movements"]
-        )
+        performance_neutral_movements=_safe_float(row["performance_neutral_movements"])
         or 0.0,
         fees_eur=_safe_float(row["fees_eur"]) or 0.0,
         taxes_eur=_safe_float(row["taxes_eur"]) or 0.0,
@@ -1917,9 +1915,7 @@ def _row_to_daily_wealth_scope(row: sqlite3.Row) -> DailyWealthScopeRecord:
         interest_eur=_safe_float(row["interest_eur"]) or 0.0,
         inbound_transfers_eur=_safe_float(row["inbound_transfers_eur"]) or 0.0,
         outbound_transfers_eur=_safe_float(row["outbound_transfers_eur"]) or 0.0,
-        performance_neutral_movements=_safe_float(
-            row["performance_neutral_movements"]
-        )
+        performance_neutral_movements=_safe_float(row["performance_neutral_movements"])
         or 0.0,
         fees_eur=_safe_float(row["fees_eur"]) or 0.0,
         taxes_eur=_safe_float(row["taxes_eur"]) or 0.0,
@@ -2529,7 +2525,7 @@ def upsert_daily_wealth_scopes(
             local_conn.close()
 
 
-def fetch_daily_wealth(
+def fetch_daily_wealth(  # noqa: PLR0913
     db_path: Path,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -2587,7 +2583,7 @@ def fetch_daily_wealth(
             local_conn.close()
 
 
-def fetch_daily_wealth_scopes(
+def fetch_daily_wealth_scopes(  # noqa: PLR0913
     db_path: Path,
     *,
     scope_type: str | None = None,

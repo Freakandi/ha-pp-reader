@@ -9,8 +9,6 @@ import pytest
 
 from custom_components.pp_reader.backdating.accounts import (
     _compute_daily_account_snapshots_sync,
-    DailyAccountSnapshot,
-    AccountValuation,
 )
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 

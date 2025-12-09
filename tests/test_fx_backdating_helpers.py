@@ -58,7 +58,9 @@ async def test_async_ensure_exchange_rates_for_schedule_fetches_missing_once(
 
     calls: list[tuple[str, tuple[str, ...]]] = []
 
-    async def _fake_fetch(date_str: str, currencies: set[str], **_: object) -> dict[str, float]:
+    async def _fake_fetch(
+        date_str: str, currencies: set[str], **_: object
+    ) -> dict[str, float]:
         calls.append((date_str, tuple(sorted(currencies))))
         return {currency: idx + 1.0 for idx, currency in enumerate(sorted(currencies))}
 
@@ -113,8 +115,10 @@ async def test_async_prepare_exchange_rates_for_backdating_uses_bounds(
     finally:
         conn.close()
 
-    async def _fake_fetch(date_str: str, currencies: set[str], **_: object) -> dict[str, float]:
-        return {currency: 1.0 for currency in currencies}
+    async def _fake_fetch(
+        date_str: str, currencies: set[str], **_: object
+    ) -> dict[str, float]:
+        return dict.fromkeys(currencies, 1.0)
 
     monkeypatch.setattr(
         fx_module, "_fetch_exchange_rates_with_retry", _fake_fetch, raising=True

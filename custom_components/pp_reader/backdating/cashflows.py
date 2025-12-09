@@ -6,14 +6,17 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, timedelta
-from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.logic.accounting import CASH_TRANSFER_TYPE
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import cent_to_eur
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping
+    from pathlib import Path
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.cashflows")
 
@@ -190,7 +193,7 @@ def _load_fx_rates_for_date(
     return rates
 
 
-def _aggregate_daily_buckets(
+def _aggregate_daily_buckets(  # noqa: PLR0912
     transactions: Iterable[db_access.Transaction],
     fx_rates: Mapping[str, float],
 ) -> tuple[float, float, float, float, float, float, float]:
@@ -253,13 +256,13 @@ def _aggregate_daily_buckets(
     )
 
 
-def _classify_transaction(
+def _classify_transaction(  # noqa: PLR0911, PLR0912
     tx: db_access.Transaction,
 ) -> tuple[str | None, int]:
     """Return bucket name and sign multiplier for a transaction."""
     tx_type = tx.type
-    is_internal_transfer = (
-        tx_type == CASH_TRANSFER_TYPE and bool(tx.account and tx.other_account)
+    is_internal_transfer = tx_type == CASH_TRANSFER_TYPE and bool(
+        tx.account and tx.other_account
     )
     if is_internal_transfer:
         return None, 0

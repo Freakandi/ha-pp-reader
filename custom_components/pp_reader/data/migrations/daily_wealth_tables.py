@@ -47,14 +47,10 @@ def _ensure_performance_neutral_column(
     except sqlite3.OperationalError as err:
         if "duplicate column name" in str(err).lower():
             return
-        _LOGGER.exception(
-            "Failed to add performance_neutral_movements to %s", table
-        )
+        _LOGGER.exception("Failed to add performance_neutral_movements to %s", table)
         raise
     except sqlite3.Error:  # pragma: no cover - defensive guard
-        _LOGGER.exception(
-            "Failed to add performance_neutral_movements to %s", table
-        )
+        _LOGGER.exception("Failed to add performance_neutral_movements to %s", table)
         raise
 
 

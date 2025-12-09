@@ -5,9 +5,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping
+    from pathlib import Path
 
 from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
@@ -209,7 +212,7 @@ def _load_relevant_transactions(
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float]]
+    transactions: Iterable[tuple[date, str, str, float]],
 ) -> dict[date, list[tuple[str, str, float]]]:
     grouped: dict[date, list[tuple[str, str, float]]] = {}
     for tx_date, portfolio_uuid, security_uuid, delta_shares in transactions:
@@ -246,8 +249,8 @@ def _load_price_cache(
             (price_date, normalized_price, str(row["date"]))
         )
 
-    for security_uuid in cache:
-        cache[security_uuid].sort(key=lambda entry: entry[0])
+    for entries in cache.values():
+        entries.sort(key=lambda entry: entry[0])
     return cache
 
 
@@ -355,8 +358,6 @@ def _compute_fx_coverage_ratio(
         return 1.0
     covered = 0
     for valuation in holdings:
-        if valuation.currency == "EUR":
-            covered += 1
-        elif valuation.fx_rate:
+        if valuation.currency == "EUR" or valuation.fx_rate:
             covered += 1
     return round(covered / len(holdings), 3)

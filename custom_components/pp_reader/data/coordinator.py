@@ -549,7 +549,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._emit_enrichment_completed(summary)
         return summary
 
-    async def _schedule_metrics_refresh(
+    async def _schedule_metrics_refresh(  # noqa: PLR0912, PLR0915
         self,
         summary: dict[str, Any],
         *,

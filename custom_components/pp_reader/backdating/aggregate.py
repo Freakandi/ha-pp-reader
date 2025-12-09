@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
-from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot
-from custom_components.pp_reader.backdating.cashflows import DailyCashflowSnapshot
-from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
+    from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot
+    from custom_components.pp_reader.backdating.cashflows import DailyCashflowSnapshot
+    from custom_components.pp_reader.backdating.holdings import DailyHoldingsSnapshot
 
 
 @dataclass(slots=True)
 class DailyWealthAggregate:
-    """Aggregated daily wealth record ready for persistence or serialization."""
+    """Consolidated daily wealth record combining all scopes."""
 
     date: str
     total_wealth_eur: float
@@ -26,13 +29,13 @@ class DailyWealthAggregate:
     performance_neutral_movements: float
     fees_eur: float
     taxes_eur: float
-    fx_coverage_ratio: float | None
-    price_coverage_ratio: float | None
+    fx_coverage_ratio: float
+    price_coverage_ratio: float
     stale_price: bool
-    provenance: str | None = None
+    provenance: str | None
 
 
-def build_daily_wealth_records(
+def build_daily_wealth_records(  # noqa: PLR0913
     start_date: date,
     end_date: date,
     *,
@@ -129,4 +132,3 @@ def _filter_ratios(values: Iterable[float | None]) -> list[float]:
             continue
         ratios.append(numeric)
     return ratios
-

@@ -185,7 +185,7 @@ async def async_refresh_all(
         return final_run
 
 
-async def async_refresh_all_with_backdating(
+async def async_refresh_all_with_backdating(  # noqa: PLR0913
     hass: HomeAssistant,
     db_path: Path | str,
     *,
