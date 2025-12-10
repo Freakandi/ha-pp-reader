@@ -557,23 +557,23 @@ export function handleAccountUpdate(
   const portfolioTable = root.querySelector<HTMLTableElement>('.portfolio-table table');
   const portfolios = portfolioTable
     ? Array.from(
-        portfolioTable.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'),
-      ).map(row => {
-        // Spalten: Name | position_count | purchase_value | current_value | day_change_abs | day_change_pct | gain_abs | gain_pct
-        const datasetValue = row.dataset.currentValue;
-        const numeric = datasetValue ? Number.parseFloat(datasetValue) : Number.NaN;
-        if (Number.isFinite(numeric)) {
-          return {
-            current_value: numeric,
-          };
-        }
-
-        const currentValueCell = row.cells.item(3);
-        const fallback = parseNumLoose(currentValueCell?.textContent);
+      portfolioTable.querySelectorAll<HTMLTableRowElement>('tbody tr.portfolio-row'),
+    ).map(row => {
+      // Spalten: Name | position_count | purchase_value | current_value | day_change_abs | day_change_pct | gain_abs | gain_pct
+      const datasetValue = row.dataset.currentValue;
+      const numeric = datasetValue ? Number.parseFloat(datasetValue) : Number.NaN;
+      if (Number.isFinite(numeric)) {
         return {
-          current_value: Number.isFinite(fallback) ? fallback : 0,
+          current_value: numeric,
         };
-      })
+      }
+
+      const currentValueCell = row.cells.item(3);
+      const fallback = parseNumLoose(currentValueCell?.textContent);
+      return {
+        current_value: Number.isFinite(fallback) ? fallback : 0,
+      };
+    })
     : [];
 
   updateTotalWealth(accountRows, portfolios, root);
@@ -618,9 +618,9 @@ function updateAccountTable(accounts: AccountOverviewRow[], root: QueryRoot): vo
       const currencyCode = toNonEmptyString(account.currency_code);
       const amountLabel = hasOrigBalance
         ? origBalance.toLocaleString('de-DE', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
         : null;
       const fxDisplay = amountLabel
         ? currencyCode
@@ -1194,7 +1194,7 @@ function renderPositionsTableInline(positions: PortfolioPositionRecord[]): strin
     if (typeof renderPositionsTable === 'function') {
       return renderPositionsTable(positions);
     }
-  } catch (_) {}
+  } catch (_) { }
 
   if (positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
@@ -1274,15 +1274,15 @@ function renderPositionsTableInline(positions: PortfolioPositionRecord[]): strin
           const performance = normalizePerformanceMetrics(position);
           const gainPctValue =
             typeof performance?.gain_pct === 'number' &&
-            Number.isFinite(performance.gain_pct)
+              Number.isFinite(performance.gain_pct)
               ? performance.gain_pct
               : null;
           const pctLabel =
             gainPctValue != null
               ? `${gainPctValue.toLocaleString('de-DE', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })} %`
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} %`
               : '—';
           const pctSign =
             gainPctValue == null
@@ -1386,13 +1386,13 @@ function updatePortfolioFooter(table: HTMLTableElement | null): void {
     current_value: totalsComplete ? metrics.sumCurrent : null,
     performance: totalsComplete
       ? {
-          gain_abs: metrics.sumGainAbs,
-          gain_pct: sumGainPct,
-          total_change_eur: metrics.sumGainAbs,
-          total_change_pct: sumGainPct,
-          source: 'aggregated',
-          coverage_ratio: 1,
-        }
+        gain_abs: metrics.sumGainAbs,
+        gain_pct: sumGainPct,
+        total_change_eur: metrics.sumGainAbs,
+        total_change_pct: sumGainPct,
+        source: 'aggregated',
+        coverage_ratio: 1,
+      }
       : null,
   } as Record<string, unknown>;
   const footerContext = { hasValue: totalsComplete };
@@ -1451,7 +1451,7 @@ function formatNumber(v: number): string {
   });
 }
 
-function updateTotalWealth(
+export function updateTotalWealth(
   accounts: Array<{ balance?: number | null; current_value?: number | null; value?: number | null }> | null | undefined,
   portfolios: Array<{ current_value?: number | null; value?: number | null; purchase_sum?: number | null }> | null | undefined,
   root: QueryRoot | null | undefined,

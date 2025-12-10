@@ -1,0 +1,416 @@
+
+> ha-pp-reader@1.0.0 test:ui
+> playwright test --project=Chromium tests/ui/hooks_e2e.spec.ts
+
+
+Running 1 test using 1 worker
+
+Seeding known values into DB...
+Opening database: /home/andreas/coding/repos/ha-pp-reader/config/pp_reader_data/S-Depot.db
+Clearing daily_wealth table...
+Seeding data from 2025-11-10 to 2025-12-10...
+Seeded 31 records in daily_wealth.
+Final Total Wealth: 13000.00
+>> GET http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http%3A%2F%2F127.0.0.1%3A5173
+<< [33m200[39m http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http%3A%2F%2F127.0.0.1%3A5173
+>> GET http://127.0.0.1:8123/frontend_latest/core.d6410a7469b6f181.js
+>> GET http://127.0.0.1:8123/frontend_latest/app.1d24f37c18c00da1.js
+>> GET http://127.0.0.1:8123/static/images/ohf-badge.svg
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Regular.woff2
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Medium.woff2
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/core.d6410a7469b6f181.js
+>> GET http://127.0.0.1:8123/auth/authorize?response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A8123%2Fppreader%3Fpp_reader_dev_server%3Dhttp%253A%252F%252F127.0.0.1%253A5173%26auth_callback%3D1&client_id=http%3A%2F%2F127.0.0.1%3A8123%2F&state=eyJoYXNzVXJsIjoiaHR0cDovLzEyNy4wLjAuMTo4MTIzIiwiY2xpZW50SWQiOiJodHRwOi8vMTI3LjAuMC4xOjgxMjMvIn0%3D
+<< [33m200[39m http://127.0.0.1:8123/static/images/ohf-badge.svg
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Regular.woff2
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Medium.woff2
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/app.1d24f37c18c00da1.js
+<< [33m200[39m http://127.0.0.1:8123/auth/authorize?response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A8123%2Fppreader%3Fpp_reader_dev_server%3Dhttp%253A%252F%252F127.0.0.1%253A5173%26auth_callback%3D1&client_id=http%3A%2F%2F127.0.0.1%3A8123%2F&state=eyJoYXNzVXJsIjoiaHR0cDovLzEyNy4wLjAuMTo4MTIzIiwiY2xpZW50SWQiOiJodHRwOi8vMTI3LjAuMC4xOjgxMjMvIn0%3D
+>> GET http://127.0.0.1:8123/static/translations/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+>> GET http://127.0.0.1:8123/frontend_latest/93033.35abc2370a322aa5.js
+>> GET http://127.0.0.1:8123/frontend_latest/98230.2ef236970d78b556.js
+>> GET http://127.0.0.1:8123/frontend_latest/51889.29a7a1e894f19482.js
+>> GET http://127.0.0.1:8123/frontend_latest/authorize.9708609db1beb6ee.js
+>> GET http://127.0.0.1:8123/static/icons/favicon-192x192.png
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Regular.woff2
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Medium.woff2
+>> GET http://127.0.0.1:8123/auth/providers
+<< [33m200[39m http://127.0.0.1:8123/static/icons/favicon-192x192.png
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Regular.woff2
+<< [33m200[39m http://127.0.0.1:8123/auth/providers
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/authorize.9708609db1beb6ee.js
+>> GET http://127.0.0.1:8123/frontend_latest/93033.35abc2370a322aa5.js
+>> GET http://127.0.0.1:8123/frontend_latest/98230.2ef236970d78b556.js
+>> GET http://127.0.0.1:8123/frontend_latest/51889.29a7a1e894f19482.js
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Medium.woff2
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/93033.35abc2370a322aa5.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/51889.29a7a1e894f19482.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/98230.2ef236970d78b556.js
+>> GET http://127.0.0.1:8123/static/locale-data/intl-displaynames/en.json
+<< [33m200[39m http://127.0.0.1:8123/static/locale-data/intl-displaynames/en.json
+>> GET http://127.0.0.1:8123/frontend_latest/94527.1914ac4ccab6ecd2.js
+>> GET http://127.0.0.1:8123/frontend_latest/22524.b9931bca35e5af83.js
+>> GET http://127.0.0.1:8123/frontend_latest/80431.b998152b7ac62665.js
+>> GET http://127.0.0.1:8123/static/translations/page-authorize/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+>> GET http://127.0.0.1:8123/frontend_latest/89972.4fcc0afd1ffb08f6.js
+>> GET http://127.0.0.1:8123/frontend_latest/36750.41ff8d40f0976c21.js
+>> GET http://127.0.0.1:8123/frontend_latest/83272.71172ac668e8b2b5.js
+>> GET http://127.0.0.1:8123/frontend_latest/48439.4e4f02f210785531.js
+>> GET http://127.0.0.1:8123/frontend_latest/47789.32c08797edfc144e.js
+>> GET http://127.0.0.1:8123/frontend_latest/30199.431258338ae3e11f.js
+>> GET http://127.0.0.1:8123/frontend_latest/37620.cb0d9a42aeb69c81.js
+>> GET http://127.0.0.1:8123/frontend_latest/75641.6167198336d0d0d5.js
+>> GET http://127.0.0.1:8123/frontend_latest/61717.b68a1c1a23f598bc.js
+>> GET http://127.0.0.1:8123/frontend_latest/3961.ba172e7a5e518002.js
+>> GET http://127.0.0.1:8123/frontend_latest/82163.8923e1b3cfa393af.js
+>> POST http://127.0.0.1:8123/auth/login_flow
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/94527.1914ac4ccab6ecd2.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/22524.b9931bca35e5af83.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/80431.b998152b7ac62665.js
+<< [33m200[39m http://127.0.0.1:8123/static/translations/page-authorize/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/89972.4fcc0afd1ffb08f6.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/36750.41ff8d40f0976c21.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/83272.71172ac668e8b2b5.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/48439.4e4f02f210785531.js
+>> GET http://127.0.0.1:8123/frontend_latest/68925.c3732cb248f8b19c.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/47789.32c08797edfc144e.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/30199.431258338ae3e11f.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/37620.cb0d9a42aeb69c81.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/75641.6167198336d0d0d5.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/82163.8923e1b3cfa393af.js
+<< [33m200[39m http://127.0.0.1:8123/auth/login_flow
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/3961.ba172e7a5e518002.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/61717.b68a1c1a23f598bc.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/68925.c3732cb248f8b19c.js
+>> GET http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http%3A%2F%2F127.0.0.1%3A5173&auth_callback=1&code=b5546d3153b841e4a6397b27484e0cc0&state=eyJoYXNzVXJsIjoiaHR0cDovLzEyNy4wLjAuMTo4MTIzIiwiY2xpZW50SWQiOiJodHRwOi8vMTI3LjAuMC4xOjgxMjMvIn0%3D&storeToken=true
+<< [33m200[39m http://127.0.0.1:8123/ppreader?pp_reader_dev_server=http%3A%2F%2F127.0.0.1%3A5173&auth_callback=1&code=b5546d3153b841e4a6397b27484e0cc0&state=eyJoYXNzVXJsIjoiaHR0cDovLzEyNy4wLjAuMTo4MTIzIiwiY2xpZW50SWQiOiJodHRwOi8vMTI3LjAuMC4xOjgxMjMvIn0%3D&storeToken=true
+>> GET http://127.0.0.1:8123/frontend_latest/core.d6410a7469b6f181.js
+>> GET http://127.0.0.1:8123/frontend_latest/app.1d24f37c18c00da1.js
+>> GET http://127.0.0.1:8123/static/images/ohf-badge.svg
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Regular.woff2
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Medium.woff2
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/core.d6410a7469b6f181.js
+>> POST http://127.0.0.1:8123/auth/token
+<< [33m200[39m http://127.0.0.1:8123/static/images/ohf-badge.svg
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Regular.woff2
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/app.1d24f37c18c00da1.js
+>> GET http://127.0.0.1:8123/static/translations/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+>> GET http://127.0.0.1:8123/frontend_latest/93033.35abc2370a322aa5.js
+>> GET http://127.0.0.1:8123/frontend_latest/98230.2ef236970d78b556.js
+>> GET http://127.0.0.1:8123/frontend_latest/51889.29a7a1e894f19482.js
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Medium.woff2
+<< [33m200[39m http://127.0.0.1:8123/auth/token
+<< [33m200[39m http://127.0.0.1:8123/static/translations/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/93033.35abc2370a322aa5.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/51889.29a7a1e894f19482.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/98230.2ef236970d78b556.js
+>> GET http://127.0.0.1:8123/static/locale-data/intl-displaynames/en.json
+<< [33m200[39m http://127.0.0.1:8123/static/locale-data/intl-displaynames/en.json
+>> GET http://127.0.0.1:8123/frontend_latest/89972.4fcc0afd1ffb08f6.js
+>> GET http://127.0.0.1:8123/frontend_latest/42153.8c4896e8dcc594d9.js
+>> GET http://127.0.0.1:8123/frontend_latest/15265.23cdcc85d21227aa.js
+>> GET http://127.0.0.1:8123/frontend_latest/48439.4e4f02f210785531.js
+>> GET http://127.0.0.1:8123/frontend_latest/3245.54f460b07c3fc7da.js
+>> GET http://127.0.0.1:8123/frontend_latest/3802.049c806d01560de2.js
+>> GET http://127.0.0.1:8123/frontend_latest/94527.1914ac4ccab6ecd2.js
+>> GET http://127.0.0.1:8123/frontend_latest/47789.32c08797edfc144e.js
+>> GET http://127.0.0.1:8123/frontend_latest/86677.68e7406170cf7f95.js
+>> GET http://127.0.0.1:8123/frontend_latest/89088.fa222f640350259d.js
+>> GET http://127.0.0.1:8123/frontend_latest/70412.009a428c457bb1de.js
+>> GET http://127.0.0.1:8123/frontend_latest/30199.431258338ae3e11f.js
+>> GET http://127.0.0.1:8123/frontend_latest/33395.fce095361bf77805.js
+>> GET http://127.0.0.1:8123/frontend_latest/11469.77881c06beb5b4a7.js
+>> GET http://127.0.0.1:8123/frontend_latest/37620.cb0d9a42aeb69c81.js
+>> GET http://127.0.0.1:8123/frontend_latest/83117.dca0cbfb088851dc.js
+>> GET http://127.0.0.1:8123/frontend_latest/91544.b8757b0aa8391348.js
+>> GET http://127.0.0.1:8123/frontend_latest/18672.1a74e50377d5b65e.js
+>> GET http://127.0.0.1:8123/frontend_latest/87110.85ba6f14847cca99.js
+>> GET http://127.0.0.1:8123/frontend_latest/93282.b664e31a58576f22.js
+>> GET http://127.0.0.1:8123/frontend_latest/58197.07f6d5a11051ac20.js
+>> GET http://127.0.0.1:8123/frontend_latest/79584.e4820a0c6293d9aa.js
+>> GET http://127.0.0.1:8123/frontend_latest/27923.713b88a2c69729ce.js
+>> GET http://127.0.0.1:8123/frontend_latest/75870.7909e6f9b0e619b4.js
+>> GET http://127.0.0.1:8123/frontend_latest/10326.1f0facc544a8ba93.js
+>> GET http://127.0.0.1:8123/frontend_latest/16521.0cb949f6f9bd1474.js
+>> GET http://127.0.0.1:8123/frontend_latest/61166.abd2a45029a088ef.js
+>> GET http://127.0.0.1:8123/frontend_latest/59401.1f758b3324e585b4.js
+>> GET http://127.0.0.1:8123/frontend_latest/704.75115c9c84a1c571.js
+>> GET http://127.0.0.1:8123/frontend_latest/33972.e7c6f2ed6b5a6dbf.js
+>> GET http://127.0.0.1:8123/frontend_latest/78689.1ac74167e90cbe8a.js
+>> GET http://127.0.0.1:8123/frontend_latest/67733.4126bde1c5e75149.js
+>> GET http://127.0.0.1:8123/frontend_latest/49032.42892542b8a9b5e5.js
+>> GET http://127.0.0.1:8123/frontend_latest/40435.2c52b2aa55a319ab.js
+>> GET http://127.0.0.1:8123/frontend_latest/89137.9df15fbb0aaf95f7.js
+>> GET http://127.0.0.1:8123/frontend_latest/61717.b68a1c1a23f598bc.js
+>> GET http://127.0.0.1:8123/frontend_latest/65336.89c63c641ceb3fa2.js
+>> GET http://127.0.0.1:8123/frontend_latest/6530.5115b393872304df.js
+>> GET http://127.0.0.1:8123/frontend_latest/88815.1777ecd923711a38.js
+>> GET http://127.0.0.1:8123/frontend_latest/75783.c60429517f3ecae7.js
+>> GET http://127.0.0.1:8123/frontend_latest/53476.0a6b99e37d69c3f3.js
+>> GET http://127.0.0.1:8123/frontend_latest/78525.07722353b4c48877.js
+>> GET http://127.0.0.1:8123/frontend_latest/15116.8ccae19adf2ce43f.js
+>> GET http://127.0.0.1:8123/frontend_latest/5023.6747edaf01bcd9c1.js
+>> GET http://127.0.0.1:8123/frontend_latest/47037.4ec7b1e6a415f6fd.js
+>> GET http://127.0.0.1:8123/frontend_latest/3029.591683c6525c68bd.js
+>> GET http://127.0.0.1:8123/frontend_latest/44128.48ba6b62f4fe8fc1.js
+>> GET http://127.0.0.1:8123/frontend_latest/7434.f18af77e50294078.js
+>> GET http://127.0.0.1:8123/frontend_latest/84764.dc72256640203b72.js
+>> GET http://127.0.0.1:8123/frontend_latest/55038.2f7fa5a47e47d700.js
+>> GET http://127.0.0.1:8123/frontend_latest/2552.fe2f327ecb39ba99.js
+>> GET http://127.0.0.1:8123/frontend_latest/12265.f887a9abc7055782.js
+>> GET http://127.0.0.1:8123/frontend_latest/61389.cb7408a6a1ab2470.js
+>> GET http://127.0.0.1:8123/frontend_latest/93076.6b0b1f7b79cac68a.js
+>> GET http://127.0.0.1:8123/frontend_latest/26488.fd4950d392aecff9.js
+>> GET http://127.0.0.1:8123/frontend_latest/53255.2237952f56288414.js
+>> GET http://127.0.0.1:8123/frontend_latest/70756.46306c428ddea681.js
+>> GET http://127.0.0.1:8123/frontend_latest/34699.77a80428a6e35f25.js
+>> GET http://127.0.0.1:8123/frontend_latest/68925.c3732cb248f8b19c.js
+>> GET http://127.0.0.1:8123/static/translations/custom/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+>> GET http://127.0.0.1:8123/frontend_latest/90357.913504f4e5daf826.js
+>> GET http://127.0.0.1:8123/frontend_latest/39311.44c2e29f5808c560.js
+>> GET http://127.0.0.1:8123/frontend_latest/77757.030d55bea60f2041.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/89972.4fcc0afd1ffb08f6.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/42153.8c4896e8dcc594d9.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/15265.23cdcc85d21227aa.js
+>> GET http://127.0.0.1:8123/frontend_latest/68585.eec2bf50200a5842.js
+>> GET http://127.0.0.1:8123/frontend_latest/40909.16179cfcf1c77982.js
+>> GET http://127.0.0.1:8123/frontend_latest/95253.17dcb1ebd0e23724.js
+>> GET http://127.0.0.1:8123/frontend_latest/70101.27afc19558bf4ac5.js
+>> GET http://127.0.0.1:8123/frontend_latest/50236.52886de659728fe7.js
+>> GET http://127.0.0.1:8123/frontend_latest/42625.208f47cf4c2b2544.js
+>> GET http://127.0.0.1:8123/frontend_latest/16179.b8bc87b7425f08af.js
+>> GET http://127.0.0.1:8123/frontend_latest/6502.97a1b95e242a3462.js
+>> GET http://127.0.0.1:8123/frontend_latest/57251.53d7ef25650c31c3.js
+>> GET http://127.0.0.1:8123/static/translations/de-6519d59921f5c2f16436b6a507dfc94c.json
+>> GET http://127.0.0.1:8123/static/translations/custom/de-6519d59921f5c2f16436b6a507dfc94c.json
+>> GET http://127.0.0.1:8123/frontend_latest/78790.4c64675fd78668ff.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/48439.4e4f02f210785531.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/94527.1914ac4ccab6ecd2.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/3802.049c806d01560de2.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/3245.54f460b07c3fc7da.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/47789.32c08797edfc144e.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/86677.68e7406170cf7f95.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/70412.009a428c457bb1de.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/89088.fa222f640350259d.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/33395.fce095361bf77805.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/30199.431258338ae3e11f.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/11469.77881c06beb5b4a7.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/83117.dca0cbfb088851dc.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/37620.cb0d9a42aeb69c81.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/18672.1a74e50377d5b65e.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/87110.85ba6f14847cca99.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/93282.b664e31a58576f22.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/91544.b8757b0aa8391348.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/79584.e4820a0c6293d9aa.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/75870.7909e6f9b0e619b4.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/58197.07f6d5a11051ac20.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/10326.1f0facc544a8ba93.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/27923.713b88a2c69729ce.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/16521.0cb949f6f9bd1474.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/704.75115c9c84a1c571.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/33972.e7c6f2ed6b5a6dbf.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/61166.abd2a45029a088ef.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/59401.1f758b3324e585b4.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/67733.4126bde1c5e75149.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/49032.42892542b8a9b5e5.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/89137.9df15fbb0aaf95f7.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/78689.1ac74167e90cbe8a.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/40435.2c52b2aa55a319ab.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/61717.b68a1c1a23f598bc.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/65336.89c63c641ceb3fa2.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/6530.5115b393872304df.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/88815.1777ecd923711a38.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/53476.0a6b99e37d69c3f3.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/75783.c60429517f3ecae7.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/15116.8ccae19adf2ce43f.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/78525.07722353b4c48877.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/5023.6747edaf01bcd9c1.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/47037.4ec7b1e6a415f6fd.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/44128.48ba6b62f4fe8fc1.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/55038.2f7fa5a47e47d700.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/7434.f18af77e50294078.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/84764.dc72256640203b72.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/3029.591683c6525c68bd.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/2552.fe2f327ecb39ba99.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/12265.f887a9abc7055782.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/93076.6b0b1f7b79cac68a.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/61389.cb7408a6a1ab2470.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/53255.2237952f56288414.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/26488.fd4950d392aecff9.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/70756.46306c428ddea681.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/34699.77a80428a6e35f25.js
+BROWSER LOG: The Material theme is deprecated and will be removed in Vaadin 25.
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/68925.c3732cb248f8b19c.js
+<< [33m200[39m http://127.0.0.1:8123/static/translations/custom/en-46bbeca39326be543b2e8ff82ab9c8bb.json
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/90357.913504f4e5daf826.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/39311.44c2e29f5808c560.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/77757.030d55bea60f2041.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/68585.eec2bf50200a5842.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/40909.16179cfcf1c77982.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/70101.27afc19558bf4ac5.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/95253.17dcb1ebd0e23724.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/50236.52886de659728fe7.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/42625.208f47cf4c2b2544.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/16179.b8bc87b7425f08af.js
+<< [33m200[39m http://127.0.0.1:8123/static/translations/de-6519d59921f5c2f16436b6a507dfc94c.json
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/57251.53d7ef25650c31c3.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/6502.97a1b95e242a3462.js
+<< [33m200[39m http://127.0.0.1:8123/static/translations/custom/de-6519d59921f5c2f16436b6a507dfc94c.json
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/78790.4c64675fd78668ff.js
+>> GET http://127.0.0.1:8123/frontend_latest/24403.dcbb38d058220484.js
+>> GET http://127.0.0.1:8123/static/locale-data/intl-displaynames/de.json
+>> GET http://127.0.0.1:8123/pp_reader_dashboard/panel.js?v=20251210121550
+Intercepted panel.js request
+>> GET http://127.0.0.1:8123/frontend_latest/567.6eeaf4f8c2cd32b9.js
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/24403.dcbb38d058220484.js
+<< [33m200[39m http://127.0.0.1:8123/static/locale-data/intl-displaynames/de.json
+<< [33m200[39m http://127.0.0.1:8123/pp_reader_dashboard/panel.js?v=20251210121550
+<< [33m200[39m http://127.0.0.1:8123/frontend_latest/567.6eeaf4f8c2cd32b9.js
+BROWSER LOG: [pp_reader] Starte loadDashboardModule...
+BROWSER LOG: [pp_reader] Versuche zu importieren: http://127.0.0.1:8123/pp_reader_dashboard/js/dashboard.module.js?v=20251210121550
+>> GET http://127.0.0.1:8123/pp_reader_dashboard/js/dashboard.module.js?v=20251210121550
+Intercepted dashboard.module.js request
+>> GET http://127.0.0.1:8123/static/mdi/7677f1cfb2dd4f5562a2aa6d3ae43a2e6997b21a.json
+<< [33m200[39m http://127.0.0.1:8123/static/mdi/7677f1cfb2dd4f5562a2aa6d3ae43a2e6997b21a.json
+<< [33m200[39m http://127.0.0.1:8123/pp_reader_dashboard/js/dashboard.module.js?v=20251210121550
+>> GET http://127.0.0.1:8123/pp_reader_dashboard/js/dashboard.8OyhXCeC.js
+Intercepted bundle request: dashboard.8OyhXCeC.js -> custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.8OyhXCeC.js
+<< [33m200[39m http://127.0.0.1:8123/pp_reader_dashboard/js/dashboard.8OyhXCeC.js
+BROWSER LOG: PPReader dashboard module v20250914b geladen
+BROWSER LOG: [pp_reader] Loading dashboard module shim...
+BROWSER LOG: [pp_reader] Dashboard Modul geladen: Module
+>> GET http://127.0.0.1:8123/pp_reader_dashboard/css/base.css?v=20251210121550
+>> GET http://127.0.0.1:8123/pp_reader_dashboard/css/cards.css?v=20251210121550
+>> GET http://127.0.0.1:8123/pp_reader_dashboard/css/nav.css?v=20251210121550
+BROWSER LOG: [pp_reader] Dashboard Element referenziert.
+BROWSER LOG: PPReaderDashboard: entry_id (fallback) = 01KA741FPV0VF7P42PXE9CM0CS
+BROWSER LOG: renderDashboard: start – panelConfig: {entry_id: 01KA741FPV0VF7P42PXE9CM0CS, _panel_custom: Object} derived entry_id? undefined
+BROWSER LOG: PPReaderDashboard: subscribed to panels_updated
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-Bold.woff2
+<< [33m200[39m http://127.0.0.1:8123/pp_reader_dashboard/css/base.css?v=20251210121550
+<< [33m200[39m http://127.0.0.1:8123/pp_reader_dashboard/css/nav.css?v=20251210121550
+<< [33m200[39m http://127.0.0.1:8123/pp_reader_dashboard/css/cards.css?v=20251210121550
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-Bold.woff2
+BROWSER LOG: buildExpandablePortfolioTable: render 6 portfolios
+BROWSER LOG: attachPortfolioToggleHandler: Listener registriert
+>> GET http://127.0.0.1:8123/static/fonts/roboto/Roboto-BoldItalic.woff2
+BROWSER LOG: renderDashboard: portfolio-toggle Buttons: 6
+<< [33m200[39m http://127.0.0.1:8123/static/fonts/roboto/Roboto-BoldItalic.woff2
+DASHBOARD HTML: <div class="pp-reader-dashboard">
+    <div id="pp-reader-sticky-anchor"></div><div class="header-card">
+    <div class="header-content">
+      <button id="nav-left" class="nav-arrow disabled" aria-label="Vorherige Seite" disabled="">
+        <svg viewBox="0 0 24 24">
+          <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
+        </svg>
+      </button>
+      <h2 id="headerTitle">Übersicht</h2>
+      <button id="nav-right" class="nav-arrow" aria-label="Nächste Seite">
+        <svg viewBox="0 0 24 24">
+          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
+        </svg>
+      </button>
+    </div>
+    <div id="headerMeta" class="meta">
+    <div class="header-meta-row">
+      💰 Gesamtvermögen: <strong class="total-wealth-value">225.174,47&nbsp;€</strong>
+    </div>
+  </div>
+  </div>
+    <div class="card">
+      <h2>Investment</h2>
+      <div class="scroll-container portfolio-table">
+        <table class="expandable-portfolio-table"><thead><tr><th>Name</th><th class="align-right">Anzahl Positionen</th><th class="align-right">Kaufwert</th><th class="align-right">Aktueller Wert</th><th class="align-right">Heute +/-</th><th class="align-right">Heute %</th><th class="align-right">Gesamt +/-</th><th class="align-right">Gesamt %</th></tr></thead><tbody><tr class="portfolio-row" data-portfolio="c116cb96-5c70-4031-a771-fe36c44ef7fa" data-position-count="3" data-current-value="486.47" data-purchase-sum="463.13" data-day-change="27.54" data-day-change-pct="6" data-gain-abs="23.34" data-gain-pct="5.04" data-has-value="true" data-fx-unavailable="false" data-coverage-ratio="1" data-provenance="" data-metric-run-uuid="776852defc9945a8b453fda905444164"><td>
+        <button type="button" class="portfolio-toggle" data-portfolio="c116cb96-5c70-4031-a771-fe36c44ef7fa" aria-expanded="false" aria-controls="portfolio-details-c116cb96-5c70-4031-a771-fe36c44ef7fa">
+          <span class="caret">▶</span>
+          <span class="portfolio-name">Binance Bots</span>
+        </button>
+      </td><td class="align-right">3</td><td class="align-right">463,13&nbsp;€</td><td class="align-right">486,47&nbsp;€</td><td class="align-right"><span class="positive">27,54&nbsp;€</span></td><td class="align-right"><span class="positive">6,00&nbsp;%</span></td><td class="align-right" data-gain-pct="5,04 %" data-gain-sign="positive"><span class="positive">23,34&nbsp;€</span></td><td class="align-right gain-pct-cell"><span class="positive">5,04&nbsp;%</span></td></tr><tr class="portfolio-details hidden" data-portfolio="c116cb96-5c70-4031-a771-fe36c44ef7fa" id="portfolio-details-c116cb96-5c70-4031-a771-fe36c44ef7fa" role="region" aria-label="Positionen für Binance Bots">
+      <td colspan="8">
+        <div class="positions-container"></div>
+      </td>
+    </tr><tr class="portfolio-row" data-portfolio="e47bd0ef-a181-4d43-8aa4-2f4d510102a4" data-position-count="2" data-current-value="1462.23" data-purchase-sum="1546.49" data-day-change="-18.94" data-day-change-pct="-1.28" data-gain-abs="-84.26" data-gain-pct="-5.45" data-has-value="true" data-fx-unavailable="false" data-coverage-ratio="1" data-provenance="" data-metric-run-uuid="776852defc9945a8b453fda905444164"><td>
+        <button type="button" class="portfolio-toggle" data-portfolio="e47bd0ef-a181-4d43-8aa4-2f4d510102a4" aria-expanded="false" aria-controls="portfolio-details-e47bd0ef-a181-4d43-8aa4-2f4d510102a4">
+          <span class="caret">▶</span>
+          <span class="portfolio-name">Binance Krypto</span>
+        </button>
+      </td><td class="align-right">2</td><td class="align-right">1.546,49&nbsp;€</td><td class="align-right">1.462,23&nbsp;€</td><td class="align-right"><span class="negative">-18,94&nbsp;€</span></td><td class="align-right"><span class="negative">-1,28&nbsp;%</span></td><td class="align-right" data-gain-pct="-5,45 %" data-gain-sign="negative"><span class="negative">-84,26&nbsp;€</span></td><td class="align-right gain-pct-cell"><span class="negative">-5,45&nbsp;%</span></td></tr><tr class="portfolio-details hidden" data-portfolio="e47bd0ef-a181-4d43-8aa4-2f4d510102a4" id="portfolio-details-e47bd0ef-a181-4d43-8aa4-2f4d510102a4" role="region" aria-label="Positionen für Binance Krypto">
+      <td colspan="8">
+        <div class="positions-container"></div>
+      </td>
+    </tr><tr class="portfolio-row" data-portfolio="8492735e-ddf7-4c7a-9555-f400a4ad89b7" data-position-count="1" data-current-value="14525.74" data-purchase-sum="7435" data-day-change="66" data-day-change-pct="0.46" data-gain-abs="7090.74" data-gain-pct="95.37" data-has-value="true" data-fx-unavailable="false" data-coverage-ratio="1" data-provenance="" data-metric-run-uuid="776852defc9945a8b453fda905444164"><td>
+        <button type="button" class="portfolio-toggle" data-portfolio="8492735e-ddf7-4c7a-9555-f400a4ad89b7" aria-expanded="false" aria-controls="portfolio-details-8492735e-ddf7-4c7a-9555-f400a4ad89b7">
+          <span class="caret">▶</span>
+          <span class="portfolio-name">Gold</span>
+        </button>
+      </td><td class="align-right">1</td><td class="align-right">7.435,00&nbsp;€</td><td class="align-right">14.525,74&nbsp;€</td><td class="align-right"><span class="positive">66,00&nbsp;€</span></td><td class="align-right"><span class="positive">0,46&nbsp;%</span></td><td class="align-right" data-gain-pct="95,37 %" data-gain-sign="positive"><span class="positive">7.090,74&nbsp;€</span></td><td class="align-right gain-pct-cell"><span class="positive">95,37&nbsp;%</span></td></tr><tr class="portfolio-details hidden" data-portfolio="8492735e-ddf7-4c7a-9555-f400a4ad89b7" id="portfolio-details-8492735e-ddf7-4c7a-9555-f400a4ad89b7" role="region" aria-label="Positionen für Gold">
+      <td colspan="8">
+        <div class="positions-container"></div>
+      </td>
+    </tr><tr class="portfolio-row" data-portfolio="f9996e0d-743d-417f-b0f2-150dd68df646" data-position-count="4" data-current-value="5866.32" data-purchase-sum="5406.87" data-day-change="74.64" data-day-change-pct="1.29" data-gain-abs="459.45" data-gain-pct="8.5" data-has-value="true" data-fx-unavailable="false" data-coverage-ratio="1" data-provenance="" data-metric-run-uuid="776852defc9945a8b453fda905444164"><td>
+        <button type="button" class="portfolio-toggle" data-portfolio="f9996e0d-743d-417f-b0f2-150dd68df646" aria-expanded="false" aria-controls="portfolio-details-f9996e0d-743d-417f-b0f2-150dd68df646">
+          <span class="caret">▶</span>
+          <span class="portfolio-name">IBKR Portfolio</span>
+        </button>
+      </td><td class="align-right">4</td><td class="align-right">5.406,87&nbsp;€</td><td class="align-right">5.866,32&nbsp;€</td><td class="align-right"><span class="positive">74,64&nbsp;€</span></td><td class="align-right"><span class="positive">1,29&nbsp;%</span></td><td class="align-right" data-gain-pct="8,50 %" data-gain-sign="positive"><span class="positive">459,45&nbsp;€</span></td><td class="align-right gain-pct-cell"><span class="positive">8,50&nbsp;%</span></td></tr><tr class="portfolio-details hidden" data-portfolio="f9996e0d-743d-417f-b0f2-150dd68df646" id="portfolio-details-f9996e0d-743d-417f-b0f2-150dd68df646" role="region" aria-label="Positionen für IBKR Portfolio">
+      <td colspan="8">
+        <div class="positions-container"></div>
+      </td>
+    </tr><tr class="portfolio-row" data-portfolio="2cff58d9-ea39-4bb3-a6bb-3b170e4237ff" data-position-count="32" data-current-value="65262.92" data-purchase-sum="52449.06" data-day-change="-200.76" data-day-change-pct="-0.31" data-gain-abs="12813.86" data-gain-pct="24.43" data-has-value="true" data-fx-unavailable="false" data-coverage-ratio="1" data-provenance="" data-metric-run-uuid="776852defc9945a8b453fda905444164"><td>
+        <button type="button" class="portfolio-toggle" data-portfolio="2cff58d9-ea39-4bb3-a6bb-3b170e4237ff" aria-expanded="false" aria-controls="portfolio-details-2cff58d9-ea39-4bb3-a6bb-3b170e4237ff">
+          <span class="caret">▶</span>
+          <span class="portfolio-name">S-Broker</span>
+        </button>
+      </td><td class="align-right">32</td><td class="align-right">52.449,06&nbsp;€</td><td class="align-right">65.262,92&nbsp;€</td><td class="align-right"><span class="negative">-200,76&nbsp;€</span></td><td class="align-right"><span class="negative">-0,31&nbsp;%</span></td><td class="align-right" data-gain-pct="24,43 %" data-gain-sign="positive"><span class="positive">12.813,86&nbsp;€</span></td><td class="align-right gain-pct-cell"><span class="positive">24,43&nbsp;%</span></td></tr><tr class="portfolio-details hidden" data-portfolio="2cff58d9-ea39-4bb3-a6bb-3b170e4237ff" id="portfolio-details-2cff58d9-ea39-4bb3-a6bb-3b170e4237ff" role="region" aria-label="Positionen für S-Broker">
+      <td colspan="8">
+        <div class="positions-container"></div>
+      </td>
+    </tr><tr class="portfolio-row" data-portfolio="8d84468b-7023-45a9-b842-6478811e022c" data-position-count="19" data-current-value="21459.37" data-purchase-sum="19135.72" data-day-change="-42.88" data-day-change-pct="-0.2" data-gain-abs="2323.65" data-gain-pct="12.14" data-has-value="true" data-fx-unavailable="false" data-coverage-ratio="1" data-provenance="" data-metric-run-uuid="776852defc9945a8b453fda905444164"><td>
+        <button type="button" class="portfolio-toggle" data-portfolio="8d84468b-7023-45a9-b842-6478811e022c" aria-expanded="false" aria-controls="portfolio-details-8d84468b-7023-45a9-b842-6478811e022c">
+          <span class="caret">▶</span>
+          <span class="portfolio-name">Trade Republic Depot</span>
+        </button>
+      </td><td class="align-right">19</td><td class="align-right">19.135,72&nbsp;€</td><td class="align-right">21.459,37&nbsp;€</td><td class="align-right"><span class="negative">-42,88&nbsp;€</span></td><td class="align-right"><span class="negative">-0,20&nbsp;%</span></td><td class="align-right" data-gain-pct="12,14 %" data-gain-sign="positive"><span class="positive">2.323,65&nbsp;€</span></td><td class="align-right gain-pct-cell"><span class="positive">12,14&nbsp;%</span></td></tr><tr class="portfolio-details hidden" data-portfolio="8d84468b-7023-45a9-b842-6478811e022c" id="portfolio-details-8d84468b-7023-45a9-b842-6478811e022c" role="region" aria-label="Positionen für Trade Republic Depot">
+      <td colspan="8">
+        <div class="positions-container"></div>
+      </td>
+    </tr><tr class="footer-row" data-position-count="61" data-current-value="109063.04999999999" data-purchase-sum="86436.26999999999" data-day-change="-94.39999999999998" data-day-change-pct="-0.08648058378058483" data-gain-abs="22626.780000000002" data-gain-pct="26.17741371764423" data-has-value="true" data-fx-unavailable="false">
+      <td>Summe</td>
+      <td class="align-right">61</td>
+      <td class="align-right">86.436,27&nbsp;€</td>
+      <td class="align-right">109.063,05&nbsp;€</td>
+      <td class="align-right"><span class="negative">-94,40&nbsp;€</span></td>
+      <td class="align-right"><span class="negative">-0,09&nbsp;%</span></td>
+      <td class="align-right" data-gain-pct="26,18 %" data-gain-sign="positive"><span class="positive">22.626,78&nbsp;€</span></td>
+      <td class="align-right"><span class="positive">26,18&nbsp;%</span></td>
+    </tr></tbody></table>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2>Liquidität</h2>
+      <div class="scroll-container account-table">
+        <table><thead><tr><th>Name</th><th class="align-right">Kontostand (EUR)</th></tr></thead><tbody><tr><td>BBVA</td><td class="align-right">98.000,00&nbsp;€</td></tr><tr><td>Binance BTC-Bot 1</td><td class="align-right">199,66&nbsp;€</td></tr><tr><td>Binance BTC-Bot 2</td><td class="align-right">500,00&nbsp;€</td></tr><tr><td>Binance Cash</td><td class="align-right">0,06&nbsp;€</td></tr><tr><td>Binance ETH-Bot 1</td><td class="align-right">400,00&nbsp;€</td></tr><tr><td>Binance ETH-Bot 2</td><td class="align-right">500,00&nbsp;€</td></tr><tr><td>Binance XRP-Bot</td><td class="align-right">400,00&nbsp;€</td></tr><tr><td>Haspa Giro</td><td class="align-right">0,00&nbsp;€</td></tr><tr><td>IBKR</td><td class="align-right">0,00&nbsp;€</td></tr><tr><td>Trade Republic Cash</td><td class="align-right">15.032,90&nbsp;€</td></tr><tr class="footer-row"><td>Summe</td><td class="align-right">115.032,62&nbsp;€</td></tr></tbody></table>
+      </div>
+    </div>
+    
+      <div class="card">
+        <h2>Fremdwährungen</h2>
+        <div class="scroll-container fx-account-table">
+          <table><thead><tr><th>Name</th><th>Betrag (FX)</th><th class="align-right">EUR</th></tr></thead><tbody><tr><td>IBKR USD</td><td>1.255,40&nbsp;USD</td><td class="align-right">1.078,80&nbsp;€</td></tr><tr class="footer-row"><td>Summe</td><td><span class="missing-value" role="note" aria-label="Kein Wert verfügbar" title="Kein Wert verfügbar">—</span></td><td class="align-right">1.078,80&nbsp;€</td></tr></tbody></table>
+        </div>
+        
+      </div>
+  
+    
+    <div class="card footer-card">
+      <div class="meta">
+        <div class="last-file-update">
+          📂 Letzte Aktualisierung der Datei: <strong>06.12.2025, 17:20</strong>
+        </div>
+      </div>
+    </div>
+  
+  </div>
+  ✓  1 [Chromium] › tests/ui/hooks_e2e.spec.ts:50:3 › Analyse Tab - Data Hooks E2E › Displays correct total wealth from seeded data (4.1s)
+
+  1 passed (5.2s)

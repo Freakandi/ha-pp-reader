@@ -3,47 +3,40 @@
 You are **Antigravity**, a powerful agentic AI coding assistant, working on the Home Assistant integration **Portfolio Performance Reader** in Andreas' Raspberry Pi 5 VS Code environment.
 
 ## 1. Core Context
-*   **Active Checklist**: Reflected in your `task.md` artifact. Initialize it from `.docs/TODO_backdating5_testing.md` or the specific TODO file provided by the user.
+*   **Active Checklist**: Reflected in your `task.md` artifact. Initialize it from `.docs/TODO_backdating5_testing.md`.
 *   **Repository Root**: `/home/andreas/coding/repos/ha-pp-reader`
 *   **Key Paths**:
     *   Frontend: `src/` -> `custom_components/pp_reader/www/pp_reader_dashboard/js/`
     *   Backend: `custom_components/pp_reader/`
     *   Data Model: `datamodel/`
 
-## 2. Agentic Workflow Mapping
+## 2. Agentic Workflow
+Unlike standard tasks, you are authorized to **process the entire remaining checklist in a single session** using the following loop:
 
-Adopt the standard PLANNING -> EXECUTION -> VERIFICATION cycle, mapping project-specific steps as follows:
+### Phase 1: Planning
+1.  **Read Todo**: Identify *all* incomplete items in `.docs/TODO_backdating5_testing.md`.
+2.  **Batch Plan**: Update `task.md` with the full list of remaining items.
+3.  **Strategy**: Create/Update `implementation_plan.md` covering the next logical batch of work.
 
-### Phase 1: Planning (Mode: PLANNING)
-1.  **Hygiene**: Ensure clean state.
-    *   Clear stale HA/Vite processes: `pgrep -fl hass`, `pgrep -fl vite`, `lsof -i :5173`.
-2.  **Task selection**: Pick the next high-priority item from `.docs/TODO_backdating5_testing.md` (or relevant TODO).
-3.  **Artifacts**:
-    *   Update `task.md` with the specific checklist item.
-    *   Create/Update `implementation_plan.md` outlining changes and specific verification steps.
-    *   *Constraint*: Keep changes minimal and scoped to one checklist item.
+### Phase 2: Execution (The Loop)
+*Iterate through the checklist items one by one or in logical groups:*
+1.  **Execute**: Implement the necessary changes for the current item(s).
+2.  **Verify**: Run targeted tests (`pytest`, `npm test`, or ephemeral UI probes).
+3.  **Mark Complete**:
+    *   Update `task.md` (`[x]`).
+    *   **CRITICAL**: Update the source file `.docs/TODO_backdating5_testing.md` (`[x]`).
+    *   *Do NOT stop yet.* Continue to the next item in the batch.
 
-### Phase 2: Execution (Mode: EXECUTION)
-1.  **Services**: Start background services *only if needed* for the task.
-    *   HA: `source venv-ha/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &`
-    *   Vite: `npm run dev -- --host 127.0.0.1 --port 5173`
-2.  **Implementation**:
-    *   Follow patterns in `custom_components/pp_reader` and `src/`.
-    *   Maintain data model alignment (`datamodel/`).
-    *   Use `task_boundary` to report progress on sub-steps.
+### Phase 3: Completion
+Only after the entire batch is done:
+1.  **Final Verification**: Run the full suite (`./scripts/lint`, `pytest`, `npm run test:ui`).
+2.  **Report**: Update `walkthrough.md` with a summary of the entire session.
+3.  **Notify**: Call `notify_user` to signal that the entire checklist is complete.
 
-### Phase 3: Verification (Mode: VERIFICATION)
-1.  **Tests**:
-    *   Backend: `./scripts/lint` (in venv), `pytest`.
-    *   Frontend: `npm run lint:ts`, `npm run typecheck`, `npm test`.
-    *   UI Smoke: `npm run test:ui -- --project=Chromium` (if UI touched).
-2.  **Completion**:
-    *   Update `walkthrough.md` with results and proof of verification.
-    *   Mark item as completed in `task.md` (and the original `.docs/TODO...md` file if requested).
-3.  **Cleanup**: Stop any services you started.
-
-## 3. Rules & Quality Gates
-*   **One Item Per Run**: Focus strictly on the defined task.
-*   **No Placeholders**: Implement complete logic unless explicitly justified.
-*   **Logging**: Use namespace `custom_components.pp_reader.<module>`.
-*   **Quality**: Ensure `ruff` (Python) and `npm run lint:ts` (TS) are clean before finishing.
+## 3. Rules & Constraints
+Adhere strictly to the rules defined in `.agent/rules/`:
+*   [dev-environment.md](.agent/rules/dev-environment.md): Services & paths.
+*   [linting-required.md](.agent/rules/linting-required.md): Quality gates (Ruff/ESLint).
+*   [ui-testing.md](.agent/rules/ui-testing.md): Headless verification & probes.
+*   [project-hygiene.md](.agent/rules/project-hygiene.md): Autonomy, logging, and completion gates.
+*   [documentation-updates.md](.agent/rules/documentation-updates.md): Syncing docs.

@@ -60,7 +60,7 @@ Additional platform-specific hints (Windows, devcontainers, Codex) live in [TEST
   - Ops guidance: run the full backfill once after deployment/import, then rely on the scheduled FX refresh for daily updates. Short gaps finish in seconds; multi-year gaps can take minutes depending on Frankfurter throughput. If throttled, rerun with `--limit`/`--max-days` to batch the work.
 - Holdings calculations return structured `aggregation` and `average_cost` data (including native currency and EUR totals). Legacy flat fields such as `gain_abs`, `gain_pct`, and `avg_price_*` must not reappear in new payloads.
 - Canonical currency edge cases (SSR Mining CAD vs. EUR, Harmonic Drive JPY) are documented in `.docs/fix_native_purchase.md` and mirrored by unit tests; keep them intact when adjusting purchase logic.
-- The end-to-end ingestion, aggregation, and payload contracts live in [`.docs/portfolio-data-spec.md`](.docs/portfolio-data-spec.md); update that spec alongside schema or API changes.
+- The end-to-end ingestion, aggregation, and payload contracts live in [`.docs/wealth-backdating-concept.md`](.docs/wealth-backdating-concept.md) and [`datamodel/SQLite_data.md`](datamodel/SQLite_data.md); update them alongside schema or API changes.
 
 ## Frontend workflow
 The dashboard is authored in TypeScript and bundled with Vite. Assets live under `custom_components/pp_reader/www/pp_reader_dashboard/js/` and are referenced by `dashboard.module.js`.
