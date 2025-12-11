@@ -15,7 +15,7 @@ This guide targets contributors working on the Portfolio Performance Reader inte
 ## Quick start
 1. Run `./scripts/setup_container` (preferred) to install system packages, create `.venv`, and install runtime dependencies from `requirements.txt`.
 2. Activate the virtual environment in every new shell: `source .venv/bin/activate`.
-   - On Andreas' Raspberry Pi 5 VS Code workspace a dedicated `venv-ha/` already exists; activate it via `source venv-ha/bin/activate`, then start Home Assistant with `hass --config ~/coding/repos/ha-pp-reader/config` to reuse the repo's bundled configuration.
+   - The legacy `venv-ha/` is deprecated; please use `.venv/` for a consistent experience across local and cloud environments.
 3. Install contributor extras before running tests: `pip install -r requirements-dev.txt`.
 4. Install Node.js **18.18+** / npm **10+**, then execute `npm install` for the frontend toolchain.
 5. For bare environments without virtualenv support, `./scripts/environment_setup` installs the Python dependencies globally.
@@ -56,7 +56,7 @@ Additional platform-specific hints (Windows, devcontainers, Codex) live in [TEST
 - FX time-series backfill: the integration runs a backfill before each FX refresh to fill gaps from the earliest transaction date through today. For manual runs use `scripts/backfill_fx.py`:
   - `python scripts/backfill_fx.py --db config/pp_reader_data/pp_reader.db --dry-run` lists missing days per currency without writing.
   - `--currency USD --start 2023-01-01 --end 2023-12-31` limits scope; `--limit` restricts to the last N days; `--max-days` aborts a currency if gaps exceed the guard; omit flags to backfill all detected non-EUR currencies.
-  - Requires the Python venv (`source .venv/bin/activate` or `venv-ha`) and an initialized DB schema (`scripts/develop` or `scripts/setup*`).
+  - Requires the Python venv (`source .venv/bin/activate`) and an initialized DB schema (`scripts/develop` or `scripts/setup*`).
   - Ops guidance: run the full backfill once after deployment/import, then rely on the scheduled FX refresh for daily updates. Short gaps finish in seconds; multi-year gaps can take minutes depending on Frankfurter throughput. If throttled, rerun with `--limit`/`--max-days` to batch the work.
 - Holdings calculations return structured `aggregation` and `average_cost` data (including native currency and EUR totals). Legacy flat fields such as `gain_abs`, `gain_pct`, and `avg_price_*` must not reappear in new payloads.
 - Canonical currency edge cases (SSR Mining CAD vs. EUR, Harmonic Drive JPY) are documented in `.docs/fix_native_purchase.md` and mirrored by unit tests; keep them intact when adjusting purchase logic.

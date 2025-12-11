@@ -6,10 +6,10 @@
  * while enabling cache busting through hashed filenames and source map output
  * for easier debugging.
  */
-import { defineConfig } from 'vite';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { defineConfig } from 'vite';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 const entryFile = resolve(projectRoot, 'src/dashboard.ts');
@@ -24,17 +24,17 @@ export default defineConfig(() => {
 
   const analyzerPlugins = enableAnalyzer
     ? [
-        visualizer({
-          filename: resolve(projectRoot, '.docs', 'bundle-analysis.html'),
-          template: 'treemap',
-          gzipSize: true,
-          brotliSize: true,
-        }),
-        visualizer({
-          filename: resolve(projectRoot, '.docs', 'bundle-analysis.json'),
-          template: 'raw-data',
-        }),
-      ]
+      visualizer({
+        filename: resolve(projectRoot, '.docs', 'bundle-analysis.html'),
+        template: 'treemap',
+        gzipSize: true,
+        brotliSize: true,
+      }),
+      visualizer({
+        filename: resolve(projectRoot, '.docs', 'bundle-analysis.json'),
+        template: 'raw-data',
+      }),
+    ]
     : [];
 
   return {
@@ -43,7 +43,6 @@ export default defineConfig(() => {
       watch: {
         // Ignore Python virtual environments to avoid hitting Pi watcher limits.
         ignored: [
-          '**/venv-ha/**',
           '**/.venv/**',
           '**/venv/**',
         ],

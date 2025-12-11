@@ -17,8 +17,8 @@ This is the primary source of truth for AI agents working in this repository. It
 ## 2. Tooling & Setup
 
 ### Python (Backend)
-Work inside the pre-configured virtual environment `venv-ha` or `.venv`.
-*   **Activate**: `source venv-ha/bin/activate` (preferred) or `source .venv/bin/activate`.
+Work inside the pre-configured virtual environment `.venv`.
+*   **Activate**: `source .venv/bin/activate`.
 *   **Lint & Format**: `./scripts/lint` (Runs Ruff format + check --fix). **Run this before every commit.**
 *   **Test**: `pytest` (Fast, isolated).
     *   `pytest --cov=custom_components/pp_reader` for coverage.
