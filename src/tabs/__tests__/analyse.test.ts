@@ -1,18 +1,18 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { __TEST_ONLY__ as ANALYSE_TEST_ONLY } from '../analyse';
 import type { DailyWealthResponse } from '../../data/api';
+import { __TEST_ONLY__ as ANALYSE_TEST_ONLY } from '../analyse';
 
 function installDom(): JSDOM {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: 'http://localhost/',
     pretendToBeVisual: true,
   });
-  (globalThis as unknown as { window: Window })['window'] = dom.window as unknown as Window;
-  (globalThis as unknown as { document: Document })['document'] = dom.window.document;
-  (globalThis as unknown as { navigator: Navigator })['navigator'] = dom.window.navigator;
+  Object.defineProperty(globalThis, 'window', { value: dom.window });
+  Object.defineProperty(globalThis, 'document', { value: dom.window.document });
+  Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator });
   return dom;
 }
 
