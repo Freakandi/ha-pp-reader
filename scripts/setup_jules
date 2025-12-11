@@ -49,4 +49,8 @@ hass --script ensure_config --config config
 npm run test           # Frontend smoke tests
 pytest -q tests/unit   # Backend unit tests
 
+# Ensure clean git state (Jules requires this for snapshotting)
+# npm install might have touched package-lock.json
+git checkout .
+
 echo "Jules environment setup complete. Activate with: source .venv/bin/activate"
