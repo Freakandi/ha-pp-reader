@@ -4,8 +4,17 @@ set -ex
 # Clean up any existing environment to ensure a fresh start
 rm -rf .venv venv-ha node_modules
 
-# Create virtual environment using system python (3.12+)
-python3 -m venv .venv
+# Ensure Python 3.13 is available via pyenv (required by HA 2025.11.1)
+if command -v pyenv >/dev/null; then
+    pyenv install -s 3.13.3
+    pyenv local 3.13.3
+    PYTHON_EXEC=$(pyenv which python)
+else
+    PYTHON_EXEC=python3
+fi
+
+# Create virtual environment using specific python
+$PYTHON_EXEC -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies fast using uv (preinstalled in Jules)
