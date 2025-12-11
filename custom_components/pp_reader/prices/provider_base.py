@@ -7,7 +7,7 @@ Dieses Modul definiert:
   last_price_fetched_at in der securities Tabelle).
 - PriceProvider Protocol: Schnittstelle für konkrete Provider (initial YahooQuery).
 
-Spezifikation (siehe .docs/nextGoals.md / DEV_PRICE_TODO):
+Spezifikation:
 - Nur Quotes mit price > 0 werden vom konkreten Provider akzeptiert.
 - Fehlende Felder → None.
 - Keine Exceptions pro Symbol (Provider filtert / lässt aus).
