@@ -360,141 +360,138 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
   if (positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
-  // Mapping für makeTable
+
   const cols = [
-    { key: 'name', label: 'Wertpapier' },
-    { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
-    { key: 'average_price', label: 'Ø Kaufpreis', align: 'right' as const },
-    { key: 'purchase_value', label: 'Kaufpreis (EUR)', align: 'right' as const },
-    { key: 'current_value', label: 'Aktueller Wert', align: 'right' as const },
-    { key: 'day_change_abs', label: 'Heute +/-', align: 'right' as const },
-    { key: 'day_change_pct', label: 'Heute %', align: 'right' as const },
-    { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' as const },
-    { key: 'gain_pct', label: 'Gesamt %', align: 'right' as const }
+    { key: 'name', label: 'Wertpapier', sortKey: 'name' },
+    { key: 'current_holdings', label: 'Bestand', align: 'right', sortKey: 'current_holdings' },
+    { key: 'average_price', label: 'Ø Kaufpreis', align: 'right', sortKey: 'average_price' },
+    { key: 'purchase_value', label: 'Kaufpreis (EUR)', align: 'right', sortKey: 'purchase_value' },
+    { key: 'current_value', label: 'Aktueller Wert', align: 'right', sortKey: 'current_value' },
+    { key: 'day_change_abs', label: 'Heute +/-', align: 'right', sortKey: 'day_change_abs' },
+    { key: 'day_change_pct', label: 'Heute %', align: 'right', sortKey: 'day_change_pct' },
+    { key: 'gain_abs', label: 'Gesamt +/-', align: 'right', sortKey: 'gain_abs' },
+    { key: 'gain_pct', label: 'Gesamt %', align: 'right', sortKey: 'gain_pct' }
   ];
-  const rows = positions.map((p) => {
-    const performance = normalizePerformancePayload(p.performance);
-    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
-    const dayChange = computePositionDayChange(p);
-    const purchaseTotal =
-      typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
-        ? p.purchase_value
-        : null;
 
-    return {
-      name:
-          typeof p.name === 'string'
-            ? p.name
-            : typeof p.name === 'number'
-              ? String(p.name)
-              : '',
-      current_holdings:
-        typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
-          ? p.current_holdings
-          : null,
-      average_price:
-        typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
-          ? p.purchase_value
-          : null,
-      purchase_value: purchaseTotal,
-      current_value:
-        typeof p.current_value === 'number' || typeof p.current_value === 'string'
-          ? p.current_value
-          : null,
-      day_change_abs: dayChange.value,
-      day_change_pct: dayChange.pct,
-      gain_abs: gainAbs,
-      gain_pct: gainPct,
-      performance,
-    };
+  let html = '<table class="sortable-positions" data-default-sort="name" data-default-dir="asc"><thead><tr>';
+  cols.forEach(col => {
+    const alignClass = col.align === 'right' ? ' class="align-right sortable-col"' : ' class="sortable-col"';
+    html += `<th${alignClass} data-sort-key="${col.sortKey}">${col.label}</th>`;
   });
+  html += '</tr></thead><tbody>';
 
-  // Basis-HTML über makeTable erzeugen
-  const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'day_change_abs', 'gain_abs']);
+  const sums = {
+    purchase_value: 0,
+    current_value: 0,
+    day_change_abs: 0,
+    gain_abs: 0
+  };
+  const sumCounts = {
+    purchase_value: 0,
+    current_value: 0,
+    day_change_abs: 0,
+    gain_abs: 0
+  };
 
-  // Header um data-sort-key ergänzen + sortable Klasse setzen
-  try {
-    const tpl = document.createElement('template');
-    tpl.innerHTML = raw.trim();
-    const table = tpl.content.querySelector<HTMLTableElement>('table');
-    if (table) {
-      table.classList.add('sortable-positions');
-        const ths = Array.from(table.querySelectorAll<HTMLElement>('thead th'));
-        cols.forEach((col, i) => {
-          const th = ths.at(i);
-          if (!th) {
-            return;
-          }
-          th.setAttribute('data-sort-key', col.key);
-          th.classList.add('sortable-col');
-        });
-    const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
-    bodyRows.forEach((tr, idx) => {
-      if (tr.classList.contains('footer-row')) {
-        return;
-      }
-      if (idx >= positions.length) {
-        return;
-      }
-      const pos = positions[idx];
-      const securityUuid = typeof pos.security_uuid === 'string' ? pos.security_uuid : null;
-      if (securityUuid) {
-        tr.dataset.security = securityUuid;
-      }
-          tr.classList.add('position-row');
-          const purchaseCell = tr.cells.item(2);
-        if (purchaseCell) {
-          const { markup, sortValue, ariaLabel } = buildPurchasePriceDisplay(pos);
-          purchaseCell.innerHTML = markup;
-          purchaseCell.dataset.sortValue = String(sortValue);
-          if (ariaLabel) {
-            purchaseCell.setAttribute('aria-label', ariaLabel);
-          } else {
-            purchaseCell.removeAttribute('aria-label');
-          }
-        }
-          const gainCell = tr.cells.item(7);
-        if (gainCell) {
-          const performance = normalizePerformancePayload(pos.performance);
-          const gainPctValue =
-            typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
-              ? performance.gain_pct
-              : null;
-          const pctLabel =
-            gainPctValue != null
-              ? `${gainPctValue.toLocaleString('de-DE', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })} %`
-              : '—';
-          const pctSign =
-            gainPctValue == null
-              ? 'neutral'
-              : gainPctValue > 0
-                ? 'positive'
-                : gainPctValue < 0
-                  ? 'negative'
-                  : 'neutral';
-          gainCell.dataset.gainPct = pctLabel;
-          gainCell.dataset.gainSign = pctSign;
-        }
-          const gainPctCell = tr.cells.item(8);
-        if (gainPctCell) {
-          gainPctCell.classList.add('gain-pct-cell');
-        }
-      });
-      // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
-      table.dataset.defaultSort = 'name';
-      table.dataset.defaultDir = 'asc';
-      applyGainPctMetadata(table);
-      return table.outerHTML;
+  const parseNum = (val: unknown): number | null => {
+    if (typeof val === 'number' && Number.isFinite(val)) return val;
+    if (typeof val === 'string') {
+      const parsed = parseFloat(val);
+      return Number.isFinite(parsed) ? parsed : null;
     }
-  } catch (e) {
-    // Fallback: unverändertes Markup
-    console.warn("renderPositionsTable: Konnte Sortier-Metadaten nicht injizieren:", e);
+    return null;
+  };
+
+  for (const p of positions) {
+    const performance = normalizePerformancePayload(p.performance);
+    const dayChange = computePositionDayChange(p);
+
+    const purchaseVal = parseNum(p.purchase_value);
+    const currentVal = parseNum(p.current_value);
+    const dayChangeAbs = dayChange.value;
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
+
+    if (purchaseVal !== null) { sums.purchase_value += purchaseVal; sumCounts.purchase_value++; }
+    if (currentVal !== null) { sums.current_value += currentVal; sumCounts.current_value++; }
+    if (dayChangeAbs !== null) { sums.day_change_abs += dayChangeAbs; sumCounts.day_change_abs++; }
+    if (gainAbs !== null) { sums.gain_abs += gainAbs; sumCounts.gain_abs++; }
+
+    const securityUuid = typeof p.security_uuid === 'string' ? p.security_uuid : '';
+
+    html += `<tr class="position-row" data-security="${escapeHtml(securityUuid)}">`;
+
+    const nameStr = typeof p.name === 'string' ? p.name : (typeof p.name === 'number' ? String(p.name) : '');
+    html += `<td>${formatValue('name', nameStr)}</td>`;
+    html += `<td class="align-right">${formatValue('current_holdings', p.current_holdings)}</td>`;
+
+    const { markup, sortValue, ariaLabel } = buildPurchasePriceDisplay(p);
+    const ariaAttr = ariaLabel ? ` aria-label="${escapeHtml(ariaLabel)}"` : '';
+    html += `<td class="align-right" data-sort-value="${String(sortValue)}"${ariaAttr}>${markup}</td>`;
+
+    html += `<td class="align-right">${formatValue('purchase_value', purchaseVal, p)}</td>`;
+    html += `<td class="align-right">${formatValue('current_value', currentVal, p)}</td>`;
+    html += `<td class="align-right">${formatValue('day_change_abs', dayChangeAbs, p)}</td>`;
+    html += `<td class="align-right">${formatValue('day_change_pct', dayChange.pct, p)}</td>`;
+
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    let pctLabel = '—';
+    let pctSign = 'neutral';
+    if (gainPct != null) {
+      pctLabel = `${gainPct.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2})} %`;
+      pctSign = gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral';
+    }
+    const gainAttrs = ` data-gain-pct="${escapeHtml(pctLabel)}" data-gain-sign="${pctSign}"`;
+    html += `<td class="align-right"${gainAttrs}>${formatValue('gain_abs', gainAbs, p)}</td>`;
+
+    html += `<td class="align-right gain-pct-cell">${formatValue('gain_pct', gainPct, p)}</td>`;
+
+    html += '</tr>';
   }
-  return raw;
+
+  html += '<tr class="footer-row"><td>Summe</td><td class="align-right"></td><td class="align-right"></td>';
+
+  const sumPurchaseVal = sumCounts.purchase_value > 0 ? sums.purchase_value : null;
+  html += `<td class="align-right">${formatValue('purchase_value', sumPurchaseVal, undefined, { hasValue: sumCounts.purchase_value > 0 })}</td>`;
+
+  const sumCurrentVal = sumCounts.current_value > 0 ? sums.current_value : null;
+  html += `<td class="align-right">${formatValue('current_value', sumCurrentVal, undefined, { hasValue: sumCounts.current_value > 0 })}</td>`;
+
+  const sumDayChangeAbsVal = sumCounts.day_change_abs > 0 ? sums.day_change_abs : null;
+  html += `<td class="align-right">${formatValue('day_change_abs', sumDayChangeAbsVal, undefined, { hasValue: sumCounts.day_change_abs > 0 })}</td>`;
+
+  let sumDayChangePctVal: number | null = null;
+  if (sumDayChangeAbsVal !== null && sumCurrentVal !== null) {
+    const previousClose = sumCurrentVal - sumDayChangeAbsVal;
+    if (previousClose) {
+      sumDayChangePctVal = (sumDayChangeAbsVal / previousClose) * 100;
+    }
+  }
+  html += `<td class="align-right">${formatValue('day_change_pct', sumDayChangePctVal, undefined, { hasValue: sumDayChangePctVal !== null })}</td>`;
+
+  const sumGainAbsVal = sumCounts.gain_abs > 0 ? sums.gain_abs : null;
+
+  let sumGainPctVal: number | null = null;
+  if (sumGainAbsVal !== null) {
+    if (sumPurchaseVal !== null && sumPurchaseVal > 0) {
+      sumGainPctVal = (sumGainAbsVal / sumPurchaseVal) * 100;
+    } else if (sumCurrentVal !== null && sumCurrentVal !== 0) {
+      sumGainPctVal = (sumGainAbsVal / (sumCurrentVal - sumGainAbsVal)) * 100;
+    }
+  }
+
+  let sumGainPctLabel = '—';
+  let sumGainPctSign = 'neutral';
+  if (sumGainPctVal != null) {
+    sumGainPctLabel = `${formatNumber(sumGainPctVal)} %`;
+    sumGainPctSign = sumGainPctVal > 0 ? 'positive' : sumGainPctVal < 0 ? 'negative' : 'neutral';
+  }
+  const sumGainAttrs = ` data-gain-pct="${escapeHtml(sumGainPctLabel)}" data-gain-sign="${sumGainPctSign}"`;
+
+  html += `<td class="align-right"${sumGainAttrs}>${formatValue('gain_abs', sumGainAbsVal, undefined, { hasValue: sumCounts.gain_abs > 0 })}</td>`;
+  html += `<td class="align-right gain-pct-cell">${formatValue('gain_pct', sumGainPctVal, undefined, { hasValue: sumGainPctVal !== null })}</td>`;
+
+  html += '</tr></tbody></table>';
+  return html;
 }
 
 // NEU: Export / Global bereitstellen für Push-Handler (Konsistenz Push vs Lazy)
