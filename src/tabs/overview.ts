@@ -385,7 +385,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
     return {
       name:
           typeof p.name === 'string'
-            ? p.name
+            ? escapeHtml(p.name)
             : typeof p.name === 'number'
               ? String(p.name)
               : '',

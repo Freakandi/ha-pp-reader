@@ -975,7 +975,7 @@ function Fo() {
     ])
   );
 }
-function Le(e) {
+function Me(e) {
   if (!e || typeof e != "object")
     return null;
   const t = e, n = q(t.native), r = q(t.security), a = q(t.account), o = q(t.eur), i = q(t.coverage_ratio);
@@ -1027,7 +1027,7 @@ function Do(e) {
     current_holdings: a,
     purchase_value: s,
     current_value: o
-  }, u = Le(t.average_cost);
+  }, u = Me(t.average_cost);
   u && (l.average_cost = u), i && (l.aggregation = i);
   const d = ve(t.performance);
   if (d)
@@ -1084,13 +1084,13 @@ function ce(e) {
   if (!(!e || typeof e != "object"))
     return { ...e };
 }
-function Ke(e) {
+function Ye(e) {
   const t = { ...e };
   return t.average_cost = ce(e.average_cost), t.performance = ce(e.performance), t.aggregation = ce(e.aggregation), t.data_state = ce(e.data_state), t;
 }
 function yn(e) {
   const t = { ...e };
-  return t.performance = ce(e.performance), t.data_state = ce(e.data_state), Array.isArray(e.positions) && (t.positions = e.positions.map(Ke)), t;
+  return t.performance = ce(e.performance), t.data_state = ce(e.data_state), Array.isArray(e.positions) && (t.positions = e.positions.map(Ye)), t;
 }
 function Tr(e) {
   if (!e || typeof e != "object")
@@ -1123,7 +1123,7 @@ function Tr(e) {
     const g = e.positions.filter(
       (m) => !!m
     );
-    g.length && (n.positions = g.map(Ke));
+    g.length && (n.positions = g.map(Ye));
   }
   return n;
 }
@@ -1132,7 +1132,7 @@ function Ro(e, t) {
     ...e,
     ...t
   };
-  return !t.performance && e.performance && (n.performance = ce(e.performance)), !t.data_state && e.data_state && (n.data_state = ce(e.data_state)), !t.positions && e.positions && (n.positions = e.positions.map(Ke)), n;
+  return !t.performance && e.performance && (n.performance = ce(e.performance)), !t.data_state && e.data_state && (n.data_state = ce(e.data_state)), !t.positions && e.positions && (n.positions = e.positions.map(Ye)), n;
 }
 function kr(e) {
   Dr = (e ?? []).map((n) => ({ ...n }));
@@ -1170,7 +1170,7 @@ function pt(e, t) {
     return;
   }
   const r = (s, l) => {
-    const u = s ? Ke(s) : {}, d = u;
+    const u = s ? Ye(s) : {}, d = u;
     [
       "portfolio_uuid",
       "security_uuid",
@@ -1208,7 +1208,7 @@ function pt(e, t) {
   ), i = t.filter((s) => !!s).map((s) => {
     const l = s.security_uuid ? o.get(s.security_uuid) : void 0;
     return r(l, s);
-  }).map(Ke), c = {
+  }).map(Ye), c = {
     ...n,
     positions: i
   };
@@ -1369,7 +1369,7 @@ function Oo() {
   const { portfolios: e } = Rr();
   return e.map(Wo).filter((t) => !!t);
 }
-function Ye(e) {
+function Re(e) {
   return e ? e.replace(/[&<>"']/g, (t) => {
     switch (t) {
       case "&":
@@ -1391,8 +1391,8 @@ function Vr(e, t = {}) {
   if (!e || e.length === 0)
     return "";
   const n = ["meta-badges", t.containerClass].filter(Boolean).join(" "), r = e.map((a) => {
-    const o = `meta-badge--${a.tone}`, i = a.description ? ` title="${Ye(a.description)}"` : "";
-    return `<span class="meta-badge ${o}"${i}>${Ye(
+    const o = `meta-badge--${a.tone}`, i = a.description ? ` title="${Re(a.description)}"` : "";
+    return `<span class="meta-badge ${o}"${i}>${Re(
       a.label
     )}</span>`;
   }).join("");
@@ -1401,9 +1401,9 @@ function Vr(e, t = {}) {
 function gt(e, t, n = {}) {
   const r = Vr(t, n);
   if (!r)
-    return Ye(e);
+    return Re(e);
   const a = n.labelClass ?? "name-with-badges__label";
-  return `<span class="${["name-with-badges", n.containerClass].filter(Boolean).join(" ")}"><span class="${a}">${Ye(
+  return `<span class="${["name-with-badges", n.containerClass].filter(Boolean).join(" ")}"><span class="${a}">${Re(
     e
   )}</span>${r}</span>`;
 }
@@ -1413,7 +1413,7 @@ function zr(e, t, n, r) {
     current: r
   };
 }
-const le = /* @__PURE__ */ new Map(), Oe = /* @__PURE__ */ new Map();
+const le = /* @__PURE__ */ new Map(), Be = /* @__PURE__ */ new Map();
 function Bo(e) {
   if (typeof e == "string") {
     const t = e.trim();
@@ -1432,7 +1432,7 @@ function Bo(e) {
     }
   return "Unbekannter Fehler";
 }
-function Me(e) {
+function He(e) {
   if (typeof e != "string")
     return null;
   const t = e.trim();
@@ -1445,7 +1445,7 @@ function jo(e) {
   return e === null ? null : Ce(e);
 }
 function Ko(e) {
-  return e === null ? null : Me(e);
+  return e === null ? null : He(e);
 }
 function qn(e) {
   return (e ?? []).filter(
@@ -1555,7 +1555,7 @@ function bn(e, t, n, r) {
 function ni(e) {
   if (!(!e || e.length === 0))
     for (const t of e) {
-      const n = Me(t.uuid);
+      const n = He(t.uuid);
       if (!n)
         continue;
       const r = _n(
@@ -1570,7 +1570,7 @@ function ni(e) {
 function ri(e) {
   if (!(!e || e.length === 0))
     for (const t of e) {
-      const n = Me(t.uuid);
+      const n = He(t.uuid);
       if (!n)
         continue;
       const r = _n(
@@ -1656,15 +1656,15 @@ function si(e) {
   return t;
 }
 function Wr(e, t) {
-  const n = Oe.get(t) ?? {
+  const n = Be.get(t) ?? {
     attempts: 0,
     timer: null
   };
   n.timer || (n.timer = setTimeout(() => {
     n.timer = null, n.attempts += 1;
     const r = vn(e, t);
-    r || n.attempts >= Go ? (Oe.delete(t), r || le.delete(t)) : Wr(e, t);
-  }, Yo), Oe.set(t, n));
+    r || n.attempts >= Go ? (Be.delete(t), r || le.delete(t)) : Wr(e, t);
+  }, Yo), Be.set(t, n));
 }
 function ci(e, t) {
   console.log("updateConfigsWS: Kontodaten-Update erhalten:", e);
@@ -1710,7 +1710,7 @@ function li(e, t) {
     console.warn("updateAccountTable: .account-table nicht gefunden.");
   if (r) {
     const i = o.map((c) => {
-      const s = c.orig_balance, l = typeof s == "number" && Number.isFinite(s), u = Me(c.currency_code), d = l ? s.toLocaleString("de-DE", {
+      const s = c.orig_balance, l = typeof s == "number" && Number.isFinite(s), u = He(c.currency_code), d = l ? s.toLocaleString("de-DE", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       }) : null, p = d ? u ? `${d} ${u}` : d : "";
@@ -1794,7 +1794,7 @@ function di(e, t) {
     }
   }, u = /* @__PURE__ */ new Map();
   for (const d of n) {
-    const p = Me(d.uuid);
+    const p = He(d.uuid);
     p && u.set(p, d);
   }
   for (const [d, p] of u.entries()) {
@@ -1936,7 +1936,7 @@ function Bn(e, t) {
       pt(n, p);
     }
   } else
-    r || d.reason !== "hidden" || l ? (le.set(n, { positions: u, error: r }), Wr(t, n)) : (le.delete(n), Oe.delete(n));
+    r || d.reason !== "hidden" || l ? (le.set(n, { positions: u, error: r }), Wr(t, n)) : (le.delete(n), Be.delete(n));
   if (!r && i.length > 0) {
     const p = Array.from(
       new Set(
@@ -2137,7 +2137,7 @@ function Or(e, t, n) {
   u ? u.textContent = `${Gt(s)} €` : l.textContent = `💰 Gesamtvermögen: ${Gt(s)} €`, l.dataset.totalWealthEur = s.toString();
 }
 function yi(e, t) {
-  const n = typeof e == "string" ? e : e?.last_file_update, r = Me(n) ?? "";
+  const n = typeof e == "string" ? e : e?.last_file_update, r = He(n) ?? "";
   if (!t) {
     console.warn("handleLastFileUpdate: root fehlt");
     return;
@@ -2172,7 +2172,7 @@ const Ec = {
     le.set(e, { positions: t, error: n });
   },
   clearPendingUpdates() {
-    le.clear(), Oe.clear();
+    le.clear(), Be.clear();
   }
 };
 function ct(e) {
@@ -2207,7 +2207,7 @@ function Kn(e) {
 }
 let ht = null, mt = null;
 const Yn = { min: 2, max: 6 };
-function Ve(e) {
+function ze(e) {
   return fe(e);
 }
 function bi(e) {
@@ -2251,7 +2251,7 @@ function Si(e) {
       "currency_code"
     ],
     a === "EUR" ? "EUR" : null
-  ) ?? "EUR", i = Ve(n?.native), c = Ve(n?.security), s = Ve(n?.account), l = Ve(n?.eur), u = c ?? i, d = l ?? (o === "EUR" ? s : null), p = a ?? o, f = p === "EUR";
+  ) ?? "EUR", i = ze(n?.native), c = ze(n?.security), s = ze(n?.account), l = ze(n?.eur), u = c ?? i, d = l ?? (o === "EUR" ? s : null), p = a ?? o, f = p === "EUR";
   let g, m;
   f ? (g = "EUR", m = d ?? u ?? s ?? null) : u != null ? (g = p, m = u) : s != null ? (g = o, m = s) : (g = "EUR", m = d ?? null);
   const _ = Xn(m, g), h = f ? null : Xn(d, "EUR"), y = !!h && h !== _, b = [], S = [];
@@ -2260,7 +2260,7 @@ function Si(e) {
   ), S.push(_.replace(/\u00A0/g, " "))) : (b.push('<span class="missing-value" role="note" aria-label="Kein Kaufpreis verfügbar" title="Kein Kaufpreis verfügbar">—</span>'), S.push("Kein Kaufpreis verfügbar")), y && h && (b.push(
     `<span class="purchase-price purchase-price--secondary">${h}</span>`
   ), S.push(h.replace(/\u00A0/g, " ")));
-  const w = b.join("<br>"), C = Ve(r?.purchase_value_eur) ?? 0, A = S.join(", ");
+  const w = b.join("<br>"), C = ze(r?.purchase_value_eur) ?? 0, A = S.join(", ");
   return { markup: w, sortValue: C, ariaLabel: A };
 }
 function wi(e) {
@@ -2314,7 +2314,7 @@ function Ge(e) {
   ], n = e.map((a) => {
     const o = ve(a.performance), i = typeof o?.gain_abs == "number" ? o.gain_abs : null, c = typeof o?.gain_pct == "number" ? o.gain_pct : null, s = wi(a), l = typeof a.purchase_value == "number" || typeof a.purchase_value == "string" ? a.purchase_value : null;
     return {
-      name: typeof a.name == "string" ? a.name : typeof a.name == "number" ? String(a.name) : "",
+      name: typeof a.name == "string" ? Re(a.name) : typeof a.name == "number" ? String(a.name) : "",
       current_holdings: typeof a.current_holdings == "number" || typeof a.current_holdings == "string" ? a.current_holdings : null,
       average_price: typeof a.purchase_value == "number" || typeof a.purchase_value == "string" ? a.purchase_value : null,
       purchase_value: l,
@@ -2414,15 +2414,15 @@ function Kr(e) {
     const x = v.align === "right" ? ' class="align-right"' : "";
     n += `<th${x}>${v.label}</th>`;
   }), n += "</tr></thead><tbody>", e.forEach((v) => {
-    const x = Number.isFinite(v.position_count) ? v.position_count : 0, $ = Number.isFinite(v.purchase_sum) ? v.purchase_sum : 0, j = v.hasValue && typeof v.current_value == "number" && Number.isFinite(v.current_value) ? v.current_value : null, k = j !== null, V = v.performance, W = typeof v.gain_abs == "number" ? v.gain_abs : typeof V?.gain_abs == "number" ? V.gain_abs : null, B = typeof v.gain_pct == "number" ? v.gain_pct : typeof V?.gain_pct == "number" ? V.gain_pct : null, G = V && typeof V == "object" ? V.day_change : null, K = typeof v.day_change_abs == "number" ? v.day_change_abs : G && typeof G == "object" ? G.value_change_eur ?? G.price_change_eur : null, He = typeof v.day_change_pct == "number" ? v.day_change_pct : G && typeof G == "object" && typeof G.change_pct == "number" ? G.change_pct : null, Se = v.fx_unavailable && k, ka = typeof v.coverage_ratio == "number" && Number.isFinite(v.coverage_ratio) ? v.coverage_ratio : "", Ra = typeof v.provenance == "string" ? v.provenance : "", $a = typeof v.metric_run_uuid == "string" ? v.metric_run_uuid : "", Ie = yt.has(v.uuid), La = Ie ? "portfolio-toggle expanded" : "portfolio-toggle", Dn = `portfolio-details-${v.uuid}`, J = {
+    const x = Number.isFinite(v.position_count) ? v.position_count : 0, $ = Number.isFinite(v.purchase_sum) ? v.purchase_sum : 0, j = v.hasValue && typeof v.current_value == "number" && Number.isFinite(v.current_value) ? v.current_value : null, k = j !== null, V = v.performance, W = typeof v.gain_abs == "number" ? v.gain_abs : typeof V?.gain_abs == "number" ? V.gain_abs : null, B = typeof v.gain_pct == "number" ? v.gain_pct : typeof V?.gain_pct == "number" ? V.gain_pct : null, G = V && typeof V == "object" ? V.day_change : null, K = typeof v.day_change_abs == "number" ? v.day_change_abs : G && typeof G == "object" ? G.value_change_eur ?? G.price_change_eur : null, Ie = typeof v.day_change_pct == "number" ? v.day_change_pct : G && typeof G == "object" && typeof G.change_pct == "number" ? G.change_pct : null, Se = v.fx_unavailable && k, ka = typeof v.coverage_ratio == "number" && Number.isFinite(v.coverage_ratio) ? v.coverage_ratio : "", Ra = typeof v.provenance == "string" ? v.provenance : "", $a = typeof v.metric_run_uuid == "string" ? v.metric_run_uuid : "", Ve = yt.has(v.uuid), La = Ve ? "portfolio-toggle expanded" : "portfolio-toggle", Dn = `portfolio-details-${v.uuid}`, J = {
       fx_unavailable: v.fx_unavailable,
       purchase_value: $,
       current_value: j,
       day_change_abs: K,
-      day_change_pct: He,
+      day_change_pct: Ie,
       gain_abs: W,
       gain_pct: B
-    }, Ae = { hasValue: k }, Ma = L("purchase_value", J.purchase_value, J, Ae), Ha = L("current_value", J.current_value, J, Ae), Ia = L("day_change_abs", J.day_change_abs, J, Ae), Va = L("day_change_pct", J.day_change_pct, J, Ae), za = L("gain_abs", J.gain_abs, J, Ae), qa = L("gain_pct", J.gain_pct, J, Ae), Tn = k && typeof B == "number" && Number.isFinite(B) ? `${re(B)} %` : "", Ua = k && typeof B == "number" && Number.isFinite(B) ? B > 0 ? "positive" : B < 0 ? "negative" : "neutral" : "", Wa = k && typeof j == "number" && Number.isFinite(j) ? j : "", Oa = k && typeof W == "number" && Number.isFinite(W) ? W : "", Ba = k && typeof B == "number" && Number.isFinite(B) ? B : "", ja = k && typeof K == "number" && Number.isFinite(K) ? K : "", Ka = k && typeof He == "number" && Number.isFinite(He) ? He : "", Ya = String(x);
+    }, Ae = { hasValue: k }, Ma = L("purchase_value", J.purchase_value, J, Ae), Ha = L("current_value", J.current_value, J, Ae), Ia = L("day_change_abs", J.day_change_abs, J, Ae), Va = L("day_change_pct", J.day_change_pct, J, Ae), za = L("gain_abs", J.gain_abs, J, Ae), qa = L("gain_pct", J.gain_pct, J, Ae), Tn = k && typeof B == "number" && Number.isFinite(B) ? `${re(B)} %` : "", Ua = k && typeof B == "number" && Number.isFinite(B) ? B > 0 ? "positive" : B < 0 ? "negative" : "neutral" : "", Wa = k && typeof j == "number" && Number.isFinite(j) ? j : "", Oa = k && typeof W == "number" && Number.isFinite(W) ? W : "", Ba = k && typeof B == "number" && Number.isFinite(B) ? B : "", ja = k && typeof K == "number" && Number.isFinite(K) ? K : "", Ka = k && typeof Ie == "number" && Number.isFinite(Ie) ? Ie : "", Ya = String(x);
     let Tt = "";
     Tn && (Tt = ` data-gain-pct="${t(Tn)}" data-gain-sign="${t(Ua)}"`), Se && (Tt += ' data-partial="true"'), n += `<tr class="portfolio-row"
                   data-portfolio="${v.uuid}"
@@ -2438,27 +2438,27 @@ function Kr(e) {
                 data-coverage-ratio="${t(ka)}"
                 data-provenance="${t(Ra)}"
                 data-metric-run-uuid="${t($a)}">`;
-    const Ga = Ye(v.name), Xa = Vr(Br(v.badges), {
+    const Ga = Re(v.name), Xa = Vr(Br(v.badges), {
       containerClass: "portfolio-badges"
     });
     n += `<td>
         <button type="button"
                 class="${La}"
                 data-portfolio="${v.uuid}"
-                aria-expanded="${Ie ? "true" : "false"}"
+                aria-expanded="${Ve ? "true" : "false"}"
                 aria-controls="${Dn}">
-          <span class="caret">${Ie ? "▼" : "▶"}</span>
+          <span class="caret">${Ve ? "▼" : "▶"}</span>
           <span class="portfolio-name">${Ga}</span>${Xa}
         </button>
       </td>`;
     const Za = x.toLocaleString("de-DE");
-    n += `<td class="align-right">${Za}</td>`, n += `<td class="align-right">${Ma}</td>`, n += `<td class="align-right">${Ha}</td>`, n += `<td class="align-right">${Ia}</td>`, n += `<td class="align-right">${Va}</td>`, n += `<td class="align-right"${Tt}>${za}</td>`, n += `<td class="align-right gain-pct-cell">${qa}</td>`, n += "</tr>", n += `<tr class="portfolio-details${Ie ? "" : " hidden"}"
+    n += `<td class="align-right">${Za}</td>`, n += `<td class="align-right">${Ma}</td>`, n += `<td class="align-right">${Ha}</td>`, n += `<td class="align-right">${Ia}</td>`, n += `<td class="align-right">${Va}</td>`, n += `<td class="align-right"${Tt}>${za}</td>`, n += `<td class="align-right gain-pct-cell">${qa}</td>`, n += "</tr>", n += `<tr class="portfolio-details${Ve ? "" : " hidden"}"
                 data-portfolio="${v.uuid}"
                 id="${Dn}"
                 role="region"
                 aria-label="Positionen für ${v.name}">
       <td colspan="${r.length.toString()}">
-        <div class="positions-container">${Ie ? xt(v.uuid) ? Ge(Fr(v.uuid)) : '<div class="loading">Lade Positionen...</div>' : ""}</div>
+        <div class="positions-container">${Ve ? xt(v.uuid) ? Ge(Fr(v.uuid)) : '<div class="loading">Lade Positionen...</div>' : ""}</div>
       </td>
     </tr>`;
   });
@@ -2532,7 +2532,7 @@ function Ci(e) {
   }
   return document.querySelector(".portfolio-table table.expandable-portfolio-table") || document.querySelector(".portfolio-table table");
 }
-function ze(e) {
+function qe(e) {
   if (e === void 0)
     return null;
   const t = Number(e);
@@ -2550,7 +2550,7 @@ function Yr(e) {
     return;
   let a = 0, o = 0, i = 0, c = 0, s = 0, l = !1, u = !1, d = !0, p = !1;
   for (const $ of r) {
-    const j = ze($.dataset.positionCount);
+    const j = qe($.dataset.positionCount);
     j != null && (a += j), $.dataset.fxUnavailable === "true" && (p = !0);
     const k = $.dataset.hasValue;
     if (!!(k === "false" || k === "0" || k === "" || k == null)) {
@@ -2558,7 +2558,7 @@ function Yr(e) {
       continue;
     }
     l = !0;
-    const W = ze($.dataset.currentValue), B = ze($.dataset.gainAbs), G = ze($.dataset.purchaseSum), K = ze($.dataset.dayChange);
+    const W = qe($.dataset.currentValue), B = qe($.dataset.gainAbs), G = qe($.dataset.purchaseSum), K = qe($.dataset.dayChange);
     if (W == null || B == null || G == null) {
       d = !1;
       continue;
@@ -3114,7 +3114,7 @@ async function Ii(e, t, n = {}) {
   }
   return Zt();
 }
-const Vi = "http://www.w3.org/2000/svg", Ne = 640, Ee = 260, Ue = { top: 12, right: 16, bottom: 24, left: 16 }, We = "var(--pp-reader-chart-line, #3f51b5)", Jt = "var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))", er = "0.75rem", Xr = "var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))", Zr = "6 4", zi = 1440 * 60 * 1e3;
+const Vi = "http://www.w3.org/2000/svg", Ne = 640, Ee = 260, We = { top: 12, right: 16, bottom: 24, left: 16 }, Oe = "var(--pp-reader-chart-line, #3f51b5)", Jt = "var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))", er = "0.75rem", Xr = "var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))", Zr = "6 4", zi = 1440 * 60 * 1e3;
 function qi(e) {
   if (e == null)
     return null;
@@ -3214,7 +3214,7 @@ function oa(e) {
     markerTooltip: null,
     width: Ne,
     height: Ee,
-    margin: { ...Ue },
+    margin: { ...We },
     series: [],
     points: [],
     range: null,
@@ -3224,7 +3224,7 @@ function oa(e) {
     yFormatter: na,
     tooltipRenderer: ra,
     markerTooltipRenderer: aa,
-    color: We,
+    color: Oe,
     areaColor: Jt,
     baseline: null,
     handlersAttached: !1,
@@ -3356,10 +3356,10 @@ function Vt(e) {
 }
 function ia(e, t, n, r) {
   e.width = Number.isFinite(t) ? Number(t) : Ne, e.height = Number.isFinite(n) ? Number(n) : Ee, e.margin = {
-    top: Number.isFinite(r?.top) ? Number(r?.top) : Ue.top,
-    right: Number.isFinite(r?.right) ? Number(r?.right) : Ue.right,
-    bottom: Number.isFinite(r?.bottom) ? Number(r?.bottom) : Ue.bottom,
-    left: Number.isFinite(r?.left) ? Number(r?.left) : Ue.left
+    top: Number.isFinite(r?.top) ? Number(r?.top) : We.top,
+    right: Number.isFinite(r?.right) ? Number(r?.right) : We.right,
+    bottom: Number.isFinite(r?.bottom) ? Number(r?.bottom) : We.bottom,
+    left: Number.isFinite(r?.left) ? Number(r?.left) : We.left
   };
 }
 function Ki(e, t) {
@@ -3481,13 +3481,13 @@ function sa(e, t = {}) {
   }), i = oe("path", {
     class: "line-chart-path",
     fill: "none",
-    stroke: We,
+    stroke: Oe,
     "stroke-width": 2,
     "stroke-linecap": "round",
     "stroke-linejoin": "round"
   }), c = oe("line", {
     class: "line-chart-focus-line",
-    stroke: We,
+    stroke: Oe,
     "stroke-width": 1,
     "stroke-dasharray": "4 4",
     opacity: 0
@@ -3495,7 +3495,7 @@ function sa(e, t = {}) {
     class: "line-chart-focus-circle",
     r: 4,
     fill: "#fff",
-    stroke: We,
+    stroke: Oe,
     "stroke-width": 2,
     opacity: 0
   }), l = oe("g", {
@@ -3516,7 +3516,7 @@ function sa(e, t = {}) {
   const f = document.createElement("div");
   f.className = "chart-tooltip chart-tooltip--marker", f.style.position = "absolute", f.style.top = "0", f.style.left = "0", f.style.pointerEvents = "none", f.style.opacity = "0", f.style.visibility = "hidden", n.appendChild(f), e.appendChild(n);
   const g = oa(n);
-  if (g.svg = r, g.areaPath = a, g.linePath = i, g.baselineLine = o, g.focusLine = c, g.focusCircle = s, g.overlay = u, g.tooltip = d, g.markerOverlay = p, g.markerLayer = l, g.markerTooltip = f, g.xAccessor = t.xAccessor ?? Qr, g.yAccessor = t.yAccessor ?? ea, g.xFormatter = t.xFormatter ?? ta, g.yFormatter = t.yFormatter ?? na, g.tooltipRenderer = t.tooltipRenderer ?? ra, g.markerTooltipRenderer = t.markerTooltipRenderer ?? aa, g.color = t.color ?? We, g.areaColor = t.areaColor ?? Jt, g.baseline = t.baseline ?? null, g.handlersAttached = !1, g.markers = Array.isArray(t.markers) ? t.markers.slice() : [], !g.xAxis) {
+  if (g.svg = r, g.areaPath = a, g.linePath = i, g.baselineLine = o, g.focusLine = c, g.focusCircle = s, g.overlay = u, g.tooltip = d, g.markerOverlay = p, g.markerLayer = l, g.markerTooltip = f, g.xAccessor = t.xAccessor ?? Qr, g.yAccessor = t.yAccessor ?? ea, g.xFormatter = t.xFormatter ?? ta, g.yFormatter = t.yFormatter ?? na, g.tooltipRenderer = t.tooltipRenderer ?? ra, g.markerTooltipRenderer = t.markerTooltipRenderer ?? aa, g.color = t.color ?? Oe, g.areaColor = t.areaColor ?? Jt, g.baseline = t.baseline ?? null, g.handlersAttached = !1, g.markers = Array.isArray(t.markers) ? t.markers.slice() : [], !g.xAxis) {
     const m = document.createElement("div");
     m.className = "line-chart-axis line-chart-axis-x", m.style.position = "absolute", m.style.left = "0", m.style.right = "0", m.style.bottom = "0", m.style.pointerEvents = "none", m.style.fontSize = er, m.style.color = "var(--secondary-text-color)", m.style.display = "block", n.appendChild(m), g.xAxis = m;
   }
@@ -3964,14 +3964,14 @@ function at(e, t) {
   const s = e.querySelector(".analyse-range-fields"), l = e.querySelector(".analyse-single-field");
   s && l && (n === "date" ? (s.style.display = "none", l.style.display = "") : (s.style.display = "", l.style.display = "none"));
 }
-function qe(e) {
+function Ue(e) {
   return e.date ? `Tag: ${e.date}` : e.range ? `Zeitraum: ${e.range.start} – ${e.range.end}` : "";
 }
 async function ot(e, t, n, r, a, o) {
   nt(e, "loading");
   const i = await Ii(r, a, o);
   if (i.status === "error") {
-    if (nt(e, "error", i.error ?? void 0), t && Ut(t, qe(o), []), n) {
+    if (nt(e, "error", i.error ?? void 0), t && Ut(t, Ue(o), []), n) {
       const s = n.querySelector(".line-chart-container");
       s && s.replaceChildren();
     }
@@ -3979,13 +3979,13 @@ async function ot(e, t, n, r, a, o) {
   }
   const c = i.data;
   if (!c || !Array.isArray(c.records) || c.records.length === 0) {
-    if (rr(e, qe(o), []), ar(e, []), nt(e, "loaded", "Keine Daten für den gewählten Zeitraum."), t && Ut(t, qe(o), []), n) {
+    if (rr(e, Ue(o), []), ar(e, []), nt(e, "loaded", "Keine Daten für den gewählten Zeitraum."), t && Ut(t, Ue(o), []), n) {
       const s = n.querySelector(".line-chart-container");
       s && s.replaceChildren();
     }
     return;
   }
-  ca = o, nn = c, os(c.slices), rr(e, qe(o), c.records), ar(e, c.records), t && Ut(t, qe(o), c.records), n && (is(n, c.slices), ua(n, c)), nt(e, "loaded");
+  ca = o, nn = c, os(c.slices), rr(e, Ue(o), c.records), ar(e, c.records), t && Ut(t, Ue(o), c.records), n && (is(n, c.slices), ua(n, c)), nt(e, "loaded");
 }
 function ds(e, t, n, r, a) {
   const o = e.querySelector("#analyse-range-apply"), i = e.querySelectorAll('input[name="analyse-range-mode"]'), c = ca ?? Zt().selection ?? as();
@@ -4131,7 +4131,7 @@ const Wt = { min: 0, max: 6 }, bt = { min: 2, max: 4 }, ys = "1Y", da = [
   aggregation: "Aggregationsdaten",
   totals: "Kaufsummen",
   eur_total: "EUR-Kaufsumme"
-}, xe = /* @__PURE__ */ new Map(), ut = /* @__PURE__ */ new Map(), Je = /* @__PURE__ */ new Map(), Fe = /* @__PURE__ */ new Map(), fa = "pp-reader:portfolio-positions-updated", Be = /* @__PURE__ */ new Map();
+}, xe = /* @__PURE__ */ new Map(), ut = /* @__PURE__ */ new Map(), Je = /* @__PURE__ */ new Map(), Fe = /* @__PURE__ */ new Map(), fa = "pp-reader:portfolio-positions-updated", je = /* @__PURE__ */ new Map();
 function As(e) {
   const { fallbackUsed: t, flaggedAsCache: n } = e, r = [];
   return t && r.push(
@@ -4202,27 +4202,27 @@ function Es(e, t) {
   (Array.isArray(n) ? n : []).includes(e) && (ha(e), ma(e));
 }
 function xs(e) {
-  if (!e || Be.has(e))
+  if (!e || je.has(e))
     return;
   const t = (n) => {
     ms(n) && Es(e, n.detail);
   };
   try {
-    window.addEventListener(fa, t), Be.set(e, t);
+    window.addEventListener(fa, t), je.set(e, t);
   } catch (n) {
     console.error("ensureLiveUpdateSubscription: Registrierung fehlgeschlagen", n);
   }
 }
 function Fs(e) {
-  if (!e || !Be.has(e))
+  if (!e || !je.has(e))
     return;
-  const t = Be.get(e);
+  const t = je.get(e);
   try {
     t && window.removeEventListener(fa, t);
   } catch (n) {
     console.error("removeLiveUpdateSubscription: Entfernen des Listeners fehlgeschlagen", n);
   }
-  Be.delete(e);
+  je.delete(e);
 }
 function Ds(e) {
   e && (Fs(e), ha(e), ma(e));
@@ -4246,12 +4246,12 @@ function rn(e) {
   );
   return Math.floor(t / 864e5);
 }
-function Re(e) {
+function $e(e) {
   const t = new Date(e.getTime());
   return t.setUTCHours(0, 0, 0, 0), t;
 }
 function sr(e) {
-  return !(e instanceof Date) || Number.isNaN(e.getTime()) ? null : rn(Re(e));
+  return !(e instanceof Date) || Number.isNaN(e.getTime()) ? null : rn($e(e));
 }
 function M(e) {
   return fe(e);
@@ -4279,7 +4279,7 @@ function Ts(e) {
     if (ie(c))
       return c;
   }
-  const a = Le(e.average_cost), o = M(a?.native) ?? M(a?.security), i = M(a?.account) ?? M(a?.eur);
+  const a = Me(e.average_cost), o = M(a?.native) ?? M(a?.security), i = M(a?.account) ?? M(a?.eur);
   if (ie(o) && ie(i)) {
     const c = o / i;
     if (ie(c))
@@ -4306,7 +4306,7 @@ function ba(e, t = "Unbekannter Fehler") {
   return t;
 }
 function vt(e, t) {
-  const n = Re(t instanceof Date ? t : /* @__PURE__ */ new Date()), r = _s[e], a = sr(n), o = {};
+  const n = $e(t instanceof Date ? t : /* @__PURE__ */ new Date()), r = _s[e], a = sr(n), o = {};
   if (a != null && (o.end_date = a), Number.isFinite(r) && r > 0) {
     const i = new Date(n.getTime());
     i.setUTCDate(i.getUTCDate() - (r - 1));
@@ -4328,7 +4328,7 @@ function Cn(e) {
     }
     if (t >= 0 && t <= 1e5) {
       const n = new Date(t * 864e5);
-      return Number.isNaN(n.getTime()) ? null : Re(n);
+      return Number.isNaN(n.getTime()) ? null : $e(n);
     }
     if (t > 1e12) {
       const n = new Date(t);
@@ -4347,7 +4347,7 @@ function Cn(e) {
       if (Number.isFinite(n) && n >= 0 && n <= 1e5) {
         const r = new Date(n * 864e5);
         if (!Number.isNaN(r.getTime()))
-          return Re(r);
+          return $e(r);
       }
     }
     if (/^\d{8}$/.test(t)) {
@@ -4476,13 +4476,13 @@ function on(e, t) {
   const o = Rs(t) ?? Date.now(), i = new Date(o);
   if (Number.isNaN(i.getTime()))
     return r;
-  const c = rn(Re(i));
+  const c = rn($e(i));
   let s = null;
   for (let l = r.length - 1; l >= 0; l -= 1) {
     const u = r[l], d = Cn(u.date);
     if (!d)
       continue;
-    const p = rn(Re(d));
+    const p = rn($e(d));
     if (s == null && (s = p), p === c)
       return u.close !== a && (r[l] = { ...u, close: a }), r;
     if (p < c)
@@ -4499,7 +4499,7 @@ function R(e) {
 function ie(e) {
   return typeof e == "number" && Number.isFinite(e) && e > 0;
 }
-function je(e, t, n) {
+function Ke(e, t, n) {
   if (!R(e) || !R(t))
     return !1;
   const r = Math.abs(e - t), a = Math.max(Math.abs(e), Math.abs(t), 1);
@@ -4697,24 +4697,24 @@ function Us(e) {
   }
 }
 function Ws(e, t, n) {
-  const r = Le(e?.average_cost), a = r?.account ?? (R(t) ? t : M(t));
+  const r = Me(e?.average_cost), a = r?.account ?? (R(t) ? t : M(t));
   if (!R(a))
     return null;
   const o = e?.account_currency_code ?? e?.account_currency;
   if (typeof o == "string" && o.trim())
     return o.trim().toUpperCase();
   const i = Pe(e?.currency_code) ?? "", c = r?.security ?? r?.native ?? (R(n) ? n : M(n)), s = mn(e?.aggregation);
-  if (i && R(c) && je(a, c))
+  if (i && R(c) && Ke(a, c))
     return i;
   const l = M(s?.purchase_total_security) ?? M(e?.purchase_total_security), u = M(s?.purchase_total_account) ?? M(e?.purchase_total_account);
   let d = null;
   if (R(l) && l !== 0 && R(u) && (d = u / l), r?.source === "eur_total")
     return "EUR";
   const f = r?.eur;
-  if (R(f) && je(a, f))
+  if (R(f) && Ke(a, f))
     return "EUR";
   const g = M(e?.purchase_value_eur);
-  return R(g) ? "EUR" : d != null && je(d, 1) ? i || null : i === "EUR" ? "EUR" : i || "EUR";
+  return R(g) ? "EUR" : d != null && Ke(d, 1) ? i || null : i === "EUR" ? "EUR" : i || "EUR";
 }
 function cr(e) {
   return typeof e != "number" || !Number.isFinite(e) || e <= 0 ? null : e.toLocaleString("de-DE", {
@@ -4768,7 +4768,7 @@ function Bs(e) {
 function js(e, t) {
   if (!e)
     return null;
-  const n = Pe(e.currency_code) ?? "", r = Le(e.average_cost);
+  const n = Pe(e.currency_code) ?? "", r = Me(e.average_cost);
   if (!r || !n)
     return null;
   const a = r.native ?? r.security ?? null;
@@ -4805,13 +4805,13 @@ function js(e, t) {
 function lr(e) {
   if (!e)
     return null;
-  const t = Le(e.average_cost), n = t?.native ?? t?.security ?? null;
+  const t = Me(e.average_cost), n = t?.native ?? t?.security ?? null;
   return R(n) ? n : null;
 }
 function Ks(e) {
   if (!e)
     return '<div class="meta-error">Keine Snapshot-Daten verfügbar.</div>';
-  const t = e.currency_code || "EUR", n = e.total_holdings_precise ?? e.total_holdings, r = xn(n), a = e.last_price_native ?? e.last_price?.native ?? e.last_price_eur, o = pe(a), i = o === "—" ? null : `${o}${`&nbsp;${t}`}`, c = M(e.market_value_eur) ?? M(e.current_value_eur) ?? null, s = Le(e.average_cost), l = s?.native ?? s?.security ?? null, u = s?.eur ?? null, p = s?.account ?? null ?? u, f = ve(e.performance), g = f?.day_change ?? null, m = g?.price_change_native ?? null, _ = g?.price_change_eur ?? null, h = R(m) ? m : _, y = R(m) ? t : "EUR", b = (k, V = "") => {
+  const t = e.currency_code || "EUR", n = e.total_holdings_precise ?? e.total_holdings, r = xn(n), a = e.last_price_native ?? e.last_price?.native ?? e.last_price_eur, o = pe(a), i = o === "—" ? null : `${o}${`&nbsp;${t}`}`, c = M(e.market_value_eur) ?? M(e.current_value_eur) ?? null, s = Me(e.average_cost), l = s?.native ?? s?.security ?? null, u = s?.eur ?? null, p = s?.account ?? null ?? u, f = ve(e.performance), g = f?.day_change ?? null, m = g?.price_change_native ?? null, _ = g?.price_change_eur ?? null, h = R(m) ? m : _, y = R(m) ? t : "EUR", b = (k, V = "") => {
     const W = ["value"];
     return V && W.push(...V.split(" ").filter(Boolean)), `<span class="${W.join(" ")}">${k}</span>`;
   }, S = (k = "") => {
@@ -4856,7 +4856,7 @@ function Ks(e) {
     S("value--average value--average-native")
   );
   let $ = null, j = null;
-  return x && (t !== "EUR" || !R(l) || !je(u, l)) ? ($ = u, j = "EUR") : R(p) && F && (F !== t || !je(p, l ?? NaN)) && ($ = p, j = F), $ != null && R($) && v.push(
+  return x && (t !== "EUR" || !R(l) || !Ke(u, l)) ? ($ = u, j = "EUR") : R(p) && F && (F !== t || !Ke(p, l ?? NaN)) && ($ = p, j = F), $ != null && R($) && v.push(
     b(
       `${pe($)}${j ? `&nbsp;${j}` : ""}`,
       "value--average value--average-eur"
@@ -5289,7 +5289,7 @@ function tc(e) {
 const nc = Ja, sn = "pp-reader-sticky-anchor", Pt = "overview", rc = "analyse", cn = "security:", ac = [
   { key: Pt, title: "Dashboard", render: Gr },
   { key: rc, title: "Analyse", render: fs }
-], $e = /* @__PURE__ */ new Map(), Qe = [], At = /* @__PURE__ */ new Map();
+], Le = /* @__PURE__ */ new Map(), Qe = [], At = /* @__PURE__ */ new Map();
 let ln = null, Bt = !1, De = null, U = 0, jt = null;
 function Ct(e) {
   return typeof e == "object" && e !== null;
@@ -5366,7 +5366,7 @@ function lc() {
   return e || (De = null), e;
 }
 function ue() {
-  const e = Qe.map((t) => $e.get(t)).filter((t) => !!t);
+  const e = Qe.map((t) => Le.get(t)).filter((t) => !!t);
   return [...ac, ...e];
 }
 function uc(e) {
@@ -5437,12 +5437,12 @@ function fc(e, t) {
     ...t,
     key: e
   };
-  $e.set(e, r), n && At.set(n, e), Qe.includes(e) || Qe.push(e);
+  Le.set(e, r), n && At.set(n, e), Qe.includes(e) || Qe.push(e);
 }
 function xa(e) {
   if (!e)
     return;
-  const t = $e.get(e);
+  const t = Le.get(e);
   if (t && typeof t.cleanup == "function")
     try {
       const a = t.cleanup({ key: e });
@@ -5455,17 +5455,17 @@ function xa(e) {
     } catch (a) {
       console.error("unregisterDetailTab: Fehler beim Ausführen von cleanup", a);
     }
-  $e.delete(e);
+  Le.delete(e);
   const n = Qe.indexOf(e);
   n >= 0 && Qe.splice(n, 1);
   const r = Fn(e);
   r && At.get(r) === e && At.delete(r);
 }
 function pc(e) {
-  return $e.has(e);
+  return Le.has(e);
 }
 function hr(e) {
-  return $e.get(e) ?? null;
+  return Le.get(e) ?? null;
 }
 function gc(e) {
   if (e != null && typeof e != "function") {
@@ -5885,4 +5885,4 @@ export {
   Cc as unregisterPanelHost,
   Yr as updatePortfolioFooterFromDom
 };
-//# sourceMappingURL=dashboard.8OyhXCeC.js.map
+//# sourceMappingURL=dashboard.DWZLuYHl.js.map
