@@ -7,7 +7,7 @@ trigger: always_on
 - **Service Management**:
   - **Start Home Assistant**:
     ```bash
-    source venv-ha/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &
+    source .venv/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &
     ```
   - **Start Frontend (Vite)**:
     ```bash
