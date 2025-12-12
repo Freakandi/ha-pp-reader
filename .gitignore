@@ -1,4 +1,7 @@
 # artifacts
+artifacts/
+S-Depot.db
+
 .worktrees/
 __pycache__
 .pytest*

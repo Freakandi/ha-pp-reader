@@ -243,7 +243,7 @@ async def test_daily_wealth_schema_with_slices(
     await WS_GET_DAILY_WEALTH(hass, connection, msg)
 
     assert not connection.errors
-    msg_id, payload = connection.sent[0]
+    _msg_id, payload = connection.sent[0]
 
     assert "slices" in payload
     slices = payload["slices"]

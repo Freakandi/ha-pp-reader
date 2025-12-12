@@ -1,5 +1,5 @@
-import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
+import { after, before, describe, test } from 'node:test';
 import { installDomEnvironment } from '../../__tests__/dom';
 
 describe('XSS Vulnerability Check', () => {
@@ -18,7 +18,7 @@ describe('XSS Vulnerability Check', () => {
 
         // Dynamic import to ensure DOM is ready
         const module = await import('../overview');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+
         renderPortfolioPositions = module.renderPortfolioPositions;
     });
 

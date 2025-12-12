@@ -8,6 +8,7 @@ and updates daily wealth records for the historical range.
 from __future__ import annotations
 
 import asyncio
+import functools
 import sqlite3
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -17,12 +18,18 @@ from google.protobuf.timestamp_pb2 import Timestamp
 
 from custom_components.pp_reader.data import canonical_sync
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.data.ingestion_writer import IngestionMetadata
+from custom_components.pp_reader.data.ingestion_writer import (
+    IngestionMetadata,
+    IngestionWriter,
+    clear_ingestion_stage,
+    ensure_ingestion_tables,
+)
 from custom_components.pp_reader.metrics.pipeline import (
     async_refresh_all_with_backdating,
 )
 from custom_components.pp_reader.models import parsed
 from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+from custom_components.pp_reader.prices.history_queue import HistoryQueueManager
 
 # We repurpose the smoketest stubs/mocks where possible or redefine minimal ones
 from tests.metrics.helpers import install_fx_stubs
@@ -134,8 +141,7 @@ class HelperHass:
         self.data = {}
 
     async def async_add_executor_job(self, func, *args, **kwargs):
-        import functools
-
+        # functools imported at top level
         return await self.loop.run_in_executor(
             None, functools.partial(func, *args, **kwargs)
         )
@@ -173,7 +179,9 @@ async def test_ingestion_rebuild_end_to_end(
     # We just need to make sure the pipeline doesn't crash on network calls.
 
     # Mock HistoryQueueManager methods to avoid network activity
-    from custom_components.pp_reader.prices.history_queue import HistoryQueueManager
+    # Mock History Queue methods to avoid network activity
+    # HistoryQueueManager imported at top level
+
 
     async def _fake_plan(self, *args, **kwargs):
         return 0
@@ -237,11 +245,8 @@ async def test_ingestion_rebuild_end_to_end(
     # for row in cursor:
     #     pass
 
-    from custom_components.pp_reader.data.ingestion_writer import (
-        IngestionWriter,
-        clear_ingestion_stage,
-        ensure_ingestion_tables,
-    )
+    # Imports moved to top level
+
 
     ensure_ingestion_tables(conn)
     clear_ingestion_stage(conn)

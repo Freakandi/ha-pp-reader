@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -80,7 +81,8 @@ async def test_roundtrip_metrics_to_api(
 
     # 1b. Seed transactions (required for backdating)
     # Type 0 = Buy (based on holdings.py constants)
-    import sqlite3
+    # Type 0 = Buy (based on holdings.py constants)
+
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(

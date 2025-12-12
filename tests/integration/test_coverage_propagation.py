@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from custom_components.pp_reader.data import websocket as websocket_module
+from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.metrics.pipeline import (
     async_refresh_all_with_backdating,
 )
@@ -95,12 +97,11 @@ async def test_coverage_and_stale_flags_propagation(
     db_path = tmp_path / "coverage.db"
 
     # 1. Setup DB Schema
-    from custom_components.pp_reader.data.db_init import initialize_database_schema
-
+    # 1. Setup DB Schema
     initialize_database_schema(db_path)
     hass = StubHass(entry_id, db_path)
 
-    import sqlite3
+
 
     with sqlite3.connect(str(db_path)) as conn:
         # Accounts

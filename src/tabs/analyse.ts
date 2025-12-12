@@ -2,22 +2,22 @@
  * Analyse tab renderer for backdating UI.
  */
 
+import { renderLineChart, updateLineChart, type LineChartOptions } from '../content/charting';
 import { createHeaderCard, formatNumber } from '../content/elements';
-import {
-  loadDailyWealth,
-  getDailyWealthState,
-  type DailyWealthState,
-  type DailyWealthSelection,
-} from '../data/dailyWealthStore';
 import type {
   DailyWealthRecord,
   DailyWealthResponse,
-  DailyWealthSlices,
   DailyWealthScopeRecord,
+  DailyWealthSlices,
 } from '../data/api';
+import {
+  getDailyWealthState,
+  loadDailyWealth,
+  type DailyWealthSelection,
+  type DailyWealthState,
+} from '../data/dailyWealthStore';
 import type { HomeAssistant } from '../types/home-assistant';
 import type { PanelConfigLike } from './types';
-import { renderLineChart, updateLineChart, type LineChartOptions } from '../content/charting';
 
 type SelectionMode = 'date' | 'range';
 type PerformanceRowKey =
@@ -176,30 +176,55 @@ function renderTotals(
   coverageEl.innerHTML = renderCoverageBadges(records);
 }
 
-function renderCashflows(card: HTMLElement, records: DailyWealthRecord[]): void {
-  const rows: Record<string, number> = {
-    dividends: sumField(records, 'dividends_eur'),
-    interest: sumField(records, 'interest_eur'),
-    inbound: sumField(records, 'inbound_transfers_eur'),
-    outbound: sumField(records, 'outbound_transfers_eur'),
-    fees: sumField(records, 'fees_eur'),
-    taxes: sumField(records, 'taxes_eur'),
-  };
 
-  const setValue = (id: string, value: number): void => {
-    const target = card.querySelector<HTMLElement>(`#${id}`);
-    if (target) {
-      target.innerHTML = formatCurrency(value);
-    }
-  };
 
-  setValue('cashflow-dividends', rows.dividends);
-  setValue('cashflow-interest', rows.interest);
-  setValue('cashflow-inbound', rows.inbound);
-  setValue('cashflow-outbound', -Math.abs(rows.outbound));
-  setValue('cashflow-fees', -Math.abs(rows.fees));
-  setValue('cashflow-taxes', -Math.abs(rows.taxes));
+function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
+  const container = card.querySelector<HTMLElement>('.analyse-metrics-grid');
+  if (!container) return;
+
+  if (!records.length) {
+    container.innerHTML = '<div class="metrics-empty">Keine Daten verfügbar</div>';
+    return;
+  }
+
+  const bd = derivePerformance(records);
+  if (!bd) return;
+
+  // const rows removed - direct usage via mkRow
+
+
+  // Let's stick to the requested layout: clear structure.
+  // We can group Cashflows and Performance.
+
+  const mkRow = (label: string, value: number | string, cls = ''): string => `
+    <div class="metric-row ${cls}">
+      <span class="metric-label">${label}</span>
+      <span class="metric-value">${typeof value === 'number' ? formatCurrency(value) : value}</span>
+    </div>`;
+
+  const html = `
+    <div class="metrics-section">
+      <h3>Vermögensentwicklung</h3>
+      ${mkRow('Startwert', bd.startValue)}
+      ${mkRow('Endwert', bd.endValue, 'highlight')}
+      ${mkRow('Abs. Veränderung', bd.endValue - bd.startValue)}
+    </div>
+    <div class="metrics-section">
+      <h3>Performance-Treiber</h3>
+      ${mkRow('Markt & FX', bd.marketGain)}
+      ${mkRow('Erträge (Div/Zins)', bd.ertraege)}
+      ${mkRow('Kosten & Steuern', bd.fees + bd.taxes)}
+    </div>
+    <div class="metrics-section">
+      <h3>Finanzfluss</h3>
+      ${mkRow('Netto-Transfers', bd.netTransfers)}
+      ${mkRow('Neutral', bd.neutral)}
+    </div>
+  `;
+
+  container.innerHTML = html;
 }
+
 
 function debounceLoad(
   callback: () => void,
@@ -270,10 +295,19 @@ function renderScopeFilters(card: HTMLElement, slices: DailyWealthSlices | undef
     records: DailyWealthScopeRecord[],
     type: 'account' | 'portfolio',
   ): string => {
-    if (!records.length) {
+    const uniqueRecords = new Map<string, DailyWealthScopeRecord>();
+    records.forEach((record) => {
+      const key = buildScopeKey(type, record.scope_id);
+      if (key && !uniqueRecords.has(key)) {
+        uniqueRecords.set(key, record);
+      }
+    });
+
+    if (uniqueRecords.size === 0) {
       return '';
     }
-    const items = records
+
+    const items = Array.from(uniqueRecords.values())
       .map((record) => {
         const key = buildScopeKey(type, record.scope_id);
         if (!key) {
@@ -514,59 +548,7 @@ function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown |
   };
 }
 
-function renderPerformance(
-  card: HTMLElement,
-  selectionLabel: string,
-  records: DailyWealthRecord[],
-): void {
-  const selectionEl = card.querySelector<HTMLElement>('#perf-selection-label');
-  const coverageEl = card.querySelector<HTMLElement>('#perf-coverage');
-  const noteEl = card.querySelector<HTMLElement>('#perf-note');
-
-  if (selectionEl) {
-    selectionEl.textContent = selectionLabel;
-  }
-  if (coverageEl) {
-    coverageEl.innerHTML = renderCoverageBadges(records);
-  }
-  if (!records.length) {
-    if (noteEl) {
-      noteEl.textContent = 'Keine Daten für den gewählten Zeitraum.';
-    }
-    ['startValue', 'endValue', 'marketGain', 'ertraege', 'fees', 'taxes', 'netTransfers', 'neutral'].forEach((key) => {
-      const target = card.querySelector<HTMLElement>(`#perf-${key}`);
-      if (target) {
-        target.innerHTML = '—';
-      }
-    });
-    return;
-  }
-
-  if (noteEl) {
-    noteEl.textContent = '';
-  }
-
-  const breakdown = derivePerformance(records);
-  if (!breakdown) {
-    return;
-  }
-
-  const setValue = (key: PerformanceRowKey, value: number): void => {
-    const target = card.querySelector<HTMLElement>(`#perf-${key}`);
-    if (target) {
-      target.innerHTML = formatCurrency(value);
-    }
-  };
-
-  setValue('startValue', breakdown.startValue);
-  setValue('endValue', breakdown.endValue);
-  setValue('marketGain', breakdown.marketGain);
-  setValue('ertraege', breakdown.ertraege);
-  setValue('fees', breakdown.fees);
-  setValue('taxes', breakdown.taxes);
-  setValue('netTransfers', breakdown.netTransfers);
-  setValue('neutral', breakdown.neutral);
-}
+// renderPerformance removed, merged into renderMetrics
 
 function readSelectionFromInputs(card: HTMLElement): DailyWealthSelection | null {
   const modeInput = card.querySelector<HTMLInputElement>('input[name="analyse-range-mode"]:checked');
@@ -586,15 +568,31 @@ function readSelectionFromInputs(card: HTMLElement): DailyWealthSelection | null
   };
 
   if (mode === 'date') {
-    const date = parseDate(singleDateInput?.value);
+    let date = parseDate(singleDateInput?.value);
     if (!date) {
-      return null;
+      // Fallback: Use start date or today if switching to date mode with empty input
+      const fallback = parseDate(startInput?.value) ?? new Date().toISOString().slice(0, 10);
+      date = fallback;
+      if (singleDateInput) {
+        singleDateInput.value = fallback; // Auto-fill the input
+      }
     }
     return { date, includeSlices: true, includeScopes: true };
   }
 
-  const start = parseDate(startInput?.value);
-  const end = parseDate(endInput?.value);
+  let start = parseDate(startInput?.value);
+  let end = parseDate(endInput?.value);
+
+  if (!start || !end) {
+    // Fallback: Use today's date if inputs are empty when switching to range mode
+    const today = new Date().toISOString().slice(0, 10);
+    if (!start) start = today;
+    if (!end) end = today;
+
+    if (startInput && !startInput.value) startInput.value = start;
+    if (endInput && !endInput.value) endInput.value = end;
+  }
+
   if (!start || !end) {
     return null;
   }
@@ -650,7 +648,6 @@ function selectionLabel(selection: DailyWealthSelection): string {
 
 async function loadAndRender(
   card: HTMLElement,
-  performanceCard: HTMLElement | null,
   chartCard: HTMLElement | null,
   hass: HomeAssistant | null | undefined,
   panelConfig: PanelConfigLike | null | undefined,
@@ -661,9 +658,6 @@ async function loadAndRender(
 
   if (state.status === 'error') {
     setStatus(card, 'error', state.error ?? undefined);
-    if (performanceCard) {
-      renderPerformance(performanceCard, selectionLabel(selection), []);
-    }
     if (chartCard) {
       const chartContainer = chartCard.querySelector('.line-chart-container');
       if (chartContainer) {
@@ -676,11 +670,8 @@ async function loadAndRender(
   const data = state.data;
   if (!data || !Array.isArray(data.records) || data.records.length === 0) {
     renderTotals(card, selectionLabel(selection), []);
-    renderCashflows(card, []);
+    renderMetrics(card, []);
     setStatus(card, 'loaded', 'Keine Daten für den gewählten Zeitraum.');
-    if (performanceCard) {
-      renderPerformance(performanceCard, selectionLabel(selection), []);
-    }
     if (chartCard) {
       const chartContainer = chartCard.querySelector('.line-chart-container');
       if (chartContainer) {
@@ -695,10 +686,8 @@ async function loadAndRender(
   ensureScopeSelection(data.slices);
 
   renderTotals(card, selectionLabel(selection), data.records);
-  renderCashflows(card, data.records);
-  if (performanceCard) {
-    renderPerformance(performanceCard, selectionLabel(selection), data.records);
-  }
+  renderMetrics(card, data.records);
+
   if (chartCard) {
     renderScopeFilters(chartCard, data.slices);
     renderWealthChart(chartCard, data);
@@ -708,7 +697,7 @@ async function loadAndRender(
 
 function initRangeCard(
   card: HTMLElement,
-  performanceCard: HTMLElement | null,
+  // performanceCard removed
   chartCard: HTMLElement | null,
   hass: HomeAssistant | null | undefined,
   panelConfig: PanelConfigLike | null | undefined,
@@ -733,7 +722,7 @@ function initRangeCard(
       if (currentSelection) {
         debounceLoad(() => {
           applySelectionToInputs(card, currentSelection);
-          void loadAndRender(card, performanceCard, chartCard, hass, panelConfig, currentSelection);
+          void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
         });
       }
     });
@@ -744,7 +733,7 @@ function initRangeCard(
       const currentSelection = readSelectionFromInputs(card) ?? selection;
       applySelectionToInputs(card, currentSelection);
       debounceLoad(() => {
-        void loadAndRender(card, performanceCard, chartCard, hass, panelConfig, currentSelection);
+        void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
       });
     });
   }
@@ -757,13 +746,13 @@ function initRangeCard(
         return;
       }
       debounceLoad(() => {
-        void loadAndRender(card, performanceCard, chartCard, hass, panelConfig, currentSelection);
+        void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
       });
     });
   });
 
   // Initial load after DOM is ready
-  void loadAndRender(card, performanceCard, chartCard, hass, panelConfig, selection);
+  void loadAndRender(card, chartCard, hass, panelConfig, selection);
 }
 
 export function renderAnalyse(
@@ -777,6 +766,60 @@ export function renderAnalyse(
     </div>
   `;
   const headerCard = createHeaderCard('Analyse', headerMeta);
+
+  const style = `
+    <style>
+      .analyse-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .metrics-section h3 {
+        margin: 0 0 0.75rem 0;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        color: var(--secondary-text-color, #727272);
+        letter-spacing: 0.05em;
+      }
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+        font-size: 0.95rem;
+      }
+      .metric-label {
+        color: var(--primary-text-color, #212121);
+      }
+      .metric-value {
+        font-weight: 500;
+        font-family: var(--code-font-family, monospace); /* Tabular figures preferred */
+      }
+      .metric-row.highlight {
+        font-weight: 600;
+        color: var(--primary-color, #03a9f4);
+      }
+      .metric-row.highlight .metric-value {
+        font-weight: 700;
+      }
+      .metrics-empty {
+        text-align: center;
+        color: var(--secondary-text-color);
+        padding: 2rem;
+        font-style: italic;
+      }
+      @media (max-width: 600px) {
+        .analyse-metrics-grid {
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+      }
+    </style>
+  `;
 
   const rangeCard = `
     <div class="card" id="analyse-range-card" data-section="range">
@@ -798,6 +841,7 @@ export function renderAnalyse(
         </div>
         <button type="button" id="analyse-range-apply" aria-label="Auswahl übernehmen">Übernehmen</button>
       </div>
+
       <div class="analyse-headline">
         <div class="headline-value" id="analyse-total-wealth">—</div>
         <div class="headline-meta">
@@ -805,38 +849,15 @@ export function renderAnalyse(
           <span id="analyse-coverage" class="coverage"></span>
         </div>
       </div>
-      <div class="analyse-cashflows">
-        <div class="cashflow-row"><span>Dividenden</span><span id="cashflow-dividends" class="value">—</span></div>
-        <div class="cashflow-row"><span>Zinsen</span><span id="cashflow-interest" class="value">—</span></div>
-        <div class="cashflow-row"><span>Eingänge</span><span id="cashflow-inbound" class="value">—</span></div>
-        <div class="cashflow-row"><span>Ausgänge</span><span id="cashflow-outbound" class="value">—</span></div>
-        <div class="cashflow-row"><span>Gebühren</span><span id="cashflow-fees" class="value">—</span></div>
-        <div class="cashflow-row"><span>Steuern</span><span id="cashflow-taxes" class="value">—</span></div>
+
+      <div class="analyse-metrics-grid">
+        <!-- Filled via renderMetrics -->
       </div>
+
       <div class="analyse-status" id="analyse-status" data-state="idle" role="status" aria-live="polite"></div>
     </div>
   `;
 
-  const performanceCard = `
-    <div class="card" id="analyse-performance-card" data-section="performance">
-      <h2>Performance</h2>
-      <div class="performance-meta">
-        <span id="perf-selection-label" class="selection-label"></span>
-        <span id="perf-coverage" class="coverage"></span>
-      </div>
-      <div class="performance-grid">
-        <div class="perf-row"><span>Startwert</span><span id="perf-startValue" class="value">—</span></div>
-        <div class="perf-row"><span>Endwert</span><span id="perf-endValue" class="value">—</span></div>
-        <div class="perf-row"><span>Markt/FX-Gewinn (Rest)</span><span id="perf-marketGain" class="value">—</span></div>
-        <div class="perf-row"><span>Erträge (Div + Zins)</span><span id="perf-ertraege" class="value">—</span></div>
-        <div class="perf-row"><span>Gebühren</span><span id="perf-fees" class="value">—</span></div>
-        <div class="perf-row"><span>Steuern</span><span id="perf-taxes" class="value">—</span></div>
-        <div class="perf-row"><span>Netto-Transfers</span><span id="perf-netTransfers" class="value">—</span></div>
-        <div class="perf-row"><span>Performance-neutral</span><span id="perf-neutral" class="value">—</span></div>
-      </div>
-      <div class="table-note" role="note" id="perf-note" aria-live="polite"></div>
-    </div>
-  `;
 
   const chartCard = `
     <div class="card" id="analyse-chart-card" data-section="chart">
@@ -851,9 +872,9 @@ export function renderAnalyse(
   `;
 
   const markup = `
+    ${style}
     ${headerCard.outerHTML}
     ${rangeCard}
-    ${performanceCard}
     ${chartCard}
   `;
 
@@ -862,12 +883,11 @@ export function renderAnalyse(
       return;
     }
     const card = root.querySelector<HTMLElement>('#analyse-range-card');
-    const perfCard = root.querySelector<HTMLElement>('#analyse-performance-card');
     const chartHost = root.querySelector<HTMLElement>('#analyse-chart-card');
     if (!card) {
       return;
     }
-    initRangeCard(card, perfCard, chartHost, hass, panelConfig);
+    initRangeCard(card, chartHost, hass, panelConfig);
   }, 0);
 
   return markup;
@@ -884,18 +904,15 @@ export const __TEST_ONLY__ = {
   ): void => {
     root.innerHTML = renderAnalyse(root, null, null);
     const rangeCard = root.querySelector<HTMLElement>('#analyse-range-card');
-    const perfCard = root.querySelector<HTMLElement>('#analyse-performance-card');
     const chartCard = root.querySelector<HTMLElement>('#analyse-chart-card');
     lastWealthData = data;
     ensureScopeSelection(data.slices);
     if (rangeCard) {
       renderTotals(rangeCard, selectionLabel(selection), data.records);
-      renderCashflows(rangeCard, data.records);
+      renderMetrics(rangeCard, data.records);
       setStatus(rangeCard, 'loaded');
     }
-    if (perfCard) {
-      renderPerformance(perfCard, selectionLabel(selection), data.records);
-    }
+    // perfCard removed from test helper
     if (chartCard) {
       renderScopeFilters(chartCard, data.slices);
       renderWealthChart(chartCard, data);

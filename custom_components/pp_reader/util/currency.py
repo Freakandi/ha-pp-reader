@@ -187,7 +187,7 @@ CACHED_FX_HELPERS: dict[str, Any] = {}
 def _load_fx_helper(name: str) -> Any:
     """Dynamically import FX helper functions on first access."""
     if name not in CACHED_FX_HELPERS:
-        from custom_components.pp_reader.currencies import fx
+        from custom_components.pp_reader.currencies import fx  # noqa: PLC0415
 
         CACHED_FX_HELPERS[name] = getattr(fx, name)
     return CACHED_FX_HELPERS[name]

@@ -31,7 +31,12 @@ from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
 from custom_components.pp_reader.util.datetime import UTC
 
-from .db_access import get_last_file_update, get_transactions
+from .db_access import (
+    get_accounts,
+    get_last_file_update,
+    get_portfolios,
+    get_transactions,
+)
 from .normalization_pipeline import (
     async_fetch_security_history,
     async_normalize_security_snapshot,
@@ -1343,6 +1348,26 @@ async def ws_get_daily_wealth(
         account_slices, portfolio_slices = await _fetch_daily_wealth_slices(
             hass, db_path, params, totals
         )
+
+        # Load all known accounts and portfolios directly from DB to ensure coverage
+        # even for entities not in the latest snapshot (e.g. retired or historical)
+        def _load_scope_maps() -> tuple[dict[str, str], dict[str, str]]:
+            all_accounts = get_accounts(Path(db_path))
+            all_portfolios = get_portfolios(Path(db_path))
+            return (
+                {a.uuid: a.name for a in all_accounts},
+                {p.uuid: p.name for p in all_portfolios},
+            )
+
+        account_map, portfolio_map = await hass.async_add_executor_job(_load_scope_maps)
+
+        for slice_record in account_slices:
+            if slice_record.scope_id in account_map:
+                slice_record.scope_name = account_map[slice_record.scope_id]
+
+        for slice_record in portfolio_slices:
+            if slice_record.scope_id in portfolio_map:
+                slice_record.scope_name = portfolio_map[slice_record.scope_id]
     except Exception:  # pragma: no cover - defensive logging
         _LOGGER.exception("WebSocket: Fehler beim Laden der daily_wealth Daten")
         connection.send_error(
