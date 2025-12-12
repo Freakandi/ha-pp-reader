@@ -2,7 +2,7 @@ colorlog==6.10.1
 homeassistant==2025.11.1
 pip>=21.3.1
 ruff==0.14.9
-pycares<5
+pycares<6
 # Dependencies from manifest.json
 protobuf>=4.25.0
 pandas>=2.2.0
