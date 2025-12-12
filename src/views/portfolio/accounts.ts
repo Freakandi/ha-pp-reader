@@ -157,7 +157,7 @@ function buildFxWarningBanner(count: number): string {
   }
   const plural = count === 1 ? '' : 'e';
   return `
-    <div class="card warning-card">
+    <div class="card warning-card" role="status" aria-live="polite">
       <h2>FX-Warnung</h2>
       <p>${String(
         count,
@@ -269,4 +269,8 @@ export const accountsTabDescriptor = {
   key: ACCOUNTS_TAB_KEY,
   title: ACCOUNT_TAB_TITLE,
   render: renderAccountsTab,
+};
+
+export const __TEST_ONLY__ = {
+  buildFxWarningBanner,
 };
