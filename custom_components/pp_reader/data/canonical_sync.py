@@ -386,11 +386,21 @@ def _compute_account_balances(
     }
 
     balances: dict[str, int] = {}
+
+    # Pre-group transactions by account to avoid O(N*M) iteration
+    transactions_by_account: dict[str, list[Transaction]] = {}
+    for tx in transactions:
+        if tx.account:
+            transactions_by_account.setdefault(tx.account, []).append(tx)
+        if tx.other_account and tx.other_account != tx.account:
+            transactions_by_account.setdefault(tx.other_account, []).append(tx)
+
     for account_uuid in accounts_currency_map:
         try:
+            account_transactions = transactions_by_account.get(account_uuid, [])
             balances[account_uuid] = db_calc_account_balance(
                 account_uuid,
-                transactions,
+                account_transactions,
                 accounts_currency_map=accounts_currency_map,
                 tx_units=tx_units,
             )
