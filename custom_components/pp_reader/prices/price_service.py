@@ -991,19 +991,6 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
         return set()
 
 
-def _process_currency_drift_skip_none(
-    _hass: HomeAssistant,
-    _entry_id: str,
-    _quotes: list[Quote],
-    _symbol_map: dict[str, list[str]],
-    _security_currencies: dict[str, str | None],
-) -> None:
-    """Filtert Quotes ohne Currency aus Drift-Prüfung heraus (kein Logging)."""
-    # Einfacher Durchlauf - Funktion dient Klarheit / ToDO-Referenz
-    # Keine Mutation; Rückgabe nicht notwendig (Selektion erfolgt im zweiten Schritt)
-    return
-
-
 def _process_currency_drift_mismatches(
     hass: HomeAssistant,
     entry_id: str,
@@ -1251,13 +1238,6 @@ async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]
                     )
 
             # Drift
-            _process_currency_drift_skip_none(
-                hass,
-                entry_id,
-                all_quotes,
-                store.get("price_symbol_to_uuids", {}),
-                security_currencies,
-            )
             _process_currency_drift_mismatches(
                 hass,
                 entry_id,
