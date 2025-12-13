@@ -185,7 +185,9 @@ async def test_enrichment_pipeline_does_not_block_bootstrap(
     async def _history_stub(self, _parsed_client) -> dict[str, Any]:
         return {"history_status": "no_targets"}
 
-    async def _metrics_stub(self, summary: dict[str, Any], *, errors: Any) -> None:
+    async def _metrics_stub(
+        self, summary: dict[str, Any], *, errors: Any, backdating: bool = False
+    ) -> None:
         summary["metrics_status"] = "skipped"
 
     async def _normalization_stub(self, summary: dict[str, Any]) -> None:
@@ -225,7 +227,9 @@ async def test_enrichment_pipeline_disabled_still_runs_metrics(
 
     calls: list[tuple[str, dict[str, Any]]] = []
 
-    async def _track_metrics(self, summary: dict[str, Any], *, errors: Any) -> None:
+    async def _track_metrics(
+        self, summary: dict[str, Any], *, errors: Any, backdating: bool = False
+    ) -> None:
         calls.append(("metrics", dict(summary)))
 
     async def _track_normalization(self, summary: dict[str, Any]) -> None:

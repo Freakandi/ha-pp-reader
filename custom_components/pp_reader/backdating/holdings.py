@@ -22,6 +22,21 @@ _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.holdings")
 
 _PURCHASE_TYPES = {0, 2}  # BUY, INBOUND_DELIVERY
 _SALE_TYPES = {1, 3}  # SELL, OUTBOUND_DELIVERY
+_TRANSFER_TYPES = {4}  # SECURITY_TRANSFER
+
+
+@dataclass(slots=True)
+class ProcessedTx:
+    """Internal representation of a transaction relevant for holdings."""
+
+    date: date
+    type: int
+    security_uuid: str
+    portfolio_uuid: str
+    other_portfolio_uuid: str | None
+    shares: float
+    amount: int
+    currency: str
 
 
 @dataclass(slots=True)
@@ -102,67 +117,109 @@ def _compute_daily_holdings_snapshots_sync(
 
     holdings: dict[tuple[str, str], dict[str, float]] = {}
     snapshots: list[DailyHoldingsSnapshot] = []
-    adjustments_by_date = _group_transaction_adjustments(transactions)
+    tx_by_date = _group_transactions(transactions)
     date_cursor = start_date
 
     while date_cursor <= end_date:
-        daily_adjustments = adjustments_by_date.get(date_cursor, ())
+        daily_txs = tx_by_date.get(date_cursor, ())
         date_iso = date_cursor.isoformat()
         fx_rates = _load_fx_rates_for_date(db_path, date_iso)
 
         daily_realized_gains = 0.0
         daily_portfolio_gains: dict[str, float] = {}
 
-        for portfolio_uuid, security_uuid, delta_shares, amount, currency in daily_adjustments:
-            key = (portfolio_uuid, security_uuid)
-            entry = holdings.get(key, {"shares": 0.0, "purchase_value_eur": 0.0})
-            current_shares = entry["shares"]
-            current_pv = entry["purchase_value_eur"]
+        for tx in daily_txs:
+            # Helper to get/create holding entry
+            def get_entry(p_uuid: str, s_uuid: str) -> dict[str, float]:
+                return holdings.get(
+                    (p_uuid, s_uuid), {"shares": 0.0, "purchase_value_eur": 0.0}
+                )
 
-            # Resolving value of transaction in EUR at daily rate
+            # Helper to save/remove holding entry
+            def save_entry(p_uuid: str, s_uuid: str, entry_data: dict[str, float]) -> None:
+                key = (p_uuid, s_uuid)
+                if entry_data["shares"] <= 1e-9:  # Filter dust
+                    holdings.pop(key, None)
+                else:
+                    holdings[key] = entry_data
+
+            # Calculate transaction value in EUR
             tx_val_eur = 0.0
-            if amount > 0:
-                tx_currency = (currency or "EUR").strip().upper()
+            if tx.amount > 0:
+                tx_currency = (tx.currency or "EUR").strip().upper()
                 fx = 1.0 if tx_currency == "EUR" else fx_rates.get(tx_currency)
                 if fx:
-                    tx_val_eur = cent_to_eur(amount) / fx
+                    tx_val_eur = cent_to_eur(tx.amount) / fx
 
-            # Average Cost Logic
-            if delta_shares > 0:
-                # BUY: Add to shares and purchase value
-                entry["shares"] += delta_shares
-                entry["purchase_value_eur"] += tx_val_eur
-            else:
-                # SELL: Reduce shares and purchase value proportionally (Average Cost)
-                shares_sold = abs(delta_shares)
-                if current_shares > 0:
-                    avg_cost = current_pv / current_shares
-                    cost_basis_sold = shares_sold * avg_cost
-                    entry["shares"] -= shares_sold
-                    entry["purchase_value_eur"] = max(0.0, current_pv - cost_basis_sold)
+            if tx.type in _PURCHASE_TYPES | _SALE_TYPES:
+                # Normal Buy/Sell/Delivery
+                entry = get_entry(tx.portfolio_uuid, tx.security_uuid)
+                current_shares = entry["shares"]
+                current_pv = entry["purchase_value_eur"]
 
-
-
-                    # Realized Gain = Proceeds (tx_val_eur) - Cost Basis
-                    gain = (tx_val_eur - cost_basis_sold)
-                    daily_realized_gains += gain
-
-                    # Accumulate per portfolio
-                    port_gains = daily_portfolio_gains.get(portfolio_uuid, 0.0)
-                    daily_portfolio_gains[portfolio_uuid] = port_gains + gain
+                if tx.shares > 0:
+                    # BUY
+                    entry["shares"] += tx.shares
+                    entry["purchase_value_eur"] += tx_val_eur
                 else:
-                    # Selling something we don't have (short or data error)
-                    # For now just adjust shares, assume 0 cost basis interaction
-                    entry["shares"] -= shares_sold
+                    # SELL
+                    shares_sold = abs(tx.shares)
+                    if current_shares > 0:
+                        avg_cost = current_pv / current_shares
+                        cost_basis_sold = shares_sold * avg_cost
+                        entry["shares"] -= shares_sold
+                        entry["purchase_value_eur"] = max(
+                            0.0, current_pv - cost_basis_sold
+                        )
 
-            if entry["shares"] <= 1e-9: # Filter dust
-                holdings.pop(key, None)
-            else:
-                holdings[key] = entry
+                        gain = tx_val_eur - cost_basis_sold
+                        daily_realized_gains += gain
 
+                        pg_key = tx.portfolio_uuid
+                        daily_portfolio_gains[pg_key] = (
+                            daily_portfolio_gains.get(pg_key, 0.0) + gain
+                        )
+                    else:
+                        # Selling short/error
+                        entry["shares"] -= shares_sold
+                        # No gain calc
+
+                save_entry(tx.portfolio_uuid, tx.security_uuid, entry)
+
+            elif tx.type in _TRANSFER_TYPES:
+                # Transfer Logic
+                # 1. Outbound from Source
+                transferred_cost = 0.0
+                if tx.portfolio_uuid in portfolios:
+                    src_entry = get_entry(tx.portfolio_uuid, tx.security_uuid)
+                    src_shares = src_entry["shares"]
+                    src_pv = src_entry["purchase_value_eur"]
+                    shares_out = abs(tx.shares)
+
+                    if src_shares > 0:
+                        avg_cost = src_pv / src_shares
+                        transferred_cost = shares_out * avg_cost
+                        src_entry["shares"] -= shares_out
+                        src_entry["purchase_value_eur"] = max(
+                            0.0, src_pv - transferred_cost
+                        )
+                    else:
+                        # Source has no shares, transfer out ghost shares
+                        src_entry["shares"] -= shares_out
+
+                    save_entry(tx.portfolio_uuid, tx.security_uuid, src_entry)
+
+                # 2. Inbound to Destination
+                if tx.other_portfolio_uuid and tx.other_portfolio_uuid in portfolios:
+                    dst_entry = get_entry(tx.other_portfolio_uuid, tx.security_uuid)
+                    shares_in = abs(tx.shares)
+
+                    dst_entry["shares"] += shares_in
+                    dst_entry["purchase_value_eur"] += transferred_cost
+
+                    save_entry(tx.other_portfolio_uuid, tx.security_uuid, dst_entry)
 
         date_iso = date_cursor.isoformat()
-        # fx_rates already loaded above
         valuations = _build_holdings_valuations(
             holdings.items(),
             securities,
@@ -190,9 +247,10 @@ def _compute_daily_holdings_snapshots_sync(
                 stale_price=stale_price,
                 total_wealth_eur=total_wealth,
                 invested_capital_eur=invested_capital,
-
                 realized_gains_eur=round(daily_realized_gains, 4),
-                portfolio_realized_gains={k: round(v, 4) for k, v in daily_portfolio_gains.items()},
+                portfolio_realized_gains={
+                    k: round(v, 4) for k, v in daily_portfolio_gains.items()
+                },
             )
         )
         date_cursor += timedelta(days=1)
@@ -239,54 +297,78 @@ def _load_relevant_transactions(
     db_path: Path,
     portfolios: dict[str, dict[str, Any]],
     securities: dict[str, dict[str, Any]],
-) -> list[tuple[date, str, str, float, int, str]]:
-    """
-    Return security transactions that affect holdings.
-
-    Returns: (date, portfolio, security, shares, amount_cents, currency)
-    """
-    relevant: list[tuple[date, str, str, float, int, str]] = []
+) -> list[ProcessedTx]:
+    """Return security transactions that affect holdings."""
+    relevant: list[ProcessedTx] = []
     for tx in db_access.get_transactions(db_path=db_path):
-        if not tx.security or not tx.portfolio:
+        if not tx.security:
             continue
 
-        portfolio_meta = portfolios.get(tx.portfolio)
         security_meta = securities.get(tx.security)
-        if not portfolio_meta or not security_meta:
-            continue
-        # Removed retired check to include history
-
-        if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
+        if not security_meta:
             continue
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
         if parsed_date is None:
             continue
 
-        shares = normalize_shares(tx.shares) if tx.shares else 0.0
-        if tx.type in _SALE_TYPES:
-            shares *= -1
-        if shares == 0:
+        shares_raw = normalize_shares(tx.shares) if tx.shares else 0.0
+        if shares_raw == 0:
             continue
 
-        # Assuming amount is always positive in DB for the value of transaction
         amount = int(tx.amount or 0)
         currency = tx.currency_code or "EUR"
 
-        relevant.append((parsed_date, tx.portfolio, tx.security, shares, amount, currency))
+        # Handle normal BUY/SELL and Deliveries
+        if tx.type in _PURCHASE_TYPES | _SALE_TYPES:
+            if not tx.portfolio or tx.portfolio not in portfolios:
+                continue
+            shares = shares_raw
+            if tx.type in _SALE_TYPES:
+                shares *= -1
+            relevant.append(
+                ProcessedTx(
+                    date=parsed_date,
+                    type=tx.type,
+                    security_uuid=tx.security,
+                    portfolio_uuid=tx.portfolio,
+                    other_portfolio_uuid=None,
+                    shares=shares,
+                    amount=amount,
+                    currency=currency,
+                )
+            )
 
-    relevant.sort(key=lambda item: item[0])
+        # Handle SECURITY_TRANSFER (Type 4)
+        elif tx.type in _TRANSFER_TYPES:
+            # We add it if EITHER source or destination is tracked.
+            # Logic inside loop handles missing sides.
+            if (tx.portfolio and tx.portfolio in portfolios) or (
+                tx.other_portfolio and tx.other_portfolio in portfolios
+            ):
+                relevant.append(
+                    ProcessedTx(
+                        date=parsed_date,
+                        type=tx.type,
+                        security_uuid=tx.security,
+                        portfolio_uuid=tx.portfolio,  # Source
+                        other_portfolio_uuid=tx.other_portfolio,  # Destination
+                        shares=shares_raw,  # Absolute shares to move
+                        amount=amount,
+                        currency=currency,
+                    )
+                )
+
+    relevant.sort(key=lambda item: item.date)
     return relevant
 
 
-def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float, int, str]],
-) -> dict[date, list[tuple[str, str, float, int, str]]]:
-    grouped: dict[date, list[tuple[str, str, float, int, str]]] = {}
-    for tx_date, portfolio_uuid, security_uuid, delta_shares, amount, currency in transactions:
-        grouped.setdefault(tx_date, []).append(
-            (portfolio_uuid, security_uuid, delta_shares, amount, currency)
-        )
+def _group_transactions(
+    transactions: Iterable[ProcessedTx],
+) -> dict[date, list[ProcessedTx]]:
+    grouped: dict[date, list[ProcessedTx]] = {}
+    for tx in transactions:
+        grouped.setdefault(tx.date, []).append(tx)
     return grouped
 
 

@@ -36,6 +36,12 @@ class StubHass:
         # We can try to just return a MagicMock which acts like a Task.
         return MagicMock()
 
+    async def async_add_executor_job(self, target, *args):
+        """Execute a function in the executor."""
+        if callable(target):
+            return target(*args)
+        return target
+
 
 class StubConnection:
     """Capture websocket responses for assertion."""

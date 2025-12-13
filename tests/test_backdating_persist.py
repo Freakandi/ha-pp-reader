@@ -44,6 +44,9 @@ async def test_persist_daily_wealth_and_scopes(tmp_path):
             price_coverage_ratio=0.8,
             stale_price=False,
             provenance="backdating-test",
+            realized_gains_eur=0.0,
+            unrealized_gains_eur=0.0,
+            invested_capital_eur=0.0,
         )
     ]
     holdings = [
@@ -59,6 +62,7 @@ async def test_persist_daily_wealth_and_scopes(tmp_path):
                     price_date="2024-01-02",
                     price_eur=50.0,
                     value_eur=50.0,
+                    purchase_value_eur=40.0,
                     fx_rate=2.0,
                     stale_price=False,
                 )
@@ -67,6 +71,9 @@ async def test_persist_daily_wealth_and_scopes(tmp_path):
             fx_coverage_ratio=1.0,
             stale_price=False,
             total_wealth_eur=50.0,
+            invested_capital_eur=40.0,
+            realized_gains_eur=0.0,
+            portfolio_realized_gains={},
         )
     ]
     accounts = [
