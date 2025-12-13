@@ -73,7 +73,7 @@ function formatOriginalBalance(account: AccountOverviewRow): string {
   if (typeof account.orig_balance !== 'number' || !Number.isFinite(account.orig_balance)) {
     return '—';
   }
-  const currency = account.currency_code ?? '';
+  const currency = escapeHtml(account.currency_code ?? '');
   const amount = account.orig_balance.toLocaleString('de-DE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
