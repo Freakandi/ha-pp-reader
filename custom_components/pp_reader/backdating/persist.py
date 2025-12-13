@@ -64,7 +64,6 @@ def _persist_daily_totals(
             outbound_transfers_eur=aggregate.outbound_transfers_eur,
             performance_neutral_movements=aggregate.performance_neutral_movements,
             fees_eur=aggregate.fees_eur,
-
             taxes_eur=aggregate.taxes_eur,
             realized_gains_eur=aggregate.realized_gains_eur,
             unrealized_gains_eur=aggregate.unrealized_gains_eur,
@@ -154,7 +153,7 @@ def _build_portfolio_scope_records(
         value = valuation.value_eur or 0.0
         meta = per_portfolio[valuation.portfolio_uuid]
         meta["total"] += value
-        meta["invested_capital"] += (valuation.purchase_value_eur or 0.0)
+        meta["invested_capital"] += valuation.purchase_value_eur or 0.0
         meta["stale"] = bool(meta["stale"] or valuation.stale_price)
         meta["total_positions"] += 1
         if valuation.price_native is not None:

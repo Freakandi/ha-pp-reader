@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import sqlite3
 from dataclasses import dataclass
@@ -113,7 +114,13 @@ def _compute_daily_holdings_snapshots_sync(
         daily_realized_gains = 0.0
         daily_portfolio_gains: dict[str, float] = {}
 
-        for portfolio_uuid, security_uuid, delta_shares, amount, currency in daily_adjustments:
+        for (
+            portfolio_uuid,
+            security_uuid,
+            delta_shares,
+            amount,
+            currency,
+        ) in daily_adjustments:
             key = (portfolio_uuid, security_uuid)
             entry = holdings.get(key, {"shares": 0.0, "purchase_value_eur": 0.0})
             current_shares = entry["shares"]
@@ -141,10 +148,8 @@ def _compute_daily_holdings_snapshots_sync(
                     entry["shares"] -= shares_sold
                     entry["purchase_value_eur"] = max(0.0, current_pv - cost_basis_sold)
 
-
-
                     # Realized Gain = Proceeds (tx_val_eur) - Cost Basis
-                    gain = (tx_val_eur - cost_basis_sold)
+                    gain = tx_val_eur - cost_basis_sold
                     daily_realized_gains += gain
 
                     # Accumulate per portfolio
@@ -155,11 +160,10 @@ def _compute_daily_holdings_snapshots_sync(
                     # For now just adjust shares, assume 0 cost basis interaction
                     entry["shares"] -= shares_sold
 
-            if entry["shares"] <= 1e-9: # Filter dust
+            if entry["shares"] <= 1e-9:  # Filter dust
                 holdings.pop(key, None)
             else:
                 holdings[key] = entry
-
 
         date_iso = date_cursor.isoformat()
         # fx_rates already loaded above
@@ -190,9 +194,10 @@ def _compute_daily_holdings_snapshots_sync(
                 stale_price=stale_price,
                 total_wealth_eur=total_wealth,
                 invested_capital_eur=invested_capital,
-
                 realized_gains_eur=round(daily_realized_gains, 4),
-                portfolio_realized_gains={k: round(v, 4) for k, v in daily_portfolio_gains.items()},
+                portfolio_realized_gains={
+                    k: round(v, 4) for k, v in daily_portfolio_gains.items()
+                },
             )
         )
         date_cursor += timedelta(days=1)
@@ -273,7 +278,9 @@ def _load_relevant_transactions(
         amount = int(tx.amount or 0)
         currency = tx.currency_code or "EUR"
 
-        relevant.append((parsed_date, tx.portfolio, tx.security, shares, amount, currency))
+        relevant.append(
+            (parsed_date, tx.portfolio, tx.security, shares, amount, currency)
+        )
 
     relevant.sort(key=lambda item: item[0])
     return relevant
@@ -283,7 +290,14 @@ def _group_transaction_adjustments(
     transactions: Iterable[tuple[date, str, str, float, int, str]],
 ) -> dict[date, list[tuple[str, str, float, int, str]]]:
     grouped: dict[date, list[tuple[str, str, float, int, str]]] = {}
-    for tx_date, portfolio_uuid, security_uuid, delta_shares, amount, currency in transactions:
+    for (
+        tx_date,
+        portfolio_uuid,
+        security_uuid,
+        delta_shares,
+        amount,
+        currency,
+    ) in transactions:
         grouped.setdefault(tx_date, []).append(
             (portfolio_uuid, security_uuid, delta_shares, amount, currency)
         )
@@ -347,19 +361,16 @@ def _resolve_price_for_date(
     if not entries:
         return None, None, False
 
-    selected_price: float | None = None
-    selected_date: date | None = None
-    selected_raw: str | None = None
+    # entries are sorted by date (ensured in _load_price_cache)
+    # Find insertion point to the right of target_date
+    idx = bisect.bisect_right(entries, target_date, key=lambda x: x[0])
 
-    for price_date, price_value, raw_date in reversed(entries):
-        if price_date <= target_date:
-            selected_price = price_value
-            selected_date = price_date
-            selected_raw = raw_date
-            break
-
-    if selected_price is None or selected_date is None:
+    if idx == 0:
+        # target_date is smaller than all dates in entries
         return None, None, False
+
+    # idx-1 is the last entry where date <= target_date
+    selected_date, selected_price, selected_raw = entries[idx - 1]
 
     stale = selected_date != target_date
     return selected_price, selected_raw or selected_date.isoformat(), stale
@@ -405,7 +416,9 @@ def _build_holdings_valuations(
                 price_date=price_date_raw,
                 price_eur=price_eur,
                 value_eur=value_eur,
-                purchase_value_eur=round(purchase_value_eur, 6) if purchase_value_eur is not None else 0.0,
+                purchase_value_eur=round(purchase_value_eur, 6)
+                if purchase_value_eur is not None
+                else 0.0,
                 fx_rate=fx_rate,
                 stale_price=stale,
             )
