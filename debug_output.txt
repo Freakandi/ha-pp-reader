@@ -1,0 +1,128 @@
+Verifying range: 2024-06-20 to 2024-07-05
+Date         | Metric                    | DB Value        | Calc Value      | Diff      
+-------------------------------------------------------------------------------------
+2024-06-20   | Total Wealth              | 128185.47       | 153282.16       | 25096.69   <--- MISMATCH
+2024-06-20   | Portfolio Wealth          | 54886.32        | 75664.97        | 20778.65   <--- MISMATCH
+2024-06-20   | Account Wealth            | 73299.15        | 77617.19        | 4318.04    <--- MISMATCH
+2024-06-20   | Invested Capital          | 59111.01        | 59111.01        | 0.00      
+2024-06-20   | Unrealized Gains          | -4224.70        | 16553.95        | 20778.65   <--- MISMATCH
+2024-06-21   | Total Wealth              | 128050.94       | 152960.43       | 24909.49   <--- MISMATCH
+2024-06-21   | Portfolio Wealth          | 54751.79        | 75343.24        | 20591.45   <--- MISMATCH
+2024-06-21   | Account Wealth            | 73299.15        | 77617.19        | 4318.04    <--- MISMATCH
+2024-06-21   | Invested Capital          | 59111.01        | 59111.01        | 0.00      
+2024-06-21   | Unrealized Gains          | -4359.23        | 16232.22        | 20591.45   <--- MISMATCH
+2024-06-22   | Total Wealth              | 128050.94       | 152960.43       | 24909.49   <--- MISMATCH
+2024-06-22   | Portfolio Wealth          | 54751.79        | 75343.24        | 20591.45   <--- MISMATCH
+2024-06-22   | Account Wealth            | 73299.15        | 77617.19        | 4318.04    <--- MISMATCH
+2024-06-22   | Invested Capital          | 59111.01        | 59111.01        | 0.00      
+2024-06-22   | Unrealized Gains          | -4359.23        | 16232.22        | 20591.45   <--- MISMATCH
+2024-06-23   | Total Wealth              | 128050.94       | 152960.43       | 24909.49   <--- MISMATCH
+2024-06-23   | Portfolio Wealth          | 54751.79        | 75343.24        | 20591.45   <--- MISMATCH
+2024-06-23   | Account Wealth            | 73299.15        | 77617.19        | 4318.04    <--- MISMATCH
+2024-06-23   | Invested Capital          | 59111.01        | 59111.01        | 0.00      
+2024-06-23   | Unrealized Gains          | -4359.23        | 16232.22        | 20591.45   <--- MISMATCH
+2024-06-24   | Total Wealth              | 128351.76       | 152891.00       | 24539.24   <--- MISMATCH
+2024-06-24   | Portfolio Wealth          | 55045.56        | 75273.81        | 20228.25   <--- MISMATCH
+2024-06-24   | Account Wealth            | 73306.20        | 77617.19        | 4310.99    <--- MISMATCH
+2024-06-24   | Invested Capital          | 59111.01        | 59111.01        | 0.00      
+2024-06-24   | Unrealized Gains          | -4065.45        | 16162.80        | 20228.25   <--- MISMATCH
+2024-06-24   | Interest                  | 7.05            | 0.00            | 7.05       <--- MISMATCH
+2024-06-25   | Total Wealth              | 128150.03       | 151713.97       | 23563.94   <--- MISMATCH
+2024-06-25   | Portfolio Wealth          | 54843.83        | 74096.78        | 19252.95   <--- MISMATCH
+2024-06-25   | Account Wealth            | 73306.20        | 77617.19        | 4310.99    <--- MISMATCH
+2024-06-25   | Invested Capital          | 59111.01        | 59111.01        | 0.00      
+2024-06-25   | Unrealized Gains          | -4267.18        | 14985.77        | 19252.95   <--- MISMATCH
+2024-06-26   | Total Wealth              | 127976.50       | 151975.49       | 23998.99   <--- MISMATCH
+2024-06-26   | Portfolio Wealth          | 54657.67        | 74345.67        | 19688.00   <--- MISMATCH
+2024-06-26   | Account Wealth            | 73318.83        | 77629.82        | 4310.99    <--- MISMATCH
+2024-06-26   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-06-26   | Realized Gains            | 1.34            | 1.34            | 0.00      
+2024-06-26   | Unrealized Gains          | -4442.05        | 15245.95        | 19688.00   <--- MISMATCH
+2024-06-27   | Total Wealth              | 127881.71       | 151923.10       | 24041.39   <--- MISMATCH
+2024-06-27   | Portfolio Wealth          | 54556.80        | 74287.20        | 19730.40   <--- MISMATCH
+2024-06-27   | Account Wealth            | 73324.91        | 77635.90        | 4310.99    <--- MISMATCH
+2024-06-27   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-06-27   | Unrealized Gains          | -4542.92        | 15187.48        | 19730.40   <--- MISMATCH
+2024-06-27   | Interest                  | 6.08            | 6.08            | 0.00      
+2024-06-28   | Total Wealth              | 127854.42       | 151855.26       | 24000.84   <--- MISMATCH
+2024-06-28   | Portfolio Wealth          | 54529.51        | 74219.36        | 19689.85   <--- MISMATCH
+2024-06-28   | Account Wealth            | 73324.91        | 77635.90        | 4310.99    <--- MISMATCH
+2024-06-28   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-06-28   | Unrealized Gains          | -4570.21        | 15119.64        | 19689.85   <--- MISMATCH
+2024-06-29   | Total Wealth              | 127854.42       | 151855.26       | 24000.84   <--- MISMATCH
+2024-06-29   | Portfolio Wealth          | 54529.51        | 74219.36        | 19689.85   <--- MISMATCH
+2024-06-29   | Account Wealth            | 73324.91        | 77635.90        | 4310.99    <--- MISMATCH
+2024-06-29   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-06-29   | Unrealized Gains          | -4570.21        | 15119.64        | 19689.85   <--- MISMATCH
+2024-06-30   | Total Wealth              | 127854.42       | 151855.26       | 24000.84   <--- MISMATCH
+2024-06-30   | Portfolio Wealth          | 54529.51        | 74219.36        | 19689.85   <--- MISMATCH
+2024-06-30   | Account Wealth            | 73324.91        | 77635.90        | 4310.99    <--- MISMATCH
+2024-06-30   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-06-30   | Unrealized Gains          | -4570.21        | 15119.64        | 19689.85   <--- MISMATCH
+2024-07-01   | Total Wealth              | 128098.06       | 152262.05       | 24163.99   <--- MISMATCH
+2024-07-01   | Portfolio Wealth          | 54600.84        | 74453.84        | 19853.00   <--- MISMATCH
+2024-07-01   | Account Wealth            | 73497.22        | 77808.21        | 4310.99    <--- MISMATCH
+2024-07-01   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-07-01   | Unrealized Gains          | -4498.89        | 15354.11        | 19853.00   <--- MISMATCH
+2024-07-01   | Dividends                 | 144.13          | 144.13          | 0.00      
+2024-07-01   | Interest                  | 28.18           | 28.18           | 0.00      
+2024-07-02   | Total Wealth              | 128159.39       | 152440.48       | 24281.09   <--- MISMATCH
+2024-07-02   | Portfolio Wealth          | 54650.28        | 74620.38        | 19970.10   <--- MISMATCH
+2024-07-02   | Account Wealth            | 73509.11        | 77820.10        | 4310.99    <--- MISMATCH
+2024-07-02   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-07-02   | Unrealized Gains          | -4449.44        | 15520.66        | 19970.10   <--- MISMATCH
+2024-07-02   | Interest                  | 11.89           | 11.89           | 0.00      
+DEBUG: Sec d3e2b6d3-feda-4c71-8af5-e665b89670db | Shares 4.0 | Price 2359.8 | FX 1.0 | Val 9439.2 | Currency USD
+DEBUG: Sec 1a77c874-1dfc-4971-a834-94503b3be61b | Shares 29.568399999999993 | Price 162.32 | FX 1.0 | Val 4799.542687999999 | Currency EUR
+DEBUG: Sec 7f4b008a-5edc-43c9-8a07-38f61c8050fa | Shares 73.83349999999997 | Price 48.121 | FX 1.0 | Val 3552.9418534999986 | Currency EUR
+DEBUG: Sec 2f1411fe-4722-4c81-8f54-8e8f0e10863b | Shares 136.899 | Price 33.642 | FX 1.0 | Val 4605.556158 | Currency EUR
+DEBUG: Sec e0718dbd-0e74-4646-bb3b-7698f844e3ca | Shares 80.0 | Price 41.96 | FX 1.0 | Val 3356.8 | Currency EUR
+DEBUG: Sec aa731fda-c90f-4fee-9bed-1d53f0916537 | Shares 60.0 | Price 23.76 | FX 1.0 | Val 1425.6000000000001 | Currency EUR
+DEBUG: Sec dedca65f-8e77-4c97-ab81-ec6b1948fc59 | Shares 85.0 | Price 17.382 | FX 1.0 | Val 1477.47 | Currency EUR
+DEBUG: Sec 409b3c2f-178d-4a40-a295-308dd1a4d917 | Shares 40.0 | Price 39.64 | FX 1.0 | Val 1585.6 | Currency EUR
+DEBUG: Sec 8088aa4a-0e02-451b-aefc-7f598e145979 | Shares 30.0 | Price 45.255 | FX 1.0 | Val 1357.65 | Currency EUR
+DEBUG: Sec 4f8776a7-5fcc-40f3-b385-acdd53761d50 | Shares 7.0 | Price 260.0 | FX 1.0 | Val 1820.0 | Currency EUR
+DEBUG: Sec 3ea8f529-157c-4985-a2a7-50379e50d0af | Shares 200.0 | Price 6.09 | FX 1.0 | Val 1218.0 | Currency USD
+DEBUG: Sec dc6530b9-30a5-4772-8b7a-939bca85d365 | Shares 20.0 | Price 182.98 | FX 1.0 | Val 3659.6 | Currency EUR
+DEBUG: Sec 0576e861-6abf-4896-9aa0-14260c8f66a0 | Shares 117.0 | Price 24.06 | FX 1.0 | Val 2815.02 | Currency EUR
+DEBUG: Sec cee7d66b-1d01-4a50-8e59-a1bf8bc1f570 | Shares 70.0 | Price 23.58 | FX 1.0 | Val 1650.6 | Currency EUR
+DEBUG: Sec c18143cc-7e53-4857-a536-cd65a0203353 | Shares 30.0 | Price 42.69 | FX 1.0 | Val 1280.6999999999998 | Currency EUR
+DEBUG: Sec e008c5aa-c542-40be-ba8c-47e2ab5e5680 | Shares 80.0 | Price 17.795 | FX 1.0 | Val 1423.6000000000001 | Currency EUR
+DEBUG: Sec 07053eeb-596b-41b1-91a0-e86586dc8229 | Shares 16.0 | Price 171.82 | FX 1.0 | Val 2749.12 | Currency EUR
+DEBUG: Sec 7eb58812-cefa-45d9-a158-c1ff1215e943 | Shares 50.0 | Price 26.225 | FX 1.0 | Val 1311.25 | Currency EUR
+DEBUG: Sec a87b1374-d619-44c3-a592-b9af183c3d67 | Shares 60.0 | Price 29.1 | FX 1.0 | Val 1746.0 | Currency EUR
+DEBUG: Sec 943c04a1-1003-41af-952f-1a552977c1fc | Shares 6.0 | Price 271.8 | FX 1.0 | Val 1630.8000000000002 | Currency CHF
+DEBUG: Sec 0b1fbd99-24cc-4a08-84fa-67308c9e2672 | Shares 250.0 | Price 30.745 | FX 1.0 | Val 7686.25 | Currency SEK
+DEBUG: Sec 3d5c8979-2dd5-47ec-893c-305114e36351 | Shares 100.0 | Price 4.091 | FX 1.0 | Val 409.1 | Currency EUR
+DEBUG: Sec 055a7a52-e943-4f9e-8aa7-99461e7e973b | Shares 0.0251 | Price 425.8 | FX 1.0 | Val 10.68758 | Currency EUR
+DEBUG: Sec 122f67f9-18ca-4cb0-9023-d39240dc537b | Shares 360.0 | Price 0.962 | FX 1.0 | Val 346.32 | Currency EUR
+DEBUG: Sec b244adae-7c10-4367-8705-fa9f148ae76d | Shares 100.0 | Price 19.95 | FX 1.0 | Val 1995.0 | Currency EUR
+DEBUG: Sec afe8f63f-a5c8-4f9b-af1f-61cfd580364a | Shares 35.0 | Price 40.23 | FX 1.0 | Val 1408.05 | Currency EUR
+DEBUG: Sec bba6231d-5080-4995-80d6-9e1b56c74ebf | Shares 90.0 | Price 16.058 | FX 1.0 | Val 1445.22 | Currency EUR
+DEBUG: Sec 1e9443eb-8636-4722-a22e-c4a4dc00659a | Shares 45.0 | Price 32.7 | FX 1.0 | Val 1471.5000000000002 | Currency EUR
+DEBUG: Sec 4f419e70-4e92-4eb3-a619-8fbecee4524a | Shares 50.0 | Price 14.37 | FX 1.0 | Val 718.5 | Currency EUR
+DEBUG: Sec e54f6fb6-4bf5-4df8-b8cb-750958454d70 | Shares 50.0 | Price 29.1 | FX 1.0 | Val 1455.0 | Currency EUR
+DEBUG: Sec 063bd8d6-7666-409d-9f9e-63d10b8f80d1 | Shares 7500.0 | Price 0.0106 | FX 1.0 | Val 79.5 | Currency EUR
+DEBUG: Sec b9ef5824-d91f-438b-953c-d4166284aada | Shares 35.0 | Price 21.0 | FX 1.0 | Val 735.0 | Currency EUR
+DEBUG: Sec 59d929c7-95e4-446c-9138-e27e8b21eab3 | Shares 40.0 | Price 24.42 | FX 1.0 | Val 976.8000000000001 | Currency EUR
+DEBUG: Sec af0ea305-f981-49b6-b9a4-7af18c7a59bf | Shares 70.0 | Price 13.9 | FX 1.0 | Val 973.0 | Currency EUR
+DEBUG: Sec 270b06b6-9152-4a5a-9aab-a842ac624a36 | Shares 20.0 | Price 55.36 | FX 1.0 | Val 1107.2 | Currency EUR
+DEBUG: Sec a5699e8a-1b40-4f3f-9e83-e05900e6dfbf | Shares 50.0 | Price 1.944 | FX 1.0 | Val 97.2 | Currency EUR
+DEBUG: Sec 3f40f1e6-0142-44eb-a427-0f5d90f41bea | Shares 150.0 | Price 0.5294 | FX 1.0 | Val 79.41 | Currency EUR
+DEBUG: Sec 0fdfe939-35ba-4a8f-8d95-5398eea8194d | Shares 10.0 | Price 106.5 | FX 1.0 | Val 1065.0 | Currency EUR
+DEBUG: Sec 312afed9-de60-4441-bba6-bc71b47e0bae | Shares 500.0 | Price 0.187 | FX 1.0 | Val 93.5 | Currency EUR
+2024-07-03   | Total Wealth              | 128592.15       | 152877.39       | 24285.24   <--- MISMATCH
+2024-07-03   | Portfolio Wealth          | 55083.04        | 75057.29        | 19974.25   <--- MISMATCH
+2024-07-03   | Account Wealth            | 73509.11        | 77820.10        | 4310.99    <--- MISMATCH
+2024-07-03   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-07-03   | Unrealized Gains          | -4016.69        | 15957.56        | 19974.25   <--- MISMATCH
+2024-07-04   | Total Wealth              | 128655.16       | 153106.35       | 24451.19   <--- MISMATCH
+2024-07-04   | Portfolio Wealth          | 55146.05        | 75286.25        | 20140.20   <--- MISMATCH
+2024-07-04   | Account Wealth            | 73509.11        | 77820.10        | 4310.99    <--- MISMATCH
+2024-07-04   | Invested Capital          | 59099.72        | 59099.72        | 0.00      
+2024-07-04   | Unrealized Gains          | -3953.67        | 16186.53        | 20140.20   <--- MISMATCH
+2024-07-05   | Total Wealth              | 128741.83       | 153884.42       | 25142.59   <--- MISMATCH
+2024-07-05   | Portfolio Wealth          | 55382.72        | 76214.32        | 20831.60   <--- MISMATCH
+2024-07-05   | Account Wealth            | 73359.11        | 77670.10        | 4310.99    <--- MISMATCH
+2024-07-05   | Invested Capital          | 59249.72        | 59249.72        | 0.00      
+2024-07-05   | Unrealized Gains          | -3867.00        | 16964.60        | 20831.60   <--- MISMATCH

@@ -67,3 +67,39 @@ def ensure_daily_wealth_tables(conn: sqlite3.Connection) -> None:
             raise
     _ensure_performance_neutral_column(conn, "daily_wealth")
     _ensure_performance_neutral_column(conn, "daily_wealth_scopes")
+    _ensure_column(conn, "daily_wealth", "realized_gains_eur")
+    _ensure_column(conn, "daily_wealth_scopes", "realized_gains_eur")
+    _ensure_column(conn, "daily_wealth", "unrealized_gains_eur")
+    _ensure_column(conn, "daily_wealth_scopes", "unrealized_gains_eur")
+    _ensure_column(conn, "daily_wealth", "invested_capital_eur")
+    _ensure_column(conn, "daily_wealth_scopes", "invested_capital_eur")
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table: str,
+    column_name: str,
+) -> None:
+    """Add a float column when missing."""
+    try:
+        cursor = conn.execute(f"PRAGMA table_info('{table}')")
+    except sqlite3.Error:  # pragma: no cover
+        _LOGGER.exception("Unable to inspect columns for %s", table)
+        return
+
+    columns = {row[1] for row in cursor.fetchall()}
+    if column_name in columns:
+        return
+
+    try:
+        conn.execute(
+            f"ALTER TABLE {table} ADD COLUMN {column_name} REAL NOT NULL DEFAULT 0.0"
+        )
+    except sqlite3.OperationalError as err:
+        if "duplicate column name" in str(err).lower():
+            return
+        _LOGGER.exception("Failed to add %s to %s", column_name, table)
+        raise
+    except sqlite3.Error:
+        _LOGGER.exception("Failed to add %s to %s", column_name, table)
+        raise

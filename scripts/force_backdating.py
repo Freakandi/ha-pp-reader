@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Mock Home Assistant
 class MockHass:
     """Mock Home Assistant instance."""
+
     def __init__(self) -> None:
         self.loop = asyncio.get_event_loop()
         self.data = {}

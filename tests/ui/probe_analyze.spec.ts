@@ -65,4 +65,25 @@ test('Probe Analyze Tab State', async ({ page }) => {
     console.log(`Total Scope Labels: ${String(scopeLabels.length)}`);
     expect(scopeLabels.length).toBeLessThan(50);
     expect(scopeLabels.length).toBeGreaterThan(0);
+
+    // Verify Performance Calculation Section
+    const metricsGrid = page.locator('.analyse-metrics-grid');
+    await expect(metricsGrid).toBeVisible();
+    await expect(metricsGrid).toContainText('Performance-Berechnung');
+
+    const expectedLabels = [
+        'Anfangswert',
+        'Kurserfolge',
+        'Dividenden',
+        'Zinsen',
+        'Gebühren',
+        'Steuern',
+        'Performanceneutrale Bew.',
+        'Endwert'
+    ];
+
+    for (const label of expectedLabels) {
+        await expect(metricsGrid).toContainText(label);
+    }
+    console.log('PASS: Performance Calculation labels verified');
 });
