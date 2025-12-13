@@ -166,6 +166,8 @@ class Transaction:
     amount: int  # Cent-Betrag
     shares: int | None  # *10^8 für Genauigkeit
     security: str | None  # Security UUID
+    fees: int = 0
+    taxes: int = 0
     amount_eur_cents: int | None = None
 
 
@@ -399,6 +401,9 @@ class DailyWealthRecord:
     performance_neutral_movements: float = 0.0
     fees_eur: float = 0.0
     taxes_eur: float = 0.0
+    realized_gains_eur: float = 0.0
+    unrealized_gains_eur: float = 0.0
+    invested_capital_eur: float = 0.0
     fx_coverage_ratio: float | None = None
     price_coverage_ratio: float | None = None
     stale_price: bool = False
@@ -425,6 +430,9 @@ class DailyWealthScopeRecord:
     performance_neutral_movements: float = 0.0
     fees_eur: float = 0.0
     taxes_eur: float = 0.0
+    realized_gains_eur: float = 0.0
+    unrealized_gains_eur: float = 0.0
+    invested_capital_eur: float = 0.0
     fx_coverage_ratio: float | None = None
     price_coverage_ratio: float | None = None
     stale_price: bool = False
@@ -524,12 +532,16 @@ def get_transactions(
 
     try:
         cur = conn.execute("""
-            SELECT uuid, type, account, portfolio,
-                   other_account, other_portfolio,
-                   date, currency_code, amount,
-                   shares, security
-            FROM transactions
-            ORDER BY date
+            SELECT t.uuid, t.type, t.account, t.portfolio,
+                   t.other_account, t.other_portfolio,
+                   t.date, t.currency_code, t.amount,
+                   t.shares, t.security,
+                   CAST(COALESCE(SUM(CASE WHEN u.type = 13 THEN u.amount WHEN u.type = 14 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as fees,
+                   CAST(COALESCE(SUM(CASE WHEN u.type = 11 THEN u.amount WHEN u.type = 12 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as taxes
+            FROM transactions t
+            LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid AND u.type IN (11, 12, 13, 14)
+            GROUP BY t.uuid
+            ORDER BY t.date
         """)
         return [Transaction(*row) for row in cur.fetchall()]
     except sqlite3.Error:
@@ -1892,6 +1904,9 @@ def _row_to_daily_wealth(row: sqlite3.Row) -> DailyWealthRecord:
         or 0.0,
         fees_eur=_safe_float(row["fees_eur"]) or 0.0,
         taxes_eur=_safe_float(row["taxes_eur"]) or 0.0,
+        realized_gains_eur=_safe_float(row["realized_gains_eur"]) or 0.0,
+        unrealized_gains_eur=_safe_float(row["unrealized_gains_eur"]) or 0.0,
+        invested_capital_eur=_safe_float(row["invested_capital_eur"]) or 0.0,
         fx_coverage_ratio=_safe_float(row["fx_coverage_ratio"]),
         price_coverage_ratio=_safe_float(row["price_coverage_ratio"]),
         stale_price=bool(row["stale_price"]),
@@ -1919,6 +1934,9 @@ def _row_to_daily_wealth_scope(row: sqlite3.Row) -> DailyWealthScopeRecord:
         or 0.0,
         fees_eur=_safe_float(row["fees_eur"]) or 0.0,
         taxes_eur=_safe_float(row["taxes_eur"]) or 0.0,
+        realized_gains_eur=_safe_float(row["realized_gains_eur"]) or 0.0,
+        unrealized_gains_eur=_safe_float(row["unrealized_gains_eur"]) or 0.0,
+        invested_capital_eur=_safe_float(row["invested_capital_eur"]) or 0.0,
         fx_coverage_ratio=_safe_float(row["fx_coverage_ratio"]),
         price_coverage_ratio=_safe_float(row["price_coverage_ratio"]),
         stale_price=bool(row["stale_price"]),
@@ -2372,13 +2390,16 @@ def upsert_daily_wealth(
                 performance_neutral_movements,
                 fees_eur,
                 taxes_eur,
+                realized_gains_eur,
+                unrealized_gains_eur,
+                invested_capital_eur,
                 fx_coverage_ratio,
                 price_coverage_ratio,
                 stale_price,
                 provenance,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(date) DO UPDATE SET
                 total_wealth_eur = excluded.total_wealth_eur,
                 portfolio_wealth_eur = excluded.portfolio_wealth_eur,
@@ -2390,6 +2411,9 @@ def upsert_daily_wealth(
                 performance_neutral_movements = excluded.performance_neutral_movements,
                 fees_eur = excluded.fees_eur,
                 taxes_eur = excluded.taxes_eur,
+                realized_gains_eur = excluded.realized_gains_eur,
+                unrealized_gains_eur = excluded.unrealized_gains_eur,
+                invested_capital_eur = excluded.invested_capital_eur,
                 fx_coverage_ratio = excluded.fx_coverage_ratio,
                 price_coverage_ratio = excluded.price_coverage_ratio,
                 stale_price = excluded.stale_price,
@@ -2409,6 +2433,9 @@ def upsert_daily_wealth(
                     record.performance_neutral_movements,
                     record.fees_eur,
                     record.taxes_eur,
+                    record.realized_gains_eur,
+                    record.unrealized_gains_eur,
+                    record.invested_capital_eur,
                     record.fx_coverage_ratio,
                     record.price_coverage_ratio,
                     1 if record.stale_price else 0,
@@ -2459,13 +2486,16 @@ def upsert_daily_wealth_scopes(
                 performance_neutral_movements,
                 fees_eur,
                 taxes_eur,
+                realized_gains_eur,
+                unrealized_gains_eur,
+                invested_capital_eur,
                 fx_coverage_ratio,
                 price_coverage_ratio,
                 stale_price,
                 provenance,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(scope_type, scope_id, date) DO UPDATE SET
                 scope_name = excluded.scope_name,
                 total_wealth_eur = excluded.total_wealth_eur,
@@ -2478,6 +2508,9 @@ def upsert_daily_wealth_scopes(
                 performance_neutral_movements = excluded.performance_neutral_movements,
                 fees_eur = excluded.fees_eur,
                 taxes_eur = excluded.taxes_eur,
+                realized_gains_eur = excluded.realized_gains_eur,
+                unrealized_gains_eur = excluded.unrealized_gains_eur,
+                invested_capital_eur = excluded.invested_capital_eur,
                 fx_coverage_ratio = excluded.fx_coverage_ratio,
                 price_coverage_ratio = excluded.price_coverage_ratio,
                 stale_price = excluded.stale_price,
@@ -2500,6 +2533,9 @@ def upsert_daily_wealth_scopes(
                     record.performance_neutral_movements,
                     record.fees_eur,
                     record.taxes_eur,
+                    record.realized_gains_eur,
+                    record.unrealized_gains_eur,
+                    record.invested_capital_eur,
                     record.fx_coverage_ratio,
                     record.price_coverage_ratio,
                     1 if record.stale_price else 0,
@@ -2551,6 +2587,9 @@ def fetch_daily_wealth(  # noqa: PLR0913
             performance_neutral_movements,
             fees_eur,
             taxes_eur,
+            realized_gains_eur,
+            unrealized_gains_eur,
+            invested_capital_eur,
             fx_coverage_ratio,
             price_coverage_ratio,
             stale_price,
@@ -2614,6 +2653,9 @@ def fetch_daily_wealth_scopes(  # noqa: PLR0913
             performance_neutral_movements,
             fees_eur,
             taxes_eur,
+            realized_gains_eur,
+            unrealized_gains_eur,
+            invested_capital_eur,
             fx_coverage_ratio,
             price_coverage_ratio,
             stale_price,

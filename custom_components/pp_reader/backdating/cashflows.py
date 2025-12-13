@@ -153,8 +153,7 @@ def _load_relevant_transactions(
         account_uuid = tx.account or tx.other_account
         if not account_uuid or account_uuid not in accounts:
             continue
-        if accounts.get(account_uuid, {}).get("retired"):
-            continue
+        # Removed retired check to include history of retired accounts
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
         if parsed_date is None:
@@ -221,6 +220,22 @@ def _aggregate_daily_buckets(  # noqa: PLR0912
                 amount_eur = round(amount_eur / fx_rate, 6)
 
         bucket, sign = _classify_transaction(tx)
+
+        # Process attached fees/taxes (e.g. on Buys/Sells), avoiding double-count for explicit Fee/Tax transactions
+        tx_fees = getattr(tx, "fees", 0)
+        tx_taxes = getattr(tx, "taxes", 0)
+        if tx_fees or tx_taxes:
+            f_eur = cent_to_eur(tx_fees, default=0.0) or 0.0
+            t_eur = cent_to_eur(tx_taxes, default=0.0) or 0.0
+            if is_foreign and fx_rate and fx_rate > 0:
+                f_eur = round(f_eur / fx_rate, 6)
+                t_eur = round(t_eur / fx_rate, 6)
+
+            if bucket != "fees" and tx_fees:
+                fees += abs(f_eur)
+            if bucket != "taxes" and tx_taxes:
+                taxes += abs(t_eur)
+
         if bucket is None or amount_eur is None:
             continue
 

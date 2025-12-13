@@ -2,19 +2,19 @@
  * Home Assistant websocket API helpers carried over for TypeScript migration.
  */
 
-import {
-  deserializeAccountSnapshots,
-  deserializeNormalizedDashboardSnapshot,
-  deserializeNormalizedPayloadMetadata,
-  deserializePortfolioSnapshots,
-  deserializePositionSnapshots,
-} from "../lib/api/portfolio";
 import type {
   NormalizedAccountSnapshot,
   NormalizedDashboardSnapshot,
   NormalizedPayloadMetadata,
   NormalizedPortfolioSnapshot,
   NormalizedPositionSnapshot,
+} from "../lib/api/portfolio";
+import {
+  deserializeAccountSnapshots,
+  deserializeNormalizedDashboardSnapshot,
+  deserializeNormalizedPayloadMetadata,
+  deserializePortfolioSnapshots,
+  deserializePositionSnapshots,
 } from "../lib/api/portfolio";
 import type {
   AverageCostPayload,
@@ -239,6 +239,9 @@ export interface DailyWealthRecord {
   performance_neutral_movements: number;
   fees_eur: number;
   taxes_eur: number;
+  realized_gains_eur: number;
+  unrealized_gains_eur: number;
+  invested_capital_eur: number;
   fx_coverage_ratio: number | null;
   price_coverage_ratio: number | null;
   stale_price: boolean;
@@ -351,10 +354,10 @@ export interface DashboardPushPayloadMap {
   accounts: AccountSummary[] | null | undefined;
   portfolio_values: PortfolioValuesUpdateEntry[] | null | undefined;
   portfolio_positions:
-    | PortfolioPositionsUpdatePayload
-    | PortfolioPositionsUpdatePayload[]
-    | null
-    | undefined;
+  | PortfolioPositionsUpdatePayload
+  | PortfolioPositionsUpdatePayload[]
+  | null
+  | undefined;
   security_snapshot: SecuritySnapshotResponse | null | undefined;
   security_history: SecurityHistoryResponse | null | undefined;
 }
@@ -581,6 +584,9 @@ function normalizeDailyWealthRecord(raw: UnknownRecord): DailyWealthRecord | nul
     performance_neutral_movements: toFiniteNumberOrZero(raw.performance_neutral_movements),
     fees_eur: toFiniteNumberOrZero(raw.fees_eur),
     taxes_eur: toFiniteNumberOrZero(raw.taxes_eur),
+    realized_gains_eur: toFiniteNumberOrZero(raw.realized_gains_eur),
+    unrealized_gains_eur: toFiniteNumberOrZero(raw.unrealized_gains_eur),
+    invested_capital_eur: toFiniteNumberOrZero(raw.invested_capital_eur),
     fx_coverage_ratio: toCoverageValue(raw.fx_coverage_ratio),
     price_coverage_ratio: toCoverageValue(raw.price_coverage_ratio),
     stale_price: raw.stale_price === true,
@@ -657,9 +663,9 @@ export async function fetchDailyWealthWS(
   const normalizedRange =
     range && typeof range === "object"
       ? {
-          start: toStringOrNull(range.start) ?? "",
-          end: toStringOrNull(range.end) ?? "",
-        }
+        start: toStringOrNull(range.start) ?? "",
+        end: toStringOrNull(range.end) ?? "",
+      }
       : null;
 
   if (normalizedDate && normalizedRange && normalizedRange.start && normalizedRange.end) {

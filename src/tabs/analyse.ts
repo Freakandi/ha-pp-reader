@@ -24,6 +24,10 @@ type PerformanceRowKey =
   | 'startValue'
   | 'endValue'
   | 'marketGain'
+  | 'realizedGains'
+  | 'unrealizedGains'
+  | 'dividends'
+  | 'interest'
   | 'ertraege'
   | 'fees'
   | 'taxes'
@@ -196,29 +200,25 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
   // Let's stick to the requested layout: clear structure.
   // We can group Cashflows and Performance.
 
-  const mkRow = (label: string, value: number | string, cls = ''): string => `
-    <div class="metric-row ${cls}">
+  const mkRow = (label: string, value: number | string, cls = '', id = ''): string => `
+    <div class="metric-row ${cls}" ${id ? `id="${id}"` : ''}>
       <span class="metric-label">${label}</span>
       <span class="metric-value">${typeof value === 'number' ? formatCurrency(value) : value}</span>
     </div>`;
 
   const html = `
     <div class="metrics-section">
-      <h3>Vermögensentwicklung</h3>
-      ${mkRow('Startwert', bd.startValue)}
-      ${mkRow('Endwert', bd.endValue, 'highlight')}
-      ${mkRow('Abs. Veränderung', bd.endValue - bd.startValue)}
-    </div>
-    <div class="metrics-section">
-      <h3>Performance-Treiber</h3>
-      ${mkRow('Markt & FX', bd.marketGain)}
-      ${mkRow('Erträge (Div/Zins)', bd.ertraege)}
-      ${mkRow('Kosten & Steuern', bd.fees + bd.taxes)}
-    </div>
-    <div class="metrics-section">
-      <h3>Finanzfluss</h3>
-      ${mkRow('Netto-Transfers', bd.netTransfers)}
-      ${mkRow('Neutral', bd.neutral)}
+      <h3>Performance-Berechnung</h3>
+      ${mkRow('Anfangswert', bd.startValue, '', 'perf-startValue')}
+      ${mkRow('Kurserfolge (Gesamt)', bd.marketGain, 'sub-header')}
+      ${mkRow('&nbsp;&nbsp;↳ Realisiert', bd.realizedGains, 'indent')}
+      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert', bd.unrealizedGains, 'indent')}
+      ${mkRow('Dividenden', bd.dividends)}
+      ${mkRow('Zinsen', bd.interest)}
+      ${mkRow('Gebühren', bd.fees)}
+      ${mkRow('Steuern', bd.taxes)}
+      ${mkRow('Performanceneutrale Bew.', bd.neutral + bd.netTransfers)}
+      ${mkRow('Endwert', bd.endValue, 'highlight', 'perf-endValue')}
     </div>
   `;
 
@@ -522,13 +522,17 @@ function renderWealthChart(chartCard: HTMLElement, data: DailyWealthResponse): v
     renderSliceSeries(chartHost as unknown as ChartContainerWithState, series);
   }
 }
+
+
 function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown | null {
   if (!records.length) {
     return null;
   }
   const startValue = records[0]?.total_wealth_eur ?? 0;
   const endValue = records[records.length - 1]?.total_wealth_eur ?? 0;
-  const ertraege = sumField(records, 'dividends_eur') + sumField(records, 'interest_eur');
+  const dividends = sumField(records, 'dividends_eur');
+  const interest = sumField(records, 'interest_eur');
+  const ertraege = dividends + interest;
   const fees = -Math.abs(sumField(records, 'fees_eur'));
   const taxes = -Math.abs(sumField(records, 'taxes_eur'));
   const netTransfers = sumField(records, 'inbound_transfers_eur') - sumField(records, 'outbound_transfers_eur');
@@ -536,10 +540,17 @@ function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown |
 
   const marketGain = endValue - startValue - ertraege - fees - taxes - netTransfers - neutral;
 
+  const realizedGains = sumField(records, 'realized_gains_eur');
+  const unrealizedGains = marketGain - realizedGains;
+
   return {
     startValue,
     endValue,
     marketGain,
+    realizedGains,
+    unrealizedGains,
+    dividends,
+    interest,
     ertraege,
     fees,
     taxes,

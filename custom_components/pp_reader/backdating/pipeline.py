@@ -158,7 +158,7 @@ async def async_run_backdating_rebuild(  # noqa: PLR0913
 
     if _BACKDATING_LOCK.locked():
         _LOGGER.info(
-            "Backdating already running, skip duplicate trigger=%s window=%s→%s",
+            "Backdating already running, skip duplicate trigger=%s window=%s->%s",
             trigger,
             plan.start_date,
             plan.end_date,
@@ -188,7 +188,7 @@ async def async_run_backdating_rebuild(  # noqa: PLR0913
             started_at=started_at,
         )
         _LOGGER.info(
-            "Backdating planned window %s→%s (trigger=%s)",
+            "Backdating planned window %s->%s (trigger=%s)",
             plan.start_date,
             plan.end_date,
             trigger,
@@ -270,7 +270,7 @@ async def async_run_backdating_rebuild(  # noqa: PLR0913
         except Exception as err:
             finished_at = _utc_now_isoformat()
             _LOGGER.exception(
-                "Backdating failed (window=%s→%s trigger=%s)",
+                "Backdating failed (window=%s->%s trigger=%s)",
                 plan.start_date,
                 plan.end_date,
                 trigger,

@@ -16,7 +16,7 @@ from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import normalize_raw_price
+from custom_components.pp_reader.util.currency import cent_to_eur, normalize_raw_price
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.holdings")
 
@@ -36,6 +36,7 @@ class HoldingValuation:
     price_date: str | None
     price_eur: float | None
     value_eur: float | None
+    purchase_value_eur: float | None
     fx_rate: float | None
     stale_price: bool
 
@@ -50,6 +51,9 @@ class DailyHoldingsSnapshot:
     fx_coverage_ratio: float
     stale_price: bool
     total_wealth_eur: float
+    invested_capital_eur: float
+    realized_gains_eur: float
+    portfolio_realized_gains: dict[str, float]
 
 
 async def async_compute_daily_holdings_snapshots(
@@ -96,21 +100,69 @@ def _compute_daily_holdings_snapshots_sync(
     transactions = _load_relevant_transactions(db_path, portfolios, securities)
     price_cache = _load_price_cache(db_path)
 
-    holdings: dict[tuple[str, str], float] = {}
+    holdings: dict[tuple[str, str], dict[str, float]] = {}
     snapshots: list[DailyHoldingsSnapshot] = []
     adjustments_by_date = _group_transaction_adjustments(transactions)
     date_cursor = start_date
 
     while date_cursor <= end_date:
         daily_adjustments = adjustments_by_date.get(date_cursor, ())
-        for portfolio_uuid, security_uuid, delta_shares in daily_adjustments:
-            key = (portfolio_uuid, security_uuid)
-            holdings[key] = round(holdings.get(key, 0.0) + delta_shares, 8)
-            if holdings[key] <= 0:
-                holdings.pop(key, None)
-
         date_iso = date_cursor.isoformat()
         fx_rates = _load_fx_rates_for_date(db_path, date_iso)
+
+        daily_realized_gains = 0.0
+        daily_portfolio_gains: dict[str, float] = {}
+
+        for portfolio_uuid, security_uuid, delta_shares, amount, currency in daily_adjustments:
+            key = (portfolio_uuid, security_uuid)
+            entry = holdings.get(key, {"shares": 0.0, "purchase_value_eur": 0.0})
+            current_shares = entry["shares"]
+            current_pv = entry["purchase_value_eur"]
+
+            # Resolving value of transaction in EUR at daily rate
+            tx_val_eur = 0.0
+            if amount > 0:
+                tx_currency = (currency or "EUR").strip().upper()
+                fx = 1.0 if tx_currency == "EUR" else fx_rates.get(tx_currency)
+                if fx:
+                    tx_val_eur = cent_to_eur(amount) / fx
+
+            # Average Cost Logic
+            if delta_shares > 0:
+                # BUY: Add to shares and purchase value
+                entry["shares"] += delta_shares
+                entry["purchase_value_eur"] += tx_val_eur
+            else:
+                # SELL: Reduce shares and purchase value proportionally (Average Cost)
+                shares_sold = abs(delta_shares)
+                if current_shares > 0:
+                    avg_cost = current_pv / current_shares
+                    cost_basis_sold = shares_sold * avg_cost
+                    entry["shares"] -= shares_sold
+                    entry["purchase_value_eur"] = max(0.0, current_pv - cost_basis_sold)
+
+
+
+                    # Realized Gain = Proceeds (tx_val_eur) - Cost Basis
+                    gain = (tx_val_eur - cost_basis_sold)
+                    daily_realized_gains += gain
+
+                    # Accumulate per portfolio
+                    port_gains = daily_portfolio_gains.get(portfolio_uuid, 0.0)
+                    daily_portfolio_gains[portfolio_uuid] = port_gains + gain
+                else:
+                    # Selling something we don't have (short or data error)
+                    # For now just adjust shares, assume 0 cost basis interaction
+                    entry["shares"] -= shares_sold
+
+            if entry["shares"] <= 1e-9: # Filter dust
+                holdings.pop(key, None)
+            else:
+                holdings[key] = entry
+
+
+        date_iso = date_cursor.isoformat()
+        # fx_rates already loaded above
         valuations = _build_holdings_valuations(
             holdings.items(),
             securities,
@@ -125,6 +177,10 @@ def _compute_daily_holdings_snapshots_sync(
             sum(v.value_eur for v in valuations if v.value_eur is not None), 4
         )
 
+        invested_capital = round(
+            sum(v["purchase_value_eur"] for v in holdings.values()), 4
+        )
+
         snapshots.append(
             DailyHoldingsSnapshot(
                 date=date_iso,
@@ -133,6 +189,10 @@ def _compute_daily_holdings_snapshots_sync(
                 fx_coverage_ratio=fx_coverage_ratio,
                 stale_price=stale_price,
                 total_wealth_eur=total_wealth,
+                invested_capital_eur=invested_capital,
+
+                realized_gains_eur=round(daily_realized_gains, 4),
+                portfolio_realized_gains={k: round(v, 4) for k, v in daily_portfolio_gains.items()},
             )
         )
         date_cursor += timedelta(days=1)
@@ -179,9 +239,13 @@ def _load_relevant_transactions(
     db_path: Path,
     portfolios: dict[str, dict[str, Any]],
     securities: dict[str, dict[str, Any]],
-) -> list[tuple[date, str, str, float]]:
-    """Return security transactions that affect holdings."""
-    relevant: list[tuple[date, str, str, float]] = []
+) -> list[tuple[date, str, str, float, int, str]]:
+    """
+    Return security transactions that affect holdings.
+
+    Returns: (date, portfolio, security, shares, amount_cents, currency)
+    """
+    relevant: list[tuple[date, str, str, float, int, str]] = []
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
             continue
@@ -190,8 +254,8 @@ def _load_relevant_transactions(
         security_meta = securities.get(tx.security)
         if not portfolio_meta or not security_meta:
             continue
-        if portfolio_meta.get("is_retired") or security_meta.get("retired"):
-            continue
+        # Removed retired check to include history
+
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
             continue
 
@@ -205,19 +269,23 @@ def _load_relevant_transactions(
         if shares == 0:
             continue
 
-        relevant.append((parsed_date, tx.portfolio, tx.security, shares))
+        # Assuming amount is always positive in DB for the value of transaction
+        amount = int(tx.amount or 0)
+        currency = tx.currency_code or "EUR"
+
+        relevant.append((parsed_date, tx.portfolio, tx.security, shares, amount, currency))
 
     relevant.sort(key=lambda item: item[0])
     return relevant
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float]],
-) -> dict[date, list[tuple[str, str, float]]]:
-    grouped: dict[date, list[tuple[str, str, float]]] = {}
-    for tx_date, portfolio_uuid, security_uuid, delta_shares in transactions:
+    transactions: Iterable[tuple[date, str, str, float, int, str]],
+) -> dict[date, list[tuple[str, str, float, int, str]]]:
+    grouped: dict[date, list[tuple[str, str, float, int, str]]] = {}
+    for tx_date, portfolio_uuid, security_uuid, delta_shares, amount, currency in transactions:
         grouped.setdefault(tx_date, []).append(
-            (portfolio_uuid, security_uuid, delta_shares)
+            (portfolio_uuid, security_uuid, delta_shares, amount, currency)
         )
     return grouped
 
@@ -298,7 +366,7 @@ def _resolve_price_for_date(
 
 
 def _build_holdings_valuations(
-    holdings: Iterable[tuple[tuple[str, str], float]],
+    holdings: Iterable[tuple[tuple[str, str], dict[str, float]]],
     securities: dict[str, dict[str, Any]],
     price_cache: dict[str, list[tuple[date, float, str]]],
     fx_rates: dict[str, float],
@@ -306,7 +374,10 @@ def _build_holdings_valuations(
     target_date: date,
 ) -> list[HoldingValuation]:
     valuations: list[HoldingValuation] = []
-    for (portfolio_uuid, security_uuid), shares in holdings:
+    for (portfolio_uuid, security_uuid), details in holdings:
+        shares = details["shares"]
+        purchase_value_eur = details.get("purchase_value_eur")
+
         security_meta = securities.get(security_uuid, {})
         currency = security_meta.get("currency") or "EUR"
 
@@ -334,6 +405,7 @@ def _build_holdings_valuations(
                 price_date=price_date_raw,
                 price_eur=price_eur,
                 value_eur=value_eur,
+                purchase_value_eur=round(purchase_value_eur, 6) if purchase_value_eur is not None else 0.0,
                 fx_rate=fx_rate,
                 stale_price=stale,
             )

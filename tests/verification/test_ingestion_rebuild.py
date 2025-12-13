@@ -125,9 +125,34 @@ def _build_sample_parsed_client() -> tuple[parsed.ParsedClient, client_pb2.PClie
 
     # Unit for buy
     unit_buy = buy.units.add()
-    unit_buy.type = client_pb2.PTransactionUnit.Type.GROSS_VALUE
     unit_buy.amount = 1_000_00
     unit_buy.currencyCode = "USD"
+
+    # 3. Sell 5 shares @ 105 USD on Jan 15
+    # Price on Jan 15 (i=5): 105.
+    # Cost Basis: 100/share.
+    # Realized Gain: (105 - 100) * 5 = 25.
+    sell = client.transactions.add()
+    sell.uuid = "txn-sell"
+    sell.type = client_pb2.PTransaction.Type.SALE
+    sell.account = account.uuid
+    sell.portfolio = portfolio.uuid
+    sell.security = security.uuid
+    sell.currencyCode = "USD"
+    sell.amount = 525_00  # 5 * 105
+    sell.shares = 5 * 10**8
+    sell.date.CopyFrom(_ts(datetime(2024, 1, 15, tzinfo=UTC)))
+    sell.updatedAt.CopyFrom(_ts(datetime(2024, 1, 15, 12, tzinfo=UTC)))
+
+    unit_sell = sell.units.add()
+    unit_sell.type = client_pb2.PTransactionUnit.Type.GROSS_VALUE
+    unit_sell.amount = 525_00
+    unit_sell.currencyCode = "USD"
+
+    unit_fee = sell.units.add()
+    unit_fee.type = 13  # FEE
+    unit_fee.amount = 10_00
+    unit_fee.currencyCode = "USD"
 
     parsed_client = parsed.ParsedClient.from_proto(client)
     return parsed_client, client
@@ -299,9 +324,12 @@ async def test_ingestion_rebuild_end_to_end(
 
     # --- ASSERTIONS ---
 
-    assert result.metric_run.status == "completed"
+    if result.metric_run.status != "completed":
+        pytest.fail(f"Metric run failed: {result.metric_run.error}")
+
     assert result.backdating is not None
-    assert result.backdating.status == "completed"
+    if result.backdating.status != "completed":
+        pytest.fail(f"Backdating failed: {result.backdating.error}")
 
     # Check Daily Wealth
     conn = sqlite3.connect(str(db_path))
@@ -342,3 +370,20 @@ async def test_ingestion_rebuild_end_to_end(
     # Just asserting it's > 0 to confirm calculation happened.
     assert jan_12["total_wealth_eur"] > 10000.0
     assert jan_12["portfolio_wealth_eur"] > 0
+    # Bought 1000 USD worth. Invested Capital should be 1000.
+    assert abs(jan_12["invested_capital_eur"] - 1000.0) < 0.1
+    # No sales yet
+    assert jan_12["realized_gains_eur"] == 0.0
+
+    # Jan 15 (After Sell)
+    jan_15 = next(r for r in rows if r["date"] == "2024-01-15")
+    # Realized Gain = 25 USD (FX 1.0) -> 25 EUR.
+    assert abs(jan_15["realized_gains_eur"] - 25.0) < 0.1
+    # Invested Capital: 5 shares remaining @ 100 cost basis -> 500.
+    assert abs(jan_15["invested_capital_eur"] - 500.0) < 0.1
+    # Portfolio wealth: 5 shares @ 105 = 525.
+    assert abs(jan_15["portfolio_wealth_eur"] - 525.0) < 0.1
+    # Fees should be 10.0
+    assert abs(jan_15["fees_eur"] - 10.0) < 0.1
+    # Unrealized Gains: Portfolio has 525 Value. Cost Basis 500. Unrealized = 25.
+    assert abs(jan_15["unrealized_gains_eur"] - 25.0) < 0.1

@@ -200,8 +200,7 @@ def _load_relevant_transactions(
         account_uuid = tx.account or tx.other_account
         if not account_uuid or account_uuid not in accounts:
             continue
-        if accounts.get(account_uuid, {}).get("retired"):
-            continue
+        # Removed retired check to include history
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
         if parsed_date is None:
