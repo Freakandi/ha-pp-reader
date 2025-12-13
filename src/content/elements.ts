@@ -225,7 +225,12 @@ export function makeTable(
     const alignClass = c.align === 'right' ? ' class="align-right"' : '';
     // Falls sortable: th data-sort-key setzen (nur wenn key vorhanden)
     if (sortable && c.key) {
-      html += `<th${alignClass} data-sort-key="${c.key}">${c.label}</th>`;
+      // Determine initial aria-sort state based on defaultSort options
+      let sortState = 'none';
+      if (defaultSortKey === c.key) {
+        sortState = defaultSortDir === 'asc' ? 'ascending' : 'descending';
+      }
+      html += `<th${alignClass} data-sort-key="${c.key}" aria-sort="${sortState}">${c.label}</th>`;
     } else {
       html += `<th${alignClass}>${c.label}</th>`;
     }
@@ -400,13 +405,13 @@ export function createHeaderCard(
   headerCard.innerHTML = `
     <div class="header-content">
       <button id="nav-left" class="nav-arrow" aria-label="Vorherige Seite">
-        <svg viewBox="0 0 24 24">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
         </svg>
       </button>
       <h2 id="headerTitle">${headerTitle}</h2>
       <button id="nav-right" class="nav-arrow" aria-label="Nächste Seite">
-        <svg viewBox="0 0 24 24">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
         </svg>
       </button>
@@ -544,12 +549,14 @@ export function sortTableRows(
   if (footer) tbody.appendChild(footer);
 
   // Visuelle Indikatoren aktualisieren (optional generisch)
-  tableEl.querySelectorAll('thead th.sort-active').forEach(th => {
+  tableEl.querySelectorAll('thead th[data-sort-key]').forEach(th => {
     th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+    th.setAttribute('aria-sort', 'none');
   });
   const activeTh = tableEl.querySelector<HTMLElement>(`thead th[data-sort-key="${key}"]`);
   if (activeTh) {
     activeTh.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
+    activeTh.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
   }
 
   return rows;
