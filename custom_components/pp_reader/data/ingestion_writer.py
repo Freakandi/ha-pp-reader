@@ -487,14 +487,13 @@ class IngestionWriter:
                 security_rows,
             )
         except Exception:
-            _LOGGER.exception("DEBUG WRITER: Error inserting securities")
+            _LOGGER.exception("Error inserting securities")
 
         if price_payload:
-            _LOGGER.error("DEBUG WRITER: Writing %s price rows", len(price_payload))
             try:
                 self.write_historical_prices(price_payload)
             except Exception:
-                _LOGGER.exception("DEBUG WRITER: Error inserting prices")
+                _LOGGER.exception("Error inserting prices")
 
     def write_transactions(
         self, transactions: Sequence[parsed_models.ParsedTransaction]
@@ -515,12 +514,6 @@ class IngestionWriter:
             if currency and currency != "EUR" and has_date:
                 fx_requests.setdefault(txn.date, set()).add(currency)
 
-            # DEBUG: Trace Gold transactions
-            sec_id = getattr(txn, "security", "")
-            if sec_id and sec_id.startswith("d3e2b6d3"):
-                _LOGGER.debug(
-                    "DEBUG WRITER: Transaction for Gold-like UUID: %s", sec_id
-                )
 
         if fx_requests:
             self._ensure_fx_rates(fx_requests)
