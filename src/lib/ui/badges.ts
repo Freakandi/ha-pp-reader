@@ -3,6 +3,7 @@
  */
 
 import type { OverviewBadge } from "../store/selectors/portfolio";
+import { escapeHtml } from '../../utils/html';
 
 export interface BadgeListOptions {
   containerClass?: string;
@@ -12,27 +13,7 @@ export interface NameWithBadgeOptions extends BadgeListOptions {
   labelClass?: string;
 }
 
-export function escapeHtml(value: string | null | undefined): string {
-  if (!value) {
-    return "";
-  }
-  return value.replace(/[&<>"']/g, (match) => {
-    switch (match) {
-      case "&":
-        return "&amp;";
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
-      case '"':
-        return "&quot;";
-      case "'":
-        return "&#39;";
-      default:
-        return match;
-    }
-  });
-}
+export { escapeHtml };
 
 export function renderBadgeList(
   badges: readonly OverviewBadge[] | null | undefined,

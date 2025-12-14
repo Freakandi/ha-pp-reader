@@ -20,6 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # Mock Home Assistant
 class MockHass:
     """Mock Home Assistant instance."""
@@ -30,6 +31,7 @@ class MockHass:
 
     async def async_add_executor_job(self, target: Any, *args: Any) -> Any:
         return await self.loop.run_in_executor(None, target, *args)
+
 
 async def main(db_path_str: str) -> None:
     db_path = Path(db_path_str).resolve()
@@ -55,6 +57,7 @@ async def main(db_path_str: str) -> None:
     except Exception:
         logger.exception("Backdating failed with exception")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
