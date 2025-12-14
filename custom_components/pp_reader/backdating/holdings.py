@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import sqlite3
 from dataclasses import dataclass
@@ -360,19 +361,16 @@ def _resolve_price_for_date(
     if not entries:
         return None, None, False
 
-    selected_price: float | None = None
-    selected_date: date | None = None
-    selected_raw: str | None = None
+    # Find insertion point where all elements to the left are <= target_date (by date)
+    # The list is sorted by date.
+    # bisect_right returns index i such that all e in a[:i] have key(e) <= x
+    # We want the last element that is <= target_date.
+    idx = bisect.bisect_right(entries, target_date, key=lambda x: x[0])
 
-    for price_date, price_value, raw_date in reversed(entries):
-        if price_date <= target_date:
-            selected_price = price_value
-            selected_date = price_date
-            selected_raw = raw_date
-            break
-
-    if selected_price is None or selected_date is None:
+    if idx == 0:
         return None, None, False
+
+    selected_date, selected_price, selected_raw = entries[idx - 1]
 
     stale = selected_date != target_date
     return selected_price, selected_raw or selected_date.isoformat(), stale
