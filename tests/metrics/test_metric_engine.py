@@ -129,9 +129,9 @@ async def test_security_metrics_include_day_change_and_fx(
 @pytest.mark.asyncio
 async def test_metric_computation_requires_run_uuid(hass, metrics_db):
     """Blank run identifiers must be rejected to avoid inconsistent persistence."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="run_uuid"):
         await async_compute_portfolio_metrics(hass, metrics_db, "")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="run_uuid"):
         await async_compute_account_metrics(hass, metrics_db, "")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="run_uuid"):
         await async_compute_security_metrics(hass, metrics_db, "")

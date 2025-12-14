@@ -12,8 +12,8 @@ def test_dashboard_bundle_smoke() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script_path = repo_root / "frontend" / "dashboard_smoke.mjs"
 
-    result = subprocess.run(
-        ["node", str(script_path)],
+    result = subprocess.run(  # noqa: S603
+        ["node", str(script_path)],  # noqa: S607
         check=True,
         capture_output=True,
         text=True,

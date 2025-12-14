@@ -6,10 +6,20 @@ import asyncio
 import sqlite3
 import sys
 import types
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+from custom_components.pp_reader.data.db_access import (
+    get_all_portfolio_securities,
+    get_portfolio_securities,
+    get_security_close_prices,
+    get_security_snapshot,
+    iter_security_close_prices,
+)
+from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.util.currency import round_currency
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -37,7 +47,7 @@ def _ensure_minimal_homeassistant_stubs() -> None:
 
         SENSOR = "sensor"
 
-    class _ConfigEntryNotReady(Exception):
+    class _ConfigEntryNotReadyError(Exception):
         """Stub ConfigEntryNotReady exception."""
 
     class _HomeAssistantError(Exception):
@@ -107,7 +117,7 @@ def _ensure_minimal_homeassistant_stubs() -> None:
         """Stub ConfigType mapping."""
 
     const_module.Platform = _Platform
-    exceptions_module.ConfigEntryNotReady = _ConfigEntryNotReady
+    exceptions_module.ConfigEntryNotReady = _ConfigEntryNotReadyError
     exceptions_module.HomeAssistantError = _HomeAssistantError
     http_module.StaticPathConfig = StaticPathConfig
     panel_custom_module.async_register_panel = async_register_panel
@@ -165,15 +175,6 @@ sys.modules.setdefault("custom_components.pp_reader.data", data_pkg)
 pp_reader_pkg.data = data_pkg
 
 
-from custom_components.pp_reader.data.db_access import (
-    get_all_portfolio_securities,
-    get_portfolio_securities,
-    get_security_close_prices,
-    get_security_snapshot,
-    iter_security_close_prices,
-)
-from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.util.currency import round_currency
 
 
 @pytest.fixture
@@ -395,7 +396,7 @@ def test_iter_security_close_prices_rejects_invalid_range(
     seeded_history_db: Path,
 ) -> None:
     """Iterator should raise when start date is after end date."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="start_date must be before end_date"):
         list(
             iter_security_close_prices(
                 seeded_history_db,
@@ -432,7 +433,7 @@ def test_get_security_snapshot_multicurrency(
     seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Snapshot helper aggregates holdings and normalises FX prices."""
-    reference_date = datetime(2024, 5, 1, 12, 0, 0)
+    reference_date = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     class _FixedDatetime(datetime):
         @classmethod
@@ -535,7 +536,7 @@ def test_get_security_snapshot_handles_null_purchase_value(
         @classmethod
         def now(cls, tz=None):
             del tz
-            return datetime(2024, 5, 1, 12, 0, 0)
+            return datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     monkeypatch.setattr(
         "custom_components.pp_reader.data.db_access.datetime",
@@ -619,7 +620,7 @@ def test_get_security_snapshot_zero_holdings_preserves_purchase_sum(
     seeded_snapshot_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Zero holdings should not trigger division errors and keep purchase sums."""
-    reference_date = datetime(2024, 5, 1, 12, 0, 0)
+    reference_date = datetime(2024, 5, 1, 12, 0, 0, tzinfo=UTC)
 
     class _FixedDatetime(datetime):
         @classmethod

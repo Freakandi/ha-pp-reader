@@ -25,12 +25,12 @@ if TYPE_CHECKING:
 
 def _shares_raw(value: float) -> int:
     """Convert share counts to the stored 10^-8 representation."""
-    return int(round(value * 10**8))
+    return round(value * 10**8)
 
 
 def _price_raw(value: float) -> int:
     """Convert prices to the stored 10^-8 representation."""
-    return int(round(value * 10**8))
+    return round(value * 10**8)
 
 
 def _purchase_total(value: float) -> float:

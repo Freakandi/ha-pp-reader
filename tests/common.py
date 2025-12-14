@@ -13,7 +13,10 @@ from homeassistant.config_entries import (
     ConfigSubentryData,
     ConfigSubentryDataWithId,
 )
-from homeassistant.core import HomeAssistant
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 from homeassistant.util import ulid as ulid_util
 
 if TYPE_CHECKING:

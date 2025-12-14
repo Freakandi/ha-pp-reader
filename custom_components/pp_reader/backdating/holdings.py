@@ -25,6 +25,7 @@ _PURCHASE_TYPES = {0, 2}  # BUY, INBOUND_DELIVERY
 _SALE_TYPES = {1, 3}  # SELL, OUTBOUND_DELIVERY
 _NEUTRAL_INBOUND_TYPES = {2}  # INBOUND_DELIVERY (Einlieferung)
 _NEUTRAL_OUTBOUND_TYPES = {3}  # OUTBOUND_DELIVERY (Auslieferung)
+_REALIZED_GAIN_TYPES = {1}  # SELL
 _EPSILON = 1e-9
 
 
@@ -468,7 +469,9 @@ def _build_holdings_valuations(
                  native_gain = market_value_native - purchase_value_native
                  unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
             elif currency == "EUR":
-                 unrealized_price_gains_eur = round(value_eur - (purchase_value_eur or 0), 6)
+                 unrealized_price_gains_eur = round(
+                     value_eur - (purchase_value_eur or 0), 6
+                 )
 
 
         valuations.append(
@@ -499,6 +502,88 @@ def _build_holdings_valuations(
 
     return valuations
 
+
+def _process_buy_lots(
+    entry: dict[str, Any],
+    delta_shares: float,
+    tx_val_eur: float,
+    tx_val_native: float,
+    tx_date: date,
+) -> None:
+    """Add new tax lot for a buy transaction."""
+    entry["shares"] += delta_shares
+    entry["purchase_value_eur"] += tx_val_eur
+    entry["purchase_value_native"] = (
+        entry.get("purchase_value_native", 0.0) + tx_val_native
+    )
+
+    cost_per_share_eur = 0.0
+    cost_per_share_native = 0.0
+    if delta_shares > 0:
+        cost_per_share_eur = tx_val_eur / delta_shares
+        cost_per_share_native = tx_val_native / delta_shares
+
+    new_lot = TaxLot(
+        date=tx_date,
+        shares=delta_shares,
+        cost_per_share_eur=cost_per_share_eur,
+        cost_per_share_native=cost_per_share_native,
+        original_shares=delta_shares,
+    )
+    entry["lots"].append(new_lot)
+
+
+def _process_sell_lots(
+    entry: dict[str, Any],
+    shares_to_sell: float,
+) -> tuple[float, float]:
+    """Consume tax lots FIFO for a sell transaction."""
+    lots: deque[TaxLot] = entry["lots"]
+    entry["shares"] -= shares_to_sell
+
+    cost_sold_eur = 0.0
+    cost_sold_native = 0.0
+
+    while shares_to_sell > _EPSILON and lots:
+        current_lot = lots[0]
+
+        if current_lot.shares <= shares_to_sell:
+            # Consume entire lot
+            shares_from_lot = current_lot.shares
+            cost_from_lot_eur = shares_from_lot * current_lot.cost_per_share_eur
+            cost_from_lot_native = shares_from_lot * current_lot.cost_per_share_native
+
+            cost_sold_eur += cost_from_lot_eur
+            cost_sold_native += cost_from_lot_native
+            shares_to_sell -= shares_from_lot
+            lots.popleft()  # Remove exhausted lot
+        else:
+            # Partial consumption
+            shares_from_lot = shares_to_sell
+            cost_from_lot_eur = shares_from_lot * current_lot.cost_per_share_eur
+            cost_from_lot_native = shares_from_lot * current_lot.cost_per_share_native
+
+            cost_sold_eur += cost_from_lot_eur
+            cost_sold_native += cost_from_lot_native
+
+            # Update remaining shares in the lot (mutate in place)
+            current_lot.shares -= shares_from_lot
+            shares_to_sell = 0.0
+
+    entry["purchase_value_eur"] -= cost_sold_eur
+    entry["purchase_value_native"] = (
+        entry.get("purchase_value_native", 0.0) - cost_sold_native
+    )
+
+    # Avoid negative zeros
+    if entry["shares"] < _EPSILON:
+        entry["shares"] = 0.0
+    if entry["purchase_value_eur"] < 0:
+        entry["purchase_value_eur"] = 0.0
+    if entry["purchase_value_native"] < 0:
+        entry["purchase_value_native"] = 0.0
+
+    return cost_sold_eur, cost_sold_native
 
 def _compute_price_coverage_ratio(
     holdings: list[HoldingValuation],
@@ -541,7 +626,9 @@ def _apply_transaction_update(
     # Entry structure:
     # - "shares": float
     # - "purchase_value_eur": float (Sum of cost of remaining lots)
-    # - "purchase_value_native": float (Sum of cost of remaining lots in native currency)
+    # - "purchase_value_native": float (Sum of cost of remaining
+    #   lots in native currency)
+
     # - "lots": deque[TaxLot]
     if key not in holdings:
         holdings[key] = {
@@ -552,7 +639,6 @@ def _apply_transaction_update(
         }
 
     entry = holdings[key]
-    lots: deque[TaxLot] = entry["lots"]
 
     # Resolving value of transaction in EUR at daily rate
     tx_val_eur = 0.0
@@ -563,10 +649,11 @@ def _apply_transaction_update(
         # For Type 0/1 (Buy/Sell), amount is value.
         # This value is in tx_currency.
 
-        # Native value (in Security Currency units) needs conversion if Tx currency != Security currency?
+        # Native value (in Security Currency units) needs conversion
+        # if Tx currency != Security currency?
         # Assuming for now Tx Currency matches Security Currency or is acceptable proxy.
-        # Ideally we'd need Security Metadata here to know its currency, but explicit "currency" arg
-        # comes from the transaction record.
+        # Ideally we'd need Security Metadata here to know its currency,
+        # but explicit "currency" arg comes from the transaction record.
 
         # Determine native value (units of security currency)
         # We invoke cent_to_eur effectively as cent_to_unit here.
@@ -588,73 +675,26 @@ def _apply_transaction_update(
 
     # FIFO Logic
     if delta_shares > 0:
-        # BUY: Add to shares and purchase value, append new lot
-        entry["shares"] += delta_shares
-
-        # Cost basis for this specific buy
-        # Note: For inbound delivery (Type 2), tx_val_eur is the cost basis we assume.
-        entry["purchase_value_eur"] += tx_val_eur
-        entry["purchase_value_native"] = entry.get("purchase_value_native", 0.0) + tx_val_native
-
-        cost_per_share_eur = tx_val_eur / delta_shares if delta_shares > 0 else 0.0
-        cost_per_share_native = tx_val_native / delta_shares if delta_shares > 0 else 0.0
-
-        new_lot = TaxLot(
-            date=tx_date,
-            shares=delta_shares,
-            cost_per_share_eur=cost_per_share_eur,
-            cost_per_share_native=cost_per_share_native,
-            original_shares=delta_shares,
+        _process_buy_lots(
+            entry, delta_shares, tx_val_eur, tx_val_native, tx_date
         )
-        lots.append(new_lot)
 
     else:
         # SELL: Reduce shares, consume lots FIFO
         shares_to_sell = abs(delta_shares)
-        entry["shares"] -= shares_to_sell
 
-        total_cost_basis_sold_eur = 0.0
-        total_cost_basis_sold_native = 0.0
+        # Helper returns total cost basis of the sold shares
+        cost_basis_sold_eur, _ = _process_sell_lots(entry, shares_to_sell)
 
-        while shares_to_sell > _EPSILON and lots:
-            current_lot = lots[0]
-
-            if current_lot.shares <= shares_to_sell:
-                # Consume entire lot
-                shares_from_lot = current_lot.shares
-                cost_from_lot_eur = shares_from_lot * current_lot.cost_per_share_eur
-                cost_from_lot_native = shares_from_lot * current_lot.cost_per_share_native
-
-                total_cost_basis_sold_eur += cost_from_lot_eur
-                total_cost_basis_sold_native += cost_from_lot_native
-                shares_to_sell -= shares_from_lot
-                lots.popleft()  # Remove exhausted lot
-            else:
-                # Partial consumption
-                shares_from_lot = shares_to_sell
-                cost_from_lot_eur = shares_from_lot * current_lot.cost_per_share_eur
-                cost_from_lot_native = shares_from_lot * current_lot.cost_per_share_native
-
-                total_cost_basis_sold_eur += cost_from_lot_eur
-                total_cost_basis_sold_native += cost_from_lot_native
-
-                # Update lot with remaining shares
-                current_lot.shares -= shares_to_sell
-                shares_to_sell = 0.0
-                # Lot remains at head of queue
-
-        # Update aggregate purchase value
-        entry["purchase_value_eur"] = max(
-            0.0, entry["purchase_value_eur"] - total_cost_basis_sold_eur
-        )
-        entry["purchase_value_native"] = max(
-            0.0, entry.get("purchase_value_native", 0.0) - total_cost_basis_sold_native
-        )
-
-        # Realized Gain = Proceeds (tx_val_eur) - Cost Basis of Sold Lots
-        realized_gain = tx_val_eur - total_cost_basis_sold_eur
+        # Realized Gain = Proceeds (Val in EUR) - Cost Basis (in EUR)
+        # Note: tx_val_eur is usually positive for "Sell" type (Type 1),
+        # but check sign convention. In common usage here, 'amount' is positive value.
+        # So Realized Gain = Sale Value - Cost Basis
+        if tx_type in _REALIZED_GAIN_TYPES:
+            realized_gain = tx_val_eur - cost_basis_sold_eur
 
     if entry["shares"] <= _EPSILON:  # Filter dust
         holdings.pop(key, None)
 
     return realized_gain, neutral_movement
+

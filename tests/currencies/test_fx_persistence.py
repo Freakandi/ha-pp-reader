@@ -25,7 +25,7 @@ def _make_record(currency: str, date_str: str, rate: float) -> FxRateRecord:
         fetched_at=fetched_at,
         data_source="frankfurter",
         provider="frankfurter.app",
-        provenance='{"currencies":["%s"]}' % currency,
+        provenance=f'{{"currencies":["{currency}"]}}',
     )
 
 

@@ -753,7 +753,7 @@ async def test_currency_drift_warn_once(monkeypatch, tmp_path, caplog):
     assert len(first_warnings) == 1
 
     caplog.clear()
-    # Zweiter Lauf – gleiche Drift sollte NICHT erneut loggen
+    # Zweiter Lauf - gleiche Drift sollte NICHT erneut loggen
     await price_service._run_price_cycle(hass, entry_id)
     second_warnings = [
         r
@@ -1361,7 +1361,7 @@ async def test_missing_symbol(monkeypatch, tmp_path):
 
     monkeypatch.setattr(YahooQueryProvider, "fetch", _fake_fetch)
 
-    # Revaluation Patch – nur secB Änderung -> ein Portfolio
+    # Revaluation Patch - nur secB Änderung -> ein Portfolio
     async def _fake_revalue_after_price_updates(hass_, conn, updated_security_uuids):
         assert "secB" in updated_security_uuids
         assert "secA" not in updated_security_uuids
@@ -1540,9 +1540,8 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
         cur = conn.execute(
             """
             SELECT uuid,last_price,last_price_source FROM securities
-            WHERE uuid IN (%s)
-            """
-            % ",".join(["?"] * (CHUNK_SIZE + 1)),
+            WHERE uuid IN ({})
+            """.format(",".join(["?"] * (CHUNK_SIZE + 1))),
             tuple(f"sec{i}" for i in range(CHUNK_SIZE + 1)),
         )
         rows = {r[0]: r[1:] for r in cur.fetchall()}

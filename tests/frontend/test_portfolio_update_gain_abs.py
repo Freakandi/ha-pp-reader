@@ -11,8 +11,8 @@ def test_portfolio_update_gain_abs_handles_zero_purchase() -> None:
     """Ensure websocket updates keep gain when purchase_sum is zero."""
     repo_root = Path(__file__).resolve().parents[1]
     script_path = repo_root / "frontend" / "portfolio_update_gain_abs.mjs"
-    result = subprocess.run(
-        ["node", str(script_path)],
+    result = subprocess.run(  # noqa: S603
+        ["node", str(script_path)],  # noqa: S607
         check=True,
         capture_output=True,
         text=True,

@@ -8,11 +8,13 @@ refresh is still running during Home Assistant startup.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from homeassistant.const import CONF_FILE_PATH
-from homeassistant.core import HomeAssistant
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 import custom_components.pp_reader as integration
 from custom_components.pp_reader.const import CONF_DB_PATH, DOMAIN

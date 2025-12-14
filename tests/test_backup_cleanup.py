@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from custom_components.pp_reader.data.backup_db import cleanup_old_backups
 
@@ -18,7 +18,7 @@ def test_cleanup_skips_invalid_backups(tmp_path, caplog) -> None:
     invalid_backup.write_text("not a real backup")
 
     # Create a valid backup using the current timestamp so it is never pruned.
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
     valid_backup = backup_dir / f"S-Depot_{timestamp}.db"
     valid_backup.write_text("valid backup")
 
