@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,6 +11,9 @@ import pytest
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data import db_schema
 from custom_components.pp_reader.util import diagnostics
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _apply_schema(conn: sqlite3.Connection, statements: list[str]) -> None:

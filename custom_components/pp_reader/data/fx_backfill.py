@@ -289,7 +289,7 @@ def _normalize_currency_filter(
     return {code for code in normalized if code}
 
 
-async def backfill_fx(  # noqa: PLR0913,PLR0915 - explicit keyword args for clarity
+async def backfill_fx(  # noqa: PLR0915
     db_path: Path | str,
     *,
     currencies: Iterable[str] | None = None,

@@ -78,7 +78,7 @@ def _persist_daily_totals(
     db_access.upsert_daily_wealth(db_path, records, conn=conn)
 
 
-def _persist_daily_scopes(  # noqa: PLR0913
+def _persist_daily_scopes(
     db_path: Path,
     conn: sqlite3.Connection,
     aggregates: Sequence[DailyWealthAggregate],

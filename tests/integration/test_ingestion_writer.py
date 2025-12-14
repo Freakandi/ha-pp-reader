@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -13,6 +13,9 @@ from custom_components.pp_reader.data.ingestion_writer import (
     IngestionMetadata,
     async_ingestion_session,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass

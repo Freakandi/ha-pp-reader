@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -14,6 +13,9 @@ from custom_components.pp_reader.metrics.pipeline import (
     async_refresh_all_with_backdating,
 )
 from tests.metrics.helpers import seed_metrics_database  # noqa: F401
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Re-use pytest fixtures
 pytestmark = pytest.mark.asyncio
@@ -182,13 +184,13 @@ async def test_coverage_and_stale_flags_propagation(
 
         # FX Rates
         # Target Date: 2024-01-10
-        # GBP: Available
+        # GBP - Available
         conn.execute(
             "INSERT INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
             ("2024-01-10", "GBP", 85000000),
         )  # 0.85
-        # USD: Missing
-        # JPY: Missing
+        # USD - Missing
+        # JPY - Missing
 
         conn.commit()
 
@@ -245,9 +247,9 @@ async def test_coverage_and_stale_flags_propagation(
     assert record["price_coverage_ratio"] == pytest.approx(0.667, abs=0.001)
 
     # FX Coverage:
-    # Holdings: EUR (ok), GBP (ok), USD (missing). 2/3 = 0.667
-    # Accounts: EUR (ok), JPY (missing). 1/2 = 0.5
-    # Overall: min(0.667, 0.5) = 0.5
+    # Holdings - EUR (ok), GBP (ok), USD (missing). 2/3 = 0.667
+    # Accounts - EUR (ok), JPY (missing). 1/2 = 0.5
+    # Overall: min(0.667, 0.5) equals 0.5
     assert record["fx_coverage_ratio"] == pytest.approx(0.5, abs=0.001)
 
     # Stale Price:

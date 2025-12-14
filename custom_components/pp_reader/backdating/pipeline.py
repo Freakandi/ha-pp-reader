@@ -112,7 +112,7 @@ async def async_plan_backdating_window(
     )
 
 
-async def async_run_backdating_rebuild(  # noqa: PLR0913
+async def async_run_backdating_rebuild(
     hass: HomeAssistant,
     db_path: Path | str,
     *,

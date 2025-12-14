@@ -582,7 +582,7 @@ def _load_securities_missing_current_value(db_path: Path) -> set[str]:
         return set()
 
 
-def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR0915 - SQL refresh mirrors legacy flow
+def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR0915
     db_path: Path, scaled_updates: dict[str, int]
 ) -> set[str]:
     """Recalculate portfolio/security aggregates for affected securities."""
@@ -1038,7 +1038,9 @@ def _process_currency_drift_mismatches(
     store["price_currency_drift_logged"] = drift_logged
 
 
-async def _run_price_cycle(hass: HomeAssistant, entry_id: str) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
+async def _run_price_cycle(  # noqa: C901, PLR0912, PLR0915
+    hass: HomeAssistant, entry_id: str
+) -> dict[str, Any]:
     cycle_start_ts = time.time()
     store = hass.data[DOMAIN][entry_id]
     lock: asyncio.Lock = store.get("price_lock")  # type: ignore[assignment]

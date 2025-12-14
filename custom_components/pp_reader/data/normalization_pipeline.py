@@ -987,7 +987,7 @@ def _portfolio_data_state(missing_value_positions: int) -> SnapshotDataState:
     return SnapshotDataState()
 
 
-def _load_position_snapshots(  # noqa: PLR0913 - aggregation helper needs context args
+def _load_position_snapshots(
     *,
     db_path: Path,
     portfolio_uuid: str,

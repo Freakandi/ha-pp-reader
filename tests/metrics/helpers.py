@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.data.db_access import FxRateRecord
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 FX_TEST_RATE = 1.25
 FX_TEST_SOURCE = "metrics-test"
@@ -68,7 +70,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "Euro Equity",
                     "EUEQ",
                     "EUR",
-                    int(round(105.25 * 1e8)),
+                    round(105.25 * 1e8),
                     1_704_153_600,
                 ),
                 (
@@ -76,7 +78,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "US Tech",
                     "USTK",
                     "USD",
-                    int(round(100.00 * 1e8)),
+                    round(100.00 * 1e8),
                     1_704_153_600,
                 ),
             ],
@@ -109,7 +111,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "sec-usd",
                     2.0,
                     100_000,
-                    int(round(95.0 * 1e8)),
+                    round(95.0 * 1e8),
                     None,
                     150_000,
                 ),
@@ -121,7 +123,7 @@ def seed_metrics_database(db_path: Path) -> None:
             VALUES (?, ?, ?)
             """,
             [
-                ("sec-usd", 20240101, int(round(95.00 * 1e8))),
+                ("sec-usd", 20240101, round(95.00 * 1e8)),
             ],
         )
         conn.commit()

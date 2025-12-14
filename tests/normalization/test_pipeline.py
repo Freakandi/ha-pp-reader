@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,6 +18,9 @@ from custom_components.pp_reader.data.db_access import (
     SecurityMetricRecord,
 )
 from custom_components.pp_reader.metrics.storage import MetricBatch
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _shares_raw(value: float) -> int:

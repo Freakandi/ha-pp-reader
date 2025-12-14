@@ -5,13 +5,16 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 from scripts import enrichment_smoketest as smoketest
 from tests.metrics.helpers import install_fx_stubs, seed_metrics_database
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.asyncio

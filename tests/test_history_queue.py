@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.prices import history_queue
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
     SecurityHistoryTarget,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class _FixedDateTime(datetime):

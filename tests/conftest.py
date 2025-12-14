@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -18,6 +17,8 @@ DATA_MISSING_PLATFORMS: Any = None
 DATA_PRELOAD_PLATFORMS: Any = None
 
 if TYPE_CHECKING:  # pragma: no cover - typing helpers only
+    from collections.abc import AsyncGenerator
+
     from homeassistant.config_entries import ConfigEntries
     from homeassistant.core import HomeAssistant
     from homeassistant.loader import Integration

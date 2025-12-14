@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -28,6 +28,9 @@ from tests.integration.test_ingestion_writer import (
     DummyTransaction,
     DummyTransactionUnit,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _open_connection(db_path: Path) -> sqlite3.Connection:

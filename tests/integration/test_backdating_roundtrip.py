@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -13,6 +12,9 @@ from custom_components.pp_reader.metrics.pipeline import (
     async_refresh_all_with_backdating,
 )
 from tests.metrics.helpers import install_fx_stubs, seed_metrics_database
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Re-use pytest fixtures
 pytestmark = pytest.mark.asyncio

@@ -276,7 +276,7 @@ def _seed_metric_records(db_path: Path) -> None:
         conn.close()
 
 
-async def _generate_smoketest_payload(  # noqa: PLR0915
+async def _generate_smoketest_payload(
     *,
     include_positions: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:

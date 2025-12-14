@@ -38,7 +38,7 @@ class DailyWealthAggregate:
     provenance: str | None
 
 
-def build_daily_wealth_records(  # noqa: PLR0913
+def build_daily_wealth_records(
     start_date: date,
     end_date: date,
     *,

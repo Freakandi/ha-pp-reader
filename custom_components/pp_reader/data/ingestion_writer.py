@@ -623,8 +623,6 @@ class IngestionWriter:
             for price in prices
         ]
 
-
-
         if not rows:
             return
 

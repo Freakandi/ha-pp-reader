@@ -548,7 +548,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             )
             await self._schedule_normalization_refresh(summary)
 
-            # Ensure progress events from earlier stages flush before emitting completion.
+            # Ensure progress events from earlier stages flush before emitting
+            # completion.
             await asyncio.sleep(0)
             self._emit_enrichment_completed(summary)
 

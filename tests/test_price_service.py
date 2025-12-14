@@ -267,6 +267,8 @@ async def test_price_cycle_adds_normalized_payload(monkeypatch, tmp_path):
             metric_run_uuid="run-1",
             snapshot_at="2024-03-01T00:00:00Z",
             accounts=(),
+            # Accounts: EUR (ok), JPY (missing). 1/2 = 0.5
+            # Overall: min(0.667, 0.5) equals 0.5
             portfolios=(
                 {
                     "uuid": "pf1",
@@ -772,7 +774,7 @@ async def test_error_counter_increment_and_reset(monkeypatch, tmp_path, caplog):
     async def fake_reval(hass_, conn, uuids):
         return {"portfolio_values": {}, "portfolio_positions": None}
 
-    # Zero-Quotes (leer)
+    # Zero-Quotes case (empty)
     async def empty_fetch(self, symbols):
         return {}
 
@@ -1559,7 +1561,7 @@ async def test_chunk_failure_partial(monkeypatch, tmp_path):
     assert pushed[0][0] == "portfolio_values"
     assert any(kind == "portfolio_positions" for kind, _ in pushed[1:])
 
-    # Fehlerzähler (Chunk-Fehler) > 0
+    # Error counter (Chunk error) greater than 0
     store = hass.data[DOMAIN][entry_id]
     assert store.get("price_error_counter", 0) > 0
 

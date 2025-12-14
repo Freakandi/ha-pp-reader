@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +12,9 @@ from custom_components.pp_reader.data.db_access import (
     DailyWealthRecord,
     DailyWealthScopeRecord,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Access the wrapped handler to bypass decoration if needed, though we test the full stack here.
 WS_GET_DAILY_WEALTH = getattr(

@@ -43,7 +43,7 @@ async def main(db_path_str: str) -> None:
     hass = MockHass()
 
     try:
-        # Run rebuild. This should read from existing metrics/history and populate daily_wealth
+        # Run rebuild. This should read from existing metrics/history/daily_wealth
         result = await async_run_backdating_rebuild(
             hass, db_path, trigger="force_script", provenance="manual-force"
         )
@@ -61,7 +61,7 @@ async def main(db_path_str: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 force_backdating.py <path_to_db>")
+        print("Usage: python3 force_backdating.py <path_to_db>")  # noqa: T201
         sys.exit(1)
 
     asyncio.run(main(sys.argv[1]))

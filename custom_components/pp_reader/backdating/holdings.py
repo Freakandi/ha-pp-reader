@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections import deque
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
-
-from collections import deque
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -186,7 +185,9 @@ def _compute_daily_holdings_snapshots_sync(
             daily_neutral_movements += neutral_val
 
             if gain != 0.0:
-                 daily_portfolio_gains[portfolio_uuid] = daily_portfolio_gains.get(portfolio_uuid, 0.0) + gain
+                daily_portfolio_gains[portfolio_uuid] = (
+                    daily_portfolio_gains.get(portfolio_uuid, 0.0) + gain
+                )
 
         date_iso = date_cursor.isoformat()
         # fx_rates already loaded above
@@ -283,12 +284,21 @@ def _load_relevant_transactions(
         portfolio_meta = portfolios.get(tx.portfolio)
         security_meta = securities.get(tx.security)
         if not portfolio_meta or not security_meta:
-            print(f"DEBUG: Skipping Tx {tx.uuid} type {tx.type} - Port/Sec missing. Port={tx.portfolio} Sec={tx.security}")
+            _LOGGER.debug(
+                "Skipping Tx %s type %s - Port/Sec missing. Port=%s Sec=%s",
+                tx.uuid,
+                tx.type,
+                tx.portfolio,
+                tx.security,
+            )
             continue
         # Removed retired check to include history
 
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
-            print(f"DEBUG: Skipping Tx {tx.uuid} type {tx.type} - Not relevant type")
+            # Very verbose if enabled
+            # _LOGGER.debug(  # noqa: ERA001
+            #     "Skipping Tx %s type %s - Not relevant type", tx.uuid, tx.type
+            # )
             continue
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
@@ -494,14 +504,14 @@ def _apply_transaction_update(
     tx_date: date,
 ) -> tuple[float, float]:
     """
-    Apply a single transaction to holdings state and return (realized_gain, neutral_movement).
+    Apply a single transaction to holdings state and return
+    (realized_gain, neutral_movement).
     """
     key = (portfolio_uuid, security_uuid)
-    # Entry structure: {
-    #   "shares": float,
-    #   "purchase_value_eur": float, # Sum of cost of remaining lots
-    #   "lots": deque[TaxLot]
-    # }
+    # Entry structure:
+    # - "shares": float
+    # - "purchase_value_eur": float (Sum of cost of remaining lots)
+    # - "lots": deque[TaxLot]
     if key not in holdings:
         holdings[key] = {
             "shares": 0.0,
@@ -566,9 +576,9 @@ def _apply_transaction_update(
 
                 total_cost_basis_sold += cost_from_lot
                 shares_to_sell -= shares_from_lot
-                lots.popleft() # Remove exhausted lot
+                lots.popleft()  # Remove exhausted lot
             else:
-                # Python doesn't support modifying dataclass fields if frozen=True/slots=True?
+                # Python doesn't support modifying dataclass fields if frozen?
                 # slots=True is mutable by default unless frozen=True is set.
                 # However, replacement is cleaner.
 
@@ -582,15 +592,16 @@ def _apply_transaction_update(
                 shares_to_sell = 0.0
                 # Lot remains at head of queue
 
-        # If we ran out of lots but still sold shares (data inconsistencies / short selling)
+        # If we ran out of lots but still sold shares (data inconsistencies)
         # We assume 0 cost basis for the excess.
 
         # Update aggregate purchase value
-        entry["purchase_value_eur"] = max(0.0, entry["purchase_value_eur"] - total_cost_basis_sold)
+        entry["purchase_value_eur"] = max(
+            0.0, entry["purchase_value_eur"] - total_cost_basis_sold
+        )
 
         # Realized Gain = Proceeds (tx_val_eur) - Cost Basis of Sold Lots
-        realized_gain = (tx_val_eur - total_cost_basis_sold)
-
+        realized_gain = tx_val_eur - total_cost_basis_sold
 
     if entry["shares"] <= _EPSILON:  # Filter dust
         holdings.pop(key, None)

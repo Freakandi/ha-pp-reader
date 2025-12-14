@@ -536,10 +536,19 @@ def get_transactions(
                    t.other_account, t.other_portfolio,
                    t.date, t.currency_code, t.amount,
                    t.shares, t.security,
-                   CAST(COALESCE(SUM(CASE WHEN u.type = 2 THEN u.amount WHEN u.type = 13 THEN u.amount WHEN u.type = 14 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as fees,
-                   CAST(COALESCE(SUM(CASE WHEN u.type = 1 THEN u.amount WHEN u.type = 11 THEN u.amount WHEN u.type = 12 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as taxes
+                   CAST(COALESCE(SUM(CASE
+                       WHEN u.type = 2 THEN u.amount
+                       WHEN u.type = 13 THEN u.amount
+                       WHEN u.type = 14 THEN -u.amount
+                       ELSE 0 END), 0) AS INTEGER) as fees,
+                   CAST(COALESCE(SUM(CASE
+                       WHEN u.type = 1 THEN u.amount
+                       WHEN u.type = 11 THEN u.amount
+                       WHEN u.type = 12 THEN -u.amount
+                       ELSE 0 END), 0) AS INTEGER) as taxes
             FROM transactions t
-            LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid AND u.type IN (1, 2, 11, 12, 13, 14)
+            LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid
+              AND u.type IN (1, 2, 11, 12, 13, 14)
             GROUP BY t.uuid
             ORDER BY t.date
         """)
@@ -2496,7 +2505,9 @@ def upsert_daily_wealth_scopes(
                 provenance,
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             ON CONFLICT(scope_type, scope_id, date) DO UPDATE SET
                 scope_name = excluded.scope_name,
                 total_wealth_eur = excluded.total_wealth_eur,
@@ -2562,7 +2573,7 @@ def upsert_daily_wealth_scopes(
             local_conn.close()
 
 
-def fetch_daily_wealth(  # noqa: PLR0913
+def fetch_daily_wealth(
     db_path: Path,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -2623,7 +2634,7 @@ def fetch_daily_wealth(  # noqa: PLR0913
             local_conn.close()
 
 
-def fetch_daily_wealth_scopes(  # noqa: PLR0913
+def fetch_daily_wealth_scopes(
     db_path: Path,
     *,
     scope_type: str | None = None,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from custom_components.pp_reader.data.db_access import (
     FxRateRecord,
@@ -14,6 +14,9 @@ from custom_components.pp_reader.data.db_access import (
     upsert_fx_rate,
 )
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _get_columns(db_path: Path, table: str) -> dict[str, dict]:

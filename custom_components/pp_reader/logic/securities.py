@@ -315,7 +315,7 @@ def db_calculate_current_holdings(
     return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
 
 
-def _resolve_native_amount(  # noqa: PLR0912 - transaction units require branching
+def _resolve_native_amount(  # noqa: PLR0912
     transaction: Transaction,
     tx_units: dict[str, Any] | None,
 ) -> tuple[float | None, str | None, float | None]:
@@ -396,7 +396,7 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915 - complex flow mirrors business rules
+def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915
     transactions: list[Transaction],
     db_path: Path,
     *,

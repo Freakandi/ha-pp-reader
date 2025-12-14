@@ -35,6 +35,18 @@ _TAX_REFUND_TYPES = {12}
 _DEPOSIT_TYPES = {6}
 _WITHDRAWAL_TYPES = {7}
 
+_BUCKET_MAP = {
+    **dict.fromkeys(_DIVIDEND_TYPES, ("dividends", 1)),
+    **dict.fromkeys(_INTEREST_TYPES, ("interest", 1)),
+    **dict.fromkeys(_INTEREST_CHARGE_TYPES, ("interest", -1)),
+    **dict.fromkeys(_FEE_TYPES, ("fees", 1)),
+    **dict.fromkeys(_FEE_REFUND_TYPES, ("fees", -1)),
+    **dict.fromkeys(_TAX_TYPES, ("taxes", 1)),
+    **dict.fromkeys(_TAX_REFUND_TYPES, ("taxes", -1)),
+    **dict.fromkeys(_DEPOSIT_TYPES, ("inbound", 1)),
+    **dict.fromkeys(_WITHDRAWAL_TYPES, ("outbound", 1)),
+}
+
 
 @dataclass(slots=True)
 class DailyCashflowSnapshot:
@@ -207,11 +219,18 @@ def _load_fx_rates_for_date(
     return rates
 
 
-def _aggregate_daily_buckets(  # noqa: PLR0912
+def _aggregate_daily_buckets(
     transactions: Iterable[db_access.Transaction],
     fx_rates: Mapping[str, float],
 ) -> tuple[float, float, float, float, float, float, float]:
-    dividends = interest = inbound = outbound = fees = taxes = 0.0
+    curr_buckets = {
+        "dividends": 0.0,
+        "interest": 0.0,
+        "inbound": 0.0,
+        "outbound": 0.0,
+        "fees": 0.0,
+        "taxes": 0.0,
+    }
     required_currencies: set[str] = set()
     covered_currencies: set[str] = set()
 
@@ -248,26 +267,18 @@ def _aggregate_daily_buckets(  # noqa: PLR0912
                 t_eur = round(t_eur / fx_rate, 6)
 
             if bucket != "fees" and tx_fees:
-                fees += abs(f_eur)
+                curr_buckets["fees"] += abs(f_eur)
             if bucket != "taxes" and tx_taxes:
-                taxes += abs(t_eur)
+                curr_buckets["taxes"] += abs(t_eur)
 
         if bucket is None or amount_eur is None:
             continue
 
         signed_value = amount_eur * sign
-        if bucket == "dividends":
-            dividends += signed_value
-        elif bucket == "interest":
-            interest += signed_value
-        elif bucket == "inbound":
-            inbound += signed_value
-        elif bucket == "outbound":
-            outbound += signed_value
-        elif bucket == "fees":
-            fees += abs(signed_value)
-        elif bucket == "taxes":
-            taxes += signed_value
+        if bucket in curr_buckets:
+            curr_buckets[bucket] += signed_value
+        elif bucket == "fees":  # Should be covered by in check but keep safe
+            curr_buckets["fees"] += abs(signed_value)
 
     coverage_ratio = 1.0
     if required_currencies:
@@ -277,17 +288,17 @@ def _aggregate_daily_buckets(  # noqa: PLR0912
         )
 
     return (
-        round(dividends, 6),
-        round(interest, 6),
-        round(inbound, 6),
-        round(outbound, 6),
-        round(fees, 6),
-        round(taxes, 6),
+        round(curr_buckets["dividends"], 6),
+        round(curr_buckets["interest"], 6),
+        round(curr_buckets["inbound"], 6),
+        round(curr_buckets["outbound"], 6),
+        round(curr_buckets["fees"], 6),
+        round(curr_buckets["taxes"], 6),
         coverage_ratio,
     )
 
 
-def _classify_transaction(  # noqa: PLR0911, PLR0912
+def _classify_transaction(
     tx: db_access.Transaction,
 ) -> tuple[str | None, int]:
     """Return bucket name and sign multiplier for a transaction."""
@@ -298,25 +309,9 @@ def _classify_transaction(  # noqa: PLR0911, PLR0912
     if is_internal_transfer:
         return None, 0
 
-    if tx_type in _DIVIDEND_TYPES:
-        return "dividends", 1
-    if tx_type in _INTEREST_TYPES:
-        return "interest", 1
-    if tx_type in _INTEREST_CHARGE_TYPES:
-        return "interest", -1
-    if tx_type in _FEE_TYPES:
-        return "fees", 1
-    if tx_type in _FEE_REFUND_TYPES:
-        return "fees", -1
-    if tx_type in _TAX_TYPES:
-        return "taxes", 1
-    if tx_type in _TAX_REFUND_TYPES:
-        return "taxes", -1
+    if result := _BUCKET_MAP.get(tx_type):
+        return result
 
-    if tx_type in _DEPOSIT_TYPES:
-        return "inbound", 1
-    if tx_type in _WITHDRAWAL_TYPES:
-        return "outbound", 1
     if tx_type == CASH_TRANSFER_TYPE:
         if tx.account and not tx.other_account:
             return "outbound", 1

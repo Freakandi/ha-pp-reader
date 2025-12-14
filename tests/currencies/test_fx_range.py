@@ -30,7 +30,7 @@ class _FakeSession:
         self._payload = payload
         self._status = status
 
-    def get(self, url: str) -> _FakeResponse:  # noqa: ARG002 - interface parity
+    def get(self, url: str) -> _FakeResponse:
         return _FakeResponse(self._payload, status=self._status)
 
     async def __aenter__(self) -> Self:

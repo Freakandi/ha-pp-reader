@@ -148,7 +148,9 @@ def _load_news_prompt_template() -> tuple[str, str]:
     return link, body
 
 
-def _serialise_security_snapshot(snapshot: Any) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
+def _serialise_security_snapshot(  # noqa: C901, PLR0912, PLR0915
+    snapshot: Any,
+) -> dict[str, Any]:
     """Coerce persisted security snapshots into JSON-serializable mappings."""
     if snapshot is None:
         return {}
@@ -1305,7 +1307,7 @@ async def _fetch_daily_wealth_slices(
 
 @websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
 @websocket_api.async_response
-async def ws_get_daily_wealth(
+async def ws_get_daily_wealth(  # noqa: PLR0912
     hass: HomeAssistant,
     connection: ActiveConnection,
     msg: dict[str, Any],
@@ -1388,7 +1390,11 @@ async def ws_get_daily_wealth(
     # PP Alignment: "Start Date" wealth is the baseline (End of Day).
     # Flows occurring ON the start date should be excluded from period summation.
     # Exception: Single Day view (start == end) includes flows.
-    if params.start_date != params.end_date and records and records[0]["date"] == start_iso:
+    if (
+        params.start_date != params.end_date
+        and records
+        and records[0]["date"] == start_iso
+    ):
         for key in (
             "dividends_eur",
             "interest_eur",
@@ -1413,21 +1419,21 @@ async def ws_get_daily_wealth(
         if params.start_date != params.end_date:
             # Apply same exclusion logic to slices
             for rec_list in (acc_records, port_records):
-                 # Slices might be multiple per day, need to filter all matching
-                 # start_date
-                 for rec in rec_list:
-                     if rec["date"] == start_iso:
-                         for key in (
-                             "dividends_eur",
-                             "interest_eur",
-                             "inbound_transfers_eur",
-                             "outbound_transfers_eur",
-                             "performance_neutral_movements",
-                             "fees_eur",
-                             "taxes_eur",
-                             "realized_gains_eur"
-                         ):
-                             rec[key] = 0.0
+                # Slices might be multiple per day, need to filter all matching
+                # start_date
+                for rec in rec_list:
+                    if rec["date"] == start_iso:
+                        for key in (
+                            "dividends_eur",
+                            "interest_eur",
+                            "inbound_transfers_eur",
+                            "outbound_transfers_eur",
+                            "performance_neutral_movements",
+                            "fees_eur",
+                            "taxes_eur",
+                            "realized_gains_eur",
+                        ):
+                            rec[key] = 0.0
 
         payload["slices"] = {
             "accounts": acc_records,

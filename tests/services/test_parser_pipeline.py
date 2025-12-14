@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from custom_components.pp_reader.const import EVENT_PARSER_PROGRESS
 from custom_components.pp_reader.services import parser_pipeline
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class _StubMessage:

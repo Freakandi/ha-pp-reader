@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from custom_components.pp_reader.data import canonical_sync
 from custom_components.pp_reader.data.canonical_sync import _lookup_fx_rate
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_lookup_fx_rate_falls_back_to_available_future_rate(tmp_path: Path) -> None:

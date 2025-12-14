@@ -115,7 +115,9 @@ def _compute_daily_account_snapshots_sync(
     for tx_date, adjustments in adjustments_by_date.items():
         if tx_date < start_date:
             for account_uuid, delta in adjustments:
-                balances_cents[account_uuid] = balances_cents.get(account_uuid, 0) + delta
+                balances_cents[account_uuid] = (
+                    balances_cents.get(account_uuid, 0) + delta
+                )
 
     date_cursor = start_date
 

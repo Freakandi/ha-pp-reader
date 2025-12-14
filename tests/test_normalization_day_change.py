@@ -36,7 +36,7 @@ def test_portfolio_day_change_uses_eur_converted_prices(monkeypatch: object) -> 
         portfolio_uuid="p1",
         security_uuid="s1",
         security_currency_code="USD",
-        holdings_raw=int(10 * 10**8),  # 10 shares
+        holdings_raw=(10 * 10**8),  # 10 shares
         current_value_cents=2000,  # €20.00 current total
         purchase_value_cents=1500,
         last_price_native_raw=11000,  # 1.1000 native
@@ -86,13 +86,13 @@ def test_portfolio_day_change_uses_price_date_for_previous_close(
             INSERT INTO securities (uuid, name, ticker_symbol, currency_code, retired, last_price, last_price_date)
             VALUES (?, ?, ?, ?, 0, ?, ?)
             """,
-            ("sec1", "Sample", "SMP", "EUR", int(round(95.0 * 1e8)), last_price_date),
+            ("sec1", "Sample", "SMP", "EUR", round(95.0 * 1e8), last_price_date),
         )
         conn.executemany(
             "INSERT INTO historical_prices (security_uuid, date, close) VALUES (?, ?, ?)",
             [
-                ("sec1", friday_date_value, int(round(95.0 * 1e8))),  # Friday close
-                ("sec1", thursday_date_value, int(round(90.0 * 1e8))),  # Thursday close
+                ("sec1", friday_date_value, round(95.0 * 1e8)),  # Friday close
+                ("sec1", thursday_date_value, round(90.0 * 1e8)),  # Thursday close
             ],
         )
         conn.commit()
@@ -102,7 +102,7 @@ def test_portfolio_day_change_uses_price_date_for_previous_close(
         portfolio_uuid="pf1",
         security_uuid="sec1",
         security_currency_code="EUR",
-        holdings_raw=int(round(2.0 * 10**8)),
+        holdings_raw=round(2.0 * 10**8),
         current_value_cents=19_000,  # €190.00
         purchase_value_cents=18_000,
         purchase_security_value_raw=None,
@@ -118,7 +118,7 @@ def test_portfolio_day_change_uses_price_date_for_previous_close(
         day_change_pct=None,
         day_change_source=None,
         day_change_coverage=None,
-        last_price_native_raw=int(round(95.0 * 1e8)),
+        last_price_native_raw=round(95.0 * 1e8),
         last_close_native_raw=None,
         provenance=None,
     )
@@ -148,7 +148,7 @@ def test_position_snapshot_carries_price_date(monkeypatch: object, tmp_path: Pat
         portfolio_uuid="pf1",
         security_uuid="sec1",
         security_currency_code="EUR",
-        holdings_raw=int(round(1.0 * 10**8)),
+        holdings_raw=round(1.0 * 10**8),
         current_value_cents=9_500,
         purchase_value_cents=9_000,
         purchase_security_value_raw=None,
@@ -164,7 +164,7 @@ def test_position_snapshot_carries_price_date(monkeypatch: object, tmp_path: Pat
         day_change_pct=None,
         day_change_source=None,
         day_change_coverage=None,
-        last_price_native_raw=int(round(95.0 * 1e8)),
+        last_price_native_raw=round(95.0 * 1e8),
         last_close_native_raw=None,
         provenance=None,
     )

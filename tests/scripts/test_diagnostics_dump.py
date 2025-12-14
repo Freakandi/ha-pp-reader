@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -27,6 +27,9 @@ from custom_components.pp_reader.data.snapshot_writer import (
     persist_normalization_result,
 )
 from scripts import diagnostics_dump
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.asyncio

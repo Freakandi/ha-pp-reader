@@ -13,7 +13,6 @@ import asyncio
 import json
 import logging
 import sqlite3
-import ssl
 import threading
 from collections import defaultdict
 from collections.abc import Callable, Mapping
@@ -23,7 +22,6 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-from homeassistant.util import ssl as hass_ssl
 
 from custom_components.pp_reader.data.db_access import (
     FxRateRecord,
@@ -180,7 +178,7 @@ async def _load_rates_for_date(
     return await _execute_db(_load_rates_for_date_sync, db_path, date)
 
 
-async def _save_rates(  # noqa: PLR0913 - retries and db control are intentional
+async def _save_rates(
     db_path: Path,
     date: str,
     rates: dict[str, float],
@@ -243,8 +241,9 @@ async def _fetch_exchange_rates_with_retry(
     return {}
 
 
-
-def _fetch_exchange_rates_sync_http(date_str: str, currencies: set[str]) -> dict[str, float]:
+def _fetch_exchange_rates_sync_http(
+    date_str: str, currencies: set[str]
+) -> dict[str, float]:
     """Synchronous fetch using requests to avoid aiohttp instability."""
     import requests
 
@@ -258,7 +257,7 @@ def _fetch_exchange_rates_sync_http(date_str: str, currencies: set[str]) -> dict
         # TIMEOUT is critical here. Using a standard requests session.
         resp = requests.get(url, timeout=10)
 
-        if resp.status_code != 200:
+        if resp.status_code != 200:  # noqa: PLR2004
             if _should_log_warning(date_str, currencies):
                 _LOGGER.warning(
                     "Fehler beim Abruf der Wechselkurse (%s): Status %d",
@@ -627,6 +626,7 @@ def _compute_fx_coverage_ratio(
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+
 async def _fetch_exchange_rates_range_aiohttp(
     session: aiohttp.ClientSession,
     currency: str,
@@ -642,9 +642,9 @@ async def _fetch_exchange_rates_range_aiohttp(
 
     try:
         async with session.get(url, timeout=20) as resp:
-            if resp.status != 200:
+            if resp.status != 200:  # noqa: PLR2004
                 # 404 might mean no data for this range/currency
-                if resp.status != 404:
+                if resp.status != 404:  # noqa: PLR2004
                     _LOGGER.warning(
                         "Fehler beim Abruf der Wechselkurse (%s..%s, %s): Status %d",
                         start_date,
@@ -674,7 +674,8 @@ async def _fetch_exchange_rates_range_aiohttp(
         )
         return {}
 
-async def async_ensure_exchange_rates_for_schedule(
+
+async def async_ensure_exchange_rates_for_schedule(  # noqa: PLR0912
     hass: Any,
     db_path: Path,
     schedule: Mapping[date, set[str]],
@@ -699,18 +700,20 @@ async def async_ensure_exchange_rates_for_schedule(
     all_needed_dates = sorted(schedule.keys())
 
     # We can load existing rates for ALL dates in one go?
-    # Current helper loads one date. Let's stick to the loop for checking checking existence
-    # but maybe we can optimize this later. For backdating, we assume many gaps.
+    # Current helper loads one date. Let's stick to the loop for checking
+    # existence but maybe we can optimize this later. For backdating, we assume
+    # many gaps.
 
     # Actually, iterate days, check DB, build missing map
-    # To reduce DB read churn, we should probably check existence more efficiently if possible.
+    # To reduce DB read churn, we should probably check existence more
+    # efficiently if possible.
     # But sticking to safety:
 
     today = datetime.now(tz=UTC).date()
 
     for day in all_needed_dates:
         if day > today:
-            continue # Can't fetch future
+            continue  # Can't fetch future
 
         currencies = {code for code in schedule[day] if code and code != "EUR"}
         if not currencies:
@@ -740,7 +743,9 @@ async def async_ensure_exchange_rates_for_schedule(
         session = aiohttp.ClientSession()
         own_session = True
 
-    fetched_data: dict[str, dict[str, float]] = defaultdict(dict) # date_str -> {currency: rate}
+    fetched_data: dict[str, dict[str, float]] = defaultdict(
+        dict
+    )  # date_str -> {currency: rate}
 
     try:
         for currency, dates in needed_by_currency.items():
@@ -764,13 +769,12 @@ async def async_ensure_exchange_rates_for_schedule(
         # 3. Save all fetched data
         # Group by date to call _save_rates
         for date_str, rates in fetched_data.items():
-             if rates:
-                 await _save_rates(db_path, date_str, rates, conn=conn)
+            if rates:
+                await _save_rates(db_path, date_str, rates, conn=conn)
 
     finally:
         if own_session:
             await session.close()
-
 
     # 4. Compute final coverage
     # (Re-using the loop from before or just computing it now)
@@ -792,7 +796,7 @@ async def async_ensure_exchange_rates_for_schedule(
         coverage[date_str] = coverage_ratio
 
         if emit_progress is not None:
-             emit_progress(
+            emit_progress(
                 "fx_schedule_day",
                 {
                     "date": date_str,

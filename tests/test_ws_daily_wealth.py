@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -15,6 +14,9 @@ from custom_components.pp_reader.data.db_access import (
     upsert_daily_wealth_scopes,
 )
 from custom_components.pp_reader.data.db_init import initialize_database_schema
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytest.importorskip(
     "google.protobuf", reason="protobuf runtime required for websocket module"

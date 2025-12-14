@@ -80,7 +80,7 @@ class DayChangeMetrics:
     coverage_ratio: float | None
 
 
-def select_performance_metrics(  # noqa: PLR0913
+def select_performance_metrics(
     *,
     current_value: float | str | None,
     purchase_value: float | str | None,

@@ -1,14 +1,15 @@
-
-from collections import deque
 from datetime import date
-import pytest
-from custom_components.pp_reader.backdating.holdings import _apply_transaction_update, TaxLot
+
+from custom_components.pp_reader.backdating.holdings import (
+    _apply_transaction_update,
+)
 
 # Constants for testing
 PORTFOLIO = "port-1"
 SECURITY = "sec-1"
 CURRENCY = "EUR"
-FX_RATES = {"EUR": 1.0, "USD": 2.0} # 1 EUR = 2.0 USD (Foreign per EUR)
+FX_RATES = {"EUR": 1.0, "USD": 2.0}  # 1 EUR = 2.0 USD (Foreign per EUR)
+
 
 def test_fifo_buy_creates_lot():
     holdings = {}
@@ -17,14 +18,15 @@ def test_fifo_buy_creates_lot():
     # Buy 10 shares @ 100 EUR each (Total 1000 EUR)
     # Amount is in cents: 100000
     _apply_transaction_update(
-        PORTFOLIO, SECURITY,
+        PORTFOLIO,
+        SECURITY,
         delta_shares=10.0,
         amount=100000,
         currency="EUR",
-        tx_type=0, # Buy
+        tx_type=0,  # Buy
         fx_rates=FX_RATES,
         holdings=holdings,
-        tx_date=tx_date
+        tx_date=tx_date,
     )
 
     entry = holdings[(PORTFOLIO, SECURITY)]
@@ -37,6 +39,7 @@ def test_fifo_buy_creates_lot():
     assert lot.shares == 10.0
     assert lot.cost_per_share_eur == 100.0
     assert lot.date == tx_date
+
 
 def test_fifo_sell_consumes_oldest_lot():
     holdings = {}
@@ -53,7 +56,7 @@ def test_fifo_sell_consumes_oldest_lot():
 
     entry = holdings[(PORTFOLIO, SECURITY)]
     assert len(entry["lots"]) == 2
-    assert entry["purchase_value_eur"] == 300.0 # 100 + 200
+    assert entry["purchase_value_eur"] == 300.0  # 100 + 200
 
     # Sell 15 shares @ 30 EUR (Total 450 EUR)
     # Cost Basis Expectation:
@@ -64,14 +67,15 @@ def test_fifo_sell_consumes_oldest_lot():
     # Realized Gain = 450 - 200 = 250 EUR
 
     gain, _ = _apply_transaction_update(
-        PORTFOLIO, SECURITY,
+        PORTFOLIO,
+        SECURITY,
         delta_shares=-15.0,
-        amount=45000, # 450 EUR
+        amount=45000,  # 450 EUR
         currency="EUR",
-        tx_type=1, # Sell
+        tx_type=1,  # Sell
         fx_rates=FX_RATES,
         holdings=holdings,
-        tx_date=date(2023, 2, 1)
+        tx_date=date(2023, 2, 1),
     )
 
     assert gain == 250.0
@@ -83,19 +87,33 @@ def test_fifo_sell_consumes_oldest_lot():
 
     assert len(entry["lots"]) == 1
     remaining_lot = entry["lots"][0]
-    assert remaining_lot.date == date(2023, 1, 2) # Lot 2
+    assert remaining_lot.date == date(2023, 1, 2)  # Lot 2
     assert remaining_lot.shares == 5.0
+
 
 def test_fifo_sell_exact_lot():
     holdings = {}
     # Buy 10 @ 10
-    _apply_transaction_update(PORTFOLIO, SECURITY, 10.0, 10000, "EUR", 0, FX_RATES, holdings, date(2023, 1, 1))
+    _apply_transaction_update(
+        PORTFOLIO, SECURITY, 10.0, 10000, "EUR", 0, FX_RATES, holdings, date(2023, 1, 1)
+    )
 
     # Sell 10 @ 20
-    gain, _ = _apply_transaction_update(PORTFOLIO, SECURITY, -10.0, 20000, "EUR", 1, FX_RATES, holdings, date(2023, 2, 1))
+    gain, _ = _apply_transaction_update(
+        PORTFOLIO,
+        SECURITY,
+        -10.0,
+        20000,
+        "EUR",
+        1,
+        FX_RATES,
+        holdings,
+        date(2023, 2, 1),
+    )
 
-    assert gain == 100.0 # 200 - 100
-    assert (PORTFOLIO, SECURITY) not in holdings # Should be removed (dust)
+    assert gain == 100.0  # 200 - 100
+    assert (PORTFOLIO, SECURITY) not in holdings  # Should be removed (dust)
+
 
 def test_fifo_fx_conversion():
     holdings = {}
@@ -113,7 +131,15 @@ def test_fifo_fx_conversion():
     # Sell 10 @ 200 USD (FX 2.0) -> 100 EUR Proceeds (200 / 2.0)
     # Gain = 100 - 50 = 50 EUR
     gain, _ = _apply_transaction_update(
-        PORTFOLIO, SECURITY, -10.0, 20000, "USD", 1, FX_RATES, holdings, date(2023, 2, 1)
+        PORTFOLIO,
+        SECURITY,
+        -10.0,
+        20000,
+        "USD",
+        1,
+        FX_RATES,
+        holdings,
+        date(2023, 2, 1),
     )
 
     assert gain == 50.0

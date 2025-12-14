@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,6 +18,9 @@ from custom_components.pp_reader.data.normalization_pipeline import (
     _load_position_snapshots,
 )
 from custom_components.pp_reader.metrics import securities as metric_securities
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _insert_fx_rate(

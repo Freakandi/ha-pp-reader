@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import replace
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -24,6 +24,9 @@ from custom_components.pp_reader.metrics.storage import (
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from tests.metrics.helpers import seed_metrics_database
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.asyncio

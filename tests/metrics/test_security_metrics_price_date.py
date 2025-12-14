@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,6 +12,9 @@ from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.metrics.securities import (
     async_compute_security_metrics,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.asyncio
@@ -59,7 +62,7 @@ async def test_previous_close_uses_price_date(
                 "Sample",
                 "SMP",
                 "EUR",
-                int(round(95.0 * 1e8)),
+                round(95.0 * 1e8),
                 friday_ts,
             ),
         )
@@ -84,8 +87,8 @@ async def test_previous_close_uses_price_date(
             VALUES (?, ?, ?)
             """,
             [
-                ("sec1", friday_date_value, int(round(95.0 * 1e8))),  # Friday close
-                ("sec1", thursday_date_value, int(round(90.0 * 1e8))),  # Thursday close
+                ("sec1", friday_date_value, round(95.0 * 1e8)),  # Friday close
+                ("sec1", thursday_date_value, round(90.0 * 1e8)),  # Thursday close
             ],
         )
         conn.commit()

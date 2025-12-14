@@ -11,7 +11,7 @@ import asyncio
 import functools
 import sqlite3
 from datetime import UTC, date, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -33,6 +33,9 @@ from custom_components.pp_reader.prices.history_queue import HistoryQueueManager
 
 # We repurpose the smoketest stubs/mocks where possible or redefine minimal ones
 from tests.metrics.helpers import install_fx_stubs
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # --- MOCKS & STUBS ---
 
@@ -261,13 +264,6 @@ async def test_ingestion_rebuild_end_to_end(
 
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
-
-    # DEBUG: Check if FX rates are visible
-    # count = conn.execute("SELECT count(*) FROM fx_rates").fetchone()[0]
-
-    # cursor = conn.execute("SELECT date, currency, rate FROM fx_rates LIMIT 5")
-    # for row in cursor:
-    #     pass
 
     # Imports moved to top level
 

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import (
     SOURCE_USER,
@@ -16,6 +15,9 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.util import ulid as ulid_util
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 class MockConfigEntry(ConfigEntry):
