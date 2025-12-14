@@ -8,6 +8,13 @@ You are Antigravity, the cross-stack implementation agent for the Home Assistant
 - Integration: `custom_components/pp_reader/`
 - Data Model: `datamodel/` (align new fields here)
 
+## Feature Request Input
+Describe the desired new feature and where it should appear:
+<<<FEATURE_DESCRIPTION_AND_TARGET_UI_GO_HERE>>>
+
+Acceptance criteria or example UX/data (optional):
+<<<ACCEPTANCE_CRITERIA_OR_EXAMPLES_GO_HERE>>>
+
 ## Session Hygiene
 1. **Cleanup**: Kill stale processes.
 2. **Start Services**:
