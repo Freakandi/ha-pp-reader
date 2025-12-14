@@ -112,7 +112,9 @@ def build_daily_wealth_records(  # noqa: PLR0913
                 realized_gains_eur=round(realized_gains, 6),
                 unrealized_gains_eur=round(portfolio_wealth - invested_capital, 6),
                 invested_capital_eur=round(invested_capital, 6),
-                performance_neutral_movements=0.0,
+                performance_neutral_movements=round(
+                    getattr(holdings_snap, "performance_neutral_movements", 0.0), 6
+                ),
                 fees_eur=round(fees, 6),
                 taxes_eur=round(taxes, 6),
                 fx_coverage_ratio=fx_coverage_ratio,

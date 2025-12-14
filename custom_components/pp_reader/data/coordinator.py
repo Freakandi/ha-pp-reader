@@ -537,16 +537,23 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         self._process_enrichment_outcome(summary, errors)
 
-        await self._schedule_metrics_refresh(
-            summary,
-            errors=errors,
-            backdating=True,
-        )
-        await self._schedule_normalization_refresh(summary)
+        self._process_enrichment_outcome(summary, errors)
 
-        # Ensure progress events from earlier stages flush before emitting completion.
-        await asyncio.sleep(0)
-        self._emit_enrichment_completed(summary)
+        # Run heavy metrics/backdating in background to avoid blocking HA startup
+        async def _run_pipeline_background() -> None:
+            await self._schedule_metrics_refresh(
+                summary,
+                errors=errors,
+                backdating=True,
+            )
+            await self._schedule_normalization_refresh(summary)
+
+            # Ensure progress events from earlier stages flush before emitting completion.
+            await asyncio.sleep(0)
+            self._emit_enrichment_completed(summary)
+
+        self.hass.async_create_task(_run_pipeline_background())
+
         return summary
 
     async def _schedule_metrics_refresh(  # noqa: PLR0912, PLR0915

@@ -536,14 +536,15 @@ def get_transactions(
                    t.other_account, t.other_portfolio,
                    t.date, t.currency_code, t.amount,
                    t.shares, t.security,
-                   CAST(COALESCE(SUM(CASE WHEN u.type = 13 THEN u.amount WHEN u.type = 14 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as fees,
-                   CAST(COALESCE(SUM(CASE WHEN u.type = 11 THEN u.amount WHEN u.type = 12 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as taxes
+                   CAST(COALESCE(SUM(CASE WHEN u.type = 2 THEN u.amount WHEN u.type = 13 THEN u.amount WHEN u.type = 14 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as fees,
+                   CAST(COALESCE(SUM(CASE WHEN u.type = 1 THEN u.amount WHEN u.type = 11 THEN u.amount WHEN u.type = 12 THEN -u.amount ELSE 0 END), 0) AS INTEGER) as taxes
             FROM transactions t
-            LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid AND u.type IN (11, 12, 13, 14)
+            LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid AND u.type IN (1, 2, 11, 12, 13, 14)
             GROUP BY t.uuid
             ORDER BY t.date
         """)
-        return [Transaction(*row) for row in cur.fetchall()]
+        transactions = [Transaction(*row) for row in cur.fetchall()]
+        return transactions
     except sqlite3.Error:
         _LOGGER.exception("Fehler beim Laden der Transaktionen")
         return []

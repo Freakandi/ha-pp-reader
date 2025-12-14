@@ -20,8 +20,13 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.cashflows")
 
-_DIVIDEND_TYPES = {9}
-_INTEREST_TYPES = {8}
+# Confirmed via DB inspection:
+# Type 8 = Dividend (has Security)
+# Type 9 = Interest (no Security)
+# Type 4 = Dividend (Standard PP)
+# Type 5 = Interest (Standard PP)
+_DIVIDEND_TYPES = {8, 4}
+_INTEREST_TYPES = {9, 5}
 _INTEREST_CHARGE_TYPES = {10}
 _FEE_TYPES = {13}
 _FEE_REFUND_TYPES = {14}
@@ -89,12 +94,22 @@ def _compute_daily_cashflows_sync(
     transactions_by_date = _group_transactions_by_date(transactions)
 
     snapshots: list[DailyCashflowSnapshot] = []
+
+    # Initialize FX fallback cache with 1.0 for EUR
+    last_known_fx_rates: dict[str, float] = {"EUR": 1.0}
+
     date_cursor = start_date
 
     while date_cursor <= end_date:
         daily_txs = transactions_by_date.get(date_cursor, ())
         date_iso = date_cursor.isoformat()
-        fx_rates = _load_fx_rates_for_date(db_path, date_iso)
+        daily_fx_rates = _load_fx_rates_for_date(db_path, date_iso)
+
+        # Update fallback cache with any available rates for today
+        last_known_fx_rates.update(daily_fx_rates)
+
+        # Use fallback for today's calculations
+        fx_rates = last_known_fx_rates.copy()
 
         (
             dividends_eur,
@@ -221,7 +236,8 @@ def _aggregate_daily_buckets(  # noqa: PLR0912
 
         bucket, sign = _classify_transaction(tx)
 
-        # Process attached fees/taxes (e.g. on Buys/Sells), avoiding double-count for explicit Fee/Tax transactions
+        # Process attached fees/taxes (e.g. on Buys/Sells),
+        # avoiding double-count for explicit Fee/Tax transactions
         tx_fees = getattr(tx, "fees", 0)
         tx_taxes = getattr(tx, "taxes", 0)
         if tx_fees or tx_taxes:

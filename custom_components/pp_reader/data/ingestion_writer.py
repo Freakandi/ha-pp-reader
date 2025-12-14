@@ -466,23 +466,35 @@ class IngestionWriter:
             )
             if security.prices:
                 price_payload.append((security.uuid, security.prices))
+            elif latest:
+                # Fallback: If no historical prices exist but we have a latest price
+                # (e.g. manual entry), treat it as a historical price point.
+                price_payload.append((security.uuid, [latest]))
 
-        self._conn.executemany(
-            """
-            INSERT OR REPLACE INTO ingestion_securities (
-                uuid, name, currency_code, target_currency_code, isin, ticker_symbol,
-                wkn, note, online_id, feed, feed_url, latest_feed, latest_feed_url,
-                latest_date, latest_close, latest_high, latest_low, latest_volume,
-                is_retired, attributes, properties, updated_at
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        try:
+            self._conn.executemany(
+                """
+                INSERT OR REPLACE INTO ingestion_securities (
+                    uuid, name, currency_code, target_currency_code, isin,
+                    ticker_symbol, wkn, note, online_id, feed, feed_url, latest_feed,
+                    latest_feed_url, latest_date, latest_close, latest_high,
+                    latest_low, latest_volume, is_retired, attributes, properties,
+                    updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                """,
+                security_rows,
             )
-            """,
-            security_rows,
-        )
+        except Exception:
+            _LOGGER.exception("DEBUG WRITER: Error inserting securities")
 
         if price_payload:
-            self.write_historical_prices(price_payload)
+            _LOGGER.error("DEBUG WRITER: Writing %s price rows", len(price_payload))
+            try:
+                self.write_historical_prices(price_payload)
+            except Exception:
+                _LOGGER.exception("DEBUG WRITER: Error inserting prices")
 
     def write_transactions(
         self, transactions: Sequence[parsed_models.ParsedTransaction]
@@ -502,6 +514,13 @@ class IngestionWriter:
             has_date = getattr(txn, "date", None) is not None
             if currency and currency != "EUR" and has_date:
                 fx_requests.setdefault(txn.date, set()).add(currency)
+
+            # DEBUG: Trace Gold transactions
+            sec_id = getattr(txn, "security", "")
+            if sec_id and sec_id.startswith("d3e2b6d3"):
+                _LOGGER.debug(
+                    "DEBUG WRITER: Transaction for Gold-like UUID: %s", sec_id
+                )
 
         if fx_requests:
             self._ensure_fx_rates(fx_requests)
@@ -603,6 +622,8 @@ class IngestionWriter:
             for security_uuid, prices in payload
             for price in prices
         ]
+
+
 
         if not rows:
             return

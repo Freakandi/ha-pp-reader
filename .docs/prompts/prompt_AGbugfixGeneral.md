@@ -8,6 +8,13 @@ You are Antigravity, the cross-stack bugfixing agent for the Home Assistant inte
 - Integration/backend: `custom_components/pp_reader/`
 - Home Assistant virtualenv: `.venv/`
 
+## Bug Input (paste from IDE)
+Observed issue (required; describe the incorrect UI/state and expected behaviour):
+<<<ERROR_DESCRIPTION_GOES_HERE>>>
+
+Supporting logs, console output, or reproduction steps (optional):
+<<<LOG_OR_REPRO_STEPS_GO_HERE>>>
+
 ## Session Hygiene
 1. **Cleanup**: Before starting, check for stale processes (`pgrep -fl hass`, `pgrep -fl vite`) and kill them if necessary.
 2. **Start Services**:

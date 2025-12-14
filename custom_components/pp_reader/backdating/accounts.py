@@ -110,6 +110,13 @@ def _compute_daily_account_snapshots_sync(
 
     balances_cents: dict[str, int] = {}
     snapshots: list[DailyAccountSnapshot] = []
+
+    # Pre-calculate initial state from prior transactions
+    for tx_date, adjustments in adjustments_by_date.items():
+        if tx_date < start_date:
+            for account_uuid, delta in adjustments:
+                balances_cents[account_uuid] = balances_cents.get(account_uuid, 0) + delta
+
     date_cursor = start_date
 
     while date_cursor <= end_date:
@@ -162,6 +169,7 @@ def _load_accounts(db_path: Path) -> dict[str, dict[str, Any]]:
         }
         for row in rows
         if row["uuid"]
+        # Retired accounts are included to ensure historical transactions are processed.
     }
 
 

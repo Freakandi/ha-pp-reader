@@ -212,7 +212,7 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
       ${mkRow('Anfangswert', bd.startValue, '', 'perf-startValue')}
       ${mkRow('Kurserfolge (Gesamt)', bd.marketGain, 'sub-header')}
       ${mkRow('&nbsp;&nbsp;↳ Realisiert', bd.realizedGains, 'indent')}
-      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert', bd.unrealizedGains, 'indent')}
+      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert (inkl. FX)', bd.unrealizedGains, 'indent')}
       ${mkRow('Dividenden', bd.dividends)}
       ${mkRow('Zinsen', bd.interest)}
       ${mkRow('Gebühren', bd.fees)}

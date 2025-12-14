@@ -544,6 +544,9 @@ def _serialize_daily_wealth(record: Any) -> dict[str, Any]:
         "performance_neutral_movements": record.performance_neutral_movements,
         "fees_eur": record.fees_eur,
         "taxes_eur": record.taxes_eur,
+        "realized_gains_eur": record.realized_gains_eur,
+        "unrealized_gains_eur": record.unrealized_gains_eur,
+        "invested_capital_eur": record.invested_capital_eur,
         "fx_coverage_ratio": record.fx_coverage_ratio,
         "price_coverage_ratio": record.price_coverage_ratio,
         "stale_price": bool(record.stale_price),
@@ -568,6 +571,9 @@ def _serialize_daily_scope(record: Any) -> dict[str, Any]:
         "performance_neutral_movements": record.performance_neutral_movements,
         "fees_eur": record.fees_eur,
         "taxes_eur": record.taxes_eur,
+        "realized_gains_eur": record.realized_gains_eur,
+        "unrealized_gains_eur": record.unrealized_gains_eur,
+        "invested_capital_eur": record.invested_capital_eur,
         "fx_coverage_ratio": record.fx_coverage_ratio,
         "price_coverage_ratio": record.price_coverage_ratio,
         "stale_price": bool(record.stale_price),
@@ -1377,14 +1383,55 @@ async def ws_get_daily_wealth(
         )
         return
 
+    records = [_serialize_daily_wealth(rec) for rec in totals]
+
+    # PP Alignment: "Start Date" wealth is the baseline (End of Day).
+    # Flows occurring ON the start date should be excluded from period summation.
+    # Exception: Single Day view (start == end) includes flows.
+    if params.start_date != params.end_date and records and records[0]["date"] == start_iso:
+        for key in (
+            "dividends_eur",
+            "interest_eur",
+            "inbound_transfers_eur",
+            "outbound_transfers_eur",
+            "fees_eur",
+            "taxes_eur",
+            "realized_gains_eur",
+            "performance_neutral_movements",
+        ):
+            # Mutate the dictionary in place to zero out the start date values
+            records[0][key] = 0.0
+
     payload: dict[str, Any] = {
         "range": {"start": start_iso, "end": end_iso},
-        "records": [_serialize_daily_wealth(rec) for rec in totals],
+        "records": records,
     }
     if params.include_slices:
+        acc_records = [_serialize_daily_scope(rec) for rec in account_slices]
+        port_records = [_serialize_daily_scope(rec) for rec in portfolio_slices]
+
+        if params.start_date != params.end_date:
+            # Apply same exclusion logic to slices
+            for rec_list in (acc_records, port_records):
+                 # Slices might be multiple per day, need to filter all matching
+                 # start_date
+                 for rec in rec_list:
+                     if rec["date"] == start_iso:
+                         for key in (
+                             "dividends_eur",
+                             "interest_eur",
+                             "inbound_transfers_eur",
+                             "outbound_transfers_eur",
+                             "performance_neutral_movements",
+                             "fees_eur",
+                             "taxes_eur",
+                             "realized_gains_eur"
+                         ):
+                             rec[key] = 0.0
+
         payload["slices"] = {
-            "accounts": [_serialize_daily_scope(rec) for rec in account_slices],
-            "portfolios": [_serialize_daily_scope(rec) for rec in portfolio_slices],
+            "accounts": acc_records,
+            "portfolios": port_records,
         }
 
     connection.send_result(msg_id, payload)

@@ -3761,7 +3761,7 @@ function tr(e, t) {
       ${a("Anfangswert", r.startValue, "", "perf-startValue")}
       ${a("Kurserfolge (Gesamt)", r.marketGain, "sub-header")}
       ${a("&nbsp;&nbsp;↳ Realisiert", r.realizedGains, "indent")}
-      ${a("&nbsp;&nbsp;↳ Nicht realisiert", r.unrealizedGains, "indent")}
+      ${a("&nbsp;&nbsp;↳ Nicht realisiert (inkl. FX)", r.unrealizedGains, "indent")}
       ${a("Dividenden", r.dividends)}
       ${a("Zinsen", r.interest)}
       ${a("Gebühren", r.fees)}
@@ -5935,4 +5935,8 @@ export {
   wc as unregisterPanelHost,
   jr as updatePortfolioFooterFromDom
 };
+<<<<<<<< HEAD:custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.zlhjJD-c.js
 //# sourceMappingURL=dashboard.zlhjJD-c.js.map
+========
+//# sourceMappingURL=dashboard.DJ9qDQ89.js.map
+>>>>>>>> 79c310a5 (feat: Implement FIFO accounting for holdings, introduce neutral movements, and update dashboard components.):custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.DJ9qDQ89.js

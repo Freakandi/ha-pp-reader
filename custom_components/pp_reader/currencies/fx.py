@@ -243,48 +243,44 @@ async def _fetch_exchange_rates_with_retry(
     return {}
 
 
-async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
+
+def _fetch_exchange_rates_sync_http(date_str: str, currencies: set[str]) -> dict[str, float]:
+    """Synchronous fetch using requests to avoid aiohttp instability."""
+    import requests
+
     if not currencies:
         return {}
 
     symbols = ",".join(currencies)
-    url = f"{API_URL}/{date}?from=EUR&to={symbols}"
-    timeout = aiohttp.ClientTimeout(total=10)
-    ssl_context = hass_ssl.client_context()
-    if hasattr(ssl_context, "verify_flags"):
-        ssl_context.verify_flags &= ~ssl.VERIFY_X509_STRICT
-    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    url = f"{API_URL}/{date_str}?from=EUR&to={symbols}"
 
     try:
-        async with (
-            aiohttp.ClientSession(
-                timeout=timeout,
-                trust_env=True,
-                connector=connector,
-            ) as session,
-            session.get(url) as response,
-        ):
-            if response.status != 200:  # noqa: PLR2004
-                if _should_log_warning(date, currencies):
-                    _LOGGER.warning(
-                        "Fehler beim Abruf der Wechselkurse (%s): Status %d",
-                        date,
-                        response.status,
-                    )
-                return {}
-            data = await response.json()
-            return {k: float(v) for k, v in data.get("rates", {}).items()}
-    except (TimeoutError, aiohttp.ClientError, OSError) as err:
-        if _should_log_warning(date, currencies):
+        # TIMEOUT is critical here. Using a standard requests session.
+        resp = requests.get(url, timeout=10)
+
+        if resp.status_code != 200:
+            if _should_log_warning(date_str, currencies):
+                _LOGGER.warning(
+                    "Fehler beim Abruf der Wechselkurse (%s): Status %d",
+                    date_str,
+                    resp.status_code,
+                )
+            return {}
+
+        data = resp.json()
+        return {k: float(v) for k, v in data.get("rates", {}).items()}
+    except Exception as err:
+        if _should_log_warning(date_str, currencies):
             _LOGGER.warning(
                 "Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
-                date,
+                date_str,
                 err,
             )
         return {}
-    except Exception:
-        _LOGGER.exception("Fehler beim Abruf der Wechselkurse")
-        return {}
+
+
+async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, float]:
+    return await _execute_db(_fetch_exchange_rates_sync_http, date, currencies)
 
 
 # --- Öffentliche Funktionen ---
@@ -544,31 +540,36 @@ def discover_currency_date_bounds(db_path: Path) -> dict[str, tuple[date, date]]
         rows = conn.execute(
             """
             SELECT
-                TRIM(UPPER(currency_code)) AS currency_code,
-                date
-            FROM transactions
-            WHERE currency_code IS NOT NULL
-              AND TRIM(currency_code) != ''
+                t.date,
+                TRIM(UPPER(t.currency_code)) AS tx_currency,
+                TRIM(UPPER(s.currency_code)) AS sec_currency
+            FROM transactions t
+            LEFT JOIN securities s ON t.security = s.uuid
+            WHERE (t.currency_code IS NOT NULL AND TRIM(t.currency_code) != '')
+               OR (s.currency_code IS NOT NULL AND TRIM(s.currency_code) != '')
             """
         ).fetchall()
 
     for row in rows:
-        currency = (row["currency_code"] or "").strip().upper()
-        if not currency or currency == "EUR":
-            continue
-
         parsed = _parse_date_value(row["date"])
         if parsed is None:
             continue
 
-        if currency not in bounds:
-            bounds[currency] = (parsed, parsed)
-        else:
-            current_start, current_end = bounds[currency]
-            bounds[currency] = (
-                min(current_start, parsed),
-                max(current_end, parsed),
-            )
+        # Collect both potential currencies
+        candidates = {row["tx_currency"], row["sec_currency"]}
+
+        for currency in candidates:
+            if not currency or currency == "EUR":
+                continue
+
+            if currency not in bounds:
+                bounds[currency] = (parsed, parsed)
+            else:
+                current_start, current_end = bounds[currency]
+                bounds[currency] = (
+                    min(current_start, parsed),
+                    max(current_end, parsed),
+                )
 
     return bounds
 
@@ -624,8 +625,57 @@ def _compute_fx_coverage_ratio(
     return round(covered / len(required_currencies), 3)
 
 
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+async def _fetch_exchange_rates_range_aiohttp(
+    session: aiohttp.ClientSession,
+    currency: str,
+    start_date: str,
+    end_date: str,
+) -> dict[str, float]:
+    """
+    Fetch rates for a single currency over a date range.
+    Returns a dict mapping date_str -> rate.
+    """
+    # Frankfurter API supports ranges: /start_date..end_date?from=EUR&to=USD
+    url = f"{API_URL}/{start_date}..{end_date}?from=EUR&to={currency}"
+
+    try:
+        async with session.get(url, timeout=20) as resp:
+            if resp.status != 200:
+                # 404 might mean no data for this range/currency
+                if resp.status != 404:
+                    _LOGGER.warning(
+                        "Fehler beim Abruf der Wechselkurse (%s..%s, %s): Status %d",
+                        start_date,
+                        end_date,
+                        currency,
+                        resp.status,
+                    )
+                return {}
+
+            data = await resp.json()
+            # Response structure: {"rates": {"2024-01-01": {"USD": 1.1}, ...}}
+            # We want: {"2024-01-01": 1.1, ...}
+            rates_by_date = data.get("rates", {})
+            result = {}
+            for d_str, rates in rates_by_date.items():
+                if currency in rates:
+                    result[d_str] = float(rates[currency])
+            return result
+
+    except Exception as err:
+        _LOGGER.warning(
+            "Netzwerkproblem beim Abruf der Wechselkurse (%s..%s, %s): %s",
+            start_date,
+            end_date,
+            currency,
+            err,
+        )
+        return {}
+
 async def async_ensure_exchange_rates_for_schedule(
-    hass: Any,  # noqa: ARG001
+    hass: Any,
     db_path: Path,
     schedule: Mapping[date, set[str]],
     *,
@@ -634,54 +684,115 @@ async def async_ensure_exchange_rates_for_schedule(
 ) -> dict[str, float]:
     """
     Ensure FX rates exist for each date in the schedule and compute coverage.
-
-    The schedule maps a date to the set of non-EUR currencies active on that
-    day. Missing rates are fetched once per date across all currencies. The
-    returned mapping is ISO-date -> coverage ratio [0.0-1.0].
+    Uses range queries to minimize API requests.
     """
     if not schedule:
         return {}
 
+    # 1. Identify missing dates per currency
+    # We first load what we have for all scheduled dates to see what's missing.
+    # This might be slightly expensive if schedule is huge, but necessary.
+    # Optimization: We could just query distinct dates from DB?
+    # For now, let's trust the existing pattern but optimize the fetching.
+
+    needed_by_currency: dict[str, set[date]] = defaultdict(set)
+    all_needed_dates = sorted(schedule.keys())
+
+    # We can load existing rates for ALL dates in one go?
+    # Current helper loads one date. Let's stick to the loop for checking checking existence
+    # but maybe we can optimize this later. For backdating, we assume many gaps.
+
+    # Actually, iterate days, check DB, build missing map
+    # To reduce DB read churn, we should probably check existence more efficiently if possible.
+    # But sticking to safety:
+
+    today = datetime.now(tz=UTC).date()
+
+    for day in all_needed_dates:
+        if day > today:
+            continue # Can't fetch future
+
+        currencies = {code for code in schedule[day] if code and code != "EUR"}
+        if not currencies:
+            continue
+
+        # This loop over days to check DB is the slow part if we do it one by one?
+        # But `_load_rates_for_date` is fast (sqlite).
+        # Ideally we'd batch-check existence, but let's see.
+
+        date_str = day.isoformat()
+        # We can accept that we might re-check DB.
+        # But wait, `_load_rates_for_date` runs a query. 1000 queries is 1000 queries.
+        # However, compared to network requests, sqlite is instant.
+
+        existing = await _load_rates_for_date(db_path, date_str, conn=conn)
+
+        for curr in currencies:
+            if curr not in existing:
+                needed_by_currency[curr].add(day)
+
+    # 2. Fetch ranges per currency
+    # Get or create session
+    own_session = False
+    if hass:
+        session = async_get_clientsession(hass)
+    else:
+        session = aiohttp.ClientSession()
+        own_session = True
+
+    fetched_data: dict[str, dict[str, float]] = defaultdict(dict) # date_str -> {currency: rate}
+
+    try:
+        for currency, dates in needed_by_currency.items():
+            if not dates:
+                continue
+
+            min_date = min(dates)
+            max_date = max(dates)
+
+            # Fetch range
+            start_str = min_date.isoformat()
+            end_str = max_date.isoformat()
+
+            rates_map = await _fetch_exchange_rates_range_aiohttp(
+                session, currency, start_str, end_str
+            )
+
+            for d_str, rate in rates_map.items():
+                fetched_data[d_str][currency] = rate
+
+        # 3. Save all fetched data
+        # Group by date to call _save_rates
+        for date_str, rates in fetched_data.items():
+             if rates:
+                 await _save_rates(db_path, date_str, rates, conn=conn)
+
+    finally:
+        if own_session:
+            await session.close()
+
+
+    # 4. Compute final coverage
+    # (Re-using the loop from before or just computing it now)
     coverage: dict[str, float] = {}
 
-    for day in sorted(schedule):
-        currencies = {code for code in schedule[day] if code and code != "EUR"}
+    for day in all_needed_dates:
         date_str = day.isoformat()
+        currencies = {code for code in schedule[day] if code and code != "EUR"}
 
         if not currencies:
             coverage[date_str] = 1.0
             continue
 
+        # Re-load from DB to be 100% sure what we have
+        # (Cached read or trust DB)
         existing = await _load_rates_for_date(db_path, date_str, conn=conn)
-        missing = currencies - set(existing.keys())
 
-        if missing:
-            try:
-                fetched = await _fetch_exchange_rates_with_retry(date_str, missing)
-                if fetched:
-                    await _save_rates(db_path, date_str, fetched, conn=conn)
-                elif _should_log_warning(date_str, missing):
-                    _LOGGER.warning(
-                        "Keine FX-Kurse erhalten für %s (Währungen: %s)",
-                        date_str,
-                        ", ".join(sorted(missing)),
-                    )
-            except Exception:
-                _LOGGER.exception(
-                    "FX-Fetch für %s fehlgeschlagen (currencies=%s)",
-                    date_str,
-                    ", ".join(sorted(missing)),
-                )
-
-        refreshed = existing.copy()
-        if missing:
-            refreshed.update(await _load_rates_for_date(db_path, date_str, conn=conn))
-
-        coverage_ratio = _compute_fx_coverage_ratio(currencies, refreshed)
+        coverage_ratio = _compute_fx_coverage_ratio(currencies, existing)
         coverage[date_str] = coverage_ratio
 
         if emit_progress is not None:
-            emit_progress(
+             emit_progress(
                 "fx_schedule_day",
                 {
                     "date": date_str,
