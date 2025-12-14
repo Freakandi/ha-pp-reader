@@ -101,8 +101,6 @@ async def test_coverage_and_stale_flags_propagation(
     initialize_database_schema(db_path)
     hass = StubHass(entry_id, db_path)
 
-
-
     with sqlite3.connect(str(db_path)) as conn:
         # Accounts
         conn.execute(

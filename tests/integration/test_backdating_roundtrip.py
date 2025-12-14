@@ -83,7 +83,6 @@ async def test_roundtrip_metrics_to_api(
     # Type 0 = Buy (based on holdings.py constants)
     # Type 0 = Buy (based on holdings.py constants)
 
-
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(
             """

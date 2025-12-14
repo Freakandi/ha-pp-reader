@@ -42,7 +42,8 @@ import {
   type AccountOverviewRow,
   type PortfolioOverviewRow,
 } from '../lib/store/selectors/portfolio';
-import { escapeHtml, renderBadgeList, renderNameWithBadges } from '../lib/ui/badges';
+import { renderBadgeList, renderNameWithBadges } from '../lib/ui/badges';
+import { escapeHtml } from '../utils/html';
 
 
 type PortfolioQueryRoot = Document | HTMLElement;
@@ -563,9 +564,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
       if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
         return '';
       }
-      return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;');
+      return escapeHtml(value);
     };
 
   let html = '<table class="expandable-portfolio-table"><thead><tr>';

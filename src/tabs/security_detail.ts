@@ -46,6 +46,7 @@ import type {
 import { isPortfolioPositionsUpdatedEvent } from './types';
 import { toFiniteCurrency, normalizePercentValue } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
+import { escapeAttribute } from '../utils/html';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
@@ -1057,22 +1058,6 @@ function formatPriceChangeWithCurrency(
   const suffix = currency ? `&nbsp;${currency}` : '';
   const className = resolveRoundedTrendClass(value, PRICE_FRACTION_DIGITS.max);
   return `<span class="${className}">${formatted}${suffix}</span>`;
-}
-
-function escapeAttribute(
-  value: string | number | boolean | null | undefined,
-): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  const raw = typeof value === 'string' ? value : String(value);
-
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 function resolveTickerSymbol(

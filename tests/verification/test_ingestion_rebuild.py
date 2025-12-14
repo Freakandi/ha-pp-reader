@@ -207,7 +207,6 @@ async def test_ingestion_rebuild_end_to_end(
     # Mock History Queue methods to avoid network activity
     # HistoryQueueManager imported at top level
 
-
     async def _fake_plan(self, *args, **kwargs):
         return 0
 
@@ -271,7 +270,6 @@ async def test_ingestion_rebuild_end_to_end(
     #     pass
 
     # Imports moved to top level
-
 
     ensure_ingestion_tables(conn)
     clear_ingestion_stage(conn)
