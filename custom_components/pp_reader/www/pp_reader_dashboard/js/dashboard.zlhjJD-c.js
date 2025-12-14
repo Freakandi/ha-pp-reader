@@ -498,13 +498,13 @@ function $n(e, t) {
     return e;
   throw new Error(`mapPositionSnapshotToRecord: fehlendes ${t}`);
 }
-function kt(e, t) {
+function Tt(e, t) {
   if (typeof e == "number" && Number.isFinite(e))
     return e;
   throw new Error(`mapPositionSnapshotToRecord: fehlendes ${t}`);
 }
 function ai(e) {
-  const t = $n(e.security_uuid, "security_uuid"), n = $n(e.name, "name"), r = kt(e.current_holdings, "current_holdings"), a = kt(e.purchase_value, "purchase_value"), i = kt(e.current_value, "current_value"), o = {
+  const t = $n(e.security_uuid, "security_uuid"), n = $n(e.name, "name"), r = Tt(e.current_holdings, "current_holdings"), a = Tt(e.purchase_value, "purchase_value"), i = Tt(e.current_value, "current_value"), o = {
     security_uuid: t,
     name: n,
     current_holdings: r,
@@ -526,7 +526,7 @@ function ge(e, t) {
   }
   return n ?? void 0;
 }
-function kn(e, t) {
+function Tn(e, t) {
   return ge(e, t);
 }
 async function ii(e, t) {
@@ -589,7 +589,7 @@ function ci(e, t, n) {
 function Z(e) {
   return typeof e == "number" && Number.isFinite(e) ? e : 0;
 }
-function Tn(e) {
+function kn(e) {
   return e === null ? null : typeof e == "number" && Number.isFinite(e) ? e : null;
 }
 function Ar(e) {
@@ -611,8 +611,8 @@ function Ar(e) {
     realized_gains_eur: Z(e.realized_gains_eur),
     unrealized_gains_eur: Z(e.unrealized_gains_eur),
     invested_capital_eur: Z(e.invested_capital_eur),
-    fx_coverage_ratio: Tn(e.fx_coverage_ratio),
-    price_coverage_ratio: Tn(e.price_coverage_ratio),
+    fx_coverage_ratio: kn(e.fx_coverage_ratio),
+    price_coverage_ratio: kn(e.price_coverage_ratio),
     stale_price: e.stale_price === !0
   }, r = te(e.provenance);
   return r && (n.provenance = r), n;
@@ -891,7 +891,7 @@ function Pi(e) {
   const t = e;
   return typeof t.security_uuid == "string" && typeof t.name == "string" && typeof t.current_holdings == "number" && typeof t.purchase_value == "number" && typeof t.current_value == "number";
 }
-function ke(e) {
+function Te(e) {
   const t = { ...e };
   return e.average_cost && typeof e.average_cost == "object" && (t.average_cost = { ...e.average_cost }), e.performance && typeof e.performance == "object" && (t.performance = { ...e.performance }), e.aggregation && typeof e.aggregation == "object" && (t.aggregation = { ...e.aggregation }), e.data_state && typeof e.data_state == "object" && (t.data_state = { ...e.data_state }), t;
 }
@@ -908,7 +908,7 @@ function Ai(e, t, n = []) {
   }), r;
 }
 function wi(e, t) {
-  const n = e ? ke(e) : {}, r = [
+  const n = e ? Te(e) : {}, r = [
     "portfolio_uuid",
     "security_uuid",
     "name",
@@ -955,8 +955,8 @@ function dt(e, t) {
   ), a = t.filter((i) => !!i).map((i) => {
     const o = i.security_uuid ?? "", l = o ? r.get(o) : void 0;
     return wi(l, i);
-  }).map(ke);
-  return _e.set(e, a), a.map(ke);
+  }).map(Te);
+  return _e.set(e, a), a.map(Te);
 }
 function xt(e) {
   return e ? _e.has(e) : !1;
@@ -965,7 +965,7 @@ function Er(e) {
   if (!e)
     return [];
   const t = _e.get(e);
-  return t ? t.map(ke) : [];
+  return t ? t.map(Te) : [];
 }
 function Ci() {
   _e.clear();
@@ -974,7 +974,7 @@ function Ni() {
   return new Map(
     Array.from(_e.entries(), ([e, t]) => [
       e,
-      t.map(ke)
+      t.map(Te)
     ])
   );
 }
@@ -1019,7 +1019,7 @@ function hn(e) {
 function Ei(e) {
   if (!e || typeof e != "object")
     return null;
-  const t = Pi(e) ? ke(e) : e, n = me(t.security_uuid), r = me(t.name), a = de(t.current_holdings), i = Ln(t.current_value), o = hn(t.aggregation), l = t.aggregation && typeof t.aggregation == "object" ? t.aggregation : null, s = U(t.purchase_value_eur) ?? U(l?.purchase_value_eur) ?? U(l?.purchase_total_account) ?? U(l?.account_currency_total) ?? Ln(t.purchase_value);
+  const t = Pi(e) ? Te(e) : e, n = me(t.security_uuid), r = me(t.name), a = de(t.current_holdings), i = Ln(t.current_value), o = hn(t.aggregation), l = t.aggregation && typeof t.aggregation == "object" ? t.aggregation : null, s = U(t.purchase_value_eur) ?? U(l?.purchase_value_eur) ?? U(l?.purchase_total_account) ?? U(l?.account_currency_total) ?? Ln(t.purchase_value);
   if (!n || !r || a == null || s == null || i == null)
     return null;
   const c = {
@@ -1143,7 +1143,7 @@ function Dr(e) {
 function $i() {
   return xr.map((e) => ({ ...e }));
 }
-function ki(e) {
+function Ti(e) {
   be.clear();
   const t = e ?? [];
   for (const n of t) {
@@ -1151,7 +1151,7 @@ function ki(e) {
     r && be.set(r.uuid, mn(r));
   }
 }
-function Ti(e) {
+function ki(e) {
   const t = e ?? [];
   for (const n of t) {
     const r = Fr(n);
@@ -1240,10 +1240,10 @@ function ee(e) {
   const t = e.trim();
   return t.length > 0 ? t : null;
 }
-function kr(e, t) {
+function Tr(e, t) {
   return ee(e) ?? t;
 }
-function Tr(e) {
+function kr(e) {
   return e == null || !Number.isFinite(e) ? null : e < 0 ? 0 : e > 1 ? 1 : e;
 }
 function Rr(e) {
@@ -1306,7 +1306,7 @@ function Ii(e) {
 function zi(e) {
   if (!e)
     return null;
-  const t = ee(e.uuid) ?? `${Li}-${e.name ?? "0"}`, n = kr(e.name, "Unbenanntes Konto"), r = ee(e.currency_code), a = X(e.balance), i = X(e.orig_balance), o = "coverage_ratio" in e ? Tr(X(e.coverage_ratio)) : null, l = ee(e.provenance), s = ee(e.metric_run_uuid), c = e.fx_unavailable === !0, u = X(e.fx_rate), p = ee(e.fx_rate_source), f = ee(e.fx_rate_timestamp), d = [], g = Lr(l);
+  const t = ee(e.uuid) ?? `${Li}-${e.name ?? "0"}`, n = Tr(e.name, "Unbenanntes Konto"), r = ee(e.currency_code), a = X(e.balance), i = X(e.orig_balance), o = "coverage_ratio" in e ? kr(X(e.coverage_ratio)) : null, l = ee(e.provenance), s = ee(e.metric_run_uuid), c = e.fx_unavailable === !0, u = X(e.fx_rate), p = ee(e.fx_rate_source), f = ee(e.fx_rate_timestamp), d = [], g = Lr(l);
   g && d.push(g);
   const m = {
     uuid: t,
@@ -1331,7 +1331,7 @@ function Vi(e) {
   const t = ee(e.uuid);
   if (!t)
     return null;
-  const n = kr(e.name, "Unbenanntes Depot"), r = Hn(e.position_count), a = Hn(e.missing_value_positions), i = X(e.current_value), o = X(e.purchase_sum) ?? X(e.purchase_value_eur) ?? X(e.purchase_value) ?? 0, l = X(e.day_change_abs) ?? null, s = X(e.day_change_pct) ?? null, c = ve(e.performance), u = c?.gain_abs ?? null, p = c?.gain_pct ?? null, f = c?.day_change ?? null;
+  const n = Tr(e.name, "Unbenanntes Depot"), r = Hn(e.position_count), a = Hn(e.missing_value_positions), i = X(e.current_value), o = X(e.purchase_sum) ?? X(e.purchase_value_eur) ?? X(e.purchase_value) ?? 0, l = X(e.day_change_abs) ?? null, s = X(e.day_change_pct) ?? null, c = ve(e.performance), u = c?.gain_abs ?? null, p = c?.gain_pct ?? null, f = c?.day_change ?? null;
   let d = l ?? (f?.value_change_eur != null ? X(f.value_change_eur) : null), g = s ?? (f?.change_pct != null ? X(f.change_pct) : null);
   if (d == null && g != null && i != null) {
     const N = i / (1 + g / 100);
@@ -1341,7 +1341,7 @@ function Vi(e) {
     const N = i - d;
     N && (g = d / N * 100);
   }
-  const m = i != null, _ = e.has_current_value === !1 || !m, h = "coverage_ratio" in e ? Tr(X(e.coverage_ratio)) : null, y = ee(e.provenance), b = ee(e.metric_run_uuid), S = [], P = Lr(y);
+  const m = i != null, _ = e.has_current_value === !1 || !m, h = "coverage_ratio" in e ? kr(X(e.coverage_ratio)) : null, y = ee(e.provenance), b = ee(e.metric_run_uuid), S = [], P = Lr(y);
   P && S.push(P);
   const C = {
     uuid: t,
@@ -1372,7 +1372,7 @@ function Ui() {
   const { portfolios: e } = $r();
   return e.map(Vi).filter((t) => !!t);
 }
-function Te(e) {
+function ke(e) {
   return e ? e.replace(/[&<>"']/g, (t) => {
     switch (t) {
       case "&":
@@ -1394,8 +1394,8 @@ function Hr(e, t = {}) {
   if (!e || e.length === 0)
     return "";
   const n = ["meta-badges", t.containerClass].filter(Boolean).join(" "), r = e.map((a) => {
-    const i = `meta-badge--${a.tone}`, o = a.description ? ` title="${Te(a.description)}"` : "";
-    return `<span class="meta-badge ${i}"${o}>${Te(
+    const i = `meta-badge--${a.tone}`, o = a.description ? ` title="${ke(a.description)}"` : "";
+    return `<span class="meta-badge ${i}"${o}>${ke(
       a.label
     )}</span>`;
   }).join("");
@@ -1404,9 +1404,9 @@ function Hr(e, t = {}) {
 function pt(e, t, n = {}) {
   const r = Hr(t, n);
   if (!r)
-    return Te(e);
+    return ke(e);
   const a = n.labelClass ?? "name-with-badges__label";
-  return `<span class="${["name-with-badges", n.containerClass].filter(Boolean).join(" ")}"><span class="${a}">${Te(
+  return `<span class="${["name-with-badges", n.containerClass].filter(Boolean).join(" ")}"><span class="${a}">${ke(
     e
   )}</span>${r}</span>`;
 }
@@ -1458,7 +1458,7 @@ function In(e) {
 function zn(e) {
   return ve(e.performance);
 }
-const Bi = 500, ji = 10, Ki = "pp-reader:portfolio-positions-updated", Yi = "pp-reader:diagnostics", Tt = /* @__PURE__ */ new Map(), zr = [
+const Bi = 500, ji = 10, Ki = "pp-reader:portfolio-positions-updated", Yi = "pp-reader:diagnostics", kt = /* @__PURE__ */ new Map(), zr = [
   "coverage_ratio",
   "provenance",
   "metric_run_uuid",
@@ -1527,11 +1527,11 @@ function Vn(e) {
   }
 }
 function _n(e, t, n, r) {
-  const a = Gi(e, n), i = Tt.get(a);
+  const a = Gi(e, n), i = kt.get(a);
   if (!r) {
     if (!i)
       return;
-    Tt.delete(a);
+    kt.delete(a);
     const l = Ji(i);
     if (!l)
       return;
@@ -1546,7 +1546,7 @@ function _n(e, t, n, r) {
     return;
   }
   const o = Zi(i, r);
-  o && (Tt.set(a, { ...r }), Vn({
+  o && (kt.set(a, { ...r }), Vn({
     kind: e,
     uuid: n,
     source: t,
@@ -1757,7 +1757,7 @@ function co(e, t) {
   } catch {
   }
   const n = so(e);
-  if (n.length && Ti(n), eo(n), !t)
+  if (n.length && ki(n), eo(n), !t)
     return;
   const r = t.querySelector(".portfolio-table table") || t.querySelector("table.expandable-portfolio-table");
   if (!r) {
@@ -1820,22 +1820,22 @@ function co(e, t) {
     }
     const Y = typeof f.missing_value_positions == "number" && Number.isFinite(f.missing_value_positions) ? f.missing_value_positions : 0, v = C !== null, x = f.has_current_value === !1 || Y > 0 || !v, R = st(_.textContent);
     st(g.textContent) !== P && (g.textContent = c(P));
-    const k = {
+    const T = {
       fx_unavailable: x,
       current_value: C,
       performance: w
-    }, z = { hasValue: v }, W = L("purchase_value", H, k, z);
+    }, z = { hasValue: v }, W = L("purchase_value", H, T, z);
     m.innerHTML !== W && (m.innerHTML = W);
-    const B = L("current_value", k.current_value, k, z), G = typeof C == "number" ? C : 0;
+    const B = L("current_value", T.current_value, T, z), G = typeof C == "number" ? C : 0;
     if ((Math.abs(R - G) >= 5e-3 || _.innerHTML !== B) && (_.innerHTML = B, d.classList.add("flash-update"), setTimeout(() => {
       d.classList.remove("flash-update");
-    }, 800)), h && (h.innerHTML = L("day_change_abs", F, k, z)), y && (y.innerHTML = L("day_change_pct", $, k, z)), b) {
-      const K = L("gain_abs", N, k, z);
+    }, 800)), h && (h.innerHTML = L("day_change_abs", F, T, z)), y && (y.innerHTML = L("day_change_pct", $, T, z)), b) {
+      const K = L("gain_abs", N, T, z);
       b.innerHTML = K;
       const Se = typeof D == "number" && Number.isFinite(D) ? D : null;
       b.dataset.gainPct = Se != null ? `${i(Se)} %` : "—", b.dataset.gainSign = Se != null ? Se > 0 ? "positive" : Se < 0 ? "negative" : "neutral" : "neutral";
     }
-    S && (S.innerHTML = L("gain_pct", D, k, z)), d.dataset.positionCount = P.toString(), d.dataset.purchaseSum = H != null ? H.toString() : "", d.dataset.currentValue = v ? G.toString() : "", d.dataset.dayChange = v && F != null ? F.toString() : "", d.dataset.dayChangePct = v && $ != null ? $.toString() : "", d.dataset.gainAbs = N != null ? N.toString() : "", d.dataset.gainPct = D != null ? D.toString() : "", d.dataset.hasValue = v ? "true" : "false", d.dataset.fxUnavailable = x ? "true" : "false", d.dataset.coverageRatio = typeof f.coverage_ratio == "number" && Number.isFinite(f.coverage_ratio) ? f.coverage_ratio.toString() : "", d.dataset.provenance = typeof f.provenance == "string" ? f.provenance : "", d.dataset.metricRunUuid = typeof f.metric_run_uuid == "string" ? f.metric_run_uuid : "", s += 1;
+    S && (S.innerHTML = L("gain_pct", D, T, z)), d.dataset.positionCount = P.toString(), d.dataset.purchaseSum = H != null ? H.toString() : "", d.dataset.currentValue = v ? G.toString() : "", d.dataset.dayChange = v && F != null ? F.toString() : "", d.dataset.dayChangePct = v && $ != null ? $.toString() : "", d.dataset.gainAbs = N != null ? N.toString() : "", d.dataset.gainPct = D != null ? D.toString() : "", d.dataset.hasValue = v ? "true" : "false", d.dataset.fxUnavailable = x ? "true" : "false", d.dataset.coverageRatio = typeof f.coverage_ratio == "number" && Number.isFinite(f.coverage_ratio) ? f.coverage_ratio.toString() : "", d.dataset.provenance = typeof f.provenance == "string" ? f.provenance : "", d.dataset.metricRunUuid = typeof f.metric_run_uuid == "string" ? f.metric_run_uuid : "", s += 1;
   }
   if (s === 0)
     console.debug("handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.");
@@ -2317,7 +2317,7 @@ function Ye(e) {
   ], n = e.map((a) => {
     const i = ve(a.performance), o = typeof i?.gain_abs == "number" ? i.gain_abs : null, l = typeof i?.gain_pct == "number" ? i.gain_pct : null, s = vo(a), c = typeof a.purchase_value == "number" || typeof a.purchase_value == "string" ? a.purchase_value : null;
     return {
-      name: typeof a.name == "string" ? Te(a.name) : typeof a.name == "number" ? String(a.name) : "",
+      name: typeof a.name == "string" ? ke(a.name) : typeof a.name == "number" ? String(a.name) : "",
       current_holdings: typeof a.current_holdings == "number" || typeof a.current_holdings == "string" ? a.current_holdings : null,
       average_price: typeof a.purchase_value == "number" || typeof a.purchase_value == "string" ? a.purchase_value : null,
       purchase_value: c,
@@ -2417,7 +2417,7 @@ function Br(e) {
     const x = v.align === "right" ? ' class="align-right"' : "";
     n += `<th${x}>${v.label}</th>`;
   }), n += "</tr></thead><tbody>", e.forEach((v) => {
-    const x = Number.isFinite(v.position_count) ? v.position_count : 0, R = Number.isFinite(v.purchase_sum) ? v.purchase_sum : 0, j = v.hasValue && typeof v.current_value == "number" && Number.isFinite(v.current_value) ? v.current_value : null, k = j !== null, z = v.performance, W = typeof v.gain_abs == "number" ? v.gain_abs : typeof z?.gain_abs == "number" ? z.gain_abs : null, B = typeof v.gain_pct == "number" ? v.gain_pct : typeof z?.gain_pct == "number" ? z.gain_pct : null, G = z && typeof z == "object" ? z.day_change : null, K = typeof v.day_change_abs == "number" ? v.day_change_abs : G && typeof G == "object" ? G.value_change_eur ?? G.price_change_eur : null, Ie = typeof v.day_change_pct == "number" ? v.day_change_pct : G && typeof G == "object" && typeof G.change_pct == "number" ? G.change_pct : null, Se = v.fx_unavailable && k, Da = typeof v.coverage_ratio == "number" && Number.isFinite(v.coverage_ratio) ? v.coverage_ratio : "", $a = typeof v.provenance == "string" ? v.provenance : "", ka = typeof v.metric_run_uuid == "string" ? v.metric_run_uuid : "", ze = mt.has(v.uuid), Ta = ze ? "portfolio-toggle expanded" : "portfolio-toggle", En = `portfolio-details-${v.uuid}`, J = {
+    const x = Number.isFinite(v.position_count) ? v.position_count : 0, R = Number.isFinite(v.purchase_sum) ? v.purchase_sum : 0, j = v.hasValue && typeof v.current_value == "number" && Number.isFinite(v.current_value) ? v.current_value : null, T = j !== null, z = v.performance, W = typeof v.gain_abs == "number" ? v.gain_abs : typeof z?.gain_abs == "number" ? z.gain_abs : null, B = typeof v.gain_pct == "number" ? v.gain_pct : typeof z?.gain_pct == "number" ? z.gain_pct : null, G = z && typeof z == "object" ? z.day_change : null, K = typeof v.day_change_abs == "number" ? v.day_change_abs : G && typeof G == "object" ? G.value_change_eur ?? G.price_change_eur : null, Ie = typeof v.day_change_pct == "number" ? v.day_change_pct : G && typeof G == "object" && typeof G.change_pct == "number" ? G.change_pct : null, Se = v.fx_unavailable && T, Da = typeof v.coverage_ratio == "number" && Number.isFinite(v.coverage_ratio) ? v.coverage_ratio : "", $a = typeof v.provenance == "string" ? v.provenance : "", Ta = typeof v.metric_run_uuid == "string" ? v.metric_run_uuid : "", ze = mt.has(v.uuid), ka = ze ? "portfolio-toggle expanded" : "portfolio-toggle", En = `portfolio-details-${v.uuid}`, J = {
       fx_unavailable: v.fx_unavailable,
       purchase_value: R,
       current_value: j,
@@ -2425,7 +2425,7 @@ function Br(e) {
       day_change_pct: Ie,
       gain_abs: W,
       gain_pct: B
-    }, we = { hasValue: k }, Ra = L("purchase_value", J.purchase_value, J, we), La = L("current_value", J.current_value, J, we), Ma = L("day_change_abs", J.day_change_abs, J, we), Ha = L("day_change_pct", J.day_change_pct, J, we), Ia = L("gain_abs", J.gain_abs, J, we), za = L("gain_pct", J.gain_pct, J, we), xn = k && typeof B == "number" && Number.isFinite(B) ? `${re(B)} %` : "", Va = k && typeof B == "number" && Number.isFinite(B) ? B > 0 ? "positive" : B < 0 ? "negative" : "neutral" : "", Ua = k && typeof j == "number" && Number.isFinite(j) ? j : "", qa = k && typeof W == "number" && Number.isFinite(W) ? W : "", Wa = k && typeof B == "number" && Number.isFinite(B) ? B : "", Oa = k && typeof K == "number" && Number.isFinite(K) ? K : "", Ba = k && typeof Ie == "number" && Number.isFinite(Ie) ? Ie : "", ja = String(x);
+    }, we = { hasValue: T }, Ra = L("purchase_value", J.purchase_value, J, we), La = L("current_value", J.current_value, J, we), Ma = L("day_change_abs", J.day_change_abs, J, we), Ha = L("day_change_pct", J.day_change_pct, J, we), Ia = L("gain_abs", J.gain_abs, J, we), za = L("gain_pct", J.gain_pct, J, we), xn = T && typeof B == "number" && Number.isFinite(B) ? `${re(B)} %` : "", Va = T && typeof B == "number" && Number.isFinite(B) ? B > 0 ? "positive" : B < 0 ? "negative" : "neutral" : "", Ua = T && typeof j == "number" && Number.isFinite(j) ? j : "", qa = T && typeof W == "number" && Number.isFinite(W) ? W : "", Wa = T && typeof B == "number" && Number.isFinite(B) ? B : "", Oa = T && typeof K == "number" && Number.isFinite(K) ? K : "", Ba = T && typeof Ie == "number" && Number.isFinite(Ie) ? Ie : "", ja = String(x);
     let $t = "";
     xn && ($t = ` data-gain-pct="${t(xn)}" data-gain-sign="${t(Va)}"`), Se && ($t += ' data-partial="true"'), n += `<tr class="portfolio-row"
                   data-portfolio="${v.uuid}"
@@ -2436,17 +2436,17 @@ function Br(e) {
                   data-day-change-pct="${t(Ba)}"
                   data-gain-abs="${t(qa)}"
                 data-gain-pct="${t(Wa)}"
-                data-has-value="${k ? "true" : "false"}"
+                data-has-value="${T ? "true" : "false"}"
                 data-fx-unavailable="${v.fx_unavailable ? "true" : "false"}"
                 data-coverage-ratio="${t(Da)}"
                 data-provenance="${t($a)}"
-                data-metric-run-uuid="${t(ka)}">`;
-    const Ka = Te(v.name), Ya = Hr(Wr(v.badges), {
+                data-metric-run-uuid="${t(Ta)}">`;
+    const Ka = ke(v.name), Ya = Hr(Wr(v.badges), {
       containerClass: "portfolio-badges"
     });
     n += `<td>
         <button type="button"
-                class="${Ta}"
+                class="${ka}"
                 data-portfolio="${v.uuid}"
                 aria-expanded="${ze ? "true" : "false"}"
                 aria-controls="${En}">
@@ -2555,8 +2555,8 @@ function jr(e) {
   for (const R of r) {
     const j = Ue(R.dataset.positionCount);
     j != null && (a += j), R.dataset.fxUnavailable === "true" && (f = !0);
-    const k = R.dataset.hasValue;
-    if (!!(k === "false" || k === "0" || k === "" || k == null)) {
+    const T = R.dataset.hasValue;
+    if (!!(T === "false" || T === "0" || T === "" || T == null)) {
       p = !1;
       continue;
     }
@@ -2865,7 +2865,7 @@ async function Kr(e, t, n) {
   const r = await ii(t, n);
   Dr(r.accounts);
   const a = Mr(), i = await si(t, n);
-  ki(i.portfolios);
+  Ti(i.portfolios);
   const o = Ui();
   let l = "";
   try {
@@ -3115,7 +3115,7 @@ function ra(e) {
 function ne(e, t, n) {
   return !Number.isFinite(e) || e < t ? t : e > n ? n : e;
 }
-function ko(e, t) {
+function To(e, t) {
   if (e.length === 0)
     return "";
   const n = [];
@@ -3126,7 +3126,7 @@ function ko(e, t) {
   const r = e[0], i = `L${e[e.length - 1].x.toFixed(2)} ${t.toFixed(2)} L${r.x.toFixed(2)} ${t.toFixed(2)} Z`;
   return `${n.join(" ")} ${i}`;
 }
-function To(e) {
+function ko(e) {
   if (e.length === 0)
     return "";
   const t = [];
@@ -3435,9 +3435,9 @@ function Sn(e, t = {}) {
     n.linePath.setAttribute("d", u), n.areaPath && n.areaPath.setAttribute("d", ""), n.focusCircle && (n.focusCircle.setAttribute("cx", s.x.toFixed(2)), n.focusCircle.setAttribute("cy", s.y.toFixed(2)), n.focusCircle.style.opacity = "1"), n.focusLine && (n.focusLine.style.opacity = "0"), zt(n), Ht(n), It(n);
     return;
   }
-  const l = To(i);
+  const l = ko(i);
   if (n.linePath.setAttribute("d", l), n.areaPath && o) {
-    const s = n.margin.top + o.boundedHeight, c = ko(i, s);
+    const s = n.margin.top + o.boundedHeight, c = To(i, s);
     n.areaPath.setAttribute("d", c);
   }
   zt(n), Ht(n), It(n);
@@ -4494,16 +4494,16 @@ function Pt(e, t, n = null) {
 }
 function An(e) {
   const t = M(e?.last_price_native) ?? M(e?.last_price?.native) ?? null;
-  if (T(t))
+  if (k(t))
     return t;
   if (Ae(e?.currency_code) === "EUR") {
     const r = M(e?.last_price_eur);
-    if (T(r))
+    if (k(r))
       return r;
   }
   return null;
 }
-function ks(e) {
+function Ts(e) {
   if (!e)
     return null;
   const n = e.last_price_fetched_at, r = St(n);
@@ -4518,9 +4518,9 @@ function an(e, t) {
     ...c
   })));
   const r = n.slice(), a = An(t);
-  if (!T(a))
+  if (!k(a))
     return r;
-  const i = ks(t) ?? Date.now(), o = new Date(i);
+  const i = Ts(t) ?? Date.now(), o = new Date(i);
   if (Number.isNaN(o.getTime()))
     return r;
   const l = nn(Re(o));
@@ -4540,41 +4540,41 @@ function an(e, t) {
     close: a
   }), r;
 }
-function T(e) {
+function k(e) {
   return typeof e == "number" && Number.isFinite(e);
 }
 function ie(e) {
   return typeof e == "number" && Number.isFinite(e) && e > 0;
 }
 function je(e, t, n) {
-  if (!T(e) || !T(t))
+  if (!k(e) || !k(t))
     return !1;
   const r = Math.abs(e - t), a = Math.max(Math.abs(e), Math.abs(t), 1);
   return r <= a * 1e-4;
 }
-function Ts(e, t) {
-  return !T(t) || t === 0 || !T(e) ? null : bi((e - t) / t * 100);
+function ks(e, t) {
+  return !k(t) || t === 0 || !k(e) ? null : bi((e - t) / t * 100);
 }
 function _a(e, t) {
   if (e.length === 0)
     return { priceChange: null, priceChangePct: null };
   const n = e[0], r = M(n.close);
-  if (!T(r) || r === 0)
+  if (!k(r) || r === 0)
     return { priceChange: null, priceChangePct: null };
   const a = e[e.length - 1], i = M(a.close), o = M(t) ?? i;
-  if (!T(o))
+  if (!k(o))
     return { priceChange: null, priceChangePct: null };
-  const l = o - r, s = Object.is(l, -0) ? 0 : l, c = Ts(o, r);
+  const l = o - r, s = Object.is(l, -0) ? 0 : l, c = ks(o, r);
   return { priceChange: s, priceChangePct: c };
 }
 function wn(e, t) {
-  if (!T(e) || e === 0)
+  if (!k(e) || e === 0)
     return "neutral";
   const n = 0.5 / Math.pow(10, t);
   return Math.abs(e) < n ? "neutral" : e > 0 ? "positive" : "negative";
 }
 function Rs(e, t) {
-  if (!T(e))
+  if (!k(e))
     return '<span class="value neutral">—</span>';
   const n = fe(e);
   if (n === "—")
@@ -4583,7 +4583,7 @@ function Rs(e, t) {
   return `<span class="value ${r}">${n}${a}</span>`;
 }
 function Ls(e) {
-  return T(e) ? `<span class="value ${wn(e, 2)} value--percentage">${re(e)}&nbsp;%</span>` : '<span class="value neutral">—</span>';
+  return k(e) ? `<span class="value ${wn(e, 2)} value--percentage">${re(e)}&nbsp;%</span>` : '<span class="value neutral">—</span>';
 }
 function ba(e, t, n, r) {
   const a = e, i = a.length > 0 ? a : "Zeitraum";
@@ -4692,7 +4692,7 @@ function zs(e) {
         class="news-prompt-button"
         data-symbol="${Sa(e)}"
       >
-        Check recent news via ChatGPT
+        Copy prompt &amp; open ChatGPT
       </button>
     </div>
   `;
@@ -4744,24 +4744,24 @@ function Us(e) {
   }
 }
 function qs(e, t, n) {
-  const r = Me(e?.average_cost), a = r?.account ?? (T(t) ? t : M(t));
-  if (!T(a))
+  const r = Me(e?.average_cost), a = r?.account ?? (k(t) ? t : M(t));
+  if (!k(a))
     return null;
   const i = e?.account_currency_code ?? e?.account_currency;
   if (typeof i == "string" && i.trim())
     return i.trim().toUpperCase();
-  const o = Ae(e?.currency_code) ?? "", l = r?.security ?? r?.native ?? (T(n) ? n : M(n)), s = hn(e?.aggregation);
-  if (o && T(l) && je(a, l))
+  const o = Ae(e?.currency_code) ?? "", l = r?.security ?? r?.native ?? (k(n) ? n : M(n)), s = hn(e?.aggregation);
+  if (o && k(l) && je(a, l))
     return o;
   const c = M(s?.purchase_total_security) ?? M(e?.purchase_total_security), u = M(s?.purchase_total_account) ?? M(e?.purchase_total_account);
   let p = null;
-  if (T(c) && c !== 0 && T(u) && (p = u / c), r?.source === "eur_total")
+  if (k(c) && c !== 0 && k(u) && (p = u / c), r?.source === "eur_total")
     return "EUR";
   const d = r?.eur;
-  if (T(d) && je(a, d))
+  if (k(d) && je(a, d))
     return "EUR";
   const g = M(e?.purchase_value_eur);
-  return T(g) ? "EUR" : p != null && je(p, 1) ? o || null : o === "EUR" ? "EUR" : o || "EUR";
+  return k(g) ? "EUR" : p != null && je(p, 1) ? o || null : o === "EUR" ? "EUR" : o || "EUR";
 }
 function or(e) {
   return typeof e != "number" || !Number.isFinite(e) || e <= 0 ? null : e.toLocaleString("de-DE", {
@@ -4836,7 +4836,7 @@ function Bs(e, t) {
   const p = Ws(e), f = Os(p), d = [`FX-Kurs (Kauf): 1 ${n} = ${c} ${l}`];
   u && d.push(`1 ${l} = ${u} ${n}`);
   const g = [], m = r.source, _ = m in Wt ? Wt[m] : Wt.aggregation;
-  if (g.push(`Quelle: ${_}`), T(r.coverage_ratio)) {
+  if (g.push(`Quelle: ${_}`), k(r.coverage_ratio)) {
     const y = Math.min(Math.max(r.coverage_ratio * 100, 0), 100);
     g.push(
       `Abdeckung: ${y.toLocaleString("de-DE", {
@@ -4853,28 +4853,28 @@ function sr(e) {
   if (!e)
     return null;
   const t = Me(e.average_cost), n = t?.native ?? t?.security ?? null;
-  return T(n) ? n : null;
+  return k(n) ? n : null;
 }
 function js(e) {
   if (!e)
     return '<div class="meta-error">Keine Snapshot-Daten verfügbar.</div>';
-  const t = e.currency_code || "EUR", n = e.total_holdings_precise ?? e.total_holdings, r = Cn(n), a = e.last_price_native ?? e.last_price?.native ?? e.last_price_eur, i = fe(a), o = i === "—" ? null : `${i}${`&nbsp;${t}`}`, l = M(e.market_value_eur) ?? M(e.current_value_eur) ?? null, s = Me(e.average_cost), c = s?.native ?? s?.security ?? null, u = s?.eur ?? null, f = s?.account ?? null ?? u, d = ve(e.performance), g = d?.day_change ?? null, m = g?.price_change_native ?? null, _ = g?.price_change_eur ?? null, h = T(m) ? m : _, y = T(m) ? t : "EUR", b = (k, z = "") => {
+  const t = e.currency_code || "EUR", n = e.total_holdings_precise ?? e.total_holdings, r = Cn(n), a = e.last_price_native ?? e.last_price?.native ?? e.last_price_eur, i = fe(a), o = i === "—" ? null : `${i}${`&nbsp;${t}`}`, l = M(e.market_value_eur) ?? M(e.current_value_eur) ?? null, s = Me(e.average_cost), c = s?.native ?? s?.security ?? null, u = s?.eur ?? null, f = s?.account ?? null ?? u, d = ve(e.performance), g = d?.day_change ?? null, m = g?.price_change_native ?? null, _ = g?.price_change_eur ?? null, h = k(m) ? m : _, y = k(m) ? t : "EUR", b = (T, z = "") => {
     const W = ["value"];
-    return z && W.push(...z.split(" ").filter(Boolean)), `<span class="${W.join(" ")}">${k}</span>`;
-  }, S = (k = "") => {
+    return z && W.push(...z.split(" ").filter(Boolean)), `<span class="${W.join(" ")}">${T}</span>`;
+  }, S = (T = "") => {
     const z = ["value--missing"];
-    return k && z.push(k), b("—", z.join(" "));
-  }, P = (k, z = "") => {
-    if (!T(k))
+    return T && z.push(T), b("—", z.join(" "));
+  }, P = (T, z = "") => {
+    if (!k(T))
       return S(z);
     const W = ["value--gain"];
-    return z && W.push(z), b(Za(k), W.join(" "));
-  }, C = (k, z = "") => {
-    if (!T(k))
+    return z && W.push(z), b(Za(T), W.join(" "));
+  }, C = (T, z = "") => {
+    if (!k(T))
       return S(z);
     const W = ["value--gain-percentage"];
-    return z && W.push(z), b(Ja(k), W.join(" "));
-  }, w = o ? b(o, "value--price") : S("value--price"), N = r === "—" ? S("value--holdings") : b(r, "value--holdings"), D = T(l) ? b(`${re(l)}&nbsp;€`, "value--market-value") : S("value--market-value"), H = T(h) ? b(
+    return z && W.push(z), b(Ja(T), W.join(" "));
+  }, w = o ? b(o, "value--price") : S("value--price"), N = r === "—" ? S("value--holdings") : b(r, "value--holdings"), D = k(l) ? b(`${re(l)}&nbsp;€`, "value--market-value") : S("value--market-value"), H = k(h) ? b(
     Hs(h, y),
     "value--gain value--absolute"
   ) : S("value--absolute"), A = C(
@@ -4893,8 +4893,8 @@ function js(e) {
   ), $ = Bs(
     e,
     F
-  ), Y = $ ? ` title="${Sa($)}"` : "", v = [], x = T(u);
-  T(c) ? v.push(
+  ), Y = $ ? ` title="${Sa($)}"` : "", v = [], x = k(u);
+  k(c) ? v.push(
     b(
       `${fe(c)}${`&nbsp;${t}`}`,
       "value--average value--average-native"
@@ -4903,7 +4903,7 @@ function js(e) {
     S("value--average value--average-native")
   );
   let R = null, j = null;
-  return x && (t !== "EUR" || !T(c) || !je(u, c)) ? (R = u, j = "EUR") : T(f) && F && (F !== t || !je(f, c ?? NaN)) && (R = f, j = F), R != null && T(R) && v.push(
+  return x && (t !== "EUR" || !k(c) || !je(u, c)) ? (R = u, j = "EUR") : k(f) && F && (F !== t || !je(f, c ?? NaN)) && (R = f, j = F), R != null && k(R) && v.push(
     b(
       `${fe(R)}${j ? `&nbsp;${j}` : ""}`,
       "value--average value--average-eur"
@@ -4973,7 +4973,7 @@ function Ys(e, t, {
   baseline: r,
   markers: a
 } = {}) {
-  const i = e.clientWidth || e.offsetWidth || 0, o = i > 0 ? i : 640, l = Math.min(Math.max(Math.floor(o * 0.5), 240), 440), s = (n || "").toUpperCase() || "EUR", c = T(r) ? r : null, u = Math.max(48, Math.min(72, Math.round(o * 0.075))), p = Math.max(28, Math.min(56, Math.round(o * 0.05))), f = Math.max(40, Math.min(64, Math.round(l * 0.14)));
+  const i = e.clientWidth || e.offsetWidth || 0, o = i > 0 ? i : 640, l = Math.min(Math.max(Math.floor(o * 0.5), 240), 440), s = (n || "").toUpperCase() || "EUR", c = k(r) ? r : null, u = Math.max(48, Math.min(72, Math.round(o * 0.075))), p = Math.max(28, Math.min(56, Math.round(o * 0.05))), f = Math.max(40, Math.min(64, Math.round(l * 0.14)));
   return {
     width: o,
     height: l,
@@ -5184,16 +5184,19 @@ Ticker: ${p}` : `Ticker: ${p}`, link: g };
         console.warn("News-Prompt: Kein Ticker verfügbar");
         return;
       }
-      if (!s.classList.contains("loading")) {
-        s.disabled = !0, s.classList.add("loading");
-        try {
-          const { body: f, link: d } = c(p);
-          await Vs(f) || console.warn("News-Prompt: Clipboard unavailable – prompt could not be copied"), Us(d), !i && !o && l();
-        } catch (f) {
-          console.error("News-Prompt: Kopiervorgang fehlgeschlagen", f);
-        } finally {
-          s.classList.remove("loading"), s.disabled = !1;
-        }
+      if (s.classList.contains("loading"))
+        return;
+      s.disabled = !0, s.classList.add("loading");
+      const f = s.textContent;
+      try {
+        const { body: d, link: g } = c(p), m = await Vs(d);
+        m ? s.textContent = "✅ Copied! Opening..." : console.warn("News-Prompt: Clipboard unavailable – prompt could not be copied"), m && await new Promise((_) => setTimeout(_, 800)), Us(g), !i && !o && l();
+      } catch (d) {
+        console.error("News-Prompt: Kopiervorgang fehlgeschlagen", d);
+      } finally {
+        s.classList.remove("loading"), s.disabled = !1, f && setTimeout(() => {
+          s.textContent = f;
+        }, 2e3);
       }
     };
     s.addEventListener("click", () => {
@@ -5732,7 +5735,7 @@ class vc extends HTMLElement {
     if (!this._hass || this._initialized)
       return;
     this._panel || (this._panel = wa(this._hass.panels ?? null));
-    const t = kn(this._hass, this._panel);
+    const t = Tn(this._hass, this._panel);
     if (!t) {
       this._entryIdWaitWarned || (console.warn("PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration."), this._entryIdWaitWarned = !0);
       return;
@@ -5786,7 +5789,7 @@ class vc extends HTMLElement {
     this._unsubscribeEvents = null;
   }
   _handleBusEvent(t) {
-    const n = kn(this._hass, this._panel);
+    const n = Tn(this._hass, this._panel);
     if (!n)
       return;
     const r = t.data;
@@ -5932,4 +5935,4 @@ export {
   wc as unregisterPanelHost,
   jr as updatePortfolioFooterFromDom
 };
-//# sourceMappingURL=dashboard.cgjNDpqs.js.map
+//# sourceMappingURL=dashboard.zlhjJD-c.js.map

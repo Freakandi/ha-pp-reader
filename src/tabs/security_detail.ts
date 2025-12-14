@@ -1101,7 +1101,7 @@ function buildNewsPromptButton(tickerSymbol: string): string {
         class="news-prompt-button"
         data-symbol="${safeSymbol}"
       >
-        Check recent news via ChatGPT
+        Copy prompt &amp; open ChatGPT
       </button>
     </div>
   `;
@@ -2137,13 +2137,23 @@ function scheduleNewsPromptSetup(options: {
       }
       button.disabled = true;
       button.classList.add('loading');
+      const originalText = button.textContent;
+
       try {
         const { body, link } = buildPromptPayload(symbol);
 
         const copied = await copyTextToClipboard(body);
-        if (!copied) {
+        if (copied) {
+          button.textContent = '✅ Copied! Opening...';
+        } else {
           console.warn('News-Prompt: Clipboard unavailable – prompt could not be copied');
         }
+
+        // Short delay to let the user see the feedback before opening the tab
+        if (copied) {
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+
         openNewsLink(link);
 
         if (!cachedPrompt && !promptPrefetchFailed) {
@@ -2154,6 +2164,11 @@ function scheduleNewsPromptSetup(options: {
       } finally {
         button.classList.remove('loading');
         button.disabled = false;
+        if (originalText) {
+          setTimeout(() => {
+            button.textContent = originalText;
+          }, 2000);
+        }
       }
     };
 
