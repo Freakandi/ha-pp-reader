@@ -1,0 +1,260 @@
+.date-range-picker {
+    position: relative;
+    display: inline-block;
+    font-family: var(--paper-font-body1_-_font-family, "Roboto", sans-serif);
+}
+
+.drp-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card-background-color, #fff);
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-size: 0.95rem;
+    color: var(--primary-text-color, #212121);
+}
+
+.drp-trigger:hover {
+    border-color: var(--primary-color, #03a9f4);
+}
+
+.drp-trigger.active {
+    border-color: var(--primary-color, #03a9f4);
+    box-shadow: 0 0 0 2px rgba(3, 169, 244, 0.2);
+}
+
+.drp-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.6;
+}
+
+.drp-popover {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: var(--card-background-color, #fff);
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    display: none;
+    z-index: 1000;
+    flex-direction: row;
+    overflow: hidden;
+    width: max-content;
+}
+
+.drp-popover.open {
+    display: flex;
+}
+
+/* Sidebar */
+.drp-sidebar {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    border-right: 1px solid var(--divider-color, #e0e0e0);
+    background: var(--secondary-background-color, #f5f5f5);
+    min-width: 140px;
+    gap: 4px;
+}
+
+.drp-preset-btn {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--primary-text-color, #212121);
+    transition: background 0.2s;
+}
+
+.drp-preset-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.drp-preset-btn.active {
+    background: var(--primary-color, #03a9f4);
+    color: #fff;
+}
+
+/* Calendars Area */
+.drp-main {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.drp-calendars {
+    display: flex;
+    gap: 24px;
+}
+
+.drp-calendar {
+    width: 280px;
+}
+
+.drp-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.drp-nav-btn {
+    background: transparent;
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--secondary-text-color, #757575);
+}
+
+.drp-nav-btn:hover {
+    color: var(--primary-text-color, #212121);
+    border-color: var(--secondary-text-color, #757575);
+}
+
+.drp-month-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--primary-text-color, #212121);
+}
+
+.drp-days-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.drp-day-name {
+    font-size: 0.8rem;
+    color: var(--secondary-text-color, #757575);
+    font-weight: 500;
+}
+
+.drp-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    row-gap: 2px;
+}
+
+.drp-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.1s;
+    color: var(--primary-text-color, #212121);
+    position: relative;
+    z-index: 1;
+}
+
+.drp-day:hover:not(.empty):not(.disabled) {
+    background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1);
+}
+
+/* Range Highlighting */
+.drp-day.in-range {
+    background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1);
+    border-radius: 0;
+}
+
+.drp-day.range-start {
+    background: var(--primary-color, #03a9f4);
+    color: #fff;
+    border-top-left-radius: 50%;
+    border-bottom-left-radius: 50%;
+}
+
+.drp-day.range-end {
+    background: var(--primary-color, #03a9f4);
+    color: #fff;
+    border-top-right-radius: 50%;
+    border-bottom-right-radius: 50%;
+}
+
+.drp-day.range-start.range-end {
+    border-radius: 50%;
+}
+
+.drp-day.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.drp-day.empty {
+    cursor: default;
+}
+
+/* Footer with inputs and actions */
+.drp-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--divider-color, #e0e0e0);
+    padding-top: 16px;
+}
+
+.drp-inputs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary-text-color, #212121);
+}
+
+.drp-date-input {
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 6px;
+    padding: 6px 10px;
+    width: 110px;
+    font-size: 0.9rem;
+    text-align: center;
+    background: var(--card-background-color, #fff);
+    color: var(--primary-text-color, #212121);
+}
+
+.drp-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.drp-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+.drp-btn-cancel {
+    background: transparent;
+    color: var(--primary-text-color, #212121);
+    border-color: var(--divider-color, #e0e0e0);
+}
+
+.drp-btn-apply {
+    background: var(--primary-color, #03a9f4);
+    color: #fff;
+}
+
+.drp-btn-apply:hover {
+    opacity: 0.9;
+}

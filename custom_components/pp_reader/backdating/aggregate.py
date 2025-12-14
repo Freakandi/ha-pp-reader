@@ -28,6 +28,7 @@ class DailyWealthAggregate:
     outbound_transfers_eur: float
     realized_gains_eur: float
     unrealized_gains_eur: float
+    unrealized_price_gains_eur: float
     invested_capital_eur: float
     performance_neutral_movements: float
     fees_eur: float

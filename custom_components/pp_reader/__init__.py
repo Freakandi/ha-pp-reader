@@ -805,85 +805,68 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
 
 
+
+def _cleanup_service_state(
+    store: dict[str, Any],
+    cancel_key: str,
+    key_prefix: str | None,
+    service_label: str,
+    entry_id: str,
+) -> None:
+    """Cancel a scheduled task and remove related keys from the store."""
+    try:
+        cancel_cb = store.get(cancel_key)
+        if cancel_cb:
+            try:
+                cancel_cb()
+                _LOGGER.debug(
+                    "%s: Intervall-Task gecancelt (entry_id=%s)",
+                    service_label,
+                    entry_id,
+                )
+            except CANCEL_EXCEPTIONS:
+                _LOGGER.warning(
+                    "%s: Fehler beim Cancel des Intervall-Tasks",
+                    service_label,
+                    exc_info=True,
+                )
+
+        if key_prefix:
+            keys_to_remove = [k for k in list(store.keys()) if k.startswith(key_prefix)]
+            for k in keys_to_remove:
+                store.pop(k, None)
+
+            if keys_to_remove:
+                _LOGGER.debug(
+                    "%s: State-Cleanup abgeschlossen removed_keys=%s entry_id=%s",
+                    service_label,
+                    keys_to_remove,
+                    entry_id,
+                )
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "%s: Unerwarteter Fehler beim Unload-Cleanup",
+            service_label,
+            exc_info=True,
+        )
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     domain_entries = hass.data.get(DOMAIN)
     store = domain_entries.get(entry.entry_id) if domain_entries else None
     if store:
-        # --- NEU: Preis-Service Cleanup (unload_cleanup Item) -----------------
-        try:
-            cancel_cb = store.get("price_task_cancel")
-            if cancel_cb:
-                try:
-                    cancel_cb()
-                    _LOGGER.debug(
-                        "Preis-Service: Intervall-Task gecancelt (entry_id=%s)",
-                        entry.entry_id,
-                    )
-                except CANCEL_EXCEPTIONS:
-                    _LOGGER.warning(
-                        "Preis-Service: Fehler beim Cancel des Intervall-Tasks",
-                        exc_info=True,
-                    )
-            # Preis-bezogene Keys entfernen (nur price_*).
-            # Andere Einträge bleiben bis zur Gesamtentfernung bestehen.
-            price_keys = [k for k in list(store.keys()) if k.startswith("price_")]
-            for k in price_keys:
-                store.pop(k, None)
-            _LOGGER.debug(
-                (
-                    "Preis-Service: State-Cleanup abgeschlossen removed_keys=%s "
-                    "entry_id=%s"
-                ),
-                price_keys,
-                entry.entry_id,
-            )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "Preis-Service: Unerwarteter Fehler beim Unload-Cleanup",
-                exc_info=True,
-            )
-        # ----------------------------------------------------------------------
-        try:
-            fx_cancel = store.get("fx_task_cancel")
-            if fx_cancel:
-                try:
-                    fx_cancel()
-                    _LOGGER.debug(
-                        "FX-Service: Intervall-Task gecancelt (entry_id=%s)",
-                        entry.entry_id,
-                    )
-                except CANCEL_EXCEPTIONS:
-                    _LOGGER.warning(
-                        "FX-Service: Fehler beim Cancel des Intervall-Tasks",
-                        exc_info=True,
-                    )
-            fx_keys = [k for k in list(store.keys()) if k.startswith("fx_")]
-            for key in fx_keys:
-                store.pop(key, None)
-            if fx_keys:
-                _LOGGER.debug(
-                    (
-                        "FX-Service: State-Cleanup abgeschlossen "
-                        "removed_keys=%s entry_id=%s"
-                    ),
-                    fx_keys,
-                    entry.entry_id,
-                )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "FX-Service: Unerwarteter Fehler beim Unload-Cleanup",
-                exc_info=True,
-            )
-        try:
-            cancel_history = store.get("history_task_cancel")
-            if cancel_history:
-                cancel_history()
-                _LOGGER.debug(
-                    "Price-History Scheduler gestoppt (entry_id=%s)", entry.entry_id
-                )
-        except Exception:  # noqa: BLE001
-            _LOGGER.debug("History-Scheduler: Fehler beim Cleanup", exc_info=True)
+        _cleanup_service_state(
+            store, "price_task_cancel", "price_", "Preis-Service", entry.entry_id
+        )
+        _cleanup_service_state(
+            store, "fx_task_cancel", "fx_", "FX-Service", entry.entry_id
+        )
+
+        # History task: Only cancel, no prefix cleanup defined in original
+        _cleanup_service_state(
+            store, "history_task_cancel", None, "History-Scheduler", entry.entry_id
+        )
 
     # Gesamten Entry-State löschen wenn Plattformen entladen
     if domain_entries is not None:

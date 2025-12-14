@@ -35,6 +35,7 @@ class TaxLot:
     date: date
     shares: float
     cost_per_share_eur: float
+    cost_per_share_native: float
     original_shares: float
 
 
@@ -51,6 +52,8 @@ class HoldingValuation:
     price_eur: float | None
     value_eur: float | None
     purchase_value_eur: float | None
+    purchase_value_native: float | None
+    unrealized_price_gains_eur: float | None
     fx_rate: float | None
     stale_price: bool
 
@@ -67,6 +70,7 @@ class DailyHoldingsSnapshot:
     total_wealth_eur: float
     invested_capital_eur: float
     realized_gains_eur: float
+    unrealized_price_gains_eur: float
     portfolio_realized_gains: dict[str, float]
     performance_neutral_movements: float
 
@@ -209,6 +213,15 @@ def _compute_daily_holdings_snapshots_sync(
             sum(v["purchase_value_eur"] for v in holdings.values()), 4
         )
 
+        unrealized_price_gains = round(
+            sum(
+                v.unrealized_price_gains_eur
+                for v in valuations
+                if v.unrealized_price_gains_eur is not None
+            ),
+            4,
+        )
+
         snapshots.append(
             DailyHoldingsSnapshot(
                 date=date_iso,
@@ -219,6 +232,7 @@ def _compute_daily_holdings_snapshots_sync(
                 total_wealth_eur=total_wealth,
                 invested_capital_eur=invested_capital,
                 realized_gains_eur=round(daily_realized_gains, 4),
+                unrealized_price_gains_eur=unrealized_price_gains,
                 portfolio_realized_gains={
                     k: round(v, 4) for k, v in daily_portfolio_gains.items()
                 },
@@ -295,10 +309,7 @@ def _load_relevant_transactions(
         # Removed retired check to include history
 
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
-            # Very verbose if enabled
-            # _LOGGER.debug(  # noqa: ERA001
-            #     "Skipping Tx %s type %s - Not relevant type", tx.uuid, tx.type
-            # )
+
             continue
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
@@ -430,6 +441,7 @@ def _build_holdings_valuations(
     for (portfolio_uuid, security_uuid), details in holdings:
         shares = details["shares"]
         purchase_value_eur = details.get("purchase_value_eur")
+        purchase_value_native = details.get("purchase_value_native")
 
         security_meta = securities.get(security_uuid, {})
         currency = security_meta.get("currency") or "EUR"
@@ -443,10 +455,21 @@ def _build_holdings_valuations(
         fx_rate: float | None = 1.0 if currency == "EUR" else fx_rates.get(currency)
         value_eur: float | None = None
         price_eur: float | None = None
+        unrealized_price_gains_eur: float | None = None
 
         if price_native is not None and fx_rate:
             price_eur = round(price_native / fx_rate, 6)
             value_eur = round(shares * price_eur, 6)
+
+            # Calculate Unrealized Gain from Price Movement (Native Delta * FX)
+            # This strips out the pure FX gain on the principal.
+            if purchase_value_native is not None:
+                 market_value_native = shares * price_native
+                 native_gain = market_value_native - purchase_value_native
+                 unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
+            elif currency == "EUR":
+                 unrealized_price_gains_eur = round(value_eur - (purchase_value_eur or 0), 6)
+
 
         valuations.append(
             HoldingValuation(
@@ -463,6 +486,12 @@ def _build_holdings_valuations(
                     if purchase_value_eur is not None
                     else 0.0
                 ),
+                purchase_value_native=(
+                    round(purchase_value_native, 6)
+                    if purchase_value_native is not None
+                    else 0.0
+                ),
+                unrealized_price_gains_eur=unrealized_price_gains_eur,
                 fx_rate=fx_rate,
                 stale_price=stale,
             )
@@ -504,18 +533,21 @@ def _apply_transaction_update(
     tx_date: date,
 ) -> tuple[float, float]:
     """
-    Apply a single transaction to holdings state and return
-    (realized_gain, neutral_movement).
+    Apply a single transaction to holdings state.
+
+    Returns (realized_gain, neutral_movement).
     """
     key = (portfolio_uuid, security_uuid)
     # Entry structure:
     # - "shares": float
     # - "purchase_value_eur": float (Sum of cost of remaining lots)
+    # - "purchase_value_native": float (Sum of cost of remaining lots in native currency)
     # - "lots": deque[TaxLot]
     if key not in holdings:
         holdings[key] = {
             "shares": 0.0,
             "purchase_value_eur": 0.0,
+            "purchase_value_native": 0.0,
             "lots": deque(),
         }
 
@@ -524,11 +556,25 @@ def _apply_transaction_update(
 
     # Resolving value of transaction in EUR at daily rate
     tx_val_eur = 0.0
+    tx_val_native = 0.0
     if amount > 0:
         tx_currency = (currency or "EUR").strip().upper()
+        # For Type 2/3 (Delivery/Transfer), amount is value.
+        # For Type 0/1 (Buy/Sell), amount is value.
+        # This value is in tx_currency.
+
+        # Native value (in Security Currency units) needs conversion if Tx currency != Security currency?
+        # Assuming for now Tx Currency matches Security Currency or is acceptable proxy.
+        # Ideally we'd need Security Metadata here to know its currency, but explicit "currency" arg
+        # comes from the transaction record.
+
+        # Determine native value (units of security currency)
+        # We invoke cent_to_eur effectively as cent_to_unit here.
+        tx_val_native = cent_to_eur(amount)
+
         fx = 1.0 if tx_currency == "EUR" else fx_rates.get(tx_currency)
         if fx:
-            tx_val_eur = cent_to_eur(amount) / fx
+            tx_val_eur = tx_val_native / fx
 
     neutral_movement = 0.0
     # Accumulate Performance Neutral Movements (Ein-/Auslieferung)
@@ -548,13 +594,16 @@ def _apply_transaction_update(
         # Cost basis for this specific buy
         # Note: For inbound delivery (Type 2), tx_val_eur is the cost basis we assume.
         entry["purchase_value_eur"] += tx_val_eur
+        entry["purchase_value_native"] = entry.get("purchase_value_native", 0.0) + tx_val_native
 
-        cost_per_share = tx_val_eur / delta_shares if delta_shares > 0 else 0.0
+        cost_per_share_eur = tx_val_eur / delta_shares if delta_shares > 0 else 0.0
+        cost_per_share_native = tx_val_native / delta_shares if delta_shares > 0 else 0.0
 
         new_lot = TaxLot(
             date=tx_date,
             shares=delta_shares,
-            cost_per_share_eur=cost_per_share,
+            cost_per_share_eur=cost_per_share_eur,
+            cost_per_share_native=cost_per_share_native,
             original_shares=delta_shares,
         )
         lots.append(new_lot)
@@ -564,7 +613,8 @@ def _apply_transaction_update(
         shares_to_sell = abs(delta_shares)
         entry["shares"] -= shares_to_sell
 
-        total_cost_basis_sold = 0.0
+        total_cost_basis_sold_eur = 0.0
+        total_cost_basis_sold_native = 0.0
 
         while shares_to_sell > _EPSILON and lots:
             current_lot = lots[0]
@@ -572,36 +622,37 @@ def _apply_transaction_update(
             if current_lot.shares <= shares_to_sell:
                 # Consume entire lot
                 shares_from_lot = current_lot.shares
-                cost_from_lot = shares_from_lot * current_lot.cost_per_share_eur
+                cost_from_lot_eur = shares_from_lot * current_lot.cost_per_share_eur
+                cost_from_lot_native = shares_from_lot * current_lot.cost_per_share_native
 
-                total_cost_basis_sold += cost_from_lot
+                total_cost_basis_sold_eur += cost_from_lot_eur
+                total_cost_basis_sold_native += cost_from_lot_native
                 shares_to_sell -= shares_from_lot
                 lots.popleft()  # Remove exhausted lot
             else:
-                # Python doesn't support modifying dataclass fields if frozen?
-                # slots=True is mutable by default unless frozen=True is set.
-                # However, replacement is cleaner.
-
+                # Partial consumption
                 shares_from_lot = shares_to_sell
-                cost_from_lot = shares_from_lot * current_lot.cost_per_share_eur
+                cost_from_lot_eur = shares_from_lot * current_lot.cost_per_share_eur
+                cost_from_lot_native = shares_from_lot * current_lot.cost_per_share_native
 
-                total_cost_basis_sold += cost_from_lot
+                total_cost_basis_sold_eur += cost_from_lot_eur
+                total_cost_basis_sold_native += cost_from_lot_native
 
                 # Update lot with remaining shares
                 current_lot.shares -= shares_to_sell
                 shares_to_sell = 0.0
                 # Lot remains at head of queue
 
-        # If we ran out of lots but still sold shares (data inconsistencies)
-        # We assume 0 cost basis for the excess.
-
         # Update aggregate purchase value
         entry["purchase_value_eur"] = max(
-            0.0, entry["purchase_value_eur"] - total_cost_basis_sold
+            0.0, entry["purchase_value_eur"] - total_cost_basis_sold_eur
+        )
+        entry["purchase_value_native"] = max(
+            0.0, entry.get("purchase_value_native", 0.0) - total_cost_basis_sold_native
         )
 
         # Realized Gain = Proceeds (tx_val_eur) - Cost Basis of Sold Lots
-        realized_gain = tx_val_eur - total_cost_basis_sold
+        realized_gain = tx_val_eur - total_cost_basis_sold_eur
 
     if entry["shares"] <= _EPSILON:  # Filter dust
         holdings.pop(key, None)

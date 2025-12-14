@@ -2,32 +2,32 @@
  * Mirrors the legacy dashboard controller for initial TypeScript migration.
  */
 
-import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
-import {
-  renderDashboard,
-  attachPortfolioToggleHandler,
-  updatePortfolioFooterFromDom,
-} from './tabs/overview';
-import { renderAnalyse } from './tabs/analyse';
-import { registerSecurityDetailTab } from './tabs/security_detail';
-import {
-  handleAccountUpdate,
-  handleLastFileUpdate,
-  handlePortfolioUpdate,
-  handlePortfolioPositionsUpdate,
-  __TEST_ONLY__,
-  flushPendingPositions,
-  reapplyPositionsSort,
-} from './data/updateConfigsWS';
-import { getEntryId } from './data/api';
 import {
   getRegisteredDashboardElements,
   getRegisteredPanelHosts,
   registerDashboardElement,
-  unregisterDashboardElement,
   registerPanelHost,
+  unregisterDashboardElement,
   unregisterPanelHost,
 } from './dashboard/registry';
+import { getEntryId } from './data/api';
+import {
+  __TEST_ONLY__,
+  flushPendingPositions,
+  handleAccountUpdate,
+  handleLastFileUpdate,
+  handlePortfolioPositionsUpdate,
+  handlePortfolioUpdate,
+  reapplyPositionsSort,
+} from './data/updateConfigsWS';
+import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
+import {
+  attachPortfolioToggleHandler,
+  renderDashboard,
+  updatePortfolioFooterFromDom,
+} from './tabs/overview';
+import { registerSecurityDetailTab } from './tabs/security_detail';
+import { renderAnalyse } from './tabs/time_series';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -41,19 +41,7 @@ import type {
   HomeAssistant,
 } from './types/home-assistant';
 
-export { updatePortfolioFooterFromDom };
-export {
-  __TEST_ONLY__,
-  handlePortfolioPositionsUpdate,
-  flushPendingPositions,
-  reapplyPositionsSort,
-};
-export {
-  registerDashboardElement,
-  unregisterDashboardElement,
-  registerPanelHost,
-  unregisterPanelHost,
-};
+export { __TEST_ONLY__, flushPendingPositions, handlePortfolioPositionsUpdate, reapplyPositionsSort, registerDashboardElement, registerPanelHost, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom };
 
 type AddSwipeEvents = (
   element: HTMLElement,
@@ -112,7 +100,7 @@ const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
-  { key: ANALYSE_TAB_KEY, title: 'Analyse', render: renderAnalyse },
+  { key: ANALYSE_TAB_KEY, title: 'Zeitmaschine', render: renderAnalyse },
 ];
 
 const detailTabRegistry = new Map<string, DashboardTabDescriptor>();

@@ -530,6 +530,7 @@ def get_transactions(
             raise ValueError(_MISSING_DB_RESOURCE_MESSAGE)
         conn = sqlite3.connect(str(db_path))
 
+    rows = []
     try:
         cur = conn.execute("""
             SELECT t.uuid, t.type, t.account, t.portfolio,
@@ -552,14 +553,15 @@ def get_transactions(
             GROUP BY t.uuid
             ORDER BY t.date
         """)
-        transactions = [Transaction(*row) for row in cur.fetchall()]
-        return transactions
+        rows = cur.fetchall()
     except sqlite3.Error:
         _LOGGER.exception("Fehler beim Laden der Transaktionen")
         return []
     finally:
         if db_path is not None:  # Verbindung nur schließen, wenn hier geöffnet wurde
             conn.close()
+
+    return [Transaction(*row) for row in rows]
 
 
 def _to_epoch_day(date_value: Any) -> int | None:

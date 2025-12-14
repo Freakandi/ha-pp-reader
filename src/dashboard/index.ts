@@ -21,7 +21,7 @@ export {
   ensurePortfolioRowFallbackListener,
 } from '../tabs/overview';
 
-export { renderAnalyse } from '../tabs/analyse';
+export { renderAnalyse } from '../tabs/time_series';
 
 export {
   renderSecurityDetail,

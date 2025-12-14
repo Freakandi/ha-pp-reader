@@ -3,6 +3,7 @@
  */
 
 import { renderLineChart, updateLineChart, type LineChartOptions } from '../content/charting';
+import { DateRangePicker, type DateRange } from '../content/date-range-picker';
 import { createHeaderCard, formatNumber } from '../content/elements';
 import type {
   DailyWealthRecord,
@@ -19,13 +20,14 @@ import {
 import type { HomeAssistant } from '../types/home-assistant';
 import type { PanelConfigLike } from './types';
 
-type SelectionMode = 'date' | 'range';
+
 type PerformanceRowKey =
   | 'startValue'
   | 'endValue'
   | 'marketGain'
   | 'realizedGains'
-  | 'unrealizedGains'
+  | 'unrealizedPriceGains'
+  | 'fxGains'
   | 'dividends'
   | 'interest'
   | 'ertraege'
@@ -39,10 +41,8 @@ type PerformanceBreakdown = Record<PerformanceRowKey, number>;
 const DEFAULT_RANGE_DAYS = 30;
 
 let lastSelection: DailyWealthSelection | null = null;
-let lastMode: SelectionMode = 'range';
 let lastWealthData: DailyWealthResponse | null = null;
 const selectedScopeKeys = new Set<string>();
-let pendingLoadTimer: number | null = null;
 
 type WealthSeries = {
   key: string;
@@ -212,11 +212,12 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
       ${mkRow('Anfangswert', bd.startValue, '', 'perf-startValue')}
       ${mkRow('Kurserfolge (Gesamt)', bd.marketGain, 'sub-header')}
       ${mkRow('&nbsp;&nbsp;↳ Realisiert', bd.realizedGains, 'indent')}
-      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert (inkl. FX)', bd.unrealizedGains, 'indent')}
+      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert', bd.unrealizedPriceGains, 'indent')}
       ${mkRow('Dividenden', bd.dividends)}
       ${mkRow('Zinsen', bd.interest)}
       ${mkRow('Gebühren', bd.fees)}
       ${mkRow('Steuern', bd.taxes)}
+      ${mkRow('FX-Veränderung', bd.fxGains)}
       ${mkRow('Performanceneutrale Bew.', bd.neutral + bd.netTransfers)}
       ${mkRow('Endwert', bd.endValue, 'highlight', 'perf-endValue')}
     </div>
@@ -226,18 +227,7 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
 }
 
 
-function debounceLoad(
-  callback: () => void,
-  delay = 200,
-): void {
-  if (pendingLoadTimer != null) {
-    window.clearTimeout(pendingLoadTimer);
-  }
-  pendingLoadTimer = window.setTimeout(() => {
-    pendingLoadTimer = null;
-    callback();
-  }, delay);
-}
+
 
 function buildScopeKey(type: DailyWealthScopeRecord['scope_type'] | null, id: string | null): string | null {
   if (!type || !id) {
@@ -379,13 +369,12 @@ function buildSeries(
   const addToIndex = (records: DailyWealthScopeRecord[], type: 'account' | 'portfolio') => {
     records.forEach((record) => {
       const key = buildScopeKey(type, record.scope_id);
-      if (!key) {
-        return;
+      if (key) {
+        if (!sliceIndex.has(key)) {
+          sliceIndex.set(key, new Map<string, DailyWealthScopeRecord>());
+        }
+        sliceIndex.get(key)?.set(record.date, record);
       }
-      if (!sliceIndex.has(key)) {
-        sliceIndex.set(key, new Map());
-      }
-      sliceIndex.get(key)?.set(record.date, record);
     });
   };
 
@@ -541,14 +530,16 @@ function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown |
   const marketGain = endValue - startValue - ertraege - fees - taxes - netTransfers - neutral;
 
   const realizedGains = sumField(records, 'realized_gains_eur');
-  const unrealizedGains = marketGain - realizedGains;
+  const unrealizedPriceGains = sumField(records, 'unrealized_price_gains_eur');
+  const fxGains = sumField(records, 'fx_gains_eur');
 
   return {
     startValue,
     endValue,
     marketGain,
     realizedGains,
-    unrealizedGains,
+    unrealizedPriceGains,
+    fxGains,
     dividends,
     interest,
     ertraege,
@@ -561,101 +552,9 @@ function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown |
 
 // renderPerformance removed, merged into renderMetrics
 
-function readSelectionFromInputs(card: HTMLElement): DailyWealthSelection | null {
-  const modeInput = card.querySelector<HTMLInputElement>('input[name="analyse-range-mode"]:checked');
-  const mode = (modeInput?.value === 'date' ? 'date' : 'range') as SelectionMode;
-  lastMode = mode;
-
-  const singleDateInput = card.querySelector<HTMLInputElement>('#analyse-date-single');
-  const startInput = card.querySelector<HTMLInputElement>('#analyse-date-start');
-  const endInput = card.querySelector<HTMLInputElement>('#analyse-date-end');
-
-  const parseDate = (value: string | null | undefined): string | null => {
-    if (!value) {
-      return null;
-    }
-    const trimmed = value.trim();
-    return trimmed.length === 10 ? trimmed : null;
-  };
-
-  if (mode === 'date') {
-    let date = parseDate(singleDateInput?.value);
-    if (!date) {
-      // Fallback: Use start date or today if switching to date mode with empty input
-      const fallback = parseDate(startInput?.value) ?? new Date().toISOString().slice(0, 10);
-      date = fallback;
-      if (singleDateInput) {
-        singleDateInput.value = fallback; // Auto-fill the input
-      }
-    }
-    return { date, includeSlices: true, includeScopes: true };
-  }
-
-  let start = parseDate(startInput?.value);
-  let end = parseDate(endInput?.value);
-
-  if (!start || !end) {
-    // Fallback: Use today's date if inputs are empty when switching to range mode
-    const today = new Date().toISOString().slice(0, 10);
-    if (!start) start = today;
-    if (!end) end = today;
-
-    if (startInput && !startInput.value) startInput.value = start;
-    if (endInput && !endInput.value) endInput.value = end;
-  }
-
-  if (!start || !end) {
-    return null;
-  }
-  if (start > end) {
-    return { range: { start: end, end: start }, includeSlices: true, includeScopes: true };
-  }
-  return { range: { start, end }, includeSlices: true, includeScopes: true };
-}
-
-function applySelectionToInputs(card: HTMLElement, selection: DailyWealthSelection): void {
-  const mode = selection.date ? 'date' : 'range';
-  const dateRadio = card.querySelector<HTMLInputElement>('input[name="analyse-range-mode"][value="date"]');
-  const rangeRadio = card.querySelector<HTMLInputElement>('input[name="analyse-range-mode"][value="range"]');
-  if (dateRadio && rangeRadio) {
-    dateRadio.checked = mode === 'date';
-    rangeRadio.checked = mode === 'range';
-  }
-
-  const singleDateInput = card.querySelector<HTMLInputElement>('#analyse-date-single');
-  const startInput = card.querySelector<HTMLInputElement>('#analyse-date-start');
-  const endInput = card.querySelector<HTMLInputElement>('#analyse-date-end');
-
-  if (singleDateInput && selection.date) {
-    singleDateInput.value = selection.date;
-  }
-  if (startInput && endInput && selection.range) {
-    startInput.value = selection.range.start;
-    endInput.value = selection.range.end;
-  }
-
-  const rangeFields = card.querySelector<HTMLElement>('.analyse-range-fields');
-  const singleField = card.querySelector<HTMLElement>('.analyse-single-field');
-  if (rangeFields && singleField) {
-    if (mode === 'date') {
-      rangeFields.style.display = 'none';
-      singleField.style.display = '';
-    } else {
-      rangeFields.style.display = '';
-      singleField.style.display = 'none';
-    }
-  }
-}
-
-function selectionLabel(selection: DailyWealthSelection): string {
-  if (selection.date) {
-    return `Tag: ${selection.date}`;
-  }
-  if (selection.range) {
-    return `Zeitraum: ${selection.range.start} – ${selection.range.end}`;
-  }
-  return '';
-}
+// selectionLabel removed - integrated into DateRangePicker visual or not needed for totals
+// readSelectionFromInputs removed - handled by DateRangePicker
+// applySelectionToInputs removed - handled by DateRangePicker
 
 async function loadAndRender(
   card: HTMLElement,
@@ -680,7 +579,10 @@ async function loadAndRender(
 
   const data = state.data;
   if (!data || !Array.isArray(data.records) || data.records.length === 0) {
-    renderTotals(card, selectionLabel(selection), []);
+    const start = selection.range?.start ?? '?';
+    const end = selection.range?.end ?? '?';
+    const label = `Zeitraum: ${start} – ${end}`;
+    renderTotals(card, label, []);
     renderMetrics(card, []);
     setStatus(card, 'loaded', 'Keine Daten für den gewählten Zeitraum.');
     if (chartCard) {
@@ -696,7 +598,10 @@ async function loadAndRender(
   lastWealthData = data;
   ensureScopeSelection(data.slices);
 
-  renderTotals(card, selectionLabel(selection), data.records);
+  const label = selection.range
+    ? `Zeitraum: ${selection.range.start} – ${selection.range.end}`
+    : (selection.date ? `Tag: ${selection.date}` : '');
+  renderTotals(card, label, data.records);
   renderMetrics(card, data.records);
 
   if (chartCard) {
@@ -713,57 +618,42 @@ function initRangeCard(
   hass: HomeAssistant | null | undefined,
   panelConfig: PanelConfigLike | null | undefined,
 ): void {
-  const applyButton = card.querySelector<HTMLButtonElement>('#analyse-range-apply');
-  const modeRadios = card.querySelectorAll<HTMLInputElement>('input[name="analyse-range-mode"]');
+  const pickerContainer = card.querySelector<HTMLElement>('#analyse-date-picker-container');
 
-  const selection = lastSelection ?? getDailyWealthState().selection ?? buildDefaultSelection();
-  applySelectionToInputs(card, selection);
+  const currentSelection = lastSelection ?? getDailyWealthState().selection ?? buildDefaultSelection();
 
-  const handleModeChange = (): void => {
-    const currentSelection = readSelectionFromInputs(card);
-    if (currentSelection) {
-      applySelectionToInputs(card, currentSelection);
-    }
-  };
+  // Convert selection strings to Date objects for picker
+  let initialRange: DateRange | undefined;
+  if (currentSelection.range) {
+    initialRange = {
+      start: new Date(currentSelection.range.start),
+      end: new Date(currentSelection.range.end),
+    };
+  } else if (currentSelection.date) {
+    const d = new Date(currentSelection.date);
+    initialRange = { start: d, end: d };
+  }
 
-  modeRadios.forEach((radio) => {
-    radio.addEventListener('change', () => {
-      handleModeChange();
-      const currentSelection = readSelectionFromInputs(card);
-      if (currentSelection) {
-        debounceLoad(() => {
-          applySelectionToInputs(card, currentSelection);
-          void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
-        });
-      }
-    });
-  });
+  if (pickerContainer) {
+    new DateRangePicker(pickerContainer, {
+      initialRange,
+      onChange: (range) => {
+        const selection: DailyWealthSelection = {
+          range: {
+            start: toIsoDateString(range.start),
+            end: toIsoDateString(range.end),
+          },
+          includeSlices: true,
+          includeScopes: true,
+        };
 
-  if (applyButton) {
-    applyButton.addEventListener('click', () => {
-      const currentSelection = readSelectionFromInputs(card) ?? selection;
-      applySelectionToInputs(card, currentSelection);
-      debounceLoad(() => {
-        void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
-      });
+        void loadAndRender(card, chartCard, hass, panelConfig, selection);
+      },
     });
   }
 
-  const dateInputs = card.querySelectorAll<HTMLInputElement>('input[type="date"]');
-  dateInputs.forEach((input) => {
-    input.addEventListener('change', () => {
-      const currentSelection = readSelectionFromInputs(card);
-      if (!currentSelection) {
-        return;
-      }
-      debounceLoad(() => {
-        void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
-      });
-    });
-  });
-
-  // Initial load after DOM is ready
-  void loadAndRender(card, chartCard, hass, panelConfig, selection);
+  // Initial load
+  void loadAndRender(card, chartCard, hass, panelConfig, currentSelection);
 }
 
 export function renderAnalyse(
@@ -773,10 +663,10 @@ export function renderAnalyse(
 ): string {
   const headerMeta = `
     <div class="header-meta-row">
-      <span>Vermögensverlauf &amp; Cashflows (Backdating)</span>
+      <span>Vermögensverlauf &amp; Cashflows</span>
     </div>
   `;
-  const headerCard = createHeaderCard('Analyse', headerMeta);
+  const headerCard = createHeaderCard('Zeitmaschine', headerMeta);
 
   const style = `
     <style>
@@ -788,7 +678,15 @@ export function renderAnalyse(
         padding-top: 1.5rem;
         border-top: 1px solid var(--divider-color, #e0e0e0);
       }
+      .metrics-section {
+        display: grid;
+        grid-template-columns: max-content max-content;
+        justify-content: start;
+        align-items: center;
+        gap: 0.25rem 2rem;
+      }
       .metrics-section h3 {
+        grid-column: 1 / -1;
         margin: 0 0 0.75rem 0;
         font-size: 0.9rem;
         font-weight: 500;
@@ -797,20 +695,18 @@ export function renderAnalyse(
         letter-spacing: 0.05em;
       }
       .metric-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.25rem 0;
-        font-size: 0.95rem;
+        display: contents;
       }
       .metric-label {
         color: var(--primary-text-color, #212121);
       }
       .metric-value {
         font-weight: 500;
-        font-family: var(--code-font-family, monospace); /* Tabular figures preferred */
+        font-family: var(--code-font-family, monospace);
+        text-align: right;
       }
-      .metric-row.highlight {
+      .metric-row.highlight .metric-label,
+      .metric-row.highlight .metric-value {
         font-weight: 600;
         color: var(--primary-color, #03a9f4);
       }
@@ -818,6 +714,7 @@ export function renderAnalyse(
         font-weight: 700;
       }
       .metrics-empty {
+        grid-column: 1 / -1;
         text-align: center;
         color: var(--secondary-text-color);
         padding: 2rem;
@@ -836,24 +733,10 @@ export function renderAnalyse(
     <div class="card" id="analyse-range-card" data-section="range">
       <h2>Zeitraum &amp; Kennzahlen</h2>
       <div class="analyse-range-form" role="group" aria-label="Zeitraum wählen">
-        <div class="analyse-mode-toggle">
-          <label><input type="radio" name="analyse-range-mode" value="range" ${lastMode === 'range' ? 'checked' : ''}> Zeitraum</label>
-          <label><input type="radio" name="analyse-range-mode" value="date" ${lastMode === 'date' ? 'checked' : ''}> Ein Tag</label>
-        </div>
-        <div class="analyse-range-fields">
-          <label for="analyse-date-start">Start</label>
-          <input type="date" id="analyse-date-start" aria-label="Startdatum">
-          <label for="analyse-date-end">Ende</label>
-          <input type="date" id="analyse-date-end" aria-label="Enddatum">
-        </div>
-        <div class="analyse-single-field" style="display: none;">
-          <label for="analyse-date-single">Datum</label>
-          <input type="date" id="analyse-date-single" aria-label="Datum">
-        </div>
-        <button type="button" id="analyse-range-apply" aria-label="Auswahl übernehmen">Übernehmen</button>
+        <div id="analyse-date-picker-container"></div>
       </div>
 
-      <div class="analyse-headline">
+      <div class="analyse-headline" style="display: none;">
         <div class="headline-value" id="analyse-total-wealth">—</div>
         <div class="headline-meta">
           <span id="analyse-selection-label" class="selection-label"></span>
@@ -919,7 +802,10 @@ export const __TEST_ONLY__ = {
     lastWealthData = data;
     ensureScopeSelection(data.slices);
     if (rangeCard) {
-      renderTotals(rangeCard, selectionLabel(selection), data.records);
+      const label = selection.range
+        ? `Zeitraum: ${selection.range.start} – ${selection.range.end}`
+        : (selection.date ? `Tag: ${selection.date}` : '');
+      renderTotals(rangeCard, label, data.records);
       renderMetrics(rangeCard, data.records);
       setStatus(rangeCard, 'loaded');
     }

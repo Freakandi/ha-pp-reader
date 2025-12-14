@@ -240,7 +240,8 @@ export interface DailyWealthRecord {
   fees_eur: number;
   taxes_eur: number;
   realized_gains_eur: number;
-  unrealized_gains_eur: number;
+  unrealized_gains_eur: number; // Derived in legacy, but now explicitly aggregated
+  unrealized_price_gains_eur: number;
   invested_capital_eur: number;
   fx_coverage_ratio: number | null;
   price_coverage_ratio: number | null;
@@ -586,6 +587,7 @@ function normalizeDailyWealthRecord(raw: UnknownRecord): DailyWealthRecord | nul
     taxes_eur: toFiniteNumberOrZero(raw.taxes_eur),
     realized_gains_eur: toFiniteNumberOrZero(raw.realized_gains_eur),
     unrealized_gains_eur: toFiniteNumberOrZero(raw.unrealized_gains_eur),
+    unrealized_price_gains_eur: toFiniteNumberOrZero(raw.unrealized_price_gains_eur),
     invested_capital_eur: toFiniteNumberOrZero(raw.invested_capital_eur),
     fx_coverage_ratio: toCoverageValue(raw.fx_coverage_ratio),
     price_coverage_ratio: toCoverageValue(raw.price_coverage_ratio),

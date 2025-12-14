@@ -235,50 +235,9 @@ def _aggregate_daily_buckets(
     covered_currencies: set[str] = set()
 
     for tx in transactions:
-        currency = (tx.currency_code or "EUR").strip().upper()
-        amount_cents = int(tx.amount or 0)
-        if amount_cents == 0:
-            continue
-
-        is_foreign = currency != "EUR"
-        if is_foreign:
-            required_currencies.add(currency)
-        fx_rate = fx_rates.get(currency)
-        if fx_rate and is_foreign:
-            covered_currencies.add(currency)
-
-        amount_eur = None
-        if fx_rate and fx_rate > 0:
-            amount_eur = cent_to_eur(amount_cents, default=0.0) or 0.0
-            if currency != "EUR":
-                amount_eur = round(amount_eur / fx_rate, 6)
-
-        bucket, sign = _classify_transaction(tx)
-
-        # Process attached fees/taxes (e.g. on Buys/Sells),
-        # avoiding double-count for explicit Fee/Tax transactions
-        tx_fees = getattr(tx, "fees", 0)
-        tx_taxes = getattr(tx, "taxes", 0)
-        if tx_fees or tx_taxes:
-            f_eur = cent_to_eur(tx_fees, default=0.0) or 0.0
-            t_eur = cent_to_eur(tx_taxes, default=0.0) or 0.0
-            if is_foreign and fx_rate and fx_rate > 0:
-                f_eur = round(f_eur / fx_rate, 6)
-                t_eur = round(t_eur / fx_rate, 6)
-
-            if bucket != "fees" and tx_fees:
-                curr_buckets["fees"] += abs(f_eur)
-            if bucket != "taxes" and tx_taxes:
-                curr_buckets["taxes"] += abs(t_eur)
-
-        if bucket is None or amount_eur is None:
-            continue
-
-        signed_value = amount_eur * sign
-        if bucket in curr_buckets:
-            curr_buckets[bucket] += signed_value
-        elif bucket == "fees":  # Should be covered by in check but keep safe
-            curr_buckets["fees"] += abs(signed_value)
+        _process_transaction(
+            tx, fx_rates, curr_buckets, required_currencies, covered_currencies
+        )
 
     coverage_ratio = 1.0
     if required_currencies:
@@ -319,3 +278,57 @@ def _classify_transaction(
             return "inbound", 1
 
     return None, 0
+
+
+def _process_transaction(
+    tx: db_access.Transaction,
+    fx_rates: Mapping[str, float],
+    curr_buckets: dict[str, float],
+    required_currencies: set[str],
+    covered_currencies: set[str],
+) -> None:
+    """Process a single transaction and update buckets."""
+    currency = (tx.currency_code or "EUR").strip().upper()
+    amount_cents = int(tx.amount or 0)
+    if amount_cents == 0:
+        return
+
+    is_foreign = currency != "EUR"
+    if is_foreign:
+        required_currencies.add(currency)
+    fx_rate = fx_rates.get(currency)
+    if fx_rate and is_foreign:
+        covered_currencies.add(currency)
+
+    amount_eur = None
+    if fx_rate and fx_rate > 0:
+        amount_eur = cent_to_eur(amount_cents, default=0.0) or 0.0
+        if currency != "EUR":
+            amount_eur = round(amount_eur / fx_rate, 6)
+
+    bucket, sign = _classify_transaction(tx)
+
+    # Process attached fees/taxes (e.g. on Buys/Sells),
+    # avoiding double-count for explicit Fee/Tax transactions
+    tx_fees = getattr(tx, "fees", 0)
+    tx_taxes = getattr(tx, "taxes", 0)
+    if tx_fees or tx_taxes:
+        f_eur = cent_to_eur(tx_fees, default=0.0) or 0.0
+        t_eur = cent_to_eur(tx_taxes, default=0.0) or 0.0
+        if is_foreign and fx_rate and fx_rate > 0:
+            f_eur = round(f_eur / fx_rate, 6)
+            t_eur = round(t_eur / fx_rate, 6)
+
+        if bucket != "fees" and tx_fees:
+            curr_buckets["fees"] += abs(f_eur)
+        if bucket != "taxes" and tx_taxes:
+            curr_buckets["taxes"] += abs(t_eur)
+
+    if bucket is None or amount_eur is None:
+        return
+
+    signed_value = amount_eur * sign
+    if bucket in curr_buckets:
+        curr_buckets[bucket] += signed_value
+    elif bucket == "fees":
+        curr_buckets["fees"] += abs(signed_value)

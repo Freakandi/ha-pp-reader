@@ -74,6 +74,7 @@ class PPReaderPanel extends HTMLElement {
     this._loadCss('css/base.css');
     this._loadCss('css/cards.css');
     this._loadCss('css/nav.css');
+    this._loadCss('css/date-range-picker.css');
     shadow.appendChild(container);
 
     this._upgradeProperty('hass');

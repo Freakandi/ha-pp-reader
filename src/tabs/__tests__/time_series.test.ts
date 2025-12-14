@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { DailyWealthResponse } from '../../data/api';
-import { __TEST_ONLY__ as ANALYSE_TEST_ONLY } from '../analyse';
+import { __TEST_ONLY__ as ANALYSE_TEST_ONLY } from '../time_series';
 
 function installDom(): JSDOM {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
@@ -33,6 +33,7 @@ const sampleData: DailyWealthResponse = {
       taxes_eur: 4,
       realized_gains_eur: 0,
       unrealized_gains_eur: 0,
+      unrealized_price_gains_eur: 0,
       invested_capital_eur: 10000,
       fx_coverage_ratio: 0.8,
       price_coverage_ratio: 1,
@@ -52,6 +53,7 @@ const sampleData: DailyWealthResponse = {
       taxes_eur: 1,
       realized_gains_eur: 10,
       unrealized_gains_eur: 0,
+      unrealized_price_gains_eur: 0,
       invested_capital_eur: 650,
       fx_coverage_ratio: 0.8,
       price_coverage_ratio: 0.9,
@@ -77,6 +79,7 @@ const sampleData: DailyWealthResponse = {
         taxes_eur: 0,
         realized_gains_eur: 0,
         unrealized_gains_eur: 0,
+        unrealized_price_gains_eur: 0,
         invested_capital_eur: 5000,
         fx_coverage_ratio: 1,
         price_coverage_ratio: 1,
@@ -101,6 +104,7 @@ const sampleData: DailyWealthResponse = {
         taxes_eur: 1,
         realized_gains_eur: 5,
         unrealized_gains_eur: 0,
+        unrealized_price_gains_eur: 0,
         invested_capital_eur: 650,
         fx_coverage_ratio: 0.9,
         price_coverage_ratio: 0.9,

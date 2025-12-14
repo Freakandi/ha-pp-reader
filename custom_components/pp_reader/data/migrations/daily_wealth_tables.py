@@ -73,6 +73,9 @@ def ensure_daily_wealth_tables(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "daily_wealth_scopes", "unrealized_gains_eur")
     _ensure_column(conn, "daily_wealth", "invested_capital_eur")
     _ensure_column(conn, "daily_wealth_scopes", "invested_capital_eur")
+    _ensure_column(conn, "daily_wealth", "unrealized_price_gains_eur")
+    _ensure_column(conn, "daily_wealth", "performance_neutral_movements")
+    _ensure_column(conn, "daily_wealth_scopes", "performance_neutral_movements")
 
 
 def _ensure_column(

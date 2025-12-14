@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
+import requests
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from custom_components.pp_reader.data.db_access import (
     FxRateRecord,
@@ -244,9 +246,7 @@ async def _fetch_exchange_rates_with_retry(
 def _fetch_exchange_rates_sync_http(
     date_str: str, currencies: set[str]
 ) -> dict[str, float]:
-    """Synchronous fetch using requests to avoid aiohttp instability."""
-    import requests
-
+    """Fetch synchronously using requests to avoid aiohttp instability."""
     if not currencies:
         return {}
 
@@ -268,7 +268,7 @@ def _fetch_exchange_rates_sync_http(
 
         data = resp.json()
         return {k: float(v) for k, v in data.get("rates", {}).items()}
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         if _should_log_warning(date_str, currencies):
             _LOGGER.warning(
                 "Netzwerkproblem beim Abruf der Wechselkurse (%s): %s",
@@ -624,7 +624,7 @@ def _compute_fx_coverage_ratio(
     return round(covered / len(required_currencies), 3)
 
 
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
 
 
 async def _fetch_exchange_rates_range_aiohttp(
@@ -635,6 +635,7 @@ async def _fetch_exchange_rates_range_aiohttp(
 ) -> dict[str, float]:
     """
     Fetch rates for a single currency over a date range.
+
     Returns a dict mapping date_str -> rate.
     """
     # Frankfurter API supports ranges: /start_date..end_date?from=EUR&to=USD
@@ -664,7 +665,7 @@ async def _fetch_exchange_rates_range_aiohttp(
                     result[d_str] = float(rates[currency])
             return result
 
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         _LOGGER.warning(
             "Netzwerkproblem beim Abruf der Wechselkurse (%s..%s, %s): %s",
             start_date,
@@ -685,6 +686,7 @@ async def async_ensure_exchange_rates_for_schedule(  # noqa: PLR0912
 ) -> dict[str, float]:
     """
     Ensure FX rates exist for each date in the schedule and compute coverage.
+
     Uses range queries to minimize API requests.
     """
     if not schedule:
