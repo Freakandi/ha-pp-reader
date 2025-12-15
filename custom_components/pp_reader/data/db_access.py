@@ -2933,6 +2933,67 @@ def load_fx_rates_for_date(
             local_conn.close()
 
 
+def load_fx_rates_in_range(
+    db_path: Path,
+    start_date: str,
+    end_date: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, list[FxRateRecord]]:
+    """Load all FX rates stored for a date range."""
+    if not start_date or not end_date:
+        message = "start_date und end_date dürfen nicht leer sein"
+        raise ValueError(message)
+
+    local_conn = conn or sqlite3.connect(str(db_path))
+
+    try:
+        try:
+            cursor = local_conn.execute(
+                """
+                SELECT
+                    date,
+                    currency,
+                    rate,
+                    fetched_at,
+                    data_source,
+                    provider,
+                    provenance
+                FROM fx_rates
+                WHERE date >= ? AND date <= ?
+                """,
+                (start_date, end_date),
+            )
+        except sqlite3.Error:
+            _LOGGER.exception(
+                "Fehler beim Laden der Wechselkurse (range=%s..%s)",
+                start_date,
+                end_date,
+            )
+            raise
+
+        rows = cursor.fetchall()
+        result: dict[str, list[FxRateRecord]] = {}
+        for row in rows:
+            date_iso = row[0]
+            record = FxRateRecord(
+                date=date_iso,
+                currency=row[1],
+                rate=row[2],
+                fetched_at=row[3],
+                data_source=row[4],
+                provider=row[5],
+                provenance=row[6],
+            )
+            if date_iso not in result:
+                result[date_iso] = []
+            result[date_iso].append(record)
+        return result
+    finally:
+        if conn is None:
+            local_conn.close()
+
+
 def enqueue_price_history_job(
     db_path: Path,
     job: NewPriceHistoryJob,

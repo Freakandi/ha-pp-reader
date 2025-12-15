@@ -30,6 +30,8 @@ def test_aggregate_combines_components_and_coverage():
                 price_eur=50.0,
                 value_eur=50.0,
                 purchase_value_eur=50.0,
+                purchase_value_native=100.0,
+                unrealized_price_gains_eur=0.0,
                 fx_rate=2.0,
                 stale_price=False,
             )
@@ -40,6 +42,7 @@ def test_aggregate_combines_components_and_coverage():
         total_wealth_eur=50.0,
         invested_capital_eur=50.0,
         realized_gains_eur=0.0,
+        unrealized_price_gains_eur=0.0,
         portfolio_realized_gains={},
         performance_neutral_movements=0.0,
     )
@@ -108,6 +111,8 @@ def test_aggregate_defaults_to_conservative_coverage():
                 price_eur=None,
                 value_eur=None,
                 purchase_value_eur=None,
+                purchase_value_native=None,
+                unrealized_price_gains_eur=None,
                 fx_rate=None,
                 stale_price=True,
             )
@@ -118,6 +123,7 @@ def test_aggregate_defaults_to_conservative_coverage():
         total_wealth_eur=0.0,
         invested_capital_eur=0.0,
         realized_gains_eur=0.0,
+        unrealized_price_gains_eur=0.0,
         portfolio_realized_gains={},
         performance_neutral_movements=0.0,
     )

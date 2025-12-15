@@ -119,6 +119,11 @@ def _compute_daily_account_snapshots_sync(
                     balances_cents.get(account_uuid, 0) + delta
                 )
 
+    # Pre-load FX rates for the main loop to avoid N+1 queries
+    fx_rates_cache = fx_module.load_fx_rates_cache_range(
+        db_path, start_date.isoformat(), end_date.isoformat()
+    )
+
     date_cursor = start_date
 
     while date_cursor <= end_date:
@@ -126,7 +131,11 @@ def _compute_daily_account_snapshots_sync(
             balances_cents[account_uuid] = balances_cents.get(account_uuid, 0) + delta
 
         date_iso = date_cursor.isoformat()
-        fx_rates = _load_fx_rates_for_date(db_path, date_iso)
+        fx_rates = fx_rates_cache.get(date_iso, {})
+        # Ensure we don't mutate the cached dictionary by creating a new one if we need to add EUR
+        if "EUR" not in fx_rates:
+            fx_rates = {**fx_rates, "EUR": 1.0}
+
         accounts_snapshot = _build_account_valuations(
             balances_cents,
             accounts,

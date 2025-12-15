@@ -151,12 +151,17 @@ def _compute_daily_holdings_snapshots_sync(
                 tx_date=tx_date,
             )
 
+    # Pre-load FX rates for the main loop to avoid N+1 queries
+    fx_rates_cache = fx_module.load_fx_rates_cache_range(
+        db_path, start_date.isoformat(), end_date.isoformat()
+    )
+
     date_cursor = start_date
 
     while date_cursor <= end_date:
         daily_adjustments = adjustments_by_date.get(date_cursor, ())
         date_iso = date_cursor.isoformat()
-        daily_fx_rates = _load_fx_rates_for_date(db_path, date_iso)
+        daily_fx_rates = fx_rates_cache.get(date_iso, {})
 
         # Update fallback cache with any available rates for today
         last_known_fx_rates.update(daily_fx_rates)
