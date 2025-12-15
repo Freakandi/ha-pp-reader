@@ -570,7 +570,11 @@ function $e(e, t, n = [], r = {}) {
   let l = "<table><thead><tr>";
   t.forEach((h) => {
     const _ = h.align === "right" ? ' class="align-right"' : "";
-    a && h.key ? l += `<th${_} data-sort-key="${h.key}">${h.label}</th>` : l += `<th${_}>${h.label}</th>`;
+    if (a && h.key) {
+      let b = "";
+      h.key === o && (b = ` aria-sort="${c === "asc" ? "ascending" : "descending"}"`), l += `<th${_} data-sort-key="${h.key}"${b}>${h.label}</th>`;
+    } else
+      l += `<th${_}>${h.label}</th>`;
   }), l += "</tr></thead><tbody>", e.forEach((h) => {
     l += "<tr>", t.forEach((_) => {
       const b = _.align === "right" ? ' class="align-right"' : "";
@@ -759,10 +763,16 @@ function Sr(e, t, n = "asc", r = !1) {
     const b = /[0-9]/.test(g) || /[0-9]/.test(m);
     return !Number.isNaN(y) && !Number.isNaN(h) && b ? _ = y - h : _ = g.localeCompare(m, "de", { sensitivity: "base" }), n === "asc" ? _ : -_;
   }), o.forEach((u) => a.appendChild(u)), i && a.appendChild(i), e.querySelectorAll("thead th.sort-active").forEach((u) => {
-    u.classList.remove("sort-active", "dir-asc", "dir-desc");
+    u.classList.remove("sort-active", "dir-asc", "dir-desc"), u.removeAttribute("aria-sort");
   });
   const l = e.querySelector(`thead th[data-sort-key="${t}"]`);
-  return l && l.classList.add("sort-active", n === "asc" ? "dir-asc" : "dir-desc"), o;
+  return l && (l.classList.add(
+    "sort-active",
+    n === "asc" ? "dir-asc" : "dir-desc"
+  ), l.setAttribute(
+    "aria-sort",
+    n === "asc" ? "ascending" : "descending"
+  )), o;
 }
 function he(e) {
   return e == null ? "" : (typeof e == "string" ? e : String(e)).replace(/[&<>"']/g, (n) => {
@@ -2014,7 +2024,7 @@ function zr(e) {
       const c = o.querySelectorAll("thead th"), s = ["name", "current_holdings", "purchase_value", "current_value", "gain_abs", "gain_pct"];
       c.forEach((f, p) => {
         const d = s[p];
-        d && (f.setAttribute("data-sort-key", d), f.classList.add("sortable-col"));
+        d && (f.setAttribute("data-sort-key", d), f.classList.add("sortable-col"), d === "name" && f.setAttribute("aria-sort", "ascending"));
       }), o.querySelectorAll("tbody tr").forEach((f, p) => {
         if (f.classList.contains("footer-row"))
           return;
@@ -2364,30 +2374,32 @@ function Ke(e) {
     if (i) {
       i.classList.add("sortable-positions");
       const o = Array.from(i.querySelectorAll("thead th"));
-      return t.forEach((s, l) => {
-        const u = o.at(l);
-        u && (u.setAttribute("data-sort-key", s.key), u.classList.add("sortable-col"));
-      }), i.querySelectorAll("tbody tr").forEach((s, l) => {
-        if (s.classList.contains("footer-row") || l >= e.length)
+      t.forEach((l, u) => {
+        const f = o.at(u);
+        f && (f.setAttribute("data-sort-key", l.key), f.classList.add("sortable-col"));
+      }), i.querySelectorAll("tbody tr").forEach((l, u) => {
+        if (l.classList.contains("footer-row") || u >= e.length)
           return;
-        const u = e[l], f = typeof u.security_uuid == "string" ? u.security_uuid : null;
-        f && (s.dataset.security = f), s.classList.add("position-row");
-        const p = s.cells.item(2);
-        if (p) {
-          const { markup: m, sortValue: y, ariaLabel: h } = ho(u);
-          p.innerHTML = m, p.dataset.sortValue = String(y), h ? p.setAttribute("aria-label", h) : p.removeAttribute("aria-label");
-        }
-        const d = s.cells.item(7);
+        const f = e[u], p = typeof f.security_uuid == "string" ? f.security_uuid : null;
+        p && (l.dataset.security = p), l.classList.add("position-row");
+        const d = l.cells.item(2);
         if (d) {
-          const m = Se(u.performance), y = typeof m?.gain_pct == "number" && Number.isFinite(m.gain_pct) ? m.gain_pct : null, h = y != null ? `${y.toLocaleString("de-DE", {
+          const { markup: y, sortValue: h, ariaLabel: _ } = ho(f);
+          d.innerHTML = y, d.dataset.sortValue = String(h), _ ? d.setAttribute("aria-label", _) : d.removeAttribute("aria-label");
+        }
+        const g = l.cells.item(7);
+        if (g) {
+          const y = Se(f.performance), h = typeof y?.gain_pct == "number" && Number.isFinite(y.gain_pct) ? y.gain_pct : null, _ = h != null ? `${h.toLocaleString("de-DE", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
-          })} %` : "—", _ = y == null ? "neutral" : y > 0 ? "positive" : y < 0 ? "negative" : "neutral";
-          d.dataset.gainPct = h, d.dataset.gainSign = _;
+          })} %` : "—", b = h == null ? "neutral" : h > 0 ? "positive" : h < 0 ? "negative" : "neutral";
+          g.dataset.gainPct = _, g.dataset.gainSign = b;
         }
-        const g = s.cells.item(8);
-        g && g.classList.add("gain-pct-cell");
-      }), i.dataset.defaultSort = "name", i.dataset.defaultDir = "asc", qr(i), i.outerHTML;
+        const m = l.cells.item(8);
+        m && m.classList.add("gain-pct-cell");
+      }), i.dataset.defaultSort = "name", i.dataset.defaultDir = "asc";
+      const s = i.querySelector('thead th[data-sort-key="name"]');
+      return s && s.setAttribute("aria-sort", "ascending"), qr(i), i.outerHTML;
     }
   } catch (a) {
     console.warn("renderPositionsTable: Konnte Sortier-Metadaten nicht injizieren:", a);
@@ -6083,4 +6095,4 @@ export {
   Sc as unregisterPanelHost,
   Or as updatePortfolioFooterFromDom
 };
-//# sourceMappingURL=dashboard.BVVJKUsI.js.map
+//# sourceMappingURL=dashboard.BzFvEbNy.js.map

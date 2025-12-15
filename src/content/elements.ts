@@ -576,14 +576,20 @@ export function sortTableRows(
   if (footer) tbody.appendChild(footer);
 
   // Visuelle Indikatoren aktualisieren (optional generisch)
-  tableEl.querySelectorAll('thead th.sort-active').forEach(th => {
+  tableEl.querySelectorAll('thead th.sort-active').forEach((th) => {
     th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
     th.removeAttribute('aria-sort');
   });
   const activeTh = tableEl.querySelector<HTMLElement>(`thead th[data-sort-key="${key}"]`);
   if (activeTh) {
-    activeTh.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
-    activeTh.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+    activeTh.classList.add(
+      'sort-active',
+      dir === 'asc' ? 'dir-asc' : 'dir-desc'
+    );
+    activeTh.setAttribute(
+      'aria-sort',
+      dir === 'asc' ? 'ascending' : 'descending'
+    );
   }
 
   return rows;
