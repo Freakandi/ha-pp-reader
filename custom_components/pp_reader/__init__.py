@@ -805,7 +805,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
 
 
-
 def _cleanup_service_state(
     store: dict[str, Any],
     cancel_key: str,

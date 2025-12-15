@@ -175,8 +175,6 @@ sys.modules.setdefault("custom_components.pp_reader.data", data_pkg)
 pp_reader_pkg.data = data_pkg
 
 
-
-
 @pytest.fixture
 def seeded_history_db(tmp_path: Path) -> Path:
     """Create a temporary database with historical price rows for tests."""

@@ -514,7 +514,6 @@ class IngestionWriter:
             if currency and currency != "EUR" and has_date:
                 fx_requests.setdefault(txn.date, set()).add(currency)
 
-
         if fx_requests:
             self._ensure_fx_rates(fx_requests)
 

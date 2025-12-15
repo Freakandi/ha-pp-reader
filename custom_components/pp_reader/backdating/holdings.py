@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from bisect import bisect_right
 from collections import deque
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -310,7 +311,6 @@ def _load_relevant_transactions(
         # Removed retired check to include history
 
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
-
             continue
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
@@ -407,24 +407,25 @@ def _resolve_price_for_date(
     price_cache: dict[str, list[tuple[date, float, str]]],
     target_date: date,
 ) -> tuple[float | None, str | None, bool]:
-    """Return close price on or before target date, plus stale flag."""
+    """
+    Return close price on or before target date, plus stale flag.
+
+    Uses binary search for O(log N) lookup performance instead of O(N) linear scan.
+    """
     entries = price_cache.get(security_uuid)
     if not entries:
         return None, None, False
 
-    selected_price: float | None = None
-    selected_date: date | None = None
-    selected_raw: str | None = None
+    # Find insertion point for target_date.
+    # Entries are sorted by date (guaranteed by _load_price_cache).
+    # We want the rightmost entry where date <= target_date.
+    idx = bisect_right(entries, target_date, key=lambda x: x[0])
 
-    for price_date, price_value, raw_date in reversed(entries):
-        if price_date <= target_date:
-            selected_price = price_value
-            selected_date = price_date
-            selected_raw = raw_date
-            break
-
-    if selected_price is None or selected_date is None:
+    if idx == 0:
         return None, None, False
+
+    # entry at idx-1 is the largest element <= target_date
+    selected_date, selected_price, selected_raw = entries[idx - 1]
 
     stale = selected_date != target_date
     return selected_price, selected_raw or selected_date.isoformat(), stale
@@ -465,14 +466,13 @@ def _build_holdings_valuations(
             # Calculate Unrealized Gain from Price Movement (Native Delta * FX)
             # This strips out the pure FX gain on the principal.
             if purchase_value_native is not None:
-                 market_value_native = shares * price_native
-                 native_gain = market_value_native - purchase_value_native
-                 unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
+                market_value_native = shares * price_native
+                native_gain = market_value_native - purchase_value_native
+                unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
             elif currency == "EUR":
-                 unrealized_price_gains_eur = round(
-                     value_eur - (purchase_value_eur or 0), 6
-                 )
-
+                unrealized_price_gains_eur = round(
+                    value_eur - (purchase_value_eur or 0), 6
+                )
 
         valuations.append(
             HoldingValuation(
@@ -585,6 +585,7 @@ def _process_sell_lots(
 
     return cost_sold_eur, cost_sold_native
 
+
 def _compute_price_coverage_ratio(
     holdings: list[HoldingValuation],
 ) -> float:
@@ -675,9 +676,7 @@ def _apply_transaction_update(
 
     # FIFO Logic
     if delta_shares > 0:
-        _process_buy_lots(
-            entry, delta_shares, tx_val_eur, tx_val_native, tx_date
-        )
+        _process_buy_lots(entry, delta_shares, tx_val_eur, tx_val_native, tx_date)
 
     else:
         # SELL: Reduce shares, consume lots FIFO
@@ -697,4 +696,3 @@ def _apply_transaction_update(
         holdings.pop(key, None)
 
     return realized_gain, neutral_movement
-
