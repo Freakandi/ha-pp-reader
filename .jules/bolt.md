@@ -7,3 +7,7 @@
 ## 2024-05-22 - [Optimized Account Balance Sync]
 **Learning:** `_compute_account_balances` was iterating all transactions for every account, causing O(AxT) complexity. Pre-grouping transactions by account reduced this to O(T).
 **Action:** Look for nested loops where the inner loop iterates over a large dataset that can be pre-indexed or grouped.
+
+## 2024-05-23 - [Optimized Price Lookup]
+**Learning:** `_resolve_price_for_date` used a linear scan `O(N)` on a sorted list of price history. For daily backdating loops over long history, this becomes `O(D * N)`.
+**Action:** Replaced linear scan with `bisect_right` for `O(log N)` lookup. Python's `bisect` module supports a `key` argument since 3.10, making it easy to binary search list of tuples.
