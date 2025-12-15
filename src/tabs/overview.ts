@@ -489,6 +489,11 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
       // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
       table.dataset.defaultSort = 'name';
       table.dataset.defaultDir = 'asc';
+      // Initialer Sort (name, asc)
+      const nameHeader = table.querySelector<HTMLElement>('thead th[data-sort-key="name"]');
+      if (nameHeader) {
+        nameHeader.setAttribute('aria-sort', 'ascending');
+      }
       applyGainPctMetadata(table);
       return table.outerHTML;
     }

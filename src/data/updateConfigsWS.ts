@@ -1240,6 +1240,10 @@ function renderPositionsTableInline(positions: PortfolioPositionRecord[]): strin
         if (!key) return;
         th.setAttribute('data-sort-key', key);
         th.classList.add('sortable-col');
+        // Initialer Sort (name, asc)
+        if (key === 'name') {
+          th.setAttribute('aria-sort', 'ascending');
+        }
       });
       const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
       bodyRows.forEach((tr, idx) => {
