@@ -108,8 +108,8 @@ async def test_cashflow_missing_fx_lowers_coverage_and_skips_values(tmp_path):
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                ("tx1", 9, "acct-gbp", "2024-02-01", 1000, "GBP"),
-                ("tx2", 9, "acct-eur", "2024-02-01", 2000, "EUR"),
+                ("tx1", 4, "acct-gbp", "2024-02-01", 1000, "GBP"),
+                ("tx2", 4, "acct-eur", "2024-02-01", 2000, "EUR"),
             ],
         )
         conn.commit()

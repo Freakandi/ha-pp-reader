@@ -112,6 +112,9 @@ def build_daily_wealth_records(
                 outbound_transfers_eur=round(outbound, 6),
                 realized_gains_eur=round(realized_gains, 6),
                 unrealized_gains_eur=round(portfolio_wealth - invested_capital, 6),
+                unrealized_price_gains_eur=round(
+                    getattr(holdings_snap, "unrealized_price_gains_eur", 0.0) or 0.0, 6
+                ),
                 invested_capital_eur=round(invested_capital, 6),
                 performance_neutral_movements=round(
                     getattr(holdings_snap, "performance_neutral_movements", 0.0), 6

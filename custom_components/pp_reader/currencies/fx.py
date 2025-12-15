@@ -28,6 +28,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from custom_components.pp_reader.data.db_access import (
     FxRateRecord,
     load_fx_rates_for_date,
+    load_fx_rates_in_range,
     upsert_fx_rate,
 )
 
@@ -392,6 +393,27 @@ def load_cached_rate_records_sync(
     date_str = reference_date.strftime("%Y-%m-%d")
     records = load_fx_rates_for_date(db_path, date_str)
     return {record.currency: record for record in records}
+
+
+def load_fx_rates_cache_range(
+    db_path: Path,
+    start_date: str,
+    end_date: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, dict[str, float]]:
+    """Load FX rates for a date range into a fast lookup cache."""
+    records_by_date = load_fx_rates_in_range(db_path, start_date, end_date, conn=conn)
+    cache = {}
+    for date_iso, records in records_by_date.items():
+        rates = {}
+        for record in records:
+            try:
+                rates[record.currency.strip().upper()] = float(record.rate)
+            except (TypeError, ValueError):
+                continue
+        cache[date_iso] = rates
+    return cache
 
 
 async def ensure_exchange_rates_for_dates(
