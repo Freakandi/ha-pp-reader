@@ -5,6 +5,7 @@
 import { renderLineChart, updateLineChart, type LineChartOptions } from '../content/charting';
 import { DateRangePicker, type DateRange } from '../content/date-range-picker';
 import { createHeaderCard, formatNumber } from '../content/elements';
+import { escapeAttribute, escapeHtml } from '../utils/html';
 import type {
   DailyWealthRecord,
   DailyWealthResponse,
@@ -304,10 +305,11 @@ function renderScopeFilters(card: HTMLElement, slices: DailyWealthSlices | undef
           return '';
         }
         const checked = selectedScopeKeys.has(key) ? 'checked' : '';
-        const label = record.scope_name ?? record.scope_id;
+        const label = escapeHtml(record.scope_name ?? record.scope_id);
+        const safeKey = escapeAttribute(key);
         return `
           <label class="scope-option">
-            <input type="checkbox" data-scope-key="${key}" ${checked}>
+            <input type="checkbox" data-scope-key="${safeKey}" ${checked}>
             <span>${label}</span>
           </label>
         `;
