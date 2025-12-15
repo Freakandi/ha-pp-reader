@@ -624,9 +624,6 @@ def _compute_fx_coverage_ratio(
     return round(covered / len(required_currencies), 3)
 
 
-
-
-
 async def _fetch_exchange_rates_range_aiohttp(
     session: aiohttp.ClientSession,
     currency: str,

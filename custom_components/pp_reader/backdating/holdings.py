@@ -310,7 +310,6 @@ def _load_relevant_transactions(
         # Removed retired check to include history
 
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
-
             continue
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
@@ -465,14 +464,13 @@ def _build_holdings_valuations(
             # Calculate Unrealized Gain from Price Movement (Native Delta * FX)
             # This strips out the pure FX gain on the principal.
             if purchase_value_native is not None:
-                 market_value_native = shares * price_native
-                 native_gain = market_value_native - purchase_value_native
-                 unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
+                market_value_native = shares * price_native
+                native_gain = market_value_native - purchase_value_native
+                unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
             elif currency == "EUR":
-                 unrealized_price_gains_eur = round(
-                     value_eur - (purchase_value_eur or 0), 6
-                 )
-
+                unrealized_price_gains_eur = round(
+                    value_eur - (purchase_value_eur or 0), 6
+                )
 
         valuations.append(
             HoldingValuation(
@@ -585,6 +583,7 @@ def _process_sell_lots(
 
     return cost_sold_eur, cost_sold_native
 
+
 def _compute_price_coverage_ratio(
     holdings: list[HoldingValuation],
 ) -> float:
@@ -675,9 +674,7 @@ def _apply_transaction_update(
 
     # FIFO Logic
     if delta_shares > 0:
-        _process_buy_lots(
-            entry, delta_shares, tx_val_eur, tx_val_native, tx_date
-        )
+        _process_buy_lots(entry, delta_shares, tx_val_eur, tx_val_native, tx_date)
 
     else:
         # SELL: Reduce shares, consume lots FIFO
@@ -697,4 +694,3 @@ def _apply_transaction_update(
         holdings.pop(key, None)
 
     return realized_gain, neutral_movement
-
