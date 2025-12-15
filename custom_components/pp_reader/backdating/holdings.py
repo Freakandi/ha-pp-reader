@@ -182,6 +182,8 @@ def _compute_daily_holdings_snapshots_sync(
             amount,
             currency,
             tx_type,
+            fees,
+            taxes,
         ) in daily_adjustments:
             gain, neutral_val = _apply_transaction_update(
                 portfolio_uuid,
@@ -190,6 +192,8 @@ def _compute_daily_holdings_snapshots_sync(
                 amount,
                 currency,
                 tx_type,
+                fees,
+                taxes,
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
@@ -293,13 +297,16 @@ def _load_relevant_transactions(
     portfolios: dict[str, dict[str, Any]],
     securities: dict[str, dict[str, Any]],
     until: date | None = None,
-) -> list[tuple[date, str, str, float, int, str, int]]:
+) -> list[tuple[date, str, str, float, int, str, int, int, int]]:
     """
     Return security transactions that affect holdings.
 
-    Returns: (date, portfolio, security, shares, amount_cents, currency, type)
+    Returns:
+        (date, portfolio, security, shares, amount_cents, currency, type,
+         fees_cents, taxes_cents)
+
     """
-    relevant: list[tuple[date, str, str, float, int, str, int]] = []
+    relevant: list[tuple[date, str, str, float, int, str, int, int, int]] = []
 
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
@@ -337,10 +344,22 @@ def _load_relevant_transactions(
 
         # Assuming amount is always positive in DB for the value of transaction
         amount = int(tx.amount or 0)
+        fees = int(tx.fees or 0)
+        taxes = int(tx.taxes or 0)
         currency = tx.currency_code or "EUR"
 
         relevant.append(
-            (parsed_date, tx.portfolio, tx.security, shares, amount, currency, tx.type)
+            (
+                parsed_date,
+                tx.portfolio,
+                tx.security,
+                shares,
+                amount,
+                currency,
+                tx.type,
+                fees,
+                taxes,
+            )
         )
 
     relevant.sort(key=lambda item: item[0])
@@ -348,9 +367,9 @@ def _load_relevant_transactions(
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float, int, str, int]],
-) -> dict[date, list[tuple[str, str, float, int, str, int]]]:
-    grouped: dict[date, list[tuple[str, str, float, int, str, int]]] = {}
+    transactions: Iterable[tuple[date, str, str, float, int, str, int, int, int]],
+) -> dict[date, list[tuple[str, str, float, int, str, int, int, int]]]:
+    grouped: dict[date, list[tuple[str, str, float, int, str, int, int, int]]] = {}
     for (
         tx_date,
         portfolio_uuid,
@@ -359,9 +378,20 @@ def _group_transaction_adjustments(
         amount,
         currency,
         tx_type,
+        fees,
+        taxes,
     ) in transactions:
         grouped.setdefault(tx_date, []).append(
-            (portfolio_uuid, security_uuid, delta_shares, amount, currency, tx_type)
+            (
+                portfolio_uuid,
+                security_uuid,
+                delta_shares,
+                amount,
+                currency,
+                tx_type,
+                fees,
+                taxes,
+            )
         )
     return grouped
 
@@ -630,6 +660,8 @@ def _apply_transaction_update(
     amount: int,
     currency: str,
     tx_type: int,
+    fees: int,
+    taxes: int,
     fx_rates: dict[str, float],
     holdings: dict[tuple[str, str], dict[str, Any]],
     tx_date: date,
@@ -660,25 +692,29 @@ def _apply_transaction_update(
     # Resolving value of transaction in EUR at daily rate
     tx_val_eur = 0.0
     tx_val_native = 0.0
+    fees_eur = 0.0
+    taxes_eur = 0.0
+
+    tx_currency = (currency or "EUR").strip().upper()
+    fx = 1.0 if tx_currency == "EUR" else fx_rates.get(tx_currency)
+
     if amount > 0:
-        tx_currency = (currency or "EUR").strip().upper()
-        # For Type 2/3 (Delivery/Transfer), amount is value.
-        # For Type 0/1 (Buy/Sell), amount is value.
-        # This value is in tx_currency.
-
-        # Native value (in Security Currency units) needs conversion
-        # if Tx currency != Security currency?
-        # Assuming for now Tx Currency matches Security Currency or is acceptable proxy.
-        # Ideally we'd need Security Metadata here to know its currency,
-        # but explicit "currency" arg comes from the transaction record.
-
         # Determine native value (units of security currency)
         # We invoke cent_to_eur effectively as cent_to_unit here.
         tx_val_native = cent_to_eur(amount)
 
-        fx = 1.0 if tx_currency == "EUR" else fx_rates.get(tx_currency)
         if fx:
             tx_val_eur = tx_val_native / fx
+
+    if fees > 0:
+        fees_val_native = cent_to_eur(fees)
+        if fx:
+            fees_eur = fees_val_native / fx
+
+    if taxes > 0:
+        taxes_val_native = cent_to_eur(taxes)
+        if fx:
+            taxes_eur = taxes_val_native / fx
 
     neutral_movement = 0.0
     # Accumulate Performance Neutral Movements (Ein-/Auslieferung)
@@ -706,7 +742,9 @@ def _apply_transaction_update(
         # but check sign convention. In common usage here, 'amount' is positive value.
         # So Realized Gain = Sale Value - Cost Basis
         if tx_type in _REALIZED_GAIN_TYPES:
-            realized_gain = tx_val_eur - cost_basis_sold_eur
+            # We want Gross Realized Gain: (Net Proceeds + Costs) - Cost Basis
+            gross_proceeds = tx_val_eur + fees_eur + taxes_eur
+            realized_gain = gross_proceeds - cost_basis_sold_eur
 
     if entry["shares"] <= _EPSILON:  # Filter dust
         holdings.pop(key, None)
