@@ -7,6 +7,7 @@ import {
   makeTable,
   formatNumber,
   formatValue,
+  renderLoadingState,
 } from '../content/elements';
 import { openSecurityDetail } from '../dashboard';
 import {
@@ -724,7 +725,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
         <div class="positions-container">${expanded
         ? (hasPortfolioPositions(d.uuid)
           ? renderPositionsTable(getPortfolioPositions(d.uuid))
-          : '<div class=\"loading\">Lade Positionen...</div>')
+          : renderLoadingState('Lade Positionen...'))
         : ''
       }</div>
       </td>
@@ -1246,7 +1247,7 @@ async function reloadPortfolioPositions(
     return; // Hidden Rows sollen keinen Silent-Preload anstoßen
   }
 
-  targetContainer.innerHTML = '<div class="loading">Neu laden...</div>';
+  targetContainer.innerHTML = renderLoadingState('Neu laden...');
   try {
     const resp: PortfolioPositionsResponse = await fetchPortfolioPositionsWS(
       _hassRef,
@@ -1386,7 +1387,7 @@ async function waitForElement<T extends Element>(
               if (!hasPortfolioPositions(portfolioUuid)) {
                 const containerEl = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
                 if (containerEl) {
-                  containerEl.innerHTML = '<div class="loading">Lade Positionen...</div>';
+                  containerEl.innerHTML = renderLoadingState('Lade Positionen...');
                 }
                 try {
                   const resp: PortfolioPositionsResponse = await fetchPortfolioPositionsWS(

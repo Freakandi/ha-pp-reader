@@ -438,6 +438,34 @@ export function formatGainPct(value: number): string {
   return `<span class="${cls}">${formatNumber(num)}&nbsp;%</span>`;
 }
 
+export function renderLoadingState(message = 'Laden...'): string {
+  const safeMessage = message ? message : 'Laden...';
+  // SVG-Spinner (inline), angelehnt an Material Design Circular Progress
+  // Verwendet animateTransform für CSS-unabhängige Rotation
+  const spinnerSvg = `
+    <svg class="spinner-icon" viewBox="0 0 50 50" aria-hidden="true" style="width: 1.5em; height: 1.5em; vertical-align: middle; animation: rotate 2s linear infinite;">
+      <circle class="path" cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="5" style="stroke-linecap: round; animation: dash 1.5s ease-in-out infinite;"></circle>
+      <style>
+        @keyframes rotate {
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes dash {
+          0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+          50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+          100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+        }
+      </style>
+    </svg>
+  `;
+
+  return `
+    <div class="loading" role="status" aria-live="polite" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--secondary-text-color);">
+      ${spinnerSvg}
+      <span>${safeMessage}</span>
+    </div>
+  `;
+}
+
 /**
  * Neue Utility: sortTableRows
  * Sortiert die Datenzeilen (<tr>) einer Tabelle anhand eines Keys.
