@@ -6,6 +6,7 @@ import { makeTable } from '../content/elements';
 import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
 import { formatValue } from '../content/elements';
 import type { SortDirection } from '../content/elements';
+import { escapeHtml } from '../utils/html';
 import { getOverviewHelpers } from '../dashboard/registry';
 import { deserializePortfolioSnapshot } from '../lib/api/portfolio';
 import type {
@@ -1203,7 +1204,7 @@ function renderPositionsTableInline(positions: PortfolioPositionRecord[]): strin
     const performance = normalizePerformanceMetrics(position);
 
     return {
-      name: position.name,
+      name: escapeHtml(position.name),
       current_holdings: position.current_holdings,
       purchase_value: position.purchase_value,
       current_value: position.current_value,
@@ -1595,6 +1596,7 @@ export const __TEST_ONLY__ = {
     pendingPortfolioUpdates.clear();
     pendingRetryMetaMap.clear();
   },
+  renderPositionsTableInline,
 };
 
 // === Globale / modulweite Utilities ===
