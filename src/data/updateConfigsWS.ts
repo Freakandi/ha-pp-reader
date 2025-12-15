@@ -1240,6 +1240,11 @@ function renderPositionsTableInline(positions: PortfolioPositionRecord[]): strin
         if (!key) return;
         th.setAttribute('data-sort-key', key);
         th.classList.add('sortable-col');
+        th.setAttribute('role', 'button');
+        th.setAttribute('tabindex', '0');
+        th.setAttribute('aria-sort', 'none');
+        const label = th.textContent || '';
+        th.setAttribute('aria-label', `${escapeHtml(label)} sortieren`);
       });
       const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
       bodyRows.forEach((tr, idx) => {

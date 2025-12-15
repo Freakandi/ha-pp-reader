@@ -430,6 +430,11 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
           }
           th.setAttribute('data-sort-key', col.key);
           th.classList.add('sortable-col');
+          th.setAttribute('role', 'button');
+          th.setAttribute('tabindex', '0');
+          th.setAttribute('aria-sort', 'none');
+          const label = th.textContent || '';
+          th.setAttribute('aria-label', `${escapeHtml(label)} sortieren`);
         });
     const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
     bodyRows.forEach((tr, idx) => {
@@ -1171,11 +1176,16 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     table.querySelectorAll('thead th.sort-active').forEach(th => {
       th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
     });
+    // A11y Indikatoren zurücksetzen
+    table.querySelectorAll('thead th[aria-sort]').forEach(th => {
+      th.setAttribute('aria-sort', 'none');
+    });
 
     // Aktives TH markieren
     const th = table.querySelector<HTMLElement>(`thead th[data-sort-key="${key}"]`);
     if (th) {
       th.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
+      th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
     }
 
     // Neu einfügen
@@ -1202,7 +1212,7 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
 
   applySort(currentKey, currentDir);
 
-  table.addEventListener('click', (event: MouseEvent) => {
+  const handleSort = (event: Event): void => {
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
@@ -1224,6 +1234,17 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     container.dataset.sortKey = keyAttr;
     container.dataset.sortDir = dir;
     applySort(keyAttr, dir);
+  };
+
+  table.addEventListener('click', (event: MouseEvent) => {
+    handleSort(event);
+  });
+
+  table.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault(); // Prevent page scroll on Space
+      handleSort(event);
+    }
   });
 }
 

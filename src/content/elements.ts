@@ -213,7 +213,8 @@ export function makeTable(
     const alignClass = c.align === "right" ? ' class="align-right"' : "";
     // Falls sortable: th data-sort-key setzen (nur wenn key vorhanden)
     if (sortable && c.key) {
-      html += `<th${alignClass} data-sort-key="${c.key}">${c.label}</th>`;
+      const sortLabel = `${escapeAttribute(c.label)} sortieren`;
+      html += `<th${alignClass} data-sort-key="${c.key}" role="button" tabindex="0" aria-sort="none" aria-label="${sortLabel}">${c.label}</th>`;
     } else {
       html += `<th${alignClass}>${c.label}</th>`;
     }
@@ -572,6 +573,12 @@ export function sortTableRows(
   tableEl.querySelectorAll("thead th.sort-active").forEach((th) => {
     th.classList.remove("sort-active", "dir-asc", "dir-desc");
   });
+
+  // A11y Indikatoren aktualisieren
+  tableEl.querySelectorAll("thead th[aria-sort]").forEach((th) => {
+    th.setAttribute("aria-sort", "none");
+  });
+
   const activeTh = tableEl.querySelector<HTMLElement>(
     `thead th[data-sort-key="${key}"]`,
   );
@@ -580,6 +587,7 @@ export function sortTableRows(
       "sort-active",
       dir === "asc" ? "dir-asc" : "dir-desc",
     );
+    activeTh.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
   }
 
   return rows;
