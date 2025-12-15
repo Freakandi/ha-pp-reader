@@ -225,9 +225,9 @@ export function makeTable(
     const alignClass = c.align === 'right' ? ' class="align-right"' : '';
     // Falls sortable: th data-sort-key setzen (nur wenn key vorhanden)
     if (sortable && c.key) {
-      let ariaSortAttr = '';
+      let ariaSortAttr = "";
       if (c.key === defaultSortKey) {
-        ariaSortAttr = ` aria-sort="${defaultSortDir === 'asc' ? 'ascending' : 'descending'}"`;
+        ariaSortAttr = ` aria-sort="${defaultSortDir === "asc" ? "ascending" : "descending"}"`;
       }
       html += `<th${alignClass} data-sort-key="${c.key}"${ariaSortAttr}>${c.label}</th>`;
     } else {
@@ -576,19 +576,21 @@ export function sortTableRows(
   if (footer) tbody.appendChild(footer);
 
   // Visuelle Indikatoren aktualisieren (optional generisch)
-  tableEl.querySelectorAll('thead th.sort-active').forEach((th) => {
-    th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
-    th.removeAttribute('aria-sort');
+  tableEl.querySelectorAll("thead th.sort-active").forEach((th) => {
+    th.classList.remove("sort-active", "dir-asc", "dir-desc");
+    th.removeAttribute("aria-sort");
   });
-  const activeTh = tableEl.querySelector<HTMLElement>(`thead th[data-sort-key="${key}"]`);
+  const activeTh = tableEl.querySelector<HTMLElement>(
+    `thead th[data-sort-key="${key}"]`,
+  );
   if (activeTh) {
     activeTh.classList.add(
-      'sort-active',
-      dir === 'asc' ? 'dir-asc' : 'dir-desc'
+      "sort-active",
+      dir === "asc" ? "dir-asc" : "dir-desc",
     );
     activeTh.setAttribute(
-      'aria-sort',
-      dir === 'asc' ? 'ascending' : 'descending'
+      "aria-sort",
+      dir === "asc" ? "ascending" : "descending",
     );
   }
 
