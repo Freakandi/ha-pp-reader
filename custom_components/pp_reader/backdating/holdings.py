@@ -118,8 +118,10 @@ def _compute_daily_holdings_snapshots_sync(
 
     portfolios = _load_portfolios(db_path)
     securities = _load_securities(db_path)
-    transactions = _load_relevant_transactions(db_path, portfolios, securities)
-    price_cache = _load_price_cache(db_path)
+    transactions = _load_relevant_transactions(
+        db_path, portfolios, securities, until=end_date
+    )
+    price_cache = _load_price_cache(db_path, until=end_date)
 
     # Initialize FX fallback cache with 1.0 for EUR
     last_known_fx_rates: dict[str, float] = {"EUR": 1.0}
@@ -290,6 +292,7 @@ def _load_relevant_transactions(
     db_path: Path,
     portfolios: dict[str, dict[str, Any]],
     securities: dict[str, dict[str, Any]],
+    until: date | None = None,
 ) -> list[tuple[date, str, str, float, int, str, int]]:
     """
     Return security transactions that affect holdings.
@@ -320,6 +323,9 @@ def _load_relevant_transactions(
 
         parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
         if parsed_date is None:
+            continue
+
+        if until and parsed_date > until:
             continue
 
         shares = normalize_shares(tx.shares) if tx.shares else 0.0
@@ -362,6 +368,7 @@ def _group_transaction_adjustments(
 
 def _load_price_cache(
     db_path: Path,
+    until: date | None = None,
 ) -> dict[str, list[tuple[date, float, str]]]:
     """Load historical prices into a security->sorted list cache."""
     cache: dict[str, list[tuple[date, float, str]]] = {}
@@ -380,6 +387,10 @@ def _load_price_cache(
         price_date = fx_module._parse_date_value(row["date"])  # noqa: SLF001
         if security_uuid is None or price_date is None:
             continue
+
+        if until and price_date > until:
+            continue
+
         normalized_price = normalize_raw_price(row["close"], decimals=6)
         if normalized_price is None:
             continue
