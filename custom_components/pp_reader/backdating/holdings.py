@@ -187,6 +187,7 @@ def _compute_daily_holdings_snapshots_sync(
             tx_type,
             fees,
             taxes,
+            fx_rate_to_base,
         ) in daily_adjustments:
             gain, neutral_val = _apply_transaction_update(
                 portfolio_uuid,
@@ -197,6 +198,7 @@ def _compute_daily_holdings_snapshots_sync(
                 tx_type,
                 fees,
                 taxes,
+                fx_rate_to_base,
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
@@ -308,10 +310,10 @@ def _load_relevant_transactions(
 
     Returns:
         (date, portfolio, security, shares, amount_cents, currency, type,
-         fees_cents, taxes_cents)
+         fees_cents, taxes_cents, fx_rate_to_base)
 
     """
-    relevant: list[tuple[date, str, str, float, int, str, int, int, int]] = []
+    relevant: list[tuple[date, str, str, float, int, str, int, int, int, float | None]] = []
 
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
@@ -364,6 +366,7 @@ def _load_relevant_transactions(
                 tx.type,
                 fees,
                 taxes,
+                getattr(tx, "fx_rate_to_base", None),
             )
         )
 
@@ -372,9 +375,9 @@ def _load_relevant_transactions(
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float, int, str, int, int, int]],
-) -> dict[date, list[tuple[str, str, float, int, str, int, int, int]]]:
-    grouped: dict[date, list[tuple[str, str, float, int, str, int, int, int]]] = {}
+    transactions: Iterable[tuple[date, str, str, float, int, str, int, int, int, float | None]],
+) -> dict[date, list[tuple[str, str, float, int, str, int, int, int, float | None]]]:
+    grouped: dict[date, list[tuple[str, str, float, int, str, int, int, int, float | None]]] = {}
     for (
         tx_date,
         portfolio_uuid,
@@ -385,6 +388,7 @@ def _group_transaction_adjustments(
         tx_type,
         fees,
         taxes,
+        fx_rate_to_base,
     ) in transactions:
         grouped.setdefault(tx_date, []).append(
             (
@@ -396,6 +400,7 @@ def _group_transaction_adjustments(
                 tx_type,
                 fees,
                 taxes,
+                fx_rate_to_base,
             )
         )
     return grouped
@@ -698,6 +703,7 @@ def _apply_transaction_update(
     tx_type: int,
     fees: int,
     taxes: int,
+    fx_rate_to_base: float | None,
     fx_rates: dict[str, float],
     holdings: dict[tuple[str, str], dict[str, Any]],
     tx_date: date,
@@ -735,8 +741,8 @@ def _apply_transaction_update(
     tx_currency = (currency or "EUR").strip().upper()
     fx = 1.0
     if tx_currency != "EUR":
-        if getattr(tx, "fx_rate_to_base", None) and tx.fx_rate_to_base > 0:
-             fx = tx.fx_rate_to_base
+        if fx_rate_to_base and fx_rate_to_base > 0:
+             fx = fx_rate_to_base
         else:
              fx = fx_rates.get(tx_currency, 1.0)
 
