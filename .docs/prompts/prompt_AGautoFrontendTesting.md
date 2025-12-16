@@ -36,8 +36,11 @@ Repeat until one reproducible issue is fixed:
 2. **Headless Verification**
    - **Smoke Tests**: Run `/verify-ui` (or equivalent workflow) to check rendering.
    - **Complex Interactions**: Create ephemeral tests to verify sorting, filtering, etc.
-   - **Probe, Don't Guess**: Use `expect(...)` in Playwright to verify state, instead of relying on visual inspection of screenshots alone.
-3. **Evidence Capture**
+   - **Probe, Don't Guess**: Use `expect(...)` in Playwright to verify state programmatically first.
+3. **Visual Confirmation**
+   - **MANDATORY**: Use `browser_subagent` to open the page and visually confirm the UI state matches expectations.
+   - **Do not skip**: Automation proves logic; this proves rendering.
+4. **Evidence Capture**
    - Capture screenshots for *reporting* (user review) in `walkthrough.md`.
 4. **Issue Handling**
    - Diagnose root causes in `src/` or `custom_components/pp_reader/`.

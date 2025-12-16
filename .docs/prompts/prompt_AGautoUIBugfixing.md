@@ -36,7 +36,10 @@ Repeat until one issue is fixed:
    - **Smoke Tests**: Run `/verify-ui`.
    - **Complex Interactions**: Verification scripts (e.g., `/verify-complex-interaction`).
    - **Probe, Don't Guess**: Do not rely on visual inspection of screenshots for debugging. Use valid assertions.
-3. **Telemetry Monitoring**
+3. **Visual Confirmation**
+   - **MANDATORY**: Use `browser_subagent` to visually verify the fix.
+   - Assertions prove logic; you must PROVE rendering.
+4. **Telemetry Monitoring**
    - Monitor `/tmp/ha_pp_reader_hass.log` and browser console (via Playwright page errors).
 4. **Issue Handling**
    - Diagnose root cause in `src/` or `custom_components/pp_reader/`.
