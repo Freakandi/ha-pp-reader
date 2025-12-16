@@ -282,6 +282,7 @@ export class DateRangePicker {
         const prevBtn = document.createElement('button');
         prevBtn.className = 'drp-nav-btn';
         prevBtn.innerHTML = '‹';
+        prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
         // Only show prev on left calendar
         if (position === 'left') {
             prevBtn.addEventListener('click', (e) => {
@@ -300,6 +301,7 @@ export class DateRangePicker {
         const nextBtn = document.createElement('button');
         nextBtn.className = 'drp-nav-btn';
         nextBtn.innerHTML = '›';
+        nextBtn.setAttribute('aria-label', 'Nächster Monat');
         // Only show next on right calendar
         if (position === 'right') {
             nextBtn.addEventListener('click', (e) => {
@@ -351,12 +353,24 @@ export class DateRangePicker {
             const cell = document.createElement('div');
             cell.className = 'drp-day';
             cell.textContent = d.toString();
+            cell.setAttribute('role', 'button');
+            cell.tabIndex = 0;
+            const label = current.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            cell.setAttribute('aria-label', label);
 
             this.applyDayClasses(cell, current);
 
             cell.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.handleDayClick(current);
+            });
+
+            cell.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.handleDayClick(current);
+                }
             });
 
             cell.addEventListener('mouseenter', () => {
