@@ -24,6 +24,8 @@ def test_fifo_buy_creates_lot():
         amount=100000,
         currency="EUR",
         tx_type=0,  # Buy
+        fees=0,
+        taxes=0,
         fx_rates=FX_RATES,
         holdings=holdings,
         tx_date=tx_date,
@@ -46,12 +48,32 @@ def test_fifo_sell_consumes_oldest_lot():
 
     # Lot 1: Buy 10 @ 10 EUR
     _apply_transaction_update(
-        PORTFOLIO, SECURITY, 10.0, 10000, "EUR", 0, FX_RATES, holdings, date(2023, 1, 1)
+        PORTFOLIO,
+        SECURITY,
+        10.0,
+        10000,
+        "EUR",
+        0,
+        0,
+        0,
+        FX_RATES,
+        holdings,
+        date(2023, 1, 1),
     )
 
     # Lot 2: Buy 10 @ 20 EUR
     _apply_transaction_update(
-        PORTFOLIO, SECURITY, 10.0, 20000, "EUR", 0, FX_RATES, holdings, date(2023, 1, 2)
+        PORTFOLIO,
+        SECURITY,
+        10.0,
+        20000,
+        "EUR",
+        0,
+        0,
+        0,
+        FX_RATES,
+        holdings,
+        date(2023, 1, 2),
     )
 
     entry = holdings[(PORTFOLIO, SECURITY)]
@@ -73,6 +95,8 @@ def test_fifo_sell_consumes_oldest_lot():
         amount=45000,  # 450 EUR
         currency="EUR",
         tx_type=1,  # Sell
+        fees=0,
+        taxes=0,
         fx_rates=FX_RATES,
         holdings=holdings,
         tx_date=date(2023, 2, 1),
@@ -95,7 +119,17 @@ def test_fifo_sell_exact_lot():
     holdings = {}
     # Buy 10 @ 10
     _apply_transaction_update(
-        PORTFOLIO, SECURITY, 10.0, 10000, "EUR", 0, FX_RATES, holdings, date(2023, 1, 1)
+        PORTFOLIO,
+        SECURITY,
+        10.0,
+        10000,
+        "EUR",
+        0,
+        0,
+        0,
+        FX_RATES,
+        holdings,
+        date(2023, 1, 1),
     )
 
     # Sell 10 @ 20
@@ -106,6 +140,8 @@ def test_fifo_sell_exact_lot():
         20000,
         "EUR",
         1,
+        0,
+        0,
         FX_RATES,
         holdings,
         date(2023, 2, 1),
@@ -121,7 +157,17 @@ def test_fifo_fx_conversion():
     # Buy 10 @ 100 USD (FX 2.0) -> 50 EUR Cost (100 / 2.0)
     # Cost per share = 5 EUR
     _apply_transaction_update(
-        PORTFOLIO, SECURITY, 10.0, 10000, "USD", 0, FX_RATES, holdings, date(2023, 1, 1)
+        PORTFOLIO,
+        SECURITY,
+        10.0,
+        10000,
+        "USD",
+        0,
+        0,
+        0,
+        FX_RATES,
+        holdings,
+        date(2023, 1, 1),
     )
 
     entry = holdings[(PORTFOLIO, SECURITY)]
@@ -137,6 +183,8 @@ def test_fifo_fx_conversion():
         20000,
         "USD",
         1,
+        0,
+        0,
         FX_RATES,
         holdings,
         date(2023, 2, 1),

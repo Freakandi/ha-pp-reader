@@ -160,6 +160,9 @@ def _compute_daily_holdings_snapshots_sync(
 
     date_cursor = start_date
 
+    # Cursor map for O(1) price lookups: security_uuid -> last_index
+    price_cursors: dict[str, int] = {}
+
     while date_cursor <= end_date:
         daily_adjustments = adjustments_by_date.get(date_cursor, ())
         date_iso = date_cursor.isoformat()
@@ -214,6 +217,7 @@ def _compute_daily_holdings_snapshots_sync(
             price_cache,
             fx_rates,
             target_date=date_cursor,
+            price_cursors=price_cursors,
         )
         price_coverage_ratio = _compute_price_coverage_ratio(valuations)
         fx_coverage_ratio = _compute_fx_coverage_ratio(valuations)
@@ -452,29 +456,45 @@ def _resolve_price_for_date(
     security_uuid: str,
     price_cache: dict[str, list[tuple[date, float, str]]],
     target_date: date,
-) -> tuple[float | None, str | None, bool]:
+    cursor_hint: int | None = None,
+) -> tuple[float | None, str | None, bool, int]:
     """
-    Return close price on or before target date, plus stale flag.
+    Return close price on or before target date, plus stale flag and updated cursor.
 
-    Uses binary search for O(log N) lookup performance instead of O(N) linear scan.
+    Uses cursor hint for amortized O(1) lookup when processing sequential dates,
+    falling back to binary search O(log N) if no cursor is provided.
     """
     entries = price_cache.get(security_uuid)
     if not entries:
-        return None, None, False
+        return None, None, False, 0
 
-    # Find insertion point for target_date.
-    # Entries are sorted by date (guaranteed by _load_price_cache).
-    # We want the rightmost entry where date <= target_date.
-    idx = bisect_right(entries, target_date, key=lambda x: x[0])
+    n = len(entries)
+    idx = 0
 
-    if idx == 0:
-        return None, None, False
+    # Fast path: use cursor if available
+    if cursor_hint is not None and 0 <= cursor_hint < n:
+        # Check if we can advance from cursor
+        idx = cursor_hint
+        # Advance while next entry is still <= target_date
+        while idx + 1 < n and entries[idx + 1][0] <= target_date:
+            idx += 1
 
-    # entry at idx-1 is the largest element <= target_date
-    selected_date, selected_price, selected_raw = entries[idx - 1]
+        # If the current cursor entry is > target_date (e.g. gap in processing), fallback to bisect
+        if entries[idx][0] > target_date:
+            idx = bisect_right(entries, target_date, key=lambda x: x[0]) - 1
+    else:
+        # Fallback to binary search
+        # We want the rightmost entry where date <= target_date.
+        idx = bisect_right(entries, target_date, key=lambda x: x[0]) - 1
+
+    if idx < 0:
+        # No entry <= target_date
+        return None, None, False, 0
+
+    selected_date, selected_price, selected_raw = entries[idx]
 
     stale = selected_date != target_date
-    return selected_price, selected_raw or selected_date.isoformat(), stale
+    return selected_price, selected_raw or selected_date.isoformat(), stale, idx
 
 
 def _build_holdings_valuations(
@@ -484,6 +504,7 @@ def _build_holdings_valuations(
     fx_rates: dict[str, float],
     *,
     target_date: date,
+    price_cursors: dict[str, int] | None = None,
 ) -> list[HoldingValuation]:
     valuations: list[HoldingValuation] = []
     for (portfolio_uuid, security_uuid), details in holdings:
@@ -494,11 +515,15 @@ def _build_holdings_valuations(
         security_meta = securities.get(security_uuid, {})
         currency = security_meta.get("currency") or "EUR"
 
-        price_native, price_date_raw, stale = _resolve_price_for_date(
+        cursor_hint = price_cursors.get(security_uuid) if price_cursors is not None else None
+        price_native, price_date_raw, stale, new_cursor = _resolve_price_for_date(
             security_uuid,
             price_cache,
             target_date,
+            cursor_hint,
         )
+        if price_cursors is not None:
+            price_cursors[security_uuid] = new_cursor
 
         fx_rate: float | None = 1.0 if currency == "EUR" else fx_rates.get(currency)
         value_eur: float | None = None
