@@ -377,7 +377,9 @@ def _load_relevant_transactions(
 def _group_transaction_adjustments(
     transactions: Iterable[tuple[date, str, str, float, int, str, int, int, int, float | None]],
 ) -> dict[date, list[tuple[str, str, float, int, str, int, int, int, float | None]]]:
-    grouped: dict[date, list[tuple[str, str, float, int, str, int, int, int, float | None]]] = {}
+    grouped: dict[
+        date, list[tuple[str, str, float, int, str, int, int, int, float | None]]
+    ] = {}
     for (
         tx_date,
         portfolio_uuid,
@@ -556,10 +558,10 @@ def _build_holdings_valuations(
                 market_value_native = shares * price_native
                 native_gain = market_value_native - purchase_value_native
                 unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
-            elif currency == "EUR":
                 unrealized_price_gains_eur = round(
                     value_eur - (purchase_value_eur or 0), 6
                 )
+
 
         valuations.append(
             HoldingValuation(
@@ -733,48 +735,11 @@ def _apply_transaction_update(
     entry = holdings[key]
 
     # Resolving value of transaction in EUR at daily rate
-    tx_val_eur = 0.0
-    tx_val_native = 0.0
-    fees_eur = 0.0
-    taxes_eur = 0.0
+    # Resolving value of transaction in EUR at daily rate
+    tx_val_eur, tx_val_native, fees_eur, taxes_eur = _resolve_transaction_values(
+        amount, currency, fees, taxes, fx_rate_to_base, fx_rates, security_currency
+    )
 
-    tx_currency = (currency or "EUR").strip().upper()
-    fx = 1.0
-    if tx_currency != "EUR":
-        if fx_rate_to_base and fx_rate_to_base > 0:
-             fx = fx_rate_to_base
-        else:
-             fx = fx_rates.get(tx_currency, 1.0)
-
-    if amount > 0:
-        # Determine value in transaction currency
-        tx_val_txn_curr = cent_to_eur(amount)
-
-        if fx:
-            tx_val_eur = tx_val_txn_curr / fx
-
-        # Determine native value (units of security currency)
-        if security_currency == tx_currency:
-            tx_val_native = tx_val_txn_curr
-        else:
-            # Fallback: Convert EUR value to security currency using daily rate
-            # (unless we had specific logic, but daily rate is best guess here)
-            sec_fx = 1.0
-            if security_currency != "EUR":
-                 sec_fx = fx_rates.get(security_currency, 1.0)
-
-            if sec_fx:
-                tx_val_native = tx_val_eur * sec_fx
-
-    if fees > 0:
-        fees_val_native = cent_to_eur(fees)
-        if fx:
-            fees_eur = fees_val_native / fx
-
-    if taxes > 0:
-        taxes_val_native = cent_to_eur(taxes)
-        if fx:
-            taxes_eur = taxes_val_native / fx
 
     neutral_movement = 0.0
     # Accumulate Performance Neutral Movements (Ein-/Auslieferung)
@@ -810,3 +775,54 @@ def _apply_transaction_update(
         holdings.pop(key, None)
 
     return realized_gain, neutral_movement
+
+
+def _resolve_transaction_values(
+    amount: int,
+    currency: str,
+    fees: int,
+    taxes: int,
+    fx_rate_to_base: float | None,
+    fx_rates: dict[str, float],
+    security_currency: str,
+) -> tuple[float, float, float, float]:
+    """Calculate EUR and Native values for transaction components."""
+
+    tx_val_eur = 0.0
+    tx_val_native = 0.0
+    fees_eur = 0.0
+    taxes_eur = 0.0
+
+    tx_currency = (currency or "EUR").strip().upper()
+    fx = 1.0
+    if tx_currency != "EUR":
+        if fx_rate_to_base and fx_rate_to_base > 0:
+            fx = fx_rate_to_base
+        else:
+            fx = fx_rates.get(tx_currency, 1.0)
+
+    if amount > 0:
+        tx_val_txn_curr = cent_to_eur(amount)
+        if fx:
+            tx_val_eur = tx_val_txn_curr / fx
+
+        if security_currency == tx_currency:
+            tx_val_native = tx_val_txn_curr
+        else:
+            sec_fx = 1.0
+            if security_currency != "EUR":
+                sec_fx = fx_rates.get(security_currency, 1.0)
+            if sec_fx:
+                tx_val_native = tx_val_eur * sec_fx
+
+    if fees > 0:
+        fees_val_native = cent_to_eur(fees)
+        if fx:
+            fees_eur = fees_val_native / fx
+
+    if taxes > 0:
+        taxes_val_native = cent_to_eur(taxes)
+        if fx:
+            taxes_eur = taxes_val_native / fx
+
+    return tx_val_eur, tx_val_native, fees_eur, taxes_eur

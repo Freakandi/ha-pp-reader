@@ -44,7 +44,7 @@ def read_portfolio_bytes(path: str | Path) -> bytes:
         LOGGER.exception("Unable to read portfolio archive %s", path_obj)
         raise PortfolioParseError(ERR_ARCHIVE_IO) from err
 
-    if raw_data.startswith(PREFIX_MARKER) and len(raw_data) > PREFIX_LENGTH:
+    if raw_data.startswith(b"PPPBV") and len(raw_data) > PREFIX_LENGTH:
         raw_data = raw_data[PREFIX_LENGTH:]
 
     if not raw_data:
