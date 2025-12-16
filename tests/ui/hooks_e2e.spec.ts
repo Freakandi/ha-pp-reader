@@ -26,7 +26,7 @@ async function ensureSignedIn(page: Page): Promise<void> {
   const loginButton = page.getByRole('button', { name: /log in|anmelden/i });
   if (await loginButton.count()) {
     await Promise.all([
-      page.waitForLoadState('networkidle').catch(() => {}),
+      page.waitForLoadState('networkidle').catch(() => { }),
       loginButton.first().click(),
     ]);
   } else {
@@ -51,8 +51,8 @@ test.describe('Analyse Tab - Data Hooks E2E', () => {
   test('Displays correct total wealth from seeded data', async ({ page }) => {
     // Enable console logging from browser
     page.on('console', msg => {
-        if (msg.type() === 'error') console.error('BROWSER ERROR:', msg.text());
-        else console.log('BROWSER LOG:', msg.text());
+      if (msg.type() === 'error') console.error('BROWSER ERROR:', msg.text());
+      else console.log('BROWSER LOG:', msg.text());
     });
     page.on('pageerror', err => { console.log('BROWSER UNCAUGHT ERROR:', err); });
     // Log network errors only
@@ -60,34 +60,34 @@ test.describe('Analyse Tab - Data Hooks E2E', () => {
 
     // Intercept panel.js to ensure we test the latest on-disk version AND disable dev server lookup
     await page.route('**/panel.js*', async route => {
-        const original = fs.readFileSync('custom_components/pp_reader/www/pp_reader_dashboard/panel.js', 'utf8');
-        // Disable dev server lookup to avoid connecting to localhost:5173
-        const modified = original.replace('const devServerUrl = resolveDevServerUrl();', 'const devServerUrl = null; // resolveDevServerUrl();');
-        await route.fulfill({
-            body: modified,
-            contentType: 'application/javascript'
-        });
+      const original = fs.readFileSync('custom_components/pp_reader/www/pp_reader_dashboard/panel.js', 'utf8');
+      // Disable dev server lookup to avoid connecting to localhost:5173
+      const modified = original.replace('const devServerUrl = resolveDevServerUrl();', 'const devServerUrl = null; // resolveDevServerUrl();');
+      await route.fulfill({
+        body: modified,
+        contentType: 'application/javascript'
+      });
     });
     // Intercept dashboard module shim
     await page.route('**/dashboard.module.js*', async route => {
-        console.log('Intercepted dashboard.module.js request');
-        await route.fulfill({ path: 'custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js' });
+      console.log('Intercepted dashboard.module.js request');
+      await route.fulfill({ path: 'custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js' });
     });
     // Intercept hashed bundle (optional, verifying path)
     await page.route('**/dashboard.*.js', async route => {
-         const url = route.request().url();
-         // Extract filename from URL
-         const filename = url.split('/').pop();
-         if (filename) {
-             const localPath = `custom_components/pp_reader/www/pp_reader_dashboard/js/${filename}`;
-             // Check if exists? Route fulfill will 404 if not found?
-             // Helper logic: try fulfill, if fails fallback to continue?
-             // Simplest: just map to local path
-             console.log(`Intercepted bundle request: ${filename} -> ${localPath}`);
-             await route.fulfill({ path: localPath });
-         } else {
-             await route.continue();
-         }
+      const url = route.request().url();
+      // Extract filename from URL
+      const filename = url.split('/').pop();
+      if (filename) {
+        const localPath = `custom_components/pp_reader/www/pp_reader_dashboard/js/${filename}`;
+        // Check if exists? Route fulfill will 404 if not found?
+        // Helper logic: try fulfill, if fails fallback to continue?
+        // Simplest: just map to local path
+        console.log(`Intercepted bundle request: ${filename} -> ${localPath}`);
+        await route.fulfill({ path: localPath });
+      } else {
+        await route.continue();
+      }
     });
 
     // 2. Open Panel
@@ -103,72 +103,72 @@ test.describe('Analyse Tab - Data Hooks E2E', () => {
 
     // Helper to dump DOM structure including Shadow Roots
     const dumpStructure = async () => {
-        return await page.evaluate(() => {
-            function dumpNode(node: Node, depth: number): string {
-                let output = "  ".repeat(depth);
-                if (node instanceof Element) {
-                    output += node.tagName.toLowerCase();
-                    if (node.id) output += "#" + node.id;
-                    if (node.className && typeof node.className === 'string') {
-                         output += "." + node.className.split(/\s+/).join(".");
-                    } else if (node.classList.length > 0) {
-                          output += "." + Array.from(node.classList).join(".");
-                     }
-                } else {
-                     return ""; // Skip text nodes for brevity
-                }
-
-                let children = "";
-                if (node instanceof Element && node.shadowRoot) {
-                    output += " (SHADOW-ROOT)";
-                    Array.from(node.shadowRoot.children).forEach(child => {
-                        const childDump = dumpNode(child, depth + 1);
-                        if (childDump) children += "\n" + childDump;
-                    });
-
-                    // Also dump light children (slotted content)
-                    if (node.children.length > 0) {
-                         children += "\n" + "  ".repeat(depth) + "  (LIGHT-CHILDREN)";
-                         Array.from(node.children).forEach(child => {
-                            const childDump = dumpNode(child, depth + 2);
-                            if (childDump) children += "\n" + childDump;
-                         });
-                    }
-                } else if (node instanceof Element) {
-                    Array.from(node.children).forEach(child => {
-                        const childDump = dumpNode(child, depth + 1);
-                        if (childDump) children += "\n" + childDump;
-                    });
-                }
-                return output + children;
+      return await page.evaluate(() => {
+        function dumpNode(node: Node, depth: number): string {
+          let output = "  ".repeat(depth);
+          if (node instanceof Element) {
+            output += node.tagName.toLowerCase();
+            if (node.id) output += "#" + node.id;
+            if (node.className && typeof node.className === 'string') {
+              output += "." + node.className.split(/\s+/).join(".");
+            } else if (node.classList.length > 0) {
+              output += "." + Array.from(node.classList).join(".");
             }
-            return dumpNode(document.body, 0);
-        });
+          } else {
+            return ""; // Skip text nodes for brevity
+          }
+
+          let children = "";
+          if (node instanceof Element && node.shadowRoot) {
+            output += " (SHADOW-ROOT)";
+            Array.from(node.shadowRoot.children).forEach(child => {
+              const childDump = dumpNode(child, depth + 1);
+              if (childDump) children += "\n" + childDump;
+            });
+
+            // Also dump light children (slotted content)
+            if (node.children.length > 0) {
+              children += "\n" + "  ".repeat(depth) + "  (LIGHT-CHILDREN)";
+              Array.from(node.children).forEach(child => {
+                const childDump = dumpNode(child, depth + 2);
+                if (childDump) children += "\n" + childDump;
+              });
+            }
+          } else if (node instanceof Element) {
+            Array.from(node.children).forEach(child => {
+              const childDump = dumpNode(child, depth + 1);
+              if (childDump) children += "\n" + childDump;
+            });
+          }
+          return output + children;
+        }
+        return dumpNode(document.body, 0);
+      });
     };
 
     // Wait for the panel generic container
     await expect(page.locator('pp-reader-dashboard')).toBeVisible({ timeout: 15000 }).catch(async () => {
-        console.log('pp-reader-dashboard not visible. Trying to navigate via sidebar...');
+      console.log('pp-reader-dashboard not visible. Trying to navigate via sidebar...');
 
-        // Look for text "Portfolio Dashboard"
-        const link = page.getByRole('link', { name: 'Portfolio Dashboard' }).first();
-        if (await link.isVisible()) {
-             await link.click();
-             await expect(page.locator('pp-reader-dashboard')).toBeVisible({ timeout: 10000 });
-        } else {
-             // Dump full content if failed
-             console.log('Sidebar link not found either. Dumping FULL DOM STRUCTURE...');
-             console.log(await dumpStructure());
-             throw new Error('pp-reader-dashboard not visible and cannot navigate via sidebar');
-        }
+      // Look for text "Portfolio Dashboard"
+      const link = page.getByRole('link', { name: 'Portfolio Dashboard' }).first();
+      if (await link.isVisible()) {
+        await link.click();
+        await expect(page.locator('pp-reader-dashboard')).toBeVisible({ timeout: 10000 });
+      } else {
+        // Dump full content if failed
+        console.log('Sidebar link not found either. Dumping FULL DOM STRUCTURE...');
+        console.log(await dumpStructure());
+        throw new Error('pp-reader-dashboard not visible and cannot navigate via sidebar');
+      }
     });
 
     // Check for error card
     const errorCard = page.locator('div.card h2:has-text("Fehler")');
     if (await errorCard.isVisible()) {
-        const errorText = await page.locator('div.card pre').textContent();
-        console.error('Render Error detected:', errorText);
-        throw new Error(`Dashboard render error: ${errorText ?? 'Unknown error'}`);
+      const errorText = await page.locator('div.card pre').textContent();
+      console.error('Render Error detected:', errorText);
+      throw new Error(`Dashboard render error: ${errorText ?? 'Unknown error'}`);
     }
 
     // Dump dashboard inner HTML for debugging
@@ -212,8 +212,12 @@ test.describe('Analyse Tab - Data Hooks E2E', () => {
     // "13.000,00 €" or similar.
 
     // We expect "13.000,00 €"
+    // Use aria-label for more robust navigation if needed, but here we focus on wealth
+
+    // Debug: Log the actual content of the wealth element
     const wealthText = page.locator('#analyse-total-wealth');
     await expect(wealthText).toBeVisible();
+
     await expect(wealthText).toContainText(/13\.000/);
 
     // Check coverage badges are "Volle Abdeckung" (Full Coverage)

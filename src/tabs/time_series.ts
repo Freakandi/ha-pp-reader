@@ -738,7 +738,7 @@ export function renderAnalyse(
         <div id="analyse-date-picker-container"></div>
       </div>
 
-      <div class="analyse-headline" style="display: none;">
+      <div class="analyse-headline">
         <div class="headline-value" id="analyse-total-wealth">—</div>
         <div class="headline-meta">
           <span id="analyse-selection-label" class="selection-label"></span>
