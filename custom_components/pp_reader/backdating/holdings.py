@@ -515,7 +515,9 @@ def _build_holdings_valuations(
         security_meta = securities.get(security_uuid, {})
         currency = security_meta.get("currency") or "EUR"
 
-        cursor_hint = price_cursors.get(security_uuid) if price_cursors is not None else None
+        cursor_hint = (
+            price_cursors.get(security_uuid) if price_cursors is not None else None
+        )
         price_native, price_date_raw, stale, new_cursor = _resolve_price_for_date(
             security_uuid,
             price_cache,
