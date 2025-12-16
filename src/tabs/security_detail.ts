@@ -14,6 +14,7 @@ import {
   formatNumber,
   formatGain,
   formatGainPct,
+  createInlineSpinner,
 } from '../content/elements';
 import { renderLineChart, updateLineChart } from '../content/charting';
 import type { LineChartMarker, LineChartOptions } from '../content/charting';
@@ -1946,7 +1947,10 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       const button = rangeSelector.querySelector<HTMLButtonElement>(
         `.security-range-button[data-range="${rangeKey}"]`,
       );
+      let originalButtonText = '';
       if (button) {
+        originalButtonText = button.innerHTML;
+        button.innerHTML = createInlineSpinner('1em');
         button.disabled = true;
         button.classList.add('loading');
       }
@@ -2032,6 +2036,11 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       const safeMarkers = Array.isArray(markers) ? markers : [];
 
       setActiveRange(securityUuid, rangeKey);
+
+      // Restore button text before updating buttons (which re-enables them)
+      if (button && originalButtonText) {
+        button.innerHTML = originalButtonText;
+      }
       updateRangeButtons(rangeSelector, rangeKey);
       updateInfoBarContent(
         root,
