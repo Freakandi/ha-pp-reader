@@ -39,6 +39,7 @@ Repeat until one reproducible issue is fixed:
    - **Probe, Don't Guess**: Use `expect(...)` in Playwright to verify state programmatically first.
 3. **Visual Confirmation**
    - **MANDATORY**: Use `browser_subagent` to open the page and visually confirm the UI state matches expectations.
+   - **Access URL**: Reach the frontend via `http://192.168.5.108:8123/ppreader`, only possible when HA is running.
    - **Do not skip**: Automation proves logic; this proves rendering.
 4. **Evidence Capture**
    - Capture screenshots for *reporting* (user review) in `walkthrough.md`.

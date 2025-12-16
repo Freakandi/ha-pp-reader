@@ -8,6 +8,7 @@ trigger: always_on
 - **Probe & Verify Visually**:
   - **Automated**: Write ephemeral Playwright probes using `expect(...)` for logic.
   - **Visual**: Use the `browser_subagent` to visually inspect the rendered page. **YOU** must evaluate the visuals directly.
+  - **Access URL**: Reach the frontend via `http://192.168.5.108:8123/ppreader`, only possible when HA is running.
 ### 2. Headless Verification
 - **Smoke Tests**: Run `/verify-ui` to check basic rendering and take a screenshot.
 - **Complex Interactions**: Run `/verify-complex-interaction` to test sorting, filtering, and data loading.

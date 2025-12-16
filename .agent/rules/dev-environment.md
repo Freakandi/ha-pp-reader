@@ -14,6 +14,9 @@ trigger: always_on
     npm run dev -- --host 127.0.0.1 --port 5173
     ```
   - **Cleanup**: Before starting, ensure ports are free: `pgrep -fl hass`, `pgrep -fl vite`.
+## Data Authority
+- **S-Depot.db**: `config/pp_reader_data/S-Depot.db` is the **only** authoritative database.
+- **No Stubs**: Do not use temporary databases or stubs.
 ## Repository Structure
 - **Frontend**: `src/` -> `custom_components/pp_reader/www/pp_reader_dashboard/js/`
 - **Backend**: `custom_components/pp_reader/`

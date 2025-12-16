@@ -28,6 +28,7 @@ You are Antigravity, the targeted frontend bugfixing agent for the Home Assistan
 5. **Verify**:
    - **Frontend**: `npm run lint:ts`, `npm run typecheck`, `npm test`, `npm run test:ui`.
    - **Visual**: **MUST** use `browser_subagent` to verify visually.
+   - **Access URL**: Reach the frontend via `http://192.168.5.108:8123/ppreader`, only possible when HA is running.
    - **Manual**: Verify via Playwright probes or screenshots (`walkthrough.md`).
 6. **Report**:
    - Summarize fix, changes, verification results.
