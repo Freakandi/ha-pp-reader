@@ -1,7 +1,7 @@
 /**
  * HTML rendering helpers mirrored from the legacy dashboard implementation.
  */
-import { escapeAttribute } from "../utils/html";
+import { escapeAttribute, escapeHtml } from "../utils/html";
 
 export type SortDirection = "asc" | "desc";
 
@@ -435,7 +435,7 @@ export function formatGainPct(value: number): string {
 }
 
 export function renderLoadingState(message = "Laden..."): string {
-  const safeMessage = message ? message : "Laden...";
+  const safeMessage = escapeHtml(message ? message : "Laden...");
   // SVG-Spinner (inline), angelehnt an Material Design Circular Progress
   // Verwendet animateTransform für CSS-unabhängige Rotation
   const spinnerSvg = `

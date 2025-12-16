@@ -395,7 +395,7 @@ function emitPortfolioPositionsDiagnostics(
   emitDiagnosticsSnapshot('portfolio_positions', 'portfolio_positions', portfolioUuid, snapshot);
 }
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
-  const safeError = formatErrorMessage(error);
+  const safeError = escapeHtml(formatErrorMessage(error));
   return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
 }
 

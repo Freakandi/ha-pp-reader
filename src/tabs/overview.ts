@@ -1277,7 +1277,7 @@ async function reloadPortfolioPositions(
     );
     if (resp.error) {
       const errorText = typeof resp.error === 'string' ? resp.error : String(resp.error);
-      targetContainer.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
+      targetContainer.innerHTML = `<div class="error">${escapeHtml(errorText)} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
       return;
     }
     const normalizedPositions = normalizePositionRecords(
@@ -1299,7 +1299,7 @@ async function reloadPortfolioPositions(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    targetContainer.innerHTML = `<div class="error">Fehler: ${message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
+    targetContainer.innerHTML = `<div class="error">Fehler: ${escapeHtml(message)} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
   }
 }
 
@@ -1419,7 +1419,7 @@ async function waitForElement<T extends Element>(
                   if (resp.error) {
                     const errorText = typeof resp.error === 'string' ? resp.error : String(resp.error);
                     if (containerEl) {
-                      containerEl.innerHTML = `<div class="error">${errorText} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
+                      containerEl.innerHTML = `<div class="error">${escapeHtml(errorText)} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
                     }
                     return;
                   }
@@ -1449,7 +1449,7 @@ async function waitForElement<T extends Element>(
                   const message = error instanceof Error ? error.message : String(error);
                   const containerEl = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
                   if (containerEl) {
-                    containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${message} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
+                    containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${escapeHtml(message)} <button class="retry-pos" data-portfolio="${portfolioUuid}">Retry</button></div>`;
                   }
                   console.error('Fehler beim Lazy Load für', portfolioUuid, error);
                 }
