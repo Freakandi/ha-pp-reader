@@ -416,9 +416,18 @@ def _load_price_cache(
             """
         ).fetchall()
 
+    date_parse_cache: dict[Any, date | None] = {}
+
     for row in rows:
         security_uuid = row["security_uuid"]
-        price_date = fx_module._parse_date_value(row["date"])  # noqa: SLF001
+        raw_date = row["date"]
+
+        if raw_date in date_parse_cache:
+            price_date = date_parse_cache[raw_date]
+        else:
+            price_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
+            date_parse_cache[raw_date] = price_date
+
         if security_uuid is None or price_date is None:
             continue
 
@@ -429,11 +438,10 @@ def _load_price_cache(
         if normalized_price is None:
             continue
         cache.setdefault(security_uuid, []).append(
-            (price_date, normalized_price, str(row["date"]))
+            (price_date, normalized_price, str(raw_date))
         )
 
-    for entries in cache.values():
-        entries.sort(key=lambda entry: entry[0])
+    # Note: Rows are already sorted by security_uuid and date in the SQL query.
     return cache
 
 
@@ -479,7 +487,7 @@ def _resolve_price_for_date(
         while idx + 1 < n and entries[idx + 1][0] <= target_date:
             idx += 1
 
-        # If the current cursor entry is > target_date (e.g. gap in processing), fallback to bisect
+        # If cursor entry is > target_date (e.g. gap in processing), fallback to bisect
         if entries[idx][0] > target_date:
             idx = bisect_right(entries, target_date, key=lambda x: x[0]) - 1
     else:
