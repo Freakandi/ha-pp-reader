@@ -169,6 +169,9 @@ class Transaction:
     fees: int = 0
     taxes: int = 0
     amount_eur_cents: int | None = None
+    fx_amount: int | None = None
+    fx_currency_code: str | None = None
+    fx_rate_to_base: float | None = None
 
 
 @dataclass
@@ -546,10 +549,15 @@ def get_transactions(
                        WHEN u.type = 1 THEN u.amount
                        WHEN u.type = 11 THEN u.amount
                        WHEN u.type = 12 THEN -u.amount
-                       ELSE 0 END), 0) AS INTEGER) as taxes
+                       ELSE 0 END), 0) AS INTEGER) as taxes,
+                   MAX(ufx.fx_amount) as fx_amount,
+                   MAX(ufx.fx_currency_code) as fx_currency_code,
+                   MAX(ufx.fx_rate_to_base) as fx_rate_to_base
             FROM transactions t
             LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid
               AND u.type IN (1, 2, 11, 12, 13, 14)
+            LEFT JOIN transaction_units ufx ON t.uuid = ufx.transaction_uuid
+              AND ufx.fx_rate_to_base IS NOT NULL
             GROUP BY t.uuid
             ORDER BY t.date
         """)
@@ -561,7 +569,28 @@ def get_transactions(
         if db_path is not None:  # Verbindung nur schließen, wenn hier geöffnet wurde
             conn.close()
 
-    return [Transaction(*row) for row in rows]
+    return [
+        Transaction(
+            uuid=row[0],
+            type=row[1],
+            account=row[2],
+            portfolio=row[3],
+            other_account=row[4],
+            other_portfolio=row[5],
+            date=row[6],
+            currency_code=row[7],
+            amount=row[8],
+            shares=row[9],
+            security=row[10],
+            fees=row[11],
+            taxes=row[12],
+            amount_eur_cents=None, # Filled later or calculated
+            fx_amount=row[13],
+            fx_currency_code=row[14],
+            fx_rate_to_base=row[15],
+        )
+        for row in rows
+    ]
 
 
 def _to_epoch_day(date_value: Any) -> int | None:

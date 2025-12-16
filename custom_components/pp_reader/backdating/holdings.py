@@ -200,6 +200,7 @@ def _compute_daily_holdings_snapshots_sync(
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
+                security_currency=(securities.get(security_uuid, {}).get("currency") or "EUR").strip().upper(),
             )
             daily_realized_gains += gain
             daily_neutral_movements += neutral_val
@@ -700,6 +701,7 @@ def _apply_transaction_update(
     fx_rates: dict[str, float],
     holdings: dict[tuple[str, str], dict[str, Any]],
     tx_date: date,
+    security_currency: str = "EUR",
 ) -> tuple[float, float]:
     """
     Apply a single transaction to holdings state.
@@ -731,15 +733,32 @@ def _apply_transaction_update(
     taxes_eur = 0.0
 
     tx_currency = (currency or "EUR").strip().upper()
-    fx = 1.0 if tx_currency == "EUR" else fx_rates.get(tx_currency)
+    fx = 1.0
+    if tx_currency != "EUR":
+        if getattr(tx, "fx_rate_to_base", None) and tx.fx_rate_to_base > 0:
+             fx = tx.fx_rate_to_base
+        else:
+             fx = fx_rates.get(tx_currency, 1.0)
 
     if amount > 0:
-        # Determine native value (units of security currency)
-        # We invoke cent_to_eur effectively as cent_to_unit here.
-        tx_val_native = cent_to_eur(amount)
+        # Determine value in transaction currency
+        tx_val_txn_curr = cent_to_eur(amount)
 
         if fx:
-            tx_val_eur = tx_val_native / fx
+            tx_val_eur = tx_val_txn_curr / fx
+
+        # Determine native value (units of security currency)
+        if security_currency == tx_currency:
+            tx_val_native = tx_val_txn_curr
+        else:
+            # Fallback: Convert EUR value to security currency using daily rate
+            # (unless we had specific logic, but daily rate is best guess here)
+            sec_fx = 1.0
+            if security_currency != "EUR":
+                 sec_fx = fx_rates.get(security_currency, 1.0)
+
+            if sec_fx:
+                tx_val_native = tx_val_eur * sec_fx
 
     if fees > 0:
         fees_val_native = cent_to_eur(fees)
