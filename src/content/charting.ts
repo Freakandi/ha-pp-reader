@@ -11,6 +11,8 @@
  * existing chart instance.
  */
 
+import { escapeHtml } from '../utils/html';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 260;
@@ -302,8 +304,8 @@ const defaultYFormatter: LineChartFormatter = (value, _dataPoint, _index) => {
 };
 
 const defaultTooltipRenderer: LineChartTooltipRenderer = ({ xFormatted, yFormatted }) => `
-    <div class="chart-tooltip-date">${xFormatted}</div>
-    <div class="chart-tooltip-value">${yFormatted}&nbsp;€</div>
+    <div class="chart-tooltip-date">${escapeHtml(xFormatted)}</div>
+    <div class="chart-tooltip-value">${escapeHtml(yFormatted)}&nbsp;€</div>
   `;
 
 const defaultMarkerTooltipRenderer: LineChartMarkerTooltipRenderer = ({
@@ -313,8 +315,8 @@ const defaultMarkerTooltipRenderer: LineChartMarkerTooltipRenderer = ({
 }) => {
   const label = typeof marker.label === 'string' ? marker.label : null;
   return `
-    <div class="chart-tooltip-date">${label || xFormatted}</div>
-    <div class="chart-tooltip-value">${yFormatted}</div>
+    <div class="chart-tooltip-date">${escapeHtml(label || xFormatted)}</div>
+    <div class="chart-tooltip-value">${escapeHtml(yFormatted)}</div>
   `;
 };
 
