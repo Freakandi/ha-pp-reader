@@ -54,3 +54,9 @@ This workflow allows agents to "see" the UI in a headless environment (like the 
 
    // turbo
    `rm tests/ui/temp_verify_ui.spec.ts`
+
+5. **Visual Confirmation**
+   After the script passes, you **MUST** use the `browser_subagent` to open the page and visually confirm the state matches your expectations.
+   - Use `open_browser_url` to go to the page.
+   - Use `capture_screenshot` or `get_dom_state` to verify.
+   - **Do not skip this step.** Automation proves *logic*, this proves *rendering*.

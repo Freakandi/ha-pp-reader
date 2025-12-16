@@ -5,7 +5,9 @@ trigger: always_on
 ## UI Verification & Workflow
 ### 1. Build & Process
 - **Build First**: Always run `npm run build` before submitting changes affecting the UI logic or DOM.
-- **Probe, Don't Guess**: Do not rely on screenshots for verification. Write ephemeral Playwright probes using `expect(...)` to assert DOM states programmatically.
+- **Probe & Verify Visually**:
+  - **Automated**: Write ephemeral Playwright probes using `expect(...)` for logic.
+  - **Visual**: Use the `browser_subagent` to visually inspect the rendered page. **YOU** must evaluate the visuals directly.
 ### 2. Headless Verification
 - **Smoke Tests**: Run `/verify-ui` to check basic rendering and take a screenshot.
 - **Complex Interactions**: Run `/verify-complex-interaction` to test sorting, filtering, and data loading.

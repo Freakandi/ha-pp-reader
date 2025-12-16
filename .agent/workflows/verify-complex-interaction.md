@@ -46,3 +46,8 @@ This workflow is the preferred method for testing UI behavior in a headless envi
    - **Fail**: Read the error message. It explains exactly what happened (e.g., selector not found, assertion failed).
    - **Bug Found?**: If this confirms a bug, **move** this file to `tests/ui/` to make it a permanent regression test.
    - **One-off?**: If just a sanity check, delete the file or leave it in scratchpad for later reference.
+
+5. **Visual Confirmation**
+   Verification is not complete until you **SEE** it.
+   - Use `browser_subagent` to perform the exact same interaction (or a simplified version) to visually confirm the UI state.
+   - Check layout, colors, and responsiveness which scripts miss.
