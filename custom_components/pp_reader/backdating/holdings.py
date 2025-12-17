@@ -202,7 +202,11 @@ def _compute_daily_holdings_snapshots_sync(
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
-                security_currency=(securities.get(security_uuid, {}).get("currency") or "EUR").strip().upper(),
+                security_currency=(
+                    securities.get(security_uuid, {}).get("currency") or "EUR"
+                )
+                .strip()
+                .upper(),
             )
             daily_realized_gains += gain
             daily_neutral_movements += neutral_val
@@ -313,7 +317,9 @@ def _load_relevant_transactions(
          fees_cents, taxes_cents, fx_rate_to_base)
 
     """
-    relevant: list[tuple[date, str, str, float, int, str, int, int, int, float | None]] = []
+    relevant: list[
+        tuple[date, str, str, float, int, str, int, int, int, float | None]
+    ] = []
 
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
@@ -375,7 +381,9 @@ def _load_relevant_transactions(
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float, int, str, int, int, int, float | None]],
+    transactions: Iterable[
+        tuple[date, str, str, float, int, str, int, int, int, float | None]
+    ],
 ) -> dict[date, list[tuple[str, str, float, int, str, int, int, int, float | None]]]:
     grouped: dict[
         date, list[tuple[str, str, float, int, str, int, int, int, float | None]]
@@ -562,7 +570,6 @@ def _build_holdings_valuations(
                     value_eur - (purchase_value_eur or 0), 6
                 )
 
-
         valuations.append(
             HoldingValuation(
                 portfolio_uuid=portfolio_uuid,
@@ -740,7 +747,6 @@ def _apply_transaction_update(
         amount, currency, fees, taxes, fx_rate_to_base, fx_rates, security_currency
     )
 
-
     neutral_movement = 0.0
     # Accumulate Performance Neutral Movements (Ein-/Auslieferung)
     if tx_type in _NEUTRAL_INBOUND_TYPES or tx_type in _NEUTRAL_OUTBOUND_TYPES:
@@ -787,7 +793,6 @@ def _resolve_transaction_values(
     security_currency: str,
 ) -> tuple[float, float, float, float]:
     """Calculate EUR and Native values for transaction components."""
-
     tx_val_eur = 0.0
     tx_val_native = 0.0
     fees_eur = 0.0
