@@ -65,3 +65,5 @@ max-complexity = 25
 "custom_components/**/*" = [
     "PLR0913",
 ]
+
+

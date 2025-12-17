@@ -394,7 +394,7 @@ def test_iter_security_close_prices_rejects_invalid_range(
     seeded_history_db: Path,
 ) -> None:
     """Iterator should raise when start date is after end date."""
-    with pytest.raises(ValueError, match="start_date must be before end_date"):
+    with pytest.raises(ValueError, match="end_date muss größer oder gleich start_date sein"):
         list(
             iter_security_close_prices(
                 seeded_history_db,

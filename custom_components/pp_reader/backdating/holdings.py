@@ -810,41 +810,69 @@ def _resolve_transaction_values(
     security_currency: str,
 ) -> tuple[float, float, float, float]:
     """Calculate EUR and Native values for transaction components."""
-    tx_val_eur = 0.0
-    tx_val_native = 0.0
-    fees_eur = 0.0
-    taxes_eur = 0.0
-
     tx_currency = (currency or "EUR").strip().upper()
-    fx = 1.0
-    if tx_currency != "EUR":
-        if fx_rate_to_base and fx_rate_to_base > 0:
-            fx = fx_rate_to_base
-        else:
-            fx = fx_rates.get(tx_currency, 1.0)
+    fx = _get_effective_fx_rate(tx_currency, fx_rate_to_base, fx_rates)
 
-    if amount > 0:
-        tx_val_txn_curr = cent_to_eur(amount)
-        if fx:
-            tx_val_eur = tx_val_txn_curr / fx
+    tx_val_eur, tx_val_native = _calculate_transaction_amounts(
+        amount, tx_currency, fx, security_currency, fx_rates
+    )
 
-        if security_currency == tx_currency:
-            tx_val_native = tx_val_txn_curr
-        else:
-            sec_fx = 1.0
-            if security_currency != "EUR":
-                sec_fx = fx_rates.get(security_currency, 1.0)
-            if sec_fx:
-                tx_val_native = tx_val_eur * sec_fx
-
-    if fees > 0:
-        fees_val_native = cent_to_eur(fees)
-        if fx:
-            fees_eur = fees_val_native / fx
-
-    if taxes > 0:
-        taxes_val_native = cent_to_eur(taxes)
-        if fx:
-            taxes_eur = taxes_val_native / fx
+    fees_eur = _calculate_cost_in_eur(fees, fx)
+    taxes_eur = _calculate_cost_in_eur(taxes, fx)
 
     return tx_val_eur, tx_val_native, fees_eur, taxes_eur
+
+
+def _get_effective_fx_rate(
+    tx_currency: str,
+    fx_rate_to_base: float | None,
+    fx_rates: dict[str, float],
+) -> float:
+    """Determine the effective exchange rate to EUR."""
+    if tx_currency == "EUR":
+        return 1.0
+    if fx_rate_to_base is not None and fx_rate_to_base > 0:
+        return fx_rate_to_base
+    return fx_rates.get(tx_currency, 1.0)
+
+
+def _calculate_transaction_amounts(
+    amount: int,
+    tx_currency: str,
+    fx: float,
+    security_currency: str,
+    fx_rates: dict[str, float],
+) -> tuple[float, float]:
+    """Calculate transaction principal in EUR and Native currency."""
+    tx_val_eur = 0.0
+    tx_val_native = 0.0
+
+    if amount <= 0:
+        return tx_val_eur, tx_val_native
+
+    # cent_to_eur helps handling rounding consistency
+    tx_val_txn_curr = cent_to_eur(amount) or 0.0
+
+    if fx:
+        tx_val_eur = tx_val_txn_curr / fx
+
+    if security_currency == tx_currency:
+        tx_val_native = tx_val_txn_curr
+    else:
+        sec_fx = 1.0
+        if security_currency != "EUR":
+            sec_fx = fx_rates.get(security_currency, 1.0)
+        if sec_fx:
+            tx_val_native = tx_val_eur * sec_fx
+
+    return tx_val_eur, tx_val_native
+
+
+def _calculate_cost_in_eur(cost_cents: int, fx: float) -> float:
+    """Convert a cost (fees/taxes) from transaction currency to EUR."""
+    if cost_cents <= 0:
+        return 0.0
+    val_native = cent_to_eur(cost_cents) or 0.0
+    if fx:
+        return val_native / fx
+    return 0.0

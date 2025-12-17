@@ -45,6 +45,15 @@ else:  # pragma: no cover - import used in fixtures only
     DATA_MISSING_PLATFORMS = loader_mod.DATA_MISSING_PLATFORMS
     DATA_PRELOAD_PLATFORMS = loader_mod.DATA_PRELOAD_PLATFORMS
 
+try:
+    import custom_components
+    import custom_components.pp_reader
+    from custom_components.pp_reader.data.coordinator import PPReaderCoordinator
+except ImportError:
+    custom_components = None
+    PPReaderCoordinator = None
+
+
 pytest_plugins = ("pytest_asyncio",)
 
 
@@ -98,10 +107,8 @@ async def hass(
     hass.data.setdefault(DATA_PRELOAD_PLATFORMS, set())
 
     # Register the pp_reader integration so loader lookups succeed during tests.
-    try:
-        import custom_components  # noqa: PLC0415
-    except ImportError:  # pragma: no cover - repository layout unexpected
-        custom_components = None
+
+
 
     if custom_components is not None:
         integration = Integration.resolve_from_root(
@@ -115,15 +122,10 @@ async def hass(
 
         # Ensure the package exposes its module under the __init__ attribute so tests
         # using monkeypatch paths like ``custom_components.pp_reader.__init__`` work.
-        import custom_components.pp_reader as pp_reader_module  # noqa: PLC0415
-
-        custom_components.pp_reader.__init__ = pp_reader_module
+        if hasattr(custom_components, "pp_reader"):
+             custom_components.pp_reader.__init__ = custom_components.pp_reader
 
     # Avoid loading real portfolio data during tests; coordinator sync is patched to no-op.
-    from custom_components.pp_reader.data.coordinator import (  # noqa: PLC0415
-        PPReaderCoordinator,
-    )
-
     original_sync_portfolio_file = PPReaderCoordinator._sync_portfolio_file
 
     async def _noop_sync_portfolio_file(self, _last_update):
