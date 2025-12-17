@@ -178,7 +178,8 @@ export function formatValue(
       if (/<[a-z]/i.test(formatted)) {
         // Expanded check to catch <script>, javascript: URIs, and event handlers
         // with various separators (space, tab, newline, slash) or whitespace around '='.
-        const DANGEROUS_PATTERN = /<script\b|javascript:|[\s\/]on[a-z]+\s*=/i;
+        // Also catches dangerous tags like iframe, object, embed, etc.
+        const DANGEROUS_PATTERN = /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|[\s\/]on[a-z]+\s*=/i;
         if (DANGEROUS_PATTERN.test(formatted)) {
           formatted = escapeHtml(formatted);
         }
