@@ -87,7 +87,7 @@ export class DateRangePicker {
         this.popoverEl.className = 'drp-popover';
         this.popoverEl.setAttribute('role', 'dialog');
         this.popoverEl.setAttribute('aria-modal', 'true');
-        this.popoverEl.setAttribute('aria-label', 'Select date range'); // Updated to English
+        this.popoverEl.setAttribute('aria-label', 'Zeitraum wählen');
 
         // Sidebar
         const sidebar = document.createElement('div');
@@ -120,13 +120,13 @@ export class DateRangePicker {
         this.startInput.type = 'text';
         this.startInput.className = 'drp-date-input';
         this.startInput.readOnly = true; // For now
-        this.startInput.setAttribute('aria-label', 'Start date'); // Updated to English
+        this.startInput.setAttribute('aria-label', 'Startdatum');
 
         this.endInput = document.createElement('input');
         this.endInput.type = 'text';
         this.endInput.className = 'drp-date-input';
         this.endInput.readOnly = true;
-        this.endInput.setAttribute('aria-label', 'End date'); // Updated to English
+        this.endInput.setAttribute('aria-label', 'Enddatum');
 
         const sep = document.createElement('span');
         sep.textContent = '–';
@@ -350,7 +350,7 @@ export class DateRangePicker {
         const prevBtn = document.createElement('button');
         prevBtn.className = 'drp-nav-btn';
         prevBtn.innerHTML = '‹';
-        prevBtn.setAttribute('aria-label', 'Previous Month'); // Updated to English
+        prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
         // Only show prev on left calendar
         if (position === 'left') {
             prevBtn.addEventListener('click', (e) => {
@@ -369,7 +369,7 @@ export class DateRangePicker {
         const nextBtn = document.createElement('button');
         nextBtn.className = 'drp-nav-btn';
         nextBtn.innerHTML = '›';
-        nextBtn.setAttribute('aria-label', 'Next Month'); // Updated to English
+        nextBtn.setAttribute('aria-label', 'Nächster Monat');
         // Only show next on right calendar
         if (position === 'right') {
             nextBtn.addEventListener('click', (e) => {
