@@ -168,19 +168,35 @@ export function formatValue(
     }
     formatted = base;
     if (formatted) {
+      // 🛡️ SECURITY: Detect potentially dangerous XSS patterns even in "markup" mode.
+      // Callers often pass pre-escaped HTML (e.g. badges, localized dates), so we cannot
+      // unconditionally escape everything. However, specific patterns like <script>,
+      // javascript: URI, or event handlers (onX=) are never valid in our cell content
+      // and indicate an attack vector.
+      // We only apply this check if the string actually contains unescaped HTML tags (start with <).
+      // If it's already escaped (&lt;...), we leave it alone to avoid double-escaping.
+      if (/<[a-z]/i.test(formatted)) {
+        // Expanded check to catch <script>, javascript: URIs, and event handlers
+        // with various separators (space, tab, newline, slash) or whitespace around '='.
+        const DANGEROUS_PATTERN = /<script\b|javascript:|[\s\/]on[a-z]+\s*=/i;
+        if (DANGEROUS_PATTERN.test(formatted)) {
+          formatted = escapeHtml(formatted);
+        }
+      }
+
       const hasMarkup = /<|&lt;|&gt;/.test(formatted);
       if (!hasMarkup) {
         const MAX_LEN = 60;
-        if (formatted.length > MAX_LEN) {
-          formatted = formatted.slice(0, MAX_LEN - 1) + "…";
+          if (formatted.length > MAX_LEN) {
+            formatted = formatted.slice(0, MAX_LEN - 1) + "…";
+          }
+          // Entferne frühere Präfixe (Abwärtskompatibilität)
+          if (formatted.startsWith("Kontostand ")) {
+            formatted = formatted.substring("Kontostand ".length);
+          } else if (formatted.startsWith("Depotwert ")) {
+            formatted = formatted.substring("Depotwert ".length);
+          }
         }
-        // Entferne frühere Präfixe (Abwärtskompatibilität)
-        if (formatted.startsWith("Kontostand ")) {
-          formatted = formatted.substring("Kontostand ".length);
-        } else if (formatted.startsWith("Depotwert ")) {
-          formatted = formatted.substring("Depotwert ".length);
-        }
-      }
     }
   }
   if (typeof formatted !== "string" || formatted === "") {

@@ -584,7 +584,7 @@ def get_transactions(
             security=row[10],
             fees=row[11],
             taxes=row[12],
-            amount_eur_cents=None, # Filled later or calculated
+            amount_eur_cents=None,  # Filled later or calculated
             fx_amount=row[13],
             fx_currency_code=row[14],
             fx_rate_to_base=row[15],
