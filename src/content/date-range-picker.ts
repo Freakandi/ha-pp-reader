@@ -12,8 +12,6 @@ export interface DateRangePickerOptions {
     presets?: { label: string; days: number }[];
 }
 
-
-
 export class DateRangePicker {
     private element: HTMLElement;
     private range: DateRange;
@@ -23,6 +21,7 @@ export class DateRangePicker {
     private isOpen = false;
     private viewDate: Date; // The date determining which month is shown in the left calendar
     private tempRange: DateRange; // Range currently being selected in the picker
+    private previousFocus: HTMLElement | null = null; // Element that had focus before opening
 
     // Elements
     private triggerEl!: HTMLElement;
@@ -68,8 +67,12 @@ export class DateRangePicker {
         // Trigger
         this.triggerEl = document.createElement('div');
         this.triggerEl.className = 'drp-trigger';
+        this.triggerEl.setAttribute('role', 'button');
+        this.triggerEl.setAttribute('aria-expanded', 'false');
+        this.triggerEl.setAttribute('aria-haspopup', 'dialog');
+        this.triggerEl.setAttribute('tabindex', '0');
         this.triggerEl.innerHTML = `
-      <svg class="drp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg class="drp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
         <line x1="16" y1="2" x2="16" y2="6"></line>
         <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -82,6 +85,9 @@ export class DateRangePicker {
         // Popover
         this.popoverEl = document.createElement('div');
         this.popoverEl.className = 'drp-popover';
+        this.popoverEl.setAttribute('role', 'dialog');
+        this.popoverEl.setAttribute('aria-modal', 'true');
+        this.popoverEl.setAttribute('aria-label', 'Select date range'); // Updated to English
 
         // Sidebar
         const sidebar = document.createElement('div');
@@ -114,14 +120,17 @@ export class DateRangePicker {
         this.startInput.type = 'text';
         this.startInput.className = 'drp-date-input';
         this.startInput.readOnly = true; // For now
+        this.startInput.setAttribute('aria-label', 'Start date'); // Updated to English
 
         this.endInput = document.createElement('input');
         this.endInput.type = 'text';
         this.endInput.className = 'drp-date-input';
         this.endInput.readOnly = true;
+        this.endInput.setAttribute('aria-label', 'End date'); // Updated to English
 
         const sep = document.createElement('span');
         sep.textContent = '–';
+        sep.setAttribute('aria-hidden', 'true');
 
         inputs.appendChild(this.startInput);
         inputs.appendChild(sep);
@@ -158,9 +167,17 @@ export class DateRangePicker {
     }
 
     private bindEvents() {
-        this.triggerEl.addEventListener('click', (e) => {
+        const toggleHandler = (e: Event) => {
             e.stopPropagation();
             this.toggle();
+        };
+
+        this.triggerEl.addEventListener('click', toggleHandler);
+        this.triggerEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleHandler(e);
+            }
         });
 
         // Close on click outside
@@ -177,6 +194,37 @@ export class DateRangePicker {
         this.popoverEl.addEventListener('click', (e) => {
             e.stopPropagation();
         });
+
+        // Trap focus
+        this.popoverEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                this.close();
+                return;
+            }
+
+            if (e.key === 'Tab') {
+                const focusableElements = this.popoverEl.querySelectorAll(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                );
+                const firstElement = focusableElements[0] as HTMLElement;
+                const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+                if (e.shiftKey) {
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                    if (document.activeElement === firstElement) {
+                        e.preventDefault();
+                        lastElement.focus();
+                    }
+                } else {
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                    if (document.activeElement === lastElement) {
+                        e.preventDefault();
+                        firstElement.focus();
+                    }
+                }
+            }
+        });
     }
 
     private toggle() {
@@ -189,21 +237,41 @@ export class DateRangePicker {
 
     private open() {
         this.isOpen = true;
+        this.previousFocus = document.activeElement as HTMLElement;
         this.popoverEl.classList.add('open'); // Using class for display: flex
+        this.popoverEl.style.display = 'flex'; // Ensure flex is applied for a11y tools to see it
         this.triggerEl.classList.add('active');
+        this.triggerEl.setAttribute('aria-expanded', 'true');
         this.tempRange = { ...this.range };
         // Reset view date to end date
         this.viewDate = new Date(this.range.end.getFullYear(), this.range.end.getMonth() - 1, 1);
         this.renderCalendars();
         this.updateInputs();
+
+        // Move focus to first preset, calendar nav, or input
+        requestAnimationFrame(() => {
+            // Expanded selector to include inputs and avoid disabled elements
+            const firstFocusable = this.popoverEl.querySelector(
+                'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            ) as HTMLElement;
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            if (firstFocusable) {
+                firstFocusable.focus();
+            }
+        });
     }
 
     private close() {
         this.isOpen = false;
         this.popoverEl.classList.remove('open'); // Removing class to hide
-        // We can also force display none via style if needed, but class is cleaner
         this.popoverEl.style.display = '';
         this.triggerEl.classList.remove('active');
+        this.triggerEl.setAttribute('aria-expanded', 'false');
+
+        if (this.previousFocus && document.body.contains(this.previousFocus)) {
+            this.previousFocus.focus();
+        }
+        this.previousFocus = null;
     }
 
     private apply() {
@@ -282,7 +350,7 @@ export class DateRangePicker {
         const prevBtn = document.createElement('button');
         prevBtn.className = 'drp-nav-btn';
         prevBtn.innerHTML = '‹';
-        prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
+        prevBtn.setAttribute('aria-label', 'Previous Month'); // Updated to English
         // Only show prev on left calendar
         if (position === 'left') {
             prevBtn.addEventListener('click', (e) => {
@@ -301,7 +369,7 @@ export class DateRangePicker {
         const nextBtn = document.createElement('button');
         nextBtn.className = 'drp-nav-btn';
         nextBtn.innerHTML = '›';
-        nextBtn.setAttribute('aria-label', 'Nächster Monat');
+        nextBtn.setAttribute('aria-label', 'Next Month'); // Updated to English
         // Only show next on right calendar
         if (position === 'right') {
             nextBtn.addEventListener('click', (e) => {
