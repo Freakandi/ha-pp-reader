@@ -257,9 +257,6 @@ def _deserialize_portfolio_security_row(row: sqlite3.Row) -> PortfolioSecurity:
     )
 
 
-
-
-
 @dataclass
 class PriceHistoryJob:
     """Persisted job entry in the price history queue."""
@@ -2735,8 +2732,6 @@ def fetch_daily_wealth_scopes(
             local_conn.close()
 
 
-
-
 __all__ = [
     "FxRateRecord",
     "load_fx_rates_for_date",
@@ -2745,10 +2740,6 @@ __all__ = [
     "upsert_fx_rates_bulk",
     "upsert_fx_rates_chunked",
 ]
-
-
-
-
 
 
 def enqueue_price_history_job(

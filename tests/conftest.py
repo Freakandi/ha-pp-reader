@@ -108,8 +108,6 @@ async def hass(
 
     # Register the pp_reader integration so loader lookups succeed during tests.
 
-
-
     if custom_components is not None:
         integration = Integration.resolve_from_root(
             hass, custom_components, "pp_reader"
@@ -123,7 +121,7 @@ async def hass(
         # Ensure the package exposes its module under the __init__ attribute so tests
         # using monkeypatch paths like ``custom_components.pp_reader.__init__`` work.
         if hasattr(custom_components, "pp_reader"):
-             custom_components.pp_reader.__init__ = custom_components.pp_reader
+            custom_components.pp_reader.__init__ = custom_components.pp_reader
 
     # Avoid loading real portfolio data during tests; coordinator sync is patched to no-op.
     original_sync_portfolio_file = PPReaderCoordinator._sync_portfolio_file
