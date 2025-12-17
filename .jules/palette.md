@@ -8,3 +8,7 @@
 ## 2024-05-23 - Accessible Sortable Tables
 **Learning:** Native `<th>` elements do not support keyboard activation (Enter/Space) even with `role="button"` and `tabindex="0"`.
 **Action:** Always attach a `keydown` listener to sortable headers that checks for `Enter` or `Space` keys and triggers the sort action, mirroring the `click` handler.
+
+## 2025-05-23 - [Localized ARIA Labels]
+**Learning:** Components using localized text (e.g., 'de-DE') must have matching localized ARIA labels to avoid confusing screen reader users who hear mixed languages.
+**Action:** When working on localized components, verify that all `aria-label`, `aria-description`, and `title` attributes match the visual language of the interface.
