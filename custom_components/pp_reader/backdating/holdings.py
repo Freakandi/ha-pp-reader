@@ -134,13 +134,25 @@ def _compute_daily_holdings_snapshots_sync(
     # We must process in correct date order for Average Cost logic.
     sorted_dates = sorted(adjustments_by_date.keys())
 
+    # Pre-load FX rates for the entire relevant range (init + main loop)
+    # to avoid N+1 queries during initialization.
+    cache_start_date = start_date
+    if sorted_dates:
+        first_tx_date = sorted_dates[0]
+        if first_tx_date < start_date:
+            cache_start_date = first_tx_date
+
+    fx_rates_cache = fx_module.load_fx_rates_cache_range(
+        db_path, cache_start_date.isoformat(), end_date.isoformat()
+    )
+
     for tx_date in sorted_dates:
         if tx_date >= start_date:
             break
 
-        # Load FX for the specific prior date to ensure correct valuation
+        # Use cached FX rates for the specific prior date
         date_iso = tx_date.isoformat()
-        daily_fx_rates = _load_fx_rates_for_date(db_path, date_iso)
+        daily_fx_rates = fx_rates_cache.get(date_iso, {})
         last_known_fx_rates.update(daily_fx_rates)
         fx_rates = last_known_fx_rates.copy()
 
@@ -152,11 +164,6 @@ def _compute_daily_holdings_snapshots_sync(
                 holdings=holdings,
                 tx_date=tx_date,
             )
-
-    # Pre-load FX rates for the main loop to avoid N+1 queries
-    fx_rates_cache = fx_module.load_fx_rates_cache_range(
-        db_path, start_date.isoformat(), end_date.isoformat()
-    )
 
     date_cursor = start_date
 
@@ -313,6 +320,8 @@ def _load_relevant_transactions(
         tuple[date, str, str, float, int, str, int, int, int, float | None]
     ] = []
 
+    date_parse_cache: dict[Any, date | None] = {}
+
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
             continue
@@ -333,7 +342,13 @@ def _load_relevant_transactions(
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
             continue
 
-        parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
+        raw_date = getattr(tx, "date", None)
+        if raw_date in date_parse_cache:
+            parsed_date = date_parse_cache[raw_date]
+        else:
+            parsed_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
+            date_parse_cache[raw_date] = parsed_date
+
         if parsed_date is None:
             continue
 
