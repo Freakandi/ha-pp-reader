@@ -202,7 +202,11 @@ def _compute_daily_holdings_snapshots_sync(
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
-                security_currency=(securities.get(security_uuid, {}).get("currency") or "EUR").strip().upper(),
+                security_currency=(
+                    securities.get(security_uuid, {}).get("currency") or "EUR"
+                )
+                .strip()
+                .upper(),
             )
             daily_realized_gains += gain
             daily_neutral_movements += neutral_val
@@ -222,24 +226,16 @@ def _compute_daily_holdings_snapshots_sync(
             target_date=date_cursor,
             price_cursors=price_cursors,
         )
-        price_coverage_ratio = _compute_price_coverage_ratio(valuations)
-        fx_coverage_ratio = _compute_fx_coverage_ratio(valuations)
-        stale_price = any(valuation.stale_price for valuation in valuations)
-        total_wealth = round(
-            sum(v.value_eur for v in valuations if v.value_eur is not None), 4
-        )
+        (
+            price_coverage_ratio,
+            fx_coverage_ratio,
+            stale_price,
+            total_wealth,
+            unrealized_price_gains,
+        ) = _aggregate_holdings_metrics(valuations)
 
         invested_capital = round(
             sum(v["purchase_value_eur"] for v in holdings.values()), 4
-        )
-
-        unrealized_price_gains = round(
-            sum(
-                v.unrealized_price_gains_eur
-                for v in valuations
-                if v.unrealized_price_gains_eur is not None
-            ),
-            4,
         )
 
         snapshots.append(
@@ -313,7 +309,9 @@ def _load_relevant_transactions(
          fees_cents, taxes_cents, fx_rate_to_base)
 
     """
-    relevant: list[tuple[date, str, str, float, int, str, int, int, int, float | None]] = []
+    relevant: list[
+        tuple[date, str, str, float, int, str, int, int, int, float | None]
+    ] = []
 
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
@@ -375,7 +373,9 @@ def _load_relevant_transactions(
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[tuple[date, str, str, float, int, str, int, int, int, float | None]],
+    transactions: Iterable[
+        tuple[date, str, str, float, int, str, int, int, int, float | None]
+    ],
 ) -> dict[date, list[tuple[str, str, float, int, str, int, int, int, float | None]]]:
     grouped: dict[
         date, list[tuple[str, str, float, int, str, int, int, int, float | None]]
@@ -562,7 +562,6 @@ def _build_holdings_valuations(
                     value_eur - (purchase_value_eur or 0), 6
                 )
 
-
         valuations.append(
             HoldingValuation(
                 portfolio_uuid=portfolio_uuid,
@@ -675,25 +674,50 @@ def _process_sell_lots(
     return cost_sold_eur, cost_sold_native
 
 
-def _compute_price_coverage_ratio(
-    holdings: list[HoldingValuation],
-) -> float:
-    if not holdings:
-        return 1.0
-    covered = sum(1 for holding in holdings if holding.price_native is not None)
-    return round(covered / len(holdings), 3)
+def _aggregate_holdings_metrics(
+    valuations: list[HoldingValuation],
+) -> tuple[float, float, bool, float, float]:
+    """
+    Compute aggregated metrics for a list of valuations in a single pass.
 
+    Returns:
+        (price_coverage_ratio, fx_coverage_ratio, stale_price,
+         total_wealth_eur, unrealized_price_gains_eur)
 
-def _compute_fx_coverage_ratio(
-    holdings: list[HoldingValuation],
-) -> float:
-    if not holdings:
-        return 1.0
-    covered = 0
-    for valuation in holdings:
-        if valuation.currency == "EUR" or valuation.fx_rate:
-            covered += 1
-    return round(covered / len(holdings), 3)
+    """
+    if not valuations:
+        return 1.0, 1.0, False, 0.0, 0.0
+
+    count = len(valuations)
+    covered_price = 0
+    covered_fx = 0
+    stale_price = False
+    total_wealth = 0.0
+    unrealized_price_gains = 0.0
+
+    for v in valuations:
+        if v.price_native is not None:
+            covered_price += 1
+
+        if v.currency == "EUR" or v.fx_rate:
+            covered_fx += 1
+
+        if v.stale_price:
+            stale_price = True
+
+        if v.value_eur is not None:
+            total_wealth += v.value_eur
+
+        if v.unrealized_price_gains_eur is not None:
+            unrealized_price_gains += v.unrealized_price_gains_eur
+
+    return (
+        round(covered_price / count, 3),
+        round(covered_fx / count, 3),
+        stale_price,
+        round(total_wealth, 4),
+        round(unrealized_price_gains, 4),
+    )
 
 
 def _apply_transaction_update(
@@ -739,7 +763,6 @@ def _apply_transaction_update(
     tx_val_eur, tx_val_native, fees_eur, taxes_eur = _resolve_transaction_values(
         amount, currency, fees, taxes, fx_rate_to_base, fx_rates, security_currency
     )
-
 
     neutral_movement = 0.0
     # Accumulate Performance Neutral Movements (Ein-/Auslieferung)
@@ -787,7 +810,6 @@ def _resolve_transaction_values(
     security_currency: str,
 ) -> tuple[float, float, float, float]:
     """Calculate EUR and Native values for transaction components."""
-
     tx_val_eur = 0.0
     tx_val_native = 0.0
     fees_eur = 0.0
