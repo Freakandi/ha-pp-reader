@@ -17,3 +17,8 @@
 **Vulnerability:** Found XSS vectors in `src/tabs/security_detail.ts` where tooltips (specifically `markerTooltipRenderer` and `tooltipRenderer`) interpolated raw values derived from backend data (transaction type, currency) into HTML strings without escaping.
 **Learning:** Charting tooltip renderers are powerful but dangerous if they consume un-sanitized data. Defaults in `charting.ts` were safe, but custom implementations in views bypassed protections.
 **Prevention:** Always wrap interpolated variables in `escapeHtml()` within template literals that generate HTML, especially in tooltip renderers.
+
+## 2025-12-23 - XSS in Dashboard Error Handling
+**Vulnerability:** Found an XSS vulnerability in `src/dashboard.ts` where error messages were rendered directly into `innerHTML` via `toErrorMessage` without escaping.
+**Learning:** Error messages are not inherently safe; exceptions or backend errors can contain malicious payloads. `innerHTML` assignment of error text is a common pitfall.
+**Prevention:** Always run error messages through `escapeHtml` before rendering them, even if they come from `Error` objects or JSON serialization.

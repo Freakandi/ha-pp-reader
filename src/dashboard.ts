@@ -11,6 +11,7 @@ import {
   unregisterPanelHost,
 } from './dashboard/registry';
 import { getEntryId } from './data/api';
+import { escapeHtml } from './utils/html';
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -137,23 +138,23 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 function toErrorMessage(error: unknown): string {
   if (typeof error === 'string') {
     const trimmed = error.trim();
-    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
+    return escapeHtml(trimmed.length > 0 ? trimmed : 'Unbekannter Fehler');
   }
   if (error instanceof Error) {
     const trimmed = error.message.trim();
-    return trimmed.length > 0 ? trimmed : error.name;
+    return escapeHtml(trimmed.length > 0 ? trimmed : error.name);
   }
   if (error != null) {
     try {
       const serialized = JSON.stringify(error);
       if (serialized && serialized !== '{}') {
-        return serialized;
+        return escapeHtml(serialized);
       }
     } catch {
       // Ignore serialization problems and fall back to String().
     }
   }
-  return String(error);
+  return escapeHtml(String(error));
 }
 
 function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
@@ -518,6 +519,7 @@ function requestDashboardRender(): void {
 
 export const __TEST_ONLY_DASHBOARD = {
   findDashboardElement,
+  toErrorMessage,
 };
 
 function notifyExternalRender(page: number): void {
