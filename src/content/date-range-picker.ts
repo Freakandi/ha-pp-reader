@@ -96,6 +96,7 @@ export class DateRangePicker {
             const btn = document.createElement('button');
             btn.className = 'drp-preset-btn';
             btn.textContent = preset.label;
+            btn.setAttribute('aria-pressed', 'false');
             btn.addEventListener('click', () => { this.selectPreset(preset); });
             sidebar.appendChild(btn);
         });
@@ -211,13 +212,11 @@ export class DateRangePicker {
                 const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
                 if (e.shiftKey) {
-                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                     if (document.activeElement === firstElement) {
                         e.preventDefault();
                         lastElement.focus();
                     }
                 } else {
-                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                     if (document.activeElement === lastElement) {
                         e.preventDefault();
                         firstElement.focus();
@@ -247,6 +246,9 @@ export class DateRangePicker {
         this.viewDate = new Date(this.range.end.getFullYear(), this.range.end.getMonth() - 1, 1);
         this.renderCalendars();
         this.updateInputs();
+
+        // Ensure no preset is misleadingly active on reopen
+        this.updatePresetState(null);
 
         // Move focus to first preset, calendar nav, or input
         requestAnimationFrame(() => {
@@ -318,10 +320,19 @@ export class DateRangePicker {
         this.renderCalendars();
         this.updateInputs();
 
-        // Highlight active preset
+        this.updatePresetState(preset.label);
+    }
+
+    private updatePresetState(activeLabel: string | null) {
         this.popoverEl.querySelectorAll('.drp-preset-btn').forEach(btn => {
-            if (btn.textContent === preset.label) btn.classList.add('active');
-            else btn.classList.remove('active');
+            const isActive = btn.textContent === activeLabel;
+            if (isActive) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
         });
     }
 
@@ -488,6 +499,7 @@ export class DateRangePicker {
 
         this.updateInputs();
         this.renderCalendars();
+        this.updatePresetState(null);
     }
 
     private handleDayHover(_date: Date) {
