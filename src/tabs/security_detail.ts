@@ -14,6 +14,7 @@ import {
   formatNumber,
   formatGain,
   formatGainPct,
+  createInlineSpinner,
 } from '../content/elements';
 import { renderLineChart, updateLineChart } from '../content/charting';
 import type { LineChartMarker, LineChartOptions } from '../content/charting';
@@ -1819,6 +1820,10 @@ function updateRangeButtons(
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     button.disabled = false;
     button.classList.remove('loading');
+    if (rangeKey) {
+      // Ensure text is restored (removing spinner if present)
+      button.textContent = rangeKey;
+    }
   });
 }
 
@@ -1949,6 +1954,8 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       if (button) {
         button.disabled = true;
         button.classList.add('loading');
+        // PALETTE: visual feedback
+        button.innerHTML = createInlineSpinner();
       }
 
       let historySeries = cache.get(rangeKey) ?? null;
