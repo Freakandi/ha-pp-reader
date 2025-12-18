@@ -210,9 +210,11 @@ def _load_transaction_units(db_path: Path) -> dict[str, dict[str, int | str]]:
 def _load_relevant_transactions(
     db_path: Path,
     accounts: Mapping[str, Mapping[str, Any]],
-) -> list[db_access.Transaction]:
+) -> list[tuple[date, db_access.Transaction]]:
     """Return account-linked transactions excluding retired accounts."""
-    relevant: list[db_access.Transaction] = []
+    relevant: list[tuple[date, db_access.Transaction]] = []
+    date_parse_cache: dict[Any, date | None] = {}
+
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.account and not tx.other_account:
             continue
@@ -222,29 +224,31 @@ def _load_relevant_transactions(
             continue
         # Removed retired check to include history
 
-        parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
+        raw_date = getattr(tx, "date", None)
+        if raw_date in date_parse_cache:
+            parsed_date = date_parse_cache[raw_date]
+        else:
+            parsed_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
+            date_parse_cache[raw_date] = parsed_date
+
         if parsed_date is None:
             continue
 
-        relevant.append(tx)
+        relevant.append((parsed_date, tx))
 
-    relevant.sort(key=lambda txn: fx_module._parse_date_value(txn.date) or date.min)  # noqa: SLF001
+    relevant.sort(key=lambda item: item[0])
     return relevant
 
 
 def _group_transaction_adjustments(
-    transactions: Iterable[db_access.Transaction],
+    transactions: Iterable[tuple[date, db_access.Transaction]],
     *,
     accounts_currency_map: Mapping[str, Mapping[str, Any]],
     tx_units: Mapping[str, Mapping[str, int | str]],
 ) -> dict[date, list[tuple[str, int]]]:
     """Aggregate transaction deltas per account keyed by transaction date."""
     grouped: dict[date, list[tuple[str, int]]] = {}
-    for tx in transactions:
-        tx_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
-        if tx_date is None:
-            continue
-
+    for tx_date, tx in transactions:
         for account_uuid, delta in _transaction_deltas(
             tx,
             accounts_currency_map=accounts_currency_map,
