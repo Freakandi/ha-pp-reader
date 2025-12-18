@@ -12,3 +12,8 @@
 **Vulnerability:** Found a Stored XSS vulnerability in `renderScopeFilters` (`src/tabs/time_series.ts`) where portfolio/account names (`scope_name`) were injected into `innerHTML` without escaping.
 **Learning:** Even simple UI components like checkbox lists can be vectors if they render user-controlled names via template literals.
 **Prevention:** Always escape user-controlled text content using `escapeHtml` and attribute values using `escapeAttribute` before interpolation into HTML strings.
+
+## 2025-12-18 - XSS in Security Detail Tooltips
+**Vulnerability:** Found XSS vectors in `src/tabs/security_detail.ts` where tooltips (specifically `markerTooltipRenderer` and `tooltipRenderer`) interpolated raw values derived from backend data (transaction type, currency) into HTML strings without escaping.
+**Learning:** Charting tooltip renderers are powerful but dangerous if they consume un-sanitized data. Defaults in `charting.ts` were safe, but custom implementations in views bypassed protections.
+**Prevention:** Always wrap interpolated variables in `escapeHtml()` within template literals that generate HTML, especially in tooltip renderers.

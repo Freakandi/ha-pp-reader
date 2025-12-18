@@ -46,7 +46,7 @@ import type {
 import { isPortfolioPositionsUpdatedEvent } from './types';
 import { toFiniteCurrency, normalizePercentValue } from '../utils/currency';
 import { normalizePerformancePayload } from '../utils/performance';
-import { escapeAttribute } from '../utils/html';
+import { escapeAttribute, escapeHtml } from '../utils/html';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
@@ -925,7 +925,7 @@ function formatPriceChangeValue(
   }
 
   const trendClass = resolveRoundedTrendClass(value, PRICE_FRACTION_DIGITS.max);
-  const suffix = currency ? `&nbsp;${currency}` : '';
+  const suffix = currency ? `&nbsp;${escapeHtml(currency)}` : '';
   return `<span class="value ${trendClass}">${formatted}${suffix}</span>`;
 }
 
@@ -947,9 +947,9 @@ function buildInfoBar(
   const rangeLabel = rangeKey;
   const rangeCaption = rangeLabel.length > 0 ? rangeLabel : 'Zeitraum';
   return `
-    <div class="security-info-bar" data-range="${rangeLabel}">
+    <div class="security-info-bar" data-range="${escapeAttribute(rangeLabel)}">
       <div class="security-info-item">
-        <span class="label">Preisänderung (${rangeCaption})</span>
+        <span class="label">Preisänderung (${escapeHtml(rangeCaption)})</span>
         <div class="value-row">
           ${formatPriceChangeValue(priceChange, currency)}
           ${formatPercentageChangeValue(priceChangePct)}
@@ -966,10 +966,10 @@ function buildRangeSelector(activeRange: SecurityHistoryRangeKey): string {
       <button
         type="button"
         class="security-range-button${activeClass}"
-        data-range="${rangeKey}"
+        data-range="${escapeAttribute(rangeKey)}"
         aria-pressed="${rangeKey === activeRange ? 'true' : 'false'}"
       >
-        ${rangeKey}
+        ${escapeHtml(rangeKey)}
       </button>
     `;
   });
@@ -985,7 +985,7 @@ function buildHistoryPlaceholder(
   rangeKey: SecurityHistoryRangeKey,
   state: HistoryPlaceholderState = { status: 'empty' },
 ): string {
-  const safeRange = rangeKey;
+  const safeRange = escapeAttribute(rangeKey);
 
   switch (state.status) {
     case 'loaded': {
@@ -1007,7 +1007,7 @@ function buildHistoryPlaceholder(
       );
       return `
         <div class="history-placeholder" data-state="error" data-range="${safeRange}">
-          <p>${message}</p>
+          <p>${escapeHtml(message)}</p>
         </div>
       `;
     }
@@ -1016,7 +1016,7 @@ function buildHistoryPlaceholder(
       const rangeDescriptor = safeRange.length > 0 ? safeRange : 'den gewählten Zeitraum';
       return `
         <div class="history-placeholder" data-state="empty" data-range="${safeRange}">
-          <p>Für dieses Wertpapier liegen im Zeitraum ${rangeDescriptor} keine historischen Daten vor.</p>
+          <p>Für dieses Wertpapier liegen im Zeitraum ${escapeHtml(rangeDescriptor)} keine historischen Daten vor.</p>
         </div>
       `;
     }
@@ -1055,7 +1055,7 @@ function formatPriceChangeWithCurrency(
   currency: string,
 ): string {
   const formatted = formatPrice(value);
-  const suffix = currency ? `&nbsp;${currency}` : '';
+  const suffix = currency ? `&nbsp;${escapeHtml(currency)}` : '';
   const className = resolveRoundedTrendClass(value, PRICE_FRACTION_DIGITS.max);
   return `<span class="${className}">${formatted}${suffix}</span>`;
 }
@@ -1439,7 +1439,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
   const lastPriceDisplay =
     formattedLastPrice === '—'
       ? null
-      : `${formattedLastPrice}${currency ? `&nbsp;${currency}` : ''}`;
+      : `${formattedLastPrice}${currency ? `&nbsp;${escapeHtml(currency)}` : ''}`;
   const marketValueRaw =
     toFiniteNumber(snapshot.market_value_eur) ??
     toFiniteNumber(snapshot.current_value_eur) ??
@@ -1556,7 +1556,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     averagePurchaseValues.push(
       wrapValue(
         `${formatPrice(averagePurchaseNativeRaw)}${
-          currency ? `&nbsp;${currency}` : ''
+          currency ? `&nbsp;${escapeHtml(currency)}` : ''
         }`,
         'value--average value--average-native',
       ),
@@ -1597,7 +1597,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     averagePurchaseValues.push(
       wrapValue(
         `${formatPrice(secondaryAverage)}${
-          secondaryCurrency ? `&nbsp;${secondaryCurrency}` : ''
+          secondaryCurrency ? `&nbsp;${escapeHtml(secondaryCurrency)}` : ''
         }`,
         'value--average value--average-eur',
       ),
@@ -1735,11 +1735,11 @@ function getHistoryChartOptions(
         ? yFormatted.trim()
         : formatPrice(payload.price);
     const valueLine = priceLabel
-      ? `${priceLabel}${currencyLabel ? `&nbsp;${currencyLabel}` : ''}`
-      : currencyLabel;
+      ? `${priceLabel}${currencyLabel ? `&nbsp;${escapeHtml(currencyLabel)}` : ''}`
+      : escapeHtml(currencyLabel);
 
     return `
-      <div class="chart-tooltip-date">${caption}</div>
+      <div class="chart-tooltip-date">${escapeHtml(caption)}</div>
       <div class="chart-tooltip-value">${valueLine}</div>
     `;
   };
@@ -1756,8 +1756,8 @@ function getHistoryChartOptions(
     series,
     yFormatter: (value) => formatPrice(value),
     tooltipRenderer: ({ xFormatted, yFormatted }) => `
-      <div class="chart-tooltip-date">${xFormatted}</div>
-      <div class="chart-tooltip-value">${yFormatted}&nbsp;${safeCurrency}</div>
+      <div class="chart-tooltip-date">${escapeHtml(xFormatted)}</div>
+      <div class="chart-tooltip-value">${escapeHtml(yFormatted)}&nbsp;${escapeHtml(safeCurrency)}</div>
     `,
     markerTooltipRenderer,
     baseline:
