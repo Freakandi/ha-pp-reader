@@ -178,33 +178,38 @@ def _load_accounts(db_path: Path) -> dict[str, dict[str, Any]]:
 def _load_relevant_transactions(
     db_path: Path,
     accounts: Mapping[str, Mapping[str, Any]],
-) -> list[db_access.Transaction]:
+) -> list[tuple[date, db_access.Transaction]]:
     """Return cashflow-relevant transactions excluding retired accounts."""
-    relevant: list[db_access.Transaction] = []
+    relevant: list[tuple[date, db_access.Transaction]] = []
+    date_parse_cache: dict[Any, date | None] = {}
+
     for tx in db_access.get_transactions(db_path=db_path):
         account_uuid = tx.account or tx.other_account
         if not account_uuid or account_uuid not in accounts:
             continue
         # Removed retired check to include history of retired accounts
 
-        parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
+        raw_date = getattr(tx, "date", None)
+        if raw_date in date_parse_cache:
+            parsed_date = date_parse_cache[raw_date]
+        else:
+            parsed_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
+            date_parse_cache[raw_date] = parsed_date
+
         if parsed_date is None:
             continue
 
-        relevant.append(tx)
+        relevant.append((parsed_date, tx))
 
-    relevant.sort(key=lambda txn: fx_module._parse_date_value(txn.date) or date.min)  # noqa: SLF001
+    relevant.sort(key=lambda item: item[0])
     return relevant
 
 
 def _group_transactions_by_date(
-    transactions: Iterable[db_access.Transaction],
+    transactions: Iterable[tuple[date, db_access.Transaction]],
 ) -> dict[date, list[db_access.Transaction]]:
     grouped: dict[date, list[db_access.Transaction]] = {}
-    for tx in transactions:
-        parsed_date = fx_module._parse_date_value(getattr(tx, "date", None))  # noqa: SLF001
-        if parsed_date is None:
-            continue
+    for parsed_date, tx in transactions:
         grouped.setdefault(parsed_date, []).append(tx)
     return grouped
 

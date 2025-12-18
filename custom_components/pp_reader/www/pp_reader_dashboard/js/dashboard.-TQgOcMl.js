@@ -569,7 +569,7 @@ function L(e, t, n = void 0, r = void 0) {
     });
   } else {
     let s = "";
-    typeof t == "string" ? s = t : typeof t == "number" && Number.isFinite(t) ? s = t.toString() : typeof t == "boolean" ? s = t ? "true" : "false" : t instanceof Date && Number.isFinite(t.getTime()) && (s = t.toISOString()), a = s, a && (/<[a-z]/i.test(a) && /<script\b|javascript:|[\s\/]on[a-z]+\s*=/i.test(a) && (a = W(a)), /<|&lt;|&gt;/.test(a) || (a.length > 60 && (a = a.slice(0, 59) + "…"), a.startsWith("Kontostand ") ? a = a.substring(11) : a.startsWith("Depotwert ") && (a = a.substring(10))));
+    typeof t == "string" ? s = t : typeof t == "number" && Number.isFinite(t) ? s = t.toString() : typeof t == "boolean" ? s = t ? "true" : "false" : t instanceof Date && Number.isFinite(t.getTime()) && (s = t.toISOString()), a = s, a && (/<[a-z]/i.test(a) && /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|[\s\/]on[a-z]+\s*=/i.test(a) && (a = W(a)), /<|&lt;|&gt;/.test(a) || (a.length > 60 && (a = a.slice(0, 59) + "…"), a.startsWith("Kontostand ") ? a = a.substring(11) : a.startsWith("Depotwert ") && (a = a.substring(10))));
   }
   return typeof a != "string" || a === "" ? c() : a;
 }
@@ -4103,7 +4103,6 @@ function ha(e, t = { status: "empty" }) {
         </div>
       `;
     }
-    case "empty":
     default: {
       const r = n.length > 0 ? n : "den gewählten Zeitraum";
       return `
@@ -6128,4 +6127,4 @@ export {
   Sc as unregisterPanelHost,
   Or as updatePortfolioFooterFromDom
 };
-//# sourceMappingURL=dashboard.7Ik49nlE.js.map
+//# sourceMappingURL=dashboard.-TQgOcMl.js.map
