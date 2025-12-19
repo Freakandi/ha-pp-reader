@@ -443,9 +443,8 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915, C901
 
         if not rate:
             skip_tx = True
-            if (
-                tx.type in SALE_TYPES
-                or (tx.type in PURCHASE_TYPES and native_amount is not None)
+            if tx.type in SALE_TYPES or (
+                tx.type in PURCHASE_TYPES and native_amount is not None
             ):
                 skip_tx = False
 

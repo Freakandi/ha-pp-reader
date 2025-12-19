@@ -137,7 +137,7 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
             INSERT INTO ingestion_transaction_units (transaction_uuid, type, fx_amount, fx_currency_code)
             VALUES (?, ?, ?, ?)
             """,
-            ("tx-1", 0, 10_000, "HKD")
+            ("tx-1", 0, 10_000, "HKD"),
         )
         conn.commit()
 

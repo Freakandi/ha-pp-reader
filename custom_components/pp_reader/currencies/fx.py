@@ -495,10 +495,7 @@ async def ensure_exchange_rates_for_dates(
             upsert_fx_rates_chunked(db_path, fetched_records, conn=conn)
         else:
             await _execute_db(
-                upsert_fx_rates_chunked,
-                db_path,
-                fetched_records,
-                conn=None
+                upsert_fx_rates_chunked, db_path, fetched_records, conn=None
             )
 
 
