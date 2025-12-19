@@ -125,31 +125,49 @@ def _compute_daily_cashflows_sync(
         # Update fallback cache with any available rates for today
         last_known_fx_rates.update(daily_fx_rates)
 
-        # Use fallback for today's calculations
-        fx_rates = last_known_fx_rates.copy()
-
-        (
-            dividends_eur,
-            interest_eur,
-            inbound_transfers_eur,
-            outbound_transfers_eur,
-            fees_eur,
-            taxes_eur,
-            coverage_ratio,
-        ) = _aggregate_daily_buckets(daily_txs, fx_rates)
-
-        snapshots.append(
-            DailyCashflowSnapshot(
-                date=date_iso,
-                dividends_eur=dividends_eur,
-                interest_eur=interest_eur,
-                inbound_transfers_eur=inbound_transfers_eur,
-                outbound_transfers_eur=outbound_transfers_eur,
-                fees_eur=fees_eur,
-                taxes_eur=taxes_eur,
-                fx_coverage_ratio=coverage_ratio,
+        if not daily_txs:
+            # OPTIMIZATION: Short-circuit if no transactions
+            # Returns default 0.0 values and 1.0 coverage without overhead
+            snapshots.append(
+                DailyCashflowSnapshot(
+                    date=date_iso,
+                    dividends_eur=0.0,
+                    interest_eur=0.0,
+                    inbound_transfers_eur=0.0,
+                    outbound_transfers_eur=0.0,
+                    fees_eur=0.0,
+                    taxes_eur=0.0,
+                    fx_coverage_ratio=1.0,
+                )
             )
-        )
+        else:
+            # Use fallback for today's calculations
+            # Optimization: fx_rates is treated as read-only by downstream
+            # functions, so we can avoid a full copy.
+            fx_rates = last_known_fx_rates
+
+            (
+                dividends_eur,
+                interest_eur,
+                inbound_transfers_eur,
+                outbound_transfers_eur,
+                fees_eur,
+                taxes_eur,
+                coverage_ratio,
+            ) = _aggregate_daily_buckets(daily_txs, fx_rates)
+
+            snapshots.append(
+                DailyCashflowSnapshot(
+                    date=date_iso,
+                    dividends_eur=dividends_eur,
+                    interest_eur=interest_eur,
+                    inbound_transfers_eur=inbound_transfers_eur,
+                    outbound_transfers_eur=outbound_transfers_eur,
+                    fees_eur=fees_eur,
+                    taxes_eur=taxes_eur,
+                    fx_coverage_ratio=coverage_ratio,
+                )
+            )
 
         date_cursor += timedelta(days=1)
 
