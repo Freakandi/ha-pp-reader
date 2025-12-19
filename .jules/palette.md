@@ -1,3 +1,3 @@
-## 2024-05-23 - [Improved Date Range Picker Accessibility]
-**Learning:** Toggle buttons in date pickers (like presets) need `aria-pressed` to communicate state to screen readers.
-**Action:** Always add `aria-pressed` to mode-switching or preset buttons.
+## 2024-05-23 - [Improved Icon-Only Buttons]
+**Learning:** Icon-only buttons (like navigation arrows) need both `aria-label` for screen readers and `title` for mouse users. The internal SVG should be `aria-hidden="true"` to prevent duplicate or confusing announcements.
+**Action:** Always add `title` to icon-only buttons and hide the decorative SVG.
