@@ -119,6 +119,7 @@ def initialize_database_schema(db_path: Path) -> None:
             _LOGGER.info("Erzeuge neue Datenbankdatei: %s", db_path)
 
         conn = sqlite3.connect(str(db_path))
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("BEGIN TRANSACTION")
 

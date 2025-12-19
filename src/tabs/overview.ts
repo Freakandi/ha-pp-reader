@@ -359,7 +359,9 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
   }
 
 function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): string {
-  if (positions.length === 0) {
+  const activePositions = positions.filter((p) => Number(p.current_holdings) > 0);
+
+  if (activePositions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
   // Mapping für makeTable
@@ -374,7 +376,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
     { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' as const },
     { key: 'gain_pct', label: 'Gesamt %', align: 'right' as const }
   ];
-  const rows = positions.map((p) => {
+  const rows = activePositions.map((p) => {
     const performance = normalizePerformancePayload(p.performance);
     const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
     const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
@@ -441,10 +443,10 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
       if (tr.classList.contains('footer-row')) {
         return;
       }
-      if (idx >= positions.length) {
+      if (idx >= activePositions.length) {
         return;
       }
-      const pos = positions[idx];
+      const pos = activePositions[idx];
       const securityUuid = typeof pos.security_uuid === 'string' ? pos.security_uuid : null;
       if (securityUuid) {
         tr.dataset.security = securityUuid;

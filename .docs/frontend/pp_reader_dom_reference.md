@@ -135,3 +135,7 @@ When new diagnostic groups are added to the backend they must be documented here
 - Footer totals rely on dataset values added to each portfolio row, allowing `updatePortfolioFooterFromDom` to recalculate sums even after manual DOM edits or partial live updates.【F:src/tabs/overview.ts†L360-L440】
 
 This reference should equip future contributors with a reliable map of the Portfolio Performance Reader panel's DOM, the components that manage it, and the data flows that keep it up to date.
+
+## 10. Trades Tab Layout
+- `renderTrades` creates a simple layout with a standard Header Card and a scrolling container for the trades table.【F:src/tabs/trades.ts】
+- `renderTradesTable` fetches all portfolio positions via `fetchAllPortfolioPositionsWS` and filters for positions where `current_holdings === 0`, displaying them in a flat table with headers for Name, Symbol, Holdings (0), and Status (Closed).【F:src/tabs/trades.ts】

@@ -786,6 +786,32 @@ export async function fetchPortfolioPositionsWS(
   return response;
 }
 
+// All portfolio positions
+export async function fetchAllPortfolioPositionsWS(
+  hass: HomeAssistant | null | undefined,
+  panelConfig: PanelConfigLike | null | undefined,
+): Promise<PortfolioPosition[]> {
+  if (!hass) {
+    throw new Error("fetchAllPortfolioPositionsWS: fehlendes hass");
+  }
+
+  const entryId = deriveEntryId(hass, panelConfig);
+  if (!entryId) {
+    throw new Error("fetchAllPortfolioPositionsWS: fehlendes entry_id");
+  }
+
+  const portfolios = await fetchPortfoliosWS(hass, panelConfig);
+  const allPositions: PortfolioPosition[] = [];
+
+  for (const portfolio of portfolios.portfolios) {
+    const positions = await fetchPortfolioPositionsWS(hass, panelConfig, portfolio.uuid);
+    allPositions.push(...positions.positions);
+  }
+
+  return allPositions;
+}
+
+
 // Security snapshot for detail tab
 export async function fetchSecuritySnapshotWS(
   hass: HomeAssistant | null | undefined,

@@ -8,6 +8,7 @@ import logging
 import sqlite3
 import time
 from collections.abc import Iterator, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,7 @@ def load_fx_rates_for_date(
         message = "date darf nicht leer sein"
         raise ValueError(message)
 
-    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn = conn or sqlite3.connect(str(db_path), timeout=30.0)
 
     try:
         try:
@@ -95,7 +96,7 @@ def load_fx_rates_in_range(
         message = "start_date und end_date dürfen nicht leer sein"
         raise ValueError(message)
 
-    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn = conn or sqlite3.connect(str(db_path), timeout=30.0)
 
     try:
         try:
@@ -158,7 +159,7 @@ def upsert_fx_rate(
         message = "currency darf nicht leer sein"
         raise ValueError(message)
 
-    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn = conn or sqlite3.connect(str(db_path), timeout=30.0)
 
     try:
         try:
@@ -186,6 +187,44 @@ def upsert_fx_rate(
             )
             if conn is None:
                 local_conn.commit()
+        except sqlite3.OperationalError as err:
+            if "database is locked" in str(err).lower() and conn is None:
+                # Simple retry for single inserts if we own the connection
+                time.sleep(0.1)
+                try:
+                    local_conn.execute(
+                        """
+                        INSERT OR REPLACE INTO fx_rates (
+                            date,
+                            currency,
+                            rate,
+                            fetched_at,
+                            data_source,
+                            provider,
+                            provenance
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            rate.date,
+                            rate.currency,
+                            rate.rate,
+                            rate.fetched_at,
+                            rate.data_source,
+                            rate.provider,
+                            rate.provenance,
+                        ),
+                    )
+                    local_conn.commit()
+                except sqlite3.Error:
+                    pass  # Fall through to original exception logging
+                else:
+                    return
+            _LOGGER.exception(
+                "Fehler beim Speichern des Wechselkurses (date=%s, currency=%s)",
+                rate.date,
+                rate.currency,
+            )
+            raise
         except sqlite3.Error:
             _LOGGER.exception(
                 "Fehler beim Speichern des Wechselkurses (date=%s, currency=%s)",
@@ -216,7 +255,7 @@ def upsert_fx_rates_bulk(
             message = "currency darf nicht leer sein"
             raise ValueError(message)
 
-    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn = conn or sqlite3.connect(str(db_path), timeout=30.0)
 
     try:
         try:
@@ -276,7 +315,11 @@ def upsert_fx_rates_chunked(
         message = "chunk_size must be positive"
         raise ValueError(message)
 
-    local_conn = conn or sqlite3.connect(str(db_path))
+    local_conn = conn or sqlite3.connect(str(db_path), timeout=30.0)
+    if conn is None:
+        # If we own the connection, enable WAL to reduce writer contention
+        with suppress(sqlite3.Error):
+            local_conn.execute("PRAGMA journal_mode=WAL")
 
     try:
         for chunk in _iter_chunks(rates, chunk_size):

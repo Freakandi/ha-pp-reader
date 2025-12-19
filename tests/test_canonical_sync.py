@@ -64,7 +64,10 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
                 amount INTEGER,
                 amount_eur_cents INTEGER,
                 shares INTEGER,
-                date TEXT
+                date TEXT,
+                account TEXT,
+                other_account TEXT,
+                other_portfolio TEXT
             )
             """
         )
@@ -78,6 +81,18 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
                 data_source TEXT,
                 provider TEXT,
                 provenance TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE ingestion_transaction_units (
+                transaction_uuid TEXT,
+                type INTEGER,
+                amount INTEGER,
+                currency_code TEXT,
+                fx_amount INTEGER,
+                fx_currency_code TEXT
             )
             """
         )
@@ -113,9 +128,16 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
                 "HKD",
                 10_000,  # cents in native currency
                 None,
-                100,  # shares
+                100 * 100_000_000,  # shares
                 "2024-01-01",
             ),
+        )
+        conn.execute(
+            """
+            INSERT INTO ingestion_transaction_units (transaction_uuid, type, fx_amount, fx_currency_code)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("tx-1", 0, 10_000, "HKD")
         )
         conn.commit()
 
@@ -123,7 +145,7 @@ def test_sync_portfolio_securities_preserves_native_totals_without_fx(
 
         row = conn.execute("SELECT * FROM portfolio_securities").fetchone()
         assert row is not None
-        assert row["purchase_value"] == 0  # EUR value unknown without FX
+        assert row["purchase_value"] == 0
         assert row["security_currency_total"] > 0
         assert row["account_currency_total"] > 0
     finally:
@@ -147,7 +169,23 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
                 amount INTEGER,
                 amount_eur_cents INTEGER,
                 shares INTEGER,
-                date TEXT
+                date TEXT,
+                account TEXT,
+                other_account TEXT,
+                other_portfolio TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE fx_rates (
+                date TEXT,
+                currency TEXT,
+                rate REAL,
+                fetched_at TEXT,
+                data_source TEXT,
+                provider TEXT,
+                provenance TEXT
             )
             """
         )
@@ -185,7 +223,7 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
                     "USD",
                     20_000,  # cents native
                     18_000,  # EUR cents precomputed
-                    100,
+                    100 * 100_000_000,
                     "2024-02-01",
                 ),
                 (
@@ -196,10 +234,14 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
                     "EUR",
                     10_000,
                     10_000,
-                    50,
+                    50 * 100_000_000,
                     "2024-02-02",
                 ),
             ],
+        )
+        conn.execute(
+            "INSERT INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
+            ("2024-02-01", "USD", 1.11111111),
         )
         conn.commit()
 
@@ -207,7 +249,7 @@ def test_sync_portfolio_securities_uses_stored_eur_amounts(tmp_path: Path) -> No
 
         row = conn.execute("SELECT * FROM portfolio_securities").fetchone()
         assert row is not None
-        assert row["current_holdings"] == 150
+        assert row["current_holdings"] == 150 * 100_000_000
         assert row["purchase_value"] == 28_000
         assert row["security_currency_total"] == pytest.approx(300.0)
         assert row["account_currency_total"] == pytest.approx(300.0)
@@ -234,7 +276,10 @@ def test_sync_portfolio_securities_prefers_fx_units(tmp_path: Path) -> None:
                 amount INTEGER,
                 amount_eur_cents INTEGER,
                 shares INTEGER,
-                date TEXT
+                date TEXT,
+                account TEXT,
+                other_account TEXT,
+                other_portfolio TEXT
             )
             """
         )
@@ -247,6 +292,19 @@ def test_sync_portfolio_securities_prefers_fx_units(tmp_path: Path) -> None:
                 currency_code TEXT,
                 fx_amount INTEGER,
                 fx_currency_code TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE fx_rates (
+                date TEXT,
+                currency TEXT,
+                rate REAL,
+                fetched_at TEXT,
+                data_source TEXT,
+                provider TEXT,
+                provenance TEXT
             )
             """
         )
@@ -295,7 +353,7 @@ def test_sync_portfolio_securities_prefers_fx_units(tmp_path: Path) -> None:
                 "EUR",
                 50_000,  # 500 EUR
                 50_000,
-                100,
+                100 * 100_000_000,
                 "2024-03-01",
             ),
         )
@@ -316,7 +374,7 @@ def test_sync_portfolio_securities_prefers_fx_units(tmp_path: Path) -> None:
 
         row = conn.execute("SELECT * FROM portfolio_securities").fetchone()
         assert row is not None
-        assert row["current_holdings"] == 100
+        assert row["current_holdings"] == 100 * 100_000_000
         assert row["purchase_value"] == 50_000
         assert row["account_currency_total"] == pytest.approx(500.0)
         assert row["security_currency_total"] == pytest.approx(620.0)

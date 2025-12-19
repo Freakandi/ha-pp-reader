@@ -142,7 +142,7 @@ def _build_sample_parsed_client() -> tuple[parsed.ParsedClient, client_pb2.PClie
     sell.portfolio = portfolio.uuid
     sell.security = security.uuid
     sell.currencyCode = "USD"
-    sell.amount = 525_00  # 5 * 105
+    sell.amount = 515_00  # 5 * 105 - 10 fee
     sell.shares = 5 * 10**8
     sell.date.CopyFrom(_ts(datetime(2024, 1, 15, tzinfo=UTC)))
     sell.updatedAt.CopyFrom(_ts(datetime(2024, 1, 15, 12, tzinfo=UTC)))
@@ -153,7 +153,7 @@ def _build_sample_parsed_client() -> tuple[parsed.ParsedClient, client_pb2.PClie
     unit_sell.currencyCode = "USD"
 
     unit_fee = sell.units.add()
-    unit_fee.type = 13  # FEE
+    unit_fee.type = client_pb2.PTransactionUnit.Type.FEE
     unit_fee.amount = 10_00
     unit_fee.currencyCode = "USD"
 

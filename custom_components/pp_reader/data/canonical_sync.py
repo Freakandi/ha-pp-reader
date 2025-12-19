@@ -5,43 +5,22 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import suppress
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.accounting import db_calc_account_balance
-from custom_components.pp_reader.name.abuchen.portfolio import client_pb2
+from custom_components.pp_reader.logic.portfolio import normalize_shares
+from custom_components.pp_reader.logic.securities import (
+    PurchaseComputation,
+    db_calculate_sec_purchase_value,
+)
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.canonical_sync")
 
 _SCALED_INT_THRESHOLD = 10_000
 _EIGHT_DECIMAL_SCALE = 10**8
-
-
-@dataclass(slots=True)
-class _PortfolioSecurityContext:
-    """Shared context for portfolio security aggregation."""
-
-    conn: sqlite3.Connection
-    tx_units: dict[str, dict[str, Any]]
-    security_currency_map: dict[str, str]
-    purchase_types: tuple[int, ...]
-    sale_types: tuple[int, ...]
-
-
-@dataclass(slots=True)
-class _SecurityAmountContext:
-    """Values required to resolve amounts into security currency."""
-
-    tx_uuid: str | None
-    security_currency: str
-    currency_code: str
-    amount_eur_cents: int | None
-    account_total: float
-    tx_date: str
 
 
 async def async_sync_ingestion_to_canonical(
@@ -525,24 +504,18 @@ def _sync_securities(conn: sqlite3.Connection) -> None:
 
 def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
     conn.execute("DELETE FROM portfolio_securities")
-    _ = db_path
+
+    transactions = _load_ingestion_transactions(conn)
+    if not transactions:
+        return
+
     tx_units = _load_transaction_units(conn)
-    security_currency_map = _load_security_currency_map(conn)
-    context = _PortfolioSecurityContext(
-        conn=conn,
-        tx_units=tx_units,
-        security_currency_map=security_currency_map,
-        purchase_types=(
-            client_pb2.PTransaction.Type.PURCHASE,
-            client_pb2.PTransaction.Type.INBOUND_DELIVERY,
-        ),
-        sale_types=(
-            client_pb2.PTransaction.Type.SALE,
-            client_pb2.PTransaction.Type.OUTBOUND_DELIVERY,
-        ),
+    purchase_computations = db_calculate_sec_purchase_value(
+        transactions, db_path, tx_units=tx_units, conn=conn
     )
-    aggregates = _gather_portfolio_security_aggregates(context)
-    rows = _build_portfolio_security_rows(aggregates)
+    holdings = _compute_current_holdings(transactions)
+    rows = _build_portfolio_security_rows(holdings, purchase_computations)
+
     if not rows:
         return
 
@@ -566,156 +539,30 @@ def _sync_portfolio_securities(conn: sqlite3.Connection, db_path: Path) -> None:
     )
 
 
-def _gather_portfolio_security_aggregates(
-    context: _PortfolioSecurityContext,
-) -> dict[tuple[str, str], dict[str, float]]:
-    """Aggregate staged portfolio/security metrics from transactions."""
-    cursor = context.conn.execute(
-        """
-        SELECT
-            uuid,
-            portfolio,
-            security,
-            type,
-            currency_code,
-            amount,
-            amount_eur_cents,
-            shares,
-            date
-        FROM ingestion_transactions
-        WHERE portfolio IS NOT NULL
-          AND security IS NOT NULL
-        """
-    )
+def _compute_current_holdings(
+    transactions: list[Transaction],
+) -> dict[tuple[str, str], float]:
+    """Calculate the current number of shares for each portfolio security."""
+    holdings: dict[tuple[str, str], float] = {}
 
-    aggregates: dict[tuple[str, str], dict[str, float]] = {}
-    for row in cursor.fetchall():
-        _accumulate_portfolio_security_row(
-            aggregates=aggregates,
-            row=row,
-            context=context,
-        )
-    return aggregates
+    for tx in transactions:
+        if not tx.security or not tx.portfolio:
+            continue
 
+        key = (tx.portfolio, tx.security)
+        shares = normalize_shares(tx.shares) if tx.shares is not None else 0.0
 
-def _accumulate_portfolio_security_row(
-    *,
-    aggregates: dict[tuple[str, str], dict[str, float]],
-    row: sqlite3.Row,
-    context: _PortfolioSecurityContext,
-) -> None:
-    """Update aggregate totals for a single transaction row."""
-    tx_uuid = row["uuid"]
-    portfolio = row["portfolio"]
-    security = row["security"]
-    if not portfolio or not security:
-        return
+        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
+            holdings[key] = holdings.get(key, 0) + shares
+        elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
+            holdings[key] = holdings.get(key, 0) - shares
 
-    tx_type = int(row["type"] or 0)
-    amount_raw = int(row["amount"] or 0)
-    amount_eur_cents = (
-        int(row["amount_eur_cents"]) if row["amount_eur_cents"] is not None else None
-    )
-    shares_raw = int(row["shares"] or 0)
-    currency_code = (row["currency_code"] or "").strip().upper()
-    tx_date = row["date"] or ""
-    security_currency = (
-        context.security_currency_map.get(security) or currency_code or "EUR"
-    )
-
-    entry = aggregates.setdefault(
-        (portfolio, security),
-        {
-            "holdings_raw": 0,
-            "purchase_value_eur_cents": 0.0,
-            "account_currency_total": 0.0,
-            "security_currency_total": 0.0,
-        },
-    )
-
-    if tx_type in context.purchase_types:
-        entry["holdings_raw"] += shares_raw
-        account_total = cent_to_eur(amount_raw, default=0.0) or 0.0
-        entry["account_currency_total"] += account_total
-
-        security_total = _resolve_security_total(
-            context=context,
-            amount_context=_SecurityAmountContext(
-                tx_uuid=tx_uuid,
-                security_currency=security_currency,
-                currency_code=currency_code,
-                amount_eur_cents=amount_eur_cents,
-                account_total=account_total,
-                tx_date=tx_date,
-            ),
-        )
-        entry["security_currency_total"] += security_total or 0.0
-
-        if amount_eur_cents is None:
-            _LOGGER.warning(
-                (
-                    "Kein EUR-Betrag für Transaktion "
-                    "portfolio=%s security=%s date=%s currency=%s"
-                ),
-                portfolio or "<ohne Portfolio>",
-                security or "<ohne Wertpapier>",
-                tx_date or "<ohne Datum>",
-                currency_code or "<ohne Währung>",
-            )
-        else:
-            entry["purchase_value_eur_cents"] += float(amount_eur_cents)
-    elif tx_type in context.sale_types:
-        entry["holdings_raw"] -= abs(shares_raw)
-
-
-def _resolve_security_total(
-    *,
-    context: _PortfolioSecurityContext,
-    amount_context: _SecurityAmountContext,
-) -> float | None:
-    """Resolve transaction amount in security currency."""
-    unit = (
-        context.tx_units.get(amount_context.tx_uuid) if amount_context.tx_uuid else None
-    )
-    if unit:
-        unit_currency = (unit.get("fx_currency_code") or "").strip().upper()
-        unit_total = cent_to_eur(unit.get("fx_amount"), default=None)
-        if (
-            unit_total is not None
-            and unit_currency
-            and unit_currency == amount_context.security_currency
-        ):
-            return unit_total
-
-    if amount_context.currency_code == amount_context.security_currency:
-        return amount_context.account_total
-
-    eur_value = (
-        cent_to_eur(amount_context.amount_eur_cents, default=None)
-        if amount_context.amount_eur_cents is not None
-        else None
-    )
-    if eur_value is not None:
-        rate_security = _lookup_fx_rate(
-            context.conn, amount_context.security_currency, amount_context.tx_date
-        )
-        if rate_security:
-            return eur_value * rate_security
-
-    rate_security = _lookup_fx_rate(
-        context.conn, amount_context.security_currency, amount_context.tx_date
-    )
-    rate_account = _lookup_fx_rate(
-        context.conn, amount_context.currency_code, amount_context.tx_date
-    )
-    if rate_security and rate_account and rate_account not in (0, None):
-        return (amount_context.account_total / rate_account) * rate_security
-
-    return None
+    return holdings
 
 
 def _build_portfolio_security_rows(
-    aggregates: dict[tuple[str, str], dict[str, float]],
+    holdings: dict[tuple[str, str], float],
+    purchase_computations: dict[tuple[str, str], PurchaseComputation],
 ) -> list[
     tuple[
         str,
@@ -745,42 +592,29 @@ def _build_portfolio_security_rows(
             int,
         ]
     ] = []
-    for (portfolio, security), data in aggregates.items():
-        holdings_raw = int(data.get("holdings_raw", 0))
-        if holdings_raw <= 0:
-            continue
 
-        normalized_holdings = _normalize_scaled_quantity(holdings_raw)
-        if normalized_holdings <= 0:
-            continue
+    all_keys = set(holdings.keys()) | set(purchase_computations.keys())
 
-        purchase_cents_eur = round(data.get("purchase_value_eur_cents", 0.0))
-        account_total = data.get("account_currency_total", 0.0)
-        security_total = data.get("security_currency_total", 0.0)
+    for portfolio, security in all_keys:
+        current_holdings = holdings.get((portfolio, security), 0.0)
+        computation = purchase_computations.get((portfolio, security))
 
-        avg_price_security = (
-            security_total / normalized_holdings
-            if security_total and normalized_holdings
-            else None
-        )
-        avg_price_account = (
-            account_total / normalized_holdings
-            if account_total and normalized_holdings
-            else None
-        )
+        purchase_value_eur = computation.purchase_value if computation else 0.0
+        purchase_cents_eur = round(purchase_value_eur * 100)
+        holdings_raw = round(current_holdings * _EIGHT_DECIMAL_SCALE)
 
         rows.append(
             (
                 portfolio,
                 security,
                 holdings_raw,
-                int(purchase_cents_eur),
-                None,
-                avg_price_security,
-                avg_price_account,
-                security_total,
-                account_total,
-                0,
+                purchase_cents_eur,
+                computation.avg_price_native if computation else None,
+                computation.avg_price_security if computation else None,
+                computation.avg_price_account if computation else None,
+                computation.security_currency_total if computation else 0.0,
+                computation.account_currency_total if computation else 0.0,
+                0,  # current_value is populated later
             )
         )
     return rows

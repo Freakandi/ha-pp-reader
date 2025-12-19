@@ -10,6 +10,7 @@ Includes:
 # custom_components/pp_reader/currencies/fx.py
 
 import asyncio
+import functools
 import json
 import logging
 import sqlite3
@@ -30,6 +31,7 @@ from custom_components.pp_reader.data.fx_persistence import (
     load_fx_rates_for_date,
     load_fx_rates_in_range,
     upsert_fx_rate,
+    upsert_fx_rates_chunked,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,7 +77,9 @@ def _safe_float(value: Any) -> float | None:
 
 async def _execute_db(fn: Callable, *args: Any, **kwargs: Any) -> Any:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, fn, *args, **kwargs)
+    if kwargs:
+        fn = functools.partial(fn, **kwargs)
+    return await loop.run_in_executor(None, fn, *args)
 
 
 def discover_active_currencies(db_path: Path) -> set[str]:
@@ -426,27 +430,76 @@ async def ensure_exchange_rates_for_dates(
     if not currencies:
         return
 
+    # 1. Identify missing
+    missing_by_date: dict[str, set[str]] = {}
     for dt in dates:
         date_str = dt.strftime("%Y-%m-%d")
         existing = await _load_rates_for_date(db_path, date_str, conn=conn)
-        missing = currencies - set(existing.keys())
+        needed = currencies - set(existing.keys())
+        if needed:
+            missing_by_date[date_str] = needed
 
-        if missing:
-            try:
-                fetched = await _fetch_exchange_rates_with_retry(
-                    date_str,
-                    missing,
-                    retries=FETCH_RETRIES,
-                    initial_delay=FETCH_BACKOFF_SECONDS,
-                )
-                if fetched:
-                    await _save_rates(db_path, date_str, fetched, conn=conn)
-                elif _should_log_warning(date_str, missing):
+    if not missing_by_date:
+        return
+
+    # 2. Fetch all missing
+    # Note: Fetch sequentially to avoid API rate limits, but could parallelize
+    fetched_records: list[FxRateRecord] = []
+
+    fetched_at = (
+        datetime.now(tz=UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+
+    for date_str, missing in missing_by_date.items():
+        try:
+            fetched_rates = await _fetch_exchange_rates_with_retry(
+                date_str,
+                missing,
+                retries=FETCH_RETRIES,
+                initial_delay=FETCH_BACKOFF_SECONDS,
+            )
+
+            if not fetched_rates:
+                if _should_log_warning(date_str, missing):
                     _LOGGER.warning(
                         "Keine Kurse erhalten für %s am %s", missing, date_str
                     )
-            except Exception:
-                _LOGGER.exception("Fehler beim Laden der Kurse")
+                continue
+
+            provenance = json.dumps(
+                {"currencies": sorted(fetched_rates.keys())},
+                ensure_ascii=False,
+            )
+
+            for currency, rate in fetched_rates.items():
+                fetched_records.append(
+                    FxRateRecord(
+                        date=date_str,
+                        currency=currency,
+                        rate=rate,
+                        fetched_at=fetched_at,
+                        data_source=FRANKFURTER_SOURCE,
+                        provider=FRANKFURTER_PROVIDER,
+                        provenance=provenance,
+                    )
+                )
+
+        except Exception:
+            _LOGGER.exception("Fehler beim Laden der Kurse für %s", date_str)
+
+    # 3. Bulk save
+    if fetched_records:
+        if conn:
+            # If we have a connection (e.g. from worker), use it synchronously
+            # to avoid thread-sharing violations with sqlite connections.
+            upsert_fx_rates_chunked(db_path, fetched_records, conn=conn)
+        else:
+            await _execute_db(
+                upsert_fx_rates_chunked,
+                db_path,
+                fetched_records,
+                conn=None
+            )
 
 
 def ensure_exchange_rates_for_dates_sync(

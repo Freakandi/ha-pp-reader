@@ -396,11 +396,12 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915
+def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915, C901
     transactions: list[Transaction],
     db_path: Path,
     *,
     tx_units: dict[str, Any] | None = None,
+    conn: sqlite3.Connection | None = None,
 ) -> dict[tuple[str, str], PurchaseComputation]:
     """Berechne den gesamten Kaufpreis und native Durchschnittspreise (FIFO)."""
     portfolio_metrics: dict[tuple[str, str], PurchaseComputation] = {}
@@ -408,7 +409,9 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915
 
     fx_dates, fx_currencies = _collect_fx_requirements(transactions)
     if fx_currencies:
-        ensure_exchange_rates_for_dates_sync(list(fx_dates), fx_currencies, db_path)
+        ensure_exchange_rates_for_dates_sync(
+            list(fx_dates), fx_currencies, db_path, conn=conn
+        )
 
     missing_rates_logged: set[tuple[str, datetime]] = set()
     missing_native_logs: set[tuple[str, str]] = set()
@@ -439,26 +442,34 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915
         )
 
         if not rate:
+            skip_tx = True
             if (
-                tx.type in PURCHASE_TYPES
-                and native_amount is None
-                and tx.portfolio
-                and tx.security
+                tx.type in SALE_TYPES
+                or (tx.type in PURCHASE_TYPES and native_amount is not None)
             ):
-                warn_key = (tx.portfolio, tx.security)
-                if warn_key not in missing_native_logs:
-                    missing_native_logs.add(warn_key)
-                    _record_missing_native_position(tx.portfolio, tx.security)
-                    _LOGGER.warning(
-                        (
-                            "Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
-                            "(Transaktion %s). Bitte manuell prüfen."
-                        ),
-                        tx.portfolio,
-                        tx.security,
-                        tx.uuid,
-                    )
-            continue
+                skip_tx = False
+
+            if skip_tx:
+                if (
+                    tx.type in PURCHASE_TYPES
+                    and native_amount is None
+                    and tx.portfolio
+                    and tx.security
+                ):
+                    warn_key = (tx.portfolio, tx.security)
+                    if warn_key not in missing_native_logs:
+                        missing_native_logs.add(warn_key)
+                        _record_missing_native_position(tx.portfolio, tx.security)
+                        _LOGGER.warning(
+                            (
+                                "Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
+                                "(Transaktion %s). Bitte manuell prüfen."
+                            ),
+                            tx.portfolio,
+                            tx.security,
+                            tx.uuid,
+                        )
+                continue
 
         if tx.type in PURCHASE_TYPES:
             if shares <= 0:
@@ -470,7 +481,7 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915
             )
             account_price = account_total / shares if shares > 0 else None
             price_per_share_eur = (
-                account_price / rate if account_price is not None else 0.0
+                account_price / rate if account_price is not None and rate else 0.0
             )
             security_total = native_amount
             security_currency = native_currency
@@ -590,8 +601,9 @@ def db_calculate_holdings_value(
             needed_currencies.add(currency_code)
 
     # Stelle sicher, dass die Wechselkurse verfügbar sind
+    # Stelle sicher, dass die Wechselkurse verfügbar sind
     today = datetime.now()  # noqa: DTZ005
-    ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path)
+    ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path, conn=conn)
 
     # Lade die Wechselkurse
     fx_rates = load_latest_rates_sync(today, db_path)

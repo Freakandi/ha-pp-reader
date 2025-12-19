@@ -29,6 +29,7 @@ import {
 } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
 import { renderAnalyse } from './tabs/time_series';
+import { renderTrades } from './tabs/trades';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -96,11 +97,13 @@ interface DashboardElement extends HTMLElement {
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 const OVERVIEW_TAB_KEY = 'overview';
+const TRADES_TAB_KEY = 'trades';
 const ANALYSE_TAB_KEY = 'analyse';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
+  { key: TRADES_TAB_KEY, title: 'Trades', render: renderTrades },
   { key: ANALYSE_TAB_KEY, title: 'Zeitmaschine', render: renderAnalyse },
 ];
 

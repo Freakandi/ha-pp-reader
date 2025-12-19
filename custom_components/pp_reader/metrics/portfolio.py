@@ -25,8 +25,12 @@ _PORTFOLIO_AGGREGATION_SQL = """
     SELECT
         p.uuid AS uuid,
         p.name AS name,
-        COALESCE(SUM(ps.current_value), 0) AS current_value,
-        COALESCE(SUM(ps.purchase_value), 0) AS purchase_sum,
+        COALESCE(SUM(
+            CASE WHEN ps.current_holdings > 0 THEN ps.current_value ELSE 0 END
+        ), 0) AS current_value,
+        COALESCE(SUM(
+            CASE WHEN ps.current_holdings > 0 THEN ps.purchase_value ELSE 0 END
+        ), 0) AS purchase_sum,
         COUNT(CASE WHEN ps.current_holdings > 0 THEN 1 END) AS position_count,
         SUM(
             CASE
