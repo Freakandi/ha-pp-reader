@@ -383,7 +383,7 @@ def _load_relevant_transactions(
             )
         )
 
-    relevant.sort(key=lambda item: item[0])
+    # Data is already sorted by date from SQL query
     return relevant
 
 
