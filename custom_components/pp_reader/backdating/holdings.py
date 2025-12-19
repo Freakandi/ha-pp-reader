@@ -154,7 +154,10 @@ def _compute_daily_holdings_snapshots_sync(
         date_iso = tx_date.isoformat()
         daily_fx_rates = fx_rates_cache.get(date_iso, {})
         last_known_fx_rates.update(daily_fx_rates)
-        fx_rates = last_known_fx_rates.copy()
+        # Use fallback for today's calculations.
+        # Note: We use the mutable dictionary directly as downstream functions
+        # treat it as read-only for current calculations.
+        fx_rates = last_known_fx_rates
 
         for params in adjustments_by_date[tx_date]:
             # Apply update but ignore gains/neutral movements for initialization
@@ -178,8 +181,10 @@ def _compute_daily_holdings_snapshots_sync(
         # Update fallback cache with any available rates for today
         last_known_fx_rates.update(daily_fx_rates)
 
-        # Use fallback for today's calculations
-        fx_rates = last_known_fx_rates.copy()
+        # Use fallback for today's calculations.
+        # Note: We use the mutable dictionary directly as downstream functions
+        # treat it as read-only for current calculations.
+        fx_rates = last_known_fx_rates
 
         daily_realized_gains = 0.0
         daily_portfolio_gains: dict[str, float] = {}
@@ -395,6 +400,12 @@ def _group_transaction_adjustments(
     grouped: dict[
         date, list[tuple[str, str, float, int, str, int, int, int, float | None]]
     ] = {}
+
+    last_date: date | None = None
+    current_list: list[
+        tuple[str, str, float, int, str, int, int, int, float | None]
+    ] = []
+
     for (
         tx_date,
         portfolio_uuid,
@@ -407,7 +418,12 @@ def _group_transaction_adjustments(
         taxes,
         fx_rate_to_base,
     ) in transactions:
-        grouped.setdefault(tx_date, []).append(
+        if tx_date != last_date:
+            last_date = tx_date
+            current_list = []
+            grouped[tx_date] = current_list
+
+        current_list.append(
             (
                 portfolio_uuid,
                 security_uuid,
@@ -460,9 +476,17 @@ def _load_price_cache(
         normalized_price = normalize_raw_price(row["close"], decimals=6)
         if normalized_price is None:
             continue
-        cache.setdefault(security_uuid, []).append(
-            (price_date, normalized_price, str(raw_date))
-        )
+
+        # Rows are sorted by security_uuid, so we can use setdefault safely or optimize further.
+        # However, security_uuid changes less frequently than dates.
+        # But here we are building the cache for ALL securities.
+        # Since SQL sorts by security_uuid, we could optimize like above.
+        # But setdefault is okay-ish here as there are fewer securities than transactions.
+        # But let's stay consistent with optimization pattern if we are processing many rows.
+        if security_uuid in cache:
+            cache[security_uuid].append((price_date, normalized_price, str(raw_date)))
+        else:
+            cache[security_uuid] = [(price_date, normalized_price, str(raw_date))]
 
     # Note: Rows are already sorted by security_uuid and date in the SQL query.
     return cache

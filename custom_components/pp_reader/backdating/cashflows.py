@@ -126,7 +126,9 @@ def _compute_daily_cashflows_sync(
         last_known_fx_rates.update(daily_fx_rates)
 
         # Use fallback for today's calculations
-        fx_rates = last_known_fx_rates.copy()
+        # Note: We use the mutable dictionary directly as downstream functions
+        # treat it as read-only for current calculations.
+        fx_rates = last_known_fx_rates
 
         (
             dividends_eur,
@@ -209,8 +211,16 @@ def _group_transactions_by_date(
     transactions: Iterable[tuple[date, db_access.Transaction]],
 ) -> dict[date, list[db_access.Transaction]]:
     grouped: dict[date, list[db_access.Transaction]] = {}
+    last_date: date | None = None
+    current_list: list[db_access.Transaction] = []
+
     for parsed_date, tx in transactions:
-        grouped.setdefault(parsed_date, []).append(tx)
+        if parsed_date != last_date:
+            last_date = parsed_date
+            current_list = []
+            grouped[parsed_date] = current_list
+        current_list.append(tx)
+
     return grouped
 
 

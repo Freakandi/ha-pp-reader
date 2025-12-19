@@ -248,13 +248,21 @@ def _group_transaction_adjustments(
 ) -> dict[date, list[tuple[str, int]]]:
     """Aggregate transaction deltas per account keyed by transaction date."""
     grouped: dict[date, list[tuple[str, int]]] = {}
+    last_date: date | None = None
+    current_list: list[tuple[str, int]] = []
+
     for tx_date, tx in transactions:
+        if tx_date != last_date:
+            last_date = tx_date
+            current_list = []
+            grouped[tx_date] = current_list
+
         for account_uuid, delta in _transaction_deltas(
             tx,
             accounts_currency_map=accounts_currency_map,
             tx_units=tx_units,
         ):
-            grouped.setdefault(tx_date, []).append((account_uuid, delta))
+            current_list.append((account_uuid, delta))
     return grouped
 
 
