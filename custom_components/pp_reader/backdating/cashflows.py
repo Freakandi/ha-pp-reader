@@ -201,16 +201,28 @@ def _load_relevant_transactions(
 
         relevant.append((parsed_date, tx))
 
-    relevant.sort(key=lambda item: item[0])
+    # Data is already sorted by date from SQL query
     return relevant
 
 
 def _group_transactions_by_date(
     transactions: Iterable[tuple[date, db_access.Transaction]],
 ) -> dict[date, list[db_access.Transaction]]:
+    """Group sorted transactions by date using linear scan."""
     grouped: dict[date, list[db_access.Transaction]] = {}
+
+    # Since transactions are sorted by date, we can avoid setdefault overhead
+    # by tracking the current group.
+    current_date: date | None = None
+    current_list: list[db_access.Transaction] = []
+
     for parsed_date, tx in transactions:
-        grouped.setdefault(parsed_date, []).append(tx)
+        if parsed_date != current_date:
+            current_date = parsed_date
+            current_list = []
+            grouped[current_date] = current_list
+        current_list.append(tx)
+
     return grouped
 
 
