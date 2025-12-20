@@ -2,34 +2,31 @@
  * Mirrors the legacy dashboard controller for initial TypeScript migration.
  */
 
+import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
+import {
+  renderDashboard,
+  attachPortfolioToggleHandler,
+  updatePortfolioFooterFromDom,
+} from './tabs/overview';
+import { registerSecurityDetailTab } from './tabs/security_detail';
+import {
+  handleAccountUpdate,
+  handleLastFileUpdate,
+  handlePortfolioUpdate,
+  handlePortfolioPositionsUpdate,
+  __TEST_ONLY__,
+  flushPendingPositions,
+  reapplyPositionsSort,
+} from './data/updateConfigsWS';
+import { getEntryId } from './data/api';
 import {
   getRegisteredDashboardElements,
   getRegisteredPanelHosts,
   registerDashboardElement,
-  registerPanelHost,
   unregisterDashboardElement,
+  registerPanelHost,
   unregisterPanelHost,
 } from './dashboard/registry';
-import { getEntryId } from './data/api';
-import { escapeHtml } from './utils/html';
-import {
-  __TEST_ONLY__,
-  flushPendingPositions,
-  handleAccountUpdate,
-  handleLastFileUpdate,
-  handlePortfolioPositionsUpdate,
-  handlePortfolioUpdate,
-  reapplyPositionsSort,
-} from './data/updateConfigsWS';
-import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
-import {
-  attachPortfolioToggleHandler,
-  renderDashboard,
-  updatePortfolioFooterFromDom,
-} from './tabs/overview';
-import { registerSecurityDetailTab } from './tabs/security_detail';
-import { renderAnalyse } from './tabs/time_series';
-import { renderTrades } from './tabs/trades';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -43,7 +40,19 @@ import type {
   HomeAssistant,
 } from './types/home-assistant';
 
-export { __TEST_ONLY__, flushPendingPositions, handlePortfolioPositionsUpdate, reapplyPositionsSort, registerDashboardElement, registerPanelHost, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom };
+export { updatePortfolioFooterFromDom };
+export {
+  __TEST_ONLY__,
+  handlePortfolioPositionsUpdate,
+  flushPendingPositions,
+  reapplyPositionsSort,
+};
+export {
+  registerDashboardElement,
+  unregisterDashboardElement,
+  registerPanelHost,
+  unregisterPanelHost,
+};
 
 type AddSwipeEvents = (
   element: HTMLElement,
@@ -97,14 +106,10 @@ interface DashboardElement extends HTMLElement {
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 const OVERVIEW_TAB_KEY = 'overview';
-const TRADES_TAB_KEY = 'trades';
-const ANALYSE_TAB_KEY = 'analyse';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
-  { key: TRADES_TAB_KEY, title: 'Trades', render: renderTrades },
-  { key: ANALYSE_TAB_KEY, title: 'Zeitmaschine', render: renderAnalyse },
 ];
 
 const detailTabRegistry = new Map<string, DashboardTabDescriptor>();
@@ -141,23 +146,23 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 function toErrorMessage(error: unknown): string {
   if (typeof error === 'string') {
     const trimmed = error.trim();
-    return escapeHtml(trimmed.length > 0 ? trimmed : 'Unbekannter Fehler');
+    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
   }
   if (error instanceof Error) {
     const trimmed = error.message.trim();
-    return escapeHtml(trimmed.length > 0 ? trimmed : error.name);
+    return trimmed.length > 0 ? trimmed : error.name;
   }
   if (error != null) {
     try {
       const serialized = JSON.stringify(error);
       if (serialized && serialized !== '{}') {
-        return escapeHtml(serialized);
+        return serialized;
       }
     } catch {
       // Ignore serialization problems and fall back to String().
     }
   }
-  return escapeHtml(String(error));
+  return String(error);
 }
 
 function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
@@ -522,7 +527,6 @@ function requestDashboardRender(): void {
 
 export const __TEST_ONLY_DASHBOARD = {
   findDashboardElement,
-  toErrorMessage,
 };
 
 function notifyExternalRender(page: number): void {

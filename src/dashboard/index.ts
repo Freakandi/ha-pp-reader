@@ -21,8 +21,6 @@ export {
   ensurePortfolioRowFallbackListener,
 } from '../tabs/overview';
 
-export { renderAnalyse } from '../tabs/time_series';
-
 export {
   renderSecurityDetail,
   registerSecurityDetailTab,
@@ -37,7 +35,6 @@ export {
   fetchPortfolioPositionsWS,
   fetchSecuritySnapshotWS,
   fetchSecurityHistoryWS,
-  fetchDailyWealthWS,
 } from '../data/api';
 export type {
   AccountSummary,
@@ -52,17 +49,6 @@ export type {
   SecurityHistoryResponse,
   LastFileUpdateResponse,
   SecurityHistoryOptions,
-  DailyWealthResponse,
-  DailyWealthRange,
-  DailyWealthRecord,
-  DailyWealthSlices,
-  DailyWealthScopeRecord,
-  DailyWealthFetchOptions,
 } from '../data/api';
 export * from '../data/updateConfigsWS';
 export { addSwipeEvents, goToTab } from '../interaction/tab_control';
-export {
-  loadDailyWealth,
-  getDailyWealthState,
-  resetDailyWealthState,
-} from '../data/dailyWealthStore';
