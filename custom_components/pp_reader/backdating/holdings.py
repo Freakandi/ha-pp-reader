@@ -154,7 +154,8 @@ def _compute_daily_holdings_snapshots_sync(
         date_iso = tx_date.isoformat()
         daily_fx_rates = fx_rates_cache.get(date_iso, {})
         last_known_fx_rates.update(daily_fx_rates)
-        fx_rates = last_known_fx_rates.copy()
+        # Optimization: Pass reference directly instead of copying (consumers are read-only)
+        fx_rates = last_known_fx_rates
 
         for params in adjustments_by_date[tx_date]:
             # Apply update but ignore gains/neutral movements for initialization
@@ -179,7 +180,8 @@ def _compute_daily_holdings_snapshots_sync(
         last_known_fx_rates.update(daily_fx_rates)
 
         # Use fallback for today's calculations
-        fx_rates = last_known_fx_rates.copy()
+        # Optimization: Pass reference directly instead of copying (consumers are read-only)
+        fx_rates = last_known_fx_rates
 
         daily_realized_gains = 0.0
         daily_portfolio_gains: dict[str, float] = {}
