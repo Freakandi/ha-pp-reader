@@ -12,7 +12,7 @@ import logging
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
-from functools import wraps
+from functools import partial, wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -1144,7 +1144,13 @@ async def ws_get_trades(
     try:
         transactions = await async_run_executor_job(hass, get_transactions, db_path)
         realized_performance = await async_run_executor_job(
-            hass, calculate_realized_performance, transactions, db_path, tx_units=None
+            hass,
+            partial(
+                calculate_realized_performance,
+                transactions,
+                db_path,
+                tx_units=None,
+            ),
         )
 
     except Exception:
