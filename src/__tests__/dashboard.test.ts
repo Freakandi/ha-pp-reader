@@ -1,8 +1,6 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert';
 import { installDomEnvironment } from './dom';

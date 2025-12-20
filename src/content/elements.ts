@@ -23,12 +23,6 @@ export interface TableOptions {
     key: string;
     dir?: SortDirection;
   };
-  rowAttributes?: (row: any) => Record<string, string>;
-}
-
-export function renderTrend(value: number, formatted: string): string {
-  const trend = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
-  return `<span class="trend--${trend}">${formatted}</span>`;
 }
 
 export type TableRow = Record<string, unknown>;

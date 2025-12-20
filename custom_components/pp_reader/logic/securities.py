@@ -303,11 +303,7 @@ def db_calculate_current_holdings(
         )  # Wende normalize_shares an
 
         # Transaktionstypen auswerten
-        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
-            portfolio_securities_holdings[key] = (
-                portfolio_securities_holdings.get(key, 0) + shares
-            )
-        elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
+        if tx.type in (0, 2) or tx.type in (1, 3):  # PURCHASE, INBOUND_DELIVERY
             portfolio_securities_holdings[key] = (
                 portfolio_securities_holdings.get(key, 0) + shares
             )
@@ -687,7 +683,7 @@ class RealizedPerformanceResult:
     lots: list[RealizedPerformanceLot]
 
 
-def calculate_realized_performance(  # noqa: C901, PLR0912, PLR0915
+def calculate_realized_performance(  # noqa: PLR0912, PLR0915
     transactions: list[Transaction],
     db_path: Path,
     *,
@@ -825,7 +821,7 @@ def calculate_realized_performance(  # noqa: C901, PLR0912, PLR0915
             else 0.0
         )
 
-        # Find the portfolio key for current holdings (assuming one portfolio for simplicity)
+        # Find the portfolio key for current holdings
         holdings_qty = 0.0
         for (
             _portfolio_uuid,

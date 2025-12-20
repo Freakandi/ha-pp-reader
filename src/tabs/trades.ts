@@ -3,15 +3,15 @@
  */
 
 import { createHeaderCard, makeTable, renderTrend } from '../content/elements';
-import type { RealizedPerformanceResult } from '../data/api';
+import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import { formatCurrency, formatNumber, formatPercent } from '../utils/format';
 import { escapeHtml } from '../utils/html';
-import type { PanelConfigLike } from './types';
+import type { PanelConfigLike, TableRow } from './types';
 
-function renderTradesTable(trades: readonly RealizedPerformanceResult[]): string {
-  if (!trades || trades.length === 0) {
+function renderTradesTable(trades: readonly RealizedTrade[]): string {
+  if (trades.length === 0) {
     return '<div class="no-positions">Keine realisierten Gewinne/Verluste vorhanden.</div>';
   }
 
@@ -27,9 +27,9 @@ function renderTradesTable(trades: readonly RealizedPerformanceResult[]): string
     { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
   ];
 
-  const rows = trades.map((trade) => {
+  const rows: TableRow[] = trades.map((trade) => {
     const currentPrice = trade.current_price ?? 0;
-    const lastSellPrice = trade.last_sell_price ?? 0;
+    const lastSellPrice = trade.last_sell_price;
     const priceDiff = currentPrice - lastSellPrice;
     const priceTrend = priceDiff > 0 ? 'positive' : priceDiff < 0 ? 'negative' : 'neutral';
 
@@ -61,30 +61,34 @@ function renderTradesTable(trades: readonly RealizedPerformanceResult[]): string
   return makeTable(rows, cols, [], {
     sortable: true,
     defaultSort: { key: 'name' },
-    rowAttributes: (row: any) => ({
-      'data-security-uuid': row._uuid,
+    rowAttributes: (row: TableRow) => ({
+      'data-security-uuid': String(row._uuid),
     }),
   });
 }
 
 
-function attachEventListeners(root: HTMLElement) {
+function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[]) {
+  const tradeMap = new Map(trades.map(t => [t.security_uuid, t]));
+
   root.querySelectorAll('.expand-icon').forEach(icon => {
     icon.addEventListener('click', (event) => {
       event.stopPropagation();
       const uuid = (event.currentTarget as HTMLElement).dataset.securityUuid;
-      const mainRow = root.querySelector(`tr[data-security-uuid="${uuid}"]`);
-      const tradeData = (mainRow as any)?._row?._lots;
+      const trade = tradeMap.get(uuid!);
+      const mainRow = root.querySelector(`tr[data-security-uuid="${String(uuid)}"]`);
 
-      if (!mainRow || !tradeData) return;
+      if (!mainRow || !trade) return;
 
       const iconEl = mainRow.querySelector('.expand-icon ha-icon');
       if (mainRow.classList.toggle('is-expanded')) {
         iconEl?.setAttribute('icon', 'mdi:chevron-down');
-        const childRows = tradeData.map((lot: any) => {
+        const childRows = trade.lots.map((lot: RealizedLot) => {
           const row = document.createElement('tr');
           row.classList.add('child-row');
-          row.dataset.parentUuid = uuid;
+          if (uuid) {
+            row.dataset.parentUuid = uuid;
+          }
           row.innerHTML = `
             <td class="cell--name">
               <span class="child-indicator"></span>
@@ -106,7 +110,9 @@ function attachEventListeners(root: HTMLElement) {
 
       } else {
         iconEl?.setAttribute('icon', 'mdi:chevron-right');
-        root.querySelectorAll(`tr.child-row[data-parent-uuid="${uuid}"]`).forEach(child => child.remove());
+        root.querySelectorAll(`tr.child-row[data-parent-uuid="${String(uuid)}"]`).forEach(child => {
+          child.remove();
+        });
       }
     });
   });
@@ -132,7 +138,9 @@ export async function renderTrades(
   `;
 
   // Attach event listeners after rendering
-  setTimeout(() => attachEventListeners(root), 0);
+  setTimeout(() => {
+    attachEventListeners(root, trades);
+  }, 0);
 
   return markup;
 }

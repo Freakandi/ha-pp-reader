@@ -27,6 +27,9 @@ from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
 )
+from custom_components.pp_reader.logic.securities import (
+    calculate_realized_performance,
+)
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
 from custom_components.pp_reader.util.datetime import UTC
@@ -37,10 +40,6 @@ from .db_access import (
     get_portfolios,
     get_transactions,
 )
-from custom_components.pp_reader.logic.securities import (
-    calculate_realized_performance,
-)
-
 from .normalization_pipeline import (
     async_fetch_security_history,
     async_normalize_security_snapshot,
