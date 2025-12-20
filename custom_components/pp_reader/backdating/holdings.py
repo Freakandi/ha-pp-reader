@@ -152,8 +152,9 @@ def _compute_daily_holdings_snapshots_sync(
 
         # Use cached FX rates for the specific prior date
         date_iso = tx_date.isoformat()
-        daily_fx_rates = fx_rates_cache.get(date_iso, {})
-        last_known_fx_rates.update(daily_fx_rates)
+        daily_fx_rates = fx_rates_cache.get(date_iso)
+        if daily_fx_rates:
+            last_known_fx_rates.update(daily_fx_rates)
         # Optimization: Pass reference directly, avoid copy (consumers are read-only)
         fx_rates = last_known_fx_rates
 
@@ -174,10 +175,11 @@ def _compute_daily_holdings_snapshots_sync(
     while date_cursor <= end_date:
         daily_adjustments = adjustments_by_date.get(date_cursor, ())
         date_iso = date_cursor.isoformat()
-        daily_fx_rates = fx_rates_cache.get(date_iso, {})
+        daily_fx_rates = fx_rates_cache.get(date_iso)
 
         # Update fallback cache with any available rates for today
-        last_known_fx_rates.update(daily_fx_rates)
+        if daily_fx_rates:
+            last_known_fx_rates.update(daily_fx_rates)
 
         # Use fallback for today's calculations
         # Optimization: Pass reference directly, avoid copy (consumers are read-only)

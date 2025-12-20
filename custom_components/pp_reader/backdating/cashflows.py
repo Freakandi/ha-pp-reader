@@ -120,10 +120,11 @@ def _compute_daily_cashflows_sync(
     while date_cursor <= end_date:
         daily_txs = transactions_by_date.get(date_cursor, ())
         date_iso = date_cursor.isoformat()
-        daily_fx_rates = fx_rates_cache.get(date_iso, {})
+        daily_fx_rates = fx_rates_cache.get(date_iso)
 
         # Update fallback cache with any available rates for today
-        last_known_fx_rates.update(daily_fx_rates)
+        if daily_fx_rates:
+            last_known_fx_rates.update(daily_fx_rates)
 
         if not daily_txs:
             # OPTIMIZATION: Short-circuit if no transactions
