@@ -546,7 +546,7 @@ tbody tr:hover {
 .header-card,
 .header-card h1,
 .header-card h2,
-.card > h2 {
+.card>h2 {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -744,12 +744,10 @@ tbody tr:hover {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(
-    120deg,
-    transparent,
-    rgba(255, 255, 255, 0.35),
-    transparent
-  );
+  background: linear-gradient(120deg,
+      transparent,
+      rgba(255, 255, 255, 0.35),
+      transparent);
   animation: security-range-loading 1.2s ease-in-out infinite;
 }
 
@@ -757,9 +755,11 @@ tbody tr:hover {
   0% {
     transform: translateX(-100%);
   }
+
   50% {
     transform: translateX(0%);
   }
+
   100% {
     transform: translateX(100%);
   }
@@ -776,7 +776,7 @@ tbody tr:hover {
   overflow: visible;
 }
 
-.card.security-detail-placeholder > h2 {
+.card.security-detail-placeholder>h2 {
   position: static;
   top: auto;
 }
@@ -875,10 +875,8 @@ tbody tr:hover {
 }
 
 .line-chart-baseline {
-  stroke: var(
-    --pp-reader-chart-baseline,
-    rgba(96, 125, 139, 0.75)
-  );
+  stroke: var(--pp-reader-chart-baseline,
+      rgba(96, 125, 139, 0.75));
   stroke-width: 1.25px;
   stroke-dasharray: var(--pp-reader-chart-baseline-dash, 6 4);
   opacity: 0;
@@ -1083,6 +1081,7 @@ tbody tr:hover {
 }
 
 @media (max-width: 600px) {
+
   .expandable-portfolio-table th,
   .expandable-portfolio-table td {
     padding: 0.4rem 0.4rem;
@@ -1102,6 +1101,7 @@ tbody tr:hover {
 }
 
 @media (max-width: 480px) {
+
   .expandable-portfolio-table th,
   .expandable-portfolio-table td {
     padding: 0.35rem 0.35rem;
@@ -1178,4 +1178,84 @@ th[data-sort-key]:hover::after,
 th.sortable-header:hover::after,
 th.sortable-col:hover::after {
   opacity: 0.35;
+}
+
+/* Trades Tab Full-Height Layout */
+.trades-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.trades-view-wrapper .header-card {
+  flex-shrink: 0;
+  /* Remove sticky from header card itself in this mode, as it stays at top of flex container */
+  position: relative;
+  top: auto;
+  z-index: 30;
+  margin-bottom: 1rem;
+}
+
+.trades-view-wrapper .card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Prevent card itself from scrolling */
+  padding: 0;
+  /* Move padding to inner container or handle otherwise if needed */
+  background-color: var(--card-background-color);
+}
+
+.trades-table-container {
+  flex: 1;
+  overflow: auto;
+  /* This is the scroll container */
+  /* padding removed to ensure sticky headers/columns extend to the edge and hide scrolled content */
+}
+
+/* Sticky Header (relative to .trades-table-container) */
+.trades-table-container table th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: var(--card-background-color);
+  /* Ensure opacity */
+  box-shadow: 0 1px 0 var(--divider-color);
+  /* Optional separation line */
+}
+
+/* Sticky First Column */
+.trades-table-container table th:first-child,
+.trades-table-container table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 21;
+}
+
+.trades-table-container table th:first-child {
+  z-index: 22;
+  /* Corner on top */
+}
+
+/* Zebra Striping fixes for Sticky Column */
+.trades-table-container table tr td:first-child {
+  background-color: var(--card-background-color);
+  /* Default (Even) */
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.trades-table-container table tr:nth-child(odd) td:first-child {
+  background-color: var(--secondary-background-color, #fcfcfc);
+}
+
+/* Ensure hover effect works on sticky column too */
+.trades-table-container table tr:hover td:first-child {
+  background-color: var(--outline-hover-color);
+}
+
+.trades-table-container table tr:nth-child(odd):hover td:first-child {
+  background-color: var(--outline-hover-color);
 }

@@ -3,7 +3,7 @@
  */
 
 import type { TableRow } from '../content/elements';
-import { createHeaderCard, makeTable } from '../content/elements';
+import { createHeaderCard, makeTable, sortTableRows } from '../content/elements';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
@@ -157,10 +157,29 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
 
       } else {
         iconEl?.setAttribute('icon', 'mdi:chevron-right');
-        root.querySelectorAll(`tr.child - row[data - parent - uuid="${String(uuid)}"]`).forEach(child => {
+        root.querySelectorAll(`tr.child-row[data-parent-uuid="${String(uuid)}"]`).forEach(child => {
           child.remove();
         });
       }
+    });
+  });
+
+  // Attach sort listeners
+  root.querySelectorAll('th[data-sort-key]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = (th as HTMLElement).dataset.sortKey;
+      if (!key) return;
+
+      const table = th.closest('table');
+      if (!table) return;
+
+      // Determine direction
+      let dir: 'asc' | 'desc' = 'asc';
+      if (th.classList.contains('sort-active') && th.classList.contains('dir-asc')) {
+        dir = 'desc';
+      }
+
+      sortTableRows(table, key, dir);
     });
   });
 }
@@ -182,13 +201,15 @@ export async function renderTrades(
   const tradesTable = renderTradesTable(trades);
 
   const markup = `
-    ${headerCard.outerHTML}
-          <div class="card" >
-            <div class="scroll-container trades-table" >
-              ${tradesTable}
-          </div>
-            </div>
-              `;
+    <div class="trades-view-wrapper" style="height: 100%;">
+      ${headerCard.outerHTML}
+      <div class="card">
+        <div class="trades-table-container">
+          ${tradesTable}
+        </div>
+      </div>
+    </div>
+  `;
 
   // Attach event listeners after rendering
   setTimeout(() => {
