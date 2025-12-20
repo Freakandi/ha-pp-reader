@@ -22,3 +22,8 @@
 **Vulnerability:** Found an XSS vulnerability in `src/dashboard.ts` where error messages were rendered directly into `innerHTML` via `toErrorMessage` without escaping.
 **Learning:** Error messages are not inherently safe; exceptions or backend errors can contain malicious payloads. `innerHTML` assignment of error text is a common pitfall.
 **Prevention:** Always run error messages through `escapeHtml` before rendering them, even if they come from `Error` objects or JSON serialization.
+
+## 2024-05-24 - Incomplete Dangerous Tag Blacklist
+**Vulnerability:** The `formatValue` helper implemented a blacklist for dangerous HTML tags but omitted critical vectors like `<input>`, `<button>`, `<img>`, and `<details>`, allowing potential phishing or XSS via attributes.
+**Learning:** Blacklists are inherently fragile; new tags or obscure vectors (like `<math>` or `<svg>`) are easily missed.
+**Prevention:** Expanded the blacklist significantly to cover interactive and embedding tags. Ideally, switch to an allowlist or a robust sanitizer (DOMPurify) if dependency constraints allow.

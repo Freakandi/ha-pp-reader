@@ -179,7 +179,10 @@ export function formatValue(
         // Expanded check to catch <script>, javascript: URIs, and event handlers
         // with various separators (space, tab, newline, slash) or whitespace around '='.
         // Also catches dangerous tags like iframe, object, embed, etc.
-        const DANGEROUS_PATTERN = /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|[\s\/]on[a-z]+\s*=/i;
+        //
+        // 2024-05: Sentinel expanded blacklist to include input, button, svg, details, math, etc.
+        // to prevent phishing and complex XSS attacks.
+        const DANGEROUS_PATTERN = /<\s*(?:script|iframe|object|embed|base|style|link|meta|form|input|button|textarea|select|option|optgroup|fieldset|legend|datalist|keygen|output|progress|meter|dialog|template|slot|canvas|svg|math|details|summary|applet|body|html|head|title|marquee|img|picture|video|audio|source|track|map|area)\b|javascript:|[\s\/]on[a-z]+\s*=/i;
         if (DANGEROUS_PATTERN.test(formatted)) {
           formatted = escapeHtml(formatted);
         }
