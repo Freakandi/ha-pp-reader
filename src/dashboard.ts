@@ -330,7 +330,7 @@ async function navigateToPage(
   const tabs = getVisibleTabs();
   const clampedIndex = clampPageIndex(targetIndex);
   if (clampedIndex === currentPage) {
-    if (targetIndex > currentPage) {
+    if (targetIndex < currentPage) {
       tryReopenLastDetail();
     }
     return;
@@ -392,6 +392,19 @@ export function registerDetailTab(
   }
 
   const securityUuid = extractSecurityUuidFromKey(key);
+
+  // Enforce Single Detail Tab Policy
+  // If we are registering a security detail tab, close all other open detail tabs first.
+  if (securityUuid) {
+    // Create a copy to iterate safely while modifying the source
+    const existingKeys = [...detailTabOrder];
+    for (const otherKey of existingKeys) {
+      if (otherKey !== key && extractSecurityUuidFromKey(otherKey)) {
+        unregisterDetailTab(otherKey);
+      }
+    }
+  }
+
   if (securityUuid) {
     const existingKey = securityTabLookup.get(securityUuid);
     if (existingKey && existingKey !== key) {
@@ -790,19 +803,15 @@ function updateNavigationState(headerCard: HTMLElement): void {
   const navRight = headerCard.querySelector<HTMLButtonElement>('#nav-right');
 
   if (navLeft) {
-    if (currentPage === 0) {
-      navLeft.disabled = true;
-      navLeft.classList.add('disabled');
-    } else {
-      navLeft.disabled = false;
-      navLeft.classList.remove('disabled');
-    }
+    const shouldEnable = currentPage > 0 || !!lastClosedSecurityUuid;
+    navLeft.disabled = !shouldEnable;
+    navLeft.classList.toggle('disabled', !shouldEnable);
   }
 
   if (navRight) {
     const tabs = getVisibleTabs();
     const atEnd = currentPage === tabs.length - 1;
-    const shouldEnable = !atEnd || !!lastClosedSecurityUuid;
+    const shouldEnable = !atEnd;
     navRight.disabled = !shouldEnable;
     navRight.classList.toggle('disabled', !shouldEnable);
   }
