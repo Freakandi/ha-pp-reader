@@ -23,6 +23,7 @@ export interface TableOptions {
     key: string;
     dir?: SortDirection;
   };
+  rowAttributes?: (row: TableRow) => Record<string, string>;
 }
 
 export type TableRow = Record<string, unknown>;
@@ -188,16 +189,16 @@ export function formatValue(
       const hasMarkup = /<|&lt;|&gt;/.test(formatted);
       if (!hasMarkup) {
         const MAX_LEN = 60;
-          if (formatted.length > MAX_LEN) {
-            formatted = formatted.slice(0, MAX_LEN - 1) + "…";
-          }
-          // Entferne frühere Präfixe (Abwärtskompatibilität)
-          if (formatted.startsWith("Kontostand ")) {
-            formatted = formatted.substring("Kontostand ".length);
-          } else if (formatted.startsWith("Depotwert ")) {
-            formatted = formatted.substring("Depotwert ".length);
-          }
+        if (formatted.length > MAX_LEN) {
+          formatted = formatted.slice(0, MAX_LEN - 1) + "…";
         }
+        // Entferne frühere Präfixe (Abwärtskompatibilität)
+        if (formatted.startsWith("Kontostand ")) {
+          formatted = formatted.substring("Kontostand ".length);
+        } else if (formatted.startsWith("Depotwert ")) {
+          formatted = formatted.substring("Depotwert ".length);
+        }
+      }
     }
   }
   if (typeof formatted !== "string" || formatted === "") {
@@ -220,7 +221,7 @@ export function makeTable(
    *
    * Bestehende Aufrufer (3 Parameter) bleiben kompatibel.
    */
-  const { sortable = false, defaultSort } = options;
+  const { sortable = false, defaultSort, rowAttributes } = options;
   const defaultSortKey = defaultSort?.key ?? "";
   const defaultSortDir: SortDirection =
     defaultSort?.dir === "desc" ? "desc" : "asc";
@@ -239,7 +240,14 @@ export function makeTable(
   html += "</tr></thead><tbody>";
 
   rows.forEach((r) => {
-    html += "<tr>";
+    let attrStr = "";
+    if (rowAttributes) {
+      const attrs = rowAttributes(r);
+      attrStr = Object.entries(attrs)
+        .map(([k, v]) => ` ${k}="${escapeAttribute(v)}"`)
+        .join("");
+    }
+    html += `<tr${attrStr}>`;
     cols.forEach((c) => {
       const alignClass = c.align === "right" ? ' class="align-right"' : "";
       html += `<td${alignClass}>${formatValue(c.key, r[c.key], r)}</td>`;
@@ -279,7 +287,7 @@ export function makeTable(
                   c.key === "day_change_pct"
                     ? (dayChange as Record<string, unknown>).change_pct
                     : ((dayChange as Record<string, unknown>)
-                        .value_change_eur ??
+                      .value_change_eur ??
                       (dayChange as Record<string, unknown>).price_change_eur);
                 if (typeof metric === "number") {
                   candidate = metric;

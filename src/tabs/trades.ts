@@ -2,13 +2,25 @@
  * Trades tab renderer for "Realized Performance".
  */
 
-import { createHeaderCard, makeTable, renderTrend } from '../content/elements';
+import type { TableRow } from '../content/elements';
+import { createHeaderCard, makeTable } from '../content/elements';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import { formatCurrency, formatNumber, formatPercent } from '../utils/format';
 import { escapeHtml } from '../utils/html';
-import type { PanelConfigLike, TableRow } from './types';
+import type { PanelConfigLike } from './types';
+
+// Extend TableRow to include our internal properties
+type TradesTableRow = TableRow & {
+  _uuid: string;
+  _lots: RealizedLot[];
+};
+
+function renderTrend(value: number, formatted: string): string {
+  const cls = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  return `<span class="${cls}">${formatted}</span>`;
+}
 
 function renderTradesTable(trades: readonly RealizedTrade[]): string {
   if (trades.length === 0) {
@@ -27,7 +39,7 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
   ];
 
-  const rows: TableRow[] = trades.map((trade) => {
+  const rows: TradesTableRow[] = trades.map((trade) => {
     const currentPrice = trade.current_price ?? 0;
     const lastSellPrice = trade.last_sell_price;
     const priceDiff = currentPrice - lastSellPrice;
@@ -55,18 +67,18 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       sales_value_net: formatCurrency(trade.sales_value_net),
       result_pct: renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100)),
       current_holdings: `${formatNumber(trade.current_holdings)} ${trade.current_holdings === 0 ? '<ha-icon icon="mdi:lock-outline" title="Geschlossen"></ha-icon>' : ''}`,
-    };
+    } as TradesTableRow;
   });
 
   return makeTable(rows, cols, [], {
     sortable: true,
     defaultSort: { key: 'name' },
+
     rowAttributes: (row: TableRow) => ({
-      'data-security-uuid': String(row._uuid),
+      'data-security-uuid': (row as TradesTableRow)._uuid,
     }),
   });
 }
-
 
 function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[]) {
   const tradeMap = new Map(trades.map(t => [t.security_uuid, t]));
@@ -74,8 +86,9 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
   root.querySelectorAll('.expand-icon').forEach(icon => {
     icon.addEventListener('click', (event) => {
       event.stopPropagation();
-      const uuid = (event.currentTarget as HTMLElement).dataset.securityUuid;
-      const trade = tradeMap.get(uuid!);
+      const target = event.currentTarget as HTMLElement;
+      const uuid = target.dataset.securityUuid;
+      const trade = uuid ? tradeMap.get(uuid) : undefined;
       const mainRow = root.querySelector(`tr[data-security-uuid="${String(uuid)}"]`);
 
       if (!mainRow || !trade) return;
@@ -118,14 +131,20 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
   });
 }
 
-
 export async function renderTrades(
   root: HTMLElement,
   hass: HomeAssistant | null | undefined,
   panelConfig: PanelConfigLike | null | undefined,
 ): Promise<string> {
   const headerCard = createHeaderCard('Realisierte Performance', '');
-  const trades = await fetchRealizedPerformance(hass, panelConfig);
+
+  let trades: RealizedTrade[] = [];
+  try {
+    trades = await fetchRealizedPerformance(hass, panelConfig);
+  } catch (e) {
+    console.error("Failed to fetch trades", e);
+  }
+
   const tradesTable = renderTradesTable(trades);
 
   const markup = `
