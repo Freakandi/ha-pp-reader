@@ -27,6 +27,7 @@ import {
   updatePortfolioFooterFromDom,
 } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
+import { renderAnalyse } from './tabs/time_series';
 import { renderTrades } from './tabs/trades';
 import type {
   DashboardTabDescriptor,
@@ -95,11 +96,13 @@ interface DashboardElement extends HTMLElement {
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 const OVERVIEW_TAB_KEY = 'overview';
+const ANALYSE_TAB_KEY = 'analyse';
 const TRADES_TAB_KEY = 'trades';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
+  { key: ANALYSE_TAB_KEY, title: 'Analyse', render: renderAnalyse },
   { key: TRADES_TAB_KEY, title: 'Trades', render: renderTrades },
 ];
 
@@ -518,6 +521,7 @@ function requestDashboardRender(): void {
 
 export const __TEST_ONLY_DASHBOARD = {
   findDashboardElement,
+  toErrorMessage,
 };
 
 function notifyExternalRender(page: number): void {

@@ -10,45 +10,19 @@ export * from '../dashboard';
 // test-only helpers (`__TEST_ONLY__`) multiple times which causes
 // conflicts under TypeScript's star-export rules.
 export {
-  renderDashboard,
-  attachPortfolioToggleHandler,
-  renderPortfolioPositions,
-  attachSecurityDetailListener,
-  updatePortfolioFooterFromDom,
-  getExpandedPortfolios,
-  setExpandedPortfolios,
-  attachPortfolioPositionsSorting,
-  ensurePortfolioRowFallbackListener,
+  attachPortfolioPositionsSorting, attachPortfolioToggleHandler, attachSecurityDetailListener, ensurePortfolioRowFallbackListener, getExpandedPortfolios, renderDashboard, renderPortfolioPositions, setExpandedPortfolios, updatePortfolioFooterFromDom
 } from '../tabs/overview';
 
 export {
-  renderSecurityDetail,
-  registerSecurityDetailTab,
-} from '../tabs/security_detail';
-export * from '../tabs/types';
-export {
-  getEntryId,
-  fetchDashboardDataWS,
-  fetchAccountsWS,
-  fetchLastFileUpdateWS,
-  fetchPortfoliosWS,
-  fetchPortfolioPositionsWS,
-  fetchSecuritySnapshotWS,
-  fetchSecurityHistoryWS,
+  fetchAccountsWS, fetchDailyWealthWS, fetchDashboardDataWS, fetchLastFileUpdateWS, fetchPortfolioPositionsWS, fetchPortfoliosWS, fetchRealizedPerformance, fetchSecurityHistoryWS, fetchSecuritySnapshotWS, getEntryId
 } from '../data/api';
 export type {
-  AccountSummary,
-  PortfolioSummary,
-  DashboardDataResponse,
-  AccountsResponse,
-  PortfoliosResponse,
-  PortfolioPositionsResponse,
-  SecuritySnapshotResponse,
-  SecurityHistoryPoint,
-  SecurityHistoryTransaction,
-  SecurityHistoryResponse,
-  LastFileUpdateResponse,
-  SecurityHistoryOptions,
+  AccountSummary, AccountsResponse, DashboardDataResponse, LastFileUpdateResponse, PortfolioPositionsResponse, PortfolioSummary, PortfoliosResponse, SecurityHistoryOptions, SecurityHistoryPoint, SecurityHistoryResponse, SecurityHistoryTransaction, SecuritySnapshotResponse
 } from '../data/api';
 export * from '../data/updateConfigsWS';
 export { addSwipeEvents, goToTab } from '../interaction/tab_control';
+export {
+  registerSecurityDetailTab, renderSecurityDetail
+} from '../tabs/security_detail';
+export * from '../tabs/types';
+

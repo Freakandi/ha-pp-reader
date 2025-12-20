@@ -2,19 +2,19 @@
  * Home Assistant websocket API helpers carried over for TypeScript migration.
  */
 
-import {
-  deserializeAccountSnapshots,
-  deserializeNormalizedDashboardSnapshot,
-  deserializeNormalizedPayloadMetadata,
-  deserializePortfolioSnapshots,
-  deserializePositionSnapshots,
-} from "../lib/api/portfolio";
 import type {
   NormalizedAccountSnapshot,
   NormalizedDashboardSnapshot,
   NormalizedPayloadMetadata,
   NormalizedPortfolioSnapshot,
   NormalizedPositionSnapshot,
+} from "../lib/api/portfolio";
+import {
+  deserializeAccountSnapshots,
+  deserializeNormalizedDashboardSnapshot,
+  deserializeNormalizedPayloadMetadata,
+  deserializePortfolioSnapshots,
+  deserializePositionSnapshots,
 } from "../lib/api/portfolio";
 import type {
   AverageCostPayload,
@@ -282,10 +282,10 @@ export interface DashboardPushPayloadMap {
   accounts: AccountSummary[] | null | undefined;
   portfolio_values: PortfolioValuesUpdateEntry[] | null | undefined;
   portfolio_positions:
-    | PortfolioPositionsUpdatePayload
-    | PortfolioPositionsUpdatePayload[]
-    | null
-    | undefined;
+  | PortfolioPositionsUpdatePayload
+  | PortfolioPositionsUpdatePayload[]
+  | null
+  | undefined;
   security_snapshot: SecuritySnapshotResponse | null | undefined;
   security_history: SecurityHistoryResponse | null | undefined;
 }
@@ -653,5 +653,100 @@ export async function fetchRealizedPerformance(
   } catch (err) {
     console.error('Error fetching realized performance data:', err);
     return [];
+  }
+}
+
+// --- Daily Wealth (Analyse Tab) ---
+
+export interface DailyWealthRange {
+  start: string;
+  end: string;
+}
+
+export interface DailyWealthFetchOptions {
+  date?: string | null;
+  range?: DailyWealthRange | null;
+  scopes?: {
+    accounts?: string[];
+    portfolios?: string[];
+  };
+  includeSlices?: boolean;
+  includeScopes?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface DailyWealthRequest extends DailyWealthFetchOptions {
+  type: 'pp_reader/get_daily_wealth';
+  entry_id: string;
+  [key: string]: unknown;
+}
+
+export interface DailyWealthRecord {
+  date: string;
+  total_wealth_eur: number;
+  dividends_eur?: number;
+  interest_eur?: number;
+  fees_eur?: number;
+  taxes_eur?: number;
+  inbound_transfers_eur?: number;
+  outbound_transfers_eur?: number;
+  performance_neutral_movements?: number;
+  realized_gains_eur?: number;
+  unrealized_price_gains_eur?: number;
+  fx_gains_eur?: number;
+  fx_coverage_ratio?: number | null;
+  price_coverage_ratio?: number | null;
+  stale_price?: boolean;
+  [key: string]: unknown;
+}
+
+export interface DailyWealthScopeRecord {
+  scope_type: 'account' | 'portfolio';
+  scope_id: string;
+  scope_name?: string;
+  date: string;
+  total_wealth_eur: number;
+  [key: string]: unknown;
+}
+
+export interface DailyWealthSlices {
+  accounts: DailyWealthScopeRecord[];
+  portfolios: DailyWealthScopeRecord[];
+}
+
+export interface DailyWealthResponse {
+  range: DailyWealthRange;
+  records: DailyWealthRecord[];
+  slices?: DailyWealthSlices;
+}
+
+export async function fetchDailyWealthWS(
+  hass: HomeAssistant | null | undefined,
+  config: PanelConfigLike | null | undefined,
+  options: DailyWealthFetchOptions,
+): Promise<DailyWealthResponse | null> {
+  const entryId = deriveEntryId(hass, config);
+  if (!hass || !entryId) return null;
+
+  try {
+    const payload: DailyWealthRequest = {
+      type: 'pp_reader/get_daily_wealth',
+      entry_id: entryId,
+      ...options,
+    };
+
+    // Cleanup undefined values to keep payload clean
+    for (const key of Object.keys(payload)) {
+      if (payload[key] === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete payload[key];
+      }
+    }
+
+    return await hass.connection.sendMessagePromise<DailyWealthResponse>(payload);
+  } catch (err) {
+    console.error('Error fetching daily wealth data:', err);
+    throw err;
   }
 }
