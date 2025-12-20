@@ -122,6 +122,12 @@
     color: var(--secondary-text-color, #757575);
 }
 
+.drp-nav-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
 .drp-nav-btn:hover {
     color: var(--primary-text-color, #212121);
     border-color: var(--secondary-text-color, #757575);
