@@ -12,7 +12,7 @@ import logging
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
-from functools import wraps
+from functools import partial, wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +26,9 @@ from custom_components.pp_reader.data.db_access import (
 from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
+)
+from custom_components.pp_reader.logic.securities import (
+    calculate_realized_performance,
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
@@ -1074,6 +1077,99 @@ ws_get_news_prompt = _wrap_with_loop_fallback(ws_get_news_prompt)
 
 # Registrierung neuer WS-Command (am Ende der bestehenden Registrierungen
 # oder analog zu anderen)
+def _serialize_realized_performance(results: list[Any]) -> list[dict[str, Any]]:
+    """Convert RealizedPerformanceResult objects into plain dictionaries."""
+    serialized = []
+    for res in results:
+        lots = [
+            {
+                "date": lot.date,
+                "shares": lot.shares,
+                "sell_price": lot.sell_price,
+                "purchase_value_gross": lot.purchase_value_gross,
+                "sales_value_gross": lot.sales_value_gross,
+                "sales_value_net": lot.sales_value_net,
+                "result_abs": lot.result_abs,
+                "result_pct": lot.result_pct,
+            }
+            for lot in res.lots
+        ]
+        serialized.append(
+            {
+                "security_uuid": res.security_uuid,
+                "name": res.name,
+                "ticker_symbol": res.ticker_symbol,
+                "current_price": res.current_price,
+                "current_holdings": res.current_holdings,
+                "last_sell_price": res.last_sell_price,
+                "purchase_value_gross": res.purchase_value_gross,
+                "sales_value_gross": res.sales_value_gross,
+                "sales_value_net": res.sales_value_net,
+                "result_abs": res.result_abs,
+                "result_pct": res.result_pct,
+                "lots": lots,
+            }
+        )
+    return serialized
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_trades",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_trades(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return realized performance for all sold positions."""
+    entry_id = msg.get("entry_id")
+    if not entry_id:
+        connection.send_error(msg["id"], "invalid_format", "entry_id erforderlich")
+        return
+
+    resolved = _resolve_entry_and_path(
+        hass,
+        entry_id,
+        msg_id=msg.get("id"),
+        connection=connection,
+    )
+    if resolved is None:
+        return
+    _, db_path = resolved
+
+    try:
+        transactions = await async_run_executor_job(hass, get_transactions, db_path)
+        realized_performance = await async_run_executor_job(
+            hass,
+            partial(
+                calculate_realized_performance,
+                transactions,
+                db_path,
+                tx_units=None,
+            ),
+        )
+
+    except Exception:
+        _LOGGER.exception(
+            "WebSocket: Fehler beim Berechnen der realisierten Performance"
+        )
+        connection.send_error(
+            msg["id"],
+            "calculation_failed",
+            "Realisierte Performance konnte nicht berechnet werden.",
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        {"trades": _serialize_realized_performance(realized_performance)},
+    )
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "pp_reader/get_portfolio_positions",
@@ -1448,6 +1544,7 @@ ws_get_daily_wealth = _wrap_with_loop_fallback(ws_get_daily_wealth)
 
 def async_register_commands(hass: HomeAssistant) -> None:
     """Registriert alle WebSocket-Commands dieses Modules."""
+    websocket_api.async_register_command(hass, ws_get_trades)
     websocket_api.async_register_command(hass, ws_get_portfolio_positions)
     websocket_api.async_register_command(hass, ws_get_security_history)
     websocket_api.async_register_command(hass, ws_get_security_snapshot)

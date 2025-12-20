@@ -24,6 +24,7 @@ from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     normalize_raw_price,
     round_currency,
+    round_price,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -302,13 +303,9 @@ def db_calculate_current_holdings(
         )  # Wende normalize_shares an
 
         # Transaktionstypen auswerten
-        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
+        if tx.type in (0, 2) or tx.type in (1, 3):  # PURCHASE, INBOUND_DELIVERY
             portfolio_securities_holdings[key] = (
                 portfolio_securities_holdings.get(key, 0) + shares
-            )
-        elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
-            portfolio_securities_holdings[key] = (
-                portfolio_securities_holdings.get(key, 0) - shares
             )
 
     # Entferne Einträge mit einem Bestand von 0 oder weniger
@@ -652,3 +649,203 @@ def db_calculate_holdings_value(
         )
 
     return current_hold_pur
+
+
+@dataclass(slots=True)
+class RealizedPerformanceLot:
+    """Represents a single realized gain/loss event (a sell)."""
+
+    date: str
+    shares: float
+    sell_price: float
+    purchase_value_gross: float
+    sales_value_gross: float
+    sales_value_net: float
+    result_abs: float
+    result_pct: float
+
+
+@dataclass(slots=True)
+class RealizedPerformanceResult:
+    """Aggregated realized performance for a single security."""
+
+    security_uuid: str
+    name: str
+    ticker_symbol: str | None
+    current_price: float | None
+    current_holdings: float
+    last_sell_price: float
+    purchase_value_gross: float  # Total cost basis of ALL sold shares
+    sales_value_gross: float  # Total gross proceeds
+    sales_value_net: float  # Total net proceeds
+    result_abs: float
+    result_pct: float
+    lots: list[RealizedPerformanceLot]
+
+
+def calculate_realized_performance(  # noqa: PLR0912, PLR0915
+    transactions: list[Transaction],
+    db_path: Path,
+    *,
+    tx_units: dict[str, Any] | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> list[RealizedPerformanceResult]:
+    """Calculate realized performance for all sold positions using FIFO."""
+    purchase_queue: dict[str, list[_HoldingLot]] = {}
+    realized_gains: dict[str, list[RealizedPerformanceLot]] = {}
+    security_info: dict[str, dict[str, Any]] = {}
+
+    if conn is None:
+        # Create a temporary connection if one isn't provided
+        db_conn = sqlite3.connect(db_path)
+        db_conn.row_factory = sqlite3.Row
+        cur = db_conn.cursor()
+    else:
+        cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT uuid, name, ticker_symbol, last_price FROM securities")
+        for row in cur.fetchall():
+            security_info[row["uuid"]] = {
+                "name": row["name"],
+                "ticker_symbol": row["ticker_symbol"],
+                "current_price": normalize_raw_price(row["last_price"]),
+            }
+    finally:
+        if conn is None:
+            db_conn.close()
+
+    fx_dates, fx_currencies = _collect_fx_requirements(transactions)
+    if fx_currencies:
+        ensure_exchange_rates_for_dates_sync(list(fx_dates), fx_currencies, db_path)
+
+    missing_rates_logged: set[tuple[str, datetime]] = set()
+
+    # First pass: Process all transactions to populate purchase queue and realized gains
+    for tx in sorted(transactions, key=lambda t: t.date):
+        if not tx.security:
+            continue
+
+        key = tx.security
+        normalized = _normalize_transaction_amounts(tx, tx_units)
+        shares = normalized.shares
+        tx_date = datetime.fromisoformat(tx.date)
+
+        rate, _ = _determine_exchange_rate(
+            tx, tx_date, db_path, missing_logged=missing_rates_logged
+        )
+        if not rate:
+            continue  # Skip transactions where FX rate is missing
+
+        if tx.type in PURCHASE_TYPES:
+            if shares <= 0:
+                continue
+
+            price_per_share_eur = (
+                (normalized.net_trade_account / shares) / rate if shares > 0 else 0.0
+            )
+
+            purchase_queue.setdefault(key, []).append(
+                _HoldingLot(
+                    shares=shares,
+                    price_eur=price_per_share_eur,
+                    timestamp=tx_date,
+                )
+            )
+
+        elif tx.type in SALE_TYPES:
+            shares_to_sell = abs(shares)
+            if shares_to_sell <= 0:
+                continue
+
+            lots = purchase_queue.get(key, [])
+            cost_basis_sold = 0.0
+            remaining_to_sell = shares_to_sell
+            consumed_lots_indices = []
+
+            for i, lot in enumerate(lots):
+                if remaining_to_sell <= 0:
+                    break
+
+                shares_from_lot = min(lot.shares, remaining_to_sell)
+                cost_basis_sold += shares_from_lot * lot.price_eur
+                lot.shares -= shares_from_lot
+                remaining_to_sell -= shares_from_lot
+
+                if lot.shares < SHARE_MATCH_EPSILON:
+                    consumed_lots_indices.append(i)
+
+            # Clean up consumed lots
+            purchase_queue[key] = [
+                lot for i, lot in enumerate(lots) if i not in consumed_lots_indices
+            ]
+
+            sales_value_gross = abs(normalized.gross) / rate
+            sales_value_net = abs(normalized.net_trade_account) / rate
+            result_abs = sales_value_net - cost_basis_sold
+            result_pct = (
+                (result_abs / cost_basis_sold) * 100 if cost_basis_sold > 0 else 0.0
+            )
+
+            sell_price = sales_value_gross / shares_to_sell if shares_to_sell > 0 else 0
+
+            realized_gains.setdefault(key, []).append(
+                RealizedPerformanceLot(
+                    date=tx_date.strftime("%Y-%m-%d"),
+                    shares=shares_to_sell,
+                    sell_price=round_price(sell_price),
+                    purchase_value_gross=round_currency(cost_basis_sold),
+                    sales_value_gross=round_currency(sales_value_gross),
+                    sales_value_net=round_currency(sales_value_net),
+                    result_abs=round_currency(result_abs),
+                    result_pct=round_currency(result_pct, decimals=2),
+                )
+            )
+
+    # Second pass: Aggregate results
+    aggregated_results: list[RealizedPerformanceResult] = []
+    current_holdings = db_calculate_current_holdings(transactions)
+
+    for sec_uuid, lots in realized_gains.items():
+        if not lots:
+            continue
+
+        info = security_info.get(sec_uuid, {})
+        total_purchase_gross = sum(lot.purchase_value_gross for lot in lots)
+        total_sales_gross = sum(lot.sales_value_gross for lot in lots)
+        total_sales_net = sum(lot.sales_value_net for lot in lots)
+        total_result_abs = total_sales_net - total_purchase_gross
+        total_result_pct = (
+            (total_result_abs / total_purchase_gross) * 100
+            if total_purchase_gross > 0
+            else 0.0
+        )
+
+        # Find the portfolio key for current holdings
+        holdings_qty = 0.0
+        for (
+            _portfolio_uuid,
+            security_uuid,
+        ), qty in current_holdings.items():
+            if security_uuid == sec_uuid:
+                holdings_qty = qty
+                break
+
+        aggregated_results.append(
+            RealizedPerformanceResult(
+                security_uuid=sec_uuid,
+                name=info.get("name", "Unknown"),
+                ticker_symbol=info.get("ticker_symbol"),
+                current_price=info.get("current_price"),
+                current_holdings=round_currency(holdings_qty, decimals=6),
+                last_sell_price=lots[-1].sell_price,
+                purchase_value_gross=round_currency(total_purchase_gross),
+                sales_value_gross=round_currency(total_sales_gross),
+                sales_value_net=round_currency(total_sales_net),
+                result_abs=round_currency(total_result_abs),
+                result_pct=round_currency(total_result_pct, decimals=2),
+                lots=lots,
+            )
+        )
+
+    return sorted(aggregated_results, key=lambda x: x.name)

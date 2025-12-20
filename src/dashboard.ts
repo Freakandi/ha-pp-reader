@@ -11,7 +11,6 @@ import {
   unregisterPanelHost,
 } from './dashboard/registry';
 import { getEntryId } from './data/api';
-import { escapeHtml } from './utils/html';
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -97,14 +96,14 @@ interface DashboardElement extends HTMLElement {
 
 const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
 const OVERVIEW_TAB_KEY = 'overview';
-const TRADES_TAB_KEY = 'trades';
 const ANALYSE_TAB_KEY = 'analyse';
+const TRADES_TAB_KEY = 'trades';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
+  { key: ANALYSE_TAB_KEY, title: 'Analyse', render: renderAnalyse },
   { key: TRADES_TAB_KEY, title: 'Trades', render: renderTrades },
-  { key: ANALYSE_TAB_KEY, title: 'Zeitmaschine', render: renderAnalyse },
 ];
 
 const detailTabRegistry = new Map<string, DashboardTabDescriptor>();
@@ -141,23 +140,23 @@ function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
 function toErrorMessage(error: unknown): string {
   if (typeof error === 'string') {
     const trimmed = error.trim();
-    return escapeHtml(trimmed.length > 0 ? trimmed : 'Unbekannter Fehler');
+    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
   }
   if (error instanceof Error) {
     const trimmed = error.message.trim();
-    return escapeHtml(trimmed.length > 0 ? trimmed : error.name);
+    return trimmed.length > 0 ? trimmed : error.name;
   }
   if (error != null) {
     try {
       const serialized = JSON.stringify(error);
       if (serialized && serialized !== '{}') {
-        return escapeHtml(serialized);
+        return serialized;
       }
     } catch {
       // Ignore serialization problems and fall back to String().
     }
   }
-  return escapeHtml(String(error));
+  return String(error);
 }
 
 function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
