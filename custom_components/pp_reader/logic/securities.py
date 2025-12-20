@@ -110,8 +110,8 @@ def _normalize_transaction_amounts(
     """Convert raw transaction figures into floats with fee/tax breakdown."""
     shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
     gross = cent_to_eur(transaction.amount, default=0.0) or 0.0
-    fees = 0.0
-    taxes = 0.0
+    fees = cent_to_eur(transaction.fees, default=0.0) or 0.0
+    taxes = cent_to_eur(transaction.taxes, default=0.0) or 0.0
 
     if tx_units:
         units = tx_units.get(transaction.uuid)
@@ -217,10 +217,10 @@ def _determine_exchange_rate(
     missing_logged: set[tuple[str, datetime]] | None = None,
 ) -> tuple[float | None, float | None]:
     """Load the exchange rate for a transaction and expose the raw value."""
-    fx_rates = load_latest_rates_sync(tx_date, db_path)
-
     if transaction.currency_code == "EUR":
         return 1.0, 1.0
+
+    fx_rates = load_latest_rates_sync(tx_date, db_path)
 
     rate = fx_rates.get(transaction.currency_code)
     if not rate:
@@ -303,9 +303,13 @@ def db_calculate_current_holdings(
         )  # Wende normalize_shares an
 
         # Transaktionstypen auswerten
-        if tx.type in (0, 2) or tx.type in (1, 3):  # PURCHASE, INBOUND_DELIVERY
+        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
             portfolio_securities_holdings[key] = (
                 portfolio_securities_holdings.get(key, 0) + shares
+            )
+        elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
+            portfolio_securities_holdings[key] = (
+                portfolio_securities_holdings.get(key, 0) - shares
             )
 
     # Entferne Einträge mit einem Bestand von 0 oder weniger
@@ -658,6 +662,7 @@ class RealizedPerformanceLot:
     date: str
     shares: float
     sell_price: float
+    sell_price_native: float | None
     purchase_value_gross: float
     sales_value_gross: float
     sales_value_net: float
@@ -671,10 +676,12 @@ class RealizedPerformanceResult:
 
     security_uuid: str
     name: str
+    currency_code: str
     ticker_symbol: str | None
     current_price: float | None
     current_holdings: float
     last_sell_price: float
+    last_sell_price_native: float | None
     purchase_value_gross: float  # Total cost basis of ALL sold shares
     sales_value_gross: float  # Total gross proceeds
     sales_value_net: float  # Total net proceeds
@@ -704,10 +711,14 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
         cur = conn.cursor()
 
     try:
-        cur.execute("SELECT uuid, name, ticker_symbol, last_price FROM securities")
+        cur.execute(
+            "SELECT uuid, name, currency_code, ticker_symbol, last_price "
+            "FROM securities"
+        )
         for row in cur.fetchall():
             security_info[row["uuid"]] = {
                 "name": row["name"],
+                "currency_code": row["currency_code"],
                 "ticker_symbol": row["ticker_symbol"],
                 "current_price": normalize_raw_price(row["last_price"]),
             }
@@ -715,9 +726,27 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
         if conn is None:
             db_conn.close()
 
-    fx_dates, fx_currencies = _collect_fx_requirements(transactions)
-    if fx_currencies:
-        ensure_exchange_rates_for_dates_sync(list(fx_dates), fx_currencies, db_path)
+    # Collect needed FX rates for both transaction currency
+    # and security currency (if different)
+    needed_currencies = set()
+    for tx in transactions:
+        if tx.currency_code != "EUR":
+            needed_currencies.add(tx.currency_code)
+
+        # Need to check security currency as well, but tx doesn't have it directly.
+        # We'll rely on what we collected in security_info, but that's static.
+        # We can iterate unique securities in transactions.
+        if tx.security and tx.security in security_info:
+            sec_ccy = security_info[tx.security]["currency_code"]
+            if sec_ccy != "EUR":
+                needed_currencies.add(sec_ccy)
+
+    dates = {datetime.fromisoformat(tx.date) for tx in transactions}
+
+    if needed_currencies:
+        ensure_exchange_rates_for_dates_sync(
+            list(dates), list(needed_currencies), db_path
+        )
 
     missing_rates_logged: set[tuple[str, datetime]] = set()
 
@@ -731,6 +760,7 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
         shares = normalized.shares
         tx_date = datetime.fromisoformat(tx.date)
 
+        # Rate for converting Transaction Amount to EUR
         rate, _ = _determine_exchange_rate(
             tx, tx_date, db_path, missing_logged=missing_rates_logged
         )
@@ -789,11 +819,31 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
 
             sell_price = sales_value_gross / shares_to_sell if shares_to_sell > 0 else 0
 
+            # Calculate native sell price
+            sell_price_native = None
+            if key in security_info:
+                sec_ccy = security_info[key]["currency_code"]
+                if sec_ccy == "EUR":
+                    sell_price_native = sell_price
+                else:
+                    # Get rate for security currency
+                    # We need to manually load it since _determine_exchange_rate
+                    # works on Transaction
+                    fx_rates = load_latest_rates_sync(tx_date, db_path)
+                    sec_rate = fx_rates.get(sec_ccy)
+                    if sec_rate:
+                        sell_price_native = sell_price * sec_rate
+
             realized_gains.setdefault(key, []).append(
                 RealizedPerformanceLot(
                     date=tx_date.strftime("%Y-%m-%d"),
                     shares=shares_to_sell,
                     sell_price=round_price(sell_price),
+                    sell_price_native=(
+                        round_price(sell_price_native)
+                        if sell_price_native is not None
+                        else None
+                    ),
                     purchase_value_gross=round_currency(cost_basis_sold),
                     sales_value_gross=round_currency(sales_value_gross),
                     sales_value_net=round_currency(sales_value_net),
@@ -821,24 +871,23 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
             else 0.0
         )
 
-        # Find the portfolio key for current holdings
-        holdings_qty = 0.0
-        for (
-            _portfolio_uuid,
-            security_uuid,
-        ), qty in current_holdings.items():
-            if security_uuid == sec_uuid:
-                holdings_qty = qty
-                break
+        # Find aggregation of holdings across all portfolios
+        holdings_qty = sum(
+            qty
+            for (p_uuid, s_uuid), qty in current_holdings.items()
+            if s_uuid == sec_uuid
+        )
 
         aggregated_results.append(
             RealizedPerformanceResult(
                 security_uuid=sec_uuid,
                 name=info.get("name", "Unknown"),
+                currency_code=info.get("currency_code", "EUR"),
                 ticker_symbol=info.get("ticker_symbol"),
                 current_price=info.get("current_price"),
                 current_holdings=round_currency(holdings_qty, decimals=6),
                 last_sell_price=lots[-1].sell_price,
+                last_sell_price_native=lots[-1].sell_price_native,
                 purchase_value_gross=round_currency(total_purchase_gross),
                 sales_value_gross=round_currency(total_sales_gross),
                 sales_value_net=round_currency(total_sales_net),

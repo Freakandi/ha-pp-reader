@@ -616,19 +616,23 @@ export interface RealizedLot {
   date: string;
   shares: number;
   sell_price: number;
+  sell_price_native: number | null;
   purchase_value_gross: number;
   sales_value_gross: number;
   sales_value_net: number;
+  result_abs: number;
   result_pct: number;
 }
 
 export interface RealizedTrade {
   security_uuid: string;
   name: string;
+  currency_code: string;
   ticker_symbol: string | null;
   current_price: number | null;
   current_holdings: number;
   last_sell_price: number;
+  last_sell_price_native: number | null;
   purchase_value_gross: number;
   sales_value_gross: number;
   sales_value_net: number;

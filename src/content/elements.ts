@@ -147,15 +147,19 @@ export function formatValue(
     formatted = safeNumber(numeric) + "&nbsp;€";
   } else if (key === "current_holdings") {
     // Bestände (Anzahl Anteile) – etwas mehr Präzision (bis 4 Nachkommastellen), aber ohne unnötige Nullen
-    const numeric = typeof value === "number" ? value : toNumber(value);
-    if (!Number.isFinite(numeric)) {
-      return renderMissingValue();
+    if (typeof value === "string" && value.trim().startsWith("<")) {
+      formatted = value;
+    } else {
+      const numeric = typeof value === "number" ? value : toNumber(value);
+      if (!Number.isFinite(numeric)) {
+        return renderMissingValue();
+      }
+      const hasFraction = Math.abs(numeric % 1) > 0;
+      formatted = numeric.toLocaleString("de-DE", {
+        minimumFractionDigits: hasFraction ? 2 : 0,
+        maximumFractionDigits: 4,
+      });
     }
-    const hasFraction = Math.abs(numeric % 1) > 0;
-    formatted = numeric.toLocaleString("de-DE", {
-      minimumFractionDigits: hasFraction ? 2 : 0,
-      maximumFractionDigits: 4,
-    });
   } else {
     let base = "";
     if (typeof value === "string") {

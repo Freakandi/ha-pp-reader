@@ -29,12 +29,12 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
 
   const cols = [
     { key: 'name', label: 'Wertpapier' },
-    { key: 'ticker_symbol', label: 'Symbol' },
     { key: 'last_sell_price', label: 'Verkaufskurs', align: 'right' as const },
     { key: 'current_price', label: 'Aktueller Kurs', align: 'right' as const },
     { key: 'purchase_value_gross', label: 'Einstandswert', align: 'right' as const },
     { key: 'sales_value_gross', label: 'Verkaufswert', align: 'right' as const },
-    { key: 'sales_value_net', label: 'Nettoerlös', align: 'right' as const },
+    { key: 'result_gross', label: 'Bruttoergebnis', align: 'right' as const },
+    { key: 'result_abs', label: 'Nettoergebnis', align: 'right' as const },
     { key: 'result_pct', label: 'Resultat', align: 'right' as const },
     { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
   ];
@@ -55,18 +55,22 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       `;
     }
 
+    const isClosed = Math.abs(trade.current_holdings) < 0.001;
+
     return {
       _uuid: trade.security_uuid,
       _lots: trade.lots,
       name: nameCell,
-      ticker_symbol: escapeHtml(trade.ticker_symbol || ''),
-      last_sell_price: formatCurrency(trade.last_sell_price),
-      current_price: `<span class="trend--${priceTrend}">${formatCurrency(trade.current_price)}</span>`,
+      last_sell_price: formatCurrency(trade.last_sell_price_native ?? trade.last_sell_price, trade.currency_code),
+      current_price: `<span class="trend--${priceTrend}">${formatCurrency(trade.current_price, trade.currency_code)}</span>`,
       purchase_value_gross: formatCurrency(trade.purchase_value_gross),
       sales_value_gross: formatCurrency(trade.sales_value_gross),
-      sales_value_net: formatCurrency(trade.sales_value_net),
+      result_gross: formatCurrency(trade.sales_value_gross - trade.purchase_value_gross),
+      result_abs: formatCurrency(trade.result_abs),
       result_pct: renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100)),
-      current_holdings: `${formatNumber(trade.current_holdings)} ${trade.current_holdings === 0 ? '<ha-icon icon="mdi:lock-outline" title="Geschlossen"></ha-icon>' : ''}`,
+      current_holdings: isClosed
+        ? '<ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon>'
+        : formatNumber(trade.current_holdings),
     } as TradesTableRow;
   });
 
@@ -78,6 +82,48 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       'data-security-uuid': (row as TradesTableRow)._uuid,
     }),
   });
+}
+
+function renderLots(lots: RealizedLot[], trade: RealizedTrade): string { // Need trade to get currency
+  const lotRows = lots.map((lot) => {
+    // Merge Date and Shares
+    const dateShares = `
+      <div class="lot-date-shares">
+         <span class="lot-date">${lot.date}</span>
+         <span class="lot-shares">${formatNumber(lot.shares)} Stk.</span>
+      </div>
+    `;
+
+    // Only show formatted prices/values
+    return {
+      name: dateShares,
+      last_sell_price: formatCurrency(lot.sell_price_native ?? lot.sell_price, trade.currency_code),
+      current_price: '',
+      purchase_value_gross: formatCurrency(lot.purchase_value_gross),
+      sales_value_gross: formatCurrency(lot.sales_value_gross),
+      result_gross: formatCurrency(lot.sales_value_gross - lot.purchase_value_gross),
+      result_abs: formatCurrency(lot.result_abs),
+      result_pct: renderTrend(lot.result_pct, formatPercent(lot.result_pct / 100)),
+      current_holdings: '',
+    };
+  });
+
+  return makeTable(
+    lotRows,
+    [
+      { key: 'name', label: '' },
+      { key: 'last_sell_price', label: '', align: 'right' },
+      { key: 'current_price', label: '', align: 'right' },
+      { key: 'purchase_value_gross', label: '', align: 'right' },
+      { key: 'sales_value_gross', label: '', align: 'right' },
+      { key: 'result_gross', label: '', align: 'right' },
+      { key: 'result_abs', label: '', align: 'right' },
+      { key: 'result_pct', label: '', align: 'right' },
+      { key: 'current_holdings', label: '', align: 'right' },
+    ],
+    [],
+    { sortable: false }
+  );
 }
 
 function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[]) {
@@ -96,26 +142,14 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
       const iconEl = mainRow.querySelector('.expand-icon ha-icon');
       if (mainRow.classList.toggle('is-expanded')) {
         iconEl?.setAttribute('icon', 'mdi:chevron-down');
-        const childRows = trade.lots.map((lot: RealizedLot) => {
-          const row = document.createElement('tr');
+        const childRowsHtml = renderLots(trade.lots, trade);
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = childRowsHtml;
+        const childRows = Array.from(tempDiv.querySelectorAll('tbody tr')).map(row => {
           row.classList.add('child-row');
           if (uuid) {
-            row.dataset.parentUuid = uuid;
+            (row as HTMLElement).dataset.parentUuid = uuid;
           }
-          row.innerHTML = `
-            <td class="cell--name">
-              <span class="child-indicator"></span>
-              ${escapeHtml(lot.date)}
-            </td>
-            <td>${formatNumber(lot.shares)} Stk.</td>
-            <td class="cell--right">${formatCurrency(lot.sell_price)}</td>
-            <td></td>
-            <td class="cell--right">${formatCurrency(lot.purchase_value_gross)}</td>
-            <td class="cell--right">${formatCurrency(lot.sales_value_gross)}</td>
-            <td class="cell--right">${formatCurrency(lot.sales_value_net)}</td>
-            <td class="cell--right">${renderTrend(lot.result_pct, formatPercent(lot.result_pct / 100))}</td>
-            <td></td>
-          `;
           return row;
         });
 
@@ -123,7 +157,7 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
 
       } else {
         iconEl?.setAttribute('icon', 'mdi:chevron-right');
-        root.querySelectorAll(`tr.child-row[data-parent-uuid="${String(uuid)}"]`).forEach(child => {
+        root.querySelectorAll(`tr.child - row[data - parent - uuid="${String(uuid)}"]`).forEach(child => {
           child.remove();
         });
       }
@@ -149,12 +183,12 @@ export async function renderTrades(
 
   const markup = `
     ${headerCard.outerHTML}
-    <div class="card">
-      <div class="scroll-container trades-table">
-        ${tradesTable}
-      </div>
-    </div>
-  `;
+          <div class="card" >
+            <div class="scroll-container trades-table" >
+              ${tradesTable}
+          </div>
+            </div>
+              `;
 
   // Attach event listeners after rendering
   setTimeout(() => {
