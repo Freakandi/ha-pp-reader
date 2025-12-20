@@ -267,7 +267,7 @@ function getVisibleTabs(): DashboardTabDescriptor[] {
     .map((key) => detailTabRegistry.get(key))
     .filter((descriptor): descriptor is DashboardTabDescriptor => Boolean(descriptor));
 
-  return [...baseTabs, ...detailTabs];
+  return [...detailTabs, ...baseTabs];
 }
 
 function getTabAtIndex(index: number): DashboardTabDescriptor | null {

@@ -5735,8 +5735,7 @@ function uc() {
   return e || ($e = null), e;
 }
 function de() {
-  const e = Je.map((t) => Re.get(t)).filter((t) => !!t);
-  return [...oc, ...e];
+  return [...Je.map((t) => Re.get(t)).filter((t) => !!t), ...oc];
 }
 function dc(e) {
   const t = de();
@@ -6255,4 +6254,4 @@ export {
   Ec as unregisterPanelHost,
   Ur as updatePortfolioFooterFromDom
 };
-//# sourceMappingURL=dashboard.BSj7vheP.js.map
+//# sourceMappingURL=dashboard.BmddYqE-.js.map
