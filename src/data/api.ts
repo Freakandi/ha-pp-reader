@@ -786,6 +786,52 @@ export async function fetchPortfolioPositionsWS(
   return response;
 }
 
+export interface RealizedPerformanceLot {
+  date: string;
+  shares: number;
+  sell_price: number;
+  purchase_value_gross: number;
+  sales_value_gross: number;
+  sales_value_net: number;
+  result_abs: number;
+  result_pct: number;
+}
+
+export interface RealizedPerformanceResult {
+  security_uuid: string;
+  name: string;
+  ticker_symbol: string | null;
+  current_price: number | null;
+  current_holdings: number;
+  last_sell_price: number;
+  purchase_value_gross: number;
+  sales_value_gross: number;
+  sales_value_net: number;
+  result_abs: number;
+  result_pct: number;
+  lots: RealizedPerformanceLot[];
+}
+
+
+export async function fetchRealizedPerformance(
+  hass: HomeAssistant | null | undefined,
+  config: PanelConfigLike | null | undefined,
+): Promise<RealizedPerformanceResult[]> {
+  const entryId = deriveEntryId(hass, config);
+  if (!hass || !entryId) return [];
+
+  try {
+    const response = await hass.connection.sendMessagePromise<{ trades: RealizedPerformanceResult[] }>({
+      type: 'pp_reader/get_trades',
+      entry_id: entryId,
+    });
+    return response.trades;
+  } catch (err) {
+    console.error('Error fetching realized performance data:', err);
+    return [];
+  }
+}
+
 // All portfolio positions
 export async function fetchAllPortfolioPositionsWS(
   hass: HomeAssistant | null | undefined,
