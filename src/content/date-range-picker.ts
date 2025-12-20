@@ -360,7 +360,11 @@ export class DateRangePicker {
 
         const prevBtn = document.createElement('button');
         prevBtn.className = 'drp-nav-btn';
-        prevBtn.innerHTML = '‹';
+        prevBtn.innerHTML = `
+            <svg viewBox="0 0 24 24">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
+            </svg>
+        `;
         prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
         // Only show prev on left calendar
         if (position === 'left') {
@@ -379,7 +383,11 @@ export class DateRangePicker {
 
         const nextBtn = document.createElement('button');
         nextBtn.className = 'drp-nav-btn';
-        nextBtn.innerHTML = '›';
+        nextBtn.innerHTML = `
+            <svg viewBox="0 0 24 24">
+                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
+            </svg>
+        `;
         nextBtn.setAttribute('aria-label', 'Nächster Monat');
         // Only show next on right calendar
         if (position === 'right') {
