@@ -10,7 +10,9 @@ from custom_components.pp_reader.logic.securities import (
 )
 
 
-@patch("custom_components.pp_reader.logic.securities.ensure_exchange_rates_for_dates_sync")
+@patch(
+    "custom_components.pp_reader.logic.securities.ensure_exchange_rates_for_dates_sync"
+)
 @patch("custom_components.pp_reader.logic.securities.load_latest_rates_sync")
 def test_calculate_realized_performance_fifo(mock_load_rates, mock_ensure_rates):
     """Test FIFO logic for realized performance calculation."""
