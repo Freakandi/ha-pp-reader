@@ -12,6 +12,7 @@ The table below links every dashboard websocket command and push event to its in
 | Push event | `_emit_last_file_update()` | `last_file_update` | `handleLastFileUpdate()` | Sends the formatted ISO timestamp string for the last portfolio file import. | Writes the status into `.last-file-update` nodes in both footer and header/meta sections. |
 | Push event | `_emit_portfolio_updates()`<br>`_run_price_cycle()` | `portfolio_values` | `handlePortfolioUpdate()` | Delivers portfolio aggregates as `portfolios[]`, each containing `uuid`, `name`, `current_value`, `purchase_sum`, `position_count`, `missing_value_positions`, and `performance` with `gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`, `source`, `coverage_ratio`; payloads may also carry `error`. | Patches the expandable portfolio table cells, refreshes gain/percentage badges, and recalculates footer totals plus the wealth headline. |
 | Push event | `_emit_portfolio_updates()`<br>`_run_price_cycle()` | `portfolio_positions` | `handlePortfolioPositionsUpdate()` | Supplies per-portfolio payloads with `portfolio_uuid`, `positions[]`, and optional `error`. Every position surfaces `security_uuid`, `name`, `current_holdings`, `purchase_value`, `current_value`, `average_cost` (`native`, `security`, `account`, `eur`, `source`, `coverage_ratio`), `performance` (`gain_abs`, `gain_pct`, `total_change_eur`, `total_change_pct`, `source`, `coverage_ratio`), and `aggregation` (`total_holdings`, `positive_holdings`, `purchase_value_cents`, `purchase_value_eur`, `security_currency_total`, `account_currency_total`, `purchase_total_security`, `purchase_total_account`). | Applies live deltas to expanded position tables, updates the cached dataset, and dispatches `pp-reader:portfolio-positions-updated` so other tabs (e.g. security detail) can react. |
+| Websocket call | `fetchTradesWS()` | `pp_reader/get_trades` | `ws_get_trades()` | Returns `{trades: [RealizedPerformanceResult]}`. Each result includes `security_uuid`, `name`, `result_abs`, `result_pct`, `since_sell_abs`, `since_sell_pct`, `lots`, etc. | Populates the "Trades" (Realized Performance) tab with a sortable table of closed positions and missed gains. |
 
 ```mermaid
 flowchart LR
@@ -40,4 +41,6 @@ flowchart LR
   BHistory -- "price history" --> FHistory
   BPush -- "accounts / last_file_update / portfolio_values / portfolio_positions" --> Bus
   Bus -- "panels_updated" --> FHandlers
+  FTrades["fetchTradesWS()"] -- "pp_reader/get_trades" --> BTrades["ws_get_trades()"]
+  BTrades -- "trades payload" --> FTrades
 ```

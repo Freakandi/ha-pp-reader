@@ -26,6 +26,13 @@ flowchart LR
     PanelsUpdated -.routes.-> FxTable
     PanelsUpdated -.routes.-> PortfolioTable
     PanelsUpdated -.routes.-> ExpandableRows
+    PanelsUpdated -.routes.-> FooterCard
+  end
+
+  subgraph TradesTab["Trades tab"]
+    TradesData["get_trades payload"]
+    TradesData --> TradesTable["Realized Performance Table"]
+    TradesData --> TradesFooter["Summe (Footer Aggregates)"]
   end
 
   subgraph SecurityTab["Security detail tabs"]

@@ -127,6 +127,15 @@ flowchart TB
     EventBus --> PanelsUpdated[["panels_updated event"]]
   end
   PanelsUpdated --> UI
+
+  subgraph RealizedPerformance["Realized Performance"]
+      TransactionsDB --> CalcRealized[["calculate_realized_performance"]]
+      SecurityProto --> CalcRealized
+      FxRates --> CalcRealized
+      SecuritiesDB --> CalcRealized
+      CalcRealized --> TradesPayload[["trades payload"]]
+  end
+  TradesPayload --> UI
 ```
 
 ## Payload Highlights
@@ -141,6 +150,7 @@ flowchart TB
 | `security_snapshot` | Combines holdings, pricing, performance, and FX context for a single security. | `holdings.*`, `market_value_eur`, `average_cost.*`, `performance.*`, `purchase_totals.*`, `last_price.market_time`, `last_price.fetched_at`. |
 | `security_history` | Streams chart-ready price history with native and EUR closes. | `series_source`, `prices[].close_native`, `prices[].close_eur`, `prices[].date`. |
 | `panels_updated` | Notifies the UI which payload has fresh data. | `data_type`, `data`, `synced_at` routing metadata. |
+| `trades` | Delivers realized performance metrics for sold positions. | `security_uuid`, `purchase_value_gross`, `sales_value_net`, `result_abs`, `result_pct`, `since_sell_abs` (missed gains), and `lots`. |
 
 ## Persistent Stores and Services
 
@@ -155,4 +165,5 @@ flowchart TB
 | `SQLite historical_prices` | Security history | Contains consolidated historical quotes from Portfolio Performance and Yahoo for range queries. |
 | Yahoo price services | Security snapshot, security history | Provide live and historical market inputs used to enrich holdings and price series. |
 | Frankfurter FX ingest | Dashboard summary, accounts payload, security snapshot, security history | Updates conversion rates that inform balances, valuations, and FX timestamps. |
+| `calculate_realized_performance` (Logic) | Trades payload | Calculates gains/losses and "since sell" metrics on demand from `transactions` and `fx_rates`. |
 ```

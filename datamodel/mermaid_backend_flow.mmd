@@ -120,3 +120,12 @@ flowchart TB
     EventBus --> PanelsUpdated[["panels_updated event"]]
   end
   PanelsUpdated --> UI
+
+  subgraph RealizedPerformance["Realized Performance"]
+      TransactionsDB --> CalcRealized[["calculate_realized_performance"]]
+      SecurityProto --> CalcRealized
+      FxRates --> CalcRealized
+      SecuritiesDB --> CalcRealized
+      CalcRealized --> TradesPayload[["trades payload"]]
+  end
+  TradesPayload --> UI

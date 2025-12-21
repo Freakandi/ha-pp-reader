@@ -30,7 +30,7 @@
 The custom component `pp_reader` integrates a local Portfolio Performance (`.portfolio`) file into Home Assistant. The integration:
 
 - Parses Portfolio Performance protobuf data with the vendored schema and mirrors it into a dedicated SQLite database placed next to Home Assistant’s configuration.
-- Exposes accounts, portfolios, transactions, and derived gains to a custom dashboard panel and WebSocket API.
+- Exposes accounts, portfolios, transactions, realized performance (FIFO), and daily wealth analysis to a custom dashboard panel and WebSocket API.
 - Streams price updates from Yahoo Finance through `yahooquery`, persists the latest quotes, revalues affected portfolios, and emits compact Home Assistant events for live UI updates while optionally refreshing price history queues twice daily.
 - Provides automated six-hour backups plus a debug service for on-demand snapshots and integrity recovery.
 
@@ -256,6 +256,21 @@ Cross-currency purchases rely on the normalisation helpers in `logic.securities`
 
 The persisted metrics flow through `data.db_access`, `data.websocket`, and `data.event_push` so portfolio positions and security snapshots present the structured `aggregation` and `average_cost` payloads as primary values. Account- and security-currency totals continue to back those helpers, but the deprecated flat mirrors have been removed from emitted payloads.
 
+### Realized Performance & FIFO
+Realized gains are computed on-demand for the "Trades" tab via `logic.securities.calculate_realized_performance`:
+
+- **FIFO Matching**: Sales are matched against purchase lots (`_HoldingLot`) in strictly chronological order. The logic tracks the cost basis of each sold share to determine precise realized gains.
+- **Native Currency Support**: The computation preserves native currency values (e.g., USD sales of a US stock) alongside converted EUR values, populating `sell_price_native` and `last_sell_price_native` when available.
+- **Aggregated Results**: Individual sales are grouped by security into `RealizedPerformanceResult` objects, containing both summary metrics (total sold shares, total gain/loss) and a list of contributing lots.
+
+### Daily Wealth Analysis
+The "Analyse" tab is powered by `data.db_access.fetch_daily_wealth`, which aggregates historical balances:
+
+- **Daily Scans**: Aggregates `daily_wealth` records containing total wealth, invested capital, and flow breakdowns (dividends, fees, taxes) for a requested date range.
+- **Slicing**: Supports drilling down into specific accounts or portfolios (`fetch_daily_wealth_scopes`) to visualize performance attribution.
+- **Performance Neutrality**: Filters movements flagged as performance-neutral to ensure accurate return calculations.
+
+
 ### Performance and day-change metrics
 `metrics/common.py` centralises the gain and change calculations that previously lived across database, event, and WebSocket helpers. `select_performance_metrics` derives `PerformanceMetrics` and `DayChangeMetrics` dataclasses by combining current and purchase values with optional holdings and price inputs, rounding currency deltas with `util.currency` and annotating coverage metadata so downstream surfaces can expose source transparency.【F:custom_components/pp_reader/metrics/common.py†L1-L163】 `compose_performance_payload` merges these metrics back into existing payload fragments, preserving backend overrides while ensuring the nested `day_change` block only ships when real values are available.【F:custom_components/pp_reader/metrics/common.py†L170-L213】
 
@@ -339,6 +354,8 @@ The FX helper logs and returns partial results on network or database failures t
 | `pp_reader/get_portfolio_positions` | `entry_id`, `portfolio_uuid` | Detailed positions assembled by the normalization pipeline from persisted `security_metrics` rows. |
 | `pp_reader/get_security_snapshot` | `entry_id`, `security_uuid` | Aggregated holdings, FX, and price metadata for a single security. |
 | `pp_reader/get_security_history` | `entry_id`, `security_uuid`, optional `start_date`, `end_date` | Close price series (epoch-day, scaled close) sourced from persisted historical prices. |
+| `pp_reader/get_trades` | `entry_id` | List of `RealizedPerformanceResult` objects for all sold positions (FIFO). |
+| `pp_reader/get_daily_wealth` | `entry_id`, `start`/`end` or `date`, optional scopes | Daily wealth aggregation series, optionally sliced by account or portfolio. |
 | `pp_reader/get_news_prompt` | `entry_id` | `{ link, prompt_template, placeholder }` read from `custom_components/pp_reader/util/search_news.md`. |
 
 Dashboard, accounts, and portfolio commands load persisted snapshot bundles via `data.normalized_store.async_load_latest_snapshot_bundle`, returning canonical accounts/portfolios plus `normalized_payload` metadata (`generated_at`, `metric_run_uuid`). The handlers bypass the coordinator cache and avoid on-demand aggregations; transactions and `last_file_update` stream directly from SQLite via `get_transactions` / `get_last_file_update`.【F:custom_components/pp_reader/data/websocket.py†L130-L338】
@@ -355,7 +372,11 @@ The custom panel lives under `www/pp_reader_dashboard`:
 
 - `panel.js` registers `<pp-reader-panel>`, loads hashed dashboard bundles or a Vite dev server for hot reload, wires menu toggles, and mirrors Home Assistant attributes onto the embedded dashboard element while keeping panel width responsive via a `ResizeObserver`.【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L1-L160】【F:custom_components/pp_reader/www/pp_reader_dashboard/panel.js†L200-L331】
 - `src/dashboard.ts` (built into `js/dashboard.module.js`) connects to the WebSocket API, subscribes to `panels_updated`, filters payloads by `entry_id`, and replays cloned events during re-render so overview and detail tabs stay in sync.【F:src/dashboard.ts†L815-L1040】
-- Security drill-down tabs originate from `src/tabs/security_detail.ts`, which fetches snapshots and historical series via the dedicated WebSocket commands and renders charts with cached range selectors.【F:src/tabs/security_detail.ts†L1-L120】【F:src/tabs/security_detail.ts†L198-L358】
+- **Tabs**:
+  - `src/tabs/overview.ts`: Main dashboard view with cards for accounts and portfolios.
+  - `src/tabs/security_detail.ts`: Drill-down view with charts (`chart.js`) and position details.
+  - `src/tabs/trades.ts`: "Trades" tab displaying realized performance (FIFO) tables.
+  - `src/tabs/time_series.ts`: "Analyse" tab visualizing daily wealth and capital flows.
 - CSS files (`base.css`, `cards.css`, `nav.css`) provide layout styling.
 
 Events emitted by `_push_update` follow the same contract as cached snapshots, allowing the frontend to patch the DOM incrementally.
@@ -372,6 +393,8 @@ Key entities and their origin:
 | Portfolio | SQLite `portfolios` | `uuid`, `name`, `reference_account`, `is_retired` | Aggregates are derived from `portfolio_securities`. |
 | PortfolioSecurity | SQLite `portfolio_securities` | `current_holdings`, `purchase_value`, `current_value` (cents), `avg_price`, `avg_price_native`, `security_currency_total`, `account_currency_total`, legacy `avg_price_security`, `avg_price_account` | EUR purchase metrics (`purchase_value`, `avg_price`) coexist with native totals so `HoldingsAggregation`/`AverageCostSelection` can populate the structured `aggregation`/`average_cost` payloads. Deprecated per-share mirrors stay persisted for migrations but are removed from emitted responses. |
 | Transaction | SQLite `transactions` | `type`, `amount`, `currency_code`, `shares`, `security` | `transaction_units` store FX amounts for cross-currency transfers. |
+| RealizedTrade | Computed (FIFO) | `purchase_value_gross`, `sales_value_net`, `result_abs`, `result_pct`, `lots` | Aggregated per security; contains list of matching purchase/sale lots. |
+| DailyWealth | SQLite `daily_wealth` | `date`, `total_wealth_eur`, `invested_capital_eur`, `realized_gains_eur` | Historical series for the "Analyse" tab. |
 | FXRate | SQLite `fx_rates` | `date`, `currency`, `rate` | Populated on demand via `currencies.fx`. |
 | PriceHistoryJob | SQLite `price_history_queue` | `id`, `security_uuid`, `requested_date`, `status`, `priority`, `attempts` | Planned from parsed securities or canonical tables to fetch Yahoo candles; drained twice daily and after imports. |
 | Metadata | SQLite `metadata` | `last_file_update` | Drives coordinator sync decisions.

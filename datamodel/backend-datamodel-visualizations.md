@@ -142,3 +142,33 @@ flowchart TD
 **Implementation cues**
 - `_compact_portfolio_positions_payload` must remain lossless for the documented keys so downstream consumers receive consistent structures.
 - Day-change metrics are not part of the push payload; retain that logic in the security snapshot path only.
+
+### Realized Performance (`pp_reader/get_trades` response)
+
+**Scope**
+- Delivers a dedicated table of realized gains/losses for closed positions.
+- Calculates "Since Sell" metrics to show missed gains.
+- Aggregates FIFO lots on demand.
+
+**Mermaid visualization**
+```mermaid
+flowchart TD
+  Request["ws_get_trades"] --> FetchTx[[get_transactions]]
+  FetchTx --> TxDB[("SQLite transactions")]
+  Request --> Calc[[calculate_realized_performance]]
+  Calc --> SecDB[("SQLite securities")]
+  Calc --> FxRates[("SQLite fx_rates")]
+  TxDB --> Calc
+  Calc --> Serialize[[_serialize_realized_performance]]
+  Serialize --> TradesPayload[["trades payload"]]
+  TradesPayload --> TradesUI
+```
+
+**Data contract table**
+| Field / Subgroup | Source category | Notes / follow-up |
+| --- | --- | --- |
+| Identity (`security_uuid`, `name`, `currency_code`) | 1 – Passed from portfolio file and stored in database. | Fetched from `securities` to label the trade row. |
+| Sale Metrics (`sales_value_net`, `purchase_value_gross`, `result_abs`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | `calculate_realized_performance` matches sales to purchases (FIFO), allocates fees/taxes, and computes the net result. |
+| Since Sell (`since_sell_abs`, `since_sell_pct`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Backend fetches `securities.last_price` (and FX if needed) to determine the theoretical current value of the sold shares. |
+| Lots (`lots[]`) | 6 – Calculate it from database values in a function or method and hand it over directly to the front end. | Detailed breakdown of each sale event within the aggregated position. |
+

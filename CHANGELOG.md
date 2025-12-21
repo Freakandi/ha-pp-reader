@@ -6,6 +6,28 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+### Added
+- **Realized Performance Tab ("Trades")**: Introduced a comprehensive view for realized gains/losses, featuring stacked columns (e.g., Purchase/Sales Value), granular sorting, and "Since Sell" metrics.
+- **Accessibility**: Added tooltips to icon-only navigation buttons and `aria-hidden` attributes to decorative SVGs.
+- **Performance**: Implemented "Bolt" optimizations for transaction grouping, history ingestion, and cashflow backdating, significantly improving data processing speed.
+
+### Changed
+- **Dashboard Navigation**: Repositioned detail tabs to the left of the Overview tab for better workflow flow; enforced single detailed tab mode.
+- **Trades Tab Layout**: Optimized column layout by stacking related metrics (e.g., Gross/Net result) and ensured native currency display for price columns.
+
+### Fixed
+- **Overview Sorting**: Resolved issue where sorting headers in nested portfolio position tables did not function correctly.
+- **Trades Tab Sum Row**: Fixed missing aggregation values in the "Summe" footer row.
+- **Tab Navigation**: Fixed regression where clicking a portfolio position failed to open the corresponding detail tab.
+- **Concurrency**: Resolved "database is locked" errors during high-concurrency sync operations (part of general stability improvements).
+- **Security**: Fixed potential XSS vulnerabilities in error rendering and Trades tab data display.
+- **Calculations**: Fixed `TypeError` in `async_run_executor_job` usage for realized performance calculations and resolved currency mismatches in "Since Sell" metrics.
+
+### Internal
+- **Documentation**: Updated `AGENT_HANDBOOK.md`, `ARCHITECTURE.md`, `README.md`, and `README-dev.md` to reflect latest workflows and setup instructions.
+- **Refactoring**: Resolved circular dependencies in `currency` and `db_access` modules.
+- **Linting**: Applied strict `ruff` and TypeScript linting across the codebase.
+
 ## [0.15.6] - 2025-12-06
 
 ### Fixed
