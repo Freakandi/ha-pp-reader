@@ -207,7 +207,7 @@ def _load_relevant_transactions(
             continue
         # Removed retired check to include history of retired accounts
 
-        raw_date = getattr(tx, "date", None)
+        raw_date = tx.date
         if raw_date in date_parse_cache:
             parsed_date = date_parse_cache[raw_date]
         else:
@@ -350,8 +350,8 @@ def _process_transaction(
 
     # Process attached fees/taxes (e.g. on Buys/Sells),
     # avoiding double-count for explicit Fee/Tax transactions
-    tx_fees = getattr(tx, "fees", 0)
-    tx_taxes = getattr(tx, "taxes", 0)
+    tx_fees = tx.fees
+    tx_taxes = tx.taxes
     if tx_fees or tx_taxes:
         f_eur = cent_to_eur(tx_fees, default=0.0) or 0.0
         t_eur = cent_to_eur(tx_taxes, default=0.0) or 0.0
