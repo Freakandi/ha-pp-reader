@@ -224,7 +224,7 @@ def _load_relevant_transactions(
             continue
         # Removed retired check to include history
 
-        raw_date = getattr(tx, "date", None)
+        raw_date = tx.date
         if raw_date in date_parse_cache:
             parsed_date = date_parse_cache[raw_date]
         else:

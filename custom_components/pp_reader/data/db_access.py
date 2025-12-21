@@ -158,7 +158,7 @@ class MetaData:
     date: str
 
 
-@dataclass
+@dataclass(slots=True)
 class Transaction:
     """Repräsentiert eine Transaktion in der Datenbank."""
 

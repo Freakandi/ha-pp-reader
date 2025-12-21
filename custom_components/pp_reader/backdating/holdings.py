@@ -344,7 +344,7 @@ def _load_relevant_transactions(
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
             continue
 
-        raw_date = getattr(tx, "date", None)
+        raw_date = tx.date
         if raw_date in date_parse_cache:
             parsed_date = date_parse_cache[raw_date]
         else:
@@ -381,7 +381,7 @@ def _load_relevant_transactions(
                 tx.type,
                 fees,
                 taxes,
-                getattr(tx, "fx_rate_to_base", None),
+                tx.fx_rate_to_base,
             )
         )
 
