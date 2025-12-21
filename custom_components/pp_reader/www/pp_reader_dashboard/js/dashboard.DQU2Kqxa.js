@@ -1,4 +1,4 @@
-const on = /* @__PURE__ */ new Set(), sn = /* @__PURE__ */ new Set(), ur = {}, ja = [
+const cn = /* @__PURE__ */ new Set(), ln = /* @__PURE__ */ new Set(), dr = {}, ja = [
   "renderPositionsTable",
   "applyGainPctMetadata",
   "attachSecurityDetailListener",
@@ -6,32 +6,32 @@ const on = /* @__PURE__ */ new Set(), sn = /* @__PURE__ */ new Set(), ur = {}, j
   "updatePortfolioFooter"
 ];
 function Ga(e, t) {
-  typeof t == "function" && (ur[e] = t);
+  typeof t == "function" && (dr[e] = t);
 }
 function Cc(e) {
-  e && on.add(e);
+  e && cn.add(e);
 }
 function Ac(e) {
-  e && on.delete(e);
+  e && cn.delete(e);
 }
 function Xa() {
-  return on;
+  return cn;
 }
 function Pc(e) {
-  e && sn.add(e);
+  e && ln.add(e);
 }
 function Ec(e) {
-  e && sn.delete(e);
+  e && ln.delete(e);
 }
 function Za() {
-  return sn;
+  return ln;
 }
 function Ja(e) {
   for (const t of ja)
     Ga(t, e[t]);
 }
-function cn() {
-  return ur;
+function un() {
+  return dr;
 }
 function me(e) {
   return typeof e == "object" && e !== null;
@@ -39,7 +39,7 @@ function me(e) {
 function W(e) {
   return typeof e == "string" ? e : null;
 }
-function Qe(e) {
+function et(e) {
   return e === null ? null : W(e);
 }
 function V(e) {
@@ -54,20 +54,20 @@ function V(e) {
   }
   return null;
 }
-function En(e) {
+function Nn(e) {
   const t = V(e);
   if (t == null)
     return null;
   const n = Math.trunc(t);
   return Number.isFinite(n) ? n : null;
 }
-function tt(e) {
-  return me(e) ? { ...e } : null;
-}
-function dr(e) {
+function nt(e) {
   return me(e) ? { ...e } : null;
 }
 function fr(e) {
+  return me(e) ? { ...e } : null;
+}
+function pr(e) {
   return typeof e == "boolean" ? e : void 0;
 }
 function Qa(e) {
@@ -84,20 +84,20 @@ function Qa(e) {
     balance: a ?? null
   }, o = V(e.fx_rate);
   o != null && (i.fx_rate = o);
-  const s = W(e.fx_rate_source);
-  s && (i.fx_rate_source = s);
-  const c = W(e.fx_rate_timestamp);
-  c && (i.fx_rate_timestamp = c);
+  const c = W(e.fx_rate_source);
+  c && (i.fx_rate_source = c);
+  const s = W(e.fx_rate_timestamp);
+  s && (i.fx_rate_timestamp = s);
   const l = V(e.coverage_ratio);
   l != null && (i.coverage_ratio = l);
   const u = W(e.provenance);
   u && (i.provenance = u);
-  const d = Qe(e.metric_run_uuid);
+  const d = et(e.metric_run_uuid);
   d !== null && (i.metric_run_uuid = d);
-  const p = fr(e.fx_unavailable);
+  const p = pr(e.fx_unavailable);
   return typeof p == "boolean" && (i.fx_unavailable = p), i;
 }
-function pr(e) {
+function gr(e) {
   if (!Array.isArray(e))
     return [];
   const t = [];
@@ -113,7 +113,7 @@ function ei(e) {
   const t = e.aggregation, n = W(e.security_uuid), r = W(e.name), a = V(e.current_holdings), i = V(e.purchase_value_eur) ?? (me(t) ? V(t.purchase_value_eur) ?? V(t.purchase_total_account) ?? V(t.account_currency_total) : null) ?? V(e.purchase_value), o = V(e.current_value);
   if (!n || !r || a == null || i == null || o == null)
     return null;
-  const s = {
+  const c = {
     portfolio_uuid: W(e.portfolio_uuid) ?? void 0,
     security_uuid: n,
     name: r,
@@ -122,26 +122,26 @@ function ei(e) {
     current_holdings: a,
     purchase_value: i,
     current_value: o,
-    average_cost: tt(e.average_cost),
-    performance: tt(e.performance),
-    aggregation: tt(e.aggregation),
-    data_state: dr(e.data_state)
-  }, c = V(e.coverage_ratio);
-  c != null && (s.coverage_ratio = c);
+    average_cost: nt(e.average_cost),
+    performance: nt(e.performance),
+    aggregation: nt(e.aggregation),
+    data_state: fr(e.data_state)
+  }, s = V(e.coverage_ratio);
+  s != null && (c.coverage_ratio = s);
   const l = W(e.provenance);
-  l && (s.provenance = l);
-  const u = Qe(e.metric_run_uuid);
-  u !== null && (s.metric_run_uuid = u);
+  l && (c.provenance = l);
+  const u = et(e.metric_run_uuid);
+  u !== null && (c.metric_run_uuid = u);
   const d = V(e.last_price_native);
-  d != null && (s.last_price_native = d);
+  d != null && (c.last_price_native = d);
   const p = V(e.last_price_eur);
-  p != null && (s.last_price_eur = p);
+  p != null && (c.last_price_eur = p);
   const f = V(e.last_close_native);
-  f != null && (s.last_close_native = f);
+  f != null && (c.last_close_native = f);
   const g = V(e.last_close_eur);
-  return g != null && (s.last_close_eur = g), s;
+  return g != null && (c.last_close_eur = g), c;
 }
-function gr(e) {
+function hr(e) {
   if (!Array.isArray(e))
     return [];
   const t = [];
@@ -151,7 +151,7 @@ function gr(e) {
   }
   return t;
 }
-function hr(e) {
+function mr(e) {
   if (!me(e))
     return null;
   const t = W(e.name), n = V(e.current_value ?? e.value);
@@ -167,31 +167,31 @@ function hr(e) {
     purchase_sum: a,
     day_change_abs: V(e.day_change_abs) ?? V(e.day_change_eur) ?? void 0,
     day_change_pct: V(e.day_change_pct) ?? void 0,
-    position_count: En(e.position_count ?? e.count) ?? void 0,
-    missing_value_positions: En(e.missing_value_positions) ?? void 0,
-    has_current_value: fr(e.has_current_value),
-    performance: tt(e.performance),
+    position_count: Nn(e.position_count ?? e.count) ?? void 0,
+    missing_value_positions: Nn(e.missing_value_positions) ?? void 0,
+    has_current_value: pr(e.has_current_value),
+    performance: nt(e.performance),
     coverage_ratio: V(e.coverage_ratio) ?? void 0,
     provenance: W(e.provenance) ?? void 0,
-    metric_run_uuid: Qe(e.metric_run_uuid) ?? void 0,
-    data_state: dr(e.data_state)
+    metric_run_uuid: et(e.metric_run_uuid) ?? void 0,
+    data_state: fr(e.data_state)
   };
-  return Array.isArray(e.positions) && (i.positions = gr(e.positions)), i;
+  return Array.isArray(e.positions) && (i.positions = hr(e.positions)), i;
 }
-function mr(e) {
+function yr(e) {
   if (!Array.isArray(e))
     return [];
   const t = [];
   for (const n of e) {
-    const r = hr(n);
+    const r = mr(n);
     r && t.push(r);
   }
   return t;
 }
-function yr(e) {
+function br(e) {
   if (!me(e))
     return null;
-  const t = { ...e }, n = Qe(e.metric_run_uuid);
+  const t = { ...e }, n = et(e.metric_run_uuid);
   n !== null ? t.metric_run_uuid = n : delete t.metric_run_uuid;
   const r = V(e.coverage_ratio);
   r != null ? t.coverage_ratio = r : delete t.coverage_ratio;
@@ -203,16 +203,16 @@ function yr(e) {
 function ti(e) {
   if (!me(e))
     return null;
-  const t = { ...e }, n = yr(e.normalized_payload);
+  const t = { ...e }, n = br(e.normalized_payload);
   return n ? t.normalized_payload = n : "normalized_payload" in t && delete t.normalized_payload, t;
 }
-function br(e) {
+function _r(e) {
   if (!me(e))
     return null;
   const t = W(e.generated_at);
   if (!t)
     return null;
-  const n = Qe(e.metric_run_uuid), r = pr(e.accounts), a = mr(e.portfolios), i = ti(e.diagnostics), o = {
+  const n = et(e.metric_run_uuid), r = gr(e.accounts), a = yr(e.portfolios), i = ti(e.diagnostics), o = {
     generated_at: t,
     metric_run_uuid: n,
     accounts: r,
@@ -220,7 +220,7 @@ function br(e) {
   };
   return i && (o.diagnostics = i), o;
 }
-function Nn(e) {
+function xn(e) {
   return typeof e == "string" ? e : null;
 }
 function ni(e) {
@@ -233,18 +233,18 @@ function ri(e) {
   if (typeof e == "number" && Number.isFinite(e))
     return e;
 }
-function xn(e, t) {
+function Dn(e, t) {
   if (typeof e == "string")
     return e;
   throw new Error(`mapPositionSnapshotToRecord: fehlendes ${t}`);
 }
-function kt(e, t) {
+function Ft(e, t) {
   if (typeof e == "number" && Number.isFinite(e))
     return e;
   throw new Error(`mapPositionSnapshotToRecord: fehlendes ${t}`);
 }
 function ai(e) {
-  const t = xn(e.security_uuid, "security_uuid"), n = xn(e.name, "name"), r = kt(e.current_holdings, "current_holdings"), a = kt(e.purchase_value, "purchase_value"), i = kt(e.current_value, "current_value"), o = {
+  const t = Dn(e.security_uuid, "security_uuid"), n = Dn(e.name, "name"), r = Ft(e.current_holdings, "current_holdings"), a = Ft(e.purchase_value, "purchase_value"), i = Ft(e.current_value, "current_value"), o = {
     security_uuid: t,
     name: n,
     current_holdings: r,
@@ -266,7 +266,7 @@ function fe(e, t) {
   }
   return n ?? void 0;
 }
-function Dn(e, t) {
+function kn(e, t) {
   return fe(e, t);
 }
 async function ii(e, t) {
@@ -278,7 +278,7 @@ async function ii(e, t) {
   const r = await e.connection.sendMessagePromise({
     type: "pp_reader/get_accounts",
     entry_id: n
-  }), a = pr(r.accounts), i = br(r.normalized_payload);
+  }), a = gr(r.accounts), i = _r(r.normalized_payload);
   return {
     accounts: a,
     normalized_payload: i
@@ -308,13 +308,13 @@ async function si(e, t) {
   const r = await e.connection.sendMessagePromise({
     type: "pp_reader/get_portfolio_data",
     entry_id: n
-  }), a = mr(r.portfolios), i = br(r.normalized_payload);
+  }), a = yr(r.portfolios), i = _r(r.normalized_payload);
   return {
     portfolios: a,
     normalized_payload: i
   };
 }
-async function _r(e, t, n) {
+async function vr(e, t, n) {
   if (!e)
     throw new Error("fetchPortfolioPositionsWS: fehlendes hass");
   const r = fe(e, t);
@@ -326,17 +326,17 @@ async function _r(e, t, n) {
     type: "pp_reader/get_portfolio_positions",
     entry_id: r,
     portfolio_uuid: n
-  }), o = gr(a.positions).map(ai), s = yr(a.normalized_payload), c = {
-    portfolio_uuid: Nn(a.portfolio_uuid) ?? n,
+  }), o = hr(a.positions).map(ai), c = br(a.normalized_payload), s = {
+    portfolio_uuid: xn(a.portfolio_uuid) ?? n,
     positions: o
   };
-  typeof a.error == "string" && (c.error = a.error);
+  typeof a.error == "string" && (s.error = a.error);
   const l = ri(a.coverage_ratio);
-  l !== void 0 && (c.coverage_ratio = l);
-  const u = Nn(a.provenance);
-  u && (c.provenance = u);
+  l !== void 0 && (s.coverage_ratio = l);
+  const u = xn(a.provenance);
+  u && (s.provenance = u);
   const d = ni(a.metric_run_uuid);
-  return d !== void 0 && (c.metric_run_uuid = d), s && (c.normalized_payload = s), c;
+  return d !== void 0 && (s.metric_run_uuid = d), c && (s.normalized_payload = c), s;
 }
 async function ci(e, t, n) {
   if (!e)
@@ -363,7 +363,7 @@ async function li(e, t) {
     entry_id: n
   });
 }
-async function ot(e, t, n, r = {}) {
+async function st(e, t, n, r = {}) {
   if (!e)
     throw new Error("fetchSecurityHistoryWS: fehlendes hass");
   const a = fe(e, t);
@@ -375,9 +375,9 @@ async function ot(e, t, n, r = {}) {
     type: "pp_reader/get_security_history",
     entry_id: a,
     security_uuid: n
-  }, { startDate: o, endDate: s, start_date: c, end_date: l } = r || {}, u = o ?? c;
+  }, { startDate: o, endDate: c, start_date: s, end_date: l } = r || {}, u = o ?? s;
   u != null && (i.start_date = u);
-  const d = s ?? l;
+  const d = c ?? l;
   d != null && (i.end_date = d);
   const p = await e.connection.sendMessagePromise(i);
   return Array.isArray(p.prices) || (p.prices = []), Array.isArray(p.transactions) || (p.transactions = []), p;
@@ -431,7 +431,7 @@ function F(e) {
 function ce(e) {
   return F(e);
 }
-const ln = (e, t) => {
+const dn = (e, t) => {
   if (!Number.isFinite(e) || e === 0)
     return "neutral";
   const n = 0.5 / Math.pow(10, t);
@@ -439,22 +439,22 @@ const ln = (e, t) => {
 };
 function M(e, t, n = void 0, r = void 0) {
   let a = null;
-  const i = (c) => {
-    if (typeof c == "number")
-      return c;
-    if (typeof c == "string" && c.trim() !== "") {
-      const l = c.replace(/\s+/g, "").replace(/[^0-9,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."), u = Number.parseFloat(l);
+  const i = (s) => {
+    if (typeof s == "number")
+      return s;
+    if (typeof s == "string" && s.trim() !== "") {
+      const l = s.replace(/\s+/g, "").replace(/[^0-9,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."), u = Number.parseFloat(l);
       return Number.isNaN(u) ? Number.NaN : u;
     }
     return Number.NaN;
-  }, o = (c, l = 2, u = 2) => {
-    const d = typeof c == "number" ? c : i(c);
+  }, o = (s, l = 2, u = 2) => {
+    const d = typeof s == "number" ? s : i(s);
     return Number.isFinite(d) ? d.toLocaleString("de-DE", {
       minimumFractionDigits: l,
       maximumFractionDigits: u
     }) : "";
-  }, s = (c = "") => {
-    const l = c || "Kein Wert verfügbar";
+  }, c = (s = "") => {
+    const l = s || "Kein Wert verfügbar";
     return `<span class="missing-value" role="note" aria-label="${l}" title="${l}">—</span>`;
   };
   if (["gain_abs", "gain_pct", "day_change_abs", "day_change_pct"].includes(e)) {
@@ -472,47 +472,47 @@ function M(e, t, n = void 0, r = void 0) {
           typeof f == "number" && (t = f);
         }
     }
-    const c = n?.fx_unavailable === !0 ? "Wechselkurs nicht verfügbar – EUR-Wert unbekannt" : "";
+    const s = n?.fx_unavailable === !0 ? "Wechselkurs nicht verfügbar – EUR-Wert unbekannt" : "";
     if (t == null || r?.hasValue === !1)
-      return s(c);
+      return c(s);
     const l = typeof t == "number" ? t : i(t);
     if (!Number.isFinite(l))
-      return s(c);
+      return c(s);
     const u = e.endsWith("pct") ? "%" : "€";
-    return a = o(l) + `&nbsp;${u}`, `<span class="${ln(l, 2)}">${a}</span>`;
+    return a = o(l) + `&nbsp;${u}`, `<span class="${dn(l, 2)}">${a}</span>`;
   } else if (e === "position_count") {
-    const c = typeof t == "number" ? t : i(t);
-    if (!Number.isFinite(c))
-      return s();
-    a = c.toLocaleString("de-DE");
+    const s = typeof t == "number" ? t : i(t);
+    if (!Number.isFinite(s))
+      return c();
+    a = s.toLocaleString("de-DE");
   } else if (["balance", "current_value", "purchase_value"].includes(e)) {
-    const c = typeof t == "number" ? t : i(t);
-    if (!Number.isFinite(c))
-      return n?.fx_unavailable ? s(
+    const s = typeof t == "number" ? t : i(t);
+    if (!Number.isFinite(s))
+      return n?.fx_unavailable ? c(
         "Wechselkurs nicht verfügbar – EUR-Wert unbekannt"
-      ) : (r && r.hasValue === !1, s());
-    a = o(c) + "&nbsp;€";
+      ) : (r && r.hasValue === !1, c());
+    a = o(s) + "&nbsp;€";
   } else if (e === "current_holdings")
     if (typeof t == "string" && t.trim().startsWith("<"))
       a = t;
     else {
-      const c = typeof t == "number" ? t : i(t);
-      if (!Number.isFinite(c))
-        return s();
-      const l = Math.abs(c % 1) > 0;
-      a = c.toLocaleString("de-DE", {
+      const s = typeof t == "number" ? t : i(t);
+      if (!Number.isFinite(s))
+        return c();
+      const l = Math.abs(s % 1) > 0;
+      a = s.toLocaleString("de-DE", {
         minimumFractionDigits: l ? 2 : 0,
         maximumFractionDigits: 4
       });
     }
   else {
-    let c = "";
-    typeof t == "string" ? c = t : typeof t == "number" && Number.isFinite(t) ? c = t.toString() : typeof t == "boolean" ? c = t ? "true" : "false" : t instanceof Date && Number.isFinite(t.getTime()) && (c = t.toISOString()), a = c, a && (/<[a-z]/i.test(a) && /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|[\s\/]on[a-z]+\s*=/i.test(a) && (a = F(a)), /<|&lt;|&gt;/.test(a) || (a.length > 60 && (a = a.slice(0, 59) + "…"), a.startsWith("Kontostand ") ? a = a.substring(11) : a.startsWith("Depotwert ") && (a = a.substring(10))));
+    let s = "";
+    typeof t == "string" ? s = t : typeof t == "number" && Number.isFinite(t) ? s = t.toString() : typeof t == "boolean" ? s = t ? "true" : "false" : t instanceof Date && Number.isFinite(t.getTime()) && (s = t.toISOString()), a = s, a && (/<[a-z]/i.test(a) && /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|[\s\/]on[a-z]+\s*=/i.test(a) && (a = F(a)), /<|&lt;|&gt;/.test(a) || (a.length > 60 && (a = a.slice(0, 59) + "…"), a.startsWith("Kontostand ") ? a = a.substring(11) : a.startsWith("Depotwert ") && (a = a.substring(10))));
   }
-  return typeof a != "string" || a === "" ? s() : a;
+  return typeof a != "string" || a === "" ? c() : a;
 }
 function Se(e, t, n = [], r = {}) {
-  const { sortable: a = !1, defaultSort: i, rowAttributes: o } = r, s = i?.key ?? "", c = i?.dir === "desc" ? "desc" : "asc";
+  const { sortable: a = !1, defaultSort: i, rowAttributes: o } = r, c = i?.key ?? "", s = i?.dir === "desc" ? "desc" : "asc";
   let l = "<table><thead><tr>";
   t.forEach((h) => {
     const b = h.align === "right" ? ' class="align-right"' : "";
@@ -608,13 +608,13 @@ function Se(e, t, n = [], r = {}) {
       h.innerHTML = l.trim();
       const b = h.content.querySelector("table");
       if (b)
-        return b.classList.add("sortable-table"), s && (b.dataset.defaultSort = s, b.dataset.defaultDir = c), b.outerHTML;
+        return b.classList.add("sortable-table"), c && (b.dataset.defaultSort = c, b.dataset.defaultDir = s), b.outerHTML;
     } catch (h) {
       console.warn("makeTable(sortable): Injection fehlgeschlagen:", h);
     }
   return l;
 }
-function At(e, t, n = {}) {
+function Et(e, t, n = {}) {
   const { includeMeta: r = !0 } = n, a = document.createElement("div");
   a.className = "header-card";
   const i = r ? `<div id="headerMeta" class="meta">${t}</div>` : "";
@@ -643,11 +643,11 @@ function re(e, t = 2, n = 2) {
 }
 function fi(e) {
   const t = Number.isNaN(e) ? 0 : e;
-  return `<span class="${ln(t, 2)}">${re(t)}&nbsp;€</span>`;
+  return `<span class="${dn(t, 2)}">${re(t)}&nbsp;€</span>`;
 }
 function pi(e) {
   const t = Number.isNaN(e) ? 0 : e;
-  return `<span class="${ln(t, 2)}">${re(t)}&nbsp;%</span>`;
+  return `<span class="${dn(t, 2)}">${re(t)}&nbsp;%</span>`;
 }
 function gi() {
   return `
@@ -666,7 +666,7 @@ function gi() {
     </svg>
   `;
 }
-function un(e = "Laden...") {
+function fn(e = "Laden...") {
   return `
     <div class="loading" role="status" aria-live="polite" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--secondary-text-color);">
       
@@ -688,7 +688,7 @@ function un(e = "Laden...") {
     </div>
   `;
 }
-function dn(e, t, n = "asc", r = !1) {
+function pn(e, t, n = "asc", r = !1) {
   if (!e)
     return [];
   const a = e.querySelector("tbody");
@@ -697,7 +697,7 @@ function dn(e, t, n = "asc", r = !1) {
   const i = a.querySelector("tr.footer-row"), o = Array.from(
     a.querySelectorAll("tr")
   ).filter((u) => u !== i);
-  let s = -1;
+  let c = -1;
   if (r) {
     const d = {
       name: 0,
@@ -710,27 +710,27 @@ function dn(e, t, n = "asc", r = !1) {
       gain_abs: 7,
       gain_pct: 8
     }[t];
-    typeof d == "number" && (s = d);
+    typeof d == "number" && (c = d);
   } else {
     const u = Array.from(
       e.querySelectorAll("thead th")
     );
     for (let d = 0; d < u.length; d++)
       if (u[d].getAttribute("data-sort-key") === t) {
-        s = d;
+        c = d;
         break;
       }
   }
-  if (s < 0)
+  if (c < 0)
     return o;
-  const c = (u) => {
+  const s = (u) => {
     const d = u.replace(/\u00A0/g, " ").replace(/[%€]/g, "").replace(/\./g, "").replace(/,/g, ".").replace(/[^\d.-]/g, "").trim();
     if (!d) return NaN;
     const p = parseFloat(d);
     return Number.isFinite(p) ? p : NaN;
   };
   o.sort((u, d) => {
-    const p = u.cells.item(s), f = d.cells.item(s), g = (p?.textContent ?? "").trim(), m = (f?.textContent ?? "").trim(), y = c(g), h = c(m);
+    const p = u.cells.item(c), f = d.cells.item(c), g = (p?.textContent ?? "").trim(), m = (f?.textContent ?? "").trim(), y = s(g), h = s(m);
     let b;
     const _ = /[0-9]/.test(g) || /[0-9]/.test(m);
     return !Number.isNaN(y) && !Number.isNaN(h) && _ ? b = y - h : b = g.localeCompare(m, "de", { sensitivity: "base" }), n === "asc" ? b : -b;
@@ -763,15 +763,15 @@ function ge(e) {
       return null;
     const a = r.lastIndexOf(","), i = r.lastIndexOf(".");
     let o = r;
-    const s = a !== -1, c = i !== -1;
-    if (s && (!c || a > i))
-      if (c)
+    const c = a !== -1, s = i !== -1;
+    if (c && (!s || a > i))
+      if (s)
         o = o.replace(/\./g, "").replace(",", ".");
       else {
         const d = o.split(","), p = d[d.length - 1]?.length ?? 0, f = d.slice(0, -1).join(""), g = f.replace(/[+-]/g, "").length, m = d.length > 2, y = /^[-+]?0$/.test(f);
         o = m || p === 0 || p === 3 && g > 0 && g <= 3 && !y ? o.replace(/,/g, "") : o.replace(",", ".");
       }
-    else c && s && i > a ? o = o.replace(/,/g, "") : c && o.length - i - 1 === 3 && /\d{4,}/.test(o.replace(/\./g, "")) && (o = o.replace(/\./g, ""));
+    else s && c && i > a ? o = o.replace(/,/g, "") : s && o.length - i - 1 === 3 && /\d{4,}/.test(o.replace(/\./g, "")) && (o = o.replace(/\./g, ""));
     if (o === "-" || o === "+")
       return null;
     const l = Number.parseFloat(o);
@@ -783,18 +783,18 @@ function ge(e) {
   }
   return null;
 }
-function Pt(e, { decimals: t = hi, fallback: n = null } = {}) {
+function Nt(e, { decimals: t = hi, fallback: n = null } = {}) {
   const r = ge(e);
   if (r == null)
     return n ?? null;
   const a = 10 ** t, i = Math.round(r * a) / a;
   return Object.is(i, -0) ? 0 : i;
 }
-function kn(e, t = {}) {
-  return Pt(e, t);
+function Fn(e, t = {}) {
+  return Nt(e, t);
 }
 function mi(e, t = {}) {
-  return Pt(e, t);
+  return Nt(e, t);
 }
 const yi = /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/, se = (e) => {
   if (typeof e == "number")
@@ -808,7 +808,7 @@ const yi = /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/, se = (e) => {
       return n;
   }
   return null;
-}, vr = (e) => {
+}, Sr = (e) => {
   if (typeof e != "string")
     return null;
   const t = e.trim();
@@ -821,14 +821,14 @@ function bi(e) {
   const n = se(t.price_change_native), r = se(t.price_change_eur), a = se(t.change_pct), i = se(t.value_change_eur);
   if (n == null && r == null && a == null && i == null)
     return null;
-  const o = vr(t.source) ?? "derived", s = se(t.coverage_ratio) ?? null;
+  const o = Sr(t.source) ?? "derived", c = se(t.coverage_ratio) ?? null;
   return {
     price_change_native: n,
     price_change_eur: r,
     change_pct: a,
     value_change_eur: i ?? null,
     source: o,
-    coverage_ratio: s
+    coverage_ratio: c
   };
 }
 function we(e) {
@@ -838,15 +838,15 @@ function we(e) {
   const n = se(t.gain_abs), r = se(t.gain_pct), a = se(t.total_change_eur), i = se(t.total_change_pct);
   if (n == null || r == null || a == null || i == null)
     return null;
-  const o = vr(t.source) ?? "derived", s = se(t.coverage_ratio) ?? null, c = bi(t.day_change);
+  const o = Sr(t.source) ?? "derived", c = se(t.coverage_ratio) ?? null, s = bi(t.day_change);
   return {
     gain_abs: n,
     gain_pct: r,
     total_change_eur: a,
     total_change_pct: i,
     source: o,
-    coverage_ratio: s,
-    day_change: c
+    coverage_ratio: c,
+    day_change: s
   };
 }
 const _e = /* @__PURE__ */ new Map();
@@ -868,7 +868,7 @@ function _i(e) {
   const t = e;
   return typeof t.security_uuid == "string" && typeof t.name == "string" && typeof t.current_holdings == "number" && typeof t.purchase_value == "number" && typeof t.current_value == "number";
 }
-function Te(e) {
+function Re(e) {
   const t = { ...e };
   return e.average_cost && typeof e.average_cost == "object" && (t.average_cost = { ...e.average_cost }), e.performance && typeof e.performance == "object" && (t.performance = { ...e.performance }), e.aggregation && typeof e.aggregation == "object" && (t.aggregation = { ...e.aggregation }), e.data_state && typeof e.data_state == "object" && (t.data_state = { ...e.data_state }), t;
 }
@@ -885,7 +885,7 @@ function vi(e, t, n = []) {
   }), r;
 }
 function Si(e, t) {
-  const n = e ? Te(e) : {}, r = [
+  const n = e ? Re(e) : {}, r = [
     "portfolio_uuid",
     "security_uuid",
     "name",
@@ -898,29 +898,29 @@ function Si(e, t) {
     "provenance",
     "metric_run_uuid",
     "fx_unavailable"
-  ], a = (c, l, u) => {
+  ], a = (s, l, u) => {
     const d = l[u];
-    d !== void 0 && (c[u] = d);
+    d !== void 0 && (s[u] = d);
   };
-  r.forEach((c) => {
-    a(n, t, c);
+  r.forEach((s) => {
+    a(n, t, s);
   });
-  const i = (c) => {
-    const l = t[c];
+  const i = (s) => {
+    const l = t[s];
     if (l && typeof l == "object") {
-      const u = e && e[c] && typeof e[c] == "object" ? e[c] : {};
-      n[c] = {
+      const u = e && e[s] && typeof e[s] == "object" ? e[s] : {};
+      n[s] = {
         ...u,
         ...l
       };
-    } else l !== void 0 && (n[c] = l);
-  }, o = t.performance, s = e && e.performance && typeof e.performance == "object" ? e.performance : void 0;
-  return o !== void 0 && (n.performance = vi(s, o, [
+    } else l !== void 0 && (n[s] = l);
+  }, o = t.performance, c = e && e.performance && typeof e.performance == "object" ? e.performance : void 0;
+  return o !== void 0 && (n.performance = vi(c, o, [
     "gain_pct",
     "total_change_pct"
   ])), i("aggregation"), i("average_cost"), i("data_state"), n;
 }
-function st(e, t) {
+function ct(e, t) {
   if (!e)
     return [];
   if (!Array.isArray(t))
@@ -930,19 +930,19 @@ function st(e, t) {
   const n = _e.get(e) ?? [], r = new Map(
     n.filter((i) => i.security_uuid).map((i) => [i.security_uuid, i])
   ), a = t.filter((i) => !!i).map((i) => {
-    const o = i.security_uuid ?? "", s = o ? r.get(o) : void 0;
-    return Si(s, i);
-  }).map(Te);
-  return _e.set(e, a), a.map(Te);
+    const o = i.security_uuid ?? "", c = o ? r.get(o) : void 0;
+    return Si(c, i);
+  }).map(Re);
+  return _e.set(e, a), a.map(Re);
 }
-function Et(e) {
+function xt(e) {
   return e ? _e.has(e) : !1;
 }
-function Sr(e) {
+function wr(e) {
   if (!e)
     return [];
   const t = _e.get(e);
-  return t ? t.map(Te) : [];
+  return t ? t.map(Re) : [];
 }
 function wi() {
   _e.clear();
@@ -951,41 +951,41 @@ function Ci() {
   return new Map(
     Array.from(_e.entries(), ([e, t]) => [
       e,
-      t.map(Te)
+      t.map(Re)
     ])
   );
 }
-function Me(e) {
+function Ie(e) {
   if (!e || typeof e != "object")
     return null;
   const t = e, n = q(t.native), r = q(t.security), a = q(t.account), i = q(t.eur), o = q(t.coverage_ratio);
   if (n == null && r == null && a == null && i == null && o == null)
     return null;
-  const s = ye(t.source);
+  const c = ye(t.source);
   return {
     native: n,
     security: r,
     account: a,
     eur: i,
-    source: s === "totals" || s === "eur_total" ? s : "aggregation",
+    source: c === "totals" || c === "eur_total" ? c : "aggregation",
     coverage_ratio: o
   };
 }
-function fn(e) {
+function gn(e) {
   if (!e || typeof e != "object")
     return null;
   const t = e, n = q(t.total_holdings), r = q(t.positive_holdings), a = q(t.purchase_value_eur), i = q(t.purchase_total_security) ?? q(t.security_currency_total), o = q(t.purchase_total_account) ?? q(t.account_currency_total);
-  let s = 0;
+  let c = 0;
   if (typeof t.purchase_value_cents == "number")
-    s = Number.isFinite(t.purchase_value_cents) ? Math.trunc(t.purchase_value_cents) : 0;
+    c = Number.isFinite(t.purchase_value_cents) ? Math.trunc(t.purchase_value_cents) : 0;
   else if (typeof t.purchase_value_cents == "string") {
     const l = Number.parseInt(t.purchase_value_cents, 10);
-    Number.isFinite(l) && (s = l);
+    Number.isFinite(l) && (c = l);
   }
-  return n != null || r != null || a != null || i != null || o != null || s !== 0 ? {
+  return n != null || r != null || a != null || i != null || o != null || c !== 0 ? {
     total_holdings: n ?? 0,
     positive_holdings: r ?? 0,
-    purchase_value_cents: s,
+    purchase_value_cents: c,
     purchase_value_eur: a ?? 0,
     security_currency_total: i ?? 0,
     account_currency_total: o ?? 0,
@@ -996,8 +996,8 @@ function fn(e) {
 function Ai(e) {
   if (!e || typeof e != "object")
     return null;
-  const t = _i(e) ? Te(e) : e, n = ye(t.security_uuid), r = ye(t.name), a = ge(t.current_holdings), i = kn(t.current_value), o = fn(t.aggregation), s = t.aggregation && typeof t.aggregation == "object" ? t.aggregation : null, c = q(t.purchase_value_eur) ?? q(s?.purchase_value_eur) ?? q(s?.purchase_total_account) ?? q(s?.account_currency_total) ?? kn(t.purchase_value);
-  if (!n || !r || a == null || c == null || i == null)
+  const t = _i(e) ? Re(e) : e, n = ye(t.security_uuid), r = ye(t.name), a = ge(t.current_holdings), i = Fn(t.current_value), o = gn(t.aggregation), c = t.aggregation && typeof t.aggregation == "object" ? t.aggregation : null, s = q(t.purchase_value_eur) ?? q(c?.purchase_value_eur) ?? q(c?.purchase_total_account) ?? q(c?.account_currency_total) ?? Fn(t.purchase_value);
+  if (!n || !r || a == null || s == null || i == null)
     return null;
   const l = {
     security_uuid: n,
@@ -1005,9 +1005,9 @@ function Ai(e) {
     portfolio_uuid: ye(t.portfolio_uuid) ?? ye(t.portfolioUuid) ?? void 0,
     currency_code: ye(t.currency_code),
     current_holdings: a,
-    purchase_value: c,
+    purchase_value: s,
     current_value: i
-  }, u = Me(t.average_cost);
+  }, u = Ie(t.average_cost);
   u && (l.average_cost = u), o && (l.aggregation = o);
   const d = we(t.performance);
   if (d)
@@ -1032,7 +1032,7 @@ function Ai(e) {
   const b = t.data_state && typeof t.data_state == "object" ? { ...t.data_state } : void 0;
   return b && (l.data_state = b), l;
 }
-function Nt(e) {
+function Dt(e) {
   if (!Array.isArray(e))
     return [];
   const t = [];
@@ -1042,13 +1042,13 @@ function Nt(e) {
   }
   return t;
 }
-let wr = [];
+let Cr = [];
 const ve = /* @__PURE__ */ new Map();
-function nt(e) {
+function rt(e) {
   return typeof e == "string" && e.length > 0 ? e : void 0;
 }
 function Pi(e) {
-  return e === null ? null : nt(e);
+  return e === null ? null : rt(e);
 }
 function Ei(e) {
   return typeof e == "number" && Number.isFinite(e) ? e : void 0;
@@ -1056,7 +1056,7 @@ function Ei(e) {
 function Ae(e) {
   return e === null ? null : Ei(e);
 }
-function Fn(e) {
+function $n(e) {
   if (!(typeof e != "number" || !Number.isFinite(e)))
     return Math.trunc(e);
 }
@@ -1064,21 +1064,21 @@ function le(e) {
   if (!(!e || typeof e != "object"))
     return { ...e };
 }
-function Ke(e) {
+function Ge(e) {
   const t = { ...e };
   return t.average_cost = le(e.average_cost), t.performance = le(e.performance), t.aggregation = le(e.aggregation), t.data_state = le(e.data_state), t;
 }
-function pn(e) {
+function hn(e) {
   const t = { ...e };
-  return t.performance = le(e.performance), t.data_state = le(e.data_state), Array.isArray(e.positions) && (t.positions = e.positions.map(Ke)), t;
+  return t.performance = le(e.performance), t.data_state = le(e.data_state), Array.isArray(e.positions) && (t.positions = e.positions.map(Ge)), t;
 }
-function Cr(e) {
+function Ar(e) {
   if (!e || typeof e != "object")
     return null;
-  const t = nt(e.uuid);
+  const t = rt(e.uuid);
   if (!t)
     return null;
-  const n = { uuid: t }, r = nt(e.name);
+  const n = { uuid: t }, r = rt(e.name);
   r && (n.name = r);
   const a = Ae(e.current_value);
   a !== void 0 && (n.current_value = a);
@@ -1086,15 +1086,15 @@ function Cr(e) {
   i !== void 0 && (n.purchase_value = i, n.purchase_sum = i);
   const o = Ae(e.day_change_abs);
   o !== void 0 && (n.day_change_abs = o);
-  const s = Ae(e.day_change_pct);
-  s !== void 0 && (n.day_change_pct = s);
-  const c = Fn(e.position_count);
-  c !== void 0 && (n.position_count = c);
-  const l = Fn(e.missing_value_positions);
+  const c = Ae(e.day_change_pct);
+  c !== void 0 && (n.day_change_pct = c);
+  const s = $n(e.position_count);
+  s !== void 0 && (n.position_count = s);
+  const l = $n(e.missing_value_positions);
   l !== void 0 && (n.missing_value_positions = l), typeof e.has_current_value == "boolean" && (n.has_current_value = e.has_current_value);
   const u = Ae(e.coverage_ratio);
   u !== void 0 && (n.coverage_ratio = u);
-  const d = nt(e.provenance);
+  const d = rt(e.provenance);
   d && (n.provenance = d), "metric_run_uuid" in e && (n.metric_run_uuid = Pi(e.metric_run_uuid));
   const p = le(e.performance);
   p && (n.performance = p);
@@ -1103,7 +1103,7 @@ function Cr(e) {
     const g = e.positions.filter(
       (m) => !!m
     );
-    g.length && (n.positions = g.map(Ke));
+    g.length && (n.positions = g.map(Ge));
   }
   return n;
 }
@@ -1112,45 +1112,45 @@ function Ni(e, t) {
     ...e,
     ...t
   };
-  return !t.performance && e.performance && (n.performance = le(e.performance)), !t.data_state && e.data_state && (n.data_state = le(e.data_state)), !t.positions && e.positions && (n.positions = e.positions.map(Ke)), n;
+  return !t.performance && e.performance && (n.performance = le(e.performance)), !t.data_state && e.data_state && (n.data_state = le(e.data_state)), !t.positions && e.positions && (n.positions = e.positions.map(Ge)), n;
 }
-function Ar(e) {
-  wr = (e ?? []).map((n) => ({ ...n }));
+function Pr(e) {
+  Cr = (e ?? []).map((n) => ({ ...n }));
 }
 function xi() {
-  return wr.map((e) => ({ ...e }));
+  return Cr.map((e) => ({ ...e }));
 }
 function Di(e) {
   ve.clear();
   const t = e ?? [];
   for (const n of t) {
-    const r = Cr(n);
-    r && ve.set(r.uuid, pn(r));
+    const r = Ar(n);
+    r && ve.set(r.uuid, hn(r));
   }
 }
 function ki(e) {
   const t = e ?? [];
   for (const n of t) {
-    const r = Cr(n);
+    const r = Ar(n);
     if (!r)
       continue;
-    const a = ve.get(r.uuid), i = a ? Ni(a, r) : pn(r);
+    const a = ve.get(r.uuid), i = a ? Ni(a, r) : hn(r);
     ve.set(i.uuid, i);
   }
 }
-function ct(e, t) {
+function lt(e, t) {
   if (!e)
     return;
   const n = ve.get(e);
   if (!n)
     return;
   if (!Array.isArray(t) || t.length === 0) {
-    const c = { ...n };
-    delete c.positions, ve.set(e, c);
+    const s = { ...n };
+    delete s.positions, ve.set(e, s);
     return;
   }
-  const r = (c, l) => {
-    const u = c ? Ke(c) : {}, d = u;
+  const r = (s, l) => {
+    const u = s ? Ge(s) : {}, d = u;
     [
       "portfolio_uuid",
       "security_uuid",
@@ -1168,7 +1168,7 @@ function ct(e, t) {
       m != null && (d[g] = m);
     });
     const f = (g, m = []) => {
-      const y = l[g], h = c && c[g] && typeof c[g] == "object" ? c[g] : void 0;
+      const y = l[g], h = s && s[g] && typeof s[g] == "object" ? s[g] : void 0;
       if (!y || typeof y != "object") {
         y !== void 0 && (d[g] = y);
         return;
@@ -1184,20 +1184,20 @@ function ct(e, t) {
     };
     return f("performance", ["gain_pct", "total_change_pct"]), f("aggregation"), f("average_cost"), f("data_state"), u;
   }, a = Array.isArray(n.positions) ? n.positions : [], i = new Map(
-    a.filter((c) => c.security_uuid).map((c) => [c.security_uuid, c])
-  ), o = t.filter((c) => !!c).map((c) => {
-    const l = c.security_uuid ? i.get(c.security_uuid) : void 0;
-    return r(l, c);
-  }).map(Ke), s = {
+    a.filter((s) => s.security_uuid).map((s) => [s.security_uuid, s])
+  ), o = t.filter((s) => !!s).map((s) => {
+    const l = s.security_uuid ? i.get(s.security_uuid) : void 0;
+    return r(l, s);
+  }).map(Ge), c = {
     ...n,
     positions: o
   };
-  ve.set(e, s);
+  ve.set(e, c);
 }
 function Fi() {
-  return Array.from(ve.values(), (e) => pn(e));
+  return Array.from(ve.values(), (e) => hn(e));
 }
-function Pr() {
+function Er() {
   return {
     accounts: xi(),
     portfolios: Fi()
@@ -1207,7 +1207,7 @@ const $i = "unknown-account";
 function Z(e) {
   return typeof e != "number" || !Number.isFinite(e) ? null : e;
 }
-function $n(e) {
+function Tn(e) {
   const t = Z(e);
   return t == null ? 0 : Math.trunc(t);
 }
@@ -1217,18 +1217,18 @@ function ee(e) {
   const t = e.trim();
   return t.length > 0 ? t : null;
 }
-function Er(e, t) {
+function Nr(e, t) {
   return ee(e) ?? t;
 }
-function Nr(e) {
+function xr(e) {
   return e == null || !Number.isFinite(e) ? null : e < 0 ? 0 : e > 1 ? 1 : e;
 }
-function xr(e) {
+function Dr(e) {
   return e.split(/[\s_-]+/).filter(Boolean).map(
     (t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
   ).join(" ");
 }
-function Dr(e) {
+function kr(e) {
   const t = Ti(e);
   if (!t)
     return null;
@@ -1245,7 +1245,7 @@ function Ti(e) {
   if (!t)
     return null;
   const n = Li(t);
-  return n || xr(t);
+  return n || Dr(t);
 }
 function Li(e) {
   const t = e.trim();
@@ -1256,7 +1256,7 @@ function Li(e) {
       n.provider ?? n.source
     ) : null;
     if (r.length && a)
-      return `${xr(a)} (${r.join(", ")})`;
+      return `${Dr(a)} (${r.join(", ")})`;
     if (r.length)
       return `FX (${r.join(", ")})`;
   } catch {
@@ -1283,7 +1283,7 @@ function Ri(e) {
 function Mi(e) {
   if (!e)
     return null;
-  const t = ee(e.uuid) ?? `${$i}-${e.name ?? "0"}`, n = Er(e.name, "Unbenanntes Konto"), r = ee(e.currency_code), a = Z(e.balance), i = Z(e.orig_balance), o = "coverage_ratio" in e ? Nr(Z(e.coverage_ratio)) : null, s = ee(e.provenance), c = ee(e.metric_run_uuid), l = e.fx_unavailable === !0, u = Z(e.fx_rate), d = ee(e.fx_rate_source), p = ee(e.fx_rate_timestamp), f = [], g = Dr(s);
+  const t = ee(e.uuid) ?? `${$i}-${e.name ?? "0"}`, n = Nr(e.name, "Unbenanntes Konto"), r = ee(e.currency_code), a = Z(e.balance), i = Z(e.orig_balance), o = "coverage_ratio" in e ? xr(Z(e.coverage_ratio)) : null, c = ee(e.provenance), s = ee(e.metric_run_uuid), l = e.fx_unavailable === !0, u = Z(e.fx_rate), d = ee(e.fx_rate_source), p = ee(e.fx_rate_timestamp), f = [], g = kr(c);
   g && f.push(g);
   const m = {
     uuid: t,
@@ -1293,13 +1293,13 @@ function Mi(e) {
     orig_balance: i,
     fx_unavailable: l,
     coverage_ratio: o,
-    provenance: s,
+    provenance: c,
     metric_run_uuid: null,
     fx_rate: u,
     fx_rate_source: d,
     fx_rate_timestamp: p,
     badges: f
-  }, y = typeof c == "string" ? c : null;
+  }, y = typeof s == "string" ? s : null;
   return m.metric_run_uuid = y, m;
 }
 function Hi(e) {
@@ -1308,8 +1308,8 @@ function Hi(e) {
   const t = ee(e.uuid);
   if (!t)
     return null;
-  const n = Er(e.name, "Unbenanntes Depot"), r = $n(e.position_count), a = $n(e.missing_value_positions), i = Z(e.current_value), o = Z(e.purchase_sum) ?? Z(e.purchase_value_eur) ?? Z(e.purchase_value) ?? 0, s = Z(e.day_change_abs) ?? null, c = Z(e.day_change_pct) ?? null, l = we(e.performance), u = l?.gain_abs ?? null, d = l?.gain_pct ?? null, p = l?.day_change ?? null;
-  let f = s ?? (p?.value_change_eur != null ? Z(p.value_change_eur) : null), g = c ?? (p?.change_pct != null ? Z(p.change_pct) : null);
+  const n = Nr(e.name, "Unbenanntes Depot"), r = Tn(e.position_count), a = Tn(e.missing_value_positions), i = Z(e.current_value), o = Z(e.purchase_sum) ?? Z(e.purchase_value_eur) ?? Z(e.purchase_value) ?? 0, c = Z(e.day_change_abs) ?? null, s = Z(e.day_change_pct) ?? null, l = we(e.performance), u = l?.gain_abs ?? null, d = l?.gain_pct ?? null, p = l?.day_change ?? null;
+  let f = c ?? (p?.value_change_eur != null ? Z(p.value_change_eur) : null), g = s ?? (p?.change_pct != null ? Z(p.change_pct) : null);
   if (f == null && g != null && i != null) {
     const E = i / (1 + g / 100);
     E && (f = i - E);
@@ -1318,7 +1318,7 @@ function Hi(e) {
     const E = i - f;
     E && (g = f / E * 100);
   }
-  const m = i != null, y = e.has_current_value === !1 || !m, h = "coverage_ratio" in e ? Nr(Z(e.coverage_ratio)) : null, b = ee(e.provenance), _ = ee(e.metric_run_uuid), v = [], w = Dr(b);
+  const m = i != null, y = e.has_current_value === !1 || !m, h = "coverage_ratio" in e ? xr(Z(e.coverage_ratio)) : null, b = ee(e.provenance), _ = ee(e.metric_run_uuid), v = [], w = kr(b);
   w && v.push(w);
   const A = {
     uuid: t,
@@ -1341,15 +1341,15 @@ function Hi(e) {
   }, P = typeof _ == "string" ? _ : null;
   return A.metric_run_uuid = P, A;
 }
-function kr() {
-  const { accounts: e } = Pr();
+function Fr() {
+  const { accounts: e } = Er();
   return e.map(Mi).filter((t) => !!t);
 }
 function Ii() {
-  const { portfolios: e } = Pr();
+  const { portfolios: e } = Er();
   return e.map(Hi).filter((t) => !!t);
 }
-function Fr(e, t = {}) {
+function $r(e, t = {}) {
   if (!e || e.length === 0)
     return "";
   const n = ["meta-badges", t.containerClass].filter(Boolean).join(" "), r = e.map((a) => {
@@ -1360,8 +1360,8 @@ function Fr(e, t = {}) {
   }).join("");
   return `<span class="${n}">${r}</span>`;
 }
-function lt(e, t, n = {}) {
-  const r = Fr(t, n);
+function ut(e, t, n = {}) {
+  const r = $r(t, n);
   if (!r)
     return F(e);
   const a = n.labelClass ?? "name-with-badges__label";
@@ -1369,13 +1369,13 @@ function lt(e, t, n = {}) {
     e
   )}</span>${r}</span>`;
 }
-function $r(e, t, n, r) {
+function Tr(e, t, n, r) {
   e[t] = {
     previous: n,
     current: r
   };
 }
-const ue = /* @__PURE__ */ new Map(), Be = /* @__PURE__ */ new Map();
+const ue = /* @__PURE__ */ new Map(), Ye = /* @__PURE__ */ new Map();
 function zi(e) {
   if (typeof e == "string") {
     const t = e.trim();
@@ -1394,35 +1394,35 @@ function zi(e) {
     }
   return "Unbekannter Fehler";
 }
-function He(e) {
+function ze(e) {
   if (typeof e != "string")
     return null;
   const t = e.trim();
   return t.length > 0 ? t : null;
 }
-function Ne(e) {
+function xe(e) {
   return typeof e == "number" && Number.isFinite(e) ? e : void 0;
 }
 function Vi(e) {
-  return e === null ? null : Ne(e);
+  return e === null ? null : xe(e);
 }
 function Ui(e) {
-  return e === null ? null : He(e);
+  return e === null ? null : ze(e);
 }
-function Tn(e) {
+function Ln(e) {
   return (e ?? []).filter(
     (t) => !t.key.endsWith("-coverage") && !t.key.startsWith("provenance-")
   );
 }
-function Ln(e) {
+function Rn(e) {
   return we(e.performance);
 }
-const qi = 500, Oi = 10, Bi = "pp-reader:portfolio-positions-updated", Wi = "pp-reader:diagnostics", Ft = /* @__PURE__ */ new Map(), Tr = [
+const qi = 500, Oi = 10, Bi = "pp-reader:portfolio-positions-updated", Wi = "pp-reader:diagnostics", $t = /* @__PURE__ */ new Map(), Lr = [
   "coverage_ratio",
   "provenance",
   "metric_run_uuid",
   "generated_at"
-], Ot = /* @__PURE__ */ new Map();
+], Bt = /* @__PURE__ */ new Map();
 function Yi(e, t) {
   return `${e}:${t}`;
 }
@@ -1439,39 +1439,39 @@ function Ki(e) {
   if (typeof t == "number" && Number.isFinite(t))
     return t;
 }
-function $t(e) {
+function Tt(e) {
   if (e !== void 0)
     return Ui(e);
 }
-function gn(e, t, n, r) {
+function mn(e, t, n, r) {
   const a = {}, i = Ki(e);
   i !== void 0 && (a.coverage_ratio = i);
-  const o = $t(t);
+  const o = Tt(t);
   o !== void 0 && (a.provenance = o);
-  const s = $t(n);
-  s !== void 0 && (a.metric_run_uuid = s);
-  const c = $t(r);
-  return c !== void 0 && (a.generated_at = c), Object.keys(a).length > 0 ? a : null;
+  const c = Tt(n);
+  c !== void 0 && (a.metric_run_uuid = c);
+  const s = Tt(r);
+  return s !== void 0 && (a.generated_at = s), Object.keys(a).length > 0 ? a : null;
 }
 function ji(e, t) {
   const n = {};
   let r = !1;
-  for (const a of Tr) {
+  for (const a of Lr) {
     const i = e?.[a], o = t[a];
-    i !== o && ($r(n, a, i, o), r = !0);
+    i !== o && (Tr(n, a, i, o), r = !0);
   }
   return r ? n : null;
 }
 function Gi(e) {
   const t = {};
   let n = !1;
-  for (const r of Tr) {
+  for (const r of Lr) {
     const a = e[r];
-    a !== void 0 && ($r(t, r, a, void 0), n = !0);
+    a !== void 0 && (Tr(t, r, a, void 0), n = !0);
   }
   return n ? t : null;
 }
-function Rn(e) {
+function Mn(e) {
   if (Object.keys(e.changed).length) {
     try {
       console.debug("pp-reader:diagnostics", e);
@@ -1485,27 +1485,27 @@ function Rn(e) {
       }
   }
 }
-function hn(e, t, n, r) {
-  const a = Yi(e, n), i = Ft.get(a);
+function yn(e, t, n, r) {
+  const a = Yi(e, n), i = $t.get(a);
   if (!r) {
     if (!i)
       return;
-    Ft.delete(a);
-    const s = Gi(i);
-    if (!s)
+    $t.delete(a);
+    const c = Gi(i);
+    if (!c)
       return;
-    Rn({
+    Mn({
       kind: e,
       uuid: n,
       source: t,
-      changed: s,
+      changed: c,
       snapshot: {},
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
     return;
   }
   const o = ji(i, r);
-  o && (Ft.set(a, { ...r }), Rn({
+  o && ($t.set(a, { ...r }), Mn({
     kind: e,
     uuid: n,
     source: t,
@@ -1517,43 +1517,43 @@ function hn(e, t, n, r) {
 function Xi(e) {
   if (!(!e || e.length === 0))
     for (const t of e) {
-      const n = He(t.uuid);
+      const n = ze(t.uuid);
       if (!n)
         continue;
-      const r = gn(
+      const r = mn(
         t.coverage_ratio,
         t.provenance,
         t.metric_run_uuid,
         void 0
       );
-      hn("account", "accounts", n, r);
+      yn("account", "accounts", n, r);
     }
 }
 function Zi(e) {
   if (!(!e || e.length === 0))
     for (const t of e) {
-      const n = He(t.uuid);
+      const n = ze(t.uuid);
       if (!n)
         continue;
-      const r = gn(
+      const r = mn(
         t.coverage_ratio,
         t.provenance,
         t.metric_run_uuid,
         void 0
       );
-      hn("portfolio", "portfolio_values", n, r);
+      yn("portfolio", "portfolio_values", n, r);
     }
 }
 function Ji(e, t) {
   if (!t)
     return;
-  const n = gn(
+  const n = mn(
     t.coverage_ratio ?? t.normalized_payload?.coverage_ratio,
     t.provenance ?? t.normalized_payload?.provenance,
     t.metric_run_uuid ?? t.normalized_payload?.metric_run_uuid,
     t.normalized_payload?.generated_at
   );
-  hn("portfolio_positions", "portfolio_positions", e, n);
+  yn("portfolio_positions", "portfolio_positions", e, n);
 }
 function Qi(e, t) {
   return `<div class="error">${F(zi(e))} <button class="retry-pos" data-portfolio="${t}">Erneut laden</button></div>`;
@@ -1564,25 +1564,25 @@ function eo(e, t, n) {
   const a = e.dataset.sortKey || r.dataset.defaultSort || "name", o = (e.dataset.sortDir || r.dataset.defaultDir || "asc") === "desc" ? "desc" : "asc";
   e.dataset.sortKey = a, e.dataset.sortDir = o;
   try {
-    dn(r, a, o, !0);
+    pn(r, a, o, !0);
   } catch (l) {
     console.warn("restoreSortAndInit: sortTableRows Fehler:", l);
   }
-  const { attachPortfolioPositionsSorting: s, attachSecurityDetailListener: c } = cn();
-  if (s)
-    try {
-      s(t, n);
-    } catch (l) {
-      console.warn("restoreSortAndInit: attachPortfolioPositionsSorting Fehler:", l);
-    }
+  const { attachPortfolioPositionsSorting: c, attachSecurityDetailListener: s } = un();
   if (c)
     try {
       c(t, n);
     } catch (l) {
+      console.warn("restoreSortAndInit: attachPortfolioPositionsSorting Fehler:", l);
+    }
+  if (s)
+    try {
+      s(t, n);
+    } catch (l) {
       console.warn("restoreSortAndInit: attachSecurityDetailListener Fehler:", l);
     }
 }
-function Lr(e, t, n, r) {
+function Rr(e, t, n, r) {
   if (!e || !t)
     return { applied: !1, reason: "invalid" };
   const a = e.querySelector(
@@ -1597,13 +1597,13 @@ function Lr(e, t, n, r) {
     return { applied: !1, reason: "hidden" };
   if (r)
     return i.innerHTML = Qi(r, t), { applied: !0 };
-  const o = i.dataset.sortKey, s = i.dataset.sortDir;
-  return i.innerHTML = Mr(n), o && (i.dataset.sortKey = o), s && (i.dataset.sortDir = s), eo(i, e, t), { applied: !0 };
+  const o = i.dataset.sortKey, c = i.dataset.sortDir;
+  return i.innerHTML = Hr(n), o && (i.dataset.sortKey = o), c && (i.dataset.sortDir = c), eo(i, e, t), { applied: !0 };
 }
-function mn(e, t) {
+function bn(e, t) {
   const n = ue.get(t);
   if (!n) return !1;
-  const r = Lr(
+  const r = Rr(
     e,
     t,
     n.positions,
@@ -1614,51 +1614,51 @@ function mn(e, t) {
 function to(e) {
   let t = !1;
   for (const [n] of ue)
-    mn(e, n) && (t = !0);
+    bn(e, n) && (t = !0);
   return t;
 }
-function Rr(e, t) {
-  const n = Be.get(t) ?? {
+function Mr(e, t) {
+  const n = Ye.get(t) ?? {
     attempts: 0,
     timer: null
   };
   n.timer || (n.timer = setTimeout(() => {
     n.timer = null, n.attempts += 1;
-    const r = mn(e, t);
-    r || n.attempts >= Oi ? (Be.delete(t), r || ue.delete(t)) : Rr(e, t);
-  }, qi), Be.set(t, n));
+    const r = bn(e, t);
+    r || n.attempts >= Oi ? (Ye.delete(t), r || ue.delete(t)) : Mr(e, t);
+  }, qi), Ye.set(t, n));
 }
 function no(e, t) {
   console.log("updateConfigsWS: Kontodaten-Update erhalten:", e);
   const n = Array.isArray(e) ? e : [];
-  if (Ar(n), Xi(n), !t)
+  if (Pr(n), Xi(n), !t)
     return;
-  const r = kr();
+  const r = Fr();
   ro(r, t);
   const a = t.querySelector(".portfolio-table table"), i = a ? Array.from(
     a.querySelectorAll("tbody tr.portfolio-row")
   ).map((o) => {
-    const s = o.dataset.currentValue, c = s ? Number.parseFloat(s) : Number.NaN;
-    if (Number.isFinite(c))
+    const c = o.dataset.currentValue, s = c ? Number.parseFloat(c) : Number.NaN;
+    if (Number.isFinite(s))
       return {
-        current_value: c
+        current_value: s
       };
-    const l = o.cells.item(3), u = rt(l?.textContent);
+    const l = o.cells.item(3), u = at(l?.textContent);
     return {
       current_value: Number.isFinite(u) ? u : 0
     };
   }) : [];
-  Hr(r, i, t);
+  Ir(r, i, t);
 }
 function ro(e, t) {
   const n = t.querySelector(".account-table"), r = t.querySelector(".fx-account-table"), a = e.filter((o) => (o.currency_code || "EUR") === "EUR"), i = e.filter((o) => (o.currency_code || "EUR") !== "EUR");
   if (n) {
-    const o = a.map((s) => ({
-      name: lt(s.name, Tn(s.badges), {
+    const o = a.map((c) => ({
+      name: ut(c.name, Ln(c.badges), {
         containerClass: "account-name",
         labelClass: "account-name__label"
       }),
-      balance: s.balance ?? null
+      balance: c.balance ?? null
     }));
     n.innerHTML = Se(
       o,
@@ -1671,18 +1671,18 @@ function ro(e, t) {
   } else
     console.warn("updateAccountTable: .account-table nicht gefunden.");
   if (r) {
-    const o = i.map((s) => {
-      const c = s.orig_balance, l = typeof c == "number" && Number.isFinite(c), u = He(s.currency_code), d = l ? c.toLocaleString("de-DE", {
+    const o = i.map((c) => {
+      const s = c.orig_balance, l = typeof s == "number" && Number.isFinite(s), u = ze(c.currency_code), d = l ? s.toLocaleString("de-DE", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       }) : null, p = d ? u ? `${d} ${u}` : d : "";
       return {
-        name: lt(s.name, Tn(s.badges), {
+        name: ut(c.name, Ln(c.badges), {
           containerClass: "account-name",
           labelClass: "account-name__label"
         }),
         fx_display: p,
-        balance: s.balance ?? null
+        balance: c.balance ?? null
       };
     });
     r.innerHTML = Se(
@@ -1701,7 +1701,7 @@ function ao(e) {
     return [];
   const t = [];
   for (const n of e) {
-    const r = hr(n);
+    const r = mr(n);
     r && t.push(r);
   }
   return t;
@@ -1740,13 +1740,13 @@ function io(e, t) {
         }).format(d);
       } catch {
       }
-    return (Pt(d, { fallback: 0 }) ?? 0).toFixed(2).replace(".", ",");
+    return (Nt(d, { fallback: 0 }) ?? 0).toFixed(2).replace(".", ",");
   }, o = /* @__PURE__ */ new Map();
   a.querySelectorAll("tr.portfolio-row").forEach((d) => {
     const p = d.dataset.portfolio;
     p && o.set(p, d);
   });
-  let c = 0;
+  let s = 0;
   const l = (d) => {
     const p = typeof d == "number" && Number.isFinite(d) ? d : 0;
     try {
@@ -1756,7 +1756,7 @@ function io(e, t) {
     }
   }, u = /* @__PURE__ */ new Map();
   for (const d of n) {
-    const p = He(d.uuid);
+    const p = ze(d.uuid);
     p && u.set(p, d);
   }
   for (const [d, p] of u.entries()) {
@@ -1767,7 +1767,7 @@ function io(e, t) {
     const g = f.cells.item(1), m = f.cells.item(2), y = f.cells.item(3), h = f.cells.item(4), b = f.cells.item(5), _ = f.cells.item(6), v = f.cells.item(7);
     if (!g || !m || !y)
       continue;
-    const w = typeof p.position_count == "number" && Number.isFinite(p.position_count) ? p.position_count : 0, A = typeof p.current_value == "number" && Number.isFinite(p.current_value) ? p.current_value : null, P = we(p.performance), E = typeof P?.gain_abs == "number" ? P.gain_abs : null, k = typeof P?.gain_pct == "number" ? P.gain_pct : null, I = typeof p.purchase_sum == "number" && Number.isFinite(p.purchase_sum) ? p.purchase_sum : typeof p.purchase_value == "number" && Number.isFinite(p.purchase_value) ? p.purchase_value : null, C = P?.day_change ?? null, x = Ne(p.day_change_abs) ?? Ne(C?.value_change_eur) ?? Ne(C?.price_change_eur), U = Ne(p.day_change_pct) ?? Ne(C?.change_pct);
+    const w = typeof p.position_count == "number" && Number.isFinite(p.position_count) ? p.position_count : 0, A = typeof p.current_value == "number" && Number.isFinite(p.current_value) ? p.current_value : null, P = we(p.performance), E = typeof P?.gain_abs == "number" ? P.gain_abs : null, k = typeof P?.gain_pct == "number" ? P.gain_pct : null, I = typeof p.purchase_sum == "number" && Number.isFinite(p.purchase_sum) ? p.purchase_sum : typeof p.purchase_value == "number" && Number.isFinite(p.purchase_value) ? p.purchase_value : null, C = P?.day_change ?? null, x = xe(p.day_change_abs) ?? xe(C?.value_change_eur) ?? xe(C?.price_change_eur), U = xe(p.day_change_pct) ?? xe(C?.change_pct);
     let N = x ?? null, $ = U ?? null;
     if (N == null && $ != null && A != null) {
       const G = A / (1 + $ / 100);
@@ -1777,8 +1777,8 @@ function io(e, t) {
       const G = A - N;
       G && ($ = N / G * 100);
     }
-    const j = typeof p.missing_value_positions == "number" && Number.isFinite(p.missing_value_positions) ? p.missing_value_positions : 0, S = A !== null, D = p.has_current_value === !1 || j > 0 || !S, R = rt(y.textContent);
-    rt(g.textContent) !== w && (g.textContent = l(w));
+    const j = typeof p.missing_value_positions == "number" && Number.isFinite(p.missing_value_positions) ? p.missing_value_positions : 0, S = A !== null, D = p.has_current_value === !1 || j > 0 || !S, R = at(y.textContent);
+    at(g.textContent) !== w && (g.textContent = l(w));
     const T = {
       fx_unavailable: D,
       current_value: A,
@@ -1794,12 +1794,12 @@ function io(e, t) {
       const Ce = typeof k == "number" && Number.isFinite(k) ? k : null;
       _.dataset.gainPct = Ce != null ? `${i(Ce)} %` : "—", _.dataset.gainSign = Ce != null ? Ce > 0 ? "positive" : Ce < 0 ? "negative" : "neutral" : "neutral";
     }
-    v && (v.innerHTML = M("gain_pct", k, T, z)), f.dataset.positionCount = w.toString(), f.dataset.purchaseSum = I != null ? I.toString() : "", f.dataset.currentValue = S ? X.toString() : "", f.dataset.dayChange = S && N != null ? N.toString() : "", f.dataset.dayChangePct = S && $ != null ? $.toString() : "", f.dataset.gainAbs = E != null ? E.toString() : "", f.dataset.gainPct = k != null ? k.toString() : "", f.dataset.hasValue = S ? "true" : "false", f.dataset.fxUnavailable = D ? "true" : "false", f.dataset.coverageRatio = typeof p.coverage_ratio == "number" && Number.isFinite(p.coverage_ratio) ? p.coverage_ratio.toString() : "", f.dataset.provenance = typeof p.provenance == "string" ? p.provenance : "", f.dataset.metricRunUuid = typeof p.metric_run_uuid == "string" ? p.metric_run_uuid : "", c += 1;
+    v && (v.innerHTML = M("gain_pct", k, T, z)), f.dataset.positionCount = w.toString(), f.dataset.purchaseSum = I != null ? I.toString() : "", f.dataset.currentValue = S ? X.toString() : "", f.dataset.dayChange = S && N != null ? N.toString() : "", f.dataset.dayChangePct = S && $ != null ? $.toString() : "", f.dataset.gainAbs = E != null ? E.toString() : "", f.dataset.gainPct = k != null ? k.toString() : "", f.dataset.hasValue = S ? "true" : "false", f.dataset.fxUnavailable = D ? "true" : "false", f.dataset.coverageRatio = typeof p.coverage_ratio == "number" && Number.isFinite(p.coverage_ratio) ? p.coverage_ratio.toString() : "", f.dataset.provenance = typeof p.provenance == "string" ? p.provenance : "", f.dataset.metricRunUuid = typeof p.metric_run_uuid == "string" ? p.metric_run_uuid : "", s += 1;
   }
-  if (c === 0)
+  if (s === 0)
     console.debug("handlePortfolioUpdate: Keine passenden Zeilen gefunden / keine Änderungen.");
   else {
-    const d = c.toLocaleString("de-DE");
+    const d = s.toLocaleString("de-DE");
     console.debug(`handlePortfolioUpdate: ${d} Zeile(n) gepatcht.`);
   }
   try {
@@ -1827,7 +1827,7 @@ function io(e, t) {
       const _ = h.querySelectorAll("tbody tr.account-row");
       return (_.length ? Array.from(_) : Array.from(h.querySelectorAll("tbody tr:not(.footer-row)"))).map((w) => {
         const A = b ? w.cells.item(2) : w.cells.item(1);
-        return { balance: rt(A?.textContent) };
+        return { balance: at(A?.textContent) };
       });
     }, m = [
       ...g(p, !1),
@@ -1841,7 +1841,7 @@ function io(e, t) {
         purchase_sum: Number.isFinite(w) ? w : 0
       };
     });
-    Hr(m, y, t);
+    Ir(m, y, t);
   } catch (d) {
     console.warn("handlePortfolioUpdate: Fehler bei Total-Neuberechnung:", d);
   }
@@ -1855,50 +1855,50 @@ function oo(e) {
   const n = e.portfolioUuid;
   return typeof n == "string" && n ? n : null;
 }
-function Bt(e) {
-  Ot.delete(e);
+function Wt(e) {
+  Bt.delete(e);
 }
-function Mn(e) {
+function Hn(e) {
   return typeof e != "number" || !Number.isInteger(e) || e <= 0 ? null : e;
 }
 function so(e, t, n, r) {
   if (!n || n <= 1 || !t)
-    return Bt(e), r;
-  const a = n, i = Ot.get(e) ?? { expected: a, chunks: /* @__PURE__ */ new Map() };
-  if (i.expected !== a && (i.chunks.clear(), i.expected = a), i.chunks.set(t, r), Ot.set(e, i), i.chunks.size < a)
+    return Wt(e), r;
+  const a = n, i = Bt.get(e) ?? { expected: a, chunks: /* @__PURE__ */ new Map() };
+  if (i.expected !== a && (i.chunks.clear(), i.expected = a), i.chunks.set(t, r), Bt.set(e, i), i.chunks.size < a)
     return null;
   const o = [];
-  for (let s = 1; s <= a; s += 1) {
-    const c = i.chunks.get(s);
-    c && Array.isArray(c) && o.push(...c);
+  for (let c = 1; c <= a; c += 1) {
+    const s = i.chunks.get(c);
+    s && Array.isArray(s) && o.push(...s);
   }
-  return Bt(e), o;
+  return Wt(e), o;
 }
-function Hn(e, t) {
+function In(e, t) {
   const n = oo(e);
   if (!n)
     return console.warn("handlePortfolioPositionsUpdate: Ungültiges Update:", e), !1;
-  const r = e?.error, a = Mn(e?.chunk_index), i = Mn(e?.chunk_count), o = Nt(e?.positions ?? []);
-  r && Bt(n);
-  const s = r ? o : so(n, a, i, o);
-  if (!r && s === null)
+  const r = e?.error, a = Hn(e?.chunk_index), i = Hn(e?.chunk_count), o = Dt(e?.positions ?? []);
+  r && Wt(n);
+  const c = r ? o : so(n, a, i, o);
+  if (!r && c === null)
     return !0;
-  const c = r ? o : s ?? [];
+  const s = r ? o : c ?? [];
   Ji(n, e);
-  const l = Et(n);
-  let u = c;
+  const l = xt(n);
+  let u = s;
   if (!r && l) {
-    const p = st(n, c);
-    ct(n, p), u = p;
+    const p = ct(n, s);
+    lt(n, p), u = p;
   }
-  const d = Lr(t, n, u, r);
+  const d = Rr(t, n, u, r);
   if (d.applied) {
     if (ue.delete(n), !r && !l) {
-      const p = st(n, u);
-      ct(n, p);
+      const p = ct(n, u);
+      lt(n, p);
     }
   } else
-    r || d.reason !== "hidden" || l ? (ue.set(n, { positions: u, error: r }), Rr(t, n)) : (ue.delete(n), Be.delete(n));
+    r || d.reason !== "hidden" || l ? (ue.set(n, { positions: u, error: r }), Mr(t, n)) : (ue.delete(n), Ye.delete(n));
   if (!r && o.length > 0) {
     const p = Array.from(
       new Set(
@@ -1931,14 +1931,14 @@ function co(e, t) {
   if (Array.isArray(e)) {
     let n = !1;
     for (const r of e)
-      Hn(r, t) && (n = !0);
+      In(r, t) && (n = !0);
     !n && e.length && console.warn("handlePortfolioPositionsUpdate: Kein gültiges Element im Array:", e);
     return;
   }
-  Hn(e, t);
+  In(e, t);
 }
-function Mr(e) {
-  const { renderPositionsTable: t, applyGainPctMetadata: n } = cn();
+function Hr(e) {
+  const { renderPositionsTable: t, applyGainPctMetadata: n } = un();
   try {
     if (typeof t == "function")
       return t(e);
@@ -1947,7 +1947,7 @@ function Mr(e) {
   if (e.length === 0)
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
   const r = e.map((i) => {
-    const o = Ln(i);
+    const o = Rn(i);
     return {
       name: F(i.name),
       current_holdings: i.current_holdings,
@@ -1973,9 +1973,9 @@ function Mr(e) {
     const o = i.content.querySelector("table");
     if (o) {
       o.classList.add("sortable-positions");
-      const s = o.querySelectorAll("thead th"), c = ["name", "current_holdings", "purchase_value", "current_value", "gain_abs", "gain_pct"];
-      s.forEach((d, p) => {
-        const f = c[p];
+      const c = o.querySelectorAll("thead th"), s = ["name", "current_holdings", "purchase_value", "current_value", "gain_abs", "gain_pct"];
+      c.forEach((d, p) => {
+        const f = s[p];
         if (!f) return;
         d.setAttribute("data-sort-key", f), d.classList.add("sortable-col"), d.setAttribute("role", "button"), d.setAttribute("tabindex", "0"), d.setAttribute("aria-sort", "none");
         const g = d.textContent || "";
@@ -2000,7 +2000,7 @@ function Mr(e) {
           const g = p.cells.item(4);
           if (!g)
             return;
-          const m = e[f], y = Ln(m), h = typeof y?.gain_pct == "number" && Number.isFinite(y.gain_pct) ? y.gain_pct : null, b = h != null ? `${h.toLocaleString("de-DE", {
+          const m = e[f], y = Rn(m), h = typeof y?.gain_pct == "number" && Number.isFinite(y.gain_pct) ? y.gain_pct : null, b = h != null ? `${h.toLocaleString("de-DE", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
           })} %` : "—", _ = h == null ? "neutral" : h > 0 ? "positive" : h < 0 ? "negative" : "neutral";
@@ -2015,7 +2015,7 @@ function Mr(e) {
 }
 function lo(e) {
   if (!e) return;
-  const { updatePortfolioFooter: t } = cn();
+  const { updatePortfolioFooter: t } = un();
   if (typeof t == "function")
     try {
       t(e);
@@ -2047,9 +2047,9 @@ function lo(e) {
       fxUnavailable: !1
     }
   ), i = a.valueRows > 0 && a.incompleteRows === 0, o = i && a.sumPurchase > 0 ? a.sumGainAbs / a.sumPurchase * 100 : null;
-  let s = e.querySelector("tr.footer-row");
-  s || (s = document.createElement("tr"), s.className = "footer-row", e.querySelector("tbody")?.appendChild(s));
-  const c = Math.round(a.sumPositions).toLocaleString("de-DE"), l = {
+  let c = e.querySelector("tr.footer-row");
+  c || (c = document.createElement("tr"), c.className = "footer-row", e.querySelector("tbody")?.appendChild(c));
+  const s = Math.round(a.sumPositions).toLocaleString("de-DE"), l = {
     fx_unavailable: a.fxUnavailable || !i,
     current_value: i ? a.sumCurrent : null,
     performance: i ? {
@@ -2061,17 +2061,17 @@ function lo(e) {
       coverage_ratio: 1
     } : null
   }, u = { hasValue: i }, d = M("current_value", l.current_value, l, u), p = i ? a.sumGainAbs : null, f = i ? o : null, g = M("gain_abs", p, l, u), m = M("gain_pct", f, l, u);
-  s.innerHTML = `
+  c.innerHTML = `
     <td>Summe</td>
-    <td class="align-right">${c}</td>
+    <td class="align-right">${s}</td>
     <td class="align-right">${d}</td>
     <td class="align-right">${g}</td>
     <td class="align-right">${m}</td>
   `;
-  const y = s.cells.item(3);
-  y && (y.dataset.gainPct = i && typeof o == "number" ? `${Wt(o)} %` : "—", y.dataset.gainSign = i && typeof o == "number" ? o > 0 ? "positive" : o < 0 ? "negative" : "neutral" : "neutral"), s.dataset.positionCount = Math.round(a.sumPositions).toString(), s.dataset.currentValue = i ? a.sumCurrent.toString() : "", s.dataset.purchaseSum = i ? a.sumPurchase.toString() : "", s.dataset.gainAbs = i ? a.sumGainAbs.toString() : "", s.dataset.gainPct = i && typeof o == "number" ? o.toString() : "", s.dataset.hasValue = i ? "true" : "false", s.dataset.fxUnavailable = a.fxUnavailable || !i ? "true" : "false";
+  const y = c.cells.item(3);
+  y && (y.dataset.gainPct = i && typeof o == "number" ? `${Yt(o)} %` : "—", y.dataset.gainSign = i && typeof o == "number" ? o > 0 ? "positive" : o < 0 ? "negative" : "neutral" : "neutral"), c.dataset.positionCount = Math.round(a.sumPositions).toString(), c.dataset.currentValue = i ? a.sumCurrent.toString() : "", c.dataset.purchaseSum = i ? a.sumPurchase.toString() : "", c.dataset.gainAbs = i ? a.sumGainAbs.toString() : "", c.dataset.gainPct = i && typeof o == "number" ? o.toString() : "", c.dataset.hasValue = i ? "true" : "false", c.dataset.fxUnavailable = a.fxUnavailable || !i ? "true" : "false";
 }
-function In(e) {
+function zn(e) {
   if (typeof e == "number" && Number.isFinite(e))
     return e;
   if (typeof e == "string") {
@@ -2080,29 +2080,29 @@ function In(e) {
   }
   return 0;
 }
-function Wt(e) {
-  return (Pt(e, { fallback: 0 }) ?? 0).toLocaleString("de-DE", {
+function Yt(e) {
+  return (Nt(e, { fallback: 0 }) ?? 0).toLocaleString("de-DE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 }
-function Hr(e, t, n) {
+function Ir(e, t, n) {
   const r = n ?? document, i = (Array.isArray(e) ? e : []).reduce((d, p) => {
-    const f = p.balance ?? p.current_value ?? p.value, g = In(f);
+    const f = p.balance ?? p.current_value ?? p.value, g = zn(f);
     return d + g;
-  }, 0), s = (Array.isArray(t) ? t : []).reduce((d, p) => {
-    const f = p.current_value ?? p.value, g = In(f);
+  }, 0), c = (Array.isArray(t) ? t : []).reduce((d, p) => {
+    const f = p.current_value ?? p.value, g = zn(f);
     return d + g;
-  }, 0), c = i + s, l = r.querySelector("#headerMeta");
+  }, 0), s = i + c, l = r.querySelector("#headerMeta");
   if (!l) {
     console.warn("updateTotalWealth: #headerMeta nicht gefunden.");
     return;
   }
   const u = l.querySelector("strong") || l.querySelector(".total-wealth-value");
-  u ? u.textContent = `${Wt(c)} €` : l.textContent = `💰 Gesamtvermögen: ${Wt(c)} €`, l.dataset.totalWealthEur = c.toString();
+  u ? u.textContent = `${Yt(s)} €` : l.textContent = `💰 Gesamtvermögen: ${Yt(s)} €`, l.dataset.totalWealthEur = s.toString();
 }
 function uo(e, t) {
-  const n = typeof e == "string" ? e : e?.last_file_update, r = He(n) ?? "";
+  const n = typeof e == "string" ? e : e?.last_file_update, r = ze(n) ?? "";
   if (!t) {
     console.warn("handleLastFileUpdate: root fehlt");
     return;
@@ -2125,7 +2125,7 @@ function Nc(e) {
   if (t == null)
     return;
   const n = e.dataset.sortKey || t.dataset.defaultSort || "name", a = (e.dataset.sortDir || t.dataset.defaultDir || "asc") === "desc" ? "desc" : "asc";
-  e.dataset.sortKey = n, e.dataset.sortDir = a, dn(t, n, a, !0);
+  e.dataset.sortKey = n, e.dataset.sortDir = a, pn(t, n, a, !0);
 }
 const xc = {
   getPortfolioPositionsCacheSnapshot: Ci,
@@ -2137,17 +2137,17 @@ const xc = {
     ue.set(e, { positions: t, error: n });
   },
   clearPendingUpdates() {
-    ue.clear(), Be.clear();
+    ue.clear(), Ye.clear();
   },
-  renderPositionsTableInline: Mr
+  renderPositionsTableInline: Hr
 };
-function rt(e) {
+function at(e) {
   return e == null ? 0 : parseFloat(
     e.replace(/\u00A0/g, " ").replace(/[€%]/g, "").replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "")
   ) || 0;
 }
-const zn = 50;
-function Vn(e, t) {
+const Vn = 50;
+function Un(e, t) {
   try {
     t();
   } catch (n) {
@@ -2157,7 +2157,7 @@ function Vn(e, t) {
 function fo(e, t, n) {
   let r = null;
   const a = (l) => {
-    l < -zn ? Vn("left", t) : l > zn && Vn("right", n);
+    l < -Vn ? Un("left", t) : l > Vn && Un("right", n);
   }, i = (l) => {
     l.touches.length === 1 && (r = l.touches[0].clientX);
   }, o = (l) => {
@@ -2169,12 +2169,12 @@ function fo(e, t, n) {
     }
     const u = l.changedTouches[0];
     a(u.clientX - r), r = null;
-  }, s = (l) => {
-    r = l.clientX;
   }, c = (l) => {
+    r = l.clientX;
+  }, s = (l) => {
     r !== null && (a(l.clientX - r), r = null);
   };
-  e.addEventListener("touchstart", i, { passive: !0 }), e.addEventListener("touchend", o, { passive: !0 }), e.addEventListener("mousedown", s), e.addEventListener("mouseup", c);
+  e.addEventListener("touchstart", i, { passive: !0 }), e.addEventListener("touchend", o, { passive: !0 }), e.addEventListener("mousedown", c), e.addEventListener("mouseup", s);
 }
 const po = [
   "name",
@@ -2187,23 +2187,23 @@ const po = [
   "gain_abs",
   "gain_pct"
 ];
-function Tt(e) {
+function Lt(e) {
   return po.includes(e);
 }
-function Lt(e) {
+function Rt(e) {
   return e === "asc" || e === "desc";
 }
-function Ir(e) {
+function zr(e) {
   return (e ?? []).filter((t) => !t.key.endsWith("-coverage"));
 }
-function Un(e) {
-  return Ir(e).filter(
+function qn(e) {
+  return zr(e).filter(
     (t) => !t.key.startsWith("provenance-")
   );
 }
-let ut = null, dt = null;
-const qn = { min: 2, max: 6 };
-function Ve(e) {
+let dt = null, ft = null;
+const On = { min: 2, max: 6 };
+function qe(e) {
   return ge(e);
 }
 function go(e) {
@@ -2218,7 +2218,7 @@ function ho(e) {
   const n = t.toUpperCase();
   return /^[A-Z]{3}$/.test(n) ? n : n === "€" ? "EUR" : null;
 }
-function On(e, t, n = null) {
+function Bn(e, t, n = null) {
   for (const r of t) {
     const a = ho(e[r]);
     if (a)
@@ -2226,19 +2226,19 @@ function On(e, t, n = null) {
   }
   return n;
 }
-function Bn(e, t) {
+function Wn(e, t) {
   return go(e) ? `${e.toLocaleString("de-DE", {
-    minimumFractionDigits: qn.min,
-    maximumFractionDigits: qn.max
+    minimumFractionDigits: On.min,
+    maximumFractionDigits: On.max
   })}${t ? ` ${t}` : ""}` : null;
 }
 function mo(e) {
-  const t = e, n = e.average_cost ?? null, r = e.aggregation ?? null, a = On(t, [
+  const t = e, n = e.average_cost ?? null, r = e.aggregation ?? null, a = Bn(t, [
     "security_currency_code",
     "security_currency",
     "native_currency_code",
     "native_currency"
-  ], e.currency_code ?? null), i = On(
+  ], e.currency_code ?? null), i = Bn(
     t,
     [
       "account_currency_code",
@@ -2247,16 +2247,16 @@ function mo(e) {
       "currency_code"
     ],
     a === "EUR" ? "EUR" : null
-  ) ?? "EUR", o = Ve(n?.native), s = Ve(n?.security), c = Ve(n?.account), l = Ve(n?.eur), u = s ?? o, d = l ?? (i === "EUR" ? c : null), p = a ?? i, f = p === "EUR";
+  ) ?? "EUR", o = qe(n?.native), c = qe(n?.security), s = qe(n?.account), l = qe(n?.eur), u = c ?? o, d = l ?? (i === "EUR" ? s : null), p = a ?? i, f = p === "EUR";
   let g, m;
-  f ? (g = "EUR", m = d ?? u ?? c ?? null) : u != null ? (g = p, m = u) : c != null ? (g = i, m = c) : (g = "EUR", m = d ?? null);
-  const y = Bn(m, g), h = f ? null : Bn(d, "EUR"), b = !!h && h !== y, _ = [], v = [];
+  f ? (g = "EUR", m = d ?? u ?? s ?? null) : u != null ? (g = p, m = u) : s != null ? (g = i, m = s) : (g = "EUR", m = d ?? null);
+  const y = Wn(m, g), h = f ? null : Wn(d, "EUR"), b = !!h && h !== y, _ = [], v = [];
   y ? (_.push(
     `<span class="purchase-price purchase-price--primary">${y}</span>`
   ), v.push(y.replace(/\u00A0/g, " "))) : (_.push('<span class="missing-value" role="note" aria-label="Kein Kaufpreis verfügbar" title="Kein Kaufpreis verfügbar">—</span>'), v.push("Kein Kaufpreis verfügbar")), b && h && (_.push(
     `<span class="purchase-price purchase-price--secondary">${h}</span>`
   ), v.push(h.replace(/\u00A0/g, " ")));
-  const w = _.join("<br>"), A = Ve(r?.purchase_value_eur) ?? 0, P = v.join(", ");
+  const w = _.join("<br>"), A = qe(r?.purchase_value_eur) ?? 0, P = v.join(", ");
   return { markup: w, sortValue: A, ariaLabel: P };
 }
 function yo(e) {
@@ -2270,19 +2270,19 @@ function yo(e) {
     const d = r * t;
     d && (i = a / d * 100);
   }
-  const s = we(e.performance)?.day_change ?? null;
-  if (a == null && s?.price_change_eur != null && (a = s.price_change_eur * t), i == null && s?.change_pct != null && (i = s.change_pct), a == null && i != null) {
+  const c = we(e.performance)?.day_change ?? null;
+  if (a == null && c?.price_change_eur != null && (a = c.price_change_eur * t), i == null && c?.change_pct != null && (i = c.change_pct), a == null && i != null) {
     const u = ge(e.current_value);
     if (u != null) {
       const d = u / (1 + i / 100);
       d && (a = u - d);
     }
   }
-  const c = a != null && Number.isFinite(a) ? Math.round(a * 100) / 100 : null, l = i != null && Number.isFinite(i) ? Math.round(i * 100) / 100 : null;
-  return { value: c, pct: l };
+  const s = a != null && Number.isFinite(a) ? Math.round(a * 100) / 100 : null, l = i != null && Number.isFinite(i) ? Math.round(i * 100) / 100 : null;
+  return { value: s, pct: l };
 }
-const ft = /* @__PURE__ */ new Set();
-function zr(e) {
+const pt = /* @__PURE__ */ new Set();
+function Vr(e) {
   if (!e)
     return;
   Array.from(e.querySelectorAll("tbody tr")).forEach((n) => {
@@ -2294,7 +2294,7 @@ function zr(e) {
     a.querySelector(".positive") ? o = "positive" : a.querySelector(".negative") && (o = "negative"), r.dataset.gainPct = i, r.dataset.gainSign = o;
   });
 }
-function je(e) {
+function Xe(e) {
   const t = e.filter((i) => Number(i.current_holdings) > 0);
   if (t.length === 0)
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
@@ -2309,7 +2309,7 @@ function je(e) {
     { key: "gain_abs", label: "Gesamt +/-", align: "right" },
     { key: "gain_pct", label: "Gesamt %", align: "right" }
   ], r = t.map((i) => {
-    const o = we(i.performance), s = typeof o?.gain_abs == "number" ? o.gain_abs : null, c = typeof o?.gain_pct == "number" ? o.gain_pct : null, l = yo(i), u = typeof i.purchase_value == "number" || typeof i.purchase_value == "string" ? i.purchase_value : null;
+    const o = we(i.performance), c = typeof o?.gain_abs == "number" ? o.gain_abs : null, s = typeof o?.gain_pct == "number" ? o.gain_pct : null, l = yo(i), u = typeof i.purchase_value == "number" || typeof i.purchase_value == "string" ? i.purchase_value : null;
     return {
       name: typeof i.name == "string" ? F(i.name) : typeof i.name == "number" ? String(i.name) : "",
       current_holdings: typeof i.current_holdings == "number" || typeof i.current_holdings == "string" ? i.current_holdings : null,
@@ -2318,8 +2318,8 @@ function je(e) {
       current_value: typeof i.current_value == "number" || typeof i.current_value == "string" ? i.current_value : null,
       day_change_abs: l.value,
       day_change_pct: l.pct,
-      gain_abs: s,
-      gain_pct: c,
+      gain_abs: c,
+      gain_pct: s,
       performance: o
     };
   }), a = Se(r, n, ["purchase_value", "current_value", "day_change_abs", "gain_abs"]);
@@ -2329,9 +2329,9 @@ function je(e) {
     const o = i.content.querySelector("table");
     if (o) {
       o.classList.add("sortable-positions");
-      const s = Array.from(o.querySelectorAll("thead th"));
+      const c = Array.from(o.querySelectorAll("thead th"));
       return n.forEach((l, u) => {
-        const d = s.at(u);
+        const d = c.at(u);
         if (!d)
           return;
         d.setAttribute("data-sort-key", l.key), d.classList.add("sortable-col"), d.setAttribute("role", "button"), d.setAttribute("tabindex", "0"), d.setAttribute("aria-sort", "none");
@@ -2357,7 +2357,7 @@ function je(e) {
         }
         const m = l.cells.item(8);
         m && m.classList.add("gain-pct-cell");
-      }), o.dataset.defaultSort = "name", o.dataset.defaultDir = "asc", zr(o), o.outerHTML;
+      }), o.dataset.defaultSort = "name", o.dataset.defaultDir = "asc", Vr(o), o.outerHTML;
     }
   } catch (i) {
     console.warn("renderPositionsTable: Konnte Sortier-Metadaten nicht injizieren:", i);
@@ -2365,8 +2365,8 @@ function je(e) {
   return a;
 }
 function bo(e) {
-  const t = Nt(e ?? []);
-  return je(t);
+  const t = Dt(e ?? []);
+  return Xe(t);
 }
 function _o(e, t) {
   if (!t) return;
@@ -2382,22 +2382,22 @@ function _o(e, t) {
     const o = i.closest("button, a");
     if (o && r.contains(o))
       return;
-    const s = i.closest("tr[data-security]");
-    if (!s || !r.contains(s))
+    const c = i.closest("tr[data-security]");
+    if (!c || !r.contains(c))
       return;
-    const c = s.getAttribute("data-security");
-    if (c)
+    const s = c.getAttribute("data-security");
+    if (s)
       try {
-        Ea(c) || console.warn("attachSecurityDetailDelegation: Detail-Tab konnte nicht geöffnet werden für", c);
+        Ea(s) || console.warn("attachSecurityDetailDelegation: Detail-Tab konnte nicht geöffnet werden für", s);
       } catch (l) {
         console.error("attachSecurityDetailDelegation: Fehler beim Öffnen des Detail-Tabs", l);
       }
   })));
 }
-function Ge(e, t) {
+function Ze(e, t) {
   _o(e, t);
 }
-function Vr(e) {
+function Ur(e) {
   console.debug("buildExpandablePortfolioTable: render", e.length, "portfolios");
   const t = (S) => S == null || typeof S != "string" && typeof S != "number" && typeof S != "boolean" ? "" : F(S);
   let n = '<table class="expandable-portfolio-table"><thead><tr>';
@@ -2415,17 +2415,17 @@ function Vr(e) {
     const D = S.align === "right" ? ' class="align-right"' : "";
     n += `<th${D}>${S.label}</th>`;
   }), n += "</tr></thead><tbody>", e.forEach((S) => {
-    const D = Number.isFinite(S.position_count) ? S.position_count : 0, R = Number.isFinite(S.purchase_sum) ? S.purchase_sum : 0, K = S.hasValue && typeof S.current_value == "number" && Number.isFinite(S.current_value) ? S.current_value : null, T = K !== null, z = S.performance, B = typeof S.gain_abs == "number" ? S.gain_abs : typeof z?.gain_abs == "number" ? z.gain_abs : null, Y = typeof S.gain_pct == "number" ? S.gain_pct : typeof z?.gain_pct == "number" ? z.gain_pct : null, X = z && typeof z == "object" ? z.day_change : null, G = typeof S.day_change_abs == "number" ? S.day_change_abs : X && typeof X == "object" ? X.value_change_eur ?? X.price_change_eur : null, Ie = typeof S.day_change_pct == "number" ? S.day_change_pct : X && typeof X == "object" && typeof X.change_pct == "number" ? X.change_pct : null, Ce = S.fx_unavailable && T, xa = typeof S.coverage_ratio == "number" && Number.isFinite(S.coverage_ratio) ? S.coverage_ratio : "", Da = typeof S.provenance == "string" ? S.provenance : "", ka = typeof S.metric_run_uuid == "string" ? S.metric_run_uuid : "", ze = ft.has(S.uuid), Fa = ze ? "portfolio-toggle expanded" : "portfolio-toggle", An = `portfolio-details-${S.uuid}`, J = {
+    const D = Number.isFinite(S.position_count) ? S.position_count : 0, R = Number.isFinite(S.purchase_sum) ? S.purchase_sum : 0, K = S.hasValue && typeof S.current_value == "number" && Number.isFinite(S.current_value) ? S.current_value : null, T = K !== null, z = S.performance, B = typeof S.gain_abs == "number" ? S.gain_abs : typeof z?.gain_abs == "number" ? z.gain_abs : null, Y = typeof S.gain_pct == "number" ? S.gain_pct : typeof z?.gain_pct == "number" ? z.gain_pct : null, X = z && typeof z == "object" ? z.day_change : null, G = typeof S.day_change_abs == "number" ? S.day_change_abs : X && typeof X == "object" ? X.value_change_eur ?? X.price_change_eur : null, Ve = typeof S.day_change_pct == "number" ? S.day_change_pct : X && typeof X == "object" && typeof X.change_pct == "number" ? X.change_pct : null, Ce = S.fx_unavailable && T, xa = typeof S.coverage_ratio == "number" && Number.isFinite(S.coverage_ratio) ? S.coverage_ratio : "", Da = typeof S.provenance == "string" ? S.provenance : "", ka = typeof S.metric_run_uuid == "string" ? S.metric_run_uuid : "", Ue = pt.has(S.uuid), Fa = Ue ? "portfolio-toggle expanded" : "portfolio-toggle", Pn = `portfolio-details-${S.uuid}`, J = {
       fx_unavailable: S.fx_unavailable,
       purchase_value: R,
       current_value: K,
       day_change_abs: G,
-      day_change_pct: Ie,
+      day_change_pct: Ve,
       gain_abs: B,
       gain_pct: Y
-    }, Ee = { hasValue: T }, $a = M("purchase_value", J.purchase_value, J, Ee), Ta = M("current_value", J.current_value, J, Ee), La = M("day_change_abs", J.day_change_abs, J, Ee), Ra = M("day_change_pct", J.day_change_pct, J, Ee), Ma = M("gain_abs", J.gain_abs, J, Ee), Ha = M("gain_pct", J.gain_pct, J, Ee), Pn = T && typeof Y == "number" && Number.isFinite(Y) ? `${re(Y)} %` : "", Ia = T && typeof Y == "number" && Number.isFinite(Y) ? Y > 0 ? "positive" : Y < 0 ? "negative" : "neutral" : "", za = T && typeof K == "number" && Number.isFinite(K) ? K : "", Va = T && typeof B == "number" && Number.isFinite(B) ? B : "", Ua = T && typeof Y == "number" && Number.isFinite(Y) ? Y : "", qa = T && typeof G == "number" && Number.isFinite(G) ? G : "", Oa = T && typeof Ie == "number" && Number.isFinite(Ie) ? Ie : "", Ba = String(D);
-    let Dt = "";
-    Pn && (Dt = ` data-gain-pct="${t(Pn)}" data-gain-sign="${t(Ia)}"`), Ce && (Dt += ' data-partial="true"'), n += `<tr class="portfolio-row"
+    }, Ne = { hasValue: T }, $a = M("purchase_value", J.purchase_value, J, Ne), Ta = M("current_value", J.current_value, J, Ne), La = M("day_change_abs", J.day_change_abs, J, Ne), Ra = M("day_change_pct", J.day_change_pct, J, Ne), Ma = M("gain_abs", J.gain_abs, J, Ne), Ha = M("gain_pct", J.gain_pct, J, Ne), En = T && typeof Y == "number" && Number.isFinite(Y) ? `${re(Y)} %` : "", Ia = T && typeof Y == "number" && Number.isFinite(Y) ? Y > 0 ? "positive" : Y < 0 ? "negative" : "neutral" : "", za = T && typeof K == "number" && Number.isFinite(K) ? K : "", Va = T && typeof B == "number" && Number.isFinite(B) ? B : "", Ua = T && typeof Y == "number" && Number.isFinite(Y) ? Y : "", qa = T && typeof G == "number" && Number.isFinite(G) ? G : "", Oa = T && typeof Ve == "number" && Number.isFinite(Ve) ? Ve : "", Ba = String(D);
+    let kt = "";
+    En && (kt = ` data-gain-pct="${t(En)}" data-gain-sign="${t(Ia)}"`), Ce && (kt += ' data-partial="true"'), n += `<tr class="portfolio-row"
                   data-portfolio="${S.uuid}"
                   data-position-count="${Ba}"
                   data-current-value="${t(za)}"
@@ -2439,31 +2439,31 @@ function Vr(e) {
                 data-coverage-ratio="${t(xa)}"
                 data-provenance="${t(Da)}"
                 data-metric-run-uuid="${t(ka)}">`;
-    const Wa = F(S.name), Ya = Fr(Ir(S.badges), {
+    const Wa = F(S.name), Ya = $r(zr(S.badges), {
       containerClass: "portfolio-badges"
     });
     n += `<td>
         <button type="button"
                 class="${Fa}"
                 data-portfolio="${S.uuid}"
-                aria-expanded="${ze ? "true" : "false"}"
-                aria-controls="${An}">
-          <span class="caret">${ze ? "▼" : "▶"}</span>
+                aria-expanded="${Ue ? "true" : "false"}"
+                aria-controls="${Pn}">
+          <span class="caret">${Ue ? "▼" : "▶"}</span>
           <span class="portfolio-name">${Wa}</span>${Ya}
         </button>
       </td>`;
     const Ka = D.toLocaleString("de-DE");
-    n += `<td class="align-right">${Ka}</td>`, n += `<td class="align-right">${$a}</td>`, n += `<td class="align-right">${Ta}</td>`, n += `<td class="align-right">${La}</td>`, n += `<td class="align-right">${Ra}</td>`, n += `<td class="align-right"${Dt}>${Ma}</td>`, n += `<td class="align-right gain-pct-cell">${Ha}</td>`, n += "</tr>", n += `<tr class="portfolio-details${ze ? "" : " hidden"}"
+    n += `<td class="align-right">${Ka}</td>`, n += `<td class="align-right">${$a}</td>`, n += `<td class="align-right">${Ta}</td>`, n += `<td class="align-right">${La}</td>`, n += `<td class="align-right">${Ra}</td>`, n += `<td class="align-right"${kt}>${Ma}</td>`, n += `<td class="align-right gain-pct-cell">${Ha}</td>`, n += "</tr>", n += `<tr class="portfolio-details${Ue ? "" : " hidden"}"
                 data-portfolio="${S.uuid}"
-                id="${An}"
+                id="${Pn}"
                 role="region"
                 aria-label="Positionen für ${S.name}">
       <td colspan="${r.length.toString()}">
-        <div class="positions-container">${ze ? Et(S.uuid) ? je(Sr(S.uuid)) : un("Lade Positionen...") : ""}</div>
+        <div class="positions-container">${Ue ? xt(S.uuid) ? Xe(wr(S.uuid)) : fn("Lade Positionen...") : ""}</div>
       </td>
     </tr>`;
   });
-  const a = e.filter((S) => typeof S.current_value == "number" && Number.isFinite(S.current_value)), i = e.reduce((S, D) => S + (Number.isFinite(D.position_count) ? D.position_count : 0), 0), o = a.reduce((S, D) => typeof D.current_value == "number" && Number.isFinite(D.current_value) ? S + D.current_value : S, 0), s = a.reduce((S, D) => typeof D.purchase_sum == "number" && Number.isFinite(D.purchase_sum) ? S + D.purchase_sum : S, 0), c = a.map((S) => {
+  const a = e.filter((S) => typeof S.current_value == "number" && Number.isFinite(S.current_value)), i = e.reduce((S, D) => S + (Number.isFinite(D.position_count) ? D.position_count : 0), 0), o = a.reduce((S, D) => typeof D.current_value == "number" && Number.isFinite(D.current_value) ? S + D.current_value : S, 0), c = a.reduce((S, D) => typeof D.purchase_sum == "number" && Number.isFinite(D.purchase_sum) ? S + D.purchase_sum : S, 0), s = a.map((S) => {
     if (typeof S.day_change_abs == "number")
       return S.day_change_abs;
     const D = S.performance && typeof S.performance == "object" ? S.performance.day_change : null;
@@ -2473,17 +2473,17 @@ function Vr(e) {
         return R;
     }
     return null;
-  }).filter((S) => typeof S == "number" && Number.isFinite(S)), l = c.reduce((S, D) => S + D, 0), u = a.reduce((S, D) => {
+  }).filter((S) => typeof S == "number" && Number.isFinite(S)), l = s.reduce((S, D) => S + D, 0), u = a.reduce((S, D) => {
     if (typeof D.performance?.gain_abs == "number" && Number.isFinite(D.performance.gain_abs))
       return S + D.performance.gain_abs;
     const R = typeof D.current_value == "number" && Number.isFinite(D.current_value) ? D.current_value : 0, K = typeof D.purchase_sum == "number" && Number.isFinite(D.purchase_sum) ? D.purchase_sum : 0;
     return S + (R - K);
-  }, 0), d = a.length > 0, p = a.length !== e.length, f = c.length > 0, g = f && d && o !== 0 ? (() => {
+  }, 0), d = a.length > 0, p = a.length !== e.length, f = s.length > 0, g = f && d && o !== 0 ? (() => {
     const S = o - l;
     return S ? l / S * 100 : null;
-  })() : null, m = d && s > 0 ? u / s * 100 : null, y = {
+  })() : null, m = d && c > 0 ? u / c * 100 : null, y = {
     fx_unavailable: p,
-    purchase_value: d ? s : null,
+    purchase_value: d ? c : null,
     current_value: d ? o : null,
     day_change_abs: f ? l : null,
     day_change_pct: f ? g : null,
@@ -2496,7 +2496,7 @@ function Vr(e) {
     k = ` data-gain-pct="${t(S)}" data-gain-sign="${t(D)}"`;
   }
   p && (k += ' data-partial="true"');
-  const I = String(Math.round(i)), C = d ? String(o) : "", x = d ? String(s) : "", U = f ? String(l) : "", N = f && typeof g == "number" && Number.isFinite(g) ? String(g) : "", $ = d ? String(u) : "", j = d && typeof m == "number" && Number.isFinite(m) ? String(m) : "";
+  const I = String(Math.round(i)), C = d ? String(o) : "", x = d ? String(c) : "", U = f ? String(l) : "", N = f && typeof g == "number" && Number.isFinite(g) ? String(g) : "", $ = d ? String(u) : "", j = d && typeof m == "number" && Number.isFinite(m) ? String(m) : "";
   return n += `<tr class="footer-row"
       data-position-count="${I}"
       data-current-value="${t(C)}"
@@ -2533,13 +2533,13 @@ function vo(e) {
   }
   return document.querySelector(".portfolio-table table.expandable-portfolio-table") || document.querySelector(".portfolio-table table");
 }
-function Ue(e) {
+function Oe(e) {
   if (e === void 0)
     return null;
   const t = Number(e);
   return Number.isFinite(t) ? t : null;
 }
-function Ur(e) {
+function qr(e) {
   const t = vo(e);
   if (!t)
     return;
@@ -2549,9 +2549,9 @@ function Ur(e) {
   const r = Array.from(n.querySelectorAll("tr.portfolio-row"));
   if (!r.length)
     return;
-  let a = 0, i = 0, o = 0, s = 0, c = 0, l = !1, u = !1, d = !0, p = !1;
+  let a = 0, i = 0, o = 0, c = 0, s = 0, l = !1, u = !1, d = !0, p = !1;
   for (const R of r) {
-    const K = Ue(R.dataset.positionCount);
+    const K = Oe(R.dataset.positionCount);
     K != null && (a += K), R.dataset.fxUnavailable === "true" && (p = !0);
     const T = R.dataset.hasValue;
     if (!!(T === "false" || T === "0" || T === "" || T == null)) {
@@ -2559,16 +2559,16 @@ function Ur(e) {
       continue;
     }
     l = !0;
-    const B = Ue(R.dataset.currentValue), Y = Ue(R.dataset.gainAbs), X = Ue(R.dataset.purchaseSum), G = Ue(R.dataset.dayChange);
+    const B = Oe(R.dataset.currentValue), Y = Oe(R.dataset.gainAbs), X = Oe(R.dataset.purchaseSum), G = Oe(R.dataset.dayChange);
     if (B == null || Y == null || X == null) {
       d = !1;
       continue;
     }
-    i += B, s += Y, o += X, G != null && (c += G, u = !0);
+    i += B, c += Y, o += X, G != null && (s += G, u = !0);
   }
-  const f = l && d, g = f && o > 0 ? s / o * 100 : null, m = u && f && i !== 0 ? (() => {
-    const R = i - c;
-    return R ? c / R * 100 : null;
+  const f = l && d, g = f && o > 0 ? c / o * 100 : null, m = u && f && i !== 0 ? (() => {
+    const R = i - s;
+    return R ? s / R * 100 : null;
   })() : null;
   let y = Array.from(n.children).find(
     (R) => R instanceof HTMLTableRowElement && R.classList.contains("footer-row")
@@ -2578,9 +2578,9 @@ function Ur(e) {
     fx_unavailable: p || !f,
     purchase_value: f ? o : null,
     current_value: f ? i : null,
-    day_change_abs: u && f ? c : null,
+    day_change_abs: u && f ? s : null,
     day_change_pct: u && f ? m : null,
-    gain_abs: f ? s : null,
+    gain_abs: f ? c : null,
     gain_pct: f ? g : null
   }, _ = { hasValue: f }, v = { hasValue: u && f }, w = M("purchase_value", b.purchase_value, b, _), A = M("current_value", b.current_value, b, _), P = M("day_change_abs", b.day_change_abs, b, v), E = M("day_change_pct", b.day_change_pct, b, v), k = M("gain_abs", b.gain_abs, b, _), I = M("gain_pct", b.gain_pct, b, _), C = t.tHead ? t.tHead.rows.item(0) : null, x = C ? C.cells.length : 0, U = y.cells.length, N = x || U, $ = N > 0 ? N <= 5 : !1, j = f && typeof g == "number" ? `${re(g)} %` : "", S = f && typeof g == "number" ? g > 0 ? "positive" : g < 0 ? "negative" : "neutral" : "neutral";
   $ ? y.innerHTML = `
@@ -2600,9 +2600,9 @@ function Ur(e) {
       <td class="align-right">${I}</td>
     `;
   const D = y.cells.item($ ? 3 : 6);
-  D && (D.dataset.gainPct = j || "—", D.dataset.gainSign = S), y.dataset.positionCount = String(Math.round(a)), y.dataset.currentValue = f ? String(i) : "", y.dataset.purchaseSum = f ? String(o) : "", y.dataset.dayChange = f && u ? String(c) : "", y.dataset.dayChangePct = f && u && typeof m == "number" ? String(m) : "", y.dataset.gainAbs = f ? String(s) : "", y.dataset.gainPct = f && typeof g == "number" ? String(g) : "", y.dataset.hasValue = f ? "true" : "false", y.dataset.fxUnavailable = p ? "true" : "false";
+  D && (D.dataset.gainPct = j || "—", D.dataset.gainSign = S), y.dataset.positionCount = String(Math.round(a)), y.dataset.currentValue = f ? String(i) : "", y.dataset.purchaseSum = f ? String(o) : "", y.dataset.dayChange = f && u ? String(s) : "", y.dataset.dayChangePct = f && u && typeof m == "number" ? String(m) : "", y.dataset.gainAbs = f ? String(c) : "", y.dataset.gainPct = f && typeof g == "number" ? String(g) : "", y.dataset.hasValue = f ? "true" : "false", y.dataset.fxUnavailable = p ? "true" : "false";
 }
-function Xe(e, t) {
+function Je(e, t) {
   if (!t) return;
   const n = e.querySelector(
     `.portfolio-details[data-portfolio="${t}"]`
@@ -2667,7 +2667,7 @@ function Xe(e, t) {
     });
     const _ = a.querySelector(`thead th[data-sort-key="${f}"]`);
     _ && (_.classList.add("sort-active", g === "asc" ? "dir-asc" : "dir-desc"), _.setAttribute("aria-sort", g === "asc" ? "ascending" : "descending")), y.forEach((v) => m.appendChild(v)), h && m.appendChild(h);
-  }, o = r.dataset.sortKey, s = r.dataset.sortDir, c = a.dataset.defaultSort, l = a.dataset.defaultDir, u = Tt(o) ? o : Tt(c) ? c : "name", d = Lt(s) ? s : Lt(l) ? l : "asc";
+  }, o = r.dataset.sortKey, c = r.dataset.sortDir, s = a.dataset.defaultSort, l = a.dataset.defaultDir, u = Lt(o) ? o : Lt(s) ? s : "name", d = Rt(c) ? c : Rt(l) ? l : "asc";
   i(u, d);
   const p = (f) => {
     const g = f.target;
@@ -2676,10 +2676,10 @@ function Xe(e, t) {
     const m = g.closest("th[data-sort-key]");
     if (!m || !a.contains(m)) return;
     const y = m.getAttribute("data-sort-key");
-    if (!Tt(y))
+    if (!Lt(y))
       return;
     let h = "asc";
-    r.dataset.sortKey === y && (h = (Lt(r.dataset.sortDir) ? r.dataset.sortDir : "asc") === "asc" ? "desc" : "asc"), r.dataset.sortKey = y, r.dataset.sortDir = h, i(y, h);
+    r.dataset.sortKey === y && (h = (Rt(r.dataset.sortDir) ? r.dataset.sortDir : "asc") === "asc" ? "desc" : "asc"), r.dataset.sortKey = y, r.dataset.sortDir = h, i(y, h);
   };
   a.addEventListener("click", (f) => {
     p(f);
@@ -2688,7 +2688,7 @@ function Xe(e, t) {
   });
 }
 async function So(e, t, n) {
-  if (!e || !ut || !dt) return;
+  if (!e || !dt || !ft) return;
   const r = t || n.querySelector(
     `.portfolio-details[data-portfolio="${e}"] .positions-container`
   );
@@ -2696,31 +2696,31 @@ async function So(e, t, n) {
     return;
   const a = r.closest(".portfolio-details");
   if (!(a && a.classList.contains("hidden"))) {
-    r.innerHTML = un("Neu laden...");
+    r.innerHTML = fn("Neu laden...");
     try {
-      const i = await _r(
-        ut,
+      const i = await vr(
         dt,
+        ft,
         e
       );
       if (i.error) {
-        const s = typeof i.error == "string" ? i.error : String(i.error);
-        r.innerHTML = `<div class="error">${F(s)} <button class="retry-pos" data-portfolio="${e}">Erneut laden</button></div>`;
+        const c = typeof i.error == "string" ? i.error : String(i.error);
+        r.innerHTML = `<div class="error">${F(c)} <button class="retry-pos" data-portfolio="${e}">Erneut laden</button></div>`;
         return;
       }
-      const o = Nt(
+      const o = Dt(
         Array.isArray(i.positions) ? i.positions : []
       );
-      st(e, o), ct(e, o), r.innerHTML = je(o);
+      ct(e, o), lt(e, o), r.innerHTML = Xe(o);
       try {
-        Xe(n, e);
-      } catch (s) {
-        console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", s);
+        Je(n, e);
+      } catch (c) {
+        console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", c);
       }
       try {
-        Ge(n, e);
-      } catch (s) {
-        console.warn("reloadPortfolioPositions: Security-Listener konnte nicht gebunden werden:", s);
+        Ze(n, e);
+      } catch (c) {
+        console.warn("reloadPortfolioPositions: Security-Listener konnte nicht gebunden werden:", c);
       }
     } catch (i) {
       const o = i instanceof Error ? i.message : String(i);
@@ -2732,9 +2732,9 @@ async function wo(e, t, n = 3e3, r = 50) {
   const a = performance.now();
   return new Promise((i) => {
     const o = () => {
-      const s = e.querySelector(t);
-      if (s) {
-        i(s);
+      const c = e.querySelector(t);
+      if (c) {
+        i(c);
         return;
       }
       if (performance.now() - a > n) {
@@ -2746,7 +2746,7 @@ async function wo(e, t, n = 3e3, r = 50) {
     o();
   });
 }
-function yn(e) {
+function _n(e) {
   const n = (typeof e.__ppReaderAttachToken == "number" ? e.__ppReaderAttachToken : 0) + 1;
   e.__ppReaderAttachToken = n, e.__ppReaderAttachInProgress = !0, (async () => {
     try {
@@ -2765,9 +2765,9 @@ function yn(e) {
             const o = i.target;
             if (!(o instanceof Element))
               return;
-            const s = o.closest(".retry-pos");
-            if (s && r.contains(s)) {
-              const f = s.getAttribute("data-portfolio");
+            const c = o.closest(".retry-pos");
+            if (c && r.contains(c)) {
+              const f = c.getAttribute("data-portfolio");
               if (f) {
                 const m = e.querySelector(
                   `.portfolio-details[data-portfolio="${f}"]`
@@ -2776,41 +2776,41 @@ function yn(e) {
               }
               return;
             }
-            const c = o.closest(".portfolio-toggle");
-            if (!c || !r.contains(c)) return;
-            const l = c.getAttribute("data-portfolio");
+            const s = o.closest(".portfolio-toggle");
+            if (!s || !r.contains(s)) return;
+            const l = s.getAttribute("data-portfolio");
             if (!l) return;
             const u = e.querySelector(
               `.portfolio-details[data-portfolio="${l}"]`
             );
             if (!u) return;
-            const d = c.querySelector(".caret");
+            const d = s.querySelector(".caret");
             if (u.classList.contains("hidden")) {
-              u.classList.remove("hidden"), c.classList.add("expanded"), c.setAttribute("aria-expanded", "true"), d && (d.textContent = "▼"), ft.add(l);
+              u.classList.remove("hidden"), s.classList.add("expanded"), s.setAttribute("aria-expanded", "true"), d && (d.textContent = "▼"), pt.add(l);
               try {
-                mn(e, l);
+                bn(e, l);
               } catch (f) {
                 console.warn("attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:", f);
               }
-              if (Et(l)) {
+              if (xt(l)) {
                 const f = u.querySelector(".positions-container");
                 if (f) {
-                  f.innerHTML = je(
-                    Sr(l)
-                  ), Xe(e, l);
+                  f.innerHTML = Xe(
+                    wr(l)
+                  ), Je(e, l);
                   try {
-                    Ge(e, l);
+                    Ze(e, l);
                   } catch (g) {
                     console.warn("attachPortfolioToggleHandler: Security-Listener (Cache) Fehler:", g);
                   }
                 }
               } else {
                 const f = u.querySelector(".positions-container");
-                f && (f.innerHTML = un("Lade Positionen..."));
+                f && (f.innerHTML = fn("Lade Positionen..."));
                 try {
-                  const g = await _r(
-                    ut,
+                  const g = await vr(
                     dt,
+                    ft,
                     l
                   );
                   if (g.error) {
@@ -2818,21 +2818,21 @@ function yn(e) {
                     f && (f.innerHTML = `<div class="error">${F(y)} <button class="retry-pos" data-portfolio="${l}">Erneut laden</button></div>`);
                     return;
                   }
-                  const m = Nt(
+                  const m = Dt(
                     Array.isArray(g.positions) ? g.positions : []
                   );
-                  if (st(l, m), ct(
+                  if (ct(l, m), lt(
                     l,
                     m
                   ), f) {
-                    f.innerHTML = je(m);
+                    f.innerHTML = Xe(m);
                     try {
-                      Xe(e, l);
+                      Je(e, l);
                     } catch (y) {
                       console.warn("attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:", y);
                     }
                     try {
-                      Ge(e, l);
+                      Ze(e, l);
                     } catch (y) {
                       console.warn("attachPortfolioToggleHandler: Security-Listener konnte nicht gebunden werden:", y);
                     }
@@ -2843,7 +2843,7 @@ function yn(e) {
                 }
               }
             } else
-              u.classList.add("hidden"), c.classList.remove("expanded"), c.setAttribute("aria-expanded", "false"), d && (d.textContent = "▶"), ft.delete(l);
+              u.classList.add("hidden"), s.classList.remove("expanded"), s.setAttribute("aria-expanded", "false"), d && (d.textContent = "▶"), pt.delete(l);
           } catch (o) {
             console.error("attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler", o);
           }
@@ -2858,35 +2858,35 @@ function Co(e) {
   const t = e.querySelector(".expandable-portfolio-table");
   t && (t.__ppReaderPortfolioFallbackBound || (t.__ppReaderPortfolioFallbackBound = !0, t.addEventListener("click", (n) => {
     const r = n.target;
-    !(r instanceof Element) || !r.closest(".portfolio-toggle") || e.querySelector(".portfolio-table")?.__ppReaderPortfolioToggleBound || (console.debug("Fallback-Listener aktiv – re-attach Hauptlistener"), yn(e));
+    !(r instanceof Element) || !r.closest(".portfolio-toggle") || e.querySelector(".portfolio-table")?.__ppReaderPortfolioToggleBound || (console.debug("Fallback-Listener aktiv – re-attach Hauptlistener"), _n(e));
   })));
 }
-async function qr(e, t, n) {
-  ut = t ?? null, dt = n ?? null, console.debug(
+async function Or(e, t, n) {
+  dt = t ?? null, ft = n ?? null, console.debug(
     "renderDashboard: start – panelConfig:",
     n?.config,
     "derived entry_id?",
     n?.config?._panel_custom?.config?.entry_id
   );
   const r = await ii(t, n);
-  Ar(r.accounts);
-  const a = kr(), i = await si(t, n);
+  Pr(r.accounts);
+  const a = Fr(), i = await si(t, n);
   Di(i.portfolios);
   const o = Ii();
-  let s = "";
+  let c = "";
   try {
-    s = await oi(t, n);
+    c = await oi(t, n);
   } catch {
-    s = "";
+    c = "";
   }
-  const c = a.reduce(
+  const s = a.reduce(
     (C, x) => C + (typeof x.balance == "number" && Number.isFinite(x.balance) ? x.balance : 0),
     0
-  ), l = o.some((C) => C.fx_unavailable), u = a.some((C) => C.fx_unavailable && (C.balance == null || !Number.isFinite(C.balance))), d = o.reduce((C, x) => x.hasValue && typeof x.current_value == "number" && Number.isFinite(x.current_value) ? C + x.current_value : C, 0), p = c + d, f = "Teilw. fehlende FX-Kurse – Gesamtvermögen abweichend", m = o.some((C) => C.hasValue && typeof C.current_value == "number" && Number.isFinite(C.current_value)) || a.some((C) => typeof C.balance == "number" && Number.isFinite(C.balance)) ? `${re(p)}&nbsp;€` : `<span class="missing-value" role="note" aria-label="${f}" title="${f}">—</span>`, y = l || u ? `<span class="total-wealth-note">${f}</span>` : "", h = `
+  ), l = o.some((C) => C.fx_unavailable), u = a.some((C) => C.fx_unavailable && (C.balance == null || !Number.isFinite(C.balance))), d = o.reduce((C, x) => x.hasValue && typeof x.current_value == "number" && Number.isFinite(x.current_value) ? C + x.current_value : C, 0), p = s + d, f = "Teilw. fehlende FX-Kurse – Gesamtvermögen abweichend", m = o.some((C) => C.hasValue && typeof C.current_value == "number" && Number.isFinite(C.current_value)) || a.some((C) => typeof C.balance == "number" && Number.isFinite(C.balance)) ? `${re(p)}&nbsp;€` : `<span class="missing-value" role="note" aria-label="${f}" title="${f}">—</span>`, y = l || u ? `<span class="total-wealth-note">${f}</span>` : "", h = `
     <div class="header-meta-row">
       💰 Gesamtvermögen: <strong class="total-wealth-value">${m}</strong>${y}
     </div>
-  `, b = At("Übersicht", h), _ = Vr(o), v = a.filter((C) => (C.currency_code ?? "EUR") === "EUR"), w = a.filter((C) => (C.currency_code ?? "EUR") !== "EUR"), P = w.some((C) => C.fx_unavailable) ? `
+  `, b = Et("Übersicht", h), _ = Ur(o), v = a.filter((C) => (C.currency_code ?? "EUR") === "EUR"), w = a.filter((C) => (C.currency_code ?? "EUR") !== "EUR"), P = w.some((C) => C.fx_unavailable) ? `
         <p class="table-note" role="note">
           <span class="table-note__icon" aria-hidden="true">⚠️</span>
           <span>Wechselkurse konnten nicht geladen werden. EUR-Werte werden derzeit nicht angezeigt.</span>
@@ -2897,7 +2897,7 @@ async function qr(e, t, n) {
       <div class="scroll-container account-table">
         ${Se(
     v.map((C) => ({
-      name: lt(C.name, Un(C.badges), {
+      name: ut(C.name, qn(C.badges), {
         containerClass: "account-name",
         labelClass: "account-name__label"
       }),
@@ -2922,7 +2922,7 @@ async function qr(e, t, n) {
         maximumFractionDigits: 2
       })}&nbsp;${C.currency_code ?? ""}` : "";
       return {
-        name: lt(C.name, Un(C.badges), {
+        name: ut(C.name, qn(C.badges), {
           containerClass: "account-name",
           labelClass: "account-name__label"
         }),
@@ -2944,7 +2944,7 @@ async function qr(e, t, n) {
     <div class="card footer-card">
       <div class="meta">
         <div class="last-file-update">
-          📂 Letzte Aktualisierung der Datei: <strong>${s || "Unbekannt"}</strong>
+          📂 Letzte Aktualisierung der Datei: <strong>${c || "Unbekannt"}</strong>
         </div>
       </div>
     </div>
@@ -2967,15 +2967,15 @@ function Ao(e, t) {
   const n = () => {
     try {
       const a = e, i = a.querySelector(".portfolio-table");
-      i && i.querySelectorAll(".portfolio-toggle").length === 0 && (console.debug("Recovery: Tabelle ohne Buttons – erneuter Aufbau"), i.innerHTML = Vr(t)), yn(e), Co(e), ft.forEach((o) => {
+      i && i.querySelectorAll(".portfolio-toggle").length === 0 && (console.debug("Recovery: Tabelle ohne Buttons – erneuter Aufbau"), i.innerHTML = Ur(t)), _n(e), Co(e), pt.forEach((o) => {
         try {
-          Et(o) && (Xe(e, o), Ge(e, o));
-        } catch (s) {
-          console.warn("Init-Sortierung für expandiertes Depot fehlgeschlagen:", o, s);
+          xt(o) && (Je(e, o), Ze(e, o));
+        } catch (c) {
+          console.warn("Init-Sortierung für expandiertes Depot fehlgeschlagen:", o, c);
         }
       });
       try {
-        Ur(a);
+        qr(a);
       } catch (o) {
         console.warn("renderDashboard: Footer-Summe konnte nicht aktualisiert werden:", o);
       }
@@ -2993,14 +2993,14 @@ function Ao(e, t) {
 }
 Ja({
   renderPositionsTable: (e) => bo(e),
-  applyGainPctMetadata: zr,
-  attachSecurityDetailListener: Ge,
-  attachPortfolioPositionsSorting: Xe,
+  applyGainPctMetadata: Vr,
+  attachSecurityDetailListener: Ze,
+  attachPortfolioPositionsSorting: Je,
   updatePortfolioFooter: (e) => {
-    e && Ur(e);
+    e && qr(e);
   }
 });
-const Po = "http://www.w3.org/2000/svg", xe = 640, De = 260, qe = { top: 12, right: 16, bottom: 24, left: 16 }, Oe = "var(--pp-reader-chart-line, #3f51b5)", Yt = "var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))", Wn = "0.75rem", Or = "var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))", Br = "6 4", Eo = 1440 * 60 * 1e3;
+const Po = "http://www.w3.org/2000/svg", De = 640, ke = 260, Be = { top: 12, right: 16, bottom: 24, left: 16 }, We = "var(--pp-reader-chart-line, #3f51b5)", Kt = "var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))", Yn = "0.75rem", Br = "var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))", Wr = "6 4", Eo = 1440 * 60 * 1e3;
 function No(e) {
   if (e == null)
     return null;
@@ -3029,7 +3029,7 @@ function ie(e, t = {}) {
     i != null && n.setAttribute(r, i);
   }), n;
 }
-function pt(e, t = null) {
+function gt(e, t = null) {
   if (typeof e == "number" && Number.isFinite(e))
     return e;
   if (typeof e == "string" && e.trim() !== "") {
@@ -3039,7 +3039,7 @@ function pt(e, t = null) {
   }
   return t;
 }
-function Wr(e, t) {
+function Yr(e, t) {
   if (e instanceof Date) {
     const n = e.getTime();
     return Number.isFinite(n) ? n : t;
@@ -3053,13 +3053,13 @@ function Wr(e, t) {
   }
   return t;
 }
-const Yr = (e) => {
+const Kr = (e) => {
   if (e && typeof e == "object" && "date" in e)
     return e.date;
-}, Kr = (e) => {
+}, jr = (e) => {
   if (e && typeof e == "object" && "close" in e)
     return e.close;
-}, jr = (e, t, n) => {
+}, Gr = (e, t, n) => {
   if (Number.isFinite(e)) {
     const r = new Date(e);
     if (!Number.isNaN(r.getTime()))
@@ -3071,13 +3071,13 @@ const Yr = (e) => {
       return a;
   }
   return Number.isFinite(e) ? e.toString() : "";
-}, Gr = (e, t, n) => (Number.isFinite(e) ? e : pt(e, 0) ?? 0).toLocaleString("de-DE", {
+}, Xr = (e, t, n) => (Number.isFinite(e) ? e : gt(e, 0) ?? 0).toLocaleString("de-DE", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
-}), Xr = ({ xFormatted: e, yFormatted: t }) => `
+}), Zr = ({ xFormatted: e, yFormatted: t }) => `
     <div class="chart-tooltip-date">${F(e)}</div>
     <div class="chart-tooltip-value">${F(t)}&nbsp;€</div>
-  `, Zr = ({
+  `, Jr = ({
   marker: e,
   xFormatted: t,
   yFormatted: n
@@ -3088,7 +3088,7 @@ const Yr = (e) => {
     <div class="chart-tooltip-value">${F(n)}</div>
   `;
 };
-function Jr(e) {
+function Qr(e) {
   return e.__chartState || (e.__chartState = {
     svg: null,
     areaPath: null,
@@ -3101,20 +3101,20 @@ function Jr(e) {
     markerOverlay: null,
     markerLayer: null,
     markerTooltip: null,
-    width: xe,
-    height: De,
-    margin: { ...qe },
+    width: De,
+    height: ke,
+    margin: { ...Be },
     series: [],
     points: [],
     range: null,
-    xAccessor: Yr,
-    yAccessor: Kr,
-    xFormatter: jr,
-    yFormatter: Gr,
-    tooltipRenderer: Xr,
-    markerTooltipRenderer: Zr,
-    color: Oe,
-    areaColor: Yt,
+    xAccessor: Kr,
+    yAccessor: jr,
+    xFormatter: Gr,
+    yFormatter: Xr,
+    tooltipRenderer: Zr,
+    markerTooltipRenderer: Jr,
+    color: We,
+    areaColor: Kt,
     baseline: null,
     handlersAttached: !1,
     markers: [],
@@ -3128,9 +3128,9 @@ function Do(e, t) {
   if (e.length === 0)
     return "";
   const n = [];
-  e.forEach((o, s) => {
-    const c = s === 0 ? "M" : "L", l = o.x.toFixed(2), u = o.y.toFixed(2);
-    n.push(`${c}${l} ${u}`);
+  e.forEach((o, c) => {
+    const s = c === 0 ? "M" : "L", l = o.x.toFixed(2), u = o.y.toFixed(2);
+    n.push(`${s}${l} ${u}`);
   });
   const r = e[0], i = `L${e[e.length - 1].x.toFixed(2)} ${t.toFixed(2)} L${r.x.toFixed(2)} ${t.toFixed(2)} Z`;
   return `${n.join(" ")} ${i}`;
@@ -3148,10 +3148,10 @@ function Fo(e) {
   const { baselineLine: t, baseline: n } = e;
   if (!t)
     return;
-  const r = n?.color ?? Or, a = n?.dashArray ?? Br;
+  const r = n?.color ?? Br, a = n?.dashArray ?? Wr;
   t.setAttribute("stroke", r), t.setAttribute("stroke-dasharray", a);
 }
-function Rt(e) {
+function Mt(e) {
   const { baselineLine: t, baseline: n, range: r, margin: a, width: i } = e;
   if (!t)
     return;
@@ -3160,15 +3160,15 @@ function Rt(e) {
     t.style.opacity = "0";
     return;
   }
-  const { minY: s, maxY: c, boundedHeight: l } = r, u = Number.isFinite(s) ? s : o, p = (Number.isFinite(c) ? c : u + 1) - u, f = p === 0 ? 0.5 : (o - u) / p, g = te(f, 0, 1), m = Math.max(l, 0), y = a.top + (1 - g) * m, h = Math.max(i - a.left - a.right, 0), b = a.left, _ = a.left + h;
+  const { minY: c, maxY: s, boundedHeight: l } = r, u = Number.isFinite(c) ? c : o, p = (Number.isFinite(s) ? s : u + 1) - u, f = p === 0 ? 0.5 : (o - u) / p, g = te(f, 0, 1), m = Math.max(l, 0), y = a.top + (1 - g) * m, h = Math.max(i - a.left - a.right, 0), b = a.left, _ = a.left + h;
   t.setAttribute("x1", b.toFixed(2)), t.setAttribute("x2", _.toFixed(2)), t.setAttribute("y1", y.toFixed(2)), t.setAttribute("y2", y.toFixed(2)), t.style.opacity = "1";
 }
 function $o(e, t, n) {
-  const { width: r, height: a, margin: i } = t, { xAccessor: o, yAccessor: s } = n;
+  const { width: r, height: a, margin: i } = t, { xAccessor: o, yAccessor: c } = n;
   if (e.length === 0)
     return { points: [], range: null };
-  const c = e.map((N, $) => {
-    const j = o(N, $), S = s(N, $), D = Wr(j, $), R = pt(S, Number.NaN);
+  const s = e.map((N, $) => {
+    const j = o(N, $), S = c(N, $), D = Yr(j, $), R = gt(S, Number.NaN);
     return Number.isFinite(R) ? {
       index: $,
       data: N,
@@ -3176,9 +3176,9 @@ function $o(e, t, n) {
       yValue: R
     } : null;
   }).filter((N) => !!N);
-  if (c.length === 0)
+  if (s.length === 0)
     return { points: [], range: null };
-  const l = c.reduce((N, $) => Math.min(N, $.xValue), c[0].xValue), u = c.reduce((N, $) => Math.max(N, $.xValue), c[0].xValue), d = c.reduce((N, $) => Math.min(N, $.yValue), c[0].yValue), p = c.reduce((N, $) => Math.max(N, $.yValue), c[0].yValue), f = Math.max(r - i.left - i.right, 1), g = Math.max(a - i.top - i.bottom, 1), m = Number.isFinite(l) ? l : 0, y = Number.isFinite(u) ? u : m + 1, h = Number.isFinite(d) ? d : 0, b = Number.isFinite(p) ? p : h + 1, _ = pt(t.baseline?.value, null), v = _ != null && Number.isFinite(_) ? Math.min(h, _) : h, w = _ != null && Number.isFinite(_) ? Math.max(b, _) : b, A = Math.max(
+  const l = s.reduce((N, $) => Math.min(N, $.xValue), s[0].xValue), u = s.reduce((N, $) => Math.max(N, $.xValue), s[0].xValue), d = s.reduce((N, $) => Math.min(N, $.yValue), s[0].yValue), p = s.reduce((N, $) => Math.max(N, $.yValue), s[0].yValue), f = Math.max(r - i.left - i.right, 1), g = Math.max(a - i.top - i.bottom, 1), m = Number.isFinite(l) ? l : 0, y = Number.isFinite(u) ? u : m + 1, h = Number.isFinite(d) ? d : 0, b = Number.isFinite(p) ? p : h + 1, _ = gt(t.baseline?.value, null), v = _ != null && Number.isFinite(_) ? Math.min(h, _) : h, w = _ != null && Number.isFinite(_) ? Math.max(b, _) : b, A = Math.max(
     2,
     Math.min(
       6,
@@ -3192,7 +3192,7 @@ function $o(e, t, n) {
     A
   ), k = Number.isFinite(P) ? P : h, I = Number.isFinite(E) ? E : b, C = y - m || 1, x = I - k || 1;
   return {
-    points: c.map((N) => {
+    points: s.map((N) => {
       const $ = C === 0 ? 0.5 : (N.xValue - m) / C, j = x === 0 ? 0.5 : (N.yValue - k) / x, S = i.left + $ * f, D = i.top + (1 - j) * g;
       return {
         ...N,
@@ -3210,9 +3210,9 @@ function $o(e, t, n) {
     }
   };
 }
-function Mt(e) {
+function Ht(e) {
   const { markerLayer: t, markerOverlay: n, markers: r, range: a, margin: i, markerTooltip: o } = e;
-  if (e.markerPositions = [], at(e), !t || !n)
+  if (e.markerPositions = [], it(e), !t || !n)
     return;
   for (; t.firstChild; )
     t.removeChild(t.firstChild);
@@ -3220,12 +3220,12 @@ function Mt(e) {
     n.removeChild(n.firstChild);
   if (!a || !Array.isArray(r) || r.length === 0)
     return;
-  const s = a.maxX - a.minX || 1, c = a.maxY - a.minY || 1;
+  const c = a.maxX - a.minX || 1, s = a.maxY - a.minY || 1;
   r.forEach((l, u) => {
-    const d = Wr(l.x, u), p = pt(l.y, Number.NaN), f = Number(p);
+    const d = Yr(l.x, u), p = gt(l.y, Number.NaN), f = Number(p);
     if (!Number.isFinite(d) || !Number.isFinite(f))
       return;
-    const g = s === 0 ? 0.5 : te((d - a.minX) / s, 0, 1), m = c === 0 ? 0.5 : te((f - a.minY) / c, 0, 1), y = i.left + g * a.boundedWidth, h = i.top + (1 - m) * a.boundedHeight, b = ie("g", {
+    const g = c === 0 ? 0.5 : te((d - a.minX) / c, 0, 1), m = s === 0 ? 0.5 : te((f - a.minY) / s, 0, 1), y = i.left + g * a.boundedWidth, h = i.top + (1 - m) * a.boundedHeight, b = ie("g", {
       class: "line-chart-marker",
       transform: `translate(${y.toFixed(2)} ${h.toFixed(2)})`,
       "data-marker-id": l.id
@@ -3243,12 +3243,12 @@ function Mt(e) {
     });
   }), o && (o.style.opacity = "0", o.style.visibility = "hidden");
 }
-function Qr(e, t, n, r) {
-  e.width = Number.isFinite(t) ? Number(t) : xe, e.height = Number.isFinite(n) ? Number(n) : De, e.margin = {
-    top: Number.isFinite(r?.top) ? Number(r?.top) : qe.top,
-    right: Number.isFinite(r?.right) ? Number(r?.right) : qe.right,
-    bottom: Number.isFinite(r?.bottom) ? Number(r?.bottom) : qe.bottom,
-    left: Number.isFinite(r?.left) ? Number(r?.left) : qe.left
+function ea(e, t, n, r) {
+  e.width = Number.isFinite(t) ? Number(t) : De, e.height = Number.isFinite(n) ? Number(n) : ke, e.margin = {
+    top: Number.isFinite(r?.top) ? Number(r?.top) : Be.top,
+    right: Number.isFinite(r?.right) ? Number(r?.right) : Be.right,
+    bottom: Number.isFinite(r?.bottom) ? Number(r?.bottom) : Be.bottom,
+    left: Number.isFinite(r?.left) ? Number(r?.left) : Be.left
   };
 }
 function To(e, t) {
@@ -3262,22 +3262,22 @@ function To(e, t) {
   });
 }
 function Lo(e, t, n, r = null) {
-  const { tooltip: a, width: i, margin: o, height: s } = e;
+  const { tooltip: a, width: i, margin: o, height: c } = e;
   if (!a)
     return;
-  const c = r && Number.isFinite(r.scaleX) && r.scaleX > 0 ? r.scaleX : 1, l = r && Number.isFinite(r.scaleY) && r.scaleY > 0 ? r.scaleY : 1, u = s - o.bottom;
+  const s = r && Number.isFinite(r.scaleX) && r.scaleX > 0 ? r.scaleX : 1, l = r && Number.isFinite(r.scaleY) && r.scaleY > 0 ? r.scaleY : 1, u = c - o.bottom;
   a.style.visibility = "visible", a.style.opacity = "1";
-  const d = a.offsetWidth || 0, p = a.offsetHeight || 0, f = t.x * c, g = te(
+  const d = a.offsetWidth || 0, p = a.offsetHeight || 0, f = t.x * s, g = te(
     f - d / 2,
-    o.left * c,
-    (i - o.right) * c - d
+    o.left * s,
+    (i - o.right) * s - d
   ), m = Math.max(u * l - p, 0), y = 12, b = (Number.isFinite(n) ? te(n ?? 0, o.top, u) : t.y) * l;
   let _ = b - p - y;
   _ < o.top * l && (_ = b + y), _ = te(_, 0, m);
   const v = Q(Math.round(g)), w = Q(Math.round(_));
   a.style.transform = `translate(${v}, ${w})`;
 }
-function Kt(e) {
+function jt(e) {
   const { tooltip: t, focusLine: n, focusCircle: r } = e;
   t && (t.style.opacity = "0", t.style.visibility = "hidden"), n && (n.style.opacity = "0"), r && (r.style.opacity = "0");
 }
@@ -3290,29 +3290,29 @@ function Ro(e, t) {
   });
 }
 function Mo(e, t, n, r = null) {
-  const { markerTooltip: a, width: i, margin: o, height: s, tooltip: c } = e;
+  const { markerTooltip: a, width: i, margin: o, height: c, tooltip: s } = e;
   if (!a)
     return;
-  const l = r && Number.isFinite(r.scaleX) && r.scaleX > 0 ? r.scaleX : 1, u = r && Number.isFinite(r.scaleY) && r.scaleY > 0 ? r.scaleY : 1, d = s - o.bottom;
+  const l = r && Number.isFinite(r.scaleX) && r.scaleX > 0 ? r.scaleX : 1, u = r && Number.isFinite(r.scaleY) && r.scaleY > 0 ? r.scaleY : 1, d = c - o.bottom;
   a.style.visibility = "visible", a.style.opacity = "1";
   const p = a.offsetWidth || 0, f = a.offsetHeight || 0, g = t.x * l, m = te(
     g - p / 2,
     o.left * l,
     (i - o.right) * l - p
-  ), y = Math.max(d * u - f, 0), h = 10, b = c?.getBoundingClientRect(), _ = e.svg?.getBoundingClientRect(), v = b && _ ? b.top - _.top : null, w = b && _ ? b.bottom - _.top : null, P = (Number.isFinite(n) ? te(n ?? t.y, o.top, d) : t.y) * u;
+  ), y = Math.max(d * u - f, 0), h = 10, b = s?.getBoundingClientRect(), _ = e.svg?.getBoundingClientRect(), v = b && _ ? b.top - _.top : null, w = b && _ ? b.bottom - _.top : null, P = (Number.isFinite(n) ? te(n ?? t.y, o.top, d) : t.y) * u;
   let E;
   v != null && w != null ? v <= P ? E = v - f - h : E = w + h : (E = P - f - h, E < o.top * u && (E = P + h)), E = te(E, 0, y);
   const k = Q(Math.round(m)), I = Q(Math.round(E));
   a.style.transform = `translate(${k}, ${I})`;
 }
-function at(e) {
+function it(e) {
   const { markerTooltip: t } = e;
   t && (t.style.opacity = "0", t.style.visibility = "hidden");
 }
 function Ho(e, t, n) {
   let a = null, i = 576;
   for (const o of e.markerPositions) {
-    const s = o.x - t, c = o.y - n, l = s * s + c * c;
+    const c = o.x - t, s = o.y - n, l = c * c + s * s;
     l <= i && (a = o, i = l);
   }
   return a;
@@ -3322,11 +3322,11 @@ function Io(e, t) {
     return;
   const n = (a) => {
     if (t.points.length === 0 || !t.svg) {
-      Kt(t), at(t);
+      jt(t), it(t);
       return;
     }
-    const i = t.svg.getBoundingClientRect(), o = t.width || xe, s = t.height || De, c = i.width && Number.isFinite(i.width) && Number.isFinite(o) && o > 0 ? i.width / o : 1, l = i.height && Number.isFinite(i.height) && Number.isFinite(s) && s > 0 ? i.height / s : 1, u = c > 0 ? 1 / c : 1, d = l > 0 ? 1 / l : 1, p = (a.clientX - i.left) * u, f = (a.clientY - i.top) * d, g = {
-      scaleX: c,
+    const i = t.svg.getBoundingClientRect(), o = t.width || De, c = t.height || ke, s = i.width && Number.isFinite(i.width) && Number.isFinite(o) && o > 0 ? i.width / o : 1, l = i.height && Number.isFinite(i.height) && Number.isFinite(c) && c > 0 ? i.height / c : 1, u = s > 0 ? 1 / s : 1, d = l > 0 ? 1 / l : 1, p = (a.clientX - i.left) * u, f = (a.clientY - i.top) * d, g = {
+      scaleX: s,
       scaleY: l
     };
     let m = t.points[0], y = Math.abs(p - m.x);
@@ -3339,19 +3339,19 @@ function Io(e, t) {
       (t.height - t.margin.bottom).toFixed(2)
     ), t.focusLine.style.opacity = "1"), t.tooltip && (t.tooltip.innerHTML = To(t, m), Lo(t, m, f, g));
     const h = Ho(t, p, f);
-    h && t.markerTooltip ? (t.markerTooltip.innerHTML = Ro(t, h), Mo(t, h, f, g)) : at(t);
+    h && t.markerTooltip ? (t.markerTooltip.innerHTML = Ro(t, h), Mo(t, h, f, g)) : it(t);
   }, r = () => {
-    Kt(t), at(t);
+    jt(t), it(t);
   };
   t.overlay.addEventListener("pointermove", n), t.overlay.addEventListener("pointerenter", n), t.overlay.addEventListener("pointerleave", r), t.handlersAttached = !0, t.handlePointerMove = n, t.handlePointerLeave = r, e.addEventListener("pointercancel", r);
 }
-function ea(e, t = {}) {
+function ta(e, t = {}) {
   const n = document.createElement("div");
   n.className = "line-chart-container", n.dataset.chartType = "line", n.style.position = "relative";
   const r = ie("svg", {
-    width: xe,
-    height: De,
-    viewBox: `0 0 ${String(xe)} ${String(De)}`,
+    width: De,
+    height: ke,
+    viewBox: `0 0 ${String(De)} ${String(ke)}`,
     role: "img",
     "aria-hidden": "true",
     focusable: "false"
@@ -3359,32 +3359,32 @@ function ea(e, t = {}) {
   r.classList.add("line-chart-svg");
   const a = ie("path", {
     class: "line-chart-area",
-    fill: Yt,
+    fill: Kt,
     stroke: "none"
   }), i = ie("line", {
     class: "line-chart-baseline",
-    stroke: Or,
+    stroke: Br,
     "stroke-width": 1,
-    "stroke-dasharray": Br,
+    "stroke-dasharray": Wr,
     opacity: 0
   }), o = ie("path", {
     class: "line-chart-path",
     fill: "none",
-    stroke: Oe,
+    stroke: We,
     "stroke-width": 2,
     "stroke-linecap": "round",
     "stroke-linejoin": "round"
-  }), s = ie("line", {
+  }), c = ie("line", {
     class: "line-chart-focus-line",
-    stroke: Oe,
+    stroke: We,
     "stroke-width": 1,
     "stroke-dasharray": "4 4",
     opacity: 0
-  }), c = ie("circle", {
+  }), s = ie("circle", {
     class: "line-chart-focus-circle",
     r: 4,
     fill: "#fff",
-    stroke: Oe,
+    stroke: We,
     "stroke-width": 2,
     opacity: 0
   }), l = ie("g", {
@@ -3394,38 +3394,38 @@ function ea(e, t = {}) {
     fill: "transparent",
     x: 0,
     y: 0,
-    width: xe,
-    height: De
+    width: De,
+    height: ke
   });
-  r.appendChild(a), r.appendChild(i), r.appendChild(o), r.appendChild(s), r.appendChild(c), r.appendChild(l), r.appendChild(u), n.appendChild(r);
+  r.appendChild(a), r.appendChild(i), r.appendChild(o), r.appendChild(c), r.appendChild(s), r.appendChild(l), r.appendChild(u), n.appendChild(r);
   const d = document.createElement("div");
   d.className = "chart-tooltip", d.style.position = "absolute", d.style.top = "0", d.style.left = "0", d.style.pointerEvents = "none", d.style.opacity = "0", d.style.visibility = "hidden", n.appendChild(d);
   const p = document.createElement("div");
   p.className = "line-chart-marker-overlay", p.style.position = "absolute", p.style.top = "0", p.style.left = "0", p.style.width = "100%", p.style.height = "100%", p.style.pointerEvents = "none", p.style.overflow = "visible", p.style.zIndex = "2", n.appendChild(p);
   const f = document.createElement("div");
   f.className = "chart-tooltip chart-tooltip--marker", f.style.position = "absolute", f.style.top = "0", f.style.left = "0", f.style.pointerEvents = "none", f.style.opacity = "0", f.style.visibility = "hidden", n.appendChild(f), e.appendChild(n);
-  const g = Jr(n);
-  if (g.svg = r, g.areaPath = a, g.linePath = o, g.baselineLine = i, g.focusLine = s, g.focusCircle = c, g.overlay = u, g.tooltip = d, g.markerOverlay = p, g.markerLayer = l, g.markerTooltip = f, g.xAccessor = t.xAccessor ?? Yr, g.yAccessor = t.yAccessor ?? Kr, g.xFormatter = t.xFormatter ?? jr, g.yFormatter = t.yFormatter ?? Gr, g.tooltipRenderer = t.tooltipRenderer ?? Xr, g.markerTooltipRenderer = t.markerTooltipRenderer ?? Zr, g.color = t.color ?? Oe, g.areaColor = t.areaColor ?? Yt, g.baseline = t.baseline ?? null, g.handlersAttached = !1, g.markers = Array.isArray(t.markers) ? t.markers.slice() : [], !g.xAxis) {
+  const g = Qr(n);
+  if (g.svg = r, g.areaPath = a, g.linePath = o, g.baselineLine = i, g.focusLine = c, g.focusCircle = s, g.overlay = u, g.tooltip = d, g.markerOverlay = p, g.markerLayer = l, g.markerTooltip = f, g.xAccessor = t.xAccessor ?? Kr, g.yAccessor = t.yAccessor ?? jr, g.xFormatter = t.xFormatter ?? Gr, g.yFormatter = t.yFormatter ?? Xr, g.tooltipRenderer = t.tooltipRenderer ?? Zr, g.markerTooltipRenderer = t.markerTooltipRenderer ?? Jr, g.color = t.color ?? We, g.areaColor = t.areaColor ?? Kt, g.baseline = t.baseline ?? null, g.handlersAttached = !1, g.markers = Array.isArray(t.markers) ? t.markers.slice() : [], !g.xAxis) {
     const m = document.createElement("div");
-    m.className = "line-chart-axis line-chart-axis-x", m.style.position = "absolute", m.style.left = "0", m.style.right = "0", m.style.bottom = "0", m.style.pointerEvents = "none", m.style.fontSize = Wn, m.style.color = "var(--secondary-text-color)", m.style.display = "block", n.appendChild(m), g.xAxis = m;
+    m.className = "line-chart-axis line-chart-axis-x", m.style.position = "absolute", m.style.left = "0", m.style.right = "0", m.style.bottom = "0", m.style.pointerEvents = "none", m.style.fontSize = Yn, m.style.color = "var(--secondary-text-color)", m.style.display = "block", n.appendChild(m), g.xAxis = m;
   }
   if (!g.yAxis) {
     const m = document.createElement("div");
-    m.className = "line-chart-axis line-chart-axis-y", m.style.position = "absolute", m.style.top = "0", m.style.bottom = "0", m.style.left = "0", m.style.pointerEvents = "none", m.style.fontSize = Wn, m.style.color = "var(--secondary-text-color)", m.style.display = "block", n.appendChild(m), g.yAxis = m;
+    m.className = "line-chart-axis line-chart-axis-y", m.style.position = "absolute", m.style.top = "0", m.style.bottom = "0", m.style.left = "0", m.style.pointerEvents = "none", m.style.fontSize = Yn, m.style.color = "var(--secondary-text-color)", m.style.display = "block", n.appendChild(m), g.yAxis = m;
   }
-  return Qr(g, t.width, t.height, t.margin), o.setAttribute("stroke", g.color), s.setAttribute("stroke", g.color), c.setAttribute("stroke", g.color), a.setAttribute("fill", g.areaColor), bn(n, t), Io(n, g), n;
+  return ea(g, t.width, t.height, t.margin), o.setAttribute("stroke", g.color), c.setAttribute("stroke", g.color), s.setAttribute("stroke", g.color), a.setAttribute("fill", g.areaColor), vn(n, t), Io(n, g), n;
 }
-function bn(e, t = {}) {
+function vn(e, t = {}) {
   if (!e) {
     console.error("updateLineChart: container element is required");
     return;
   }
-  const n = Jr(e);
+  const n = Qr(e);
   if (!n.svg || !n.linePath || !n.overlay) {
     console.error("updateLineChart: chart was not initialised with renderLineChart");
     return;
   }
-  t.xAccessor && (n.xAccessor = t.xAccessor), t.yAccessor && (n.yAccessor = t.yAccessor), t.xFormatter && (n.xFormatter = t.xFormatter), t.yFormatter && (n.yFormatter = t.yFormatter), t.tooltipRenderer && (n.tooltipRenderer = t.tooltipRenderer), t.markerTooltipRenderer && (n.markerTooltipRenderer = t.markerTooltipRenderer), t.color && (n.color = t.color, n.linePath.setAttribute("stroke", n.color), n.focusLine && n.focusLine.setAttribute("stroke", n.color), n.focusCircle && n.focusCircle.setAttribute("stroke", n.color)), t.areaColor && (n.areaColor = t.areaColor, n.areaPath && n.areaPath.setAttribute("fill", n.areaColor)), Object.prototype.hasOwnProperty.call(t, "baseline") && (n.baseline = t.baseline ?? null), Array.isArray(t.markers) && (n.markers = t.markers.slice()), Fo(n), Qr(n, t.width, t.height, t.margin);
+  t.xAccessor && (n.xAccessor = t.xAccessor), t.yAccessor && (n.yAccessor = t.yAccessor), t.xFormatter && (n.xFormatter = t.xFormatter), t.yFormatter && (n.yFormatter = t.yFormatter), t.tooltipRenderer && (n.tooltipRenderer = t.tooltipRenderer), t.markerTooltipRenderer && (n.markerTooltipRenderer = t.markerTooltipRenderer), t.color && (n.color = t.color, n.linePath.setAttribute("stroke", n.color), n.focusLine && n.focusLine.setAttribute("stroke", n.color), n.focusCircle && n.focusCircle.setAttribute("stroke", n.color)), t.areaColor && (n.areaColor = t.areaColor, n.areaPath && n.areaPath.setAttribute("fill", n.areaColor)), Object.prototype.hasOwnProperty.call(t, "baseline") && (n.baseline = t.baseline ?? null), Array.isArray(t.markers) && (n.markers = t.markers.slice()), Fo(n), ea(n, t.width, t.height, t.margin);
   const { width: r, height: a } = n;
   n.svg.setAttribute("width", String(r)), n.svg.setAttribute("height", String(a)), n.svg.setAttribute("viewBox", `0 0 ${String(r)} ${String(a)}`), n.overlay.setAttribute("x", "0"), n.overlay.setAttribute("y", "0"), n.overlay.setAttribute("width", Math.max(r, 0).toFixed(2)), n.overlay.setAttribute("height", Math.max(a, 0).toFixed(2)), Array.isArray(t.series) && (n.series = Array.from(t.series));
   const { points: i, range: o } = $o(n.series, n, {
@@ -3433,25 +3433,25 @@ function bn(e, t = {}) {
     yAccessor: n.yAccessor
   });
   if (n.points = i, n.range = o, i.length === 0) {
-    n.linePath.setAttribute("d", ""), n.areaPath && n.areaPath.setAttribute("d", ""), Kt(n), Mt(n), Ht(n), Rt(n);
+    n.linePath.setAttribute("d", ""), n.areaPath && n.areaPath.setAttribute("d", ""), jt(n), Ht(n), It(n), Mt(n);
     return;
   }
   if (i.length === 1) {
-    const c = i[0], l = Math.max(
+    const s = i[0], l = Math.max(
       0.5,
       Math.min(4, Math.max(n.width - n.margin.left - n.margin.right, 1) * 0.01)
-    ), u = `M${c.x.toFixed(2)} ${c.y.toFixed(2)} h${l.toFixed(2)}`;
-    n.linePath.setAttribute("d", u), n.areaPath && n.areaPath.setAttribute("d", ""), n.focusCircle && (n.focusCircle.setAttribute("cx", c.x.toFixed(2)), n.focusCircle.setAttribute("cy", c.y.toFixed(2)), n.focusCircle.style.opacity = "1"), n.focusLine && (n.focusLine.style.opacity = "0"), Ht(n), Rt(n), Mt(n);
+    ), u = `M${s.x.toFixed(2)} ${s.y.toFixed(2)} h${l.toFixed(2)}`;
+    n.linePath.setAttribute("d", u), n.areaPath && n.areaPath.setAttribute("d", ""), n.focusCircle && (n.focusCircle.setAttribute("cx", s.x.toFixed(2)), n.focusCircle.setAttribute("cy", s.y.toFixed(2)), n.focusCircle.style.opacity = "1"), n.focusLine && (n.focusLine.style.opacity = "0"), It(n), Mt(n), Ht(n);
     return;
   }
-  const s = ko(i);
-  if (n.linePath.setAttribute("d", s), n.areaPath && o) {
-    const c = n.margin.top + o.boundedHeight, l = Do(i, c);
+  const c = ko(i);
+  if (n.linePath.setAttribute("d", c), n.areaPath && o) {
+    const s = n.margin.top + o.boundedHeight, l = Do(i, s);
     n.areaPath.setAttribute("d", l);
   }
-  Ht(n), Rt(n), Mt(n);
+  It(n), Mt(n), Ht(n);
 }
-function Ht(e) {
+function It(e) {
   const { xAxis: t, yAxis: n, range: r, margin: a, height: i, yFormatter: o } = e;
   if (!t || !n)
     return;
@@ -3459,10 +3459,10 @@ function Ht(e) {
     t.innerHTML = "", n.innerHTML = "";
     return;
   }
-  const { minX: s, maxX: c, minY: l, maxY: u, boundedWidth: d, boundedHeight: p } = r, f = Number.isFinite(s) && Number.isFinite(c) && c >= s, g = Number.isFinite(l) && Number.isFinite(u) && u >= l, m = Math.max(d, 0), y = Math.max(p, 0);
+  const { minX: c, maxX: s, minY: l, maxY: u, boundedWidth: d, boundedHeight: p } = r, f = Number.isFinite(c) && Number.isFinite(s) && s >= c, g = Number.isFinite(l) && Number.isFinite(u) && u >= l, m = Math.max(d, 0), y = Math.max(p, 0);
   if (t.style.left = Q(a.left), t.style.width = Q(m), t.style.top = Q(i - a.bottom + 6), t.innerHTML = "", f && m > 0) {
-    const b = (c - s) / Eo, _ = Math.max(2, Math.min(6, Math.round(m / 140) || 4));
-    Vo(e, s, c, _, b).forEach(({ positionRatio: w, label: A }) => {
+    const b = (s - c) / Eo, _ = Math.max(2, Math.min(6, Math.round(m / 140) || 4));
+    Vo(e, c, s, _, b).forEach(({ positionRatio: w, label: A }) => {
       const P = document.createElement("div");
       P.className = "line-chart-axis-tick line-chart-axis-tick-x", P.style.position = "absolute", P.style.bottom = "0";
       const E = te(w, 0, 1);
@@ -3491,19 +3491,19 @@ function zo(e, t, n = 4) {
     };
   const r = Math.max(2, n);
   if (t === e) {
-    const l = jt(Math.abs(e) || 1);
+    const l = Gt(Math.abs(e) || 1);
     return {
       niceMin: e - l,
       niceMax: t + l
     };
   }
-  const i = (t - e) / (r - 1), o = jt(i), s = Math.floor(e / o) * o, c = Math.ceil(t / o) * o;
-  return s === c ? {
+  const i = (t - e) / (r - 1), o = Gt(i), c = Math.floor(e / o) * o, s = Math.ceil(t / o) * o;
+  return c === s ? {
     niceMin: e,
     niceMax: t + o
   } : {
-    niceMin: s,
-    niceMax: c
+    niceMin: c,
+    niceMax: s
   };
 }
 function Vo(e, t, n, r, a) {
@@ -3513,20 +3513,20 @@ function Vo(e, t, n, r, a) {
     return [
       {
         positionRatio: 0.5,
-        label: Yn(e, t, a || 0)
+        label: Kn(e, t, a || 0)
       }
     ];
-  const i = Math.max(2, r), o = [], s = n - t;
-  for (let c = 0; c < i; c += 1) {
-    const l = i === 1 ? 0.5 : c / (i - 1), u = t + l * s;
+  const i = Math.max(2, r), o = [], c = n - t;
+  for (let s = 0; s < i; s += 1) {
+    const l = i === 1 ? 0.5 : s / (i - 1), u = t + l * c;
     o.push({
       positionRatio: l,
-      label: Yn(e, u, a)
+      label: Kn(e, u, a)
     });
   }
   return o;
 }
-function Yn(e, t, n) {
+function Kn(e, t, n) {
   const r = new Date(t);
   return Number.isFinite(r.getTime()) ? n > 1095 ? String(r.getFullYear()) : n > 365 ? r.toLocaleDateString("de-DE", {
     year: "numeric",
@@ -3552,8 +3552,8 @@ function Uo(e, t, n) {
         positionRatio: 0.5
       }
     ];
-  const r = t - e, a = Math.max(2, n), i = r / (a - 1), o = jt(i), s = Math.floor(e / o) * o, c = Math.ceil(t / o) * o, l = [];
-  for (let u = s; u <= c + o / 2; u += o) {
+  const r = t - e, a = Math.max(2, n), i = r / (a - 1), o = Gt(i), c = Math.floor(e / o) * o, s = Math.ceil(t / o) * o, l = [];
+  for (let u = c; u <= s + o / 2; u += o) {
     const d = (u - e) / (t - e);
     l.push({
       value: u,
@@ -3562,7 +3562,7 @@ function Uo(e, t, n) {
   }
   return l.length > a + 2 ? l.filter((u, d) => d % 2 === 0) : l;
 }
-function jt(e) {
+function Gt(e) {
   if (!Number.isFinite(e) || e === 0)
     return 1;
   const t = Math.floor(Math.log10(Math.abs(e))), n = Math.abs(e) / 10 ** t;
@@ -3584,7 +3584,7 @@ function Bo(e) {
 function Wo(e) {
   return e instanceof CustomEvent ? Bo(e.detail) : !1;
 }
-const It = { min: 0, max: 6 }, gt = { min: 2, max: 4 }, Yo = "1Y", ta = [
+const zt = { min: 0, max: 6 }, ht = { min: 2, max: 4 }, Yo = "1Y", na = [
   "1M",
   "6M",
   "1Y",
@@ -3596,11 +3596,11 @@ const It = { min: 0, max: 6 }, gt = { min: 2, max: 4 }, Yo = "1Y", ta = [
   "1Y": 365,
   "5Y": 1826,
   ALL: Number.POSITIVE_INFINITY
-}, jo = /* @__PURE__ */ new Set([0, 2]), Go = /* @__PURE__ */ new Set([1, 3]), Xo = "var(--pp-reader-chart-marker-buy, #2e7d32)", Zo = "var(--pp-reader-chart-marker-sell, #c0392b)", Kn = "{TICKER}", Jo = "https://chatgpt.com/", zt = {
+}, jo = /* @__PURE__ */ new Set([0, 2]), Go = /* @__PURE__ */ new Set([1, 3]), Xo = "var(--pp-reader-chart-marker-buy, #2e7d32)", Zo = "var(--pp-reader-chart-marker-sell, #c0392b)", jn = "{TICKER}", Jo = "https://chatgpt.com/", Vt = {
   aggregation: "Aggregationsdaten",
   totals: "Kaufsummen",
   eur_total: "EUR-Kaufsumme"
-}, ke = /* @__PURE__ */ new Map(), it = /* @__PURE__ */ new Map(), Ze = /* @__PURE__ */ new Map(), Fe = /* @__PURE__ */ new Map(), na = "pp-reader:portfolio-positions-updated", We = /* @__PURE__ */ new Map();
+}, Fe = /* @__PURE__ */ new Map(), ot = /* @__PURE__ */ new Map(), Qe = /* @__PURE__ */ new Map(), $e = /* @__PURE__ */ new Map(), ra = "pp-reader:portfolio-positions-updated", Ke = /* @__PURE__ */ new Map();
 function Qo(e) {
   const { fallbackUsed: t, flaggedAsCache: n } = e, r = [];
   return t && r.push(
@@ -3618,96 +3618,96 @@ function Qo(e) {
 function es(e, t) {
   if (e) {
     if (t) {
-      Ze.set(e, t);
+      Qe.set(e, t);
       return;
     }
-    Ze.delete(e);
+    Qe.delete(e);
   }
 }
 function ts(e) {
   if (!e || typeof window > "u")
     return null;
-  if (Ze.has(e)) {
-    const t = Ze.get(e) || null;
+  if (Qe.has(e)) {
+    const t = Qe.get(e) || null;
     if (t)
       return t;
   }
   return null;
 }
-function ra(e) {
-  return ke.has(e) || ke.set(e, /* @__PURE__ */ new Map()), ke.get(e);
-}
 function aa(e) {
   return Fe.has(e) || Fe.set(e, /* @__PURE__ */ new Map()), Fe.get(e);
 }
 function ia(e) {
+  return $e.has(e) || $e.set(e, /* @__PURE__ */ new Map()), $e.get(e);
+}
+function oa(e) {
   if (e) {
-    if (ke.has(e)) {
+    if (Fe.has(e)) {
       try {
-        const t = ke.get(e);
+        const t = Fe.get(e);
         t && t.clear();
       } catch (t) {
         console.warn("invalidateHistoryCache: Konnte Cache nicht leeren", e, t);
       }
-      ke.delete(e);
+      Fe.delete(e);
     }
-    if (Fe.has(e)) {
+    if ($e.has(e)) {
       try {
-        Fe.get(e)?.clear();
+        $e.get(e)?.clear();
       } catch (t) {
         console.warn("invalidateHistoryCache: Konnte Marker-Cache nicht leeren", e, t);
       }
-      Fe.delete(e);
+      $e.delete(e);
     }
   }
 }
-function oa(e) {
-  e && Ze.delete(e);
+function sa(e) {
+  e && Qe.delete(e);
 }
 function ns(e, t) {
   if (!e || !t)
     return;
   const n = t.securityUuids;
-  (Array.isArray(n) ? n : []).includes(e) && (ia(e), oa(e));
+  (Array.isArray(n) ? n : []).includes(e) && (oa(e), sa(e));
 }
 function rs(e) {
-  if (!e || We.has(e))
+  if (!e || Ke.has(e))
     return;
   const t = (n) => {
     Wo(n) && ns(e, n.detail);
   };
   try {
-    window.addEventListener(na, t), We.set(e, t);
+    window.addEventListener(ra, t), Ke.set(e, t);
   } catch (n) {
     console.error("ensureLiveUpdateSubscription: Registrierung fehlgeschlagen", n);
   }
 }
 function as(e) {
-  if (!e || !We.has(e))
+  if (!e || !Ke.has(e))
     return;
-  const t = We.get(e);
+  const t = Ke.get(e);
   try {
-    t && window.removeEventListener(na, t);
+    t && window.removeEventListener(ra, t);
   } catch (n) {
     console.error("removeLiveUpdateSubscription: Entfernen des Listeners fehlgeschlagen", n);
   }
-  We.delete(e);
+  Ke.delete(e);
 }
 function is(e) {
-  e && (as(e), ia(e), oa(e));
+  e && (as(e), oa(e), sa(e));
 }
-function jn(e, t) {
-  if (!it.has(e)) {
-    it.set(e, { activeRange: t });
+function Gn(e, t) {
+  if (!ot.has(e)) {
+    ot.set(e, { activeRange: t });
     return;
   }
-  const n = it.get(e);
+  const n = ot.get(e);
   n && (n.activeRange = t);
 }
-function sa(e) {
-  return it.get(e)?.activeRange ?? Yo;
+function ca(e) {
+  return ot.get(e)?.activeRange ?? Yo;
 }
-function Gt(e) {
+function Xt(e) {
   const t = Date.UTC(
     e.getUTCFullYear(),
     e.getUTCMonth(),
@@ -3715,48 +3715,48 @@ function Gt(e) {
   );
   return Math.floor(t / 864e5);
 }
-function Le(e) {
+function Me(e) {
   const t = new Date(e.getTime());
   return t.setUTCHours(0, 0, 0, 0), t;
 }
-function Gn(e) {
-  return !(e instanceof Date) || Number.isNaN(e.getTime()) ? null : Gt(Le(e));
+function Xn(e) {
+  return !(e instanceof Date) || Number.isNaN(e.getTime()) ? null : Xt(Me(e));
 }
 function H(e) {
   return ge(e);
 }
-function ca(e) {
+function la(e) {
   if (typeof e != "string")
     return null;
   const t = e.trim();
   return t || null;
 }
 function Pe(e) {
-  const t = ca(e);
+  const t = la(e);
   return t ? t.toUpperCase() : null;
 }
 function os(e) {
   if (!e)
     return null;
-  const t = fn(e.aggregation), n = H(t?.purchase_total_security) ?? (t ? H(
+  const t = gn(e.aggregation), n = H(t?.purchase_total_security) ?? (t ? H(
     t.security_currency_total
   ) : null), r = H(t?.purchase_total_account) ?? (t ? H(
     t.account_currency_total
   ) : null);
   if (oe(n) && oe(r)) {
-    const s = n / r;
-    if (oe(s))
-      return s;
+    const c = n / r;
+    if (oe(c))
+      return c;
   }
-  const a = Me(e.average_cost), i = H(a?.native) ?? H(a?.security), o = H(a?.account) ?? H(a?.eur);
+  const a = Ie(e.average_cost), i = H(a?.native) ?? H(a?.security), o = H(a?.account) ?? H(a?.eur);
   if (oe(i) && oe(o)) {
-    const s = i / o;
-    if (oe(s))
-      return s;
+    const c = i / o;
+    if (oe(c))
+      return c;
   }
   return null;
 }
-function la(e, t = "Unbekannter Fehler") {
+function ua(e, t = "Unbekannter Fehler") {
   if (typeof e == "string") {
     const n = e.trim();
     return n || t;
@@ -3774,17 +3774,17 @@ function la(e, t = "Unbekannter Fehler") {
     }
   return t;
 }
-function ht(e, t) {
-  const n = Le(t instanceof Date ? t : /* @__PURE__ */ new Date()), r = Ko[e], a = Gn(n), i = {};
+function mt(e, t) {
+  const n = Me(t instanceof Date ? t : /* @__PURE__ */ new Date()), r = Ko[e], a = Xn(n), i = {};
   if (a != null && (i.end_date = a), Number.isFinite(r) && r > 0) {
     const o = new Date(n.getTime());
     o.setUTCDate(o.getUTCDate() - (r - 1));
-    const s = Gn(o);
-    s != null && (i.start_date = s);
+    const c = Xn(o);
+    c != null && (i.start_date = c);
   }
   return i;
 }
-function _n(e) {
+function Sn(e) {
   if (!e)
     return null;
   if (e instanceof Date)
@@ -3797,7 +3797,7 @@ function _n(e) {
     }
     if (t >= 0 && t <= 1e5) {
       const n = new Date(t * 864e5);
-      return Number.isNaN(n.getTime()) ? null : Le(n);
+      return Number.isNaN(n.getTime()) ? null : Me(n);
     }
     if (t > 1e12) {
       const n = new Date(t);
@@ -3816,7 +3816,7 @@ function _n(e) {
       if (Number.isFinite(n) && n >= 0 && n <= 1e5) {
         const r = new Date(n * 864e5);
         if (!Number.isNaN(r.getTime()))
-          return Le(r);
+          return Me(r);
       }
     }
     if (/^\d{8}$/.test(t)) {
@@ -3831,7 +3831,7 @@ function _n(e) {
   return null;
 }
 function ss(e) {
-  const t = _n(e);
+  const t = Sn(e);
   if (t)
     return t;
   if (typeof e == "string") {
@@ -3846,7 +3846,7 @@ function ss(e) {
   }
   return null;
 }
-function mt(e) {
+function yt(e) {
   if (!e && e !== 0)
     return null;
   if (e instanceof Date && !Number.isNaN(e.getTime()))
@@ -3867,7 +3867,7 @@ function mt(e) {
   }
   return null;
 }
-function Xt(e) {
+function Zt(e) {
   return Array.isArray(e) ? e.map((t) => {
     let r = H(t.close);
     if (r == null) {
@@ -3875,26 +3875,26 @@ function Xt(e) {
       i != null && (r = i / 1e8);
     }
     return r == null ? null : {
-      date: _n(t.date) ?? t.date,
+      date: Sn(t.date) ?? t.date,
       close: r
     };
   }).filter((t) => !!t) : [];
 }
-function yt(e, t, n = null) {
+function bt(e, t, n = null) {
   if (!Array.isArray(e))
     return [];
   const r = [], a = Pe(t), i = a || "EUR", o = os(n);
-  return e.forEach((s, c) => {
-    const l = typeof s.type == "number" ? s.type : Number(s.type), u = jo.has(l), d = Go.has(l);
+  return e.forEach((c, s) => {
+    const l = typeof c.type == "number" ? c.type : Number(c.type), u = jo.has(l), d = Go.has(l);
     if (!u && !d)
       return;
-    const p = ss(s.date);
-    let f = H(s.price);
+    const p = ss(c.date);
+    let f = H(c.price);
     if (!p || f == null)
       return;
-    const g = Pe(s.currency_code), m = a ?? g ?? i;
+    const g = Pe(c.currency_code), m = a ?? g ?? i;
     g && a && g !== a && oe(o) && (f *= o);
-    const y = H(s.shares), h = H(s.net_price_eur), b = u ? "Kauf" : "Verkauf", _ = y != null ? `${wn(y)} @ ` : "", v = `${b} ${_}${he(f)} ${m}`, w = d && h != null ? `${v} (netto ${he(h)} EUR)` : v, A = u ? Xo : Zo, P = typeof s.uuid == "string" && s.uuid.trim() || `${b}-${p.getTime().toString()}-${c.toString()}`;
+    const y = H(c.shares), h = H(c.net_price_eur), b = u ? "Kauf" : "Verkauf", _ = y != null ? `${An(y)} @ ` : "", v = `${b} ${_}${he(f)} ${m}`, w = d && h != null ? `${v} (netto ${he(h)} EUR)` : v, A = u ? Xo : Zo, P = typeof c.uuid == "string" && c.uuid.trim() || `${b}-${p.getTime().toString()}-${s.toString()}`;
     r.push({
       id: P,
       x: p.getTime(),
@@ -3909,12 +3909,12 @@ function yt(e, t, n = null) {
         price: f,
         netPriceEur: h,
         date: p.toISOString(),
-        portfolio: s.portfolio
+        portfolio: c.portfolio
       }
     });
   }), r;
 }
-function vn(e) {
+function wn(e) {
   const t = H(e?.last_price_native) ?? H(e?.last_price?.native) ?? null;
   if (L(t))
     return t;
@@ -3928,36 +3928,36 @@ function vn(e) {
 function cs(e) {
   if (!e)
     return null;
-  const n = e.last_price_fetched_at, r = mt(n);
+  const n = e.last_price_fetched_at, r = yt(n);
   if (r != null)
     return r;
   const i = e.last_price?.fetched_at;
-  return mt(i) ?? null;
+  return yt(i) ?? null;
 }
-function Zt(e, t) {
+function Jt(e, t) {
   let n = [];
   Array.isArray(e) && (n = e.map((l) => ({
     ...l
   })));
-  const r = n.slice(), a = vn(t);
+  const r = n.slice(), a = wn(t);
   if (!L(a))
     return r;
   const i = cs(t) ?? Date.now(), o = new Date(i);
   if (Number.isNaN(o.getTime()))
     return r;
-  const s = Gt(Le(o));
-  let c = null;
+  const c = Xt(Me(o));
+  let s = null;
   for (let l = r.length - 1; l >= 0; l -= 1) {
-    const u = r[l], d = _n(u.date);
+    const u = r[l], d = Sn(u.date);
     if (!d)
       continue;
-    const p = Gt(Le(d));
-    if (c == null && (c = p), p === s)
+    const p = Xt(Me(d));
+    if (s == null && (s = p), p === c)
       return u.close !== a && (r[l] = { ...u, close: a }), r;
-    if (p < s)
+    if (p < c)
       break;
   }
-  return c != null && c > s || r.push({
+  return s != null && s > c || r.push({
     date: o,
     close: a
   }), r;
@@ -3968,7 +3968,7 @@ function L(e) {
 function oe(e) {
   return typeof e == "number" && Number.isFinite(e) && e > 0;
 }
-function Ye(e, t, n) {
+function je(e, t, n) {
   if (!L(e) || !L(t))
     return !1;
   const r = Math.abs(e - t), a = Math.max(Math.abs(e), Math.abs(t), 1);
@@ -3977,7 +3977,7 @@ function Ye(e, t, n) {
 function ls(e, t) {
   return !L(t) || t === 0 || !L(e) ? null : mi((e - t) / t * 100);
 }
-function ua(e, t) {
+function da(e, t) {
   if (e.length === 0)
     return { priceChange: null, priceChangePct: null };
   const n = e[0], r = H(n.close);
@@ -3986,10 +3986,10 @@ function ua(e, t) {
   const a = e[e.length - 1], i = H(a.close), o = H(t) ?? i;
   if (!L(o))
     return { priceChange: null, priceChangePct: null };
-  const s = o - r, c = Object.is(s, -0) ? 0 : s, l = ls(o, r);
-  return { priceChange: c, priceChangePct: l };
+  const c = o - r, s = Object.is(c, -0) ? 0 : c, l = ls(o, r);
+  return { priceChange: s, priceChangePct: l };
 }
-function Sn(e, t) {
+function Cn(e, t) {
   if (!L(e) || e === 0)
     return "neutral";
   const n = 0.5 / Math.pow(10, t);
@@ -4001,13 +4001,13 @@ function us(e, t) {
   const n = he(e);
   if (n === "—")
     return '<span class="value neutral">—</span>';
-  const r = Sn(e, gt.max), a = t ? `&nbsp;${F(t)}` : "";
+  const r = Cn(e, ht.max), a = t ? `&nbsp;${F(t)}` : "";
   return `<span class="value ${r}">${n}${a}</span>`;
 }
 function ds(e) {
-  return L(e) ? `<span class="value ${Sn(e, 2)} value--percentage">${re(e)}&nbsp;%</span>` : '<span class="value neutral">—</span>';
+  return L(e) ? `<span class="value ${Cn(e, 2)} value--percentage">${re(e)}&nbsp;%</span>` : '<span class="value neutral">—</span>';
 }
-function da(e, t, n, r) {
+function fa(e, t, n, r) {
   const a = e, i = a.length > 0 ? a : "Zeitraum";
   return `
     <div class="security-info-bar" data-range="${ce(a)}">
@@ -4024,7 +4024,7 @@ function da(e, t, n, r) {
 function fs(e) {
   return `
     <div class="security-range-selector" role="group" aria-label="Zeitraum">
-      ${ta.map((n) => `
+      ${na.map((n) => `
       <button
         type="button"
         class="security-range-button${n === e ? " active" : ""}"
@@ -4038,7 +4038,7 @@ function fs(e) {
     </div>
   `;
 }
-function fa(e, t = { status: "empty" }) {
+function pa(e, t = { status: "empty" }) {
   const n = ce(e);
   switch (t.status) {
     case "loaded": {
@@ -4054,7 +4054,7 @@ function fa(e, t = { status: "empty" }) {
       `;
     }
     case "error": {
-      const r = la(
+      const r = ua(
         t.message,
         "Die historischen Daten konnten nicht geladen werden."
       );
@@ -4075,11 +4075,11 @@ function fa(e, t = { status: "empty" }) {
     }
   }
 }
-function wn(e) {
+function An(e) {
   const t = H(e);
   if (t == null)
     return "—";
-  const n = Math.abs(t % 1) > 0, r = n ? 2 : It.min, a = n ? It.max : It.min;
+  const n = Math.abs(t % 1) > 0, r = n ? 2 : zt.min, a = n ? zt.max : zt.min;
   return t.toLocaleString("de-DE", {
     minimumFractionDigits: r,
     maximumFractionDigits: a
@@ -4088,13 +4088,13 @@ function wn(e) {
 function he(e) {
   const t = H(e);
   return t == null ? "—" : t.toLocaleString("de-DE", {
-    minimumFractionDigits: gt.min,
-    maximumFractionDigits: gt.max
+    minimumFractionDigits: ht.min,
+    maximumFractionDigits: ht.max
   });
 }
 function ps(e, t) {
   const n = he(e), r = `&nbsp;${F(t)}`;
-  return `<span class="${Sn(e, gt.max)}">${n}${r}</span>`;
+  return `<span class="${Cn(e, ht.max)}">${n}${r}</span>`;
 }
 function gs(e, t) {
   const n = e?.ticker_symbol;
@@ -4163,26 +4163,26 @@ function ys(e) {
   }
 }
 function bs(e, t, n) {
-  const r = Me(e?.average_cost), a = r?.account ?? (L(t) ? t : H(t));
+  const r = Ie(e?.average_cost), a = r?.account ?? (L(t) ? t : H(t));
   if (!L(a))
     return null;
   const i = e?.account_currency_code ?? e?.account_currency;
   if (typeof i == "string" && i.trim())
     return i.trim().toUpperCase();
-  const o = Pe(e?.currency_code) ?? "", s = r?.security ?? r?.native ?? (L(n) ? n : H(n)), c = fn(e?.aggregation);
-  if (o && L(s) && Ye(a, s))
+  const o = Pe(e?.currency_code) ?? "", c = r?.security ?? r?.native ?? (L(n) ? n : H(n)), s = gn(e?.aggregation);
+  if (o && L(c) && je(a, c))
     return o;
-  const l = H(c?.purchase_total_security) ?? H(e?.purchase_total_security), u = H(c?.purchase_total_account) ?? H(e?.purchase_total_account);
+  const l = H(s?.purchase_total_security) ?? H(e?.purchase_total_security), u = H(s?.purchase_total_account) ?? H(e?.purchase_total_account);
   let d = null;
   if (L(l) && l !== 0 && L(u) && (d = u / l), r?.source === "eur_total")
     return "EUR";
   const f = r?.eur;
-  if (L(f) && Ye(a, f))
+  if (L(f) && je(a, f))
     return "EUR";
   const g = H(e?.purchase_value_eur);
-  return L(g) ? "EUR" : d != null && Ye(d, 1) ? o || null : o === "EUR" ? "EUR" : o || "EUR";
+  return L(g) ? "EUR" : d != null && je(d, 1) ? o || null : o === "EUR" ? "EUR" : o || "EUR";
 }
-function Xn(e) {
+function Zn(e) {
   return typeof e != "number" || !Number.isFinite(e) || e <= 0 ? null : e.toLocaleString("de-DE", {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4
@@ -4206,16 +4206,16 @@ function _s(e) {
     "last_transaction_at"
   ];
   for (const i of n) {
-    const o = t?.[i], s = mt(o);
-    if (s != null)
-      return s;
+    const o = t?.[i], c = yt(o);
+    if (c != null)
+      return c;
   }
   const r = [];
   t && "last_price_fetched_at" in t && r.push(t.last_price_fetched_at);
   const a = e?.last_price;
   a && typeof a == "object" && r.push(a.fetched_at), t && "last_price_date" in t && r.push(t.last_price_date);
   for (const i of r) {
-    const o = mt(i);
+    const o = yt(i);
     if (o != null)
       return o;
   }
@@ -4234,27 +4234,27 @@ function vs(e) {
 function Ss(e, t) {
   if (!e)
     return null;
-  const n = Pe(e.currency_code) ?? "", r = Me(e.average_cost);
+  const n = Pe(e.currency_code) ?? "", r = Ie(e.average_cost);
   if (!r || !n)
     return null;
   const a = r.native ?? r.security ?? null;
-  let o = r.account ?? r.eur ?? null, s = Pe(t) ?? "";
-  if (oe(r.eur) && (!s || s === n) && (o = r.eur, s = "EUR"), !n || !s || n === s || !oe(a) || !oe(o))
+  let o = r.account ?? r.eur ?? null, c = Pe(t) ?? "";
+  if (oe(r.eur) && (!c || c === n) && (o = r.eur, c = "EUR"), !n || !c || n === c || !oe(a) || !oe(o))
     return null;
-  const c = o / a;
-  if (!Number.isFinite(c) || c <= 0)
+  const s = o / a;
+  if (!Number.isFinite(s) || s <= 0)
     return null;
-  const l = Xn(c);
+  const l = Zn(s);
   if (!l)
     return null;
   let u = null;
-  if (c > 0) {
-    const b = 1 / c;
-    Number.isFinite(b) && b > 0 && (u = Xn(b));
+  if (s > 0) {
+    const b = 1 / s;
+    Number.isFinite(b) && b > 0 && (u = Zn(b));
   }
-  const d = _s(e), p = vs(d), f = [`FX-Kurs (Kauf): 1 ${n} = ${l} ${s}`];
-  u && f.push(`1 ${s} = ${u} ${n}`);
-  const g = [], m = r.source, y = m in zt ? zt[m] : zt.aggregation;
+  const d = _s(e), p = vs(d), f = [`FX-Kurs (Kauf): 1 ${n} = ${l} ${c}`];
+  u && f.push(`1 ${c} = ${u} ${n}`);
+  const g = [], m = r.source, y = m in Vt ? Vt[m] : Vt.aggregation;
   if (g.push(`Quelle: ${y}`), L(r.coverage_ratio)) {
     const b = Math.min(Math.max(r.coverage_ratio * 100, 0), 100);
     g.push(
@@ -4268,16 +4268,16 @@ function Ss(e, t) {
   const h = p ?? "Datum unbekannt";
   return `${f.join(" · ")} (Stand: ${h})`;
 }
-function Zn(e) {
+function Jn(e) {
   if (!e)
     return null;
-  const t = Me(e.average_cost), n = t?.native ?? t?.security ?? null;
+  const t = Ie(e.average_cost), n = t?.native ?? t?.security ?? null;
   return L(n) ? n : null;
 }
 function ws(e) {
   if (!e)
     return '<div class="meta-error">Keine Snapshot-Daten verfügbar.</div>';
-  const t = e.currency_code || "EUR", n = e.total_holdings_precise ?? e.total_holdings, r = wn(n), a = e.last_price_native ?? e.last_price?.native ?? e.last_price_eur, i = he(a), o = i === "—" ? null : `${i}${`&nbsp;${F(t)}`}`, s = H(e.market_value_eur) ?? H(e.current_value_eur) ?? null, c = Me(e.average_cost), l = c?.native ?? c?.security ?? null, u = c?.eur ?? null, p = c?.account ?? null ?? u, f = we(e.performance), g = f?.day_change ?? null, m = g?.price_change_native ?? null, y = g?.price_change_eur ?? null, h = L(m) ? m : y, b = L(m) ? t : "EUR", _ = (T, z = "") => {
+  const t = e.currency_code || "EUR", n = e.total_holdings_precise ?? e.total_holdings, r = An(n), a = e.last_price_native ?? e.last_price?.native ?? e.last_price_eur, i = he(a), o = i === "—" ? null : `${i}${`&nbsp;${F(t)}`}`, c = H(e.market_value_eur) ?? H(e.current_value_eur) ?? null, s = Ie(e.average_cost), l = s?.native ?? s?.security ?? null, u = s?.eur ?? null, p = s?.account ?? null ?? u, f = we(e.performance), g = f?.day_change ?? null, m = g?.price_change_native ?? null, y = g?.price_change_eur ?? null, h = L(m) ? m : y, b = L(m) ? t : "EUR", _ = (T, z = "") => {
     const B = ["value"];
     return z && B.push(...z.split(" ").filter(Boolean)), `<span class="${B.join(" ")}">${T}</span>`;
   }, v = (T = "") => {
@@ -4293,7 +4293,7 @@ function ws(e) {
       return v(z);
     const B = ["value--gain-percentage"];
     return z && B.push(z), _(pi(T), B.join(" "));
-  }, P = o ? _(o, "value--price") : v("value--price"), E = r === "—" ? v("value--holdings") : _(r, "value--holdings"), k = L(s) ? _(`${re(s)}&nbsp;€`, "value--market-value") : v("value--market-value"), I = L(h) ? _(
+  }, P = o ? _(o, "value--price") : v("value--price"), E = r === "—" ? v("value--holdings") : _(r, "value--holdings"), k = L(c) ? _(`${re(c)}&nbsp;€`, "value--market-value") : v("value--market-value"), I = L(h) ? _(
     ps(h, b),
     "value--gain value--absolute"
   ) : v("value--absolute"), C = A(
@@ -4322,7 +4322,7 @@ function ws(e) {
     v("value--average value--average-native")
   );
   let R = null, K = null;
-  return D && (t !== "EUR" || !L(l) || !Ye(u, l)) ? (R = u, K = "EUR") : L(p) && N && (N !== t || !Ye(p, l ?? NaN)) && (R = p, K = N), R != null && L(R) && S.push(
+  return D && (t !== "EUR" || !L(l) || !je(u, l)) ? (R = u, K = "EUR") : L(p) && N && (N !== t || !je(p, l ?? NaN)) && (R = p, K = N), R != null && L(R) && S.push(
     _(
       `${he(R)}${K ? `&nbsp;${F(K)}` : ""}`,
       "value--average value--average-eur"
@@ -4373,7 +4373,7 @@ function Cs(e) {
     </div>
   `;
 }
-function pa(e) {
+function ga(e) {
   if (!e)
     return null;
   if (typeof e == "string")
@@ -4392,10 +4392,10 @@ function As(e, t, {
   baseline: r,
   markers: a
 } = {}) {
-  const i = e.clientWidth || e.offsetWidth || 0, o = i > 0 ? i : 640, s = Math.min(Math.max(Math.floor(o * 0.5), 240), 440), c = (n || "").toUpperCase() || "EUR", l = L(r) ? r : null, u = Math.max(48, Math.min(72, Math.round(o * 0.075))), d = Math.max(28, Math.min(56, Math.round(o * 0.05))), p = Math.max(40, Math.min(64, Math.round(s * 0.14)));
+  const i = e.clientWidth || e.offsetWidth || 0, o = i > 0 ? i : 640, c = Math.min(Math.max(Math.floor(o * 0.5), 240), 440), s = (n || "").toUpperCase() || "EUR", l = L(r) ? r : null, u = Math.max(48, Math.min(72, Math.round(o * 0.075))), d = Math.max(28, Math.min(56, Math.round(o * 0.05))), p = Math.max(40, Math.min(64, Math.round(c * 0.14)));
   return {
     width: o,
-    height: s,
+    height: c,
     margin: {
       top: 18,
       right: d,
@@ -4406,14 +4406,14 @@ function As(e, t, {
     yFormatter: (g) => he(g),
     tooltipRenderer: ({ xFormatted: g, yFormatted: m }) => `
       <div class="chart-tooltip-date">${F(g)}</div>
-      <div class="chart-tooltip-value">${F(m)}&nbsp;${F(c)}</div>
+      <div class="chart-tooltip-value">${F(m)}&nbsp;${F(s)}</div>
     `,
     markerTooltipRenderer: ({
       marker: g,
       xFormatted: m,
       yFormatted: y
     }) => {
-      const h = g.payload ?? {}, b = ca(h.type), _ = H(h.shares), v = _ != null ? wn(_) : null, w = Pe(h.currency) ?? c, A = [];
+      const h = g.payload ?? {}, b = la(h.type), _ = H(h.shares), v = _ != null ? An(_) : null, w = Pe(h.currency) ?? s, A = [];
       b && A.push(b), v && A.push(`${v} Stück`), m && A.push(`am ${m}`);
       const P = A.join(" ").trim() || (typeof g.label == "string" ? g.label : m), E = typeof y == "string" && y.trim() ? y.trim() : he(h.price), k = E ? `${E}${w ? `&nbsp;${F(w)}` : ""}` : F(w);
       return `
@@ -4427,19 +4427,19 @@ function As(e, t, {
     markers: Array.isArray(a) ? a : []
   };
 }
-const Jn = /* @__PURE__ */ new WeakMap();
+const Qn = /* @__PURE__ */ new WeakMap();
 function Ps(e, t, n = {}) {
   if (t.length === 0)
     return;
   const r = As(e, t, n);
-  let a = Jn.get(e) ?? null;
+  let a = Qn.get(e) ?? null;
   if (!a || !e.contains(a)) {
-    e.innerHTML = "", a = ea(e, r), a && Jn.set(e, a);
+    e.innerHTML = "", a = ta(e, r), a && Qn.set(e, a);
     return;
   }
-  bn(a, r);
+  vn(a, r);
 }
-function Qn(e, t) {
+function er(e, t) {
   e && (e.dataset.activeRange = t, e.querySelectorAll(".security-range-button").forEach((n) => {
     const r = n.dataset.range, a = r === t;
     n.classList.toggle("active", a), n.setAttribute("aria-pressed", a ? "true" : "false"), n.disabled = !1, n.classList.remove("loading"), r && (n.textContent = r);
@@ -4450,15 +4450,15 @@ function Es(e, t, n, r, a) {
   if (!i || !i.parentElement)
     return;
   const o = document.createElement("div");
-  o.innerHTML = da(t, n, r, a).trim();
-  const s = o.firstElementChild;
-  s && i.parentElement.replaceChild(s, i);
+  o.innerHTML = fa(t, n, r, a).trim();
+  const c = o.firstElementChild;
+  c && i.parentElement.replaceChild(c, i);
 }
-function er(e, t, n, r, a = {}) {
+function tr(e, t, n, r, a = {}) {
   const i = e.querySelector(".security-detail-placeholder");
   if (i && (i.innerHTML = `
     <h2>Historie</h2>
-    ${fa(t, n)}
+    ${pa(t, n)}
   `, n.status === "loaded" && Array.isArray(r) && r.length)) {
     const o = i.querySelector(".history-chart");
     o && requestAnimationFrame(() => {
@@ -4474,21 +4474,21 @@ function Ns(e) {
     securityUuid: a,
     snapshot: i,
     initialRange: o,
-    initialHistory: s,
-    initialHistoryState: c
+    initialHistory: c,
+    initialHistoryState: s
   } = e;
   setTimeout(() => {
     const l = t.querySelector(".security-range-selector");
     if (!l)
       return;
-    const u = ra(a), d = aa(a), p = Zn(i);
-    Array.isArray(s) && c.status !== "error" && u.set(o, s), rs(a), jn(a, o), Qn(l, o);
-    const g = Zt(
-      s,
+    const u = aa(a), d = ia(a), p = Jn(i);
+    Array.isArray(c) && s.status !== "error" && u.set(o, c), rs(a), Gn(a, o), er(l, o);
+    const g = Jt(
+      c,
       i
     );
-    let m = c;
-    m.status !== "error" && (m = g.length ? { status: "loaded" } : { status: "empty" }), er(
+    let m = s;
+    m.status !== "error" && (m = g.length ? { status: "loaded" } : { status: "empty" }), tr(
       t,
       o,
       m,
@@ -4500,7 +4500,7 @@ function Ns(e) {
       }
     );
     const y = async (h) => {
-      if (h === sa(a))
+      if (h === ca(a))
         return;
       const b = l.querySelector(
         `.security-range-button[data-range="${h}"]`
@@ -4511,13 +4511,13 @@ function Ns(e) {
         w = _.length ? { status: "loaded" } : { status: "empty" };
       else
         try {
-          const x = ht(h), U = await ot(
+          const x = mt(h), U = await st(
             n,
             r,
             a,
             x
           );
-          _ = Xt(U.prices), v = yt(
+          _ = Zt(U.prices), v = bt(
             U.transactions,
             i?.currency_code,
             i
@@ -4525,18 +4525,18 @@ function Ns(e) {
         } catch (x) {
           console.error("Range-Wechsel: Historie konnte nicht geladen werden", x), _ = [], v = [], w = {
             status: "error",
-            message: pa(x) || "Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden."
+            message: ga(x) || "Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden."
           };
         }
       if (!Array.isArray(v))
         try {
-          const x = ht(h), U = await ot(
+          const x = mt(h), U = await st(
             n,
             r,
             a,
             x
           );
-          v = yt(
+          v = bt(
             U.transactions,
             i?.currency_code,
             i
@@ -4544,20 +4544,20 @@ function Ns(e) {
         } catch (x) {
           console.error("Range-Wechsel: Transaktionsmarker konnten nicht geladen werden", x), v = [];
         }
-      A = Zt(_, i), w.status !== "error" && (w = A.length ? { status: "loaded" } : { status: "empty" });
-      const P = vn(i), { priceChange: E, priceChangePct: k } = ua(
+      A = Jt(_, i), w.status !== "error" && (w = A.length ? { status: "loaded" } : { status: "empty" });
+      const P = wn(i), { priceChange: E, priceChangePct: k } = da(
         A,
         P
       ), I = Array.isArray(v) ? v : [];
-      jn(a, h), Qn(l, h), Es(
+      Gn(a, h), er(l, h), Es(
         t,
         h,
         E,
         k,
         i?.currency_code
       );
-      const C = Zn(i);
-      er(
+      const C = Jn(i);
+      tr(
         t,
         h,
         w,
@@ -4574,51 +4574,51 @@ function Ns(e) {
       if (!b || b.disabled)
         return;
       const { range: _ } = b.dataset;
-      !_ || !ta.includes(_) || y(_);
+      !_ || !na.includes(_) || y(_);
     });
   }, 0);
 }
 function xs(e) {
   const { root: t, hass: n, panelConfig: r, tickerSymbol: a } = e;
   let i = null, o = !1;
-  const s = async () => {
+  const c = async () => {
     try {
       i = await li(n, r);
-    } catch (c) {
-      o = !0, console.warn("News-Prompt: Prefetch fehlgeschlagen", c);
+    } catch (s) {
+      o = !0, console.warn("News-Prompt: Prefetch fehlgeschlagen", s);
     }
   };
-  s(), setTimeout(() => {
-    const c = t.querySelector(".news-prompt-button");
-    if (!c)
+  c(), setTimeout(() => {
+    const s = t.querySelector(".news-prompt-button");
+    if (!s)
       return;
     const l = (d) => {
-      const p = (i?.placeholder || Kn).trim() || Kn, f = (i?.prompt_template || "").trim(), g = (i?.link || "").trim() || Jo;
+      const p = (i?.placeholder || jn).trim() || jn, f = (i?.prompt_template || "").trim(), g = (i?.link || "").trim() || Jo;
       return { body: f ? f.includes(p) ? f.split(p).join(d) : `${f}
 
 Ticker: ${d}` : `Ticker: ${d}`, link: g };
     }, u = async () => {
-      const d = (c.dataset.symbol || a || "").trim();
+      const d = (s.dataset.symbol || a || "").trim();
       if (!d) {
         console.warn("News-Prompt: Kein Ticker verfügbar");
         return;
       }
-      if (c.classList.contains("loading"))
+      if (s.classList.contains("loading"))
         return;
-      c.disabled = !0, c.classList.add("loading");
-      const p = c.textContent;
+      s.disabled = !0, s.classList.add("loading");
+      const p = s.textContent;
       try {
         const { body: f, link: g } = l(d), m = await ms(f);
-        m ? c.textContent = "✅ Copied! Opening..." : console.warn("News-Prompt: Clipboard unavailable – prompt could not be copied"), m && await new Promise((y) => setTimeout(y, 800)), ys(g), !i && !o && s();
+        m ? s.textContent = "✅ Copied! Opening..." : console.warn("News-Prompt: Clipboard unavailable – prompt could not be copied"), m && await new Promise((y) => setTimeout(y, 800)), ys(g), !i && !o && c();
       } catch (f) {
         console.error("News-Prompt: Kopiervorgang fehlgeschlagen", f);
       } finally {
-        c.classList.remove("loading"), c.disabled = !1, p && setTimeout(() => {
-          c.textContent = p;
+        s.classList.remove("loading"), s.disabled = !1, p && setTimeout(() => {
+          s.textContent = p;
         }, 2e3);
       }
     };
-    c.addEventListener("click", () => {
+    s.addEventListener("click", () => {
       u();
     });
   }, 0);
@@ -4636,13 +4636,13 @@ async function Ds(e, t, n, r) {
     ), x = C.snapshot;
     i = x && typeof x == "object" ? x : C;
   } catch (C) {
-    console.error("renderSecurityDetail: Snapshot konnte nicht geladen werden", C), o = la(C);
+    console.error("renderSecurityDetail: Snapshot konnte nicht geladen werden", C), o = ua(C);
   }
-  const s = i || a, c = !!(a && !i), l = (s?.source ?? "") === "cache";
-  r && es(r, s ?? null);
-  const u = s && (c || l) ? Qo({ fallbackUsed: c, flaggedAsCache: l }) : "", d = s?.name || "Wertpapierdetails", p = At(d, "", { includeMeta: !1 });
+  const c = i || a, s = !!(a && !i), l = (c?.source ?? "") === "cache";
+  r && es(r, c ?? null);
+  const u = c && (s || l) ? Qo({ fallbackUsed: s, flaggedAsCache: l }) : "", d = c?.name || "Wertpapierdetails", p = Et(d, "", { includeMeta: !1 });
   p.classList.add("security-detail-header");
-  const f = Cs(s);
+  const f = Cs(c);
   if (o)
     return `
       ${p.outerHTML}
@@ -4653,23 +4653,23 @@ async function Ds(e, t, n, r) {
         <p>${o}</p>
       </div>
     `;
-  const g = sa(r), m = ra(r), y = aa(r);
+  const g = ca(r), m = aa(r), y = ia(r);
   let h = m.has(g) ? m.get(g) ?? null : null, b = { status: "empty" }, _ = y.has(g) ? y.get(g) ?? null : null;
   if (Array.isArray(h))
     b = h.length ? { status: "loaded" } : { status: "empty" };
   else {
     h = [];
     try {
-      const C = ht(g), x = await ot(
+      const C = mt(g), x = await st(
         t,
         n,
         r,
         C
       );
-      h = Xt(x.prices), _ = yt(
+      h = Zt(x.prices), _ = bt(
         x.transactions,
-        s?.currency_code,
-        s
+        c?.currency_code,
+        c
       ), m.set(g, h), _ = Array.isArray(_) ? _ : [], y.set(g, _), b = h.length ? { status: "loaded" } : { status: "empty" };
     } catch (C) {
       console.error(
@@ -4677,22 +4677,22 @@ async function Ds(e, t, n, r) {
         C
       ), b = {
         status: "error",
-        message: pa(C) || "Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden."
+        message: ga(C) || "Die historischen Daten konnten aufgrund eines Fehlers nicht geladen werden."
       };
     }
   }
   if (!Array.isArray(_))
     try {
-      const C = ht(g), x = await ot(
+      const C = mt(g), x = await st(
         t,
         n,
         r,
         C
-      ), U = Xt(x.prices);
-      _ = yt(
+      ), U = Zt(x.prices);
+      _ = bt(
         x.transactions,
-        s?.currency_code,
-        s
+        c?.currency_code,
+        c
       ), m.set(g, U), _ = Array.isArray(_) ? _ : [], y.set(g, _), h = U, b = h.length ? { status: "loaded" } : { status: "empty" };
     } catch (C) {
       console.error(
@@ -4700,26 +4700,26 @@ async function Ds(e, t, n, r) {
         C
       ), _ = [];
     }
-  const v = Zt(
+  const v = Jt(
     h,
-    s
+    c
   );
   b.status !== "error" && (b = v.length ? { status: "loaded" } : { status: "empty" });
-  const w = gs(s, r), A = hs(w), P = vn(s), { priceChange: E, priceChangePct: k } = ua(
+  const w = gs(c, r), A = hs(w), P = wn(c), { priceChange: E, priceChangePct: k } = da(
     v,
     P
-  ), I = da(
+  ), I = fa(
     g,
     E,
     k,
-    s?.currency_code
+    c?.currency_code
   );
   return Ns({
     root: e,
     hass: t,
     panelConfig: n,
     securityUuid: r,
-    snapshot: s,
+    snapshot: c,
     initialRange: g,
     initialHistory: h,
     initialHistoryState: b
@@ -4737,7 +4737,7 @@ async function Ds(e, t, n, r) {
     ${fs(g)}
     <div class="card security-detail-placeholder">
       <h2>Historie</h2>
-      ${fa(g, b)}
+      ${pa(g, b)}
     </div>
   `;
 }
@@ -4823,14 +4823,14 @@ class Fs {
     i.textContent = "–", i.setAttribute("aria-hidden", "true"), a.appendChild(this.startInput), a.appendChild(i), a.appendChild(this.endInput);
     const o = document.createElement("div");
     o.className = "drp-actions";
-    const s = document.createElement("button");
-    s.className = "drp-btn drp-btn-cancel", s.textContent = "Abbrechen", s.addEventListener("click", (l) => {
+    const c = document.createElement("button");
+    c.className = "drp-btn drp-btn-cancel", c.textContent = "Abbrechen", c.addEventListener("click", (l) => {
       l.stopPropagation(), this.close();
     });
-    const c = document.createElement("button");
-    c.className = "drp-btn drp-btn-apply", c.textContent = "Übernehmen", c.addEventListener("click", (l) => {
+    const s = document.createElement("button");
+    s.className = "drp-btn drp-btn-apply", s.textContent = "Übernehmen", s.addEventListener("click", (l) => {
       l.stopPropagation(), this.apply();
-    }), o.appendChild(s), o.appendChild(c), r.appendChild(a), r.appendChild(o), n.appendChild(r), this.popoverEl.appendChild(n), this.element.appendChild(this.popoverEl);
+    }), o.appendChild(c), o.appendChild(s), r.appendChild(a), r.appendChild(o), n.appendChild(r), this.popoverEl.appendChild(n), this.element.appendChild(this.popoverEl);
   }
   bindEvents() {
     const t = (n) => {
@@ -4901,16 +4901,16 @@ class Fs {
     i.className = "drp-calendar";
     const o = document.createElement("div");
     o.className = "drp-calendar-header";
-    const s = document.createElement("button");
-    s.className = "drp-nav-btn", s.innerHTML = `
+    const c = document.createElement("button");
+    c.className = "drp-nav-btn", c.innerHTML = `
             <svg viewBox="0 0 24 24">
                 <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
             </svg>
-        `, s.setAttribute("aria-label", "Vorheriger Monat"), n === "left" ? s.addEventListener("click", (m) => {
+        `, c.setAttribute("aria-label", "Vorheriger Monat"), n === "left" ? c.addEventListener("click", (m) => {
       m.stopPropagation(), this.viewDate.setMonth(this.viewDate.getMonth() - 1), this.renderCalendars();
-    }) : s.style.visibility = "hidden";
-    const c = document.createElement("span");
-    c.className = "drp-month-label", c.textContent = t.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+    }) : c.style.visibility = "hidden";
+    const s = document.createElement("span");
+    s.className = "drp-month-label", s.textContent = t.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
     const l = document.createElement("button");
     l.className = "drp-nav-btn", l.innerHTML = `
             <svg viewBox="0 0 24 24">
@@ -4918,7 +4918,7 @@ class Fs {
             </svg>
         `, l.setAttribute("aria-label", "Nächster Monat"), n === "right" ? l.addEventListener("click", (m) => {
       m.stopPropagation(), this.viewDate.setMonth(this.viewDate.getMonth() + 1), this.renderCalendars();
-    }) : l.style.visibility = "hidden", o.appendChild(s), o.appendChild(c), o.appendChild(l), i.appendChild(o);
+    }) : l.style.visibility = "hidden", o.appendChild(c), o.appendChild(s), o.appendChild(l), i.appendChild(o);
     const u = document.createElement("div");
     u.className = "drp-days-header", ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].forEach((m) => {
       const y = document.createElement("span");
@@ -4966,7 +4966,7 @@ let be = {
   data: null,
   selection: null,
   lastUpdated: null
-}, tr = null;
+}, nr = null;
 function $s(e) {
   if (typeof e == "string")
     return e.trim() || "Unbekannter Fehler";
@@ -4978,47 +4978,47 @@ function $s(e) {
     return String(e);
   }
 }
-function Jt(e) {
+function Qt(e) {
   return typeof e != "string" ? null : e.trim() || null;
 }
 function Ts(e) {
   if (!e || typeof e != "object")
     return null;
-  const t = e, n = Jt(t.start), r = Jt(t.end);
+  const t = e, n = Qt(t.start), r = Qt(t.end);
   return n && r ? { start: n, end: r } : null;
 }
-function nr(e) {
+function rr(e) {
   if (!Array.isArray(e))
     return [];
   const t = e.map((r) => typeof r == "string" ? r.trim() : "").filter((r) => r.length > 0), n = Array.from(new Set(t));
   return n.sort(), n;
 }
 function Ls(e) {
-  const t = Jt(e.date ?? null), n = Ts(e.range ?? null);
+  const t = Qt(e.date ?? null), n = Ts(e.range ?? null);
   if (t && n)
     throw new Error("loadDailyWealth: date und range können nicht gleichzeitig gesetzt werden");
   if (!t && !n)
     throw new Error("loadDailyWealth: entweder date oder range erforderlich");
-  const r = e.scopes ?? {}, a = nr(r.accounts), i = nr(r.portfolios), o = {};
+  const r = e.scopes ?? {}, a = rr(r.accounts), i = rr(r.portfolios), o = {};
   t && (o.date = t), n && (o.range = n);
-  const s = e.include_slices ?? e.includeSlices ?? void 0, c = e.include_scopes ?? e.includeScopes ?? void 0;
-  return s !== void 0 && (o.includeSlices = s), c !== void 0 && (o.includeScopes = c), (a.length || i.length) && (o.scopes = {}, a.length && (o.scopes.accounts = a), i.length && (o.scopes.portfolios = i)), typeof e.limit == "number" && Number.isFinite(e.limit) && e.limit > 0 && (o.limit = e.limit), typeof e.offset == "number" && Number.isFinite(e.offset) && e.offset >= 0 && (o.offset = e.offset), o;
+  const c = e.include_slices ?? e.includeSlices ?? void 0, s = e.include_scopes ?? e.includeScopes ?? void 0;
+  return c !== void 0 && (o.includeSlices = c), s !== void 0 && (o.includeScopes = s), (a.length || i.length) && (o.scopes = {}, a.length && (o.scopes.accounts = a), i.length && (o.scopes.portfolios = i)), typeof e.limit == "number" && Number.isFinite(e.limit) && e.limit > 0 && (o.limit = e.limit), typeof e.offset == "number" && Number.isFinite(e.offset) && e.offset >= 0 && (o.offset = e.offset), o;
 }
 function Rs(e) {
-  const t = e.date ?? "", n = e.range ? `${e.range.start}..${e.range.end}` : "", r = e.scopes?.accounts ?? [], a = e.scopes?.portfolios ?? [], i = JSON.stringify({ accounts: r, portfolios: a }), o = e.includeSlices ? "1" : "0", s = e.includeScopes ? "1" : "0", c = e.limit ?? "", l = e.offset ?? "";
-  return [t, n, i, o, s, c, l].join("::");
+  const t = e.date ?? "", n = e.range ? `${e.range.start}..${e.range.end}` : "", r = e.scopes?.accounts ?? [], a = e.scopes?.portfolios ?? [], i = JSON.stringify({ accounts: r, portfolios: a }), o = e.includeSlices ? "1" : "0", c = e.includeScopes ? "1" : "0", s = e.limit ?? "", l = e.offset ?? "";
+  return [t, n, i, o, c, s, l].join("::");
 }
 function Ms(e) {
   return { ...e };
 }
-function rr(e) {
+function ar(e) {
   return { ...e };
 }
 function Hs(e) {
   if (e)
     return {
-      accounts: e.accounts.map(rr),
-      portfolios: e.portfolios.map(rr)
+      accounts: e.accounts.map(ar),
+      portfolios: e.portfolios.map(ar)
     };
 }
 function Is(e) {
@@ -5040,13 +5040,13 @@ function zs(e) {
     ...e.scopes.portfolios ? { portfolios: [...e.scopes.portfolios] } : {}
   }), e.includeSlices !== void 0 && (t.includeSlices = e.includeSlices), e.includeScopes !== void 0 && (t.includeScopes = e.includeScopes), e.limit !== void 0 && (t.limit = e.limit), e.offset !== void 0 && (t.offset = e.offset), t;
 }
-function Vt(e) {
+function Ut(e) {
   be = {
     ...be,
     ...e
   };
 }
-function Qt() {
+function en() {
   return {
     status: be.status,
     error: be.error,
@@ -5057,16 +5057,16 @@ function Qt() {
 }
 async function Vs(e, t, n = {}) {
   const r = Ls(n), a = Rs(r);
-  if (be.data && !n.force && tr === a)
-    return Qt();
-  Vt({
+  if (be.data && !n.force && nr === a)
+    return en();
+  Ut({
     status: "loading",
     error: null,
     selection: r
   });
   try {
     const i = await di(e, t, r);
-    tr = a, Vt({
+    nr = a, Ut({
       status: "loaded",
       error: null,
       data: i,
@@ -5074,17 +5074,17 @@ async function Vs(e, t, n = {}) {
       lastUpdated: Date.now()
     });
   } catch (i) {
-    Vt({
+    Ut({
       status: "error",
       error: $s(i),
       selection: r,
       lastUpdated: Date.now()
     });
   }
-  return Qt();
+  return en();
 }
 const Us = 30;
-let ga = null, en = null;
+let ha = null, tn = null;
 const pe = /* @__PURE__ */ new Set(), qs = [
   "#1976d2",
   "#c2185b",
@@ -5095,7 +5095,7 @@ const pe = /* @__PURE__ */ new Set(), qs = [
   "#512da8",
   "#0097a7"
 ];
-function bt(e) {
+function _t(e) {
   const t = e.getUTCFullYear(), n = String(e.getUTCMonth() + 1).padStart(2, "0"), r = String(e.getUTCDate()).padStart(2, "0");
   return `${String(t)}-${n}-${r}`;
 }
@@ -5103,8 +5103,8 @@ function Os() {
   const e = /* @__PURE__ */ new Date(), t = new Date(e);
   return t.setUTCDate(e.getUTCDate() - (Us - 1)), {
     range: {
-      start: bt(t),
-      end: bt(e)
+      start: _t(t),
+      end: _t(e)
     },
     includeSlices: !0,
     includeScopes: !0
@@ -5116,7 +5116,7 @@ function Bs(e) {
   const t = e.some((i) => i.fx_coverage_ratio != null && i.fx_coverage_ratio < 1), n = e.some((i) => i.price_coverage_ratio != null && i.price_coverage_ratio < 1), r = e.some((i) => i.stale_price), a = [];
   return t && a.push('<span class="meta-badge meta-badge--warning" title="Wechselkurse fehlen teilweise">FX-Abdeckung</span>'), n && a.push('<span class="meta-badge meta-badge--warning" title="Preisdaten unvollständig">Preisabdeckung</span>'), r && a.push('<span class="meta-badge meta-badge--neutral" title="Letzte Kurse sind veraltet">Stale Kurse</span>'), a.length ? `<span class="meta-badges">${a.join("")}</span>` : '<span class="meta-badge meta-badge--positive">Volle Abdeckung</span>';
 }
-function ha(e) {
+function ma(e) {
   return `${re(e)}&nbsp;€`;
 }
 function ae(e, t) {
@@ -5125,11 +5125,11 @@ function ae(e, t) {
     return typeof a == "number" && Number.isFinite(a) ? n + a : n;
   }, 0);
 }
-function et(e, t, n = "") {
+function tt(e, t, n = "") {
   const r = e.querySelector("#analyse-status");
   r && (r.dataset.state = t, t === "loading" ? r.textContent = "Lade Vermögensdaten …" : t === "error" ? r.textContent = n || "Daten konnten nicht geladen werden." : r.textContent = "");
 }
-function ar(e, t, n) {
+function ir(e, t, n) {
   const r = e.querySelector("#analyse-total-wealth"), a = e.querySelector("#analyse-coverage"), i = e.querySelector("#analyse-selection-label");
   if (!r || !a || !i)
     return;
@@ -5138,9 +5138,9 @@ function ar(e, t, n) {
     return;
   }
   const o = n[n.length - 1];
-  r.innerHTML = ha(o.total_wealth_eur), a.innerHTML = Bs(n);
+  r.innerHTML = ma(o.total_wealth_eur), a.innerHTML = Bs(n);
 }
-function ir(e, t) {
+function or(e, t) {
   const n = e.querySelector(".analyse-metrics-grid");
   if (!n) return;
   if (!t.length) {
@@ -5149,10 +5149,10 @@ function ir(e, t) {
   }
   const r = Xs(t);
   if (!r) return;
-  const a = (o, s, c = "", l = "") => `
-    <div class="metric-row ${c}" ${l ? `id="${l}"` : ""}>
+  const a = (o, c, s = "", l = "") => `
+    <div class="metric-row ${s}" ${l ? `id="${l}"` : ""}>
       <span class="metric-label">${o}</span>
-      <span class="metric-value">${typeof s == "number" ? ha(s) : s}</span>
+      <span class="metric-value">${typeof c == "number" ? ma(c) : c}</span>
     </div>`, i = `
     <div class="metrics-section">
       <h3>Performance-Berechnung</h3>
@@ -5171,7 +5171,7 @@ function ir(e, t) {
   `;
   n.innerHTML = i;
 }
-function _t(e, t) {
+function vt(e, t) {
   return !e || !t ? null : `${e}:${t}`;
 }
 function Ws(e) {
@@ -5181,7 +5181,7 @@ function Ws(e) {
   }
   const t = /* @__PURE__ */ new Set(), n = (r, a) => {
     r.forEach((i) => {
-      const o = _t(a, i.scope_id);
+      const o = vt(a, i.scope_id);
       o && t.add(o);
     });
   };
@@ -5200,15 +5200,15 @@ function Ys(e, t) {
     r.innerHTML = '<p class="table-note" role="note"><span class="table-note__icon" aria-hidden="true">ℹ️</span><span>Keine Slices verfügbar.</span></p>';
     return;
   }
-  const o = (s, c, l) => {
+  const o = (c, s, l) => {
     const u = /* @__PURE__ */ new Map();
-    if (c.forEach((p) => {
-      const f = _t(l, p.scope_id);
+    if (s.forEach((p) => {
+      const f = vt(l, p.scope_id);
       f && !u.has(f) && u.set(f, p);
     }), u.size === 0)
       return "";
     const d = Array.from(u.values()).map((p) => {
-      const f = _t(l, p.scope_id);
+      const f = vt(l, p.scope_id);
       if (!f)
         return "";
       const g = pe.has(f) ? "checked" : "", m = F(p.scope_name ?? p.scope_id);
@@ -5219,21 +5219,21 @@ function Ys(e, t) {
           </label>
         `;
     }).join("");
-    return `<div class="scope-group"><div class="scope-title">${s}</div>${d}</div>`;
+    return `<div class="scope-group"><div class="scope-title">${c}</div>${d}</div>`;
   };
   r.innerHTML = `
     ${o("Konten", t.accounts, "account")}
     ${o("Depots", t.portfolios, "portfolio")}
-  `, r.addEventListener("change", (s) => {
-    const c = s.target?.closest('input[type="checkbox"][data-scope-key]');
-    if (!c || !c.dataset.scopeKey)
+  `, r.addEventListener("change", (c) => {
+    const s = c.target?.closest('input[type="checkbox"][data-scope-key]');
+    if (!s || !s.dataset.scopeKey)
       return;
-    const { scopeKey: l } = c.dataset;
+    const { scopeKey: l } = s.dataset;
     if (!l)
       return;
-    c.checked ? pe.add(l) : pe.delete(l);
+    s.checked ? pe.add(l) : pe.delete(l);
     const u = e.closest("#analyse-chart-card");
-    u && en && ma(u, en);
+    u && tn && ya(u, tn);
   });
 }
 function Ks(e) {
@@ -5251,20 +5251,20 @@ function js(e) {
       date: o.date,
       value: o.total_wealth_eur
     }))
-  }, r = [], a = /* @__PURE__ */ new Map(), i = (o, s) => {
-    o.forEach((c) => {
-      const l = _t(s, c.scope_id);
-      l && (a.has(l) || a.set(l, /* @__PURE__ */ new Map()), a.get(l)?.set(c.date, c));
+  }, r = [], a = /* @__PURE__ */ new Map(), i = (o, c) => {
+    o.forEach((s) => {
+      const l = vt(c, s.scope_id);
+      l && (a.has(l) || a.set(l, /* @__PURE__ */ new Map()), a.get(l)?.set(s.date, s));
     });
   };
-  return e.slices && (i(e.slices.accounts, "account"), i(e.slices.portfolios, "portfolio")), a.forEach((o, s) => {
-    if (!pe.has(s))
+  return e.slices && (i(e.slices.accounts, "account"), i(e.slices.portfolios, "portfolio")), a.forEach((o, c) => {
+    if (!pe.has(c))
       return;
-    const c = t.shift() ?? "#607d8b", l = s.startsWith("account:"), u = s.split(":")[1] ?? "", p = `${l ? "Konto" : "Depot"} ${u}`.trim(), f = o.values().next(), m = (f.done ? void 0 : f.value)?.scope_name ?? p;
+    const s = t.shift() ?? "#607d8b", l = c.startsWith("account:"), u = c.split(":")[1] ?? "", p = `${l ? "Konto" : "Depot"} ${u}`.trim(), f = o.values().next(), m = (f.done ? void 0 : f.value)?.scope_name ?? p;
     r.push({
-      key: s,
+      key: c,
       label: m,
-      color: c,
+      color: s,
       points: e.records.map((y) => {
         const h = o.get(y.date);
         return !h || !Number.isFinite(h.total_wealth_eur) ? null : { date: y.date, value: h.total_wealth_eur };
@@ -5280,22 +5280,22 @@ function Gs(e, t) {
   r.querySelectorAll(".analyse-slice-series").forEach((o) => {
     o.remove();
   }), t.filter((o) => o.key !== "total").forEach((o) => {
-    const s = o.points.map((u, d) => {
+    const c = o.points.map((u, d) => {
       const p = Ks(u.date);
       if (p == null || !Number.isFinite(u.value))
         return null;
       const f = a.maxX === a.minX ? 0.5 : (p - a.minX) / (a.maxX - a.minX), g = a.maxY === a.minY ? 0.5 : (u.value - a.minY) / (a.maxY - a.minY), m = i.left + f * a.boundedWidth, y = i.top + (1 - g) * a.boundedHeight;
       return `${d === 0 ? "M" : "L"}${String(m)},${String(y)}`;
     }).filter(Boolean).join(" ");
-    if (!s)
+    if (!c)
       return;
-    const c = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    c.setAttribute("class", "analyse-slice-series");
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    s.setAttribute("class", "analyse-slice-series");
     const l = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    l.setAttribute("d", s), l.setAttribute("fill", "none"), l.setAttribute("stroke", o.color), l.setAttribute("stroke-width", "2"), l.setAttribute("stroke-linejoin", "round"), l.setAttribute("stroke-linecap", "round"), c.appendChild(l), r.appendChild(c);
+    l.setAttribute("d", c), l.setAttribute("fill", "none"), l.setAttribute("stroke", o.color), l.setAttribute("stroke-width", "2"), l.setAttribute("stroke-linejoin", "round"), l.setAttribute("stroke-linecap", "round"), s.appendChild(l), r.appendChild(s);
   });
 }
-function ma(e, t) {
+function ya(e, t) {
   const n = e.querySelector(".line-chart-container");
   if (!n)
     return;
@@ -5310,23 +5310,23 @@ function ma(e, t) {
   }
   const i = {
     series: a.points,
-    xAccessor: (c) => c.date,
-    yAccessor: (c) => c.value,
-    xFormatter: (c) => {
-      const l = new Date(c);
+    xAccessor: (s) => s.date,
+    yAccessor: (s) => s.value,
+    xFormatter: (s) => {
+      const l = new Date(s);
       return Number.isFinite(l.getTime()) ? l.toLocaleDateString("de-DE") : "";
     },
-    yFormatter: (c) => re(c),
+    yFormatter: (s) => re(s),
     color: a.color,
     areaColor: "rgba(44, 62, 80, 0.12)"
   }, o = n;
-  let s = o;
-  !o.__chartState || !n.querySelector("svg") ? (n.innerHTML = "", s = ea(n, i)) : (bn(o, i), s = o), s && Gs(s, r);
+  let c = o;
+  !o.__chartState || !n.querySelector("svg") ? (n.innerHTML = "", c = ta(n, i)) : (vn(o, i), c = o), c && Gs(c, r);
 }
 function Xs(e) {
   if (!e.length)
     return null;
-  const t = e[0]?.total_wealth_eur ?? 0, n = e[e.length - 1]?.total_wealth_eur ?? 0, r = ae(e, "dividends_eur"), a = ae(e, "interest_eur"), i = r + a, o = -Math.abs(ae(e, "fees_eur")), s = -Math.abs(ae(e, "taxes_eur")), c = ae(e, "inbound_transfers_eur") - ae(e, "outbound_transfers_eur"), l = ae(e, "performance_neutral_movements"), u = n - t - i - o - s - c - l, d = ae(e, "realized_gains_eur"), p = ae(e, "unrealized_price_gains_eur"), f = ae(e, "fx_gains_eur");
+  const t = e[0]?.total_wealth_eur ?? 0, n = e[e.length - 1]?.total_wealth_eur ?? 0, r = ae(e, "dividends_eur"), a = ae(e, "interest_eur"), i = r + a, o = -Math.abs(ae(e, "fees_eur")), c = -Math.abs(ae(e, "taxes_eur")), s = ae(e, "inbound_transfers_eur") - ae(e, "outbound_transfers_eur"), l = ae(e, "performance_neutral_movements"), u = n - t - i - o - c - s - l, d = ae(e, "realized_gains_eur"), p = ae(e, "unrealized_price_gains_eur"), f = ae(e, "fx_gains_eur");
   return {
     startValue: t,
     endValue: n,
@@ -5338,36 +5338,36 @@ function Xs(e) {
     interest: a,
     ertraege: i,
     fees: o,
-    taxes: s,
-    netTransfers: c,
+    taxes: c,
+    netTransfers: s,
     neutral: l
   };
 }
-async function or(e, t, n, r, a) {
-  et(e, "loading");
+async function sr(e, t, n, r, a) {
+  tt(e, "loading");
   const i = await Vs(n, r, a);
   if (i.status === "error") {
-    if (et(e, "error", i.error ?? void 0), t) {
-      const c = t.querySelector(".line-chart-container");
-      c && c.replaceChildren();
+    if (tt(e, "error", i.error ?? void 0), t) {
+      const s = t.querySelector(".line-chart-container");
+      s && s.replaceChildren();
     }
     return;
   }
   const o = i.data;
   if (!o || !Array.isArray(o.records) || o.records.length === 0) {
-    const c = a.range?.start ?? "?", l = a.range?.end ?? "?", u = `Zeitraum: ${c} – ${l}`;
-    if (ar(e, u, []), ir(e, []), et(e, "loaded", "Keine Daten für den gewählten Zeitraum."), t) {
+    const s = a.range?.start ?? "?", l = a.range?.end ?? "?", u = `Zeitraum: ${s} – ${l}`;
+    if (ir(e, u, []), or(e, []), tt(e, "loaded", "Keine Daten für den gewählten Zeitraum."), t) {
       const d = t.querySelector(".line-chart-container");
       d && d.replaceChildren();
     }
     return;
   }
-  ga = a, en = o, Ws(o.slices);
-  const s = a.range ? `Zeitraum: ${a.range.start} – ${a.range.end}` : a.date ? `Tag: ${a.date}` : "";
-  ar(e, s, o.records), ir(e, o.records), t && (Ys(t, o.slices), ma(t, o)), et(e, "loaded");
+  ha = a, tn = o, Ws(o.slices);
+  const c = a.range ? `Zeitraum: ${a.range.start} – ${a.range.end}` : a.date ? `Tag: ${a.date}` : "";
+  ir(e, c, o.records), or(e, o.records), t && (Ys(t, o.slices), ya(t, o)), tt(e, "loaded");
 }
 function Zs(e, t, n, r) {
-  const a = e.querySelector("#analyse-date-picker-container"), i = ga ?? Qt().selection ?? Os();
+  const a = e.querySelector("#analyse-date-picker-container"), i = ha ?? en().selection ?? Os();
   let o;
   if (i.range)
     o = {
@@ -5375,26 +5375,26 @@ function Zs(e, t, n, r) {
       end: new Date(i.range.end)
     };
   else if (i.date) {
-    const s = new Date(i.date);
-    o = { start: s, end: s };
+    const c = new Date(i.date);
+    o = { start: c, end: c };
   }
   a && new Fs(a, {
     initialRange: o,
-    onChange: (s) => {
-      const c = {
+    onChange: (c) => {
+      const s = {
         range: {
-          start: bt(s.start),
-          end: bt(s.end)
+          start: _t(c.start),
+          end: _t(c.end)
         },
         includeSlices: !0,
         includeScopes: !0
       };
-      or(e, t, n, r, c);
+      sr(e, t, n, r, s);
     }
-  }), or(e, t, n, r, i);
+  }), sr(e, t, n, r, i);
 }
 function Js(e, t, n) {
-  const c = `
+  const s = `
     
     <style>
       .analyse-metrics-grid {
@@ -5455,7 +5455,7 @@ function Js(e, t, n) {
       }
     </style>
   
-    ${At("Zeitmaschine", `
+    ${Et("Zeitmaschine", `
     <div class="header-meta-row">
       <span>Vermögensverlauf &amp; Cashflows</span>
     </div>
@@ -5499,7 +5499,7 @@ function Js(e, t, n) {
       return;
     const l = e.querySelector("#analyse-range-card"), u = e.querySelector("#analyse-chart-card");
     l && Zs(l, u, t, n);
-  }, 0), c;
+  }, 0), s;
 }
 function ne(e, t = "EUR") {
   return e === null || typeof e > "u" ? "" : new Intl.NumberFormat("de-DE", {
@@ -5507,20 +5507,20 @@ function ne(e, t = "EUR") {
     currency: t
   }).format(e);
 }
-function ya(e) {
+function ba(e) {
   return e === null || typeof e > "u" ? "" : new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(e);
 }
-function ba(e) {
+function _a(e) {
   return e === null || typeof e > "u" ? "" : new Intl.NumberFormat("de-DE", {
     style: "percent",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(e);
 }
-function _a(e, t) {
+function va(e, t) {
   return `<span class="${e > 0 ? "positive" : e < 0 ? "negative" : "neutral"}">${t}</span>`;
 }
 function Qs(e) {
@@ -5537,27 +5537,27 @@ function Qs(e) {
     { key: "result_pct", label: "Resultat", align: "right" },
     { key: "current_holdings", label: "Bestand", align: "right" }
   ], n = e.map((r) => {
-    const a = r.current_price ?? 0, i = r.last_sell_price, o = a - i, s = o > 0 ? "positive" : o < 0 ? "negative" : "neutral";
-    let c = F(r.name);
-    r.lots.length > 1 && (c = `
+    const a = r.current_price ?? 0, i = r.last_sell_price, o = a - i, c = o > 0 ? "positive" : o < 0 ? "negative" : "neutral";
+    let s = F(r.name);
+    r.lots.length > 1 && (s = `
         <span class="expand-icon" data-security-uuid="${r.security_uuid}">
           <ha-icon icon="mdi:chevron-right"></ha-icon>
         </span>
-        ${c}
+        ${s}
       `);
     const l = Math.abs(r.current_holdings) < 1e-3;
     return {
       _uuid: r.security_uuid,
       _lots: r.lots,
-      name: c,
+      name: s,
       last_sell_price: ne(r.last_sell_price_native ?? r.last_sell_price, r.currency_code),
-      current_price: `<span class="trend--${s}">${ne(r.current_price, r.currency_code)}</span>`,
+      current_price: `<span class="trend--${c}">${ne(r.current_price, r.currency_code)}</span>`,
       purchase_value_gross: ne(r.purchase_value_gross),
       sales_value_gross: ne(r.sales_value_gross),
       result_gross: ne(r.sales_value_gross - r.purchase_value_gross),
       result_abs: ne(r.result_abs),
-      result_pct: _a(r.result_pct, ba(r.result_pct / 100)),
-      current_holdings: l ? '<ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon>' : ya(r.current_holdings)
+      result_pct: va(r.result_pct, _a(r.result_pct / 100)),
+      current_holdings: l ? '<ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon>' : ba(r.current_holdings)
     };
   });
   return Se(n, t, [], {
@@ -5573,7 +5573,7 @@ function ec(e, t) {
     name: `
       <div class="lot-date-shares">
          <span class="lot-date">${r.date}</span>
-         <span class="lot-shares">${ya(r.shares)} Stk.</span>
+         <span class="lot-shares">${ba(r.shares)} Stk.</span>
       </div>
     `,
     last_sell_price: ne(r.sell_price_native ?? r.sell_price, t.currency_code),
@@ -5582,7 +5582,7 @@ function ec(e, t) {
     sales_value_gross: ne(r.sales_value_gross),
     result_gross: ne(r.sales_value_gross - r.purchase_value_gross),
     result_abs: ne(r.result_abs),
-    result_pct: _a(r.result_pct, ba(r.result_pct / 100)),
+    result_pct: va(r.result_pct, _a(r.result_pct / 100)),
     current_holdings: ""
   }));
   return Se(
@@ -5607,15 +5607,15 @@ function tc(e, t) {
   e.querySelectorAll(".expand-icon").forEach((r) => {
     r.addEventListener("click", (a) => {
       a.stopPropagation();
-      const o = a.currentTarget.dataset.securityUuid, s = o ? n.get(o) : void 0, c = e.querySelector(`tr[data-security-uuid="${String(o)}"]`);
-      if (!c || !s) return;
-      const l = c.querySelector(".expand-icon ha-icon");
-      if (c.classList.toggle("is-expanded")) {
+      const o = a.currentTarget.dataset.securityUuid, c = o ? n.get(o) : void 0, s = e.querySelector(`tr[data-security-uuid="${String(o)}"]`);
+      if (!s || !c) return;
+      const l = s.querySelector(".expand-icon ha-icon");
+      if (s.classList.toggle("is-expanded")) {
         l?.setAttribute("icon", "mdi:chevron-down");
-        const u = ec(s.lots, s), d = document.createElement("div");
+        const u = ec(c.lots, c), d = document.createElement("div");
         d.innerHTML = u;
         const p = Array.from(d.querySelectorAll("tbody tr")).map((f) => (f.classList.add("child-row"), o && (f.dataset.parentUuid = o), f));
-        c.after(...p);
+        s.after(...p);
       } else
         l?.setAttribute("icon", "mdi:chevron-right"), e.querySelectorAll(`tr.child-row[data-parent-uuid="${String(o)}"]`).forEach((u) => {
           u.remove();
@@ -5628,17 +5628,17 @@ function tc(e, t) {
       const i = r.closest("table");
       if (!i) return;
       let o = "asc";
-      r.classList.contains("sort-active") && r.classList.contains("dir-asc") && (o = "desc"), dn(i, a, o);
+      r.classList.contains("sort-active") && r.classList.contains("dir-asc") && (o = "desc"), pn(i, a, o);
     });
   });
 }
 async function nc(e, t, n) {
-  const r = At("Realisierte Performance", "");
+  const r = Et("Realisierte Performance", "");
   let a = [];
   try {
     a = await ui(t, n);
-  } catch (s) {
-    console.error("Failed to fetch trades", s);
+  } catch (c) {
+    console.error("Failed to fetch trades", c);
   }
   const i = Qs(a), o = `
     <div class="trades-view-wrapper" style="height: 100%;">
@@ -5654,19 +5654,19 @@ async function nc(e, t, n) {
     tc(e, a);
   }, 0), o;
 }
-const rc = fo, tn = "pp-reader-sticky-anchor", vt = "overview", ac = "analyse", ic = "trades", nn = "security:", oc = [
-  { key: vt, title: "Dashboard", render: qr },
+const rc = fo, nn = "pp-reader-sticky-anchor", St = "overview", ac = "analyse", ic = "trades", rn = "security:", oc = [
+  { key: St, title: "Dashboard", render: Or },
   { key: ac, title: "Analyse", render: Js },
   { key: ic, title: "Trades", render: nc }
-], Re = /* @__PURE__ */ new Map(), Je = [], St = /* @__PURE__ */ new Map();
-let rn = null, Ut = !1, $e = null, O = 0, qt = null;
-function wt(e) {
+], He = /* @__PURE__ */ new Map(), Te = [], wt = /* @__PURE__ */ new Map();
+let an = null, qt = !1, Le = null, O = 0, Ot = null;
+function Ct(e) {
   return typeof e == "object" && e !== null;
 }
-function va(e) {
+function Sa(e) {
   return typeof e == "object" && e !== null && typeof e.then == "function";
 }
-function Sa(e) {
+function wa(e) {
   if (typeof e == "string") {
     const t = e.trim();
     return t.length > 0 ? t : "Unbekannter Fehler";
@@ -5687,7 +5687,7 @@ function Sa(e) {
 function sc(e) {
   return e === "accounts" || e === "last_file_update" || e === "portfolio_values" || e === "portfolio_positions";
 }
-function sr(e) {
+function cr(e) {
   const t = e.portfolio_uuid;
   if (typeof t == "string" && t)
     return t;
@@ -5699,14 +5699,14 @@ function cc(e) {
     return null;
   if (Array.isArray(e)) {
     for (const t of e)
-      if (wt(t)) {
-        const n = sr(t);
+      if (Ct(t)) {
+        const n = cr(t);
         if (n)
           return n;
       }
     return null;
   }
-  return wt(e) ? sr(e) : null;
+  return Ct(e) ? cr(e) : null;
 }
 function lc(e, t) {
   switch (e) {
@@ -5716,79 +5716,79 @@ function lc(e, t) {
         data: Array.isArray(t) ? t : null
       };
     case "last_file_update":
-      return typeof t == "string" ? { type: e, data: t } : wt(t) ? { type: e, data: t } : { type: e, data: null };
+      return typeof t == "string" ? { type: e, data: t } : Ct(t) ? { type: e, data: t } : { type: e, data: null };
     case "portfolio_values":
       return Array.isArray(t) ? { type: e, data: t } : { type: e, data: null };
     case "portfolio_positions":
-      return Array.isArray(t) ? { type: e, data: t } : wt(t) ? { type: e, data: t } : { type: e, data: null };
+      return Array.isArray(t) ? { type: e, data: t } : Ct(t) ? { type: e, data: t } : { type: e, data: null };
     default:
       return null;
   }
 }
-function Cn(e) {
-  return typeof e != "string" || !e.startsWith(nn) ? null : e.slice(nn.length) || null;
+function At(e) {
+  return typeof e != "string" || !e.startsWith(rn) ? null : e.slice(rn.length) || null;
 }
 function uc() {
-  if (!$e)
+  if (!Le)
     return !1;
-  const e = Ea($e);
-  return e || ($e = null), e;
+  const e = Ea(Le);
+  return e || (Le = null), e;
 }
 function de() {
-  return [...Je.map((t) => Re.get(t)).filter((t) => !!t), ...oc];
+  return [...Te.map((t) => He.get(t)).filter((t) => !!t), ...oc];
 }
 function dc(e) {
   const t = de();
   return e < 0 || e >= t.length ? null : t[e];
 }
-function wa(e) {
+function Ca(e) {
   if (!e)
     return null;
   const t = e, n = t.ppreader ?? t.pp_reader;
   return n || (Object.values(t).find((a) => !a || typeof a != "object" ? !1 : a.webcomponent_name === "pp-reader-panel") ?? null);
 }
-function Ca() {
+function Aa() {
   try {
-    const e = xt();
+    const e = Ee();
     e && typeof e.rememberScrollPosition == "function" && e.rememberScrollPosition();
   } catch (e) {
     console.warn("rememberCurrentPageScroll: konnte Scroll-Position nicht sichern", e);
   }
 }
-function cr(e) {
+function lr(e) {
   const t = de();
   return !t.length || e < 0 ? 0 : e >= t.length ? t.length - 1 : e;
 }
 async function fc(e, t, n, r) {
-  const a = de(), i = cr(e);
+  const a = de(), i = lr(e);
   if (i === O) {
-    e > O && uc();
+    e < O && uc();
     return;
   }
-  Ca();
-  const o = O >= 0 && O < a.length ? a[O] : null, s = o ? Cn(o.key) : null;
-  let c = i;
-  if (s) {
+  Aa();
+  const o = O >= 0 && O < a.length ? a[O] : null, c = o ? At(o.key) : null;
+  let s = i;
+  if (c) {
     const l = i >= 0 && i < a.length ? a[i] : null;
-    if (l && l.key === vt && yc(s, { suppressRender: !0 })) {
-      const p = de().findIndex((f) => f.key === vt);
-      c = p >= 0 ? p : 0;
+    if (l && l.key === St && yc(c, { suppressRender: !0 })) {
+      const p = de().findIndex((f) => f.key === St);
+      s = p >= 0 ? p : 0;
     }
   }
-  if (!Ut) {
-    Ut = !0;
+  if (!qt) {
+    qt = !0;
     try {
-      O = cr(c);
+      O = lr(s);
       const l = O;
       await Na(t, n, r), mc(l);
     } catch (l) {
       console.error("navigateToPage: Fehler beim Rendern des Tabs", l);
     } finally {
-      Ut = !1;
+      qt = !1;
     }
   }
 }
-function Ct(e, t, n, r) {
+function Pt(e, t, n, r) {
   fc(O + e, t, n, r);
 }
 function pc(e, t) {
@@ -5796,25 +5796,30 @@ function pc(e, t) {
     console.error("registerDetailTab: Ungültiger Tab-Descriptor", e, t);
     return;
   }
-  const n = Cn(e);
+  const n = At(e);
   if (n) {
-    const a = St.get(n);
-    a && a !== e && Aa(a);
+    const a = [...Te];
+    for (const i of a)
+      i !== e && At(i) && on(i);
+  }
+  if (n) {
+    const a = wt.get(n);
+    a && a !== e && on(a);
   }
   const r = {
     ...t,
     key: e
   };
-  Re.set(e, r), n && St.set(n, e), Je.includes(e) || Je.push(e);
+  He.set(e, r), n && wt.set(n, e), Te.includes(e) || Te.push(e);
 }
-function Aa(e) {
+function on(e) {
   if (!e)
     return;
-  const t = Re.get(e);
+  const t = He.get(e);
   if (t && typeof t.cleanup == "function")
     try {
       const a = t.cleanup({ key: e });
-      va(a) && a.catch((i) => {
+      Sa(a) && a.catch((i) => {
         console.error(
           "unregisterDetailTab: Fehler beim asynchronen cleanup",
           i
@@ -5823,29 +5828,29 @@ function Aa(e) {
     } catch (a) {
       console.error("unregisterDetailTab: Fehler beim Ausführen von cleanup", a);
     }
-  Re.delete(e);
-  const n = Je.indexOf(e);
-  n >= 0 && Je.splice(n, 1);
-  const r = Cn(e);
-  r && St.get(r) === e && St.delete(r);
+  He.delete(e);
+  const n = Te.indexOf(e);
+  n >= 0 && Te.splice(n, 1);
+  const r = At(e);
+  r && wt.get(r) === e && wt.delete(r);
 }
 function gc(e) {
-  return Re.has(e);
+  return He.has(e);
 }
-function lr(e) {
-  return Re.get(e) ?? null;
+function ur(e) {
+  return He.get(e) ?? null;
 }
 function hc(e) {
   if (e != null && typeof e != "function") {
     console.error("setSecurityDetailTabFactory: Erwartet Funktion oder null", e);
     return;
   }
-  rn = e ?? null;
+  an = e ?? null;
 }
 function Pa(e) {
-  return `${nn}${e}`;
+  return `${rn}${e}`;
 }
-function xt() {
+function Ee() {
   for (const t of Xa())
     if (t.isConnected)
       return t;
@@ -5864,8 +5869,8 @@ function xt() {
   }
   return null;
 }
-function an() {
-  const e = xt();
+function sn() {
+  const e = Ee();
   if (!e) {
     console.warn("requestDashboardRender: Kein pp-reader-dashboard Element gefunden");
     return;
@@ -5877,11 +5882,11 @@ function an() {
   typeof e._render == "function" && e._render();
 }
 const Dc = {
-  findDashboardElement: xt,
-  toErrorMessage: Sa
+  findDashboardElement: Ee,
+  toErrorMessage: wa
 };
 function mc(e) {
-  const t = xt();
+  const t = Ee();
   if (t && typeof t.handleExternalRender == "function")
     try {
       t.handleExternalRender(e);
@@ -5893,19 +5898,23 @@ function Ea(e) {
   if (!e)
     return console.error("openSecurityDetail: Ungültige securityUuid", e), !1;
   const t = Pa(e);
-  let n = lr(t);
-  if (!n && typeof rn == "function")
+  let n = ur(t);
+  if (!n && typeof an == "function")
     try {
-      const i = rn(e);
-      i && typeof i.render == "function" ? (pc(t, i), n = lr(t)) : console.error("openSecurityDetail: Factory lieferte ungültigen Descriptor", i);
-    } catch (i) {
-      console.error("openSecurityDetail: Fehler beim Erzeugen des Tab-Descriptors", i);
+      const o = an(e);
+      o && typeof o.render == "function" ? (pc(t, o), n = ur(t)) : console.error("openSecurityDetail: Factory lieferte ungültigen Descriptor", o);
+    } catch (o) {
+      console.error("openSecurityDetail: Fehler beim Erzeugen des Tab-Descriptors", o);
     }
   if (!n)
     return console.warn(`openSecurityDetail: Kein Detail-Tab für ${e} verfügbar`), !1;
-  Ca();
-  let a = de().findIndex((i) => i.key === t);
-  return a === -1 && (a = de().findIndex((o) => o.key === t), a === -1) ? (console.error("openSecurityDetail: Tab nach Registrierung nicht auffindbar"), !1) : (O = a, $e = null, an(), !0);
+  Aa();
+  let a = de().findIndex((o) => o.key === t);
+  if (a === -1 && (a = de().findIndex((c) => c.key === t), a === -1))
+    return console.error("openSecurityDetail: Tab nach Registrierung nicht auffindbar"), !1;
+  O = a, Le = null;
+  const i = Ee();
+  return i && (i._lastPage = null), sn(), !0;
 }
 function yc(e, t = {}) {
   if (!e)
@@ -5913,20 +5922,29 @@ function yc(e, t = {}) {
   const { suppressRender: n = !1 } = t, r = Pa(e);
   if (!gc(r))
     return !1;
-  const i = de().findIndex((c) => c.key === r), o = i === O;
-  Aa(r);
-  const s = de();
-  if (!s.length)
-    return O = 0, n || an(), !0;
-  if ($e = e, o) {
-    const c = s.findIndex((l) => l.key === vt);
-    c >= 0 ? O = c : O = Math.min(Math.max(i - 1, 0), s.length - 1);
-  } else O >= s.length && (O = Math.max(0, s.length - 1));
-  return n || an(), !0;
+  const i = de().findIndex((s) => s.key === r), o = i === O;
+  on(r);
+  const c = de();
+  if (!c.length) {
+    if (O = 0, !n) {
+      const s = Ee();
+      s && (s._lastPage = null), sn();
+    }
+    return !0;
+  }
+  if (Le = e, o) {
+    const s = c.findIndex((l) => l.key === St);
+    s >= 0 ? O = s : O = Math.min(Math.max(i - 1, 0), c.length - 1);
+  } else O >= c.length && (O = Math.max(0, c.length - 1));
+  if (!n) {
+    const s = Ee();
+    s && (s._lastPage = null), sn();
+  }
+  return !0;
 }
 async function Na(e, t, n) {
   let r = n;
-  r || (r = wa(t ? t.panels : null));
+  r || (r = Ca(t ? t.panels : null));
   const a = de();
   O >= a.length && (O = Math.max(0, a.length - 1));
   const i = dc(O);
@@ -5938,31 +5956,31 @@ async function Na(e, t, n) {
   try {
     o = await i.render(e, t, r);
   } catch (u) {
-    console.error("renderTab: Fehler beim Rendern des Tabs:", u), e.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${Sa(u)}</pre></div>`;
+    console.error("renderTab: Fehler beim Rendern des Tabs:", u), e.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${wa(u)}</pre></div>`;
     return;
   }
-  e.innerHTML = o ?? "", i.render === qr && yn(e);
-  const c = await new Promise((u) => {
+  e.innerHTML = o ?? "", i.render === Or && _n(e);
+  const s = await new Promise((u) => {
     const d = window.setInterval(() => {
       const p = e.querySelector(".header-card");
       p && (clearInterval(d), u(p));
     }, 50);
   });
-  let l = e.querySelector(`#${tn}`);
+  let l = e.querySelector(`#${nn}`);
   if (!l) {
-    l = document.createElement("div"), l.id = tn;
-    const u = c.parentNode;
-    u && "insertBefore" in u && u.insertBefore(l, c);
+    l = document.createElement("div"), l.id = nn;
+    const u = s.parentNode;
+    u && "insertBefore" in u && u.insertBefore(l, s);
   }
   vc(e, t, n), _c(e, t, n), bc(e);
 }
 function bc(e) {
-  const t = e.querySelector(".header-card"), n = e.querySelector(`#${tn}`);
+  const t = e.querySelector(".header-card"), n = e.querySelector(`#${nn}`);
   if (!t || !n) {
     console.error("Fehlende Elemente für das Scrollverhalten: headerCard oder anchor.");
     return;
   }
-  qt?.disconnect(), qt = new IntersectionObserver(
+  Ot?.disconnect(), Ot = new IntersectionObserver(
     ([r]) => {
       r.isIntersecting ? t.classList.remove("sticky") : t.classList.add("sticky");
     },
@@ -5971,7 +5989,7 @@ function bc(e) {
       rootMargin: "0px 0px 0px 0px",
       threshold: 0
     }
-  ), qt.observe(n);
+  ), Ot.observe(n);
 }
 function _c(e, t, n) {
   const r = e.querySelector(".header-card");
@@ -5982,10 +6000,10 @@ function _c(e, t, n) {
   rc(
     r,
     () => {
-      Ct(1, e, t, n);
+      Pt(1, e, t, n);
     },
     () => {
-      Ct(-1, e, t, n);
+      Pt(-1, e, t, n);
     }
   );
 }
@@ -6001,15 +6019,19 @@ function vc(e, t, n) {
     return;
   }
   a.addEventListener("click", () => {
-    Ct(-1, e, t, n);
+    Pt(-1, e, t, n);
   }), i.addEventListener("click", () => {
-    Ct(1, e, t, n);
+    Pt(1, e, t, n);
   }), Sc(r);
 }
 function Sc(e) {
   const t = e.querySelector("#nav-left"), n = e.querySelector("#nav-right");
-  if (t && (O === 0 ? (t.disabled = !0, t.classList.add("disabled")) : (t.disabled = !1, t.classList.remove("disabled"))), n) {
-    const r = de(), i = !(O === r.length - 1) || !!$e;
+  if (t) {
+    const r = O > 0 || !!Le;
+    t.disabled = !r, t.classList.toggle("disabled", !r);
+  }
+  if (n) {
+    const r = de(), i = !(O === r.length - 1);
     n.disabled = !i, n.classList.toggle("disabled", !i);
   }
 }
@@ -6053,8 +6075,8 @@ class wc extends HTMLElement {
   _checkInitialization() {
     if (!this._hass || this._initialized)
       return;
-    this._panel || (this._panel = wa(this._hass.panels ?? null));
-    const t = Dn(this._hass, this._panel);
+    this._panel || (this._panel = Ca(this._hass.panels ?? null));
+    const t = kn(this._hass, this._panel);
     if (!t) {
       this._entryIdWaitWarned || (console.warn("PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration."), this._entryIdWaitWarned = !0);
       return;
@@ -6108,7 +6130,7 @@ class wc extends HTMLElement {
     this._unsubscribeEvents = null;
   }
   _handleBusEvent(t) {
-    const n = Dn(this._hass, this._panel);
+    const n = kn(this._hass, this._panel);
     if (!n)
       return;
     const r = t.data;
@@ -6209,7 +6231,7 @@ class wc extends HTMLElement {
       return;
     this._lastPage != null && (this._scrollPositions[this._lastPage] = this._root.scrollTop);
     const n = Na(this._root, this._hass, this._panel);
-    if (va(n)) {
+    if (Sa(n)) {
       n.then(() => {
         this._afterRender(t);
       }).catch((r) => {
@@ -6239,8 +6261,8 @@ export {
   Dc as __TEST_ONLY_DASHBOARD,
   xc as __TEST_ONLY__,
   yc as closeSecurityDetail,
-  mn as flushPendingPositions,
-  lr as getDetailTabDescriptor,
+  bn as flushPendingPositions,
+  ur as getDetailTabDescriptor,
   co as handlePortfolioPositionsUpdate,
   gc as hasDetailTab,
   Ea as openSecurityDetail,
@@ -6250,8 +6272,8 @@ export {
   Pc as registerPanelHost,
   hc as setSecurityDetailTabFactory,
   Ac as unregisterDashboardElement,
-  Aa as unregisterDetailTab,
+  on as unregisterDetailTab,
   Ec as unregisterPanelHost,
-  Ur as updatePortfolioFooterFromDom
+  qr as updatePortfolioFooterFromDom
 };
-//# sourceMappingURL=dashboard.BmddYqE-.js.map
+//# sourceMappingURL=dashboard.DQU2Kqxa.js.map
