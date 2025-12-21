@@ -36,3 +36,11 @@ tmp/playwright-results/
 tests/ui/playwright/*
 !tests/ui/playwright/AGENTS.md
 tests/ui/agent_scratchpad/
+
+# Log files
+*.log
+
+# Generated frontend artifacts
+custom_components/pp_reader/www/pp_reader_dashboard/js/*.js
+custom_components/pp_reader/www/pp_reader_dashboard/js/*.js.map
+!custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js
