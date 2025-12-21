@@ -91,6 +91,7 @@ interface DashboardElement extends HTMLElement {
   rememberScrollPosition?: (page?: number) => void;
   _renderIfInitialized?: () => void;
   _render?: () => void;
+  _lastPage?: number | null;
   handleExternalRender?: (page: number) => void;
 }
 
@@ -596,6 +597,14 @@ export function openSecurityDetail(securityUuid: string | null | undefined): boo
 
   currentPage = targetIndex;
   lastClosedSecurityUuid = null;
+
+  // Force render by invalidating lastPage, because changing tabs while keeping index constant
+  // (e.g. 0 -> 0) might otherwise be optimized away by _render().
+  const dashboardElement = findDashboardElement();
+  if (dashboardElement) {
+    dashboardElement._lastPage = null;
+  }
+
   requestDashboardRender();
   return true;
 }
@@ -630,6 +639,11 @@ export function closeSecurityDetail(
   if (!tabsAfter.length) {
     currentPage = 0;
     if (!suppressRender) {
+      // Force render invalidation
+      const dashboardElement = findDashboardElement();
+      if (dashboardElement) {
+        dashboardElement._lastPage = null;
+      }
       requestDashboardRender();
     }
     return true;
@@ -649,6 +663,11 @@ export function closeSecurityDetail(
   }
 
   if (!suppressRender) {
+    // Force render invalidation
+    const dashboardElement = findDashboardElement();
+    if (dashboardElement) {
+      dashboardElement._lastPage = null;
+    }
     requestDashboardRender();
   }
   return true;
