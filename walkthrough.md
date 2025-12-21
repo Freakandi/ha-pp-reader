@@ -1,33 +1,32 @@
+# Walkthrough - Stacked Trades Columns Feature
 
-# Walkthrough - New Feature: Dashboard Navigation (Refined)
+## Feature Verification
+We implemented a stacked column layout for the "Trades" (Realisierte Performance) tab to save space and improve readability.
 
-## Logical Flow
-1. **Tabs Order**: `[DetailTab (max 1), Dashboard, Analyze, Trades]`
-2. **Opening a Detail**:
-   - Opens at **Index 0** (Leftmost).
-   - Automatically **closes** any other open Detail tab (Enforced Single Instance).
-3. **Closing a Detail**:
-   - Explicit toggle or navigating from Detail -> Dashboard.
-   - Saves the closed UUID for "Reopen" logic.
-4. **Navigation Arrows**:
-   - **Left Arrow**:
-     - Disabled at Dashboard (Index 0) *unless* there is a closed detail to reopen.
-     - Clicking Left at Dashboard -> Reopens Last Detail (Index 0).
-   - **Right Arrow**:
-     - Navigates Right.
-     - At the end (Trades), it is **Disabled**. (Previously looped to Detail, which was confusing).
+### 1. Stacked Layout
+The following column pairs were combined:
+- **Verkaufskurs** / **Aktueller Kurs**
+- **Einstandswert** / **Verkaufswert**
+- **Bruttoergebnis** / **Nettoergebnis**
 
-## Changes
-- **Single Instance**: `registerDetailTab` now aggressively unregisters other security tabs.
-- **Left Reopen**: `navigateToPage` triggers reopen on left-overflow; `updateNavigationState` enables left button if reopen is possible.
-- **Right Safety**: Removed right-overflow reopen logic to prevent unexpected looping.
+**Verification Screenshot:**
+![Initial State](./artifacts/trades_tab_initial_1766278577547.png)
 
-## Verification
-- **Build**: `npm run build` passed.
-- **Lint**: `npm run lint:ts` passed.
-- **Behavior Check**:
-  - Open Auric -> [Auric, Dashboard...]. Nav Right -> Dashboard. Auric closes? No, stays until dismissed or navigated past? Use "Close on Navigate" logic if configured, but default behavior is to keep it in registry until explicitly closed or replaced. Wait, `navigateToPage` logic closes it if *target is OVERVIEW*.
-  - So: Detail (0) -> Right -> Overview (1). Logic closes Detail. Array shrinks to `[Dashboard...]`. Dashboard becomes 0.
-  - User sees: Dashboard.
-  - Nav Left from Dashboard (0)? `lastClosedSecurityUuid` is set. Left enabled. Click Left -> Reopens Auric.
-  - This matches the "Return with one click" and "Re-open with one click" flow perfectly.
+(Note: Screenshots are stored in artifacts directory)
+
+### 2. Granular Sorting
+We verified that sorting works independently for top and bottom metrics in the stacked columns.
+
+**Sorting by Gross Result (Bruttoergebnis):**
+![Sort Gross](./artifacts/trades_sort_gross_1766278600240.png)
+
+**Sorting by Net Result (Nettoergebnis):**
+![Sort Net](./artifacts/trades_sort_net_1766278624574.png)
+
+## Implementation Details
+- Modified `src/tabs/trades.ts`:
+  - Updated `renderTradesTable` to use stacked HTML structure.
+  - Added `renderLots` support for stacked structure.
+  - Implemented custom `sortTrades` function to handle stacked data sorting via `data-val` attributes.
+  - Added CSS for `.sort-stack`, `.cell-stack`, and `.val-top` / `.val-bottom`.
+- Verified build and linting passes.

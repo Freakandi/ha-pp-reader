@@ -3,13 +3,89 @@
  */
 
 import type { TableRow } from '../content/elements';
-import { createHeaderCard, makeTable, sortTableRows } from '../content/elements';
+import { createHeaderCard, makeTable } from '../content/elements';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import { formatCurrency, formatNumber, formatPercent } from '../utils/format';
 import { escapeHtml } from '../utils/html';
 import type { PanelConfigLike } from './types';
+
+// CSS for stacked columns and sorting
+const STYLES = `
+<style>
+  .sort-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.2;
+    padding: 4px 0;
+  }
+  .sort-item {
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    display: inline-block;
+  }
+  .sort-item:hover {
+    opacity: 1;
+    text-decoration: underline;
+  }
+  .sort-item.sort-active {
+    opacity: 1;
+    font-weight: bold;
+    color: var(--primary-color);
+  }
+  .sort-item.sort-active::after {
+    content: " ↕"; /* Default neutral arrow */
+    font-size: 0.8em;
+    opacity: 0.5;
+  }
+  .sort-item.sort-active.dir-asc::after {
+    content: " ▲";
+    opacity: 1;
+  }
+  .sort-item.sort-active.dir-desc::after {
+    content: " ▼";
+    opacity: 1;
+  }
+
+  .simple-sort-header {
+    cursor: pointer;
+  }
+  .simple-sort-header:hover {
+    text-decoration: underline;
+  }
+  .simple-sort-header.sort-active {
+     font-weight: bold;
+     color: var(--primary-color);
+  }
+  .simple-sort-header.sort-active.dir-asc::after { content: " ▲"; }
+  .simple-sort-header.sort-active.dir-desc::after { content: " ▼"; }
+
+
+  .cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.2;
+  }
+  .val-top {
+    display: block;
+    font-weight: 500;
+  }
+  .val-bottom {
+    display: block;
+    color: var(--secondary-text-color);
+    font-size: 0.9em;
+  }
+
+  /* Ensure trend colors carry over */
+  .val-top .positive, .val-bottom .positive { color: var(--success-color); }
+  .val-top .negative, .val-bottom .negative { color: var(--error-color); }
+</style>
+`;
 
 // Extend TableRow to include our internal properties
 type TradesTableRow = TableRow & {
@@ -22,21 +98,48 @@ function renderTrend(value: number, formatted: string): string {
   return `<span class="${cls}">${formatted}</span>`;
 }
 
+function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
+  return `
+    <div class="sort-stack">
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0">${labelTop}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0">${labelBottom}</span>
+    </div>
+  `;
+}
+
+function createSimpleSortHeader(label: string, key: string): string {
+  // Use a pseudo-selector or data-key for simple columns
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0">${label}</span>`;
+}
+
 function renderTradesTable(trades: readonly RealizedTrade[]): string {
   if (trades.length === 0) {
-    return '<div class="no-positions">Keine realisierten Gewinne/Verluste vorhanden.</div>';
+    return STYLES + '<div class="no-positions">Keine realisierten Gewinne/Verluste vorhanden.</div>';
   }
 
+  // Define columns with custom headers
   const cols = [
-    { key: 'name', label: 'Wertpapier' },
-    { key: 'last_sell_price', label: 'Verkaufskurs', align: 'right' as const },
-    { key: 'current_price', label: 'Aktueller Kurs', align: 'right' as const },
-    { key: 'purchase_value_gross', label: 'Einstandswert', align: 'right' as const },
-    { key: 'sales_value_gross', label: 'Verkaufswert', align: 'right' as const },
-    { key: 'result_gross', label: 'Bruttoergebnis', align: 'right' as const },
-    { key: 'result_abs', label: 'Nettoergebnis', align: 'right' as const },
-    { key: 'result_pct', label: 'Resultat', align: 'right' as const },
-    { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
+    { key: 'name', label: createSimpleSortHeader('Wertpapier', 'name') },
+    // Combo 1: Sales / Current
+    {
+      key: 'price_combo',
+      label: createSortHeader('Verkaufskurs', '.val-top', 'Aktueller Kurs', '.val-bottom'),
+      align: 'right' as const
+    },
+    // Combo 2: Purchase / Sales Value
+    {
+      key: 'value_combo',
+      label: createSortHeader('Einstandswert', '.val-top', 'Verkaufswert', '.val-bottom'),
+      align: 'right' as const
+    },
+    // Combo 3: Gross / Net Result
+    {
+      key: 'result_combo',
+      label: createSortHeader('Bruttoergebnis', '.val-top', 'Nettoergebnis', '.val-bottom'),
+      align: 'right' as const
+    },
+    { key: 'result_pct', label: createSimpleSortHeader('Resultat', 'result_pct'), align: 'right' as const },
+    { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
   ];
 
   const rows: TradesTableRow[] = trades.map((trade) => {
@@ -51,40 +154,66 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
         <span class="expand-icon" data-security-uuid="${trade.security_uuid}">
           <ha-icon icon="mdi:chevron-right"></ha-icon>
         </span>
-        ${nameCell}
+        <span data-val="${escapeHtml(trade.name)}">${nameCell}</span>
       `;
+    } else {
+      nameCell = `<span data-val="${escapeHtml(trade.name)}">${nameCell}</span>`;
     }
 
     const isClosed = Math.abs(trade.current_holdings) < 0.001;
+
+    // Helper for stacked cells
+    const stack = (topVal: number, topFmt: string, botVal: number, botFmt: string) => `
+      <div class="cell-stack">
+        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+      </div>
+    `;
 
     return {
       _uuid: trade.security_uuid,
       _lots: trade.lots,
       name: nameCell,
-      last_sell_price: formatCurrency(trade.last_sell_price_native ?? trade.last_sell_price, trade.currency_code),
-      current_price: `<span class="trend--${priceTrend}">${formatCurrency(trade.current_price, trade.currency_code)}</span>`,
-      purchase_value_gross: formatCurrency(trade.purchase_value_gross),
-      sales_value_gross: formatCurrency(trade.sales_value_gross),
-      result_gross: formatCurrency(trade.sales_value_gross - trade.purchase_value_gross),
-      result_abs: formatCurrency(trade.result_abs),
-      result_pct: renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100)),
+
+      price_combo: stack(
+        trade.last_sell_price_native ?? trade.last_sell_price,
+        formatCurrency(trade.last_sell_price_native ?? trade.last_sell_price, trade.currency_code),
+        trade.current_price ?? 0,
+        `<span class="trend--${priceTrend}">${formatCurrency(trade.current_price, trade.currency_code)}</span>`
+      ),
+
+      value_combo: stack(
+        trade.purchase_value_gross,
+        formatCurrency(trade.purchase_value_gross),
+        trade.sales_value_gross,
+        formatCurrency(trade.sales_value_gross)
+      ),
+
+      // Gross Result (Top) / Net Result (Bottom)
+      result_combo: stack(
+        trade.sales_value_gross - trade.purchase_value_gross, // result_gross
+        formatCurrency(trade.sales_value_gross - trade.purchase_value_gross),
+        trade.result_abs,
+        formatCurrency(trade.result_abs)
+      ),
+
+      result_pct: `<span data-val="${String(trade.result_pct)}">${renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100))}</span>`,
+
       current_holdings: isClosed
-        ? '<ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon>'
-        : formatNumber(trade.current_holdings),
+        ? '<span data-val="0"><ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon></span>'
+        : `<span data-val="${String(trade.current_holdings)}">${formatNumber(trade.current_holdings)}</span>`,
     } as TradesTableRow;
   });
 
-  return makeTable(rows, cols, [], {
-    sortable: true,
-    defaultSort: { key: 'name' },
-
+  return STYLES + makeTable(rows, cols, [], {
+    sortable: false, // We handle sorting manually
     rowAttributes: (row: TableRow) => ({
       'data-security-uuid': (row as TradesTableRow)._uuid,
     }),
   });
 }
 
-function renderLots(lots: RealizedLot[], trade: RealizedTrade): string { // Need trade to get currency
+function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
   const lotRows = lots.map((lot) => {
     // Merge Date and Shares
     const dateShares = `
@@ -94,16 +223,34 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string { // Need
       </div>
     `;
 
-    // Only show formatted prices/values
+    // Helper for stacked cells -- same structure as parent for alignment
+    const stack = (topVal: number, topFmt: string, botVal: number | string, botFmt: string) => `
+      <div class="cell-stack">
+        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+      </div>
+    `;
+
     return {
       name: dateShares,
-      last_sell_price: formatCurrency(lot.sell_price_native ?? lot.sell_price, trade.currency_code),
-      current_price: '',
-      purchase_value_gross: formatCurrency(lot.purchase_value_gross),
-      sales_value_gross: formatCurrency(lot.sales_value_gross),
-      result_gross: formatCurrency(lot.sales_value_gross - lot.purchase_value_gross),
-      result_abs: formatCurrency(lot.result_abs),
-      result_pct: renderTrend(lot.result_pct, formatPercent(lot.result_pct / 100)),
+      price_combo: stack(
+        lot.sell_price_native ?? lot.sell_price,
+        formatCurrency(lot.sell_price_native ?? lot.sell_price, trade.currency_code),
+        0, '' // No current price for lots
+      ),
+      value_combo: stack(
+        lot.purchase_value_gross,
+        formatCurrency(lot.purchase_value_gross),
+        lot.sales_value_gross,
+        formatCurrency(lot.sales_value_gross)
+      ),
+      result_combo: stack(
+        lot.sales_value_gross - lot.purchase_value_gross,
+        formatCurrency(lot.sales_value_gross - lot.purchase_value_gross),
+        lot.result_abs,
+        formatCurrency(lot.result_abs)
+      ),
+      result_pct: `<span data-val="${String(lot.result_pct)}">${renderTrend(lot.result_pct, formatPercent(lot.result_pct / 100))}</span>`,
       current_holdings: '',
     };
   });
@@ -112,12 +259,9 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string { // Need
     lotRows,
     [
       { key: 'name', label: '' },
-      { key: 'last_sell_price', label: '', align: 'right' },
-      { key: 'current_price', label: '', align: 'right' },
-      { key: 'purchase_value_gross', label: '', align: 'right' },
-      { key: 'sales_value_gross', label: '', align: 'right' },
-      { key: 'result_gross', label: '', align: 'right' },
-      { key: 'result_abs', label: '', align: 'right' },
+      { key: 'price_combo', label: '', align: 'right' },
+      { key: 'value_combo', label: '', align: 'right' },
+      { key: 'result_combo', label: '', align: 'right' },
       { key: 'result_pct', label: '', align: 'right' },
       { key: 'current_holdings', label: '', align: 'right' },
     ],
@@ -126,61 +270,141 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string { // Need
   );
 }
 
+// Custom sort function
+function sortTrades(
+  table: HTMLTableElement,
+  colIndex: number,
+  valueSelector: string | null, // null means use simple data-val or text
+  dir: 'asc' | 'desc'
+) {
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+
+  const footer = tbody.querySelector<HTMLTableRowElement>('tr.footer-row');
+  // We only sort main rows, not child lot rows (they get removed anyway on re-render but let's be safe)
+  // Actually, child rows are dynamically added/removed. If they exist, sorting breaks.
+  // Ideally we collapse all before sorting.
+  table.querySelectorAll('.is-expanded').forEach(tr => {
+    tr.classList.remove('is-expanded');
+    const icon = tr.querySelector('.expand-icon ha-icon');
+    if (icon) icon.setAttribute('icon', 'mdi:chevron-right');
+  });
+  // Remove all child rows
+  tbody.querySelectorAll('tr.child-row').forEach(tr => { tr.remove(); });
+
+  const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr')).filter(r => r !== footer);
+
+  rows.sort((a, b) => {
+    const aCell = a.cells[colIndex];
+    const bCell = b.cells[colIndex];
+    // Cells are guaranteed to exist by row index logic
+    // if (!aCell || !bCell) return 0;
+
+    let aValText = '';
+    let bValText = '';
+
+    if (valueSelector) {
+      const aEl = aCell.querySelector<HTMLElement>(valueSelector);
+      const bEl = bCell.querySelector<HTMLElement>(valueSelector);
+      aValText = aEl?.getAttribute('data-val') ?? '';
+      bValText = bEl?.getAttribute('data-val') ?? '';
+    } else {
+      // Try to find data-val on children first (for simple columns wrapped in span)
+      // or data-val on cell? We didn't put data-val on cell for simple ones in `makeTable`.
+      // Rendered: <td><span data-val="...">...</span></td>
+      const aEl = aCell.querySelector<HTMLElement>('[data-val]');
+      const bEl = bCell.querySelector<HTMLElement>('[data-val]');
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      aValText = aEl?.getAttribute('data-val') ?? aCell.textContent ?? '';
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      bValText = bEl?.getAttribute('data-val') ?? bCell.textContent ?? '';
+    }
+
+    const aNum = parseFloat(aValText);
+    const bNum = parseFloat(bValText);
+
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return (aNum - bNum) * (dir === 'asc' ? 1 : -1);
+    }
+
+    return aValText.localeCompare(bValText) * (dir === 'asc' ? 1 : -1);
+  });
+
+  // Reorder
+  rows.forEach(r => tbody.appendChild(r));
+  if (footer) tbody.appendChild(footer);
+}
+
 function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[]) {
   const tradeMap = new Map(trades.map(t => [t.security_uuid, t]));
 
-  root.querySelectorAll('.expand-icon').forEach(icon => {
-    icon.addEventListener('click', (event) => {
+  // Expand/Collapse handlers
+  root.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+
+    // Handle expander
+    const expandIcon = target.closest('.expand-icon');
+    if (expandIcon) {
       event.stopPropagation();
-      const target = event.currentTarget as HTMLElement;
-      const uuid = target.dataset.securityUuid;
+      const uuid = (expandIcon as HTMLElement).dataset.securityUuid;
       const trade = uuid ? tradeMap.get(uuid) : undefined;
       const mainRow = root.querySelector(`tr[data-security-uuid="${String(uuid)}"]`);
 
-      if (!mainRow || !trade) return;
-
-      const iconEl = mainRow.querySelector('.expand-icon ha-icon');
-      if (mainRow.classList.toggle('is-expanded')) {
-        iconEl?.setAttribute('icon', 'mdi:chevron-down');
-        const childRowsHtml = renderLots(trade.lots, trade);
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = childRowsHtml;
-        const childRows = Array.from(tempDiv.querySelectorAll('tbody tr')).map(row => {
-          row.classList.add('child-row');
-          if (uuid) {
-            (row as HTMLElement).dataset.parentUuid = uuid;
-          }
-          return row;
-        });
-
-        mainRow.after(...childRows);
-
-      } else {
-        iconEl?.setAttribute('icon', 'mdi:chevron-right');
-        root.querySelectorAll(`tr.child-row[data-parent-uuid="${String(uuid)}"]`).forEach(child => {
-          child.remove();
-        });
+      if (mainRow && trade) {
+        if (mainRow.classList.toggle('is-expanded')) {
+          mainRow.querySelector('.expand-icon ha-icon')?.setAttribute('icon', 'mdi:chevron-down');
+          const childRowsHtml = renderLots(trade.lots, trade);
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = childRowsHtml;
+          // Extract rows from the temp table body
+          const childRows = Array.from(tempDiv.querySelectorAll('tbody tr')).map(row => {
+            row.classList.add('child-row');
+            if (uuid) (row as HTMLElement).dataset.parentUuid = uuid;
+            return row;
+          });
+          mainRow.after(...childRows);
+        } else {
+          mainRow.querySelector('.expand-icon ha-icon')?.setAttribute('icon', 'mdi:chevron-right');
+          root.querySelectorAll(`tr.child-row[data-parent-uuid="${String(uuid)}"]`).forEach(child => { child.remove(); });
+        }
       }
-    });
-  });
+      return;
+    }
 
-  // Attach sort listeners
-  root.querySelectorAll('th[data-sort-key]').forEach((th) => {
-    th.addEventListener('click', () => {
-      const key = (th as HTMLElement).dataset.sortKey;
-      if (!key) return;
-
-      const table = th.closest('table');
+    // Handle sort
+    const sortTrigger = target.closest('[data-sort-selector]') || target.closest('[data-sort-key]');
+    if (sortTrigger) {
+      const table = sortTrigger.closest('table');
       if (!table) return;
 
-      // Determine direction
+      // Clean up previous sort indicators
+      table.querySelectorAll('.sort-active').forEach(el => {
+        if (el !== sortTrigger) {
+          el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+        }
+      });
+
+      // Determine new state
       let dir: 'asc' | 'desc' = 'asc';
-      if (th.classList.contains('sort-active') && th.classList.contains('dir-asc')) {
+      if (sortTrigger.classList.contains('sort-active') && sortTrigger.classList.contains('dir-asc')) {
         dir = 'desc';
       }
 
-      sortTableRows(table, key, dir);
-    });
+      // Apply visual state
+      sortTrigger.classList.add('sort-active');
+      sortTrigger.classList.remove('dir-asc', 'dir-desc');
+      sortTrigger.classList.add(`dir-${dir}`);
+
+      // Execute sort
+      // Find column index
+      const th = sortTrigger.closest('th');
+      const colIndex = th ? Array.from(th.parentElement?.children ?? []).indexOf(th) : -1;
+
+      if (colIndex >= 0) {
+        const selector = (sortTrigger as HTMLElement).dataset.sortSelector || null;
+        sortTrades(table, colIndex, selector, dir);
+      }
+    }
   });
 }
 
