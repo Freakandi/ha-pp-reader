@@ -697,7 +697,6 @@ class RealizedPerformanceResult:
     current_price_eur: float | None = None  # Helper for debugging/frontend
 
 
-
 def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
     transactions: list[Transaction],
     db_path: Path,
@@ -958,7 +957,7 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
                 last_sell_date=lots[-1].date,
                 since_sell_abs=agg_since_sell_abs,
                 since_sell_pct=agg_since_sell_pct,
-                current_price_eur=current_price_eur
+                current_price_eur=current_price_eur,
             )
         )
 
