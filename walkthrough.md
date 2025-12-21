@@ -44,3 +44,33 @@ Current Price converted to EUR - Sell Price (EUR) = Correct Result.
 Harmonic Drive Systems: ~ -158 EUR.
 ![Correct Calculation](./artifacts/harmonic_drive_row_1766311608875.png)
 
+## Bug Fix: Date Sorting Logic in Trades Tab
+Fixed an issue where "Datum" (last_sell_date) was not sorting correctly.
+
+### Impact
+Dates were sorted as numbers (parsing the year only, e.g. "2024") instead of full date strings, causing random ordering for dates within the same year.
+
+### Resolution
+- Updated sort logic in `src/tabs/trades.ts` to use strict `Number()` parsing vs greedy `parseFloat()`.
+- ISO date strings now correctly fall back to string comparison (`localeCompare`), ensuring chronological order.
+
+**Verification:**
+- Verified with reproduction script showing correct chronological sort of ISO dates.
+- Verified numeric columns still sort strictly numerically.
+
+
+## Bug Fix: Missing "Summe" Row Values
+Fixed an issue where the "Summe" (Total) row in the "Realisierte Performance" tab was missing values for key consolidated columns.
+
+### Resolution
+- Updated `src/content/elements.ts` to support explicit `footerValues` in table generation.
+- Updated `src/tabs/trades.ts` to calculate and pass total values for:
+  - **Einstandswert / Verkaufswert** (Sum)
+  - **Bruttoergebnis / Nettoergebnis** (Sum)
+  - **Resultat** (Weighted Percentage: Gross Result / Total Purchase)
+  - **Seit Verkauf** (Sum of absolute values)
+
+### Verification
+**After Fix:**
+Verified that the footer row is correctly populated.
+![Footer Values Populated](./artifacts/final_footer_values_1766318765724.png)

@@ -149,6 +149,14 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     },
   ];
 
+  // Helper for stacked cells
+  const stack = (topVal: number | string, topFmt: string, botVal: number | string, botFmt: string) => `
+      <div class="cell-stack">
+        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+      </div>
+    `;
+
   const rows: TradesTableRow[] = trades.map((trade) => {
     const currentPrice = trade.current_price ?? 0;
     const lastSellPrice = trade.last_sell_price;
@@ -168,14 +176,6 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     }
 
     const isClosed = Math.abs(trade.current_holdings) < 0.001;
-
-    // Helper for stacked cells
-    const stack = (topVal: number, topFmt: string, botVal: number, botFmt: string) => `
-      <div class="cell-stack">
-        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
-      </div>
-    `;
 
     // Use backend-provided metrics which handle currency conversion correctly
     const sinceSellAbs = trade.since_sell_abs;
@@ -224,11 +224,44 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     } as TradesTableRow;
   });
 
+  // --- Footer Calculation ---
+  const totalPurchase = trades.reduce((sum, t) => sum + t.purchase_value_gross, 0);
+  const totalSales = trades.reduce((sum, t) => sum + t.sales_value_gross, 0);
+  const totalResultGross = trades.reduce((sum, t) => sum + (t.sales_value_gross - t.purchase_value_gross), 0);
+  const totalResultNet = trades.reduce((sum, t) => sum + t.result_abs, 0);
+  const totalSinceSellAbs = trades.reduce((sum, t) => sum + t.since_sell_abs, 0);
+
+  // Percentage of total result over total purchase value
+  const totalResultPct = totalPurchase !== 0 ? (totalResultGross / totalPurchase) * 100 : 0;
+
+  const footerValues = {
+    value_combo: stack(
+      totalPurchase,
+      formatCurrency(totalPurchase),
+      totalSales,
+      formatCurrency(totalSales)
+    ),
+    result_combo: stack(
+      totalResultGross,
+      formatCurrency(totalResultGross),
+      totalResultNet,
+      formatCurrency(totalResultNet)
+    ),
+    result_pct: `<span data-val="${String(totalResultPct)}">${renderTrend(totalResultPct, formatPercent(totalResultPct / 100))}</span>`,
+    since_sell: stack(
+      0,
+      '—',
+      totalSinceSellAbs,
+      renderTrend(totalSinceSellAbs, formatCurrency(totalSinceSellAbs))
+    )
+  };
+
   return STYLES + makeTable(rows, cols, [], {
     sortable: false, // We handle sorting manually
     rowAttributes: (row: TableRow) => ({
       'data-security-uuid': (row as TradesTableRow)._uuid,
     }),
+    footerValues: footerValues,
   });
 }
 
@@ -345,8 +378,24 @@ function sortTrades(
       bValText = bEl?.getAttribute('data-val') ?? bCell.textContent ?? '';
     }
 
-    const aNum = parseFloat(aValText);
-    const bNum = parseFloat(bValText);
+    // Use Number() to avoid partial parsing of dates (e.g. "2024-01-01" -> 2024)
+    // implicitly checking isNaN(Number('')) -> 0, which might be acceptable or handled by fallthrough if we want empty to be NaN
+    // But data-val for empty/missing might be tricky.
+    // Actually, for robust sorting, we want strictly numeric strings to be sorted as numbers.
+    // Date strings 'YYYY-MM-DD' result in NaN with Number(), so they fall through to localeCompare which is correct for ISO dates.
+    const aNum = Number(aValText);
+    const bNum = Number(bValText);
+
+    // Check for NaN but also ensure we aren't comparing empty strings as 0 if that wasn't intended,
+    // though String(0) is "0".
+    // aValText might be empty string if attribute missing and text content empty.
+    // But let's stick to the minimal fix: Number() returns NaN for "2024-...", parseFloat returns 2024.
+
+    // We only want to use numeric sort if BOTH are valid numbers.
+    // Note: whitespace strings become 0 with Number(), but parseFloat would be NaN (if empty) or parsed.
+    // If aValText is strictly whitespace/empty, Number is 0.
+    // If our data-val are generated from numbers, they won't be empty unless value is null/undefined.
+    // If value is null, String(null) is "null" -> Number is NaN.
 
     if (!isNaN(aNum) && !isNaN(bNum)) {
       return (aNum - bNum) * (dir === 'asc' ? 1 : -1);

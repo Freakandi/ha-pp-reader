@@ -24,6 +24,7 @@ export interface TableOptions {
     dir?: SortDirection;
   };
   rowAttributes?: (row: TableRow) => Record<string, string>;
+  footerValues?: Record<string, string | number | null | undefined>;
 }
 
 export type TableRow = Record<string, unknown>;
@@ -363,6 +364,20 @@ export function makeTable(
     const alignClass = c.align === "right" ? ' class="align-right"' : "";
     if (idx === 0) {
       html += `<td${alignClass}>Summe</td>`;
+      return;
+    }
+
+    // 1. Explicit Footer Override (via options.footerValues)
+    if (options.footerValues && options.footerValues[c.key] !== undefined) {
+      const val = options.footerValues[c.key];
+      if (typeof val === 'string') {
+        html += `<td${alignClass}>${val}</td>`;
+      } else if (typeof val === 'number') {
+        html += `<td${alignClass}>${formatValue(c.key, val)}</td>`;
+      } else {
+        // null or unknown
+        html += `<td${alignClass}>—</td>`;
+      }
       return;
     }
 
