@@ -8,7 +8,7 @@ import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import { formatCurrency, formatNumber, formatPercent } from '../utils/format';
-import { escapeHtml } from '../utils/html';
+import { escapeAttribute, escapeHtml } from '../utils/html';
 import type { PanelConfigLike } from './types';
 
 // CSS for stacked columns and sorting
@@ -101,15 +101,15 @@ function renderTrend(value: number, formatted: string): string {
 function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
   return `
     <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0">${labelTop}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0">${labelBottom}</span>
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0">${escapeHtml(labelTop)}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0">${escapeHtml(labelBottom)}</span>
     </div>
   `;
 }
 
 function createSimpleSortHeader(label: string, key: string): string {
   // Use a pseudo-selector or data-key for simple columns
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0">${label}</span>`;
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0">${escapeHtml(label)}</span>`;
 }
 
 function renderTradesTable(trades: readonly RealizedTrade[]): string {
@@ -151,7 +151,7 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     let nameCell = escapeHtml(trade.name);
     if (trade.lots.length > 1) {
       nameCell = `
-        <span class="expand-icon" data-security-uuid="${trade.security_uuid}">
+        <span class="expand-icon" data-security-uuid="${escapeAttribute(trade.security_uuid)}">
           <ha-icon icon="mdi:chevron-right"></ha-icon>
         </span>
         <span data-val="${escapeHtml(trade.name)}">${nameCell}</span>
@@ -218,7 +218,7 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
     // Merge Date and Shares
     const dateShares = `
       <div class="lot-date-shares">
-         <span class="lot-date">${lot.date}</span>
+         <span class="lot-date">${escapeHtml(lot.date)}</span>
          <span class="lot-shares">${formatNumber(lot.shares)} Stk.</span>
       </div>
     `;
@@ -442,3 +442,7 @@ export async function renderTrades(
 
   return markup;
 }
+
+export const __TEST_ONLY__ = {
+  renderTradesTable,
+};
