@@ -141,6 +141,11 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       align: 'right' as const
     },
     { key: 'result_pct', label: createSimpleSortHeader('Resultat', 'result_pct'), align: 'right' as const },
+    {
+      key: 'since_sell_combo',
+      label: createSortHeader('Seit Verkauf Prozent', '.val-top', 'Gesamt', '.val-bottom'),
+      align: 'right' as const,
+    },
     { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
     { key: 'since_sell', label: createSimpleSortHeader('Seit Verkauf', 'since_sell'), align: 'right' as const },
   ];
@@ -214,6 +219,18 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
 
       result_pct: `<span data-val="${String(trade.result_pct)}">${renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100))}</span>`,
 
+      since_sell_combo: (() => {
+        if (isClosed) return '<span data-val="0">-</span>';
+        const sinceSellAbs = (trade.current_price ?? 0) - trade.last_sell_price;
+        const sinceSellPct = trade.last_sell_price !== 0 ? (sinceSellAbs / trade.last_sell_price) * 100 : 0;
+        return stack(
+          sinceSellPct,
+          renderTrend(sinceSellPct, formatPercent(sinceSellPct / 100)),
+          sinceSellAbs * trade.total_shares_sold,
+          renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs * trade.total_shares_sold, trade.currency_code))
+        );
+      })(),
+
       current_holdings: isClosed
         ? '<span data-val="0"><ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon></span>'
         : `<span data-val="${String(trade.current_holdings)}">${formatNumber(trade.current_holdings)}</span>`,
@@ -275,6 +292,18 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
         formatCurrency(lot.result_abs)
       ),
       result_pct: `<span data-val="${String(lot.result_pct)}">${renderTrend(lot.result_pct, formatPercent(lot.result_pct / 100))}</span>`,
+      since_sell_combo: (() => {
+        const isClosed = Math.abs(trade.current_holdings) < 0.001;
+        if (isClosed) return '<span data-val="0">-</span>';
+        const sinceSellAbs = (trade.current_price ?? 0) - lot.sell_price;
+        const sinceSellPct = lot.sell_price !== 0 ? (sinceSellAbs / lot.sell_price) * 100 : 0;
+        return stack(
+          sinceSellPct,
+          renderTrend(sinceSellPct, formatPercent(sinceSellPct / 100)),
+          sinceSellAbs * lot.shares,
+          renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs * lot.shares, trade.currency_code))
+        );
+      })(),
       current_holdings: '',
       since_sell: trade.current_price === null ? '<span>-</span>' : stack(
         sinceSellAbs,
@@ -295,6 +324,7 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
       { key: 'value_combo', label: '', align: 'right' },
       { key: 'result_combo', label: '', align: 'right' },
       { key: 'result_pct', label: '', align: 'right' },
+      { key: 'since_sell_combo', label: '', align: 'right' },
       { key: 'current_holdings', label: '', align: 'right' },
       { key: 'since_sell', label: '', align: 'right' },
     ],
