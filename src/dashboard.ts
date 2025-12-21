@@ -11,6 +11,7 @@ import {
   unregisterPanelHost,
 } from './dashboard/registry';
 import { getEntryId } from './data/api';
+import { escapeHtml } from './utils/html';
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -698,7 +699,7 @@ async function renderTab(
     content = await tab.render(root, hass, effectivePanel);
   } catch (error: unknown) {
     console.error('renderTab: Fehler beim Rendern des Tabs:', error);
-    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${toErrorMessage(error)}</pre></div>`;
+    root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${escapeHtml(toErrorMessage(error))}</pre></div>`;
     return;
   }
 

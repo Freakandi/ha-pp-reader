@@ -2223,7 +2223,7 @@ export async function renderSecurityDetail(
       ${staleNotice}
       <div class="card error-card">
         <h2>Fehler beim Laden</h2>
-        <p>${error}</p>
+        <p>${escapeHtml(error)}</p>
       </div>
     `;
   }
