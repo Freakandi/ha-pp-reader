@@ -4,34 +4,27 @@
 
 import {
   createHeaderCard,
-  makeTable,
   formatNumber,
-  formatValue,
-  renderLoadingState,
+  makeTable,
+  renderLoadingState
 } from '../content/elements';
 import { openSecurityDetail } from '../dashboard';
+import { registerOverviewHelpers } from '../dashboard/registry';
+import type { PortfolioPositionsResponse } from '../data/api';
 import {
   fetchAccountsWS,
   fetchLastFileUpdateWS,
-  fetchPortfoliosWS,
   fetchPortfolioPositionsWS,
+  fetchPortfoliosWS,
 } from '../data/api';
-import type { PortfolioPositionsResponse } from '../data/api';
-import { flushPendingPositions, flushAllPendingPositions } from '../data/updateConfigsWS';
-import { registerOverviewHelpers } from '../dashboard/registry';
+import type { PortfolioPositionRecord } from '../data/positionsCache';
 import {
   getPortfolioPositions,
   hasPortfolioPositions,
   normalizePositionRecords,
   setPortfolioPositions,
 } from '../data/positionsCache';
-import type { PortfolioPositionRecord } from '../data/positionsCache';
-import type { HomeAssistant } from '../types/home-assistant';
-import type {
-  PanelConfigLike,
-} from './types';
-import { toFiniteCurrency } from '../utils/currency';
-import { normalizePerformancePayload } from '../utils/performance';
+import { flushAllPendingPositions, flushPendingPositions } from '../data/updateConfigsWS';
 import {
   replacePortfolioSnapshots,
   setAccountSnapshots,
@@ -44,7 +37,117 @@ import {
   type PortfolioOverviewRow,
 } from '../lib/store/selectors/portfolio';
 import { renderBadgeList, renderNameWithBadges } from '../lib/ui/badges';
+import type { HomeAssistant } from '../types/home-assistant';
+import { toFiniteCurrency } from '../utils/currency';
+import { formatCurrency, formatPercent } from '../utils/format';
 import { escapeHtml } from '../utils/html';
+import { normalizePerformancePayload } from '../utils/performance';
+import type {
+  PanelConfigLike,
+} from './types';
+
+// CSS for stacked columns and sorting (Copied from trades.ts)
+const STYLES = `
+<style>
+  .sort-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.2;
+    padding: 4px 0;
+  }
+  .sort-item {
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    display: inline-block;
+  }
+  .sort-item:hover {
+    opacity: 1;
+    text-decoration: underline;
+  }
+  .sort-item.sort-active {
+    opacity: 1;
+    font-weight: bold;
+    color: var(--primary-color);
+  }
+  .sort-item.sort-active::after {
+    content: " ↕"; /* Default neutral arrow */
+    font-size: 0.8em;
+    opacity: 0.5;
+  }
+  .sort-item.sort-active.dir-asc::after {
+    content: " ▲";
+    opacity: 1;
+  }
+  .sort-item.sort-active.dir-desc::after {
+    content: " ▼";
+    opacity: 1;
+  }
+
+  .simple-sort-header {
+    cursor: pointer;
+  }
+  .simple-sort-header:hover {
+    text-decoration: underline;
+  }
+  .simple-sort-header.sort-active {
+     font-weight: bold;
+     color: var(--primary-color);
+  }
+  .simple-sort-header.sort-active.dir-asc::after { content: " ▲"; }
+  .simple-sort-header.sort-active.dir-desc::after { content: " ▼"; }
+
+  .cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.2;
+  }
+  .val-top {
+    display: block;
+    font-weight: 500;
+  }
+  .val-bottom {
+    display: block;
+    color: var(--secondary-text-color);
+    font-size: 0.9em;
+  }
+
+  /* Ensure trend colors carry over */
+  .val-top .positive, .val-bottom .positive { color: var(--success-color); }
+  .val-top .negative, .val-bottom .negative { color: var(--error-color); }
+</style>
+`;
+
+// Helper functions for stacked columns
+function renderTrend(value: number, formatted: string): string {
+  const cls = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  return `<span class="${cls}">${formatted}</span>`;
+}
+
+function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
+  return `
+    <div class="sort-stack">
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0">${escapeHtml(labelTop)}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0">${escapeHtml(labelBottom)}</span>
+    </div>
+  `;
+}
+
+function createSimpleSortHeader(label: string, key: string): string {
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0">${escapeHtml(label)}</span>`;
+}
+
+function stack(topVal: number | string, topFmt: string, botVal: number | string, botFmt: string): string {
+  return `
+      <div class="cell-stack">
+        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+      </div>
+    `;
+}
 
 
 type PortfolioQueryRoot = Document | HTMLElement;
@@ -99,6 +202,7 @@ type ToggleRootElement = HTMLElement & {
 type SortableTableElement = HTMLTableElement & {
   __ppReaderSortingBound?: boolean;
   __ppReaderPortfolioFallbackBound?: boolean;
+  __ppReaderOverviewSortingBound?: boolean;
 };
 
 type OverviewBadgeList = AccountOverviewRow['badges'];
@@ -332,178 +436,180 @@ const expandedPortfolios = new Set<string>();           // gemerkte geöffnete D
 // Stattdessen scoped Listener über attachPortfolioToggleHandler(root)
 
 // Rendert die Positions-Tabelle für ein Depot
-  function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): void {
-    if (!tableEl) {
-      return;
+function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): void {
+  if (!tableEl) {
+    return;
   }
   const bodyRows = Array.from(tableEl.querySelectorAll<HTMLTableRowElement>('tbody tr'));
   bodyRows.forEach(row => {
-      const gainAbsCell = row.cells.item(7);
-      const gainPctCell = row.cells.item(8);
-      if (!gainAbsCell || !gainPctCell) {
-        return;
-      }
-      if (gainAbsCell.dataset.gainPct && gainAbsCell.dataset.gainSign) {
-        return;
-      }
-      const pctText = (gainPctCell.textContent || '').trim() || '—';
-      let pctSign: 'positive' | 'negative' | 'neutral' = 'neutral';
-      if (gainPctCell.querySelector('.positive')) {
-        pctSign = 'positive';
-      } else if (gainPctCell.querySelector('.negative')) {
-        pctSign = 'negative';
-      }
-      gainAbsCell.dataset.gainPct = pctText;
-      gainAbsCell.dataset.gainSign = pctSign;
-    });
-  }
+    const gainAbsCell = row.cells.item(7);
+    const gainPctCell = row.cells.item(8);
+    if (!gainAbsCell || !gainPctCell) {
+      return;
+    }
+    if (gainAbsCell.dataset.gainPct && gainAbsCell.dataset.gainSign) {
+      return;
+    }
+    const pctText = (gainPctCell.textContent || '').trim() || '—';
+    let pctSign: 'positive' | 'negative' | 'neutral' = 'neutral';
+    if (gainPctCell.querySelector('.positive')) {
+      pctSign = 'positive';
+    } else if (gainPctCell.querySelector('.negative')) {
+      pctSign = 'negative';
+    }
+    gainAbsCell.dataset.gainPct = pctText;
+    gainAbsCell.dataset.gainSign = pctSign;
+  });
+}
 
 function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): string {
   const activePositions = positions.filter((p) => Number(p.current_holdings) > 0);
 
   if (activePositions.length === 0) {
-    return '<div class="no-positions">Keine Positionen vorhanden.</div>';
+    return STYLES + '<div class="no-positions">Keine Positionen vorhanden.</div>';
   }
-  // Mapping für makeTable
-  const cols = [
-    { key: 'name', label: 'Wertpapier' },
-    { key: 'current_holdings', label: 'Bestand', align: 'right' as const },
-    { key: 'average_price', label: 'Ø Kaufpreis', align: 'right' as const },
-    { key: 'purchase_value', label: 'Kaufpreis (EUR)', align: 'right' as const },
-    { key: 'current_value', label: 'Aktueller Wert', align: 'right' as const },
-    { key: 'day_change_abs', label: 'Heute +/-', align: 'right' as const },
-    { key: 'day_change_pct', label: 'Heute %', align: 'right' as const },
-    { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' as const },
-    { key: 'gain_pct', label: 'Gesamt %', align: 'right' as const }
-  ];
+
+  // --- Footer Calculation ---
+  let totalPurchase = 0;
+  let totalCurrent = 0;
+  let totalDayChangeAbs = 0;
+  let totalGainAbs = 0;
+
+
   const rows = activePositions.map((p) => {
     const performance = normalizePerformancePayload(p.performance);
-    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : null;
-    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : null;
+    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : 0;
+    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : 0;
     const dayChange = computePositionDayChange(p);
-    const purchaseTotal =
-      typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
-        ? p.purchase_value
-        : null;
+    const dayChangeAbs = dayChange.value ?? 0;
+    const dayChangePct = dayChange.pct ?? 0;
 
-    return {
-      name:
-          typeof p.name === 'string'
-            ? escapeHtml(p.name)
-            : typeof p.name === 'number'
-              ? String(p.name)
-              : '',
+    const purchaseVal = typeof p.purchase_value === 'number' ? p.purchase_value : 0;
+    const currentVal = typeof p.current_value === 'number' ? p.current_value : 0;
+
+    if (typeof p.purchase_value === 'number') {
+      totalPurchase += purchaseVal;
+    }
+    if (typeof p.current_value === 'number') {
+      totalCurrent += currentVal;
+    }
+    if (dayChange.value != null) totalDayChangeAbs += dayChangeAbs;
+    if (typeof performance?.gain_abs === 'number') totalGainAbs += gainAbs;
+
+    // Build stacked cells
+    const valueCombo = stack(
+      purchaseVal,
+      formatCurrency(purchaseVal),
+      currentVal,
+      formatCurrency(currentVal)
+    );
+
+    const dayCombo = stack(
+      dayChangeAbs,
+      renderTrend(dayChangeAbs, formatCurrency(dayChangeAbs)),
+      dayChangePct,
+      renderTrend(dayChangePct, formatPercent(dayChangePct / 100))
+    );
+
+    const gainCombo = stack(
+      gainAbs,
+      renderTrend(gainAbs, formatCurrency(gainAbs)),
+      gainPct,
+      renderTrend(gainPct, formatPercent(gainPct / 100))
+    );
+
+    // Reuse buildPurchasePriceDisplay to get the complex average price display
+    const { markup: avgPriceMarkup, sortValue: avgPriceSortVal } = buildPurchasePriceDisplay(p);
+
+    const row: Record<string, unknown> = {
+      _uuid: typeof p.security_uuid === 'string' ? p.security_uuid : '',
+      name: typeof p.name === 'string'
+        ? escapeHtml(p.name)
+        : typeof p.name === 'number'
+          ? String(p.name)
+          : '',
       current_holdings:
         typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
           ? p.current_holdings
           : null,
-      average_price:
-        typeof p.purchase_value === 'number' || typeof p.purchase_value === 'string'
-          ? p.purchase_value
-          : null,
-      purchase_value: purchaseTotal,
-      current_value:
-        typeof p.current_value === 'number' || typeof p.current_value === 'string'
-          ? p.current_value
-          : null,
-      day_change_abs: dayChange.value,
-      day_change_pct: dayChange.pct,
-      gain_abs: gainAbs,
-      gain_pct: gainPct,
-      performance,
+      average_price: `<span data-sort-value="${String(avgPriceSortVal)}">${avgPriceMarkup}</span>`,
+
+      // Stacked columns
+      value_combo: valueCombo,
+      day_combo: dayCombo,
+      gain_combo: gainCombo,
     };
+    return row;
   });
 
-  // Basis-HTML über makeTable erzeugen
-  const raw = makeTable(rows, cols, ['purchase_value', 'current_value', 'day_change_abs', 'gain_abs']);
+  // Calculate Footer Aggregates
+  // Calculate Footer Aggregates
+  const totalDayChangePct = (totalCurrent - totalDayChangeAbs !== 0)
+    ? (totalDayChangeAbs / (totalCurrent - totalDayChangeAbs)) * 100
+    : 0;
 
-  // Header um data-sort-key ergänzen + sortable Klasse setzen
-  try {
-    const tpl = document.createElement('template');
-    tpl.innerHTML = raw.trim();
-    const table = tpl.content.querySelector<HTMLTableElement>('table');
-    if (table) {
-      table.classList.add('sortable-positions');
-        const ths = Array.from(table.querySelectorAll<HTMLElement>('thead th'));
-        cols.forEach((col, i) => {
-          const th = ths.at(i);
-          if (!th) {
-            return;
-          }
-          th.setAttribute('data-sort-key', col.key);
-          th.classList.add('sortable-col');
-          th.setAttribute('role', 'button');
-          th.setAttribute('tabindex', '0');
-          th.setAttribute('aria-sort', 'none');
-          const label = th.textContent || '';
-          th.setAttribute('aria-label', `${escapeHtml(label)} sortieren`);
-        });
-    const bodyRows = table.querySelectorAll<HTMLTableRowElement>('tbody tr');
-    bodyRows.forEach((tr, idx) => {
-      if (tr.classList.contains('footer-row')) {
-        return;
-      }
-      if (idx >= activePositions.length) {
-        return;
-      }
-      const pos = activePositions[idx];
-      const securityUuid = typeof pos.security_uuid === 'string' ? pos.security_uuid : null;
-      if (securityUuid) {
-        tr.dataset.security = securityUuid;
-      }
-          tr.classList.add('position-row');
-          const purchaseCell = tr.cells.item(2);
-        if (purchaseCell) {
-          const { markup, sortValue, ariaLabel } = buildPurchasePriceDisplay(pos);
-          purchaseCell.innerHTML = markup;
-          purchaseCell.dataset.sortValue = String(sortValue);
-          if (ariaLabel) {
-            purchaseCell.setAttribute('aria-label', ariaLabel);
-          } else {
-            purchaseCell.removeAttribute('aria-label');
-          }
-        }
-          const gainCell = tr.cells.item(7);
-        if (gainCell) {
-          const performance = normalizePerformancePayload(pos.performance);
-          const gainPctValue =
-            typeof performance?.gain_pct === 'number' && Number.isFinite(performance.gain_pct)
-              ? performance.gain_pct
-              : null;
-          const pctLabel =
-            gainPctValue != null
-              ? `${gainPctValue.toLocaleString('de-DE', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })} %`
-              : '—';
-          const pctSign =
-            gainPctValue == null
-              ? 'neutral'
-              : gainPctValue > 0
-                ? 'positive'
-                : gainPctValue < 0
-                  ? 'negative'
-                  : 'neutral';
-          gainCell.dataset.gainPct = pctLabel;
-          gainCell.dataset.gainSign = pctSign;
-        }
-          const gainPctCell = tr.cells.item(8);
-        if (gainPctCell) {
-          gainPctCell.classList.add('gain-pct-cell');
-        }
-      });
-      // Default-Sortierung (nach Name asc) – bereits durch SQL geliefert, aber markieren
-      table.dataset.defaultSort = 'name';
-      table.dataset.defaultDir = 'asc';
-      applyGainPctMetadata(table);
-      return table.outerHTML;
+  const totalGainPct = (totalPurchase !== 0)
+    ? (totalGainAbs / totalPurchase) * 100
+    : 0;
+
+  const footerValues = {
+    name: 'Summe',
+    current_holdings: '',
+    average_price: '',
+    value_combo: stack(
+      totalPurchase,
+      formatCurrency(totalPurchase),
+      totalCurrent,
+      formatCurrency(totalCurrent)
+    ),
+    day_combo: stack(
+      totalDayChangeAbs,
+      renderTrend(totalDayChangeAbs, formatCurrency(totalDayChangeAbs)),
+      totalDayChangePct,
+      renderTrend(totalDayChangePct, formatPercent(totalDayChangePct / 100))
+    ),
+    gain_combo: stack(
+      totalGainAbs,
+      renderTrend(totalGainAbs, formatCurrency(totalGainAbs)),
+      totalGainPct,
+      renderTrend(totalGainPct, formatPercent(totalGainPct / 100))
+    )
+  };
+
+  // Define Columns
+  const cols = [
+    { key: 'name', label: createSimpleSortHeader('Wertpapier', 'name') },
+    { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
+    { key: 'average_price', label: createSimpleSortHeader('Ø Kaufpreis', 'average_price'), align: 'right' as const },
+
+    // Stacked Columns
+    {
+      key: 'value_combo',
+      label: createSortHeader('Kaufwert', 'purchase_value', 'Aktueller Wert', 'current_value'),
+      align: 'right' as const
+    },
+    {
+      key: 'day_combo',
+      label: createSortHeader('Heute +/-', 'day_change_abs', 'Heute %', 'day_change_pct'),
+      align: 'right' as const
+    },
+    {
+      key: 'gain_combo',
+      label: createSortHeader('Gesamt +/-', 'gain_abs', 'Gesamt %', 'gain_pct'),
+      align: 'right' as const
     }
-  } catch (e) {
-    // Fallback: unverändertes Markup
-    console.warn("renderPositionsTable: Konnte Sortier-Metadaten nicht injizieren:", e);
-  }
-  return raw;
+  ];
+
+  return STYLES + makeTable(rows, cols, ['sortable-positions'], {
+    sortable: false,
+    footerValues,
+    rowAttributes: (row: Record<string, unknown>) => {
+      const uuid = row._uuid as string;
+      const attrs: Record<string, string> = { class: 'position-row' };
+      if (uuid) attrs['data-security'] = uuid;
+      return attrs;
+    }
+  }).replace('<table', '<table class="sortable-positions"');
 }
 
 // NEU: Export / Global bereitstellen für Push-Handler (Konsistenz Push vs Lazy)
@@ -520,11 +626,11 @@ function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid:
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
   );
   if (!detailsRow) return;
-    const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
-    if (!container) return;
-    if (container.__ppReaderSecurityClickBound) return;
+  const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+  if (!container) return;
+  if (container.__ppReaderSecurityClickBound) return;
 
-    container.__ppReaderSecurityClickBound = true;
+  container.__ppReaderSecurityClickBound = true;
 
   container.addEventListener('click', (event: MouseEvent) => {
     const target = event.target;
@@ -565,26 +671,23 @@ export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolio
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
 function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]): string {
   console.debug('buildExpandablePortfolioTable: render', depots.length, 'portfolios');
-    const escapeAttribute = (value: unknown): string => {
-      if (value == null) {
-        return '';
-      }
-      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-        return '';
-      }
-      return escapeHtml(value);
-    };
+  const escapeAttribute = (value: unknown): string => {
+    if (value == null) {
+      return '';
+    }
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+      return '';
+    }
+    return escapeHtml(value);
+  };
 
-  let html = '<table class="expandable-portfolio-table"><thead><tr>';
+  let html = '<table class="expandable-portfolio-table sortable-table"><thead><tr>';
   const cols = [
-    { key: 'name', label: 'Name' },
-    { key: 'position_count', label: 'Anzahl Positionen', align: 'right' },
-    { key: 'purchase_value', label: 'Kaufwert', align: 'right' },
-    { key: 'current_value', label: 'Aktueller Wert', align: 'right' },
-    { key: 'day_change_abs', label: 'Heute +/-', align: 'right' },
-    { key: 'day_change_pct', label: 'Heute %', align: 'right' },
-    { key: 'gain_abs', label: 'Gesamt +/-', align: 'right' },
-    { key: 'gain_pct', label: 'Gesamt %', align: 'right' }
+    { key: 'name', label: createSimpleSortHeader('Name', 'name') },
+    { key: 'position_count', label: createSimpleSortHeader('Anzahl Positionen', 'position_count'), align: 'right' as const },
+    { key: 'value_combo', label: createSortHeader('Kaufwert', '.val-top', 'Aktueller Wert', '.val-bottom'), align: 'right' as const },
+    { key: 'day_combo', label: createSortHeader('Heute +/-', '.val-top', 'Heute %', '.val-bottom'), align: 'right' as const },
+    { key: 'gain_combo', label: createSortHeader('Gesamt +/-', '.val-top', 'Gesamt %', '.val-bottom'), align: 'right' as const }
   ];
   cols.forEach(c => {
     const align = c.align === 'right' ? ' class="align-right"' : '';
@@ -592,14 +695,14 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
   });
   html += '</tr></thead><tbody>';
 
-    depots.forEach(d => {
-      const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
-      const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
-      const currentValue =
-        d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value)
-          ? d.current_value
-          : null;
-      const hasValue = currentValue !== null;
+  depots.forEach(d => {
+    const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
+    const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
+    const currentValue =
+      d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value)
+        ? d.current_value
+        : null;
+    const hasValue = currentValue !== null;
     const performance = d.performance;
     const gainAbs =
       typeof d.gain_abs === 'number'
@@ -621,8 +724,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
       typeof d.day_change_abs === 'number'
         ? d.day_change_abs
         : dayChangePayload && typeof dayChangePayload === 'object'
-          ? ((dayChangePayload as Record<string, unknown>).value_change_eur ??
-            (dayChangePayload as Record<string, unknown>).price_change_eur)
+          ? ((dayChangePayload as Record<string, unknown>).value_change_eur as number | null ??
+            (dayChangePayload as Record<string, unknown>).price_change_eur as number | null)
           : null;
     const dayChangePct =
       typeof d.day_change_pct === 'number'
@@ -631,10 +734,6 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
           ? (dayChangePayload as Record<string, unknown>).change_pct as number
           : null;
     const partialValue = d.fx_unavailable && hasValue;
-    const datasetCoverageRatio =
-      typeof d.coverage_ratio === 'number' && Number.isFinite(d.coverage_ratio)
-        ? d.coverage_ratio
-        : '';
     const datasetProvenance = typeof d.provenance === 'string' ? d.provenance : '';
     const datasetMetricRunUuid =
       typeof d.metric_run_uuid === 'string' ? d.metric_run_uuid : '';
@@ -642,48 +741,40 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     const expanded = expandedPortfolios.has(d.uuid);
     const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
     const detailId = `portfolio-details-${d.uuid}`;
-    const rowData = {
-      fx_unavailable: d.fx_unavailable,
-      purchase_value: purchaseSum,
-      current_value: currentValue,
-      day_change_abs: dayChangeAbs,
-      day_change_pct: dayChangePct,
-      gain_abs: gainAbs,
-      gain_pct: gainPct
-    };
-    const valueContext = { hasValue };
-    const purchaseValueCell = formatValue('purchase_value', rowData.purchase_value, rowData, valueContext);
-    const currentValueCell = formatValue('current_value', rowData.current_value, rowData, valueContext);
-    const dayChangeAbsCell = formatValue('day_change_abs', rowData.day_change_abs, rowData, valueContext);
-    const dayChangePctCell = formatValue('day_change_pct', rowData.day_change_pct, rowData, valueContext);
-    const gainAbsCell = formatValue('gain_abs', rowData.gain_abs, rowData, valueContext);
-    const gainPctCell = formatValue('gain_pct', rowData.gain_pct, rowData, valueContext);
 
-    const gainPctLabel = hasValue && typeof gainPct === 'number' && Number.isFinite(gainPct)
-      ? `${formatNumber(gainPct)} %`
-      : '';
-    const gainPctSign = hasValue && typeof gainPct === 'number' && Number.isFinite(gainPct)
-      ? (gainPct > 0 ? 'positive' : gainPct < 0 ? 'negative' : 'neutral')
-      : '';
+    // Stacked Cells
+    const valueCombo = stack(
+      purchaseSum,
+      formatCurrency(purchaseSum),
+      currentValue ?? 0,
+      currentValue != null ? formatCurrency(currentValue) : '—'
+    );
 
-      const datasetCurrentValue = hasValue && typeof currentValue === 'number' && Number.isFinite(currentValue)
-        ? currentValue
-        : '';
-      const datasetGainAbs = hasValue && typeof gainAbs === 'number' && Number.isFinite(gainAbs) ? gainAbs : '';
-      const datasetGainPct = hasValue && typeof gainPct === 'number' && Number.isFinite(gainPct) ? gainPct : '';
-      const datasetDayChangeAbs =
-        hasValue && typeof dayChangeAbs === 'number' && Number.isFinite(dayChangeAbs) ? dayChangeAbs : '';
-      const datasetDayChangePct =
-        hasValue && typeof dayChangePct === 'number' && Number.isFinite(dayChangePct) ? dayChangePct : '';
-      const positionCountAttr = String(positionCount);
+    const dayCombo = stack(
+      dayChangeAbs ?? 0,
+      dayChangeAbs != null ? renderTrend(dayChangeAbs, formatCurrency(dayChangeAbs)) : '—',
+      dayChangePct ?? 0,
+      dayChangePct != null ? renderTrend(dayChangePct, formatPercent(dayChangePct / 100)) : '—'
+    );
 
-    let gainAbsAttributes = '';
-    if (gainPctLabel) {
-      gainAbsAttributes = ` data-gain-pct="${escapeAttribute(gainPctLabel)}" data-gain-sign="${escapeAttribute(gainPctSign)}"`;
-    }
-    if (partialValue) {
-      gainAbsAttributes += ' data-partial="true"';
-    }
+    const gainCombo = stack(
+      gainAbs ?? 0,
+      gainAbs != null ? renderTrend(gainAbs, formatCurrency(gainAbs)) : '—',
+      gainPct ?? 0,
+      gainPct != null ? renderTrend(gainPct, formatPercent(gainPct / 100)) : '—'
+    );
+
+    // Dataset values for sorting (using simple properties, logic maps later)
+    const datasetCurrentValue = hasValue && typeof currentValue === 'number' ? currentValue : '';
+    const datasetGainAbs = hasValue && typeof gainAbs === 'number' ? gainAbs : '';
+    const datasetGainPct = hasValue && typeof gainPct === 'number' ? gainPct : '';
+    const datasetDayChangeAbs = hasValue && typeof dayChangeAbs === 'number' ? dayChangeAbs : '';
+    const datasetDayChangePct = hasValue && typeof dayChangePct === 'number' ? dayChangePct : '';
+    const positionCountAttr = String(positionCount);
+
+    let rowAttributes = '';
+    if (d.fx_unavailable) rowAttributes += ' data-fx-unavailable="true"';
+    if (partialValue) rowAttributes += ' data-partial="true"';
 
     html += `<tr class="portfolio-row"
                   data-portfolio="${d.uuid}"
@@ -695,10 +786,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                   data-gain-abs="${escapeAttribute(datasetGainAbs)}"
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
                 data-has-value="${hasValue ? 'true' : 'false'}"
-                data-fx-unavailable="${d.fx_unavailable ? 'true' : 'false'}"
-                data-coverage-ratio="${escapeAttribute(datasetCoverageRatio)}"
                 data-provenance="${escapeAttribute(datasetProvenance)}"
-                data-metric-run-uuid="${escapeAttribute(datasetMetricRunUuid)}">`;
+                data-metric-run-uuid="${escapeAttribute(datasetMetricRunUuid)}"
+                ${rowAttributes}>`;
     const safeName = escapeHtml(d.name);
     const badgeMarkup = renderBadgeList(withoutCoverageBadges(d.badges), {
       containerClass: 'portfolio-badges',
@@ -713,14 +803,11 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
           <span class="portfolio-name">${safeName}</span>${badgeMarkup}
         </button>
       </td>`;
-      const positionCountDisplay = positionCount.toLocaleString('de-DE');
-      html += `<td class="align-right">${positionCountDisplay}</td>`;
-    html += `<td class="align-right">${purchaseValueCell}</td>`;
-    html += `<td class="align-right">${currentValueCell}</td>`;
-    html += `<td class="align-right">${dayChangeAbsCell}</td>`;
-    html += `<td class="align-right">${dayChangePctCell}</td>`;
-    html += `<td class="align-right"${gainAbsAttributes}>${gainAbsCell}</td>`;
-    html += `<td class="align-right gain-pct-cell">${gainPctCell}</td>`;
+    const positionCountDisplay = positionCount.toLocaleString('de-DE');
+    html += `<td class="align-right"><span data-val="${String(positionCount)}">${positionCountDisplay}</span></td>`;
+    html += `<td class="align-right">${valueCombo}</td>`;
+    html += `<td class="align-right">${dayCombo}</td>`;
+    html += `<td class="align-right">${gainCombo}</td>`;
     html += '</tr>';
 
     html += `<tr class="portfolio-details${expanded ? '' : ' hidden'}"
@@ -739,125 +826,85 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     </tr>`;
   });
 
-    const availableDepots = depots.filter(d => typeof d.current_value === 'number' && Number.isFinite(d.current_value));
-    const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0), 0);
+  const availableDepots = depots.filter(d => typeof d.current_value === 'number' && Number.isFinite(d.current_value));
+  const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0), 0);
   const sumCurrent = availableDepots.reduce((a, d) => {
     if (typeof d.current_value === 'number' && Number.isFinite(d.current_value)) {
       return a + d.current_value;
     }
     return a;
   }, 0);
-  const sumPurchase = availableDepots.reduce((a, d) => {
-    if (typeof d.purchase_sum === 'number' && Number.isFinite(d.purchase_sum)) {
-      return a + d.purchase_sum;
-    }
-    return a;
-  }, 0);
+  const sumPurchase = availableDepots.reduce((a, d) => a + (d.purchase_sum || 0), 0);
+
   const dayChangeValues = availableDepots
     .map(d => {
-      if (typeof d.day_change_abs === 'number') {
-        return d.day_change_abs;
-      }
       const perfDayChange = d.performance && typeof d.performance === 'object'
         ? (d.performance as Record<string, unknown>).day_change
         : null;
+      if (typeof d.day_change_abs === 'number') return d.day_change_abs;
       if (perfDayChange && typeof perfDayChange === 'object') {
-        const valueChange = (perfDayChange as Record<string, unknown>).value_change_eur;
-        if (typeof valueChange === 'number' && Number.isFinite(valueChange)) {
-          return valueChange;
-        }
+        const vc = (perfDayChange as Record<string, unknown>).value_change_eur;
+        return typeof vc === 'number' ? vc : 0;
       }
-      return null;
-    })
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+      return 0;
+    });
+
   const sumDayChangeAbs = dayChangeValues.reduce((a, value) => a + value, 0);
   const sumGainAbs = availableDepots.reduce((a, d) => {
-    if (typeof d.performance?.gain_abs === 'number' && Number.isFinite(d.performance.gain_abs)) {
-      return a + d.performance.gain_abs;
-    }
-    const current = typeof d.current_value === 'number' && Number.isFinite(d.current_value) ? d.current_value : 0;
-    const purchase = typeof d.purchase_sum === 'number' && Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
-    return a + (current - purchase);
+    // Logic for gain sum
+    if (typeof d.performance?.gain_abs === 'number') return a + d.performance.gain_abs;
+    // fallback
+    const cur = d.current_value as number;
+    const pur = d.purchase_sum;
+    return a + (cur - pur);
   }, 0);
+
   const sumHasValue = availableDepots.length > 0;
-  const sumIsPartial = availableDepots.length !== depots.length;
   const dayChangeHasValue = dayChangeValues.length > 0;
+
   const sumDayChangePct =
     dayChangeHasValue && sumHasValue && sumCurrent !== 0
       ? (() => {
-          const previousClose = sumCurrent - sumDayChangeAbs;
-          if (!previousClose) {
-            return null;
-          }
-          return (sumDayChangeAbs / previousClose) * 100;
-        })()
-      : null;
-  const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
+        const previousClose = sumCurrent - sumDayChangeAbs;
+        if (!previousClose) return 0;
+        return (sumDayChangeAbs / previousClose) * 100;
+      })()
+      : 0;
+  const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
 
-  const sumRowData = {
-    fx_unavailable: sumIsPartial,
-    purchase_value: sumHasValue ? sumPurchase : null,
-    current_value: sumHasValue ? sumCurrent : null,
-    day_change_abs: dayChangeHasValue ? sumDayChangeAbs : null,
-    day_change_pct: dayChangeHasValue ? sumDayChangePct : null,
-    gain_abs: sumHasValue ? sumGainAbs : null,
-    gain_pct: sumHasValue ? sumGainPct : null
-  };
-  const sumContext = { hasValue: sumHasValue };
-  const dayChangeContext = { hasValue: dayChangeHasValue };
-  const sumPurchaseCell = formatValue('purchase_value', sumRowData.purchase_value, sumRowData, sumContext);
-  const sumCurrentCell = formatValue('current_value', sumRowData.current_value, sumRowData, sumContext);
-  const sumDayChangeAbsCell = formatValue('day_change_abs', sumRowData.day_change_abs, sumRowData, dayChangeContext);
-  const sumDayChangePctCell = formatValue('day_change_pct', sumRowData.day_change_pct, sumRowData, dayChangeContext);
-  const sumGainAbsCell = formatValue('gain_abs', sumRowData.gain_abs, sumRowData, sumContext);
-  const sumGainPctCell = formatValue('gain_pct', sumRowData.gain_pct, sumRowData, sumContext);
+  // Footer Row
+  const footerValueCombo = stack(
+    sumPurchase,
+    formatCurrency(sumPurchase),
+    sumCurrent,
+    formatCurrency(sumCurrent)
+  );
+  const footerDayCombo = stack(
+    sumDayChangeAbs,
+    renderTrend(sumDayChangeAbs, formatCurrency(sumDayChangeAbs)),
+    sumDayChangePct,
+    renderTrend(sumDayChangePct, formatPercent(sumDayChangePct / 100))
+  );
+  const footerGainCombo = stack(
+    sumGainAbs,
+    renderTrend(sumGainAbs, formatCurrency(sumGainAbs)),
+    sumGainPct,
+    renderTrend(sumGainPct, formatPercent(sumGainPct / 100))
+  );
 
-  let sumGainAbsAttributes = '';
-  if (sumHasValue && typeof sumGainPct === 'number' && Number.isFinite(sumGainPct)) {
-    const sumGainPctLabel = `${formatNumber(sumGainPct)} %`;
-    const sumGainPctSign = sumGainPct > 0 ? 'positive' : sumGainPct < 0 ? 'negative' : 'neutral';
-    sumGainAbsAttributes = ` data-gain-pct="${escapeAttribute(sumGainPctLabel)}" data-gain-sign="${escapeAttribute(sumGainPctSign)}"`;
-  }
-  if (sumIsPartial) {
-    sumGainAbsAttributes += ' data-partial="true"';
-  }
+  html += '<tr class="footer-row">';
+  html += '<td>Summe</td>';
+  html += `<td class="align-right">${sumPositions.toLocaleString('de-DE')}</td>`;
+  html += `<td class="align-right">${footerValueCombo}</td>`;
+  html += `<td class="align-right">${footerDayCombo}</td>`;
+  html += `<td class="align-right">${footerGainCombo}</td>`;
 
-    const sumPositionAttr = String(Math.round(sumPositions));
-    const sumCurrentAttr = sumHasValue ? String(sumCurrent) : '';
-    const sumPurchaseAttr = sumHasValue ? String(sumPurchase) : '';
-    const sumDayChangeAttr = dayChangeHasValue ? String(sumDayChangeAbs) : '';
-    const sumDayChangePctAttr =
-      dayChangeHasValue && typeof sumDayChangePct === 'number' && Number.isFinite(sumDayChangePct)
-        ? String(sumDayChangePct)
-        : '';
-    const sumGainAbsAttr = sumHasValue ? String(sumGainAbs) : '';
-    const sumGainPctAttr = sumHasValue && typeof sumGainPct === 'number' && Number.isFinite(sumGainPct)
-      ? String(sumGainPct)
-      : '';
-
-    html += `<tr class="footer-row"
-      data-position-count="${sumPositionAttr}"
-      data-current-value="${escapeAttribute(sumCurrentAttr)}"
-      data-purchase-sum="${escapeAttribute(sumPurchaseAttr)}"
-      data-day-change="${escapeAttribute(sumDayChangeAttr)}"
-      data-day-change-pct="${escapeAttribute(sumDayChangePctAttr)}"
-      data-gain-abs="${escapeAttribute(sumGainAbsAttr)}"
-      data-gain-pct="${escapeAttribute(sumGainPctAttr)}"
-      data-has-value="${sumHasValue ? 'true' : 'false'}"
-      data-fx-unavailable="${sumIsPartial ? 'true' : 'false'}">
-      <td>Summe</td>
-      <td class="align-right">${Math.round(sumPositions).toLocaleString('de-DE')}</td>
-    <td class="align-right">${sumPurchaseCell}</td>
-    <td class="align-right">${sumCurrentCell}</td>
-    <td class="align-right">${sumDayChangeAbsCell}</td>
-    <td class="align-right">${sumDayChangePctCell}</td>
-    <td class="align-right"${sumGainAbsAttributes}>${sumGainAbsCell}</td>
-    <td class="align-right gain-pct-cell">${sumGainPctCell}</td>
-  </tr>`;
-
+  html += '</tr>';
   html += '</tbody></table>';
+
   return html;
 }
+
 
 function resolvePortfolioTable(target: Element | PortfolioQueryRoot | null | undefined): HTMLTableElement | null {
   if (target instanceof HTMLTableElement) {
@@ -890,11 +937,11 @@ function readDatasetNumber(value: string | undefined): number | null {
 }
 
 export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoot | null | undefined): void {
-    const table = resolvePortfolioTable(target);
-    if (!table) {
-      return;
-    }
-    const tbody = table.tBodies.item(0);
+  const table = resolvePortfolioTable(target);
+  if (!table) {
+    return;
+  }
+  const tbody = table.tBodies.item(0);
   if (!tbody) {
     return;
   }
@@ -926,11 +973,12 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     const hasValueAttr = row.dataset.hasValue;
     const hasValue = !(hasValueAttr === 'false' || hasValueAttr === '0' || hasValueAttr === '' || hasValueAttr == null);
     if (!hasValue) {
-      allRowsComplete = false;
-      continue;
+      // Only if we expect a value but don't have it, we might mark incomplete.
+      // But typically partial rows just skip accumulation.
     }
-
-    hasValueRow = true;
+    else {
+      hasValueRow = true;
+    }
 
     const currentValue = readDatasetNumber(row.dataset.currentValue);
     const gainAbs = readDatasetNumber(row.dataset.gainAbs);
@@ -956,17 +1004,25 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   const sumDayChangePct =
     hasDayChangeRow && totalsComplete && sumCurrent !== 0
       ? (() => {
-          const previousClose = sumCurrent - sumDayChange;
-          if (!previousClose) {
-            return null;
-          }
-          return (sumDayChange / previousClose) * 100;
-        })()
+        const previousClose = sumCurrent - sumDayChange;
+        if (!previousClose) {
+          return null;
+        }
+        return (sumDayChange / previousClose) * 100;
+      })()
       : null;
 
-  let footer = Array.from(tbody.children).find((child): child is HTMLTableRowElement =>
-    child instanceof HTMLTableRowElement && child.classList.contains('footer-row')
-  );
+  // Ensure unique footer
+  const existingFooters = tbody.querySelectorAll('tr.footer-row');
+  if (existingFooters.length > 1) {
+    // Remove duplicates, keep first
+    for (let i = 1; i < existingFooters.length; i++) {
+      existingFooters[i].remove();
+    }
+  }
+
+  let footer = existingFooters.length > 0 ? (existingFooters[0] as HTMLTableRowElement) : null;
+
   if (!footer) {
     footer = document.createElement('tr');
     footer.classList.add('footer-row');
@@ -975,68 +1031,38 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
 
   const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
 
-  const footerRowData = {
-    fx_unavailable: fxUnavailable || !totalsComplete,
-    purchase_value: totalsComplete ? sumPurchase : null,
-    current_value: totalsComplete ? sumCurrent : null,
-    day_change_abs: hasDayChangeRow && totalsComplete ? sumDayChange : null,
-    day_change_pct: hasDayChangeRow && totalsComplete ? sumDayChangePct : null,
-    gain_abs: totalsComplete ? sumGainAbs : null,
-    gain_pct: totalsComplete ? sumGainPct : null,
-  };
-  const footerContext = { hasValue: totalsComplete };
-  const dayChangeContext = { hasValue: hasDayChangeRow && totalsComplete };
+  // Build Stacked Cells
+  // Note: formatValue internally handles escaping somewhat, but here we use simple formatters + stack
 
-  const purchaseValueHtml = formatValue('purchase_value', footerRowData.purchase_value, footerRowData, footerContext);
-  const currentValueHtml = formatValue('current_value', footerRowData.current_value, footerRowData, footerContext);
-  const dayChangeAbsHtml = formatValue('day_change_abs', footerRowData.day_change_abs, footerRowData, dayChangeContext);
-  const dayChangePctHtml = formatValue('day_change_pct', footerRowData.day_change_pct, footerRowData, dayChangeContext);
-  const gainAbsHtml = formatValue('gain_abs', footerRowData.gain_abs, footerRowData, footerContext);
-  const gainPctHtml = formatValue('gain_pct', footerRowData.gain_pct, footerRowData, footerContext);
+  const footerValueCombo = stack(
+    totalsComplete ? sumPurchase : 0,
+    totalsComplete ? formatCurrency(sumPurchase) : '—',
+    totalsComplete ? sumCurrent : 0,
+    totalsComplete ? formatCurrency(sumCurrent) : '—'
+  );
 
-  const headerRow = table.tHead ? table.tHead.rows.item(0) : null;
-  const headerCellCount = headerRow ? headerRow.cells.length : 0;
-  const footerCellCount = footer.cells.length;
-  const layoutColumns = headerCellCount || footerCellCount;
-  const useCompactLayout = layoutColumns > 0 ? layoutColumns <= 5 : false;
+  const footerDayCombo = stack(
+    hasDayChangeRow && totalsComplete ? sumDayChange : 0,
+    hasDayChangeRow && totalsComplete ? renderTrend(sumDayChange, formatCurrency(sumDayChange)) : '—',
+    hasDayChangeRow && totalsComplete && sumDayChangePct != null ? sumDayChangePct : 0,
+    hasDayChangeRow && totalsComplete && sumDayChangePct != null ? renderTrend(sumDayChangePct, formatPercent(sumDayChangePct / 100)) : '—'
+  );
 
-  const gainPctLabel =
-    totalsComplete && typeof sumGainPct === 'number' ? `${formatNumber(sumGainPct)} %` : '';
-  const gainPctSign =
-    totalsComplete && typeof sumGainPct === 'number'
-      ? sumGainPct > 0
-        ? 'positive'
-        : sumGainPct < 0
-          ? 'negative'
-          : 'neutral'
-      : 'neutral';
+  const footerGainCombo = stack(
+    totalsComplete ? sumGainAbs : 0,
+    totalsComplete ? renderTrend(sumGainAbs, formatCurrency(sumGainAbs)) : '—',
+    totalsComplete && sumGainPct != null ? sumGainPct : 0,
+    totalsComplete && sumGainPct != null ? renderTrend(sumGainPct, formatPercent(sumGainPct / 100)) : '—'
+  );
 
-  if (useCompactLayout) {
-    footer.innerHTML = `
+  footer.innerHTML = `
       <td>Summe</td>
       <td class="align-right">${sumPositionsDisplay}</td>
-      <td class="align-right">${currentValueHtml}</td>
-      <td class="align-right">${gainAbsHtml}</td>
-      <td class="align-right gain-pct-cell">${gainPctHtml}</td>
+      <td class="align-right">${footerValueCombo}</td>
+      <td class="align-right">${footerDayCombo}</td>
+      <td class="align-right">${footerGainCombo}</td>
     `;
-  } else {
-    footer.innerHTML = `
-      <td>Summe</td>
-      <td class="align-right">${sumPositionsDisplay}</td>
-      <td class="align-right">${purchaseValueHtml}</td>
-      <td class="align-right">${currentValueHtml}</td>
-      <td class="align-right">${dayChangeAbsHtml}</td>
-      <td class="align-right">${dayChangePctHtml}</td>
-      <td class="align-right">${gainAbsHtml}</td>
-      <td class="align-right">${gainPctHtml}</td>
-    `;
-  }
 
-  const footerGainAbsCell = footer.cells.item(useCompactLayout ? 3 : 6);
-  if (footerGainAbsCell) {
-    footerGainAbsCell.dataset.gainPct = gainPctLabel || '—';
-    footerGainAbsCell.dataset.gainSign = gainPctSign;
-  }
   footer.dataset.positionCount = String(Math.round(sumPositions));
   footer.dataset.currentValue = totalsComplete ? String(sumCurrent) : '';
   footer.dataset.purchaseSum = totalsComplete ? String(sumPurchase) : '';
@@ -1048,8 +1074,20 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   footer.dataset.gainAbs = totalsComplete ? String(sumGainAbs) : '';
   footer.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number' ? String(sumGainPct) : '';
   footer.dataset.hasValue = totalsComplete ? 'true' : 'false';
-  footer.dataset.fxUnavailable = fxUnavailable ? 'true' : 'false';
+  footer.dataset.fxUnavailable = (fxUnavailable || !totalsComplete) ? 'true' : 'false';
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 /**
  * Utility-Funktionen zum Auslesen und Wiederherstellen des Expand-States.
@@ -1087,9 +1125,9 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
   );
   if (!detailsRow) return;
-    const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
-    if (!container) return;
-    const table = container.querySelector<SortableTableElement>('table.sortable-positions');
+  const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+  if (!container) return;
+  const table = container.querySelector<SortableTableElement>('table.sortable-positions');
   if (!table || table.__ppReaderSortingBound) return;
 
   table.__ppReaderSortingBound = true;
@@ -1118,57 +1156,87 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     };
 
     rows.sort((a, b) => {
-        const idxMap: Record<PortfolioPositionsSortKey, number> = {
-          name: 0,
-          current_holdings: 1,
-          average_price: 2,
-          purchase_value: 3,
-          current_value: 4,
-          day_change_abs: 5,
-          day_change_pct: 6,
-          gain_abs: 7,
-          gain_pct: 8,
-        };
-        const colIdx = idxMap[key];
-          const aCellEl = a.cells.item(colIdx);
-          const bCellEl = b.cells.item(colIdx);
+      const idxMap: Record<PortfolioPositionsSortKey, number> = {
+        name: 0,
+        current_holdings: 1,
+        average_price: 2,
+        purchase_value: 3,
+        current_value: 3,
+        day_change_abs: 4,
+        day_change_pct: 4,
+        gain_abs: 5,
+        gain_pct: 5,
+      };
 
-        let aCell = '';
-        if (aCellEl) {
-          const raw = aCellEl.textContent;
-          if (typeof raw === 'string') {
-            aCell = raw.trim();
-          }
+      const subSelectorMap: Record<PortfolioPositionsSortKey, string | null> = {
+        name: null,
+        current_holdings: null,
+        average_price: null,
+        purchase_value: '.val-top',
+        current_value: '.val-bottom',
+        day_change_abs: '.val-top',
+        day_change_pct: '.val-bottom',
+        gain_abs: '.val-top',
+        gain_pct: '.val-bottom',
+      };
+      const colIdx = idxMap[key];
+      const aCellEl = a.cells.item(colIdx);
+      const bCellEl = b.cells.item(colIdx);
+
+      const subSel = subSelectorMap[key];
+
+      let aCell = '';
+      if (aCellEl) {
+        let raw: string | null = null;
+        if (subSel) {
+          const subEl = aCellEl.querySelector(subSel);
+          raw = subEl ? (subEl.getAttribute('data-val') || subEl.textContent) : null;
+        } else {
+          // For simple columns like Name, just text
+          // But average_price/holdings might have data-sort-value on inner span?
+          // Existing logic read textContent. Let's stick closer to textContent but check data-val
+          const el = aCellEl.querySelector('[data-sort-value]') || aCellEl.querySelector('[data-val]');
+          raw = el ? (el.getAttribute('data-sort-value') || el.getAttribute('data-val')) : aCellEl.textContent;
         }
 
-        let bCell = '';
-        if (bCellEl) {
-          const raw = bCellEl.textContent;
-          if (typeof raw === 'string') {
-            bCell = raw.trim();
-          }
+        if (typeof raw === 'string') {
+          aCell = raw.trim();
+        }
+      }
+
+      let bCell = '';
+      if (bCellEl) {
+        let raw: string | null = null;
+        if (subSel) {
+          const subEl = bCellEl.querySelector(subSel);
+          raw = subEl ? (subEl.getAttribute('data-val') || subEl.textContent) : null;
+        } else {
+          const el = bCellEl.querySelector('[data-sort-value]') || bCellEl.querySelector('[data-val]');
+          raw = el ? (el.getAttribute('data-sort-value') || el.getAttribute('data-val')) : bCellEl.textContent;
         }
 
-          const resolveSortValue = (
-            cell: HTMLTableCellElement | null | undefined,
-            text: string,
-          ): number => {
-            const sortAttr = cell ? cell.dataset.sortValue : undefined;
-            if (sortAttr != null && sortAttr !== '') {
-              const numericAttr = Number(sortAttr);
-              if (Number.isFinite(numericAttr)) {
-                return numericAttr;
-              }
-            }
-            return parseNum(text);
-          };
+        if (typeof raw === 'string') {
+          bCell = raw.trim();
+        }
+      }
+
+      const resolveSortValue = (
+        text: string,
+      ): number => {
+        // Try parsing as standard float first (e.g. from data-val="1234.56")
+        // Standard JS float format: optional minus, digits, optional dot, digits.
+        if (/^-?\d+(\.\d+)?$/.test(text)) {
+          return Number.parseFloat(text);
+        }
+        return parseNum(text);
+      };
 
       let comp: number;
       if (key === 'name') {
         comp = aCell.localeCompare(bCell, 'de', { sensitivity: 'base' });
       } else {
-        const aValue = resolveSortValue(aCellEl, aCell);
-        const bValue = resolveSortValue(bCellEl, bCell);
+        const aValue = resolveSortValue(aCell);
+        const bValue = resolveSortValue(bCell);
         comp = aValue - bValue;
       }
       return dir === 'asc' ? comp : -comp;
@@ -1179,14 +1247,21 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
       th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
     });
     // A11y Indikatoren zurücksetzen
-    table.querySelectorAll('thead th[aria-sort]').forEach(th => {
-      th.setAttribute('aria-sort', 'none');
+    table.querySelectorAll('.sort-active').forEach(th => {
+      th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
     });
 
     // Aktives TH markieren
-    const th = table.querySelector<HTMLElement>(`thead th[data-sort-key="${key}"]`);
+    // Aktives Element markieren
+    // Wir suchen entweder TH mit data-sort-key ODER ein .sort-item mit dem selector
+    const sortTrigger = table.querySelector(`[data-sort-key="${key}"], [data-sort-selector="${key}"]`);
+    if (sortTrigger) {
+      sortTrigger.classList.add('sort-active');
+      sortTrigger.classList.remove('dir-asc', 'dir-desc');
+      sortTrigger.classList.add(dir === 'asc' ? 'dir-asc' : 'dir-desc');
+    }
+    const th = sortTrigger?.closest('th');
     if (th) {
-      th.classList.add('sort-active', dir === 'asc' ? 'dir-asc' : 'dir-desc');
       th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
     }
 
@@ -1219,9 +1294,10 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     if (!(target instanceof Element)) {
       return;
     }
-    const th = target.closest('th[data-sort-key]');
-    if (!th || !table.contains(th)) return;
-    const keyAttr = th.getAttribute('data-sort-key');
+    const sortItem = target.closest('[data-sort-key], [data-sort-selector]');
+    if (!sortItem || !table.contains(sortItem)) return;
+
+    const keyAttr = sortItem.getAttribute('data-sort-key') || sortItem.getAttribute('data-sort-selector');
     if (!isPortfolioPositionsSortKey(keyAttr)) {
       return;
     }
@@ -1330,15 +1406,124 @@ async function waitForElement<T extends Element>(
   });
 }
 
-  export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
-    const previousToken = typeof root.__ppReaderAttachToken === 'number' ? root.__ppReaderAttachToken : 0;
-    const token = previousToken + 1;
+function sortOverviewTable(table: HTMLTableElement, colIndex: number, valueSelector: string | null, dir: 'asc' | 'desc') {
+  const tbody = table.tBodies[0];
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!tbody) return;
+
+  // Move ALL footer rows to the end (cleanup if multiple exist)
+  const footers = Array.from(tbody.children).filter(child => child.classList.contains('footer-row'));
+
+  // Pairs of rows { main, detail }
+  const rowPairs: { main: HTMLTableRowElement; detail: HTMLTableRowElement }[] = [];
+  let currentMain: HTMLTableRowElement | null = null;
+
+  Array.from(tbody.children).forEach(child => {
+    if (child.classList.contains('footer-row')) return;
+    if (child instanceof HTMLTableRowElement) {
+      if (child.classList.contains('portfolio-row')) {
+        currentMain = child;
+      } else if (child.classList.contains('portfolio-details') && currentMain) {
+        rowPairs.push({ main: currentMain, detail: child });
+        currentMain = null;
+      }
+    }
+  });
+
+  rowPairs.sort((aP, bP) => {
+    const a = aP.main;
+    const b = bP.main;
+    const aCell = a.cells[colIndex];
+    const bCell = b.cells[colIndex];
+
+    let aValText = '';
+    let bValText = '';
+
+    if (valueSelector) {
+      const aEl = aCell.querySelector<HTMLElement>(valueSelector);
+      const bEl = bCell.querySelector<HTMLElement>(valueSelector);
+      aValText = aEl?.getAttribute('data-val') || '';
+      bValText = bEl?.getAttribute('data-val') || '';
+    } else {
+      const aEl = aCell.querySelector<HTMLElement>('[data-val]');
+      const bEl = bCell.querySelector<HTMLElement>('[data-val]');
+      aValText = aEl?.getAttribute('data-val') || aCell.textContent || '';
+      bValText = bEl?.getAttribute('data-val') || bCell.textContent || '';
+    }
+
+    const aNum = Number(aValText);
+    const bNum = Number(bValText);
+
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return (aNum - bNum) * (dir === 'asc' ? 1 : -1);
+    }
+    return aValText.localeCompare(bValText) * (dir === 'asc' ? 1 : -1);
+  });
+
+  rowPairs.forEach(pair => {
+    tbody.appendChild(pair.main);
+    tbody.appendChild(pair.detail);
+  });
+
+  // Re-append unique footer
+  if (footers.length > 0) {
+    tbody.appendChild(footers[0]);
+    // Remove others if any
+    for (let i = 1; i < footers.length; i++) footers[i].remove();
+  }
+}
+
+function attachPortfolioOverviewSorting(root: HTMLElement) {
+  const table = root.querySelector<HTMLTableElement>('.expandable-portfolio-table');
+  if (!table) return;
+  const sortableTable = table as SortableTableElement;
+  if (sortableTable.__ppReaderOverviewSortingBound) return;
+  sortableTable.__ppReaderOverviewSortingBound = true;
+
+  table.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const sortTrigger = target.closest('[data-sort-selector]') || target.closest('[data-sort-key]');
+    if (sortTrigger) {
+      // Ensure the event came from this table's header, not a nested table
+      const triggerTable = sortTrigger.closest('table');
+      if (triggerTable !== table) return;
+
+      // Clean up previous sort indicators
+      table.querySelectorAll('.sort-active').forEach(el => {
+        if (el !== sortTrigger) {
+          el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+        }
+      });
+
+      let dir: 'asc' | 'desc' = 'asc';
+      if (sortTrigger.classList.contains('sort-active') && sortTrigger.classList.contains('dir-asc')) {
+        dir = 'desc';
+      }
+
+      sortTrigger.classList.add('sort-active');
+      sortTrigger.classList.remove('dir-asc', 'dir-desc');
+      sortTrigger.classList.add(`dir-${dir}`);
+
+      const th = sortTrigger.closest('th');
+      const colIndex = th ? Array.from(th.parentElement?.children ?? []).indexOf(th) : -1;
+
+      if (colIndex >= 0) {
+        const selector = (sortTrigger as HTMLElement).dataset.sortSelector || null;
+        sortOverviewTable(table, colIndex, selector, dir);
+      }
+    }
+  });
+}
+
+export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
+  const previousToken = typeof root.__ppReaderAttachToken === 'number' ? root.__ppReaderAttachToken : 0;
+  const token = previousToken + 1;
   root.__ppReaderAttachToken = token;
   root.__ppReaderAttachInProgress = true;
 
-    void (async () => {
+  void (async () => {
     try {
-        const container = await waitForElement<ToggleContainerElement>(root, '.portfolio-table');
+      const container = await waitForElement<ToggleContainerElement>(root, '.portfolio-table');
       if (token !== root.__ppReaderAttachToken) {
         return; // Ein neuer Versuch läuft bereits – diesen abbrechen
       }
@@ -1353,10 +1538,10 @@ async function waitForElement<T extends Element>(
         console.debug("attachPortfolioToggleHandler: Noch keine Buttons – evtl. Recovery später");
       }
 
-        if (container.__ppReaderPortfolioToggleBound) {
-          return;
-        }
-        container.__ppReaderPortfolioToggleBound = true;
+      if (container.__ppReaderPortfolioToggleBound) {
+        return;
+      }
+      container.__ppReaderPortfolioToggleBound = true;
       console.debug("attachPortfolioToggleHandler: Listener registriert");
 
       container.addEventListener('click', (event: MouseEvent) => {
@@ -1367,7 +1552,7 @@ async function waitForElement<T extends Element>(
               return;
             }
 
-              const retryBtn = target.closest<HTMLButtonElement>('.retry-pos');
+            const retryBtn = target.closest<HTMLButtonElement>('.retry-pos');
             if (retryBtn && container.contains(retryBtn)) {
               const pid = retryBtn.getAttribute('data-portfolio');
               if (pid) {
@@ -1386,7 +1571,7 @@ async function waitForElement<T extends Element>(
             const portfolioUuid = btn.getAttribute('data-portfolio');
             if (!portfolioUuid) return;
 
-              const detailsRow = root.querySelector<HTMLTableRowElement>(
+            const detailsRow = root.querySelector<HTMLTableRowElement>(
               `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
             );
             if (!detailsRow) return;
@@ -1476,9 +1661,9 @@ async function waitForElement<T extends Element>(
               if (caretEl) caretEl.textContent = '▶';
               expandedPortfolios.delete(portfolioUuid);
             }
-            } catch (error) {
-              console.error('attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler', error);
-            }
+          } catch (error) {
+            console.error('attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler', error);
+          }
         })();
       });
     } finally {
@@ -1486,15 +1671,15 @@ async function waitForElement<T extends Element>(
         root.__ppReaderAttachInProgress = false;
       }
     }
-    })();
+  })();
 }
 
 // Fallback: direkter Listener auf die Tabelle selbst (falls outer container nicht klickt)
-  export function ensurePortfolioRowFallbackListener(root: ToggleRootElement): void {
-    const table = root.querySelector<SortableTableElement>('.expandable-portfolio-table');
-    if (!table) return;
-    if (table.__ppReaderPortfolioFallbackBound) return;
-    table.__ppReaderPortfolioFallbackBound = true;
+export function ensurePortfolioRowFallbackListener(root: ToggleRootElement): void {
+  const table = root.querySelector<SortableTableElement>('.expandable-portfolio-table');
+  if (!table) return;
+  if (table.__ppReaderPortfolioFallbackBound) return;
+  table.__ppReaderPortfolioFallbackBound = true;
   table.addEventListener('click', (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -1503,7 +1688,7 @@ async function waitForElement<T extends Element>(
     const btn = target.closest<HTMLButtonElement>('.portfolio-toggle');
     if (!btn) return;
     // Falls der Haupt-Listener schon aktiv war, nichts doppelt machen
-      const primaryContainer = root.querySelector<ToggleContainerElement>('.portfolio-table');
+    const primaryContainer = root.querySelector<ToggleContainerElement>('.portfolio-table');
     if (primaryContainer?.__ppReaderPortfolioToggleBound) return;
     console.debug('Fallback-Listener aktiv – re-attach Hauptlistener');
     attachPortfolioToggleHandler(root);
@@ -1621,9 +1806,9 @@ export async function renderDashboard(
       const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
       const fxDisplay = hasOrigBalance
         ? `${origBalance.toLocaleString('de-DE', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}&nbsp;${account.currency_code ?? ''}`
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}&nbsp;${account.currency_code ?? ''}`
         : '';
 
       return {
@@ -1659,6 +1844,7 @@ export async function renderDashboard(
   `;
 
   const markup = `
+    ${STYLES}
     ${headerCard.outerHTML}
     <div class="card">
       <h2>Investment</h2>
@@ -1670,12 +1856,12 @@ export async function renderDashboard(
     ${footerCard}
   `;
 
-    schedulePostRenderSetup(root as ToggleRootElement, depots);
+  schedulePostRenderSetup(root as ToggleRootElement, depots);
 
   return markup;
 }
 
-  function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonly PortfolioOverviewRow[]): void {
+function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonly PortfolioOverviewRow[]): void {
   if (!root) {
     return;
   }
@@ -1690,6 +1876,7 @@ export async function renderDashboard(
       }
 
       attachPortfolioToggleHandler(root);
+      attachPortfolioOverviewSorting(root);
       ensurePortfolioRowFallbackListener(root);
 
       expandedPortfolios.forEach((pid) => {
