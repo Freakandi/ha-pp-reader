@@ -709,7 +709,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                 data-portfolio="${d.uuid}"
                 aria-expanded="${expanded ? 'true' : 'false'}"
                 aria-controls="${detailId}">
-          <span class="caret">${expanded ? '▼' : '▶'}</span>
+          <span class="caret" aria-hidden="true">${expanded ? '▼' : '▶'}</span>
           <span class="portfolio-name">${safeName}</span>${badgeMarkup}
         </button>
       </td>`;
