@@ -639,6 +639,8 @@ export interface RealizedTrade {
   result_abs: number;
   result_pct: number;
   lots: RealizedLot[];
+  total_sold_shares: number;
+  last_sell_date: string;
 }
 
 export async function fetchRealizedPerformance(

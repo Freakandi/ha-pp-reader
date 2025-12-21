@@ -688,6 +688,8 @@ class RealizedPerformanceResult:
     result_abs: float
     result_pct: float
     lots: list[RealizedPerformanceLot]
+    total_sold_shares: float
+    last_sell_date: str
 
 
 def calculate_realized_performance(  # noqa: PLR0912, PLR0915
@@ -878,6 +880,8 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
             if s_uuid == sec_uuid
         )
 
+        total_sold_shares = sum(lot.shares for lot in lots)
+
         aggregated_results.append(
             RealizedPerformanceResult(
                 security_uuid=sec_uuid,
@@ -894,6 +898,8 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
                 result_abs=round_currency(total_result_abs),
                 result_pct=round_currency(total_result_pct, decimals=2),
                 lots=lots,
+                total_sold_shares=round_currency(total_sold_shares, decimals=6),
+                last_sell_date=lots[-1].date,
             )
         )
 

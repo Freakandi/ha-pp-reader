@@ -1111,6 +1111,8 @@ def _serialize_realized_performance(results: list[Any]) -> list[dict[str, Any]]:
                 "result_abs": res.result_abs,
                 "result_pct": res.result_pct,
                 "lots": lots,
+                "total_sold_shares": res.total_sold_shares,
+                "last_sell_date": res.last_sell_date,
             }
         )
     return serialized

@@ -22,7 +22,7 @@ def _patch_fx(
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda dates, currencies, db_path, conn=None: None,
     )
     monkeypatch.setattr(
         securities,
