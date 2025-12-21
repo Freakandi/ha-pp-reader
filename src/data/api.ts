@@ -638,6 +638,7 @@ export interface RealizedTrade {
   sales_value_net: number;
   result_abs: number;
   result_pct: number;
+  total_shares_sold: number;
   lots: RealizedLot[];
 }
 
