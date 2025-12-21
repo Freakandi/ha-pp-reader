@@ -7,7 +7,7 @@ import { createHeaderCard, makeTable } from '../content/elements';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
-import { formatCurrency, formatNumber, formatPercent } from '../utils/format';
+import { formatCurrency, formatDate, formatNumber, formatPercent } from '../utils/format';
 import { escapeAttribute, escapeHtml } from '../utils/html';
 import type { PanelConfigLike } from './types';
 
@@ -141,13 +141,12 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       align: 'right' as const
     },
     { key: 'result_pct', label: createSimpleSortHeader('Resultat', 'result_pct'), align: 'right' as const },
+    { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
     {
-      key: 'since_sell_combo',
-      label: createSortHeader('Seit Verkauf Prozent', '.val-top', 'Gesamt', '.val-bottom'),
+      key: 'since_sell',
+      label: createSortHeader('Seit Verkauf %', '.val-top', 'Gesamt', '.val-bottom'),
       align: 'right' as const,
     },
-    { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
-    { key: 'since_sell', label: createSimpleSortHeader('Seit Verkauf', 'since_sell'), align: 'right' as const },
   ];
 
   const rows: TradesTableRow[] = trades.map((trade) => {
@@ -178,22 +177,16 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       </div>
     `;
 
-    const lastLot = trade.lots.length > 0 ? trade.lots[trade.lots.length - 1] : null;
-    let sinceSellAbs = 0;
-    let sinceSellPct = 0;
-    if (lastLot && trade.current_price !== null) {
-      sinceSellAbs = (trade.current_price - lastLot.sell_price) * lastLot.shares;
-      if (lastLot.sell_price > 0) {
-        sinceSellPct = (trade.current_price - lastLot.sell_price) / lastLot.sell_price;
-      }
-    }
+    // Use backend-provided metrics which handle currency conversion correctly
+    const sinceSellAbs = trade.since_sell_abs;
+    const sinceSellPct = trade.since_sell_pct;
 
     return {
       _uuid: trade.security_uuid,
       _lots: trade.lots,
       name: nameCell,
       total_sold_shares: `<span data-val="${String(trade.total_sold_shares)}">${formatNumber(trade.total_sold_shares)}</span>`,
-      last_sell_date: `<span data-val="${escapeAttribute(trade.last_sell_date)}">${escapeHtml(trade.last_sell_date)}</span>`,
+      last_sell_date: `<span data-val="${escapeAttribute(trade.last_sell_date)}">${formatDate(trade.last_sell_date)}</span>`,
 
       price_combo: stack(
         trade.last_sell_price_native ?? trade.last_sell_price,
@@ -219,26 +212,14 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
 
       result_pct: `<span data-val="${String(trade.result_pct)}">${renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100))}</span>`,
 
-      since_sell_combo: (() => {
-        if (isClosed) return '<span data-val="0">-</span>';
-        const sinceSellAbs = (trade.current_price ?? 0) - trade.last_sell_price;
-        const sinceSellPct = trade.last_sell_price !== 0 ? (sinceSellAbs / trade.last_sell_price) * 100 : 0;
-        return stack(
-          sinceSellPct,
-          renderTrend(sinceSellPct, formatPercent(sinceSellPct / 100)),
-          sinceSellAbs * trade.total_shares_sold,
-          renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs * trade.total_shares_sold, trade.currency_code))
-        );
-      })(),
-
       current_holdings: isClosed
         ? '<span data-val="0"><ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon></span>'
         : `<span data-val="${String(trade.current_holdings)}">${formatNumber(trade.current_holdings)}</span>`,
       since_sell: trade.current_price === null ? '<span>-</span>' : stack(
-        sinceSellAbs,
-        renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs)),
         sinceSellPct,
-        renderTrend(sinceSellPct, formatPercent(sinceSellPct))
+        renderTrend(sinceSellPct, formatPercent(sinceSellPct)),
+        sinceSellAbs,
+        renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs))
       ),
     } as TradesTableRow;
   });
@@ -261,19 +242,13 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
       </div>
     `;
 
-    let sinceSellAbs = 0;
-    let sinceSellPct = 0;
-    if (trade.current_price !== null) {
-      sinceSellAbs = (trade.current_price - lot.sell_price) * lot.shares;
-      if (lot.sell_price > 0) {
-        sinceSellPct = (trade.current_price - lot.sell_price) / lot.sell_price;
-      }
-    }
+    const sinceSellAbs = lot.since_sell_abs;
+    const sinceSellPct = lot.since_sell_pct;
 
     return {
-      name: '', // Keep first col empty for alignment
+      name: escapeHtml(trade.name),
       total_sold_shares: formatNumber(lot.shares),
-      last_sell_date: escapeHtml(lot.date),
+      last_sell_date: formatDate(lot.date),
       price_combo: stack(
         lot.sell_price_native ?? lot.sell_price,
         formatCurrency(lot.sell_price_native ?? lot.sell_price, trade.currency_code),
@@ -292,24 +267,12 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
         formatCurrency(lot.result_abs)
       ),
       result_pct: `<span data-val="${String(lot.result_pct)}">${renderTrend(lot.result_pct, formatPercent(lot.result_pct / 100))}</span>`,
-      since_sell_combo: (() => {
-        const isClosed = Math.abs(trade.current_holdings) < 0.001;
-        if (isClosed) return '<span data-val="0">-</span>';
-        const sinceSellAbs = (trade.current_price ?? 0) - lot.sell_price;
-        const sinceSellPct = lot.sell_price !== 0 ? (sinceSellAbs / lot.sell_price) * 100 : 0;
-        return stack(
-          sinceSellPct,
-          renderTrend(sinceSellPct, formatPercent(sinceSellPct / 100)),
-          sinceSellAbs * lot.shares,
-          renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs * lot.shares, trade.currency_code))
-        );
-      })(),
       current_holdings: '',
       since_sell: trade.current_price === null ? '<span>-</span>' : stack(
-        sinceSellAbs,
-        renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs)),
         sinceSellPct,
-        renderTrend(sinceSellPct, formatPercent(sinceSellPct))
+        renderTrend(sinceSellPct, formatPercent(sinceSellPct)),
+        sinceSellAbs,
+        renderTrend(sinceSellAbs, formatCurrency(sinceSellAbs))
       ),
     };
   });
@@ -324,7 +287,6 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
       { key: 'value_combo', label: '', align: 'right' },
       { key: 'result_combo', label: '', align: 'right' },
       { key: 'result_pct', label: '', align: 'right' },
-      { key: 'since_sell_combo', label: '', align: 'right' },
       { key: 'current_holdings', label: '', align: 'right' },
       { key: 'since_sell', label: '', align: 'right' },
     ],

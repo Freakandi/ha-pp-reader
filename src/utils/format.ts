@@ -26,3 +26,14 @@ export function formatPercent(value: number | null | undefined): string {
   });
   return formatter.format(value);
 }
+
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}

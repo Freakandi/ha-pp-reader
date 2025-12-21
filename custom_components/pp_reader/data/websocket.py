@@ -1092,6 +1092,8 @@ def _serialize_realized_performance(results: list[Any]) -> list[dict[str, Any]]:
                 "sales_value_net": lot.sales_value_net,
                 "result_abs": lot.result_abs,
                 "result_pct": lot.result_pct,
+                "since_sell_abs": lot.since_sell_abs,
+                "since_sell_pct": lot.since_sell_pct,
             }
             for lot in res.lots
         ]
@@ -1113,6 +1115,8 @@ def _serialize_realized_performance(results: list[Any]) -> list[dict[str, Any]]:
                 "lots": lots,
                 "total_sold_shares": res.total_sold_shares,
                 "last_sell_date": res.last_sell_date,
+                "since_sell_abs": res.since_sell_abs,
+                "since_sell_pct": res.since_sell_pct,
             }
         )
     return serialized

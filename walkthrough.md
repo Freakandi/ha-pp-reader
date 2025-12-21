@@ -30,3 +30,17 @@ We verified that sorting works independently for top and bottom metrics in the s
   - Implemented custom `sortTrades` function to handle stacked data sorting via `data-val` attributes.
   - Added CSS for `.sort-stack`, `.cell-stack`, and `.val-top` / `.val-bottom`.
 - Verified build and linting passes.
+
+## Bug Fix: Currency Mismatch in "Seit Verkauf"
+Fixed a critical bug where "Seit Verkauf" (Since Sale) gain was calculated by subtracting EUR-denominated sale price from foreign-currency current price (e.g., JPY), leading to massive erroneous gains.
+
+### Verification
+**Before Fix (Bug):**
+Current Price (JPY) - Sell Price (EUR) = Huge Number.
+![Erroneous Calculation](./artifacts/trades_tab_with_bug_1766311344863.png)
+
+**After Fix (Correct):**
+Current Price converted to EUR - Sell Price (EUR) = Correct Result.
+Harmonic Drive Systems: ~ -158 EUR.
+![Correct Calculation](./artifacts/harmonic_drive_row_1766311608875.png)
+

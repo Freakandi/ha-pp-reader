@@ -622,6 +622,8 @@ export interface RealizedLot {
   sales_value_net: number;
   result_abs: number;
   result_pct: number;
+  since_sell_abs: number;
+  since_sell_pct: number;
 }
 
 export interface RealizedTrade {
@@ -642,6 +644,8 @@ export interface RealizedTrade {
   lots: RealizedLot[];
   total_sold_shares: number;
   last_sell_date: string;
+  since_sell_abs: number;
+  since_sell_pct: number;
 }
 
 export async function fetchRealizedPerformance(

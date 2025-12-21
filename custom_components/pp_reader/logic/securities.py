@@ -668,6 +668,8 @@ class RealizedPerformanceLot:
     sales_value_net: float
     result_abs: float
     result_pct: float
+    since_sell_abs: float = 0.0
+    since_sell_pct: float = 0.0
 
 
 @dataclass(slots=True)
@@ -690,9 +692,13 @@ class RealizedPerformanceResult:
     lots: list[RealizedPerformanceLot]
     total_sold_shares: float
     last_sell_date: str
+    since_sell_abs: float = 0.0
+    since_sell_pct: float = 0.0
+    current_price_eur: float | None = None  # Helper for debugging/frontend
 
 
-def calculate_realized_performance(  # noqa: PLR0912, PLR0915
+
+def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
     transactions: list[Transaction],
     db_path: Path,
     *,
@@ -749,6 +755,14 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
         ensure_exchange_rates_for_dates_sync(
             list(dates), list(needed_currencies), db_path
         )
+
+    # -------------------------------------------------------------------------
+    # NEW: Load LATEST exchange rates (today) to convert current_price -> EUR
+    # -------------------------------------------------------------------------
+    today = datetime.now()  # noqa: DTZ005
+    ensure_exchange_rates_for_dates_sync([today], list(needed_currencies), db_path)
+    latest_rates = load_latest_rates_sync(today, db_path)
+    # -------------------------------------------------------------------------
 
     missing_rates_logged: set[tuple[str, datetime]] = set()
 
@@ -863,6 +877,41 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
             continue
 
         info = security_info.get(sec_uuid, {})
+        security_currency = info.get("currency_code", "EUR")
+        current_price_native = info.get("current_price")
+
+        # Calculate current_price_eur
+        current_price_eur = current_price_native
+        if current_price_native is not None and security_currency != "EUR":
+            rate = latest_rates.get(security_currency)
+            current_price_eur = current_price_native / rate if rate else None
+
+        # Re-process lots to calculate since_sell metrics
+        updated_lots: list[RealizedPerformanceLot] = []
+        for lot in lots:
+            s_abs = 0.0
+            s_pct = 0.0
+            if current_price_eur is not None and lot.sell_price > 0:
+                delta = current_price_eur - lot.sell_price
+                s_abs = delta * lot.shares
+                s_pct = delta / lot.sell_price
+
+            updated_lots.append(
+                RealizedPerformanceLot(
+                    date=lot.date,
+                    shares=lot.shares,
+                    sell_price=lot.sell_price,
+                    sell_price_native=lot.sell_price_native,
+                    purchase_value_gross=lot.purchase_value_gross,
+                    sales_value_gross=lot.sales_value_gross,
+                    sales_value_net=lot.sales_value_net,
+                    result_abs=lot.result_abs,
+                    result_pct=lot.result_pct,
+                    since_sell_abs=round_currency(s_abs),
+                    since_sell_pct=round_currency(s_pct, decimals=4),
+                )
+            )
+
         total_purchase_gross = sum(lot.purchase_value_gross for lot in lots)
         total_sales_gross = sum(lot.sales_value_gross for lot in lots)
         total_sales_net = sum(lot.sales_value_net for lot in lots)
@@ -882,13 +931,20 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
 
         total_sold_shares = sum(lot.shares for lot in lots)
 
+        # Aggregated since_sell matches logic of Last Lot (as requested previously)
+        agg_since_sell_abs = 0.0
+        agg_since_sell_pct = 0.0
+        if updated_lots:
+            agg_since_sell_abs = updated_lots[-1].since_sell_abs
+            agg_since_sell_pct = updated_lots[-1].since_sell_pct
+
         aggregated_results.append(
             RealizedPerformanceResult(
                 security_uuid=sec_uuid,
                 name=info.get("name", "Unknown"),
-                currency_code=info.get("currency_code", "EUR"),
+                currency_code=security_currency,
                 ticker_symbol=info.get("ticker_symbol"),
-                current_price=info.get("current_price"),
+                current_price=current_price_native,
                 current_holdings=round_currency(holdings_qty, decimals=6),
                 last_sell_price=lots[-1].sell_price,
                 last_sell_price_native=lots[-1].sell_price_native,
@@ -897,9 +953,12 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915
                 sales_value_net=round_currency(total_sales_net),
                 result_abs=round_currency(total_result_abs),
                 result_pct=round_currency(total_result_pct, decimals=2),
-                lots=lots,
+                lots=updated_lots,
                 total_sold_shares=round_currency(total_sold_shares, decimals=6),
                 last_sell_date=lots[-1].date,
+                since_sell_abs=agg_since_sell_abs,
+                since_sell_pct=agg_since_sell_pct,
+                current_price_eur=current_price_eur
             )
         )
 
