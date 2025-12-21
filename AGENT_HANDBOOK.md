@@ -3,9 +3,10 @@
 This is the primary source of truth for AI agents working in this repository. It defines the environment, workflows, and strict verification protocols required for success.
 
 ## 1. Environment & Context
-*   **System**: Linux (Headless Raspberry Pi 5).
+*   **System**: Linux.
 *   **Project**: Home Assistant Integration (Python) + React Dashboard (TypeScript/Vite).
-*   **Critical Constraint**: **NO GUI**. You cannot launch a visible browser. All UI interaction must be headless/programmatic.
+*   **Critical Constraint**: **NO GUI**. You cannot launch a visible browser. All UI interaction must be headless/programmatic via the `browser_subagent`.
+*   **Data Authority**: `config/pp_reader_data/S-Depot.db` is the **only** authoritative database. Do not use temporary databases or stubs.
 
 ### Directory Structure
 *   `custom_components/pp_reader/`: Python backend source.
@@ -23,6 +24,10 @@ Work inside the pre-configured virtual environment `.venv`.
 *   **Test**: `pytest` (Fast, isolated).
     *   `pytest --cov=custom_components/pp_reader` for coverage.
     *   `script.hassfest` for integration validity.
+*   **Start Home Assistant**:
+    ```bash
+    source .venv/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &
+    ```
 
 ### Node.js (Frontend)
 *   **Install**: `npm install`.
@@ -30,6 +35,10 @@ Work inside the pre-configured virtual environment `.venv`.
 *   **Typecheck**: `npm run typecheck`.
 *   **Build**: `npm run build` (Updates assets in `custom_components/...`).
     *   **Rule**: Always run `npm run build` before submitting changes affecting the UI.
+*   **Start Frontend (Vite)**:
+    ```bash
+    npm run dev -- --host 127.0.0.1 --port 5173
+    ```
 
 ## 3. Workflow: "Probe, Don't Guess"
 In a headless environment, you cannot "look" at the screen to verify changes. You must write code to verify code.
@@ -61,6 +70,9 @@ test('PROBE: <Description>', async ({ page }) => {
 ```
 
 ## 4. Work Rules
-1.  **Always Lint**: Broken formatting breaks CI. Run `./scripts/lint` religiously.
-2.  **English Only**: While some existing docs (`TESTING.md`) are German, **your** output (plans, artifacts, comments) must be valid English.
-3.  **Docs**: Keep `README.md` and `README-dev.md` updated if you change behavior.
+1.  **Always Lint**: Broken formatting breaks CI. Run `./scripts/lint` religiously for Python, and `npm run lint:ts`/`typecheck` for TS.
+2.  **English Only**: Output (plans, artifacts, comments) must be in English.
+3.  **Completion Gate**: You are **PROHIBITED** from calling `notify_user` to finish a task until you have marked the corresponding item as completed `[x]` in the original source TODO file.
+4.  **Process Management**: Whenever you start HA or Vite instances during a session, you **MUST** terminate those processes before finalizing your response.
+    *   Check processes: `pgrep -fl hass`, `pgrep -fl vite`
+5.  **Docs**: Keep `README.md` and `README-dev.md` updated if you change behavior.
