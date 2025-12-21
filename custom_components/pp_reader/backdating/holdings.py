@@ -397,6 +397,12 @@ def _group_transaction_adjustments(
     grouped: dict[
         date, list[tuple[str, str, float, int, str, int, int, int, float | None]]
     ] = {}
+
+    current_date: date | None = None
+    current_list: list[
+        tuple[str, str, float, int, str, int, int, int, float | None]
+    ] = []
+
     for (
         tx_date,
         portfolio_uuid,
@@ -409,7 +415,23 @@ def _group_transaction_adjustments(
         taxes,
         fx_rate_to_base,
     ) in transactions:
-        grouped.setdefault(tx_date, []).append(
+        # Transactions are pre-sorted by date, so we can avoid setdefault overhead
+        if tx_date != current_date:
+            if current_date and tx_date < current_date:
+                # Should not happen if data is correctly sorted from DB
+                _LOGGER.warning(
+                    "Transactions not sorted! Date %s appeared after %s",
+                    tx_date,
+                    current_date,
+                )
+                # Fallback to safe insertion
+                current_list = grouped.setdefault(tx_date, [])
+            else:
+                current_list = []
+                grouped[tx_date] = current_list
+            current_date = tx_date
+
+        current_list.append(
             (
                 portfolio_uuid,
                 security_uuid,
