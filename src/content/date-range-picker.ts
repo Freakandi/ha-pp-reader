@@ -366,6 +366,7 @@ export class DateRangePicker {
             </svg>
         `;
         prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
+        prevBtn.setAttribute('title', 'Vorheriger Monat');
         // Only show prev on left calendar
         if (position === 'left') {
             prevBtn.addEventListener('click', (e) => {
@@ -389,6 +390,7 @@ export class DateRangePicker {
             </svg>
         `;
         nextBtn.setAttribute('aria-label', 'Nächster Monat');
+        nextBtn.setAttribute('title', 'Nächster Monat');
         // Only show next on right calendar
         if (position === 'right') {
             nextBtn.addEventListener('click', (e) => {
