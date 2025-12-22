@@ -175,19 +175,55 @@ export function formatValue(
     formatted = base;
     if (formatted) {
       // 🛡️ SECURITY: Detect potentially dangerous XSS patterns even in "markup" mode.
-      // Callers often pass pre-escaped HTML (e.g. badges, localized dates), so we cannot
-      // unconditionally escape everything. However, specific patterns like <script>,
-      // javascript: URI, or event handlers (onX=) are never valid in our cell content
-      // and indicate an attack vector.
-      // We only apply this check if the string actually contains unescaped HTML tags (start with <).
-      // If it's already escaped (&lt;...), we leave it alone to avoid double-escaping.
       if (/<[a-z]/i.test(formatted)) {
-        // Expanded check to catch <script>, javascript: URIs, and event handlers
-        // with various separators (space, tab, newline, slash) or whitespace around '='.
-        // Also catches dangerous tags like iframe, object, embed, etc.
-        // 🛡️ SENTINEL: Added data:URI check to prevent base64 XSS (matches data:MIME/TYPE...)
+        let isDangerous = false;
+        // 1. Fast Regex Check (catches obvious attacks)
         const DANGEROUS_PATTERN = /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=/i;
         if (DANGEROUS_PATTERN.test(formatted)) {
+          isDangerous = true;
+        } else {
+          // 2. Deep Check via DOM Parser (catches obfuscated attacks like &#106;avascript:)
+          try {
+             const tpl = document.createElement('template');
+             tpl.innerHTML = formatted;
+
+             // Check for dangerous tags
+             if (tpl.content.querySelector('script,iframe,object,embed,base,style,link,meta,form')) {
+               isDangerous = true;
+             } else {
+               // Check attributes on all elements
+               const all = tpl.content.querySelectorAll('*');
+               for (const el of all) {
+                  const attrs = el.attributes;
+                  for (let i = 0; i < attrs.length; i++) {
+                    const name = attrs[i].name.toLowerCase();
+                    const val = attrs[i].value.trim().toLowerCase();
+
+                    // Event handlers
+                    if (name.startsWith('on')) {
+                      isDangerous = true; break;
+                    }
+
+                    // Dangerous protocols (href, src, etc.)
+                    // Browser automatically decodes entities in attributes when parsing innerHTML,
+                    // so &#106;avascript: becomes javascript: here.
+                    if (['href', 'src', 'action', 'data', 'formaction'].includes(name)) {
+                       if (val.startsWith('javascript:') || val.startsWith('data:') || val.startsWith('vbscript:')) {
+                          isDangerous = true; break;
+                       }
+                    }
+                  }
+                  if (isDangerous) break;
+               }
+             }
+          } catch (e) {
+             // If parsing fails, we assume it's safe OR we log it.
+             // Given this runs in browser, template creation should work.
+             // If extremely malformed, browser might not parse it as HTML anyway.
+          }
+        }
+
+        if (isDangerous) {
           formatted = escapeHtml(formatted);
         }
       }
@@ -611,7 +647,7 @@ export function sortTableRows(
       .replace(/\u00A0/g, " ")
       .replace(/[%€]/g, "")
       .replace(/\./g, "")
-      .replace(/,/g, ".")
+      .replace(/\,/g, ".")
       .replace(/[^\d.-]/g, "")
       .trim();
     if (!cleaned) return NaN;
