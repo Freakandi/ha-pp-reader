@@ -498,18 +498,87 @@ function renderHistoryChart(
 
 // --- Trade Specific UI ---
 
-function buildTradeMetaCard(trade: RealizedTrade): string {
-  const lastSellPriceNative = toFiniteNumber(trade.last_sell_price_native);
-  const lastSellPriceEur = toFiniteNumber(trade.last_sell_price);
-  const currency = trade.currency_code;
 
-  let lastPriceDisplay = '';
-  if (lastSellPriceNative != null && lastSellPriceEur != null && lastSellPriceNative !== lastSellPriceEur) {
-    lastPriceDisplay = `${formatPrice(lastSellPriceNative)} ${currency} / ${formatPrice(lastSellPriceEur)} €`;
-  } else if (lastSellPriceEur != null) {
-    lastPriceDisplay = `${formatPrice(lastSellPriceEur)} €`;
+
+function buildTradeMetaCard(trade: RealizedTrade): string {
+  // Letzter Verkaufspreis Calculation
+  // 1. Find the last executed lot
+  // Filter lots to find the last sell transaction. Ideally backend provides this reliability.
+  // We'll trust trade.lots if available, else fallback to trade.last_sell_price (aggregate).
+  let grossNative: number | null = null;
+  let grossEur: number | null = null;
+  let netEur: number | null = null;
+
+  if (trade.lots.length > 0) {
+    // Sort lots by date to ensure we pick the last one
+    const sortedLots = [...trade.lots].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const lastLot = sortedLots[sortedLots.length - 1];
+
+    grossNative = toFiniteNumber(lastLot.sell_price_native) ?? null;
+    grossEur = toFiniteNumber(lastLot.sell_price) ?? null;
+    const netTotal = toFiniteNumber(lastLot.sales_value_net);
+    const shares = toFiniteNumber(lastLot.shares);
+    if (netTotal != null && shares != null && shares > 0) {
+      netEur = netTotal / shares;
+    }
+  }
+
+  // Fallback to top-level if lots logic failed or lots empty
+  if (grossEur == null) {
+    grossEur = toFiniteNumber(trade.last_sell_price);
+  }
+  if (grossNative == null) {
+    grossNative = toFiniteNumber(trade.last_sell_price_native);
+  }
+
+  const currency = trade.currency_code;
+  const values: string[] = [];
+
+  // Line 1: [Gross Native/Eur] [Curr] (Netto: [Net Eur] EUR)
+  // If native is available, use it. Else EUR.
+  // Exception: If Native == EUR, we use EUR.
+  let line1Value = grossNative;
+  let line1Curr = currency;
+  if (!isFiniteNumber(line1Value)) {
+    line1Value = grossEur;
+    line1Curr = 'EUR';
+  } else if (currency === 'EUR') {
+    line1Value = grossEur; // Ensure consistency
+    line1Curr = 'EUR';
+  }
+
+  if (isFiniteNumber(line1Value)) {
+    let line1Html = `${formatPrice(line1Value)} ${line1Curr}`;
+
+    const isFx = line1Curr !== 'EUR';
+
+    if (!isFx && isFiniteNumber(netEur)) {
+      line1Html += ` <span class="secondary-text" style="font-size: 0.85em; opacity: 0.8;">(Netto: ${formatPrice(netEur)} EUR)</span>`;
+    }
+    values.push(`<span class="value value--price">${line1Html}</span>`);
   } else {
-    lastPriceDisplay = '—';
+    values.push('<span class="value neutral">—</span>');
+  }
+
+  // Line 2: [Gross Eur] EUR (only if different from Line 1)
+  // Logic: Show if Line 1 was Non-EUR.
+  if (line1Curr !== 'EUR' && isFiniteNumber(grossEur) && isFiniteNumber(line1Value)) {
+    let line2Html = `${formatPrice(grossEur)} €`;
+
+    if (isFiniteNumber(netEur)) {
+      line2Html += ` <span class="secondary-text" style="font-size: 0.85em; opacity: 0.8;">(Netto: ${formatPrice(netEur)} EUR)</span>`;
+    }
+
+    values.push(`<span class="value value--average value--average-eur" style="display: block; font-size: 0.85em; margin-top: 2px;">${line2Html}</span>`);
+  }
+
+  const lastSellPriceDisplay = values.join('');
+
+  // Letzter Preis (aktueller Marktpreis wenn verfügbar)
+  const currentPrice = toFiniteNumber(trade.current_price);
+  let currentPriceDisplay = '—';
+  if (currentPrice != null) {
+    currentPriceDisplay = `${formatPrice(currentPrice)} ${currency ? currency : ''}`;
   }
 
   const changeAbs = toFiniteNumber(trade.since_sell_abs);
@@ -532,8 +601,12 @@ function buildTradeMetaCard(trade: RealizedTrade): string {
       <div id="headerMeta" class="meta">
         <div class="security-meta-grid security-meta-grid--expanded">
           <div class="security-meta-item">
+            <span class="label">Letzter Preis</span>
+            <div class="value-group"><span class="value value--price">${currentPriceDisplay}</span></div>
+          </div>
+          <div class="security-meta-item">
             <span class="label">Letzter Verkaufspreis</span>
-            <div class="value-group"><span class="value value--price">${lastPriceDisplay}</span></div>
+            <div class="value-group" style="display: flex; flex-direction: column; align-items: flex-start;">${lastSellPriceDisplay}</div>
           </div>
           <div class="security-meta-item">
             <span class="label">Änderung seit Verkauf</span>
@@ -824,7 +897,11 @@ async function renderTradeDetail(
   // 3. Construct UI Elements
 
   // Header with centered name (passing name to createHeaderCard)
-  const headerCard = createHeaderCard(trade.name, '');
+  // Header with centered name (passing name to createHeaderCard)
+  const headerCard = createHeaderCard(trade.name, '', {
+    includeMeta: false,
+    subtitle: 'Watchlist Details',
+  });
   headerCard.classList.add('security-detail-header'); // Reuse security detail styling if global
 
   const metaCard = buildTradeMetaCard(trade);
@@ -860,7 +937,7 @@ async function renderTradeDetail(
     if (placeholderContainer && historyState.status === 'loaded') {
       renderHistoryChart(placeholderContainer as HTMLElement, historySeries, {
         currency: trade.currency_code,
-        baseline: trade.last_sell_price, // Use last sell price as baseline? The user asked for "match security detail". Security detail uses avg purchase price. For trades, maybe last sell price is good? Or just empty. I'll stick to last_sell_price as a logical baseline for a realized trade.
+        baseline: toFiniteNumber(trade.last_sell_price_native) ?? trade.last_sell_price,
         markers
       });
     }
@@ -872,7 +949,7 @@ async function renderTradeDetail(
       panelConfig,
       securityUuid,
       currencyCode: trade.currency_code,
-      baseline: trade.last_sell_price,
+      baseline: toFiniteNumber(trade.last_sell_price_native) ?? trade.last_sell_price,
     });
 
     scheduleNewsPromptSetup({

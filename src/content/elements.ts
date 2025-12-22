@@ -428,7 +428,7 @@ export function makeTable(
 export function createHeaderCard(
   headerTitle: string,
   meta: string,
-  options: { includeMeta?: boolean } = {},
+  options: { includeMeta?: boolean; subtitle?: string } = {},
 ): HTMLDivElement {
   const { includeMeta = true } = options;
   const headerCard = document.createElement("div");
@@ -438,6 +438,11 @@ export function createHeaderCard(
     ? `<div id="headerMeta" class="meta">${meta}</div>`
     : "";
 
+  // Resolve optional subtitle
+  const subtitle = (options as { subtitle?: string }).subtitle
+    ? `<div class="header-subtitle">${escapeHtml((options as { subtitle?: string }).subtitle ?? '')}</div>`
+    : '';
+
   headerCard.innerHTML = `
     <div class="header-content">
       <button id="nav-left" class="nav-arrow" aria-label="Vorherige Seite" title="Vorherige Seite">
@@ -445,7 +450,10 @@ export function createHeaderCard(
           <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path>
         </svg>
       </button>
-      <h2 id="headerTitle">${headerTitle}</h2>
+      <div class="header-title-group" style="display: flex; flex-direction: column; align-items: center;">
+        <h2 id="headerTitle">${headerTitle}</h2>
+        ${subtitle}
+      </div>
       <button id="nav-right" class="nav-arrow" aria-label="Nächste Seite" title="Nächste Seite">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>

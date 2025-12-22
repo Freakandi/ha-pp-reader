@@ -825,8 +825,23 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
                 lot for i, lot in enumerate(lots) if i not in consumed_lots_indices
             ]
 
-            sales_value_gross = abs(normalized.gross) / rate
-            sales_value_net = abs(normalized.net_trade_account) / rate
+            # Amount (normalized.gross) is Net Inflow (Credit) for Sales.
+            # True Gross (Market Value) = Amount + Fees + Taxes
+            # Note: normalized.gross, fees, and taxes are already scaled (cents -> unit)
+            # but NOT FX converted if the transaction currency != EUR.
+            # `rate` handles Tx Currency -> EUR conversion.
+
+            # Gross Market Value in Native (Transaction) Currency
+            sales_value_gross_native = (
+                abs(normalized.gross) + normalized.fees + normalized.taxes
+            )
+
+            # Convert to EUR
+            sales_value_gross = sales_value_gross_native / rate
+
+            # Net Value is just the amount (already Net Inflow)
+            sales_value_net = abs(normalized.gross) / rate
+
             result_abs = sales_value_net - cost_basis_sold
             result_pct = (
                 (result_abs / cost_basis_sold) * 100 if cost_basis_sold > 0 else 0.0

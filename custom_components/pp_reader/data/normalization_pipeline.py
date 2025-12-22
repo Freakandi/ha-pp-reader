@@ -20,6 +20,7 @@ else:  # pragma: no cover - runtime fallback for type hints
 
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.logic.securities import (
+    PURCHASE_TYPES,
     SALE_TYPES,
     get_missing_fx_diagnostics,
 )
@@ -455,7 +456,7 @@ def _normalize_transaction_row(tx: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
-def _compute_transaction_pricing(
+def _compute_transaction_pricing(  # noqa: PLR0912
     tx: dict[str, Any],
 ) -> tuple[float | None, float | None, float | None]:
     """Return (shares, price_native, net_price_eur) for a transaction row."""
@@ -467,26 +468,52 @@ def _compute_transaction_pricing(
         except (TypeError, ValueError):
             shares_value = None
 
+    amount_raw = tx.get("amount") or 0
+    fees_raw = tx.get("fees") or 0
+    taxes_raw = tx.get("taxes") or 0
+    tx_type = tx.get("type", -1)
+
+    is_sale = tx_type in SALE_TYPES
+    is_purchase = tx_type in PURCHASE_TYPES
+
     price_native = None
-    amount_raw = tx.get("amount")
-    if shares_value not in (None, 0) and amount_raw is not None:
-        gross_total = cent_to_eur(amount_raw, decimals=4, default=None)
-        if gross_total is not None:
+    net_price_eur = None
+
+    if shares_value not in (None, 0):
+        # Calculate Gross Total (Market Value at Execution)
+        gross_total_cents = 0
+        if is_sale:
+            # Sale: Amount is Net Inflow. Gross = Amount + Fees + Taxes
+            gross_total_cents = amount_raw + fees_raw + taxes_raw
+        elif is_purchase:
+            # Purchase: Amount is Total Outflow. Gross = Amount - Fees - Taxes
+            gross_total_cents = amount_raw - fees_raw - taxes_raw
+        else:
+            # Fallback for transfers or unknown types
+            gross_total_cents = amount_raw
+
+        gross_total_eur = cent_to_eur(gross_total_cents, decimals=4, default=None)
+        if gross_total_eur is not None:
             try:
                 price_native = round_price(
-                    gross_total / shares_value,
+                    gross_total_eur / shares_value,
                     decimals=4,
                     default=None,
                 )
-            except ZeroDivisionError:  # pragma: no cover - defensive
+            except ZeroDivisionError:  # pragma: no cover
                 price_native = None
 
-    net_price_eur = None
-    is_sale = tx.get("type") in SALE_TYPES
-    if is_sale and shares_value not in (None, 0):
-        fees_raw = tx.get("fees") or 0
-        taxes_raw = tx.get("taxes") or 0
-        net_total_cents = (amount_raw or 0) - fees_raw - taxes_raw
+        # Calculate Net Price EUR (Effective Price per Share)
+        net_total_cents = 0
+        if is_sale:
+            # Sale: Amount is already Net Inflow.
+            net_total_cents = amount_raw
+        elif is_purchase:
+            # Purchase: Amount is already Total Outflow (Effective Cost).
+            net_total_cents = amount_raw
+        else:
+            net_total_cents = amount_raw
+
         net_total_eur = cent_to_eur(net_total_cents, decimals=4, default=None)
         if net_total_eur is not None:
             try:
@@ -495,7 +522,7 @@ def _compute_transaction_pricing(
                     decimals=4,
                     default=None,
                 )
-            except ZeroDivisionError:  # pragma: no cover - defensive
+            except ZeroDivisionError:  # pragma: no cover
                 net_price_eur = None
 
     return shares_value, price_native, net_price_eur

@@ -9,45 +9,45 @@
  * exposes a helper to register the descriptor factory with the
  * dashboard controller.
  */
+import type { LineChartMarker, LineChartOptions } from '../content/charting';
+import { renderLineChart, updateLineChart } from '../content/charting';
 import {
   createHeaderCard,
-  formatNumber,
+  createInlineSpinner,
   formatGain,
   formatGainPct,
-  createInlineSpinner,
+  formatNumber,
 } from '../content/elements';
-import { renderLineChart, updateLineChart } from '../content/charting';
-import type { LineChartMarker, LineChartOptions } from '../content/charting';
-import {
-  fetchSecuritySnapshotWS,
-  fetchSecurityHistoryWS,
-  fetchNewsPromptWS,
-} from '../data/api';
-import {
-  normalizeAverageCostPayload,
-  normalizeAggregationPayload,
-} from '../data/positionsCache';
 import type {
-  SecuritySnapshotResponse,
-  SecurityHistoryResponse,
-  SecurityHistoryOptions,
-  SecurityHistoryTransaction,
   NewsPromptResponse,
+  SecurityHistoryOptions,
+  SecurityHistoryResponse,
+  SecurityHistoryTransaction,
+  SecuritySnapshotResponse,
 } from '../data/api';
+import {
+  fetchNewsPromptWS,
+  fetchSecurityHistoryWS,
+  fetchSecuritySnapshotWS,
+} from '../data/api';
+import {
+  normalizeAggregationPayload,
+  normalizeAverageCostPayload,
+} from '../data/positionsCache';
 import type { HomeAssistant } from '../types/home-assistant';
+import { normalizePercentValue, toFiniteCurrency } from '../utils/currency';
+import { escapeAttribute, escapeHtml } from '../utils/html';
+import { normalizePerformancePayload } from '../utils/performance';
 import type {
+  AverageCostSource,
   DashboardTabRenderFn,
   PanelConfigLike,
   PortfolioPositionsUpdatedEventDetail,
   SecurityHistoryRangeKey,
   SecurityHistoryRangeState,
   SecuritySnapshotLike,
-  AverageCostSource,
 } from './types';
 import { isPortfolioPositionsUpdatedEvent } from './types';
-import { toFiniteCurrency, normalizePercentValue } from '../utils/currency';
-import { normalizePerformancePayload } from '../utils/performance';
-import { escapeAttribute, escapeHtml } from '../utils/html';
 
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
@@ -411,15 +411,15 @@ function resolveAccountToSecurityFxRate(
     toFiniteNumber(aggregation?.purchase_total_security) ??
     (aggregation
       ? toFiniteNumber(
-          (aggregation as { security_currency_total?: unknown }).security_currency_total,
-        )
+        (aggregation as { security_currency_total?: unknown }).security_currency_total,
+      )
       : null);
   const purchaseTotalAccount =
     toFiniteNumber(aggregation?.purchase_total_account) ??
     (aggregation
       ? toFiniteNumber(
-          (aggregation as { account_currency_total?: unknown }).account_currency_total,
-        )
+        (aggregation as { account_currency_total?: unknown }).account_currency_total,
+      )
       : null);
 
   if (isPositiveFinite(purchaseTotalSecurity) && isPositiveFinite(purchaseTotalAccount)) {
@@ -670,7 +670,19 @@ function normaliseTransactionMarkers(
     }
 
     const parsedDate = parseTransactionDate(tx.date);
+    const shares = toFiniteNumber(tx.shares);
+
     let price = toFiniteNumber(tx.price);
+
+    // Fallback if price is missing (unlikely with backend fix)
+    if (price == null) {
+      const amount = toFiniteNumber(tx.amount);
+      // Simple fallback: Amount / Shares (Effective Price)
+      if (isFiniteNumber(amount) && isPositiveFinite(shares)) {
+        price = Math.abs(amount) / shares;
+      }
+    }
+
     if (!parsedDate || price == null) {
       return;
     }
@@ -686,7 +698,6 @@ function normaliseTransactionMarkers(
       price *= accountToSecurityRate;
     }
 
-    const shares = toFiniteNumber(tx.shares);
     const netPriceEur = toFiniteNumber((tx as { net_price_eur?: unknown }).net_price_eur);
 
     const typeLabel = isPurchase ? 'Kauf' : 'Verkauf';
@@ -1522,9 +1533,9 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
     : wrapMissingValue('value--market-value');
   const dayChangeAbsolute = isFiniteNumber(dayChangeValue)
     ? wrapValue(
-        formatPriceChangeWithCurrency(dayChangeValue, dayChangeCurrency),
-        'value--gain value--absolute',
-      )
+      formatPriceChangeWithCurrency(dayChangeValue, dayChangeCurrency),
+      'value--gain value--absolute',
+    )
     : wrapMissingValue('value--absolute');
   const dayChangePercentage = renderGainPercentage(
     dayChangePayload?.change_pct,
@@ -1556,8 +1567,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
   if (isFiniteNumber(averagePurchaseNativeRaw)) {
     averagePurchaseValues.push(
       wrapValue(
-        `${formatPrice(averagePurchaseNativeRaw)}${
-          currency ? `&nbsp;${escapeHtml(currency)}` : ''
+        `${formatPrice(averagePurchaseNativeRaw)}${currency ? `&nbsp;${escapeHtml(currency)}` : ''
         }`,
         'value--average value--average-native',
       ),
@@ -1597,8 +1607,7 @@ function buildHeaderMeta(snapshot: SecuritySnapshotDetail | null): string {
   if (secondaryAverage != null && isFiniteNumber(secondaryAverage)) {
     averagePurchaseValues.push(
       wrapValue(
-        `${formatPrice(secondaryAverage)}${
-          secondaryCurrency ? `&nbsp;${escapeHtml(secondaryCurrency)}` : ''
+        `${formatPrice(secondaryAverage)}${secondaryCurrency ? `&nbsp;${escapeHtml(secondaryCurrency)}` : ''
         }`,
         'value--average value--average-eur',
       ),
@@ -1764,8 +1773,8 @@ function getHistoryChartOptions(
     baseline:
       baselineValue != null
         ? {
-            value: baselineValue,
-          }
+          value: baselineValue,
+        }
         : null,
     markers: Array.isArray(markers) ? markers : [],
   };
@@ -2071,7 +2080,7 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
       if (!range || !AVAILABLE_HISTORY_RANGES.includes(range as SecurityHistoryRangeKey)) {
         return;
       }
-        void handleRangeClick(range as SecurityHistoryRangeKey);
+      void handleRangeClick(range as SecurityHistoryRangeKey);
     });
   }, 0);
 }
@@ -2212,7 +2221,10 @@ export async function renderSecurityDetail(
       ? buildCachedSnapshotNotice({ fallbackUsed, flaggedAsCache })
       : '';
   const headerTitle = effectiveSnapshot?.name || 'Wertpapierdetails';
-  const headerCard = createHeaderCard(headerTitle, '', { includeMeta: false });
+  const headerCard = createHeaderCard(headerTitle, '', {
+    includeMeta: false,
+    subtitle: 'Positions-Details',
+  });
   headerCard.classList.add('security-detail-header');
   const snapshotMetaCard = buildSnapshotMetaCard(effectiveSnapshot);
 
@@ -2382,12 +2394,12 @@ export function registerSecurityDetailTab(
     return;
   }
 
-    setSecurityDetailTabFactory((securityUuid) => ({
-      title: 'Wertpapier',
-      render: (root, hass, panelConfig) =>
-        renderSecurityDetail(root, hass, panelConfig, securityUuid),
-      cleanup: () => {
-        cleanupSecurityDetailState(securityUuid);
-      },
-    }));
+  setSecurityDetailTabFactory((securityUuid) => ({
+    title: 'Wertpapier',
+    render: (root, hass, panelConfig) =>
+      renderSecurityDetail(root, hass, panelConfig, securityUuid),
+    cleanup: () => {
+      cleanupSecurityDetailState(securityUuid);
+    },
+  }));
 }

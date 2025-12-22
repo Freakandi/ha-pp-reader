@@ -18,6 +18,10 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ### Fixed
 - **Trade Detail Tab**: Resolved critical bug where the "Trade Detail" tab would not open when clicking on a security name in the "Trades" tab. Fixing this involved resolving a circular dependency between `dashboard.ts` and `trades.ts` and ensuring event listeners are attached to the correct DOM elements.
+- **Chart Markers**: Corrected the calculation of transaction markers to reliably display Gross Prices (Market Price) rather than Net Prices, resolving visual discrepancies where markers appeared offset from the price history line.
+- **Detail Headers**: Added descriptive subtitles ("Positions-Details", "Watchlist Details") and "Letzter Preis" (Trade Detail) to enhance context and consistency across detail views.
+- **Trade Detail UI**: Centered the "Watchlist Details" subtitle and enhanced the "Letzter Verkaufspreis" display to show Gross Native Price with Net EUR Price in parentheses, and the EUR conversion on a second line (if different), matching the Security Detail style.
+- **Transaction Logic**: Corrected backend calculation for Sales to accurately determine Gross Market Value (Amount + Fees + Taxes) vs Net Payout (Amount). This ensures "Sell" markers and details reflect the actual market execution price, not the net payout.
 
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.
