@@ -1,6 +1,5 @@
 """Module for calculating period-specific realized gains."""
 
-
 import logging
 import sqlite3
 from collections import defaultdict
@@ -93,9 +92,7 @@ def calculate_period_realized_gains(  # noqa: PLR0912, PLR0915
             ).fetchone()
 
             if p_row:
-                start_prices[sec_uuid] = (
-                    p_row["close"] / 100000000.0
-                )  # Scale down
+                start_prices[sec_uuid] = p_row["close"] / 100000000.0  # Scale down
             else:
                 start_prices[sec_uuid] = 0.0
 
@@ -110,7 +107,7 @@ def calculate_period_realized_gains(  # noqa: PLR0912, PLR0915
         for r in rows:
             sec_currencies[r["uuid"]] = r["currency_code"]
 
-        start_rates = {} # currency -> rate at start_date
+        start_rates = {}  # currency -> rate at start_date
 
         # 4. Iterate Sells
         for sell in sells:
@@ -132,9 +129,7 @@ def calculate_period_realized_gains(  # noqa: PLR0912, PLR0915
             fees_cents = sum(u["amount"] for u in units if u["type"] in (2, 13))
             taxes_cents = sum(u["amount"] for u in units if u["type"] in (1, 11))
 
-            gross_proceeds_native = (
-                sell["amount"] + fees_cents + taxes_cents
-            ) / 100.0
+            gross_proceeds_native = (sell["amount"] + fees_cents + taxes_cents) / 100.0
 
             # Convert to EUR
             sell_rate = _get_fx_rate(cur, sell_curr, sell_date_iso)
@@ -185,9 +180,9 @@ def calculate_period_realized_gains(  # noqa: PLR0912, PLR0915
 
                     # Get rate at Start Date
                     if sec_native_curr not in start_rates:
-                         start_rates[sec_native_curr] = _get_fx_rate(
-                             cur, sec_native_curr, start_iso
-                         )
+                        start_rates[sec_native_curr] = _get_fx_rate(
+                            cur, sec_native_curr, start_iso
+                        )
 
                     start_rate = start_rates[sec_native_curr]
                     start_price_eur = start_price_native / start_rate

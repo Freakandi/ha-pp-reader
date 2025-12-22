@@ -1505,7 +1505,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                 calculate_period_realized_gains,
                 db_path,
                 params.start_date,
-                params.end_date
+                params.end_date,
             )
             # Inject into records
             for rec in records:

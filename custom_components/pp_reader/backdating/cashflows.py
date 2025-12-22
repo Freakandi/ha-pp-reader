@@ -368,12 +368,12 @@ def _process_transaction(  # noqa: PLR0912
         f_add = abs(cent_to_eur(tx_fees, default=0.0) or 0.0)
 
         if is_foreign and fx_rate and fx_rate > 0:
-             t_add = round(t_add / fx_rate, 6)
-             f_add = round(f_add / fx_rate, 6)
+            t_add = round(t_add / fx_rate, 6)
+            f_add = round(f_add / fx_rate, 6)
 
         # Note: signed_value is positive for Div/Int (Income).
         # We add taxes/fees to make it larger (Gross).
-        curr_buckets[bucket] += (signed_value + t_add + f_add)
+        curr_buckets[bucket] += signed_value + t_add + f_add
     elif bucket in curr_buckets:
         curr_buckets[bucket] += signed_value
     elif bucket == "fees":

@@ -202,9 +202,7 @@ async def async_run_backdating_rebuild(
                 hass,
                 Path(db_path),
                 until=plan.end_date,
-                emit_progress=(
-                    lambda stage, payload: _emit(f"fx_{stage}", **payload)
-                ),
+                emit_progress=(lambda stage, payload: _emit(f"fx_{stage}", **payload)),
             )
 
             holdings = await async_compute_daily_holdings_snapshots(
