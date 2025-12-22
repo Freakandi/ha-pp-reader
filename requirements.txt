@@ -3,6 +3,8 @@ homeassistant==2025.11.1
 pip>=21.3.1
 ruff==0.14.10
 pycares<5
+# aiodns is pinned to 3.5.0 to be compatible with pycares<5
+aiodns==3.5.0
 # Dependencies from manifest.json
 protobuf>=4.25.0
 pandas>=2.2.0

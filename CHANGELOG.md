@@ -15,6 +15,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Dashboard Navigation**: Repositioned detail tabs to the left of the Overview tab for better workflow flow; enforced single detailed tab mode.
 - **Trades Tab Layout**: Optimized column layout by stacking related metrics (e.g., Gross/Net result) and ensured native currency display for price columns.
 
+### Fixed
+- **Trade Detail Tab**: Resolved critical bug where the "Trade Detail" tab would not open when clicking on a security name in the "Trades" tab. Fixing this involved resolving a circular dependency between `dashboard.ts` and `trades.ts` and ensuring event listeners are attached to the correct DOM elements.
+
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.
 

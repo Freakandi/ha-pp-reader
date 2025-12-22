@@ -11,7 +11,6 @@ import {
   unregisterPanelHost,
 } from './dashboard/registry';
 import { getEntryId } from './data/api';
-import { escapeHtml } from './utils/html';
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -29,7 +28,8 @@ import {
 } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
 import { renderAnalyse } from './tabs/time_series';
-import { renderTrades } from './tabs/trades';
+import { registerTradeDetailTab } from './tabs/trade_detail';
+import { renderTrades, setOpenTradeDetail } from './tabs/trades';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -42,8 +42,9 @@ import type {
   HassUnsubscribe,
   HomeAssistant,
 } from './types/home-assistant';
+import { escapeHtml } from './utils/html';
 
-export { __TEST_ONLY__, flushPendingPositions, handlePortfolioPositionsUpdate, reapplyPositionsSort, registerDashboardElement, registerPanelHost, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom };
+export { __TEST_ONLY__, closeSecurityDetail, closeTradeDetail, flushPendingPositions, getVisibleTabs, handlePortfolioPositionsUpdate, openSecurityDetail, openTradeDetail, reapplyPositionsSort, registerDashboardElement, registerPanelHost, setTradeDetailTabFactory, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom };
 
 type AddSwipeEvents = (
   element: HTMLElement,
@@ -101,6 +102,7 @@ const OVERVIEW_TAB_KEY = 'overview';
 const ANALYSE_TAB_KEY = 'analyse';
 const TRADES_TAB_KEY = 'trades';
 const SECURITY_DETAIL_TAB_PREFIX = 'security:';
+const TRADE_DETAIL_TAB_PREFIX = 'trade_detail:';
 
 const baseTabs: DashboardTabDescriptor[] = [
   { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
@@ -113,6 +115,7 @@ const detailTabOrder: string[] = [];
 const securityTabLookup = new Map<string, string>();
 
 let securityDetailTabFactory: DetailTabFactory | null = null;
+let tradeDetailTabFactory: DetailTabFactory | null = null;
 let navigationInProgress = false;
 let lastClosedSecurityUuid: string | null = null;
 let currentPage = 0;
@@ -244,12 +247,18 @@ function normalizeDashboardUpdate(
 }
 
 function extractSecurityUuidFromKey(key: string | null | undefined): string | null {
-  if (typeof key !== 'string' || !key.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
+  if (typeof key !== 'string') {
     return null;
   }
-
-  const uuid = key.slice(SECURITY_DETAIL_TAB_PREFIX.length);
-  return uuid || null;
+  if (key.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
+    const uuid = key.slice(SECURITY_DETAIL_TAB_PREFIX.length);
+    return uuid || null;
+  }
+  if (key.startsWith(TRADE_DETAIL_TAB_PREFIX)) {
+    const uuid = key.slice(TRADE_DETAIL_TAB_PREFIX.length);
+    return uuid || null;
+  }
+  return null;
 }
 
 function tryReopenLastDetail(): boolean {
@@ -265,11 +274,17 @@ function tryReopenLastDetail(): boolean {
 }
 
 function getVisibleTabs(): DashboardTabDescriptor[] {
-  const detailTabs = detailTabOrder
+  const securityDetailTabs = detailTabOrder
+    .filter((key) => key.startsWith(SECURITY_DETAIL_TAB_PREFIX))
     .map((key) => detailTabRegistry.get(key))
     .filter((descriptor): descriptor is DashboardTabDescriptor => Boolean(descriptor));
 
-  return [...detailTabs, ...baseTabs];
+  const tradeDetailTabs = detailTabOrder
+    .filter((key) => key.startsWith(TRADE_DETAIL_TAB_PREFIX))
+    .map((key) => detailTabRegistry.get(key))
+    .filter((descriptor): descriptor is DashboardTabDescriptor => Boolean(descriptor));
+
+  return [...securityDetailTabs, ...baseTabs, ...tradeDetailTabs];
 }
 
 function getTabAtIndex(index: number): DashboardTabDescriptor | null {
@@ -346,14 +361,23 @@ async function navigateToPage(
     : null;
   let nextIndex = clampedIndex;
 
-  if (currentSecurityUuid) {
+  if (currentSecurityUuid && currentTab) {
     const intendedTarget = clampedIndex >= 0 && clampedIndex < tabs.length ? tabs[clampedIndex] : null;
-    if (intendedTarget && intendedTarget.key === OVERVIEW_TAB_KEY) {
-      const closed = closeSecurityDetail(currentSecurityUuid, { suppressRender: true });
-      if (closed) {
-        const updatedTabs = getVisibleTabs();
-        const overviewIndex = updatedTabs.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
-        nextIndex = overviewIndex >= 0 ? overviewIndex : 0;
+    if (intendedTarget) {
+      if (currentTab.key.startsWith(SECURITY_DETAIL_TAB_PREFIX) && intendedTarget.key === OVERVIEW_TAB_KEY) {
+        const closed = closeSecurityDetail(currentSecurityUuid, { suppressRender: true });
+        if (closed) {
+          const updatedTabs = getVisibleTabs();
+          const overviewIndex = updatedTabs.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
+          nextIndex = overviewIndex >= 0 ? overviewIndex : 0;
+        }
+      } else if (currentTab.key.startsWith(TRADE_DETAIL_TAB_PREFIX) && intendedTarget.key === TRADES_TAB_KEY) {
+        const closed = closeTradeDetail(currentSecurityUuid, { suppressRender: true });
+        if (closed) {
+          const updatedTabs = getVisibleTabs();
+          const tradesIndex = updatedTabs.findIndex((tab) => tab.key === TRADES_TAB_KEY);
+          nextIndex = tradesIndex >= 0 ? tradesIndex : 0;
+        }
       }
     }
   }
@@ -396,12 +420,18 @@ export function registerDetailTab(
   const securityUuid = extractSecurityUuidFromKey(key);
 
   // Enforce Single Detail Tab Policy
-  // If we are registering a security detail tab, close all other open detail tabs first.
-  if (securityUuid) {
+  if (key.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
     // Create a copy to iterate safely while modifying the source
     const existingKeys = [...detailTabOrder];
     for (const otherKey of existingKeys) {
-      if (otherKey !== key && extractSecurityUuidFromKey(otherKey)) {
+      if (otherKey !== key && otherKey.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
+        unregisterDetailTab(otherKey);
+      }
+    }
+  } else if (key.startsWith(TRADE_DETAIL_TAB_PREFIX)) {
+    const existingKeys = [...detailTabOrder];
+    for (const otherKey of existingKeys) {
+      if (otherKey !== key && otherKey.startsWith(TRADE_DETAIL_TAB_PREFIX)) {
         unregisterDetailTab(otherKey);
       }
     }
@@ -484,8 +514,23 @@ export function setSecurityDetailTabFactory(
   securityDetailTabFactory = factory ?? null;
 }
 
+function setTradeDetailTabFactory(
+  factory: DetailTabFactory | null | undefined,
+): void {
+  if (factory != null && typeof factory !== 'function') {
+    console.error('setTradeDetailTabFactory: Erwartet Funktion oder null', factory);
+    return;
+  }
+
+  tradeDetailTabFactory = factory ?? null;
+}
+
 function getSecurityDetailTabKey(securityUuid: string): string {
   return `${SECURITY_DETAIL_TAB_PREFIX}${securityUuid}`;
+}
+
+function getTradeDetailTabKey(securityUuid: string): string {
+  return `${TRADE_DETAIL_TAB_PREFIX}${securityUuid}`;
 }
 
 function findDashboardElement(): DashboardElement | null {
@@ -554,7 +599,7 @@ function notifyExternalRender(page: number): void {
   }
 }
 
-export function openSecurityDetail(securityUuid: string | null | undefined): boolean {
+function openSecurityDetail(securityUuid: string | null | undefined): boolean {
   if (!securityUuid) {
     console.error('openSecurityDetail: Ungültige securityUuid', securityUuid);
     return false;
@@ -610,11 +655,67 @@ export function openSecurityDetail(securityUuid: string | null | undefined): boo
   return true;
 }
 
+function openTradeDetail(securityUuid: string | null | undefined): boolean {
+  if (!securityUuid) {
+    console.error('openTradeDetail: Ungültige securityUuid', securityUuid);
+    return false;
+  }
+
+  const tabKey = getTradeDetailTabKey(securityUuid);
+  let descriptor = getDetailTabDescriptor(tabKey);
+
+  if (!descriptor && typeof tradeDetailTabFactory === 'function') {
+    try {
+      const maybeDescriptor = tradeDetailTabFactory(securityUuid);
+      if (maybeDescriptor && typeof maybeDescriptor.render === 'function') {
+        registerDetailTab(tabKey, maybeDescriptor);
+        descriptor = getDetailTabDescriptor(tabKey);
+      } else {
+        console.error('openTradeDetail: Factory lieferte ungültigen Descriptor', maybeDescriptor);
+      }
+    } catch (error) {
+      console.error('openTradeDetail: Fehler beim Erzeugen des Tab-Descriptors', error);
+    }
+  }
+
+  if (!descriptor) {
+    console.warn(`openTradeDetail: Kein Detail-Tab für ${securityUuid} verfügbar`);
+    return false;
+  }
+
+  rememberCurrentPageScroll();
+
+  const tabs = getVisibleTabs();
+  let targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
+
+  if (targetIndex === -1) {
+    const updatedTabs = getVisibleTabs();
+    targetIndex = updatedTabs.findIndex((tab) => tab.key === tabKey);
+    if (targetIndex === -1) {
+      console.error('openTradeDetail: Tab nach Registrierung nicht auffindbar');
+      return false;
+    }
+  }
+
+  currentPage = targetIndex;
+  lastClosedSecurityUuid = null;
+
+  // Force render by invalidating lastPage, because changing tabs while keeping index constant
+  // (e.g. 0 -> 0) might otherwise be optimized away by _render().
+  const dashboardElement = findDashboardElement();
+  if (dashboardElement) {
+    dashboardElement._lastPage = null;
+  }
+
+  requestDashboardRender();
+  return true;
+}
+
 interface CloseSecurityDetailOptions {
   suppressRender?: boolean;
 }
 
-export function closeSecurityDetail(
+function closeSecurityDetail(
   securityUuid: string | null | undefined,
   options: CloseSecurityDetailOptions = {},
 ): boolean {
@@ -656,6 +757,66 @@ export function closeSecurityDetail(
     const overviewIndex = tabsAfter.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
     if (overviewIndex >= 0) {
       currentPage = overviewIndex;
+    } else {
+      currentPage = Math.min(Math.max(tabIndexBefore - 1, 0), tabsAfter.length - 1);
+    }
+  } else if (currentPage >= tabsAfter.length) {
+    currentPage = Math.max(0, tabsAfter.length - 1);
+  }
+
+  if (!suppressRender) {
+    // Force render invalidation
+    const dashboardElement = findDashboardElement();
+    if (dashboardElement) {
+      dashboardElement._lastPage = null;
+    }
+    requestDashboardRender();
+  }
+  return true;
+}
+
+function closeTradeDetail(
+  securityUuid: string | null | undefined,
+  options: CloseSecurityDetailOptions = {},
+): boolean {
+  if (!securityUuid) {
+    console.error('closeTradeDetail: Ungültige securityUuid', securityUuid);
+    return false;
+  }
+
+  const { suppressRender = false } = options;
+
+  const tabKey = getTradeDetailTabKey(securityUuid);
+  if (!hasDetailTab(tabKey)) {
+    return false;
+  }
+
+  const tabsBefore = getVisibleTabs();
+  const tabIndexBefore = tabsBefore.findIndex((tab) => tab.key === tabKey);
+  const wasActive = tabIndexBefore === currentPage;
+
+  unregisterDetailTab(tabKey);
+
+  const tabsAfter = getVisibleTabs();
+  if (!tabsAfter.length) {
+    currentPage = 0;
+    if (!suppressRender) {
+      // Force render invalidation
+      const dashboardElement = findDashboardElement();
+      if (dashboardElement) {
+        dashboardElement._lastPage = null;
+      }
+      requestDashboardRender();
+    }
+    return true;
+  }
+
+  lastClosedSecurityUuid = securityUuid;
+
+  if (wasActive) {
+    const tradesIndex = tabsAfter.findIndex((tab) => tab.key === TRADES_TAB_KEY);
+    if (tradesIndex >= 0) {
+      currentPage = tradesIndex;
     } else {
       currentPage = Math.min(Math.max(tabIndexBefore - 1, 0), tabsAfter.length - 1);
     }
@@ -1207,7 +1368,10 @@ if (!customElements.get('pp-reader-dashboard')) {
 }
 
 console.log('PPReader dashboard module v20250914b geladen');
-
 registerSecurityDetailTab({
   setSecurityDetailTabFactory,
 });
+registerTradeDetailTab({
+  setTradeDetailTabFactory,
+});
+setOpenTradeDetail(openTradeDetail);

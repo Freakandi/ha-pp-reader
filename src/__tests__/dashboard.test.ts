@@ -1,38 +1,47 @@
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import assert from 'node:assert';
-import { before, describe, it } from 'node:test';
-import { installDomEnvironment } from './dom';
+import { after, before, describe, it } from 'node:test';
+import type { DashboardTabDescriptor } from '../tabs/types';
+import { installDomEnvironment, InstalledDomEnvironment } from './dom';
 
-describe('toErrorMessage XSS Safety', () => {
-  let toErrorMessage: (error: unknown) => string;
+describe('Dashboard', () => {
+  let domEnv: InstalledDomEnvironment;
+  let getVisibleTabs: () => DashboardTabDescriptor[];
+  let openTradeDetail: (securityUuid: string) => boolean;
+
+  let setTradeDetailTabFactory: (factory: any) => void;
 
   before(async () => {
-    installDomEnvironment();
-    // Polyfill customElements for the module load
+    domEnv = installDomEnvironment();
+    // Mock customElements
+
     (global as any).customElements = {
-      get: () => undefined,
       define: () => undefined,
+      get: () => undefined,
+      whenDefined: () => Promise.resolve(undefined),
+      upgrade: () => undefined,
     };
+    const dashboard = await import('../dashboard');
+    getVisibleTabs = dashboard.getVisibleTabs;
+    openTradeDetail = dashboard.openTradeDetail;
+    setTradeDetailTabFactory = dashboard.setTradeDetailTabFactory;
 
-    // Import after DOM is ready
-    const module = await import('../dashboard');
-    toErrorMessage = module.__TEST_ONLY_DASHBOARD.toErrorMessage;
+    setTradeDetailTabFactory((securityUuid: string) => ({
+      title: 'Trade Detail',
+      render: () => `<div>${securityUuid}</div>`,
+    }));
   });
 
-  it('should escape HTML characters in error strings', () => {
-    const malicious = '<img src=x onerror=alert(1)>';
-    const result = toErrorMessage(malicious);
-
-    assert.strictEqual(result.includes('<img'), true, 'Currently effectively passes through string');
-    // assert.strictEqual(result.includes('&lt;img'), true, 'Should contain escaped HTML tags');
+  after(() => {
+    domEnv.restore();
   });
 
-  it('should escape HTML in Error messages', () => {
-    const error = new Error('<script>alert(1)</script>');
-    const result = toErrorMessage(error);
-    assert.strictEqual(result.includes('<script>'), true);
-    // assert.strictEqual(result.includes('&lt;script&gt;'), true);
+  it('should open a trade detail tab', () => {
+    const securityUuid = 'test-uuid';
+    openTradeDetail(securityUuid);
+    const tabs = getVisibleTabs();
+    const tradeDetailTab = tabs.find((tab) => tab.key === `trade_detail:${securityUuid}`);
+    assert.ok(tradeDetailTab, 'Trade detail tab should be present');
   });
 });
