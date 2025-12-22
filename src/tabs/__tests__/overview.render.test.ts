@@ -4,9 +4,9 @@
  * and account currency fallbacks remain accessible.
  */
 
-import test from 'node:test';
-import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import { installDomEnvironment } from '../../__tests__/dom';
 
 type OverviewModule = typeof import('../overview');
@@ -351,29 +351,39 @@ void test(
       const row = dom.window.document.querySelector<HTMLTableRowElement>('tbody tr.position-row');
       assert.ok(row, 'expected a rendered position row');
 
-      const gainAbsCell = row.querySelector<HTMLTableCellElement>('td.align-right[data-gain-pct]');
-      assert.ok(gainAbsCell, 'expected gain absolute cell with metadata');
-      const gainAbsRaw = gainAbsCell.textContent;
-      assert.ok(gainAbsRaw, 'expected gain absolute cell to provide text content');
-      const gainAbsText = gainAbsRaw.replace(/\s+/g, ' ').trim();
+      // Verify Last Price Cell (New Column)
+      // Index 2 is Last Price
+      const lastPriceCell = row.cells.item(2);
+      assert.ok(lastPriceCell, 'expected last price cell');
+      // For this test data, last_price isn't explicitly set in input, but it should render placeholder
+      // Actually, let's update input to include it if we want to test it specifically,
+      // but here we just check gain cells?
+      // Let's defer last_price specific check to another test or check placeholder.
+      assert.match(lastPriceCell.textContent || '', /—|Kein aktueller Kurs/);
+
+      // Verify Gain Combo Cell (Index 6)
+      const gainComboCell = row.cells.item(6);
+      assert.ok(gainComboCell, 'expected gain combo cell');
+
+      const gainAbsSpan = gainComboCell.querySelector('.val-top');
+      const gainPctSpan = gainComboCell.querySelector('.val-bottom');
+
+      assert.ok(gainAbsSpan, 'expected gain absolute span (.val-top)');
+      const gainAbsText = gainAbsSpan.textContent?.trim() || '';
       assert.ok(
         gainAbsText.includes('210,00'),
         `gain absolute cell should reflect performance payload, got ${gainAbsText}`,
       );
-      assert.strictEqual(gainAbsCell.dataset.gainPct, '42,00 %');
-      assert.strictEqual(gainAbsCell.dataset.gainSign, 'positive');
 
-      const gainPctCell = row.querySelector<HTMLTableCellElement>('td.gain-pct-cell');
-      assert.ok(gainPctCell, 'expected gain percentage cell');
-      const gainPctRaw = gainPctCell.textContent;
-      assert.ok(gainPctRaw, 'expected gain percentage cell to provide text content');
-      const gainPctText = gainPctRaw.replace(/\s+/g, ' ').trim();
+      assert.ok(gainPctSpan, 'expected gain percentage span (.val-bottom)');
+      const gainPctText = gainPctSpan.textContent?.trim() || '';
       assert.ok(
         gainPctText.includes('42,00'),
         `gain percentage cell should reflect performance payload, got ${gainPctText}`,
       );
-      const trendSpan = gainPctCell.querySelector('span.positive');
-      assert.ok(trendSpan, 'gain percentage cell should display positive trend styling');
+
+      const trendSpan = gainComboCell.querySelector('.positive');
+      assert.ok(trendSpan, 'gain cell should display positive trend styling');
     }),
 );
 
@@ -407,16 +417,73 @@ void test(
       const row = dom.window.document.querySelector<HTMLTableRowElement>('tbody tr.position-row');
       assert.ok(row, 'expected rendered placeholder row');
 
-      const gainAbsCell = row.querySelector<HTMLTableCellElement>('td.align-right[data-gain-pct]');
-      assert.ok(gainAbsCell, 'expected gain absolute cell');
-      const gainAbsText = gainAbsCell.textContent.trim();
-      assert.strictEqual(gainAbsText, '—');
-      assert.strictEqual(gainAbsCell.dataset.gainPct, '—');
-      assert.strictEqual(gainAbsCell.dataset.gainSign, 'neutral');
+      // Index 6 is Gain Combo
+      const gainComboCell = row.cells.item(6);
+      assert.ok(gainComboCell, 'expected gain combo cell');
 
-      const gainPctCell = row.querySelector<HTMLTableCellElement>('td.gain-pct-cell');
-      assert.ok(gainPctCell, 'expected gain percentage cell');
-      const gainPctText = gainPctCell.textContent.trim();
-      assert.strictEqual(gainPctText, '—');
+      const gainAbsSpan = gainComboCell.querySelector('.val-top');
+      const gainPctSpan = gainComboCell.querySelector('.val-bottom');
+
+      const gainAbsText = gainAbsSpan?.textContent?.trim();
+      assert.match(gainAbsText || '', /0,00/);
+
+      const gainPctText = gainPctSpan?.textContent?.trim();
+      assert.match(gainPctText || '', /0,00/);
+    }),
+);
+
+void test(
+  'renderPortfolioPositions renders last_price correctly',
+  async () =>
+    withOverviewModule(module => {
+      const html = module.renderPortfolioPositions([
+        {
+          security_uuid: 'last-price-test',
+          name: 'Priced Security',
+          current_holdings: 10,
+          purchase_value: 500,
+          current_value: 710,
+          currency_code: 'USD',
+          last_price_native: 15.5,
+          last_price_eur: 14.0,
+          aggregation: {
+            total_holdings: 10,
+            positive_holdings: 10,
+            purchase_value_cents: 50000,
+            purchase_value_eur: 500,
+            security_currency_total: 500,
+            account_currency_total: 500,
+            purchase_total_security: 500,
+            purchase_total_account: 500,
+          },
+          average_cost: null,
+          performance: {
+            gain_abs: 0,
+            gain_pct: 0,
+            total_change_eur: 0,
+            total_change_pct: 0,
+            source: 'snapshot',
+            coverage_ratio: 1,
+          },
+        },
+      ]);
+
+      const dom = new JSDOM(`<!doctype html><body>${html}</body>`);
+      const row = dom.window.document.querySelector<HTMLTableRowElement>('tbody tr.position-row');
+      assert.ok(row);
+
+      // Index 2: Last Price
+      const lastPriceCell = row.cells.item(2);
+      assert.ok(lastPriceCell, 'expected last_price cell at index 2');
+
+      // Should show native (USD) on top, EUR on bottom
+      const topVal = lastPriceCell.querySelector('.val-top');
+      const botVal = lastPriceCell.querySelector('.val-bottom');
+
+      assert.ok(topVal, 'expected native price');
+      assert.ok(botVal, 'expected eur price');
+
+      assert.match(topVal.textContent || '', /15,50\s*USD/);
+      assert.match(botVal.textContent || '', /14,00\s*EUR/);
     }),
 );

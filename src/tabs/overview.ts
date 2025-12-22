@@ -161,13 +161,15 @@ type PortfolioPositionsSortKey =
   | 'day_change_abs'
   | 'day_change_pct'
   | 'gain_abs'
-  | 'gain_pct';
+  | 'gain_pct'
+  | 'last_price';
 
 type PortfolioSortDirection = 'asc' | 'desc';
 
 const PORTFOLIO_SORT_KEYS: readonly PortfolioPositionsSortKey[] = [
   'name',
   'current_holdings',
+  'last_price',
   'average_price',
   'purchase_value',
   'current_value',
@@ -372,8 +374,70 @@ function buildPurchasePriceDisplay(
   return { markup, sortValue, ariaLabel };
 }
 
+function buildLastPriceDisplay(
+  position: PortfolioPositionRecord,
+): { markup: string; sortValue: number; ariaLabel: string } {
+  const nativePrice = toNullableNumber(position.last_price_native);
+  const eurPrice = toNullableNumber(position.last_price_eur);
+  const currency = position.currency_code ?? 'EUR';
+  const isEur = currency === 'EUR';
+
+  const parts: string[] = [];
+  const ariaParts: string[] = [];
+
+  let sortValue = 0;
+
+  if (isEur) {
+    // Case 1: EUR security
+    // Use native if available, else eurPrice (which should be same), or fallback
+    const val = nativePrice ?? eurPrice;
+    sortValue = val ?? 0;
+
+    if (val != null) {
+      const formatted = formatPriceWithCurrency(val, 'EUR');
+      if (formatted) {
+        parts.push(`<span class="val-top">${formatted}</span>`);
+        ariaParts.push(formatted.replace(/\u00A0/g, ' '));
+      }
+    }
+  } else {
+    // Case 2: Non-EUR security
+    // Line 1: Native Price
+    if (nativePrice != null) {
+      sortValue = eurPrice ?? 0; // Sort by EUR equivalent usually makes sense for value comparison, but here maybe just EUR price? Actually for "Last Price" column, usually people sort by the visible number, but since currencies differ, sorting by EUR equivalent allows valid cross-security comparison.
+
+      const formattedNative = formatPriceWithCurrency(nativePrice, currency);
+      if (formattedNative) {
+        parts.push(`<span class="val-top">${formattedNative}</span>`);
+        ariaParts.push(formattedNative.replace(/\u00A0/g, ' '));
+      }
+    }
+
+    // Line 2: EUR Price
+    if (eurPrice != null) {
+      const formattedEur = formatPriceWithCurrency(eurPrice, 'EUR');
+      if (formattedEur) {
+        parts.push(`<span class="val-bottom">${formattedEur}</span>`);
+        ariaParts.push(formattedEur.replace(/\u00A0/g, ' '));
+      }
+    }
+  }
+
+  if (parts.length === 0) {
+    parts.push('<span class="missing-value">—</span>');
+    ariaParts.push('Kein aktueller Kurs');
+  }
+
+  return {
+    markup: `<div class="cell-stack">${parts.join('')}</div>`,
+    sortValue, // Using EUR value for consistent sorting across different currencies
+    ariaLabel: ariaParts.join(', '),
+  };
+}
+
 export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
+  buildLastPriceDisplayForTest: buildLastPriceDisplay,
 };
 
 function computePositionDayChange(position: PortfolioPositionRecord): { value: number | null; pct: number | null } {
@@ -521,6 +585,9 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
     // Reuse buildPurchasePriceDisplay to get the complex average price display
     const { markup: avgPriceMarkup, sortValue: avgPriceSortVal } = buildPurchasePriceDisplay(p);
 
+    // Build Last Price display
+    const { markup: lastPriceMarkup, sortValue: lastPriceSortVal } = buildLastPriceDisplay(p);
+
     const row: Record<string, unknown> = {
       _uuid: typeof p.security_uuid === 'string' ? p.security_uuid : '',
       name: typeof p.name === 'string'
@@ -532,6 +599,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
         typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
           ? p.current_holdings
           : null,
+      last_price: `<span data-sort-value="${String(lastPriceSortVal)}">${lastPriceMarkup}</span>`,
       average_price: `<span data-sort-value="${String(avgPriceSortVal)}">${avgPriceMarkup}</span>`,
 
       // Stacked columns
@@ -542,7 +610,6 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
     return row;
   });
 
-  // Calculate Footer Aggregates
   // Calculate Footer Aggregates
   const totalDayChangePct = (totalCurrent - totalDayChangeAbs !== 0)
     ? (totalDayChangeAbs / (totalCurrent - totalDayChangeAbs)) * 100
@@ -555,6 +622,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
   const footerValues = {
     name: 'Summe',
     current_holdings: '',
+    last_price: '',
     average_price: '',
     value_combo: stack(
       totalPurchase,
@@ -580,6 +648,7 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
   const cols = [
     { key: 'name', label: createSimpleSortHeader('Wertpapier', 'name') },
     { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
+    { key: 'last_price', label: createSimpleSortHeader('Letzter Kurs', 'last_price'), align: 'right' as const },
     { key: 'average_price', label: createSimpleSortHeader('Ø Kaufpreis', 'average_price'), align: 'right' as const },
 
     // Stacked Columns
@@ -1159,18 +1228,20 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
       const idxMap: Record<PortfolioPositionsSortKey, number> = {
         name: 0,
         current_holdings: 1,
-        average_price: 2,
-        purchase_value: 3,
-        current_value: 3,
-        day_change_abs: 4,
-        day_change_pct: 4,
-        gain_abs: 5,
-        gain_pct: 5,
+        last_price: 2,
+        average_price: 3,
+        purchase_value: 4,
+        current_value: 4,
+        day_change_abs: 5,
+        day_change_pct: 5,
+        gain_abs: 6,
+        gain_pct: 6,
       };
 
       const subSelectorMap: Record<PortfolioPositionsSortKey, string | null> = {
         name: null,
         current_holdings: null,
+        last_price: null,
         average_price: null,
         purchase_value: '.val-top',
         current_value: '.val-bottom',

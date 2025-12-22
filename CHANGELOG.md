@@ -15,6 +15,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Dashboard Navigation**: Repositioned detail tabs to the left of the Overview tab for better workflow flow; enforced single detailed tab mode.
 - **Trades Tab Layout**: Optimized column layout by stacking related metrics (e.g., Gross/Net result) and ensured native currency display for price columns.
 
+### Added
+- **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.
+
 ### Fixed
 - **Overview Sorting**: Resolved issue where sorting headers in nested portfolio position tables did not function correctly.
 - **Trades Tab Sum Row**: Fixed missing aggregation values in the "Summe" footer row.

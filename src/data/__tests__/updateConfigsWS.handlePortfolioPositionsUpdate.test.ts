@@ -1,16 +1,15 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import { installDomEnvironment } from '../../__tests__/dom';
-import { handlePortfolioPositionsUpdate } from '../updateConfigsWS';
+import { __TEST_ONLY__ as storeTestHelpers } from '../../lib/store/portfolioStore';
 import {
   clearAllPortfolioPositions,
+  hasPortfolioPositions,
   setPortfolioPositions,
   type PortfolioPositionRecord,
-  hasPortfolioPositions,
 } from '../positionsCache';
-import { __TEST_ONLY__ as storeTestHelpers } from '../../lib/store/portfolioStore';
-import { __TEST_ONLY__ as wsTestHelpers } from '../updateConfigsWS';
+import { handlePortfolioPositionsUpdate, __TEST_ONLY__ as wsTestHelpers } from '../updateConfigsWS';
 
 const POSITIONS_MARKUP = `
 <!doctype html>
@@ -110,7 +109,7 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
     );
     assert.ok(firstRow);
 
-    const avgPriceCell = firstRow.cells.item(2);
+    const avgPriceCell = firstRow.cells.item(3);
     assert.ok(avgPriceCell);
     const avgPriceText = avgPriceCell.textContent;
     assert.ok(avgPriceText);
@@ -119,6 +118,7 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
       'average price should be sourced from cached payload',
     );
 
+    // Day Change Combo is at Index 5
     const dayChangeCell = firstRow.cells.item(5);
     assert.ok(dayChangeCell);
     const dayChangeText = dayChangeCell.textContent;
@@ -126,7 +126,8 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
     assert.ok(!dayChangeText.includes('—'), 'day change should remain populated');
     assert.ok(dayChangeText.includes('€'));
 
-    const gainPctCell = firstRow.cells.item(8);
+    // Gain Combo is at Index 6
+    const gainPctCell = firstRow.cells.item(6);
     assert.ok(gainPctCell);
     const gainPctText = gainPctCell.textContent;
     assert.ok(gainPctText);
