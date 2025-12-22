@@ -4,6 +4,7 @@
 
 import type { TableRow } from '../content/elements';
 import { createHeaderCard, makeTable } from '../content/elements';
+import { openTradeDetail } from '../dashboard';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
@@ -84,6 +85,8 @@ const STYLES = `
   /* Ensure trend colors carry over */
   .val-top .positive, .val-bottom .positive { color: var(--success-color); }
   .val-top .negative, .val-bottom .negative { color: var(--error-color); }
+  .trades-table-container { user-select: none; }
+  .trade-name-clickable { cursor: pointer; text-decoration: underline; }
 </style>
 `;
 
@@ -163,16 +166,15 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     const priceDiff = currentPrice - lastSellPrice;
     const priceTrend = priceDiff > 0 ? 'positive' : priceDiff < 0 ? 'negative' : 'neutral';
 
-    let nameCell = escapeHtml(trade.name);
+    const nameContent = escapeHtml(trade.name);
+    let nameCell = `<span class="trade-name-clickable" data-val="${nameContent}" data-security-uuid="${escapeAttribute(trade.security_uuid)}">${nameContent}</span>`;
     if (trade.lots.length > 1) {
       nameCell = `
         <span class="expand-icon" data-security-uuid="${escapeAttribute(trade.security_uuid)}">
           <ha-icon icon="mdi:chevron-right"></ha-icon>
         </span>
-        <span data-val="${escapeHtml(trade.name)}">${nameCell}</span>
+        ${nameCell}
       `;
-    } else {
-      nameCell = `<span data-val="${escapeHtml(trade.name)}">${nameCell}</span>`;
     }
 
     const isClosed = Math.abs(trade.current_holdings) < 0.001;
@@ -416,6 +418,16 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
   root.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
 
+    // Handle trade detail click
+    const tradeNameLink = target.closest('.trade-name-clickable');
+    if (tradeNameLink) {
+      event.stopPropagation();
+      const uuid = (tradeNameLink as HTMLElement).dataset.securityUuid;
+      if (uuid) {
+        openTradeDetail(uuid);
+      }
+      return;
+    }
     // Handle expander
     const expandIcon = target.closest('.expand-icon');
     if (expandIcon) {
