@@ -18,7 +18,7 @@ from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur, normalize_raw_price
+from custom_components.pp_reader.util.currency import normalize_raw_price
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -567,6 +567,7 @@ def _build_valuations_and_aggregate(
     Returns:
         (valuations, price_coverage_ratio, fx_coverage_ratio, stale_price,
          total_wealth_eur, unrealized_price_gains_eur)
+
     """
     valuations: list[HoldingValuation] = []
 
