@@ -369,14 +369,14 @@ void test(
       const gainPctSpan = gainComboCell.querySelector('.val-bottom');
 
       assert.ok(gainAbsSpan, 'expected gain absolute span (.val-top)');
-      const gainAbsText = gainAbsSpan.textContent?.trim() || '';
+      const gainAbsText = gainAbsSpan.textContent.trim() || '';
       assert.ok(
         gainAbsText.includes('210,00'),
         `gain absolute cell should reflect performance payload, got ${gainAbsText}`,
       );
 
       assert.ok(gainPctSpan, 'expected gain percentage span (.val-bottom)');
-      const gainPctText = gainPctSpan.textContent?.trim() || '';
+      const gainPctText = gainPctSpan.textContent.trim() || '';
       assert.ok(
         gainPctText.includes('42,00'),
         `gain percentage cell should reflect performance payload, got ${gainPctText}`,
@@ -424,10 +424,10 @@ void test(
       const gainAbsSpan = gainComboCell.querySelector('.val-top');
       const gainPctSpan = gainComboCell.querySelector('.val-bottom');
 
-      const gainAbsText = gainAbsSpan?.textContent?.trim();
+      const gainAbsText = gainAbsSpan?.textContent.trim();
       assert.match(gainAbsText || '', /0,00/);
 
-      const gainPctText = gainPctSpan?.textContent?.trim();
+      const gainPctText = gainPctSpan?.textContent.trim();
       assert.match(gainPctText || '', /0,00/);
     }),
 );
