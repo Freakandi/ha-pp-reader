@@ -474,7 +474,7 @@ function getHistoryChartOptions(
       <div class="chart-tooltip-date">${escapeHtml(xFormatted)}</div>
       <div class="chart-tooltip-value">${escapeHtml(yFormatted)}&nbsp;${escapeHtml(safeCurrency)}</div>
     `,
-    baseline: baselineValue != null ? { value: baselineValue } : null,
+    baseline: baselineValue != null ? { value: baselineValue, includeInDomain: false } : null,
     markers: Array.isArray(options.markers) ? options.markers : [],
   };
 }

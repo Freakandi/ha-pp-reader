@@ -126,6 +126,7 @@ export interface LineChartBaselineOptions {
   value: number | null | undefined;
   color?: string;
   dashArray?: string;
+  includeInDomain?: boolean;
 }
 
 interface LineChartRange {
@@ -499,12 +500,14 @@ function computePoints(
   const safeMaxY = Number.isFinite(maxY) ? maxY : safeMinY + 1;
   const baselineValue = toNumber(dimensions.baseline?.value, null);
 
+  const includeBaseline = dimensions.baseline?.includeInDomain !== false;
+
   const minDomainCandidate =
-    baselineValue != null && Number.isFinite(baselineValue)
+    includeBaseline && baselineValue != null && Number.isFinite(baselineValue)
       ? Math.min(safeMinY, baselineValue)
       : safeMinY;
   const maxDomainCandidate =
-    baselineValue != null && Number.isFinite(baselineValue)
+    includeBaseline && baselineValue != null && Number.isFinite(baselineValue)
       ? Math.max(safeMaxY, baselineValue)
       : safeMaxY;
 

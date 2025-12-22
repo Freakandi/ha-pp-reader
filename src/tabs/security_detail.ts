@@ -1774,6 +1774,7 @@ function getHistoryChartOptions(
       baselineValue != null
         ? {
           value: baselineValue,
+          includeInDomain: false,
         }
         : null,
     markers: Array.isArray(markers) ? markers : [],
