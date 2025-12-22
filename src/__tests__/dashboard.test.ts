@@ -1,21 +1,26 @@
-import { describe, it, before, after } from 'node:test';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import assert from 'node:assert';
+import { after, before, describe, it } from 'node:test';
+import type { DashboardTabDescriptor } from '../tabs/types';
 import { installDomEnvironment, InstalledDomEnvironment } from './dom';
 
 describe('Dashboard', () => {
   let domEnv: InstalledDomEnvironment;
-  let getVisibleTabs: any;
-  let openTradeDetail: any;
-  let setTradeDetailTabFactory: any;
+  let getVisibleTabs: () => DashboardTabDescriptor[];
+  let openTradeDetail: (securityUuid: string) => boolean;
+
+  let setTradeDetailTabFactory: (factory: any) => void;
 
   before(async () => {
     domEnv = installDomEnvironment();
     // Mock customElements
+
     (global as any).customElements = {
-        define: () => {},
-        get: () => {},
-        whenDefined: async () => {},
-        upgrade: () => {},
+      define: () => undefined,
+      get: () => undefined,
+      whenDefined: () => Promise.resolve(undefined),
+      upgrade: () => undefined,
     };
     const dashboard = await import('../dashboard');
     getVisibleTabs = dashboard.getVisibleTabs;
@@ -36,7 +41,7 @@ describe('Dashboard', () => {
     const securityUuid = 'test-uuid';
     openTradeDetail(securityUuid);
     const tabs = getVisibleTabs();
-    const tradeDetailTab = tabs.find(tab => tab.key === `trade_detail:${securityUuid}`);
+    const tradeDetailTab = tabs.find((tab) => tab.key === `trade_detail:${securityUuid}`);
     assert.ok(tradeDetailTab, 'Trade detail tab should be present');
   });
 });
