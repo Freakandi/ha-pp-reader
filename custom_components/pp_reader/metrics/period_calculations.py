@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def calculate_period_realized_gains(  # noqa: PLR0912, PLR0915
-    db_path: Path,
+    db_path: "Path",
     start_date: date,
     end_date: date,
 ) -> dict[str, float]:
