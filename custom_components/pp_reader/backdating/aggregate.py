@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
     from custom_components.pp_reader.backdating.accounts import DailyAccountSnapshot
     from custom_components.pp_reader.backdating.cashflows import DailyCashflowSnapshot
@@ -84,21 +84,28 @@ def build_daily_wealth_records(
 
         total_wealth = round(portfolio_wealth + account_wealth, 6)
 
-        fx_ratios = _filter_ratios(
-            [
-                getattr(holdings_snap, "fx_coverage_ratio", None),
-                getattr(accounts_snap, "fx_coverage_ratio", None),
-                getattr(cashflow_snap, "fx_coverage_ratio", None),
-            ]
-        )
+        fx_ratios = []
+        if holdings_snap:
+            val = holdings_snap.fx_coverage_ratio
+            if val is not None and 0 <= val <= 1:
+                fx_ratios.append(val)
+        if accounts_snap:
+            val = accounts_snap.fx_coverage_ratio
+            if val is not None and 0 <= val <= 1:
+                fx_ratios.append(val)
+        if cashflow_snap:
+            val = cashflow_snap.fx_coverage_ratio
+            if val is not None and 0 <= val <= 1:
+                fx_ratios.append(val)
         fx_coverage_ratio = min(fx_ratios) if fx_ratios else 1.0
 
-        price_ratios = _filter_ratios(
-            [getattr(holdings_snap, "price_coverage_ratio", None)]
-        )
-        price_coverage_ratio = min(price_ratios) if price_ratios else 1.0
+        price_coverage_ratio = 1.0
+        if holdings_snap:
+            val = holdings_snap.price_coverage_ratio
+            if val is not None and 0 <= val <= 1:
+                price_coverage_ratio = val
 
-        stale_price = bool(getattr(holdings_snap, "stale_price", False))
+        stale_price = holdings_snap.stale_price if holdings_snap else False
 
         records.append(
             DailyWealthAggregate(
@@ -113,11 +120,16 @@ def build_daily_wealth_records(
                 realized_gains_eur=round(realized_gains, 6),
                 unrealized_gains_eur=round(portfolio_wealth - invested_capital, 6),
                 unrealized_price_gains_eur=round(
-                    getattr(holdings_snap, "unrealized_price_gains_eur", 0.0) or 0.0, 6
+                    (holdings_snap.unrealized_price_gains_eur if holdings_snap else 0.0)
+                    or 0.0,
+                    6,
                 ),
                 invested_capital_eur=round(invested_capital, 6),
                 performance_neutral_movements=round(
-                    getattr(holdings_snap, "performance_neutral_movements", 0.0), 6
+                    holdings_snap.performance_neutral_movements
+                    if holdings_snap
+                    else 0.0,
+                    6,
                 ),
                 fees_eur=round(fees, 6),
                 taxes_eur=round(taxes, 6),
@@ -131,19 +143,3 @@ def build_daily_wealth_records(
         cursor += timedelta(days=1)
 
     return records
-
-
-def _filter_ratios(values: Iterable[float | None]) -> list[float]:
-    """Return valid coverage ratios within expected bounds."""
-    ratios: list[float] = []
-    for value in values:
-        if value is None:
-            continue
-        try:
-            numeric = float(value)
-        except (TypeError, ValueError):
-            continue
-        if numeric < 0 or numeric > 1:
-            continue
-        ratios.append(numeric)
-    return ratios
