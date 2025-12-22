@@ -41,14 +41,25 @@ async function findLatestBundle(directory) {
 }
 
 async function updateModule(modulePath, bundleSpecifier) {
-  const contents = await fs.readFile(modulePath, 'utf8');
-
-  if (!MODULE_EXPORT_PATTERN.test(contents)) {
-    throw new Error(`dashboard.module.js does not contain an export line to rewrite at ${modulePath}`);
+  let contents = '';
+  try {
+    contents = await fs.readFile(modulePath, 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+    // File doesn't exist, start with empty string or default export
+    contents = "export * from './placeholder.js';";
   }
 
   const replacementLine = `export * from './${bundleSpecifier}';`;
-  let updated = contents.replace(MODULE_EXPORT_PATTERN, replacementLine);
+  let updated;
+
+  if (MODULE_EXPORT_PATTERN.test(contents)) {
+    updated = contents.replace(MODULE_EXPORT_PATTERN, replacementLine);
+  } else {
+    updated = replacementLine; // Overwrite or create new
+  }
 
   if (updated === contents) {
     return false;
