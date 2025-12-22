@@ -25,7 +25,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Transaction Logic**: Corrected backend calculation for Sales to accurately determine Gross Market Value (Amount + Fees + Taxes) vs Net Payout (Amount). This ensures "Sell" markers and details reflect the actual market execution price, not the net payout.
 - **FX Latching**: Implemented 7-day lookback for FX rates in "Time Series" to prevent metric drop-offs on weekends/holidays.
 - **Gross Metrics**: Dividends and Interest in "Time Series" now correctly report Gross values (Net + Taxes + Fees).
-- **Realized Gains**: Realized Gains calculation refactored to be fully Gross (excludes Buy Fees from cost basis and adds back Sell Fees/Taxes).
+- **Realized Gains**: Realized Gains calculation refactored to correctly use Gross Sell Proceeds (Net + Costs) while maintaining full Cost Basis (Debit) for Buys.
 
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.

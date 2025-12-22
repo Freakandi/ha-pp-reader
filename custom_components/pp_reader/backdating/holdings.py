@@ -870,21 +870,9 @@ def _apply_transaction_update(
 
     # FIFO Logic
     if delta_shares > 0:
-        # BUY: Cost basis should be principal only (excluding fees/taxes)
-        # because fees/taxes are already accounted for in respective buckets.
-        # Amount (Debit) usually includes Fees+Taxes, so we subtract them.
-        principal_eur = tx_val_eur
-        principal_native = tx_val_native
-
-        # Ensure we don't subtract if they weren't included (sanity check?)
-        # Generally amount = principal + fees + taxes for a buy debit.
-        if tx_val_eur > fees_eur + taxes_eur:
-             principal_eur = tx_val_eur - fees_eur - taxes_eur
-
-        if tx_val_native > fees_native + taxes_native:
-             principal_native = tx_val_native - fees_native - taxes_native
-
-        _process_buy_lots(entry, delta_shares, principal_eur, principal_native, tx_date)
+        # BUY: Use full transaction value (Principal + Fees + Taxes) as cost basis
+        # per User instruction ("gross on buy side is the final amount debited").
+        _process_buy_lots(entry, delta_shares, tx_val_eur, tx_val_native, tx_date)
 
     else:
         # SELL: Reduce shares, consume lots FIFO
