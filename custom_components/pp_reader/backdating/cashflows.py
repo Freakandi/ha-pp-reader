@@ -75,12 +75,12 @@ async def async_compute_daily_cashflows(
         message = "start_date must be on or before end_date"
         raise ValueError(message)
 
-    await fx_module.async_prepare_exchange_rates_for_backdating(
-        hass,
-        db_path,
-        until=end_date,
-        emit_progress=emit_progress,
-    )
+    # await fx_module.async_prepare_exchange_rates_for_backdating(
+    #     hass,
+    #     db_path,
+    #     until=end_date,
+    #     emit_progress=emit_progress,
+    # )
 
     return await async_run_executor_job(
         hass,
@@ -368,7 +368,23 @@ def _process_transaction(
         return
 
     signed_value = amount_eur * sign
-    if bucket in curr_buckets:
+
+    # Portfolio Performance reports Dividends and Interest as GROSS (before tax/fee).
+    # The 'amount' in DB is typically Net (payout).
+    # So we add back taxes and fees to the metric for these buckets.
+    if bucket in ("dividends", "interest"):
+        t_add = abs(cent_to_eur(tx_taxes, default=0.0) or 0.0)
+        f_add = abs(cent_to_eur(tx_fees, default=0.0) or 0.0)
+
+        if is_foreign and fx_rate and fx_rate > 0:
+             t_add = round(t_add / fx_rate, 6)
+             f_add = round(f_add / fx_rate, 6)
+
+        # Note: signed_value is positive for Div/Int (Income).
+        # We add taxes/fees to make it larger (Gross).
+        curr_buckets[bucket] += (signed_value + t_add + f_add)
+    elif bucket in curr_buckets:
         curr_buckets[bucket] += signed_value
     elif bucket == "fees":
+        # Separate fees bucket (for non-attached fees)
         curr_buckets["fees"] += abs(signed_value)

@@ -1,7 +1,7 @@
 // Die Panel-Logik muss das Dashboard-Modul laden, bevor der Custom Element Code
 // ausgeführt wird. Wir nutzen Top-Level-Await, um das gebaute Bundle zu
 // importieren und optional den Dev-Server für Hot-Reloading zu booten.
-const DASHBOARD_MODULE_SPECIFIER = './js/dashboard.module.js';
+const DASHBOARD_MODULE_SPECIFIER = './js/dashboard.live.js';
 const DEV_SERVER_QUERY_PARAM = 'pp_reader_dev_server';
 const DEV_SERVER_STORAGE_KEY = 'pp_reader:viteDevServer';
 const DEV_SERVER_GLOBAL_KEY = '__PP_READER_VITE_DEV_SERVER__';

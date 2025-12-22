@@ -35,6 +35,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Security**: Fixed potential XSS vulnerabilities in error rendering and Trades tab data display.
 - **Calculations**: Fixed `TypeError` in `async_run_executor_job` usage for realized performance calculations and resolved currency mismatches in "Since Sell" metrics.
 - **Push Updates**: Fixed bug where push updates from live price fetches would cause portfolio tables to lose their stacked column formatting and fall back to single-line rendering. The `handlePortfolioUpdate` function now correctly updates stacked cells (Value Combo, Day Combo, Gain Combo) instead of expecting the old 8-column structure.
+- **Analyze Tab Timezone**: Resolved timezone-related off-by-one error in date selection. The analyzed period now correctly aligns with the selected dates, ensuring "Start Value" reflects the closing value of the previous day, and "End Value" reflects the closing value of the selected end day.
+- **FX Calculation**: Eliminated "Phantom FX" volatility on weekends and holidays. When a security's price is stale (market closed), the system now uses the exchange rate from the price's date rather than the current day's rate, ensuring valuations remain stable and "FX-Veränderung" only reflects actual market movements.
+- **Metric Consistency**: Fixed calculation of Dividends and Interest to report **Gross** values (including taxes and fees) instead of Net payouts, aligning exactly with Portfolio Performance's reporting standards. Adjusted Start/End value calculations to better handle missing FX rates on non-trading days.
 
 ### Internal
 - **Documentation**: Updated `AGENT_HANDBOOK.md`, `ARCHITECTURE.md`, `README.md`, and `README-dev.md` to reflect latest workflows and setup instructions.

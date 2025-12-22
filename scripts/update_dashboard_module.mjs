@@ -11,7 +11,7 @@ import { promises as fs } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const MODULE_FILENAME = 'dashboard.module.js';
+const MODULE_FILENAME = 'dashboard.live.js';
 const HASHED_ENTRY_PATTERN = /^dashboard\.(?!module$)[\da-zA-Z_-]+\.js$/;
 const MODULE_EXPORT_PATTERN = /export \* from ['"](?<specifier>.+?)['"];?/;
 
@@ -112,7 +112,7 @@ async function main() {
     projectRoot,
     'custom_components/pp_reader/www/pp_reader_dashboard/js',
   );
-  const modulePath = resolve(bundleDirectory, 'dashboard.module.js');
+  const modulePath = resolve(bundleDirectory, MODULE_FILENAME);
 
   const latestBundle = await findLatestBundle(bundleDirectory);
 

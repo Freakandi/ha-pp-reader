@@ -73,6 +73,7 @@ class DailyHoldingsSnapshot:
     invested_capital_eur: float
     realized_gains_eur: float
     unrealized_price_gains_eur: float
+    realized_price_gains_eur: float
     portfolio_realized_gains: dict[str, float]
     performance_neutral_movements: float
 
@@ -90,12 +91,12 @@ async def async_compute_daily_holdings_snapshots(
         message = "start_date must be on or before end_date"
         raise ValueError(message)
 
-    await fx_module.async_prepare_exchange_rates_for_backdating(
-        hass,
-        db_path,
-        until=end_date,
-        emit_progress=emit_progress,
-    )
+    # await fx_module.async_prepare_exchange_rates_for_backdating(
+    #     hass,
+    #     db_path,
+    #     until=end_date,
+    #     emit_progress=emit_progress,
+    # )
 
     return await async_run_executor_job(
         hass,
@@ -121,7 +122,7 @@ def _compute_daily_holdings_snapshots_sync(
     transactions = _load_relevant_transactions(
         db_path, portfolios, securities, until=end_date
     )
-    price_cache = _load_price_cache(db_path, until=end_date)
+    price_cache = _load_price_cache(db_path, until=end_date, securities=securities)
 
     # Initialize FX fallback cache with 1.0 for EUR
     last_known_fx_rates: dict[str, float] = {"EUR": 1.0}
@@ -135,16 +136,25 @@ def _compute_daily_holdings_snapshots_sync(
     sorted_dates = sorted(adjustments_by_date.keys())
 
     # Pre-load FX rates for the entire relevant range (init + main loop)
-    # to avoid N+1 queries during initialization.
-    cache_start_date = start_date
+    # Plus a 7-day lookback to ensure we have a latch for the start_date
+    lookback_start = start_date - timedelta(days=7)
+    cache_start_date = lookback_start
     if sorted_dates:
         first_tx_date = sorted_dates[0]
-        if first_tx_date < start_date:
+        if first_tx_date < lookback_start:
             cache_start_date = first_tx_date
 
     fx_rates_cache = fx_module.load_fx_rates_cache_range(
         db_path, cache_start_date.isoformat(), end_date.isoformat()
     )
+
+    # Explicitly seed the latch from the lookback period up to start_date
+    # This handles cases where no transactions occurred recently but we need valid FX (e.g. Price Stale check)
+    seed_cursor = lookback_start
+    while seed_cursor < start_date:
+        if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
+            last_known_fx_rates.update(day_rates)
+        seed_cursor += timedelta(days=1)
 
     for tx_date in sorted_dates:
         if tx_date >= start_date:
@@ -184,6 +194,7 @@ def _compute_daily_holdings_snapshots_sync(
         fx_rates = last_known_fx_rates
 
         daily_realized_gains = 0.0
+        daily_realized_price_gains = 0.0
         daily_portfolio_gains: dict[str, float] = {}
         daily_neutral_movements = 0.0
 
@@ -198,7 +209,7 @@ def _compute_daily_holdings_snapshots_sync(
             taxes,
             fx_rate_to_base,
         ) in daily_adjustments:
-            gain, neutral_val = _apply_transaction_update(
+            gain, price_gain, neutral_val = _apply_transaction_update(
                 portfolio_uuid,
                 security_uuid,
                 delta_shares,
@@ -218,6 +229,7 @@ def _compute_daily_holdings_snapshots_sync(
                 .upper(),
             )
             daily_realized_gains += gain
+            daily_realized_price_gains += price_gain
             daily_neutral_movements += neutral_val
 
             if gain != 0.0:
@@ -233,6 +245,7 @@ def _compute_daily_holdings_snapshots_sync(
             price_cache,
             fx_rates,
             target_date=date_cursor,
+            fx_rates_cache=fx_rates_cache,
             price_cursors=price_cursors,
         )
         (
@@ -258,6 +271,7 @@ def _compute_daily_holdings_snapshots_sync(
                 invested_capital_eur=invested_capital,
                 realized_gains_eur=round(daily_realized_gains, 4),
                 unrealized_price_gains_eur=unrealized_price_gains,
+                realized_price_gains_eur=round(daily_realized_price_gains, 4),
                 portfolio_realized_gains={
                     k: round(v, 4) for k, v in daily_portfolio_gains.items()
                 },
@@ -290,7 +304,7 @@ def _load_securities(db_path: Path) -> dict[str, dict[str, Any]]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT uuid, currency_code, retired
+            SELECT uuid, currency_code, retired, last_price, last_price_date
             FROM securities
             """
         ).fetchall()
@@ -298,6 +312,8 @@ def _load_securities(db_path: Path) -> dict[str, dict[str, Any]]:
         row["uuid"]: {
             "currency": (row["currency_code"] or "EUR").strip().upper(),
             "retired": bool(row["retired"]),
+            "last_price": row["last_price"],
+            "last_price_date": row["last_price_date"],
         }
         for row in rows
         if row["uuid"]
@@ -450,8 +466,9 @@ def _group_transaction_adjustments(
 def _load_price_cache(
     db_path: Path,
     until: date | None = None,
+    securities: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, list[tuple[date, float, str]]]:
-    """Load historical prices into a security->sorted list cache."""
+    """Load historical prices into a security-sorted list cache."""
     cache: dict[str, list[tuple[date, float, str]]] = {}
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
@@ -487,6 +504,23 @@ def _load_price_cache(
         cache.setdefault(security_uuid, []).append(
             (price_date, normalized_price, str(raw_date))
         )
+
+    # Merge real-time prices from securities if available and more recent
+    if securities:
+        for sid, sec in securities.items():
+            last_price_raw = sec.get("last_price")
+            last_price_date_raw = sec.get("last_price_date")
+            if last_price_raw is not None and last_price_date_raw is not None:
+                lp_date = fx_module._parse_date_value(last_price_date_raw)  # noqa: SLF001
+                if lp_date and (not until or lp_date <= until):
+                    lp_val = normalize_raw_price(last_price_raw, decimals=6)
+                    if lp_val:
+                        existing = cache.get(sid, [])
+                        if not existing or lp_date > existing[-1][0]:
+                            existing.append(
+                                (lp_date, lp_val, f"rt:{last_price_date_raw}")
+                            )
+                            cache[sid] = existing
 
     # Note: Rows are already sorted by security_uuid and date in the SQL query.
     return cache
@@ -559,6 +593,7 @@ def _build_holdings_valuations(
     fx_rates: dict[str, float],
     *,
     target_date: date,
+    fx_rates_cache: dict[str, dict[str, float]] | None = None,
     price_cursors: dict[str, int] | None = None,
 ) -> list[HoldingValuation]:
     valuations: list[HoldingValuation] = []
@@ -582,7 +617,29 @@ def _build_holdings_valuations(
         if price_cursors is not None:
             price_cursors[security_uuid] = new_cursor
 
-        fx_rate: float | None = 1.0 if currency == "EUR" else fx_rates.get(currency)
+        # Determine FX rate:
+        # If price is stale and we have coverage, use FX rate from the price date
+        # to ensure value/price consistency (avoiding phantom FX volatility).
+        fx_rate: float | None = 1.0
+        used_fx_for_conversion = False
+
+        if currency == "EUR":
+            fx_rate = 1.0
+            used_fx_for_conversion = True
+        elif stale and price_date_raw and fx_rates_cache:
+            # Try to find FX rate for the specific price date
+            # price_date_raw comes from _resolve_price_for_date which returns
+            # ISO string or raw string.
+            # We assume it's ISO YYYY-MM-DD for cache lookup
+            cached_day = fx_rates_cache.get(str(price_date_raw).split("T")[0])
+            if cached_day and currency in cached_day:
+                fx_rate = cached_day[currency]
+                used_fx_for_conversion = True
+
+        if not used_fx_for_conversion:
+            # Fallback to current (target_date) FX rate or last known
+            fx_rate = fx_rates.get(currency)
+
         value_eur: float | None = None
         price_eur: float | None = None
         unrealized_price_gains_eur: float | None = None
@@ -591,15 +648,12 @@ def _build_holdings_valuations(
             price_eur = round(price_native / fx_rate, 6)
             value_eur = round(shares * price_eur, 6)
 
-            # Calculate Unrealized Gain from Price Movement (Native Delta * FX)
+            # Calculate Unrealized Gain from Price Movement (Native Delta / FX)
             # This strips out the pure FX gain on the principal.
             if purchase_value_native is not None:
                 market_value_native = shares * price_native
                 native_gain = market_value_native - purchase_value_native
                 unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
-                unrealized_price_gains_eur = round(
-                    value_eur - (purchase_value_eur or 0), 6
-                )
 
         valuations.append(
             HoldingValuation(
@@ -773,11 +827,11 @@ def _apply_transaction_update(
     holdings: dict[tuple[str, str], dict[str, Any]],
     tx_date: date,
     security_currency: str = "EUR",
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     """
     Apply a single transaction to holdings state.
 
-    Returns (realized_gain, neutral_movement).
+    Returns (realized_gain_total_eur, realized_gain_price_eur, neutral_movement_eur).
     """
     key = (portfolio_uuid, security_uuid)
     # Entry structure:
@@ -797,11 +851,11 @@ def _apply_transaction_update(
 
     entry = holdings[key]
 
-    # Resolving value of transaction in EUR at daily rate
-    # Resolving value of transaction in EUR at daily rate
-    tx_val_eur, tx_val_native, fees_eur, taxes_eur = _resolve_transaction_values(
+    # Resolving value of transaction in EUR and Native
+    vals = _resolve_transaction_values(
         amount, currency, fees, taxes, fx_rate_to_base, fx_rates, security_currency
     )
+    tx_val_eur, tx_val_native, fees_eur, fees_native, taxes_eur, taxes_native = vals
 
     neutral_movement = 0.0
     # Accumulate Performance Neutral Movements (Ein-/Auslieferung)
@@ -812,6 +866,7 @@ def _apply_transaction_update(
         neutral_movement = tx_val_eur * sign
 
     realized_gain = 0.0
+    realized_price_gain = 0.0
 
     # FIFO Logic
     if delta_shares > 0:
@@ -822,21 +877,33 @@ def _apply_transaction_update(
         shares_to_sell = abs(delta_shares)
 
         # Helper returns total cost basis of the sold shares
-        cost_basis_sold_eur, _ = _process_sell_lots(entry, shares_to_sell)
+        cost_basis_sold_eur, cost_basis_sold_native = _process_sell_lots(
+            entry, shares_to_sell
+        )
 
         # Realized Gain = Proceeds (Val in EUR) - Cost Basis (in EUR)
-        # Note: tx_val_eur is usually positive for "Sell" type (Type 1),
-        # but check sign convention. In common usage here, 'amount' is positive value.
-        # So Realized Gain = Sale Value - Cost Basis
         if tx_type in _REALIZED_GAIN_TYPES:
             # We want Gross Realized Gain: (Net Proceeds + Costs) - Cost Basis
-            gross_proceeds = tx_val_eur + fees_eur + taxes_eur
-            realized_gain = gross_proceeds - cost_basis_sold_eur
+            gross_proceeds_eur = tx_val_eur + fees_eur + taxes_eur
+            realized_gain = gross_proceeds_eur - cost_basis_sold_eur
+
+            # Price Gain = Gross Proceeds Native - Cost Basis Native, converted at
+            # today's rate.
+            gross_proceeds_native = tx_val_native + fees_native + taxes_native
+            realized_price_gain_native = gross_proceeds_native - cost_basis_sold_native
+
+            # Find current FX rate for conversion of native gain to EUR
+            tx_currency = (currency or "EUR").strip().upper()
+            fx = _get_effective_fx_rate(tx_currency, fx_rate_to_base, fx_rates)
+            if fx:
+                realized_price_gain = realized_price_gain_native / fx
+            else:
+                realized_price_gain = realized_gain
 
     if entry["shares"] <= _EPSILON:  # Filter dust
         holdings.pop(key, None)
 
-    return realized_gain, neutral_movement
+    return realized_gain, realized_price_gain, neutral_movement
 
 
 def _resolve_transaction_values(
@@ -847,7 +914,7 @@ def _resolve_transaction_values(
     fx_rate_to_base: float | None,
     fx_rates: dict[str, float],
     security_currency: str,
-) -> tuple[float, float, float, float]:
+) -> tuple[float, float, float, float, float, float]:
     """Calculate EUR and Native values for transaction components."""
     tx_currency = (currency or "EUR").strip().upper()
     fx = _get_effective_fx_rate(tx_currency, fx_rate_to_base, fx_rates)
@@ -856,10 +923,14 @@ def _resolve_transaction_values(
         amount, tx_currency, fx, security_currency, fx_rates
     )
 
-    fees_eur = _calculate_cost_in_eur(fees, fx)
-    taxes_eur = _calculate_cost_in_eur(taxes, fx)
+    fees_eur, fees_native = _calculate_transaction_amounts(
+        fees, tx_currency, fx, security_currency, fx_rates
+    )
+    taxes_eur, taxes_native = _calculate_transaction_amounts(
+        taxes, tx_currency, fx, security_currency, fx_rates
+    )
 
-    return tx_val_eur, tx_val_native, fees_eur, taxes_eur
+    return tx_val_eur, tx_val_native, fees_eur, fees_native, taxes_eur, taxes_native
 
 
 def _get_effective_fx_rate(

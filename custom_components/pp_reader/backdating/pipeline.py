@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any
 from custom_components.pp_reader.backdating.accounts import (
     async_compute_daily_account_snapshots,
 )
+from custom_components.pp_reader.currencies.fx import (
+    async_prepare_exchange_rates_for_backdating,
+)
 from custom_components.pp_reader.backdating.aggregate import build_daily_wealth_records
 from custom_components.pp_reader.backdating.cashflows import (
     async_compute_daily_cashflows,
@@ -194,6 +197,16 @@ async def async_run_backdating_rebuild(
             trigger,
         )
         try:
+            # Ensure FX rates are available for the entire window
+            await async_prepare_exchange_rates_for_backdating(
+                hass,
+                Path(db_path),
+                until=plan.end_date,
+                emit_progress=(
+                    lambda stage, payload: _emit(f"fx_{stage}", **payload)
+                ),
+            )
+
             holdings = await async_compute_daily_holdings_snapshots(
                 hass,
                 db_path,

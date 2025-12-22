@@ -5,7 +5,6 @@
 import { renderLineChart, updateLineChart, type LineChartOptions } from '../content/charting';
 import { DateRangePicker, type DateRange } from '../content/date-range-picker';
 import { createHeaderCard, formatNumber } from '../content/elements';
-import { escapeAttribute, escapeHtml } from '../utils/html';
 import type {
   DailyWealthRecord,
   DailyWealthResponse,
@@ -19,6 +18,7 @@ import {
   type DailyWealthState,
 } from '../data/dailyWealthStore';
 import type { HomeAssistant } from '../types/home-assistant';
+import { escapeAttribute, escapeHtml } from '../utils/html';
 import type { PanelConfigLike } from './types';
 
 
@@ -27,6 +27,7 @@ type PerformanceRowKey =
   | 'endValue'
   | 'marketGain'
   | 'realizedGains'
+  | 'unrealizedGains'
   | 'unrealizedPriceGains'
   | 'fxGains'
   | 'dividends'
@@ -81,6 +82,13 @@ function toIsoDateString(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${String(year)}-${month}-${day}`;
+}
+
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${String(year)}-${month}-${day}`;
 }
 
@@ -213,7 +221,7 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
       ${mkRow('Anfangswert', bd.startValue, '', 'perf-startValue')}
       ${mkRow('Kurserfolge (Gesamt)', bd.marketGain, 'sub-header')}
       ${mkRow('&nbsp;&nbsp;↳ Realisiert', bd.realizedGains, 'indent')}
-      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert', bd.unrealizedPriceGains, 'indent')}
+      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert', bd.unrealizedGains, 'indent')}
       ${mkRow('Dividenden', bd.dividends)}
       ${mkRow('Zinsen', bd.interest)}
       ${mkRow('Gebühren', bd.fees)}
@@ -515,31 +523,73 @@ function renderWealthChart(chartCard: HTMLElement, data: DailyWealthResponse): v
 }
 
 
+/**
+ * Derive performance metrics from a sequence of daily wealth records.
+ * The first record (index 0) is treated as the baseline (morning of start date).
+ * Subsequent records are treated as the activity within the selected period.
+ */
 function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown | null {
-  if (!records.length) {
+  if (records.length < 1) {
     return null;
   }
-  const startValue = records[0]?.total_wealth_eur ?? 0;
-  const endValue = records[records.length - 1]?.total_wealth_eur ?? 0;
-  const dividends = sumField(records, 'dividends_eur');
-  const interest = sumField(records, 'interest_eur');
+
+  // Baseline is the state at the end of the day BEFORE the period starts.
+  // This represents the "Morning of start date" value.
+  const baseline = records[0];
+  const startValue = baseline.total_wealth_eur;
+
+  // If we only have one record, it means start-1 was requested but we only got one day.
+  // Or the range was just one day and we have no baseline.
+  // In this case, we have to treat startValue as 0 or the first record's value.
+  const periodRecords = records.length > 1 ? records.slice(1) : records;
+  const latest = records[records.length - 1];
+  const endValue = latest.total_wealth_eur;
+
+  // Period Cashflows
+  const dividends = sumField(periodRecords, 'dividends_eur');
+  const interest = sumField(periodRecords, 'interest_eur');
   const ertraege = dividends + interest;
-  const fees = -Math.abs(sumField(records, 'fees_eur'));
-  const taxes = -Math.abs(sumField(records, 'taxes_eur'));
-  const netTransfers = sumField(records, 'inbound_transfers_eur') - sumField(records, 'outbound_transfers_eur');
-  const neutral = sumField(records, 'performance_neutral_movements');
+  const fees = -Math.abs(sumField(periodRecords, 'fees_eur'));
+  const taxes = -Math.abs(sumField(periodRecords, 'taxes_eur'));
+  const netTransfers = sumField(periodRecords, 'inbound_transfers_eur') - sumField(periodRecords, 'outbound_transfers_eur');
+  const neutral = sumField(periodRecords, 'performance_neutral_movements');
 
-  const marketGain = endValue - startValue - ertraege - fees - taxes - netTransfers - neutral;
+  // Total Delta = E - A
+  const delta = endValue - startValue;
+  // Total Performance = Delta - Neutral Capital Movements (Transfers + Deliveries)
+  const totalPerformance = delta - (netTransfers + neutral);
 
-  const realizedGains = sumField(records, 'realized_gains_eur');
-  const unrealizedPriceGains = sumField(records, 'unrealized_price_gains_eur');
-  const fxGains = sumField(records, 'fx_gains_eur');
+  // Realized Gains during Period (Gross since purchase for all items sold)
+  const realizedGains = sumField(periodRecords, 'realized_gains_eur');
+
+  // Unrealized Gains during Period = (ValueEnd - CapitalEnd) - (ValueStart - CapitalStart)
+  // Note: For shares bought during the period, (ValueStart - CapitalStart) is 0.
+  // This captures the change in valuation for items held throughout, and the full gain for items bought during.
+  // Use unrealized_gains_eur (total including FX) not unrealized_price_gains_eur (price-only)
+  const uEnd = latest.unrealized_gains_eur ?? 0;
+  const uStart = records.length > 1 ? baseline.unrealized_gains_eur ?? 0 : 0;
+  const unrealizedGains = uEnd - uStart;
+
+  // For display: also track price-only component
+  const uPriceEnd = latest.unrealized_price_gains_eur ?? 0;
+  const uPriceStart = records.length > 1 ? baseline.unrealized_price_gains_eur ?? 0 : 0;
+  const unrealizedPriceGains = uPriceEnd - uPriceStart;
+
+  // Kurserfolge (Gesamt) = Realized + Period Unrealized Change (both include FX)
+  // This is the total gain on all security positions.
+  const marketGain = realizedGains + unrealizedGains;
+
+  // FX-Veränderung = Residual balance
+  // (Everything that is not accounted for by Kurserfolge, Dividends, Interest, Fees, Taxes)
+  // This typically represents FX gains on cash accounts or rounding.
+  const fxGains = totalPerformance - marketGain - ertraege - fees - taxes;
 
   return {
     startValue,
     endValue,
     marketGain,
     realizedGains,
+    unrealizedGains,
     unrealizedPriceGains,
     fxGains,
     dividends,
@@ -566,7 +616,26 @@ async function loadAndRender(
   selection: DailyWealthSelection,
 ): Promise<void> {
   setStatus(card, 'loading');
-  const state = await loadDailyWealth(hass, panelConfig, selection);
+
+  // Request an extended range: start minus 1 day to end.
+  // This gives us the baseline record for the "Morning of start date" (end of start-1).
+  let fetchSelection = selection;
+  if (selection.range) {
+    // Parse the ISO date string and subtract one day
+    const startParts = selection.range.start.split('-').map(Number);
+    const startDate = new Date(Date.UTC(startParts[0], startParts[1] - 1, startParts[2]));
+    startDate.setUTCDate(startDate.getUTCDate() - 1);
+
+    fetchSelection = {
+      ...selection,
+      range: {
+        start: toIsoDateString(startDate),
+        end: selection.range.end,
+      },
+    };
+  }
+
+  const state = await loadDailyWealth(hass, panelConfig, fetchSelection);
 
   if (state.status === 'error') {
     setStatus(card, 'error', state.error ?? undefined);
@@ -600,9 +669,22 @@ async function loadAndRender(
   lastWealthData = data;
   ensureScopeSelection(data.slices);
 
-  const label = selection.range
-    ? `Zeitraum: ${selection.range.start} – ${selection.range.end}`
-    : (selection.date ? `Tag: ${selection.date}` : '');
+  // Display the actual analyzed period (first and last record dates)
+  // Not the fetch range which includes an extra baseline day
+  let label = '';
+  if (data.records.length > 1) {
+    // Skip the baseline record (index 0) when displaying the period
+    const firstRecord = data.records[1];
+    const lastRecord = data.records[data.records.length - 1];
+    label = `Zeitraum: ${firstRecord.date} – ${lastRecord.date}`;
+  } else if (data.records.length === 1) {
+    // Single day - use the only record
+    label = `Tag: ${data.records[0].date}`;
+  } else if (selection.range) {
+    label = `Zeitraum: ${selection.range.start} – ${selection.range.end}`;
+  } else if (selection.date) {
+    label = `Tag: ${selection.date}`;
+  }
   renderTotals(card, label, data.records);
   renderMetrics(card, data.records);
 
@@ -642,8 +724,8 @@ function initRangeCard(
       onChange: (range) => {
         const selection: DailyWealthSelection = {
           range: {
-            start: toIsoDateString(range.start),
-            end: toIsoDateString(range.end),
+            start: toLocalDateString(range.start),
+            end: toLocalDateString(range.end),
           },
           includeSlices: true,
           includeScopes: true,

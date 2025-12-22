@@ -433,7 +433,7 @@ async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> 
 
     try:
         cache_bust = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-        module_url = f"/pp_reader_dashboard/panel.js?v={cache_bust}"
+        module_url = f"/pp_reader_dashboard/panel.js?v2={cache_bust}"
         panel_config = _build_panel_config(
             module_url,
             entry_id=entry.entry_id,

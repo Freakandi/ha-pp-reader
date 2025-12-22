@@ -73,12 +73,12 @@ async def async_compute_daily_account_snapshots(
         message = "start_date must be on or before end_date"
         raise ValueError(message)
 
-    await fx_module.async_prepare_exchange_rates_for_backdating(
-        hass,
-        db_path,
-        until=end_date,
-        emit_progress=emit_progress,
-    )
+    # await fx_module.async_prepare_exchange_rates_for_backdating(
+    #     hass,
+    #     db_path,
+    #     until=end_date,
+    #     emit_progress=emit_progress,
+    # )
 
     return await async_run_executor_job(
         hass,
@@ -119,10 +119,23 @@ def _compute_daily_account_snapshots_sync(
                     balances_cents.get(account_uuid, 0) + delta
                 )
 
-    # Pre-load FX rates for the main loop to avoid N+1 queries
+    # Initialize FX fallback cache with 1.0 for EUR
+    last_known_fx_rates: dict[str, float] = {"EUR": 1.0}
+
+    # Pre-load FX rates including a lookback to seed the latch (for weekends/holidays)
+    lookback_days = 7
+    cache_start = start_date - timedelta(days=lookback_days)
+
     fx_rates_cache = fx_module.load_fx_rates_cache_range(
-        db_path, start_date.isoformat(), end_date.isoformat()
+        db_path, cache_start.isoformat(), end_date.isoformat()
     )
+
+    # Seed the latch by replaying the lookback period
+    seed_cursor = cache_start
+    while seed_cursor < start_date:
+        if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
+            last_known_fx_rates.update(day_rates)
+        seed_cursor += timedelta(days=1)
 
     date_cursor = start_date
 
@@ -131,11 +144,13 @@ def _compute_daily_account_snapshots_sync(
             balances_cents[account_uuid] = balances_cents.get(account_uuid, 0) + delta
 
         date_iso = date_cursor.isoformat()
-        fx_rates = fx_rates_cache.get(date_iso, {})
-        # Ensure we don't mutate the cached dictionary by creating a new one
-        # if we need to add EUR
-        if "EUR" not in fx_rates:
-            fx_rates = {**fx_rates, "EUR": 1.0}
+        daily_fx_rates = fx_rates_cache.get(date_iso, {})
+
+        # Update fallback cache with any available rates for today
+        last_known_fx_rates.update(daily_fx_rates)
+
+        # Use fallback/latch
+        fx_rates = last_known_fx_rates
 
         accounts_snapshot = _build_account_valuations(
             balances_cents,

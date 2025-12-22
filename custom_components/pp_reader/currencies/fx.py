@@ -584,9 +584,18 @@ def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
             except ValueError:
                 return None
         # Handle epoch days (e.g. 19733 for 2024-01-12)
-        # 10000 days is around 1997. 50000 is 2106.
-        if 0 <= int(text_value) <= MAX_EPOCH_DAY_CUTOFF:
-            return date(1970, 1, 1) + timedelta(days=int(text_value))
+        # 10000 days is around 1997. 100000 is 2243.
+        numeric_val = int(text_value)
+        if 0 <= numeric_val <= MAX_EPOCH_DAY_CUTOFF:
+            return date(1970, 1, 1) + timedelta(days=numeric_val)
+
+        # Handle Unix timestamps (e.g. 1700000000 for 2023-11-14).
+        # Any value larger than MAX_EPOCH_DAY_CUTOFF is assumed to be a
+        # timestamp in seconds.
+        try:
+            return datetime.fromtimestamp(numeric_val, tz=UTC).date()
+        except (ValueError, OSError, OverflowError):
+            pass
 
     sanitized = text_value.replace("Z", "+00:00")
     try:
@@ -669,10 +678,12 @@ def build_fx_schedule_from_bounds(
     effective_until = until or datetime.now(UTC).date()
     schedule: dict[date, set[str]] = {}
 
-    for currency, (start_date, end_date) in bounds.items():
+    for currency, (start_date, _) in bounds.items():
         if start_date > effective_until:
             continue
-        horizon = min(end_date, effective_until)
+        # Always extend to the target date (now) to ensure open positions are covered.
+        # Relying on transaction bounds (end_date) is dangerous for buy-and-hold portfolios.
+        horizon = effective_until
         for day in _iter_dates(start_date, horizon):
             schedule.setdefault(day, set()).add(currency)
 
@@ -891,11 +902,15 @@ async def async_prepare_exchange_rates_for_backdating(
 
     Returns ISO-date -> coverage ratio mapping for the planned window.
     """
+    print(f"DEBUG: async_prepare_exchange_rates_for_backdating db={db_path} until={until}")
     bounds = discover_currency_date_bounds(db_path)
+    print(f"DEBUG: bounds={bounds}")
     if not bounds:
         return {}
 
     schedule = build_fx_schedule_from_bounds(bounds, until=until)
+    print(f"DEBUG: schedule keys count={len(schedule)}")
+
     return await async_ensure_exchange_rates_for_schedule(
         hass,
         db_path,
