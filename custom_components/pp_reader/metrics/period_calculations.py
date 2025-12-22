@@ -1,3 +1,5 @@
+"""Module for calculating period-specific realized gains."""
+
 
 import logging
 import sqlite3

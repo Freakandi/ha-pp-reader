@@ -682,7 +682,8 @@ def build_fx_schedule_from_bounds(
         if start_date > effective_until:
             continue
         # Always extend to the target date (now) to ensure open positions are covered.
-        # Relying on transaction bounds (end_date) is dangerous for buy-and-hold portfolios.
+        # Relying on transaction bounds (end_date) is dangerous for buy-and-hold
+        # portfolios.
         horizon = effective_until
         for day in _iter_dates(start_date, horizon):
             schedule.setdefault(day, set()).add(currency)
@@ -902,14 +903,11 @@ async def async_prepare_exchange_rates_for_backdating(
 
     Returns ISO-date -> coverage ratio mapping for the planned window.
     """
-    print(f"DEBUG: async_prepare_exchange_rates_for_backdating db={db_path} until={until}")
     bounds = discover_currency_date_bounds(db_path)
-    print(f"DEBUG: bounds={bounds}")
     if not bounds:
         return {}
 
     schedule = build_fx_schedule_from_bounds(bounds, until=until)
-    print(f"DEBUG: schedule keys count={len(schedule)}")
 
     return await async_ensure_exchange_rates_for_schedule(
         hass,

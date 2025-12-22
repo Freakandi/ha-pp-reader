@@ -14,9 +14,6 @@ from typing import TYPE_CHECKING, Any
 from custom_components.pp_reader.backdating.accounts import (
     async_compute_daily_account_snapshots,
 )
-from custom_components.pp_reader.currencies.fx import (
-    async_prepare_exchange_rates_for_backdating,
-)
 from custom_components.pp_reader.backdating.aggregate import build_daily_wealth_records
 from custom_components.pp_reader.backdating.cashflows import (
     async_compute_daily_cashflows,
@@ -25,6 +22,9 @@ from custom_components.pp_reader.backdating.holdings import (
     async_compute_daily_holdings_snapshots,
 )
 from custom_components.pp_reader.backdating.persist import persist_daily_wealth
+from custom_components.pp_reader.currencies.fx import (
+    async_prepare_exchange_rates_for_backdating,
+)
 from custom_components.pp_reader.util import async_run_executor_job
 
 if TYPE_CHECKING:
@@ -225,11 +225,6 @@ async def async_run_backdating_rebuild(
                 db_path,
                 plan.start_date,
                 plan.end_date,
-                emit_progress=(
-                    lambda stage, payload: _emit(
-                        f"backdating_accounts_{stage}", **payload
-                    )
-                ),
             )
             _emit("backdating_accounts_completed", days=len(accounts))
 
@@ -238,11 +233,6 @@ async def async_run_backdating_rebuild(
                 db_path,
                 plan.start_date,
                 plan.end_date,
-                emit_progress=(
-                    lambda stage, payload: _emit(
-                        f"backdating_cashflows_{stage}", **payload
-                    )
-                ),
             )
             _emit("backdating_cashflows_completed", days=len(cashflows))
 

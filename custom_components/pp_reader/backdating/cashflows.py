@@ -67,20 +67,11 @@ async def async_compute_daily_cashflows(
     db_path: Path,
     start_date: date,
     end_date: date,
-    *,
-    emit_progress: Callable[[str, Mapping[str, Any]], None] | None = None,
 ) -> list[DailyCashflowSnapshot]:
     """Async wrapper to ensure FX coverage and compute daily cashflow buckets."""
     if start_date > end_date:
         message = "start_date must be on or before end_date"
         raise ValueError(message)
-
-    # await fx_module.async_prepare_exchange_rates_for_backdating(
-    #     hass,
-    #     db_path,
-    #     until=end_date,
-    #     emit_progress=emit_progress,
-    # )
 
     return await async_run_executor_job(
         hass,

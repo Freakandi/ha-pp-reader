@@ -153,7 +153,8 @@ def _compute_daily_holdings_snapshots_sync(
     )
 
     # Explicitly seed the latch from the lookback period up to start_date
-    # This handles cases where no transactions occurred recently but we need valid FX (e.g. Price Stale check)
+    # This handles cases where no transactions occurred recently but we need valid FX
+    # (e.g. Price Stale check)
     seed_cursor = lookback_start
     while seed_cursor < start_date:
         if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
@@ -880,7 +881,9 @@ def _apply_transaction_update(
         cost_basis_eur = tx_val_eur + fees_eur + taxes_eur
         cost_basis_native = tx_val_native + fees_native + taxes_native
 
-        _process_buy_lots(entry, delta_shares, cost_basis_eur, cost_basis_native, tx_date)
+        _process_buy_lots(
+            entry, delta_shares, cost_basis_eur, cost_basis_native, tx_date
+        )
 
     else:
         # SELL: Reduce shares, consume lots FIFO
