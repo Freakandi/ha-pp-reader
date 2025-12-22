@@ -30,6 +30,9 @@ from custom_components.pp_reader.data.normalized_store import (
 from custom_components.pp_reader.logic.securities import (
     calculate_realized_performance,
 )
+from custom_components.pp_reader.metrics.period_calculations import (
+    calculate_period_realized_gains,
+)
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
 from custom_components.pp_reader.util.datetime import UTC
@@ -1412,7 +1415,7 @@ async def _fetch_daily_wealth_slices(
 
 @websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
 @websocket_api.async_response
-async def ws_get_daily_wealth(  # noqa: PLR0912
+async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     hass: HomeAssistant,
     connection: ActiveConnection,
     msg: dict[str, Any],
@@ -1491,6 +1494,31 @@ async def ws_get_daily_wealth(  # noqa: PLR0912
         return
 
     records = [_serialize_daily_wealth(rec) for rec in totals]
+
+    # --- Period-Specific Realized Gains Calculation ---
+    # Standard daily_wealth stores absolute realized gains (Buy->Sell).
+    # For Period views, we need gains relative to the Period Start Value.
+    if params.start_date and params.end_date:
+        try:
+            period_gains = await async_run_executor_job(
+                hass,
+                calculate_period_realized_gains,
+                db_path,
+                params.start_date,
+                params.end_date
+            )
+            # Inject into records
+            for rec in records:
+                iso = rec["date"]
+                if iso in period_gains:
+                    rec["realized_gains_eur"] = period_gains[iso]
+                else:
+                    # If no sell on this day, period realized gain is 0.
+                    # Note: DB realized_gains_eur might be non-zero (absolute gain).
+                    # We must overwrite it to 0 to be consistent with Period View.
+                    rec["realized_gains_eur"] = 0.0
+        except Exception:
+            _LOGGER.exception("Failed to calculate period realized gains")
 
     # PP Alignment: "Start Date" wealth is the baseline (End of Day).
     # Flows occurring ON the start date should be excluded from period summation.
