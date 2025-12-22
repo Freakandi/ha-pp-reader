@@ -227,7 +227,14 @@ def _compute_daily_holdings_snapshots_sync(
 
         date_iso = date_cursor.isoformat()
         # fx_rates already loaded above
-        valuations = _build_holdings_valuations(
+        (
+            valuations,
+            price_coverage_ratio,
+            fx_coverage_ratio,
+            stale_price,
+            total_wealth,
+            unrealized_price_gains,
+        ) = _build_valuations_and_aggregate(
             holdings.items(),
             securities,
             price_cache,
@@ -235,13 +242,6 @@ def _compute_daily_holdings_snapshots_sync(
             target_date=date_cursor,
             price_cursors=price_cursors,
         )
-        (
-            price_coverage_ratio,
-            fx_coverage_ratio,
-            stale_price,
-            total_wealth,
-            unrealized_price_gains,
-        ) = _aggregate_holdings_metrics(valuations)
 
         invested_capital = round(
             sum(v["purchase_value_eur"] for v in holdings.values()), 4
@@ -552,7 +552,7 @@ def _resolve_price_for_date(
     return selected_price, selected_raw or selected_date.isoformat(), stale, idx
 
 
-def _build_holdings_valuations(
+def _build_valuations_and_aggregate(
     holdings: Iterable[tuple[tuple[str, str], dict[str, float]]],
     securities: dict[str, dict[str, Any]],
     price_cache: dict[str, list[tuple[date, float, str]]],
@@ -560,9 +560,25 @@ def _build_holdings_valuations(
     *,
     target_date: date,
     price_cursors: dict[str, int] | None = None,
-) -> list[HoldingValuation]:
+) -> tuple[list[HoldingValuation], float, float, bool, float, float]:
+    """
+    Build valuations and compute aggregated metrics in a single pass.
+
+    Returns:
+        (valuations, price_coverage_ratio, fx_coverage_ratio, stale_price,
+         total_wealth_eur, unrealized_price_gains_eur)
+    """
     valuations: list[HoldingValuation] = []
+
+    count = 0
+    covered_price = 0
+    covered_fx = 0
+    stale_price_flag = False
+    total_wealth = 0.0
+    total_unrealized_price_gains = 0.0
+
     for (portfolio_uuid, security_uuid), details in holdings:
+        count += 1
         shares = details["shares"]
         purchase_value_eur = details.get("purchase_value_eur")
         purchase_value_native = details.get("purchase_value_native")
@@ -587,19 +603,27 @@ def _build_holdings_valuations(
         price_eur: float | None = None
         unrealized_price_gains_eur: float | None = None
 
-        if price_native is not None and fx_rate:
-            price_eur = round(price_native / fx_rate, 6)
-            value_eur = round(shares * price_eur, 6)
+        if price_native is not None:
+            covered_price += 1
+            if fx_rate:
+                price_eur = round(price_native / fx_rate, 6)
+                value_eur = round(shares * price_eur, 6)
+                total_wealth += value_eur
 
-            # Calculate Unrealized Gain from Price Movement (Native Delta * FX)
-            # This strips out the pure FX gain on the principal.
-            if purchase_value_native is not None:
-                market_value_native = shares * price_native
-                native_gain = market_value_native - purchase_value_native
-                unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
-                unrealized_price_gains_eur = round(
-                    value_eur - (purchase_value_eur or 0), 6
-                )
+                # Calculate Unrealized Gain from Price Movement (Native Delta * FX)
+                # This strips out the pure FX gain on the principal.
+                if purchase_value_native is not None:
+                    # Optimized: removed redundant calculations here
+                    unrealized_price_gains_eur = round(
+                        value_eur - (purchase_value_eur or 0), 6
+                    )
+                    total_unrealized_price_gains += unrealized_price_gains_eur
+
+        if currency == "EUR" or fx_rate:
+            covered_fx += 1
+
+        if stale:
+            stale_price_flag = True
 
         valuations.append(
             HoldingValuation(
@@ -627,7 +651,17 @@ def _build_holdings_valuations(
             )
         )
 
-    return valuations
+    if count == 0:
+        return valuations, 1.0, 1.0, False, 0.0, 0.0
+
+    return (
+        valuations,
+        round(covered_price / count, 3),
+        round(covered_fx / count, 3),
+        stale_price_flag,
+        round(total_wealth, 4),
+        round(total_unrealized_price_gains, 4),
+    )
 
 
 def _process_buy_lots(
@@ -711,52 +745,6 @@ def _process_sell_lots(
         entry["purchase_value_native"] = 0.0
 
     return cost_sold_eur, cost_sold_native
-
-
-def _aggregate_holdings_metrics(
-    valuations: list[HoldingValuation],
-) -> tuple[float, float, bool, float, float]:
-    """
-    Compute aggregated metrics for a list of valuations in a single pass.
-
-    Returns:
-        (price_coverage_ratio, fx_coverage_ratio, stale_price,
-         total_wealth_eur, unrealized_price_gains_eur)
-
-    """
-    if not valuations:
-        return 1.0, 1.0, False, 0.0, 0.0
-
-    count = len(valuations)
-    covered_price = 0
-    covered_fx = 0
-    stale_price = False
-    total_wealth = 0.0
-    unrealized_price_gains = 0.0
-
-    for v in valuations:
-        if v.price_native is not None:
-            covered_price += 1
-
-        if v.currency == "EUR" or v.fx_rate:
-            covered_fx += 1
-
-        if v.stale_price:
-            stale_price = True
-
-        if v.value_eur is not None:
-            total_wealth += v.value_eur
-
-        if v.unrealized_price_gains_eur is not None:
-            unrealized_price_gains += v.unrealized_price_gains_eur
-
-    return (
-        round(covered_price / count, 3),
-        round(covered_fx / count, 3),
-        stale_price,
-        round(total_wealth, 4),
-        round(unrealized_price_gains, 4),
-    )
 
 
 def _apply_transaction_update(
@@ -889,8 +877,8 @@ def _calculate_transaction_amounts(
     if amount <= 0:
         return tx_val_eur, tx_val_native
 
-    # cent_to_eur helps handling rounding consistency
-    tx_val_txn_curr = cent_to_eur(amount) or 0.0
+    # Fast path: amount is int cents, avoid cent_to_eur overhead
+    tx_val_txn_curr = amount / 100.0
 
     if fx:
         tx_val_eur = tx_val_txn_curr / fx
@@ -911,7 +899,8 @@ def _calculate_cost_in_eur(cost_cents: int, fx: float) -> float:
     """Convert a cost (fees/taxes) from transaction currency to EUR."""
     if cost_cents <= 0:
         return 0.0
-    val_native = cent_to_eur(cost_cents) or 0.0
+    # Fast path: cost_cents is int, avoid cent_to_eur overhead
+    val_native = cost_cents / 100.0
     if fx:
         return val_native / fx
     return 0.0
