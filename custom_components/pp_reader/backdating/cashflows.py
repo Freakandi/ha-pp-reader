@@ -15,7 +15,7 @@ from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import cent_to_eur
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.cashflows")
@@ -311,7 +311,7 @@ def _classify_transaction(
     return None, 0
 
 
-def _process_transaction(
+def _process_transaction(  # noqa: PLR0912
     tx: db_access.Transaction,
     fx_rates: Mapping[str, float],
     curr_buckets: dict[str, float],

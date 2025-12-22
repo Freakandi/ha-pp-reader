@@ -111,7 +111,7 @@ async def async_compute_daily_holdings_snapshots(
     )
 
 
-def _compute_daily_holdings_snapshots_sync(
+def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
     db_path: Path,
     start_date: date,
     end_date: date,

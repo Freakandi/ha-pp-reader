@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
 from custom_components.pp_reader.currencies import fx as fx_module
