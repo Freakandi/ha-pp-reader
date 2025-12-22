@@ -43,10 +43,11 @@ def _make_transaction(
 
 def _patch_fx(monkeypatch: pytest.MonkeyPatch, rate: float) -> None:
     """Stub FX helpers used during purchase aggregation."""
+    # Patch the function where it is IMPORTED in the module under test
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda dates, currencies, db_path, conn=None: None,
     )
     monkeypatch.setattr(
         securities,
@@ -60,7 +61,7 @@ def _patch_fx_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda dates, currencies, db_path, conn=None: None,
     )
     monkeypatch.setattr(
         securities,
