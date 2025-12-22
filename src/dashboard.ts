@@ -11,7 +11,6 @@ import {
   unregisterPanelHost,
 } from './dashboard/registry';
 import { getEntryId } from './data/api';
-import { escapeHtml } from './utils/html';
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -28,9 +27,9 @@ import {
   updatePortfolioFooterFromDom,
 } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
-import { registerTradeDetailTab } from './tabs/trade_detail';
 import { renderAnalyse } from './tabs/time_series';
-import { renderTrades } from './tabs/trades';
+import { registerTradeDetailTab } from './tabs/trade_detail';
+import { renderTrades, setOpenTradeDetail } from './tabs/trades';
 import type {
   DashboardTabDescriptor,
   PanelConfigLike,
@@ -43,8 +42,9 @@ import type {
   HassUnsubscribe,
   HomeAssistant,
 } from './types/home-assistant';
+import { escapeHtml } from './utils/html';
 
-export { __TEST_ONLY__, flushPendingPositions, handlePortfolioPositionsUpdate, reapplyPositionsSort, registerDashboardElement, registerPanelHost, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom, openSecurityDetail, openTradeDetail, closeSecurityDetail, closeTradeDetail, getVisibleTabs, setTradeDetailTabFactory };
+export { __TEST_ONLY__, closeSecurityDetail, closeTradeDetail, flushPendingPositions, getVisibleTabs, handlePortfolioPositionsUpdate, openSecurityDetail, openTradeDetail, reapplyPositionsSort, registerDashboardElement, registerPanelHost, setTradeDetailTabFactory, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom };
 
 type AddSwipeEvents = (
   element: HTMLElement,
@@ -1368,8 +1368,10 @@ if (!customElements.get('pp-reader-dashboard')) {
 }
 
 console.log('PPReader dashboard module v20250914b geladen');
-
 registerSecurityDetailTab({
   setSecurityDetailTabFactory,
 });
-registerTradeDetailTab();
+registerTradeDetailTab({
+  setTradeDetailTabFactory,
+});
+setOpenTradeDetail(openTradeDetail);

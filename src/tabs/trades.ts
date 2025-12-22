@@ -4,13 +4,19 @@
 
 import type { TableRow } from '../content/elements';
 import { createHeaderCard, makeTable } from '../content/elements';
-import { openTradeDetail } from '../dashboard';
+// import { openTradeDetail } from '../dashboard';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
 import type { HomeAssistant } from '../types/home-assistant';
 import { formatCurrency, formatDate, formatNumber, formatPercent } from '../utils/format';
 import { escapeAttribute, escapeHtml } from '../utils/html';
 import type { PanelConfigLike } from './types';
+// Circular dependency breaker
+let openTradeDetailArg: ((uuid: string) => boolean) | null = null;
+
+export function setOpenTradeDetail(fn: (uuid: string) => boolean) {
+  openTradeDetailArg = fn;
+}
 
 // CSS for stacked columns and sorting
 const STYLES = `
@@ -423,8 +429,11 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
     if (tradeNameLink) {
       event.stopPropagation();
       const uuid = (tradeNameLink as HTMLElement).dataset.securityUuid;
-      if (uuid) {
-        openTradeDetail(uuid);
+
+      if (uuid && openTradeDetailArg) {
+        openTradeDetailArg(uuid);
+      } else if (!openTradeDetailArg) {
+        console.warn('openTradeDetail callback not set');
       }
       return;
     }
@@ -523,7 +532,10 @@ export async function renderTrades(
 
   // Attach event listeners after rendering
   setTimeout(() => {
-    attachEventListeners(root, trades);
+    const wrapper = root.querySelector<HTMLElement>('.trades-view-wrapper');
+    if (wrapper) {
+      attachEventListeners(wrapper, trades);
+    }
   }, 0);
 
   return markup;
