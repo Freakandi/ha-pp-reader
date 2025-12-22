@@ -91,12 +91,16 @@ async def async_compute_daily_holdings_snapshots(
         message = "start_date must be on or before end_date"
         raise ValueError(message)
 
-    # await fx_module.async_prepare_exchange_rates_for_backdating(
-    #     hass,
-    #     db_path,
-    #     until=end_date,
-    #     emit_progress=emit_progress,
-    # )
+    bounds = await async_run_executor_job(
+        hass, fx_module.discover_currency_date_bounds, db_path
+    )
+    schedule = fx_module.build_fx_schedule_from_bounds(bounds, until=end_date)
+    await fx_module.async_ensure_exchange_rates_for_schedule(
+        hass,
+        db_path,
+        schedule,
+        emit_progress=emit_progress,
+    )
 
     return await async_run_executor_job(
         hass,
