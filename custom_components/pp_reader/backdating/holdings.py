@@ -870,7 +870,21 @@ def _apply_transaction_update(
 
     # FIFO Logic
     if delta_shares > 0:
-        _process_buy_lots(entry, delta_shares, tx_val_eur, tx_val_native, tx_date)
+        # BUY: Cost basis should be principal only (excluding fees/taxes)
+        # because fees/taxes are already accounted for in respective buckets.
+        # Amount (Debit) usually includes Fees+Taxes, so we subtract them.
+        principal_eur = tx_val_eur
+        principal_native = tx_val_native
+
+        # Ensure we don't subtract if they weren't included (sanity check?)
+        # Generally amount = principal + fees + taxes for a buy debit.
+        if tx_val_eur > fees_eur + taxes_eur:
+             principal_eur = tx_val_eur - fees_eur - taxes_eur
+
+        if tx_val_native > fees_native + taxes_native:
+             principal_native = tx_val_native - fees_native - taxes_native
+
+        _process_buy_lots(entry, delta_shares, principal_eur, principal_native, tx_date)
 
     else:
         # SELL: Reduce shares, consume lots FIFO
@@ -884,6 +898,8 @@ def _apply_transaction_update(
         # Realized Gain = Proceeds (Val in EUR) - Cost Basis (in EUR)
         if tx_type in _REALIZED_GAIN_TYPES:
             # We want Gross Realized Gain: (Net Proceeds + Costs) - Cost Basis
+            # Net Proceeds (Cash Credit) = Principal - Fees - Taxes
+            # So Principal (Gross Proceeds) = Net Proceeds + Fees + Taxes
             gross_proceeds_eur = tx_val_eur + fees_eur + taxes_eur
             realized_gain = gross_proceeds_eur - cost_basis_sold_eur
 
