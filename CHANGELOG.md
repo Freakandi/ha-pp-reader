@@ -34,6 +34,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Concurrency**: Resolved "database is locked" errors during high-concurrency sync operations (part of general stability improvements).
 - **Security**: Fixed potential XSS vulnerabilities in error rendering and Trades tab data display.
 - **Calculations**: Fixed `TypeError` in `async_run_executor_job` usage for realized performance calculations and resolved currency mismatches in "Since Sell" metrics.
+- **Push Updates**: Fixed bug where push updates from live price fetches would cause portfolio tables to lose their stacked column formatting and fall back to single-line rendering. The `handlePortfolioUpdate` function now correctly updates stacked cells (Value Combo, Day Combo, Gain Combo) instead of expecting the old 8-column structure.
 
 ### Internal
 - **Documentation**: Updated `AGENT_HANDBOOK.md`, `ARCHITECTURE.md`, `README.md`, and `README-dev.md` to reflect latest workflows and setup instructions.

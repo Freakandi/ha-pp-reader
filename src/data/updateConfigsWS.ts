@@ -2,33 +2,10 @@
  * Live update handlers mirrored from the legacy websocket client.
  */
 
-import { makeTable } from '../content/elements';
-import { sortTableRows } from '../content/elements'; // NEU: generische Sortier-Utility
-import { formatValue } from '../content/elements';
 import type { SortDirection } from '../content/elements';
-import { escapeHtml } from '../utils/html';
+import { formatValue, makeTable, sortTableRows } from '../content/elements';
 import { getOverviewHelpers } from '../dashboard/registry';
 import { deserializePortfolioSnapshot } from '../lib/api/portfolio';
-import type {
-  PerformanceMetricsPayload,
-  PortfolioPositionsUpdatedEventDetail,
-} from '../tabs/types';
-import { roundCurrency } from '../utils/currency';
-import { normalizePerformancePayload } from '../utils/performance';
-import type {
-  AccountSummary,
-  PortfolioPositionsUpdatePayload,
-  PortfolioSummary,
-  PortfolioValuesUpdateEntry,
-} from './api';
-import {
-  clearAllPortfolioPositions,
-  getPortfolioPositionsSnapshot,
-  normalizePositionRecords,
-  setPortfolioPositions,
-  hasPortfolioPositions,
-  type PortfolioPositionRecord,
-} from './positionsCache';
 import {
   mergePortfolioSnapshots,
   setAccountSnapshots,
@@ -39,6 +16,27 @@ import {
   type AccountOverviewRow,
 } from '../lib/store/selectors/portfolio';
 import { renderNameWithBadges } from '../lib/ui/badges';
+import type {
+  PerformanceMetricsPayload,
+  PortfolioPositionsUpdatedEventDetail,
+} from '../tabs/types';
+import { roundCurrency } from '../utils/currency';
+import { escapeHtml } from '../utils/html';
+import { normalizePerformancePayload } from '../utils/performance';
+import type {
+  AccountSummary,
+  PortfolioPositionsUpdatePayload,
+  PortfolioSummary,
+  PortfolioValuesUpdateEntry,
+} from './api';
+import {
+  clearAllPortfolioPositions,
+  getPortfolioPositionsSnapshot,
+  hasPortfolioPositions,
+  normalizePositionRecords,
+  setPortfolioPositions,
+  type PortfolioPositionRecord,
+} from './positionsCache';
 
 export type { PortfolioPositionsUpdatedEventDetail } from '../tabs/types';
 
@@ -726,24 +724,6 @@ export function handlePortfolioUpdate(
     return;
   }
 
-  // Helper Formatierer (lokal oder einfacher Fallback)
-  const formatNumberLocal = (val: number): string => {
-    if (typeof Intl !== 'undefined') {
-      try {
-        const locale = typeof navigator !== 'undefined' && navigator.language
-          ? navigator.language
-          : 'de-DE';
-        return new Intl.NumberFormat(locale, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }).format(val);
-      } catch {
-        // fallback below
-      }
-    }
-    const rounded = roundCurrency(val, { fallback: 0 }) ?? 0;
-    return rounded.toFixed(2).replace('.', ',');
-  };
 
   // Map: uuid -> Row
   const rowMap = new Map<string, HTMLTableRowElement>();
@@ -781,19 +761,18 @@ export function handlePortfolioUpdate(
       continue;
     }
 
-    if (row.cells.length < 8) {
-      console.warn('handlePortfolioUpdate: Unerwartetes Spaltenlayout', row.cells.length);
+    // New stacked column structure: Name (0), Position Count (1), Value Combo (2), Day Combo (3), Gain Combo (4)
+    if (row.cells.length < 5) {
+      console.warn('handlePortfolioUpdate: Unerwartetes Spaltenlayout', row.cells.length, '(erwartet mindestens 5 für gestapelte Spalten)');
+      continue;
     }
 
     const posCountCell = row.cells.item(1);
-    const purchaseCell = row.cells.item(2);
-    const curValCell = row.cells.item(3);
-    const dayChangeAbsCell = row.cells.item(4);
-    const dayChangePctCell = row.cells.item(5);
-    const gainAbsCell = row.cells.item(6);
-    const gainPctCell = row.cells.item(7);
+    const valueComboCell = row.cells.item(2);
+    const dayComboCell = row.cells.item(3);
+    const gainComboCell = row.cells.item(4);
 
-    if (!posCountCell || !purchaseCell || !curValCell) {
+    if (!posCountCell || !valueComboCell) {
       continue;
     }
 
@@ -850,7 +829,9 @@ export function handlePortfolioUpdate(
     const fxUnavailable =
       snapshot.has_current_value === false || missingValuePositions > 0 || !hasValue;
 
-    const oldCur = parseNumLoose(curValCell.textContent);
+    // Extract old current value from the stacked cell for comparison
+    const curValSpan = valueComboCell.querySelector<HTMLElement>('.val-bottom [data-val]');
+    const oldCur = curValSpan ? parseNumLoose(curValSpan.getAttribute('data-val')) : 0;
     const oldCnt = parseNumLoose(posCountCell.textContent);
 
     if (oldCnt !== posCount) {
@@ -869,47 +850,49 @@ export function handlePortfolioUpdate(
     };
     const valueContext = { hasValue };
 
+    // Update Value Combo (Purchase Value / Current Value)
     const purchaseMarkup = formatValue('purchase_value', purchase, rowData, valueContext);
-    if (purchaseCell.innerHTML !== purchaseMarkup) {
-      purchaseCell.innerHTML = purchaseMarkup;
-    }
-
     const currentMarkup = formatValue('current_value', rowData.current_value, rowData, valueContext);
+    const valueComboMarkup = `
+      <div class="cell-stack">
+        <span class="val-top" data-val="${String(purchase ?? 0)}">${purchaseMarkup}</span>
+        <span class="val-bottom" data-val="${String(currentValue ?? 0)}">${currentMarkup}</span>
+      </div>
+    `;
+
     const curValNumeric = typeof currentValue === 'number' ? currentValue : 0;
-    if (Math.abs(oldCur - curValNumeric) >= 0.005 || curValCell.innerHTML !== currentMarkup) {
-      curValCell.innerHTML = currentMarkup;
+    if (Math.abs(oldCur - curValNumeric) >= 0.005 || valueComboCell.innerHTML.trim() !== valueComboMarkup.trim()) {
+      valueComboCell.innerHTML = valueComboMarkup;
       row.classList.add('flash-update');
       setTimeout(() => {
         row.classList.remove('flash-update');
       }, 800);
     }
 
-    if (dayChangeAbsCell) {
-      dayChangeAbsCell.innerHTML = formatValue('day_change_abs', dayChangeAbs, rowData, valueContext);
+    // Update Day Combo (Day Change Abs / Day Change Pct)
+    if (dayComboCell) {
+      const dayChangeAbsMarkup = formatValue('day_change_abs', dayChangeAbs, rowData, valueContext);
+      const dayChangePctMarkup = formatValue('day_change_pct', dayChangePct, rowData, valueContext);
+      const dayComboMarkup = `
+        <div class="cell-stack">
+          <span class="val-top" data-val="${String(dayChangeAbs ?? 0)}">${dayChangeAbsMarkup}</span>
+          <span class="val-bottom" data-val="${String(dayChangePct ?? 0)}">${dayChangePctMarkup}</span>
+        </div>
+      `;
+      dayComboCell.innerHTML = dayComboMarkup;
     }
 
-    if (dayChangePctCell) {
-      dayChangePctCell.innerHTML = formatValue('day_change_pct', dayChangePct, rowData, valueContext);
-    }
-
-    if (gainAbsCell) {
-      const gainMarkup = formatValue('gain_abs', gainAbs, rowData, valueContext);
-      gainAbsCell.innerHTML = gainMarkup;
-      const hasGainPct = typeof gainPct === 'number' && Number.isFinite(gainPct);
-      const pctValue = hasGainPct ? gainPct : null;
-      gainAbsCell.dataset.gainPct = pctValue != null
-        ? `${formatNumberLocal(pctValue)} %`
-        : '—';
-      gainAbsCell.dataset.gainSign = pctValue != null
-        ? pctValue > 0
-          ? 'positive'
-          : pctValue < 0
-            ? 'negative'
-            : 'neutral'
-        : 'neutral';
-    }
-    if (gainPctCell) {
-      gainPctCell.innerHTML = formatValue('gain_pct', gainPct, rowData, valueContext);
+    // Update Gain Combo (Gain Abs / Gain Pct)
+    if (gainComboCell) {
+      const gainAbsMarkup = formatValue('gain_abs', gainAbs, rowData, valueContext);
+      const gainPctMarkup = formatValue('gain_pct', gainPct, rowData, valueContext);
+      const gainComboMarkup = `
+        <div class="cell-stack">
+          <span class="val-top" data-val="${String(gainAbs ?? 0)}">${gainAbsMarkup}</span>
+          <span class="val-bottom" data-val="${String(gainPct ?? 0)}">${gainPctMarkup}</span>
+        </div>
+      `;
+      gainComboCell.innerHTML = gainComboMarkup;
     }
 
     row.dataset.positionCount = posCount.toString();
@@ -1193,9 +1176,17 @@ function renderPositionsTableInline(positions: PortfolioPositionRecord[]): strin
   const { renderPositionsTable, applyGainPctMetadata } = getOverviewHelpers();
   try {
     if (typeof renderPositionsTable === 'function') {
-      return renderPositionsTable(positions);
+      const result = renderPositionsTable(positions);
+      if (result) {
+        return result;
+      }
+      console.warn('renderPositionsTableInline: renderPositionsTable returned empty/falsy result');
+    } else {
+      console.warn('renderPositionsTableInline: renderPositionsTable is not a function, falling back to basic rendering');
     }
-  } catch (_) { }
+  } catch (error) {
+    console.error('renderPositionsTableInline: renderPositionsTable threw an error, falling back to basic rendering:', error);
+  }
 
   if (positions.length === 0) {
     return '<div class="no-positions">Keine Positionen vorhanden.</div>';
