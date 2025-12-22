@@ -872,7 +872,11 @@ def _apply_transaction_update(
     if delta_shares > 0:
         # BUY: Use full transaction value (Principal + Fees + Taxes) as cost basis
         # per User instruction ("gross on buy side is the final amount debited").
-        _process_buy_lots(entry, delta_shares, tx_val_eur, tx_val_native, tx_date)
+        # Note: tx_val_eur derived from 'amount' is typically Principal.
+        cost_basis_eur = tx_val_eur + fees_eur + taxes_eur
+        cost_basis_native = tx_val_native + fees_native + taxes_native
+
+        _process_buy_lots(entry, delta_shares, cost_basis_eur, cost_basis_native, tx_date)
 
     else:
         # SELL: Reduce shares, consume lots FIFO
