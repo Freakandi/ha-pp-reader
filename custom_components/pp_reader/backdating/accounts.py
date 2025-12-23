@@ -328,21 +328,6 @@ def _transaction_deltas(
     return deltas
 
 
-def _load_fx_rates_for_date(
-    db_path: Path,
-    date_iso: str,
-) -> dict[str, float]:
-    records = db_access.load_fx_rates_for_date(db_path, date_iso)
-    rates: dict[str, float] = {"EUR": 1.0}
-    for record in records:
-        try:
-            numeric = float(record.rate)
-        except (TypeError, ValueError):
-            continue
-        rates[record.currency.strip().upper()] = numeric
-    return rates
-
-
 def _build_account_valuations(
     balances_cents: Mapping[str, int],
     accounts: Mapping[str, Mapping[str, Any]],

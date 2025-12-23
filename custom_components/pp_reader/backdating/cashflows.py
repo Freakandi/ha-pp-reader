@@ -235,21 +235,6 @@ def _group_transactions_by_date(
     return grouped
 
 
-def _load_fx_rates_for_date(
-    db_path: Path,
-    date_iso: str,
-) -> dict[str, float]:
-    records = db_access.load_fx_rates_for_date(db_path, date_iso)
-    rates: dict[str, float] = {"EUR": 1.0}
-    for record in records:
-        try:
-            numeric = float(record.rate)
-        except (TypeError, ValueError):
-            continue
-        rates[record.currency.strip().upper()] = numeric
-    return rates
-
-
 def _aggregate_daily_buckets(
     transactions: Iterable[db_access.Transaction],
     fx_rates: Mapping[str, float],

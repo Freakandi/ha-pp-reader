@@ -512,21 +512,6 @@ def _load_price_cache(
     return cache
 
 
-def _load_fx_rates_for_date(
-    db_path: Path,
-    date_iso: str,
-) -> dict[str, float]:
-    records = db_access.load_fx_rates_for_date(db_path, date_iso)
-    rates: dict[str, float] = {}
-    for record in records:
-        try:
-            numeric = float(record.rate)
-        except (TypeError, ValueError):
-            continue
-        rates[record.currency.strip().upper()] = numeric
-    return rates
-
-
 def _resolve_price_for_date(
     security_uuid: str,
     price_cache: dict[str, list[tuple[date, float, str]]],
@@ -994,11 +979,3 @@ def _calculate_transaction_amounts(
     return tx_val_eur, tx_val_native
 
 
-def _calculate_cost_in_eur(cost_cents: int, fx: float) -> float:
-    """Convert a cost (fees/taxes) from transaction currency to EUR."""
-    if cost_cents <= 0:
-        return 0.0
-    val_native = cent_to_eur(cost_cents) or 0.0
-    if fx:
-        return val_native / fx
-    return 0.0

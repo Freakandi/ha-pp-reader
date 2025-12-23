@@ -84,6 +84,9 @@ async def test_account_balances_rollup_with_fx_and_transfer_units(tmp_path):
     day3 = snapshots[2]
     wealth_day3 = {val.account_uuid: val.balance_eur for val in day3.accounts}
     assert wealth_day3["acct-eur"] == 50.0
-    assert wealth_day3["acct-usd"] is None  # missing FX rate
-    assert day3.account_wealth_eur == pytest.approx(50.0)
-    assert day3.fx_coverage_ratio == 0.5
+    # Before the fix, this was None because fallback logic was weaker/different.
+    # Now, with last_known_fx_rates fallback, it uses 1.20 from 2024-01-03.
+    # (200 + 55 - 10) / 1.2 = 245 / 1.2 = 204.166667
+    assert wealth_day3["acct-usd"] == pytest.approx(204.166667)
+    assert day3.account_wealth_eur == pytest.approx(254.166667)
+    assert day3.fx_coverage_ratio == 1.0
