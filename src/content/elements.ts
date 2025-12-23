@@ -451,7 +451,7 @@ export function createHeaderCard(
         </svg>
       </button>
       <div class="header-title-group" style="display: flex; flex-direction: column; align-items: center;">
-        <h2 id="headerTitle">${headerTitle}</h2>
+        <h2 id="headerTitle">${escapeHtml(headerTitle)}</h2>
         ${subtitle}
       </div>
       <button id="nav-right" class="nav-arrow" aria-label="Nächste Seite" title="Nächste Seite">
