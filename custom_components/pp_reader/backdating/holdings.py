@@ -136,27 +136,9 @@ def _compute_daily_holdings_snapshots_sync(
     # We must process in correct date order for Average Cost logic.
     sorted_dates = sorted(adjustments_by_date.keys())
 
-    # Pre-load FX rates for the entire relevant range (init + main loop)
-    # Plus a 7-day lookback to ensure we have a latch for the start_date
-    lookback_start = start_date - timedelta(days=7)
-    cache_start_date = lookback_start
-    if sorted_dates:
-        first_tx_date = sorted_dates[0]
-        if first_tx_date < lookback_start:
-            cache_start_date = first_tx_date
-
-    fx_rates_cache = fx_module.load_fx_rates_cache_range(
-        db_path, cache_start_date.isoformat(), end_date.isoformat()
+    fx_rates_cache = _initialize_fx_cache(
+        db_path, start_date, end_date, sorted_dates, last_known_fx_rates
     )
-
-    # Explicitly seed the latch from the lookback period up to start_date
-    # This handles cases where no transactions occurred recently but we need valid FX
-    # (e.g. Price Stale check)
-    seed_cursor = lookback_start
-    while seed_cursor < start_date:
-        if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
-            last_known_fx_rates.update(day_rates)
-        seed_cursor += timedelta(days=1)
 
     for tx_date in sorted_dates:
         if tx_date >= start_date:
@@ -171,11 +153,16 @@ def _compute_daily_holdings_snapshots_sync(
 
         for params in adjustments_by_date[tx_date]:
             # Apply update but ignore gains/neutral movements for initialization
+            security_uuid = params[1]
+            # Note: securities dict already contains normalized currency
+            sec_curr = securities.get(security_uuid, {}).get("currency") or "EUR"
+
             _apply_transaction_update(
                 *params,
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=tx_date,
+                security_currency=sec_curr,
             )
 
     date_cursor = start_date
@@ -208,6 +195,9 @@ def _compute_daily_holdings_snapshots_sync(
             taxes,
             fx_rate_to_base,
         ) in daily_adjustments:
+            # Note: securities dict already contains normalized currency
+            sec_curr = securities.get(security_uuid, {}).get("currency") or "EUR"
+
             _, _, neutral_val = _apply_transaction_update(
                 portfolio_uuid,
                 security_uuid,
@@ -221,11 +211,7 @@ def _compute_daily_holdings_snapshots_sync(
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
-                security_currency=(
-                    securities.get(security_uuid, {}).get("currency") or "EUR"
-                )
-                .strip()
-                .upper(),
+                security_currency=sec_curr,
             )
             daily_neutral_movements += neutral_val
 
@@ -233,7 +219,6 @@ def _compute_daily_holdings_snapshots_sync(
         # fx_rates already loaded above
         valuations = _build_holdings_valuations(
             holdings.items(),
-            securities,
             price_cache,
             fx_rates,
             target_date=date_cursor,
@@ -527,6 +512,39 @@ def _load_fx_rates_for_date(
     return rates
 
 
+def _initialize_fx_cache(
+    db_path: Path,
+    start_date: date,
+    end_date: date,
+    sorted_dates: list[date],
+    last_known_fx_rates: dict[str, float],
+) -> dict[str, dict[str, float]]:
+    """Load and seed FX rates cache for the backdating window."""
+    # Pre-load FX rates for the entire relevant range (init + main loop)
+    # Plus a 7-day lookback to ensure we have a latch for the start_date
+    lookback_start = start_date - timedelta(days=7)
+    cache_start_date = lookback_start
+    if sorted_dates:
+        first_tx_date = sorted_dates[0]
+        if first_tx_date < lookback_start:
+            cache_start_date = first_tx_date
+
+    fx_rates_cache = fx_module.load_fx_rates_cache_range(
+        db_path, cache_start_date.isoformat(), end_date.isoformat()
+    )
+
+    # Explicitly seed the latch from the lookback period up to start_date
+    # This handles cases where no transactions occurred recently but we need valid FX
+    # (e.g. Price Stale check)
+    seed_cursor = lookback_start
+    while seed_cursor < start_date:
+        if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
+            last_known_fx_rates.update(day_rates)
+        seed_cursor += timedelta(days=1)
+
+    return fx_rates_cache
+
+
 def _resolve_price_for_date(
     security_uuid: str,
     price_cache: dict[str, list[tuple[date, float, str]]],
@@ -580,7 +598,6 @@ def _resolve_price_for_date(
 
 def _build_holdings_valuations(
     holdings: Iterable[tuple[tuple[str, str], dict[str, float]]],
-    securities: dict[str, dict[str, Any]],
     price_cache: dict[str, list[tuple[date, float, str]]],
     fx_rates: dict[str, float],
     *,
@@ -593,9 +610,8 @@ def _build_holdings_valuations(
         shares = details["shares"]
         purchase_value_eur = details.get("purchase_value_eur")
         purchase_value_native = details.get("purchase_value_native")
-
-        security_meta = securities.get(security_uuid, {})
-        currency = security_meta.get("currency") or "EUR"
+        # Optimization: use cached currency from holdings to avoid dict lookup
+        currency = details.get("currency", "EUR")
 
         cursor_hint = (
             price_cursors.get(security_uuid) if price_cursors is not None else None
@@ -853,6 +869,7 @@ def _apply_transaction_update(
             "purchase_value_eur": 0.0,
             "purchase_value_native": 0.0,
             "lots": deque(),
+            "currency": security_currency,
         }
 
     entry = holdings[key]
