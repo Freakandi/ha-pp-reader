@@ -117,9 +117,12 @@ def build_daily_wealth_records(
                 outbound_transfers_eur=round(outbound, 6),
                 invested_capital_eur=round(invested_capital, 6),
                 performance_neutral_movements=round(
-                    holdings_snap.performance_neutral_movements
-                    if holdings_snap
-                    else 0.0,
+                    (
+                        holdings_snap.performance_neutral_movements
+                        if holdings_snap
+                        else 0.0
+                    )
+                    - outbound,
                     6,
                 ),
                 fees_eur=round(fees, 6),

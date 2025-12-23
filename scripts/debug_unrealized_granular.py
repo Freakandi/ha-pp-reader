@@ -1,4 +1,4 @@
-# ruff: noqa: ANN, T201
+# ruff: noqa: T201
 
 import sqlite3
 from datetime import date
@@ -15,7 +15,9 @@ def to_iso(d: date) -> str:
     return d.isoformat()
 
 
-def get_price_and_fx(conn, sec_uuid, currency, at_date_iso):
+def get_price_and_fx(
+    conn: sqlite3.Connection, sec_uuid: str, currency: str, at_date_iso: str
+) -> tuple[float, float]:
     # Price
     # Convert ISO to epoch days for price table
     d = date.fromisoformat(at_date_iso)
@@ -51,7 +53,7 @@ def get_price_and_fx(conn, sec_uuid, currency, at_date_iso):
 
 def main() -> None:
     if not DB_PATH.exists():
-        print(f"Error: {DB_PATH} not found")  # noqa: T201
+        print(f"Error: {DB_PATH} not found")
         return
 
     conn = sqlite3.connect(DB_PATH)
@@ -89,8 +91,8 @@ def main() -> None:
     # Pre-fetch security info
     sec_info = {}
     placeholders = ",".join(["?"] * len(involved_uuids))
-    # noqa: S608 - Safe usage
-    query = f"SELECT uuid, name, currency_code FROM securities WHERE uuid IN ({placeholders})"
+    # Safe usage (S608 ignored manually)
+    query = f"SELECT uuid, name, currency_code FROM securities WHERE uuid IN ({placeholders})"  # noqa: S608, E501
     sec_rows = conn.execute(query, list(involved_uuids)).fetchall()
     for r in sec_rows:
         sec_info[r[0]] = {"name": r[1], "curr": (r[2] or "EUR").strip().upper()}
@@ -245,8 +247,8 @@ def main() -> None:
 
         f.write(f"\n**TOTAL UNREALIZED GAIN: {total:,.2f} €**\n")
 
-    print(f"Report generated at {OUTPUT_FILE}")  # noqa: T201
-    print(f"Total: {total:,.2f} EUR")  # noqa: T201
+    print(f"Report generated at {OUTPUT_FILE}")
+    print(f"Total: {total:,.2f} EUR")
 
 
 if __name__ == "__main__":

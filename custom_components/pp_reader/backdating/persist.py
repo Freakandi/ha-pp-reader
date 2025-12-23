@@ -65,8 +65,10 @@ def _persist_daily_totals(
             performance_neutral_movements=aggregate.performance_neutral_movements,
             fees_eur=aggregate.fees_eur,
             taxes_eur=aggregate.taxes_eur,
-            realized_gains_eur=aggregate.realized_gains_eur,
-            unrealized_gains_eur=aggregate.unrealized_gains_eur,
+            realized_gains_eur=0.0,
+            unrealized_gains_eur=round(
+                aggregate.portfolio_wealth_eur - aggregate.invested_capital_eur, 6
+            ),
             invested_capital_eur=aggregate.invested_capital_eur,
             fx_coverage_ratio=aggregate.fx_coverage_ratio,
             price_coverage_ratio=aggregate.price_coverage_ratio,
@@ -147,8 +149,6 @@ def _build_portfolio_scope_records(
         }
     )
 
-    portfolio_gains = holdings_snap.portfolio_realized_gains
-
     for valuation in holdings_snap.holdings:
         value = valuation.value_eur or 0.0
         meta = per_portfolio[valuation.portfolio_uuid]
@@ -189,7 +189,7 @@ def _build_portfolio_scope_records(
                 performance_neutral_movements=0.0,
                 fees_eur=0.0,
                 taxes_eur=0.0,
-                realized_gains_eur=round(portfolio_gains.get(portfolio_uuid, 0.0), 6),
+                realized_gains_eur=0.0,
                 unrealized_gains_eur=round(meta["total"] - meta["invested_capital"], 6),
                 invested_capital_eur=round(meta["invested_capital"], 6),
                 fx_coverage_ratio=round(fx_cov, 3),
