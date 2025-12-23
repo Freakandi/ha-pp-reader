@@ -437,6 +437,7 @@ export class DateRangePicker {
         }
 
         // Days
+        const today = new Date();
         for (let d = 1; d <= lastDay.getDate(); d++) {
             const current = new Date(year, month, d);
             const cell = document.createElement('div');
@@ -444,7 +445,23 @@ export class DateRangePicker {
             cell.textContent = d.toString();
             cell.setAttribute('role', 'button');
             cell.tabIndex = 0;
-            const label = current.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            let label = current.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+            // Accessibility: Current Day
+            if (current.getDate() === today.getDate() && current.getMonth() === today.getMonth() && current.getFullYear() === today.getFullYear()) {
+                cell.setAttribute('aria-current', 'date');
+                label = `Heute, ${label}`;
+            }
+
+            // Accessibility: Selection State
+            const t = current.getTime();
+            const s = this.tempRange.start.getTime();
+            const e = this.tempRange.end.getTime();
+
+            if (t === s) label += ' (Startdatum)';
+            else if (t === e) label += ' (Enddatum)';
+            else if (t > s && t < e) label += ' (im Zeitraum)';
+
             cell.setAttribute('aria-label', label);
 
             this.applyDayClasses(cell, current);
