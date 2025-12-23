@@ -176,7 +176,7 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     let nameCell = `<span class="trade-name-clickable" data-val="${nameContent}" data-security-uuid="${escapeAttribute(trade.security_uuid)}">${nameContent}</span>`;
     if (trade.lots.length > 1) {
       nameCell = `
-        <span class="expand-icon" data-security-uuid="${escapeAttribute(trade.security_uuid)}">
+        <span class="expand-icon" role="button" tabindex="0" aria-label="Details anzeigen" aria-expanded="false" data-security-uuid="${escapeAttribute(trade.security_uuid)}">
           <ha-icon icon="mdi:chevron-right"></ha-icon>
         </span>
         ${nameCell}
@@ -421,7 +421,7 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
   const tradeMap = new Map(trades.map(t => [t.security_uuid, t]));
 
   // Expand/Collapse handlers
-  root.addEventListener('click', (event) => {
+  const handleInteraction = (event: Event) => {
     const target = event.target as HTMLElement;
 
     // Handle trade detail click
@@ -441,12 +441,24 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
     const expandIcon = target.closest('.expand-icon');
     if (expandIcon) {
       event.stopPropagation();
+      // For keyboard events, prevent default scrolling/action
+      if (event.type === 'keydown') {
+        event.preventDefault();
+      }
+
       const uuid = (expandIcon as HTMLElement).dataset.securityUuid;
       const trade = uuid ? tradeMap.get(uuid) : undefined;
       const mainRow = root.querySelector(`tr[data-security-uuid="${String(uuid)}"]`);
 
       if (mainRow && trade) {
-        if (mainRow.classList.toggle('is-expanded')) {
+        const isExpanded = mainRow.classList.toggle('is-expanded');
+        const iconContainer = mainRow.querySelector('.expand-icon');
+        if (iconContainer) {
+          iconContainer.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+          iconContainer.setAttribute('aria-label', isExpanded ? 'Details verbergen' : 'Details anzeigen');
+        }
+
+        if (isExpanded) {
           mainRow.querySelector('.expand-icon ha-icon')?.setAttribute('icon', 'mdi:chevron-down');
           const childRowsHtml = renderLots(trade.lots, trade);
           const tempDiv = document.createElement('div');
@@ -467,6 +479,11 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
     }
 
     // Handle sort
+    // Only process sort on click or Enter/Space
+    if (event.type === 'keydown' && !['Enter', ' '].includes((event as KeyboardEvent).key)) {
+      return;
+    }
+
     const sortTrigger = target.closest('[data-sort-selector]') || target.closest('[data-sort-key]');
     if (sortTrigger) {
       const table = sortTrigger.closest('table');
@@ -499,6 +516,13 @@ function attachEventListeners(root: HTMLElement, trades: readonly RealizedTrade[
         const selector = (sortTrigger as HTMLElement).dataset.sortSelector || null;
         sortTrades(table, colIndex, selector, dir);
       }
+    }
+  };
+
+  root.addEventListener('click', handleInteraction);
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      handleInteraction(e);
     }
   });
 }
