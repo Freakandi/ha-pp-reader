@@ -136,27 +136,9 @@ def _compute_daily_holdings_snapshots_sync(
     # We must process in correct date order for Average Cost logic.
     sorted_dates = sorted(adjustments_by_date.keys())
 
-    # Pre-load FX rates for the entire relevant range (init + main loop)
-    # Plus a 7-day lookback to ensure we have a latch for the start_date
-    lookback_start = start_date - timedelta(days=7)
-    cache_start_date = lookback_start
-    if sorted_dates:
-        first_tx_date = sorted_dates[0]
-        if first_tx_date < lookback_start:
-            cache_start_date = first_tx_date
-
-    fx_rates_cache = fx_module.load_fx_rates_cache_range(
-        db_path, cache_start_date.isoformat(), end_date.isoformat()
+    fx_rates_cache = _initialize_fx_cache(
+        db_path, start_date, end_date, sorted_dates, last_known_fx_rates
     )
-
-    # Explicitly seed the latch from the lookback period up to start_date
-    # This handles cases where no transactions occurred recently but we need valid FX
-    # (e.g. Price Stale check)
-    seed_cursor = lookback_start
-    while seed_cursor < start_date:
-        if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
-            last_known_fx_rates.update(day_rates)
-        seed_cursor += timedelta(days=1)
 
     for tx_date in sorted_dates:
         if tx_date >= start_date:
@@ -237,7 +219,6 @@ def _compute_daily_holdings_snapshots_sync(
         # fx_rates already loaded above
         valuations = _build_holdings_valuations(
             holdings.items(),
-            securities,
             price_cache,
             fx_rates,
             target_date=date_cursor,
@@ -531,6 +512,39 @@ def _load_fx_rates_for_date(
     return rates
 
 
+def _initialize_fx_cache(
+    db_path: Path,
+    start_date: date,
+    end_date: date,
+    sorted_dates: list[date],
+    last_known_fx_rates: dict[str, float],
+) -> dict[str, dict[str, float]]:
+    """Load and seed FX rates cache for the backdating window."""
+    # Pre-load FX rates for the entire relevant range (init + main loop)
+    # Plus a 7-day lookback to ensure we have a latch for the start_date
+    lookback_start = start_date - timedelta(days=7)
+    cache_start_date = lookback_start
+    if sorted_dates:
+        first_tx_date = sorted_dates[0]
+        if first_tx_date < lookback_start:
+            cache_start_date = first_tx_date
+
+    fx_rates_cache = fx_module.load_fx_rates_cache_range(
+        db_path, cache_start_date.isoformat(), end_date.isoformat()
+    )
+
+    # Explicitly seed the latch from the lookback period up to start_date
+    # This handles cases where no transactions occurred recently but we need valid FX
+    # (e.g. Price Stale check)
+    seed_cursor = lookback_start
+    while seed_cursor < start_date:
+        if day_rates := fx_rates_cache.get(seed_cursor.isoformat()):
+            last_known_fx_rates.update(day_rates)
+        seed_cursor += timedelta(days=1)
+
+    return fx_rates_cache
+
+
 def _resolve_price_for_date(
     security_uuid: str,
     price_cache: dict[str, list[tuple[date, float, str]]],
@@ -584,7 +598,6 @@ def _resolve_price_for_date(
 
 def _build_holdings_valuations(
     holdings: Iterable[tuple[tuple[str, str], dict[str, float]]],
-    securities: dict[str, dict[str, Any]],
     price_cache: dict[str, list[tuple[date, float, str]]],
     fx_rates: dict[str, float],
     *,
