@@ -1540,7 +1540,7 @@ export function handleLastFileUpdate(
   // Format abhängig vom Ort (Footer behält <strong>)
   if (el.closest('.footer-card')) {
     el.innerHTML = value
-      ? `📂 Letzte Aktualisierung der Datei: <strong>${value}</strong>`
+      ? `📂 Letzte Aktualisierung der Datei: <strong>${escapeHtml(value)}</strong>`
       : '📂 Letzte Aktualisierung der Datei: <strong>Unbekannt</strong>';
   } else {
     // Header/Meta-Version (schlichter Text)
