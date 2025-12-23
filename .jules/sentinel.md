@@ -27,3 +27,8 @@
 **Vulnerability:** The regex blacklist `DANGEROUS_PATTERN` in `src/content/elements.ts` failed to block `data:` URIs, allowing XSS execution via payloads like `<a href="data:text/html,<script>alert(1)</script>">`.
 **Learning:** Regex-based XSS filtering is fragile and blacklist approaches often miss obscure vectors like `data:` URIs which can execute scripts without `javascript:` protocol.
 **Prevention:** Include `data:` in XSS filter blacklists alongside `javascript:` and event handlers, or prefer whitelist-based sanitization where feasible.
+
+## 2025-01-01 - Stored XSS in Last File Update
+**Vulnerability:** `handleLastFileUpdate` in `src/data/updateConfigsWS.ts` injected `last_file_update` payload directly into `innerHTML` without escaping.
+**Learning:** Legacy websocket handlers ported to TypeScript often retained unsafe string concatenation patterns.
+**Prevention:** Audit all functions in `src/data/updateConfigsWS.ts` and ensure `escapeHtml` is used for any user-controlled data injected into DOM.
