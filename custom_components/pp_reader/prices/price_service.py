@@ -596,7 +596,7 @@ def _refresh_impacted_portfolio_securities(  # noqa: C901, PLR0911, PLR0912, PLR
     impacted_portfolios: set[str] = set()
 
     try:
-        with sqlite3.connect(str(db_path)) as conn:
+        with sqlite3.connect(str(db_path), isolation_level=None) as conn:
             existing_entries: dict[tuple[str, str], dict[str, float | int | None]] = {}
             impacted_pairs: set[tuple[str, str]] = set()
 

@@ -17,6 +17,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Trade Details Tab**: Enhanced the trade details view to match the security detail design, adding a centered security name header, a metadata grid for "Letzter Verkaufspreis" and "Änderung seit Verkauf", an interactive history chart with range selectors and purchase/sell markers, and a "Copy prompt for ChatGPT" button.
 
 ### Fixed
+- **Fixed**: Resolved a critical bug in `period_calculations.py` where daily prices were not updating during the simulation loop due to incorrect dictionary key access, causing flat/static performance calculations for held positions.
+- **Fixed**: Linter errors in `period_calculations.py`.
 - **Trade Detail Tab**: Resolved critical bug where the "Trade Detail" tab would not open when clicking on a security name in the "Trades" tab. Fixing this involved resolving a circular dependency between `dashboard.ts` and `trades.ts` and ensuring event listeners are attached to the correct DOM elements.
 - **Chart Markers**: Corrected the calculation of transaction markers to reliably display Gross Prices (Market Price) rather than Net Prices, resolving visual discrepancies where markers appeared offset from the price history line.
 - **Chart Rendering**: Improved vertical axis scaling for security and trade detail charts. For short time periods (e.g., 1 month), the Y-axis now adjusts tightly to the min/max values of that period instead of being forced to include the purchase price baseline, preventing charts from appearing as "flat lines" when the purchase price is far from current market values.
@@ -31,8 +33,13 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.
 
+### Changed
+- **Schema Refactor**: Removed static `realized_gains_eur` and `unrealized_gains_eur` columns from the `daily_wealth` table to eliminate incorrect lifetime values in period views.
+- **Period Logic**: "Time Series" now exclusively uses dynamic calculation for Realized and Unrealized Gains, ensuring values are always relative to the selected time range.
+
 ### Fixed
 - **Overview Sorting**: Resolved issue where sorting headers in nested portfolio position tables did not function correctly.
+- **Price Service**: Fixed `sqlite3.OperationalError` caused by nested transaction attempts during price updates by enabling manual transaction control.
 - **Trades Tab Sum Row**: Fixed missing aggregation values in the "Summe" footer row.
 - **Tab Navigation**: Fixed regression where clicking a portfolio position failed to open the corresponding detail tab.
 - **Concurrency**: Resolved "database is locked" errors during high-concurrency sync operations (part of general stability improvements).

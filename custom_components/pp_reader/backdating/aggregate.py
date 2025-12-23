@@ -26,10 +26,7 @@ class DailyWealthAggregate:
     interest_eur: float
     inbound_transfers_eur: float
     outbound_transfers_eur: float
-    realized_gains_eur: float
-    realized_price_gains_eur: float
-    unrealized_gains_eur: float
-    unrealized_price_gains_eur: float
+
     invested_capital_eur: float
     performance_neutral_movements: float
     fees_eur: float
@@ -80,10 +77,7 @@ def build_daily_wealth_records(
         outbound = cashflow_snap.outbound_transfers_eur if cashflow_snap else 0.0
         fees = cashflow_snap.fees_eur if cashflow_snap else 0.0
         taxes = cashflow_snap.taxes_eur if cashflow_snap else 0.0
-        realized_gains = holdings_snap.realized_gains_eur if holdings_snap else 0.0
-        realized_price_gains = (
-            holdings_snap.realized_price_gains_eur if holdings_snap else 0.0
-        )
+
         invested_capital = holdings_snap.invested_capital_eur if holdings_snap else 0.0
 
         total_wealth = round(portfolio_wealth + account_wealth, 6)
@@ -121,14 +115,6 @@ def build_daily_wealth_records(
                 interest_eur=round(interest, 6),
                 inbound_transfers_eur=round(inbound, 6),
                 outbound_transfers_eur=round(outbound, 6),
-                realized_gains_eur=round(realized_gains, 6),
-                realized_price_gains_eur=round(realized_price_gains, 6),
-                unrealized_gains_eur=round(portfolio_wealth - invested_capital, 6),
-                unrealized_price_gains_eur=round(
-                    (holdings_snap.unrealized_price_gains_eur if holdings_snap else 0.0)
-                    or 0.0,
-                    6,
-                ),
                 invested_capital_eur=round(invested_capital, 6),
                 performance_neutral_movements=round(
                     holdings_snap.performance_neutral_movements

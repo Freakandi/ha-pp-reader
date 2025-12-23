@@ -71,10 +71,7 @@ class DailyHoldingsSnapshot:
     stale_price: bool
     total_wealth_eur: float
     invested_capital_eur: float
-    realized_gains_eur: float
-    unrealized_price_gains_eur: float
-    realized_price_gains_eur: float
-    portfolio_realized_gains: dict[str, float]
+
     performance_neutral_movements: float
 
 
@@ -111,7 +108,7 @@ async def async_compute_daily_holdings_snapshots(
     )
 
 
-def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
+def _compute_daily_holdings_snapshots_sync(
     db_path: Path,
     start_date: date,
     end_date: date,
@@ -198,9 +195,6 @@ def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
         # Optimization: Pass reference directly, avoid copy (consumers are read-only)
         fx_rates = last_known_fx_rates
 
-        daily_realized_gains = 0.0
-        daily_realized_price_gains = 0.0
-        daily_portfolio_gains: dict[str, float] = {}
         daily_neutral_movements = 0.0
 
         for (
@@ -214,7 +208,7 @@ def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
             taxes,
             fx_rate_to_base,
         ) in daily_adjustments:
-            gain, price_gain, neutral_val = _apply_transaction_update(
+            _, _, neutral_val = _apply_transaction_update(
                 portfolio_uuid,
                 security_uuid,
                 delta_shares,
@@ -233,14 +227,7 @@ def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
                 .strip()
                 .upper(),
             )
-            daily_realized_gains += gain
-            daily_realized_price_gains += price_gain
             daily_neutral_movements += neutral_val
-
-            if gain != 0.0:
-                daily_portfolio_gains[portfolio_uuid] = (
-                    daily_portfolio_gains.get(portfolio_uuid, 0.0) + gain
-                )
 
         date_iso = date_cursor.isoformat()
         # fx_rates already loaded above
@@ -258,7 +245,7 @@ def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
             fx_coverage_ratio,
             stale_price,
             total_wealth,
-            unrealized_price_gains,
+            _,
         ) = _aggregate_holdings_metrics(valuations)
 
         invested_capital = round(
@@ -274,12 +261,6 @@ def _compute_daily_holdings_snapshots_sync(  # noqa: PLR0915
                 stale_price=stale_price,
                 total_wealth_eur=total_wealth,
                 invested_capital_eur=invested_capital,
-                realized_gains_eur=round(daily_realized_gains, 4),
-                unrealized_price_gains_eur=unrealized_price_gains,
-                realized_price_gains_eur=round(daily_realized_price_gains, 4),
-                portfolio_realized_gains={
-                    k: round(v, 4) for k, v in daily_portfolio_gains.items()
-                },
                 performance_neutral_movements=round(daily_neutral_movements, 4),
             )
         )
@@ -330,7 +311,7 @@ def _load_relevant_transactions(
     portfolios: dict[str, dict[str, Any]],
     securities: dict[str, dict[str, Any]],
     until: date | None = None,
-) -> list[tuple[date, str, str, float, int, str, int, int, int]]:
+) -> list[tuple[date, str, str, float, int, str, int, int, int, float | None]]:
     """
     Return security transactions that affect holdings.
 

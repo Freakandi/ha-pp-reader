@@ -31,7 +31,7 @@ from custom_components.pp_reader.logic.securities import (
     calculate_realized_performance,
 )
 from custom_components.pp_reader.metrics.period_calculations import (
-    calculate_period_realized_gains,
+    calculate_period_performance_series,
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
@@ -552,8 +552,8 @@ def _serialize_daily_wealth(record: Any) -> dict[str, Any]:
         "performance_neutral_movements": record.performance_neutral_movements,
         "fees_eur": record.fees_eur,
         "taxes_eur": record.taxes_eur,
-        "realized_gains_eur": record.realized_gains_eur,
-        "unrealized_gains_eur": record.unrealized_gains_eur,
+        "realized_gains_eur": 0.0,
+        "unrealized_gains_eur": 0.0,
         "invested_capital_eur": record.invested_capital_eur,
         "fx_coverage_ratio": record.fx_coverage_ratio,
         "price_coverage_ratio": record.price_coverage_ratio,
@@ -579,8 +579,8 @@ def _serialize_daily_scope(record: Any) -> dict[str, Any]:
         "performance_neutral_movements": record.performance_neutral_movements,
         "fees_eur": record.fees_eur,
         "taxes_eur": record.taxes_eur,
-        "realized_gains_eur": record.realized_gains_eur,
-        "unrealized_gains_eur": record.unrealized_gains_eur,
+        "realized_gains_eur": 0.0,
+        "unrealized_gains_eur": 0.0,
         "invested_capital_eur": record.invested_capital_eur,
         "fx_coverage_ratio": record.fx_coverage_ratio,
         "price_coverage_ratio": record.price_coverage_ratio,
@@ -1500,25 +1500,32 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     # For Period views, we need gains relative to the Period Start Value.
     if params.start_date and params.end_date:
         try:
-            period_gains = await async_run_executor_job(
+            _LOGGER.debug(
+                "Calculating period performance for %s to %s",
+                params.start_date,
+                params.end_date,
+            )
+            period_metrics = await async_run_executor_job(
                 hass,
-                calculate_period_realized_gains,
+                calculate_period_performance_series,
                 db_path,
                 params.start_date,
                 params.end_date,
             )
+            _LOGGER.debug("Calculated metrics for %d days", len(period_metrics))
             # Inject into records
             for rec in records:
                 iso = rec["date"]
-                if iso in period_gains:
-                    rec["realized_gains_eur"] = period_gains[iso]
+                if iso in period_metrics:
+                    pm = period_metrics[iso]
+                    rec["realized_gains_eur"] = pm.realized_gains_eur
+                    rec["unrealized_gains_eur"] = pm.unrealized_gains_eur
                 else:
-                    # If no sell on this day, period realized gain is 0.
-                    # Note: DB realized_gains_eur might be non-zero (absolute gain).
-                    # We must overwrite it to 0 to be consistent with Period View.
+                    # No metrics found for this day (no trades + no holdings?)
                     rec["realized_gains_eur"] = 0.0
+                    rec["unrealized_gains_eur"] = 0.0
         except Exception:
-            _LOGGER.exception("Failed to calculate period realized gains")
+            _LOGGER.exception("Failed to calculate period performance")
 
     # PP Alignment: "Start Date" wealth is the baseline (End of Day).
     # Flows occurring ON the start date should be excluded from period summation.
@@ -1536,6 +1543,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
             "fees_eur",
             "taxes_eur",
             "realized_gains_eur",
+            "unrealized_gains_eur",
             "performance_neutral_movements",
         ):
             # Mutate the dictionary in place to zero out the start date values
@@ -1565,6 +1573,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                             "fees_eur",
                             "taxes_eur",
                             "realized_gains_eur",
+                            "unrealized_gains_eur",
                         ):
                             rec[key] = 0.0
 

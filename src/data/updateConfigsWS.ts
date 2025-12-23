@@ -713,7 +713,7 @@ export function handlePortfolioUpdate(
         'handlePortfolioUpdate: Übersicht nicht aktiv – Update wird später angewendet.',
       );
     } else {
-      console.warn('handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden.');
+      console.debug('handlePortfolioUpdate: Keine Portfolio-Tabelle gefunden (Tab inaktiv?).');
     }
     return;
   }

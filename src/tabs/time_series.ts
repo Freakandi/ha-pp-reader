@@ -562,12 +562,24 @@ function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown |
   // Realized Gains during Period (Gross since purchase for all items sold)
   const realizedGains = sumField(periodRecords, 'realized_gains_eur');
 
-  // Unrealized Gains during Period = (ValueEnd - CapitalEnd) - (ValueStart - CapitalStart)
-  // Note: For shares bought during the period, (ValueStart - CapitalStart) is 0.
-  // This captures the change in valuation for items held throughout, and the full gain for items bought during.
-  // Use unrealized_gains_eur (total including FX) not unrealized_price_gains_eur (price-only)
-  const uEnd = latest.unrealized_gains_eur ?? 0;
-  const uStart = records.length > 1 ? baseline.unrealized_gains_eur ?? 0 : 0;
+  // Unrealized Gains during Period:
+  // The backend injects 'unrealized_gains_eur' which represents the cumulative unrealized gain
+  // relative to the Period Start (Mark-to-Market).
+  // Therefore, we treat the backend value as the authoritative source.
+  const valEnd = latest.unrealized_gains_eur;
+  const valStart = records.length > 1 ? baseline.unrealized_gains_eur : 0;
+
+  // Create a debug probe (visible in browser console) to trace the values
+  console.debug('AG-Debug: Unrealized Gains', {
+    dateStart: baseline.date,
+    dateEnd: latest.date,
+    valStart,
+    valEnd,
+    recordsLength: records.length
+  });
+
+  const uEnd = valEnd ?? 0;
+  const uStart = valStart ?? 0;
   const unrealizedGains = uEnd - uStart;
 
   // For display: also track price-only component
