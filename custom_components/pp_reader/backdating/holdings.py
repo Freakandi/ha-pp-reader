@@ -171,11 +171,16 @@ def _compute_daily_holdings_snapshots_sync(
 
         for params in adjustments_by_date[tx_date]:
             # Apply update but ignore gains/neutral movements for initialization
+            security_uuid = params[1]
+            # Note: securities dict already contains normalized currency
+            sec_curr = securities.get(security_uuid, {}).get("currency") or "EUR"
+
             _apply_transaction_update(
                 *params,
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=tx_date,
+                security_currency=sec_curr,
             )
 
     date_cursor = start_date
@@ -208,6 +213,9 @@ def _compute_daily_holdings_snapshots_sync(
             taxes,
             fx_rate_to_base,
         ) in daily_adjustments:
+            # Note: securities dict already contains normalized currency
+            sec_curr = securities.get(security_uuid, {}).get("currency") or "EUR"
+
             _, _, neutral_val = _apply_transaction_update(
                 portfolio_uuid,
                 security_uuid,
@@ -221,11 +229,7 @@ def _compute_daily_holdings_snapshots_sync(
                 fx_rates=fx_rates,
                 holdings=holdings,
                 tx_date=date_cursor,
-                security_currency=(
-                    securities.get(security_uuid, {}).get("currency") or "EUR"
-                )
-                .strip()
-                .upper(),
+                security_currency=sec_curr,
             )
             daily_neutral_movements += neutral_val
 
@@ -593,9 +597,8 @@ def _build_holdings_valuations(
         shares = details["shares"]
         purchase_value_eur = details.get("purchase_value_eur")
         purchase_value_native = details.get("purchase_value_native")
-
-        security_meta = securities.get(security_uuid, {})
-        currency = security_meta.get("currency") or "EUR"
+        # Optimization: use cached currency from holdings to avoid dict lookup
+        currency = details.get("currency", "EUR")
 
         cursor_hint = (
             price_cursors.get(security_uuid) if price_cursors is not None else None
@@ -853,6 +856,7 @@ def _apply_transaction_update(
             "purchase_value_eur": 0.0,
             "purchase_value_native": 0.0,
             "lots": deque(),
+            "currency": security_currency,
         }
 
     entry = holdings[key]
