@@ -68,12 +68,6 @@ def get_missing_fx_diagnostics() -> dict[str, Any]:
     }
 
 
-def reset_missing_fx_diagnostics() -> None:
-    """Clear accumulated FX diagnostics (for tests or fresh runs)."""
-    _FX_RATE_FAILURES.clear()
-    _MISSING_NATIVE_POSITIONS.clear()
-
-
 def _record_rate_failure(currency: str | None, tx_date: datetime | None) -> None:
     """Track missing FX rate lookups grouped by currency and trade date."""
     if not currency or tx_date is None:
