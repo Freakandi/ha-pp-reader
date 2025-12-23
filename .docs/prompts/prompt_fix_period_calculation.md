@@ -1,57 +1,52 @@
 
-# Debug and Fix Period Performance Calculation
+# Deep-Dive: Period Unrealized Gains Discrepancy
 
 ## Context
-We have established that the frontend correctly displays the values provided by the backend. However, the backend calculation in `period_calculations.py` is incorrect.
-- **Period**: 2025-11-23 to 2025-12-22 (30 days)
-- **Current Output**: `-598,07 €` (matches a legacy/static state, potentially suspicious)
-- **Expected Output**: `~1.975,26 €` (User provided expectation)
+We have significantly improved the Period Performance Calculation, moving from an erroneous `-600 €` to `~1.580 €`. However, the user expects `~1.975 €`.
+We suspect a discrepancy on a per-position basis (possibly FX or Price data issues for specific assets).
 
 ## Objective
-Identify the flaw in the "Mark-to-Market" calculation logic or data retrieval and correct it to match the expected value.
+Generate a detailed, itemized report of Unrealized Gains for the period **2025-11-23 to 2025-12-22** to identify exactly which securities are under-reporting gains compared to expectations.
 
-## Plan
+## Knowns & Fixed Logic
+- **Inventory Logic**: We MUST exclude transaction `Type 8` (Divs) and `Type 11` (Accumulation) from share counts. Only `Type 0` (Buy) and `Type 2` (Delivery In) add shares. `Type 1` (Sell) and `Type 3` (Delivery Out) reduce shares.
+- **Mark-to-Market**:
+    - `Start Value` = `Shares_at_Start * Price_at_Start / FX_at_Start`
+    - `End Value` = `Remaining_Shares * Price_at_End / FX_at_End`
+    - `Unrealized Gain` = `End Value` - `Start Value` (for held positions).
+- **Current Total**: ~1.578 €
+- **Target Total**: ~1.975 €
+- **Gap**: ~400 €
 
-### 1. Establish Ground Truth (The "Audit Script")
-We cannot fix the logic until we know *exactly* which security is causing the deviation.
-- Create a Python script (`scripts/audit_period_math.py`) that performs a "dumb", strictly itemized calculation for the target period.
-- **Inputs**:
-    - `start_date` = 2025-11-23
-    - `end_date` = 2025-12-22
-- **Logic for each Security**:
-    1.  **Identify Inventory**:
-        - `Held_Start`: Shares held at `start_date`. Cost Basis = `Price_Start` (Mark-to-Market).
-        - `Bought_During`: Shares bought between `start_date` and `end_date`. Cost Basis = `Purchase_Price` (Actual).
-    2.  **Process Sells (FIFO)**:
-        - For every sell transaction during the period, reduce the inventory (consuming `Held_Start` first, then `Bought_During`).
-        - Shares sold during the period do **not** contribute to Unrealized Gains (their performance is captured in Realized Gains).
-    3.  **Calculate Unrealized Gain (for Remaining Shares only)**:
-        - For shares remaining from `Held_Start`: `Gain = Shares * (Price_End - Price_Start) / FX_End`
-          *(Note: Ensure strictly consistent FX handling. If Start Price was converted with FX_Start, then delta is `(Price_End/FX_End) - (Price_Start/FX_Start)`)*.
-        - For shares remaining from `Bought_During`: `Gain = Shares * ((Price_End/FX_End) - (Purchase_Price_EUR))`
-    4.  **Summation**: Sum the calculated gains for all securities.
-- **Output**: A table listing every security with its individual calculated Unrealized Gain for the period.
-- **Goal**: Sum these deltas to see if we get `~1.975 €`. If yes, this simple logic is correct, and the complex `period_calculations.py` is wrong. If no, our data (prices/FX) might be wrong.
+## Task Plan
 
-### 2. Isolate the Divergence
-- Run the existing `scripts/debug_period_calc_exact.py` (which uses the *current* buggy logic) and the new `scripts/audit_period_math.py` side-by-side.
-- Identify the specific security or securities where the values differ significantly.
-- **Hypothesis Checklist**:
-    - **Initialization**: is the "Mark-to-Market" start value being set to 0 or a lifetime average instead of the spot value on `start_date`?
-    - **FX Handling**: Are we dividing by `1.0` (missing FX rate) at the start or end?
-    - **Transaction Timing**: Are transactions on the start/end date being included/excluded incorrectly?
+### 1. Run Granular Reporting Script
+Run the existing script `scripts/debug_unrealized_granular.py` to generate the detailed breakdown.
+The script outputs to `.docs/unrealized_breakdown.md`.
+1.  **Security Name**
+2.  **Shares Start** (Inventory at 2025-11-23)
+3.  **Price Start (Native)**
+4.  **FX Start**
+5.  **Start Value (EUR)**
+6.  **Shares End** (Inventory at 2025-12-22)
+7.  **Price End (Native)**
+8.  **FX End**
+9.  **End Value (EUR)**
+10. **Unrealized Gain (EUR)** (The calculated delta)
 
-### 3. Refine `period_calculations.py`
-- Modify the core logic in `custom_components/pp_reader/metrics/period_calculations.py`.
-- **Focus**:
-    - The `lots` initialization loop (Lines 242-262).
-    - The `start_prices` and `start_fx_rates` fetching.
-    - Ensure logical consistency: `Unrealized = (Vol_End * Price_End) - (Vol_Start * Price_Start)` for held positions.
+### 2. Execution & Analysis
+- Run the script.
+- Sort the output by `Unrealized Gain (EUR)` descending.
+- Identify the top gainers.
+- Compare these against a manual check or external data if possible (e.g., look for "suspiciously low" gains for known high-performers like Gold, Tech, etc. if known).
 
-### 4. Verification
-- The `scripts/debug_period_calc_exact.py` must output `~1.975,26 €`.
-- The frontend (via Browser verification) must display this exact number.
+### 3. Hypothesis Generation
+Based on the list, determine:
+- Are we missing specific price updates (e.g. `Price End` is same as `Price Start`)?
+- Is FX applied correctly?
+- Is there a specific asset class (e.g., USD stocks) that is consistently lower?
 
-## Constraint
-- Do **not** use `daily_wealth` pre-calculated columns. You must calculate from `transactions`, `historical_prices`, and `fx_rates`.
-- **Expected Output**: ~1.975,26 € (based on user calculation)
+## Constraints
+- **Strict Inventory**: Ensure `Type 8` and `Type 11` are IGNORED.
+- **Price Fallback**: If a price is missing on the exact start/end date, ensure the script finds the *last known price* before or on that date.
+- **Output**: Save the detailed table to `.docs/unrealized_breakdown.md` for user review.
