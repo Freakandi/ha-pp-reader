@@ -91,7 +91,7 @@ def test_fifo_sell_consumes_oldest_lot():
     # Proceeds = 450 EUR
     # Realized Gain = 450 - 200 = 250 EUR
 
-    gain, _ = _apply_transaction_update(
+    gain, _, _ = _apply_transaction_update(
         PORTFOLIO,
         SECURITY,
         delta_shares=-15.0,
@@ -138,7 +138,7 @@ def test_fifo_sell_exact_lot():
     )
 
     # Sell 10 @ 20
-    gain, _ = _apply_transaction_update(
+    gain, _, _ = _apply_transaction_update(
         PORTFOLIO,
         SECURITY,
         -10.0,
@@ -183,7 +183,7 @@ def test_fifo_fx_conversion():
 
     # Sell 10 @ 200 USD (FX 2.0) -> 100 EUR Proceeds (200 / 2.0)
     # Gain = 100 - 50 = 50 EUR
-    gain, _ = _apply_transaction_update(
+    gain, _, _ = _apply_transaction_update(
         PORTFOLIO,
         SECURITY,
         -10.0,
