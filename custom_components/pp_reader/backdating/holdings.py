@@ -608,7 +608,7 @@ def _build_holdings_valuations(
     valuations: list[HoldingValuation] = []
     for (portfolio_uuid, security_uuid), details in holdings:
         shares = details["shares"]
-        # Optimization: Direct access avoids .get() overhead. Values are guaranteed initialized.
+        # Optimization: Direct access avoids .get(). Values are guaranteed initialized.
         purchase_value_eur = details["purchase_value_eur"]
         purchase_value_native = details["purchase_value_native"]
         currency = details["currency"]
