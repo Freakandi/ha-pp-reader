@@ -608,10 +608,10 @@ def _build_holdings_valuations(
     valuations: list[HoldingValuation] = []
     for (portfolio_uuid, security_uuid), details in holdings:
         shares = details["shares"]
-        purchase_value_eur = details.get("purchase_value_eur")
-        purchase_value_native = details.get("purchase_value_native")
-        # Optimization: use cached currency from holdings to avoid dict lookup
-        currency = details.get("currency", "EUR")
+        # Optimization: Direct access avoids .get() overhead. Values are guaranteed initialized.
+        purchase_value_eur = details["purchase_value_eur"]
+        purchase_value_native = details["purchase_value_native"]
+        currency = details["currency"]
 
         cursor_hint = (
             price_cursors.get(security_uuid) if price_cursors is not None else None
@@ -672,10 +672,9 @@ def _build_holdings_valuations(
 
             # Calculate Unrealized Gain from Price Movement (Native Delta / FX)
             # This strips out the pure FX gain on the principal.
-            if purchase_value_native is not None:
-                market_value_native = shares * price_native
-                native_gain = market_value_native - purchase_value_native
-                unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
+            market_value_native = shares * price_native
+            native_gain = market_value_native - purchase_value_native
+            unrealized_price_gains_eur = round(native_gain / fx_rate, 6)
 
         valuations.append(
             HoldingValuation(
@@ -687,16 +686,8 @@ def _build_holdings_valuations(
                 price_date=price_date_raw,
                 price_eur=price_eur,
                 value_eur=value_eur,
-                purchase_value_eur=(
-                    round(purchase_value_eur, 6)
-                    if purchase_value_eur is not None
-                    else 0.0
-                ),
-                purchase_value_native=(
-                    round(purchase_value_native, 6)
-                    if purchase_value_native is not None
-                    else 0.0
-                ),
+                purchase_value_eur=round(purchase_value_eur, 6),
+                purchase_value_native=round(purchase_value_native, 6),
                 unrealized_price_gains_eur=unrealized_price_gains_eur,
                 fx_rate=fx_rate,
                 stale_price=stale,
