@@ -130,14 +130,14 @@ function renderTrend(value: number, formatted: string): string {
 function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
   return `
     <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0">${escapeHtml(labelTop)}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0">${escapeHtml(labelBottom)}</span>
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
     </div>
   `;
 }
 
 function createSimpleSortHeader(label: string, key: string): string {
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0">${escapeHtml(label)}</span>`;
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
 }
 
 function stack(topVal: number | string, topFmt: string, botVal: number | string, botFmt: string): string {
@@ -438,6 +438,7 @@ function buildLastPriceDisplay(
 export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
   buildLastPriceDisplayForTest: buildLastPriceDisplay,
+  attachPortfolioOverviewSorting,
 };
 
 function computePositionDayChange(position: PortfolioPositionRecord): { value: number | null; pct: number | null } {
@@ -1551,7 +1552,7 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
   if (sortableTable.__ppReaderOverviewSortingBound) return;
   sortableTable.__ppReaderOverviewSortingBound = true;
 
-  table.addEventListener('click', (event) => {
+  const handleSort = (event: Event) => {
     const target = event.target as HTMLElement;
     const sortTrigger = target.closest('[data-sort-selector]') || target.closest('[data-sort-key]');
     if (sortTrigger) {
@@ -1560,14 +1561,17 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
       if (triggerTable !== table) return;
 
       // Clean up previous sort indicators
-      table.querySelectorAll('.sort-active').forEach(el => {
+      table.querySelectorAll('.sort-active').forEach((el) => {
         if (el !== sortTrigger) {
           el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
         }
       });
 
       let dir: 'asc' | 'desc' = 'asc';
-      if (sortTrigger.classList.contains('sort-active') && sortTrigger.classList.contains('dir-asc')) {
+      if (
+        sortTrigger.classList.contains('sort-active') &&
+        sortTrigger.classList.contains('dir-asc')
+      ) {
         dir = 'desc';
       }
 
@@ -1576,12 +1580,26 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
       sortTrigger.classList.add(`dir-${dir}`);
 
       const th = sortTrigger.closest('th');
-      const colIndex = th ? Array.from(th.parentElement?.children ?? []).indexOf(th) : -1;
+      const colIndex = th
+        ? Array.from(th.parentElement?.children ?? []).indexOf(th)
+        : -1;
 
       if (colIndex >= 0) {
-        const selector = (sortTrigger as HTMLElement).dataset.sortSelector || null;
+        const selector =
+          (sortTrigger as HTMLElement).dataset.sortSelector || null;
         sortOverviewTable(table, colIndex, selector, dir);
       }
+    }
+  };
+
+  table.addEventListener('click', (event) => {
+    handleSort(event);
+  });
+
+  table.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleSort(event);
     }
   });
 }
