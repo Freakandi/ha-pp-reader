@@ -177,7 +177,7 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     if (trade.lots.length > 1) {
       nameCell = `
         <span class="expand-icon" role="button" tabindex="0" aria-label="Details anzeigen" aria-expanded="false" data-security-uuid="${escapeAttribute(trade.security_uuid)}">
-          <ha-icon icon="mdi:chevron-right"></ha-icon>
+          <ha-icon icon="mdi:chevron-right" aria-hidden="true"></ha-icon>
         </span>
         ${nameCell}
       `;
@@ -221,7 +221,7 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       result_pct: `<span data-val="${String(trade.result_pct)}">${renderTrend(trade.result_pct, formatPercent(trade.result_pct / 100))}</span>`,
 
       current_holdings: isClosed
-        ? '<span data-val="0"><ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;"></ha-icon></span>'
+        ? '<span data-val="0" role="img" aria-label="Position geschlossen"><ha-icon icon="mdi:lock-outline" title="Geschlossen" style="opacity: 0.6;" aria-hidden="true"></ha-icon></span>'
         : `<span data-val="${String(trade.current_holdings)}">${formatNumber(trade.current_holdings)}</span>`,
       since_sell: trade.current_price === null ? '<span>-</span>' : stack(
         sinceSellPct,
