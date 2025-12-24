@@ -438,9 +438,10 @@ def _load_price_cache(
     db_path: Path,
     until: date | None = None,
     securities: dict[str, dict[str, Any]] | None = None,
-) -> dict[str, list[tuple[date, float, str]]]:
-    """Load historical prices into a security-sorted list cache."""
-    cache: dict[str, list[tuple[date, float, str]]] = {}
+) -> dict[str, list[tuple[date, float, str, str | None]]]:
+    """Load historical prices into a security-sorted list cache with ISO strings."""
+    # Cache entry: (date_obj, price_float, raw_date_str, iso_date_str)
+    cache: dict[str, list[tuple[date, float, str, str | None]]] = {}
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -451,17 +452,19 @@ def _load_price_cache(
             """
         ).fetchall()
 
-    date_parse_cache: dict[Any, date | None] = {}
+    # Cache both the date object and its ISO string representation
+    date_parse_cache: dict[Any, tuple[date | None, str | None]] = {}
 
     for row in rows:
         security_uuid = row["security_uuid"]
         raw_date = row["date"]
 
         if raw_date in date_parse_cache:
-            price_date = date_parse_cache[raw_date]
+            price_date, price_date_iso = date_parse_cache[raw_date]
         else:
             price_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
-            date_parse_cache[raw_date] = price_date
+            price_date_iso = price_date.isoformat() if price_date else None
+            date_parse_cache[raw_date] = (price_date, price_date_iso)
 
         if security_uuid is None or price_date is None:
             continue
@@ -473,7 +476,7 @@ def _load_price_cache(
         if normalized_price is None:
             continue
         cache.setdefault(security_uuid, []).append(
-            (price_date, normalized_price, str(raw_date))
+            (price_date, normalized_price, str(raw_date), price_date_iso)
         )
 
     # Merge real-time prices from securities if available and more recent
@@ -488,8 +491,14 @@ def _load_price_cache(
                     if lp_val:
                         existing = cache.get(sid, [])
                         if not existing or lp_date > existing[-1][0]:
+                            lp_iso = lp_date.isoformat()
                             existing.append(
-                                (lp_date, lp_val, f"rt:{last_price_date_raw}")
+                                (
+                                    lp_date,
+                                    lp_val,
+                                    f"rt:{last_price_date_raw}",
+                                    lp_iso,
+                                )
                             )
                             cache[sid] = existing
 
@@ -547,19 +556,23 @@ def _initialize_fx_cache(
 
 def _resolve_price_for_date(
     security_uuid: str,
-    price_cache: dict[str, list[tuple[date, float, str]]],
+    price_cache: dict[str, list[tuple[date, float, str, str | None]]],
     target_date: date,
     cursor_hint: int | None = None,
-) -> tuple[float | None, str | None, date | None, bool, int]:
+) -> tuple[float | None, str | None, date | None, bool, int, str | None]:
     """
     Return close price on or before target date, plus stale flag and updated cursor.
 
+    Returns:
+        (price, raw_date_str, date_obj, stale, new_cursor_idx, iso_date_str)
+
     Uses cursor hint for amortized O(1) lookup when processing sequential dates,
     falling back to binary search O(log N) if no cursor is provided.
+
     """
     entries = price_cache.get(security_uuid)
     if not entries:
-        return None, None, None, False, 0
+        return None, None, None, False, 0, None
 
     n = len(entries)
     idx = 0
@@ -582,23 +595,24 @@ def _resolve_price_for_date(
 
     if idx < 0:
         # No entry <= target_date
-        return None, None, None, False, 0
+        return None, None, None, False, 0, None
 
-    selected_date, selected_price, selected_raw = entries[idx]
+    selected_date, selected_price, selected_raw, selected_iso = entries[idx]
 
     stale = selected_date != target_date
     return (
         selected_price,
-        selected_raw or selected_date.isoformat(),
+        selected_raw or selected_iso,  # fallback to iso if raw is somehow missing
         selected_date,
         stale,
         idx,
+        selected_iso,
     )
 
 
 def _build_holdings_valuations(
     holdings: Iterable[tuple[tuple[str, str], dict[str, float]]],
-    price_cache: dict[str, list[tuple[date, float, str]]],
+    price_cache: dict[str, list[tuple[date, float, str, str | None]]],
     fx_rates: dict[str, float],
     *,
     target_date: date,
@@ -619,9 +633,10 @@ def _build_holdings_valuations(
         (
             price_native,
             price_date_raw,
-            price_date_obj,
+            _price_date_obj,
             stale,
             new_cursor,
+            price_date_iso,
         ) = _resolve_price_for_date(
             security_uuid,
             price_cache,
@@ -640,20 +655,10 @@ def _build_holdings_valuations(
         if currency == "EUR":
             fx_rate = 1.0
             used_fx_for_conversion = True
-        elif stale and price_date_raw and fx_rates_cache:
-            # Try to find FX rate for the specific price date
-            # Optimization: Use price_date_obj directly to avoid expensive split()
-            # on raw string, but fallback if date obj is missing (unlikely).
-            date_key = None
-            if price_date_obj:
-                date_key = price_date_obj.isoformat()
-            else:
-                # Fallback for defensive coding, check "T" to avoid unnecessary split
-                # Only needed if price_date_raw contains 'T' (e.g. ISO timestamp)
-                s = str(price_date_raw)
-                date_key = s.split("T")[0] if "T" in s else s
-
-            cached_day = fx_rates_cache.get(date_key)
+        elif stale and price_date_iso and fx_rates_cache:
+            # Try to find FX rate for the specific price date using cached ISO string
+            # to avoid repeated isoformat() calls.
+            cached_day = fx_rates_cache.get(price_date_iso)
             if cached_day and currency in cached_day:
                 fx_rate = cached_day[currency]
                 used_fx_for_conversion = True
