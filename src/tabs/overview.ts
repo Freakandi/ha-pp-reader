@@ -1926,7 +1926,7 @@ export async function renderDashboard(
     <div class="card footer-card">
       <div class="meta">
         <div class="last-file-update">
-          📂 Letzte Aktualisierung der Datei: <strong>${lastFileUpdate || 'Unbekannt'}</strong>
+          📂 Letzte Aktualisierung der Datei: <strong>${escapeHtml(lastFileUpdate) || 'Unbekannt'}</strong>
         </div>
       </div>
     </div>
