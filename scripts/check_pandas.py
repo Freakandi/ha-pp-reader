@@ -1,9 +1,8 @@
-
-import sys
 try:
-    import pandas as pd
     import numpy as np
-    print(f"Pandas version: {pd.__version__}")
-    print(f"Numpy version: {np.__version__}")
+    import pandas as pd
+
+    print(f"Pandas version: {pd.__version__}")  # noqa: T201
+    print(f"Numpy version: {np.__version__}")  # noqa: T201
 except ImportError as e:
-    print(f"ImportError: {e}")
+    print(f"ImportError: {e}")  # noqa: T201

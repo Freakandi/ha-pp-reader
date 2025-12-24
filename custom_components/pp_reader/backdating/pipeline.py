@@ -211,7 +211,10 @@ async def async_run_backdating_rebuild(
                 plan.start_date,
                 plan.end_date,
             )
-            _emit("backdating_pandas_completed", days=(plan.end_date - plan.start_date).days + 1)
+            _emit(
+                "backdating_pandas_completed",
+                days=(plan.end_date - plan.start_date).days + 1,
+            )
         except Exception as err:
             finished_at = _utc_now_isoformat()
             _LOGGER.exception(

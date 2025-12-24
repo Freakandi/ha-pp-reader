@@ -4,14 +4,18 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import date
-from typing import ClassVar, Any
+from typing import Any, ClassVar
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from custom_components.pp_reader.util.currency import PRICE_SCALE
 
 _LOGGER = logging.getLogger(__name__)
+
+# Constants for Transaction Unit Types
+UNIT_TYPE_TAX = 1
+UNIT_TYPE_FEE = 2
 
 
 @dataclass(slots=True)
@@ -150,142 +154,31 @@ class BackdatingEngine:
         """Calculate daily wealth metrics."""
         date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
 
-        # --- 1. FX PREPARATION ---
-        if not df_rates.empty:
-            fx_pivot = df_rates.pivot_table(
-                index="date", columns="currency", values="rate"
-            )
-        else:
-            fx_pivot = pd.DataFrame(index=date_range)
-
-        fx_pivot["EUR"] = 1.0
-        fx_pivot = fx_pivot.reindex(date_range).ffill()
-
-        # --- 2. PRICES PREPARATION ---
-        if not df_prices.empty:
-            price_pivot = df_prices.pivot_table(
-                index="date", columns="security_uuid", values="close"
-            )
-            price_pivot = price_pivot / PRICE_SCALE
-            price_pivot = price_pivot.reindex(date_range).ffill()
-        else:
-            price_pivot = pd.DataFrame(index=date_range)
-
-        # --- 3. AUGMENT TRANSACTIONS WITH FX AND VALUES ---
-        # Helper: Create long-form FX table for efficient merging
-        fx_long = fx_pivot.stack().reset_index()
-        fx_long.columns = ["date", "currency_code", "daily_fx_rate"]
-
-        if not df_txs.empty:
-            # Join with FX
-            df_augmented = pd.merge(
-                df_txs, fx_long, on=["date", "currency_code"], how="left"
-            )
-            df_augmented["daily_fx_rate"] = df_augmented["daily_fx_rate"].fillna(1.0)
-            df_augmented["historic_fx_rate"] = df_augmented["daily_fx_rate"]
-            # Calculate EUR Amount (Cash Flow Value)
-            df_augmented["amount_eur"] = (
-                (df_augmented["amount"] / 100.0) / df_augmented["historic_fx_rate"]
-            )
-        else:
-            df_augmented = pd.DataFrame(
-                columns=["date", "type", "amount_eur", "security", "shares"]
-            )
-
-        # --- 4. INVESTED CAPITAL ---
-        flow_types = {
-            TransactionType.DEPOSIT: 1,
-            TransactionType.INBOUND_DELIVERY: 1,
-            TransactionType.REMOVAL: -1,
-            TransactionType.OUTBOUND_DELIVERY: -1,
-        }
-        df_flows = df_augmented[df_augmented["type"].isin(flow_types)].copy()
-        if not df_flows.empty:
-            df_flows["sign"] = df_flows["type"].map(flow_types)
-            df_flows["flow_val"] = df_flows["amount_eur"] * df_flows["sign"]
-            daily_invested_flow = df_flows.groupby("date")["flow_val"].sum()
-        else:
-            daily_invested_flow = pd.Series(dtype=float)
-
-        daily_invested_cum = daily_invested_flow.reindex(
-            date_range, fill_value=0.0
-        ).cumsum()
-
-        # --- 5. CASH ACCUMULATORS ---
-        # Helper to sum by transaction type
-        def _sum_by_type(tx_type: int) -> pd.Series:
-            return (
-                df_augmented[df_augmented["type"] == tx_type]
-                .groupby("date")["amount_eur"]
-                .sum()
-                .reindex(date_range, fill_value=0)
-            )
-
-        div_flow = _sum_by_type(TransactionType.DIVIDEND)
-        int_net = _sum_by_type(TransactionType.INTEREST).sub(
-            _sum_by_type(TransactionType.INTEREST_CHARGE), fill_value=0
-        )
-        fees_net = _sum_by_type(TransactionType.FEE).sub(
-            _sum_by_type(TransactionType.FEE_REFUND), fill_value=0
-        )
-        taxes_net = _sum_by_type(TransactionType.TAX).sub(
-            _sum_by_type(TransactionType.TAX_REFUND), fill_value=0
+        # --- 1. PREPARE MARKET DATA ---
+        fx_pivot, price_pivot = self._prepare_market_data(
+            df_rates, df_prices, date_range
         )
 
-        # Add transaction units (Fees/Taxes embedded)
-        if not df_units.empty and not df_txs.empty:
-            df_units_aug = pd.merge(
-                df_units,
-                df_txs[["uuid", "date", "currency_code"]],
-                left_on="transaction_uuid",
-                right_on="uuid",
-                how="left",
-            )
-            df_units_aug = df_units_aug.dropna(subset=["date"])
-            df_units_aug = pd.merge(
-                df_units_aug, fx_long, on=["date", "currency_code"], how="left"
-            )
-            df_units_aug["daily_fx_rate"] = df_units_aug["daily_fx_rate"].fillna(1.0)
-            df_units_aug["amount_eur"] = (
-                (df_units_aug["amount"] / 100.0) / df_units_aug["daily_fx_rate"]
-            )
+        # --- 2. AUGMENT TRANSACTIONS ---
+        df_augmented, fx_long = self._augment_transactions(df_txs, fx_pivot)
 
-            # Type 1 = Tax, Type 2 = Fee (as per implicit knowledge/constants)
-            # Replicating logic but using explicit ints matching existing code or constants if available
-            # engine_pandas.py defines TransactionType, but not UnitType.
-            # Assuming 1=Tax, 2=Fee is correct based on review context.
-            TAX_UNIT_TYPE = 1
-            FEE_UNIT_TYPE = 2
+        # --- 3. INVESTED CAPITAL ---
+        daily_invested_cum = self._calculate_invested_capital(df_augmented, date_range)
 
-            units_tax = (
-                df_units_aug[df_units_aug["type"] == TAX_UNIT_TYPE]
-                .groupby("date")["amount_eur"]
-                .sum()
-            )
-            units_fee = (
-                df_units_aug[df_units_aug["type"] == FEE_UNIT_TYPE]
-                .groupby("date")["amount_eur"]
-                .sum()
-            )
+        # --- 4. CASH ACCUMULATORS ---
+        div_flow, int_net, fees_net, taxes_net = self._calculate_cash_accumulators(
+            df_augmented, df_units, df_txs, fx_long, date_range
+        )
 
-            taxes_net = taxes_net.add(
-                units_tax.reindex(date_range, fill_value=0), fill_value=0
-            )
-            fees_net = fees_net.add(
-                units_fee.reindex(date_range, fill_value=0), fill_value=0
-            )
-
-        # --- 6. WEALTH CALCULATION (SECURITIES) ---
+        # --- 5. WEALTH CALCULATION (SECURITIES) ---
         daily_sec_wealth = self._calculate_security_wealth(
             df_augmented, price_pivot, fx_pivot, date_range
         )
 
-        # --- 7. WEALTH CALCULATION (CASH) ---
-        daily_cash_wealth = self._calculate_cash_wealth(
-            df_txs, fx_pivot, date_range
-        )
+        # --- 6. WEALTH CALCULATION (CASH) ---
+        daily_cash_wealth = self._calculate_cash_wealth(df_txs, fx_pivot, date_range)
 
-        # --- 8. ASSEMBLE RESULT ---
+        # --- 7. ASSEMBLE RESULT ---
         result = pd.DataFrame(index=date_range)
         result["invested_capital_eur"] = daily_invested_cum.round(2)
         result["total_wealth_eur"] = (daily_sec_wealth + daily_cash_wealth).round(2)
@@ -311,6 +204,153 @@ class BackdatingEngine:
 
         return result
 
+    def _prepare_market_data(
+        self,
+        df_rates: pd.DataFrame,
+        df_prices: pd.DataFrame,
+        date_range: pd.DatetimeIndex,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Prepare FX and Price pivot tables."""
+        if not df_rates.empty:
+            fx_pivot = df_rates.pivot_table(
+                index="date", columns="currency", values="rate"
+            )
+        else:
+            fx_pivot = pd.DataFrame(index=date_range)
+
+        fx_pivot["EUR"] = 1.0
+        fx_pivot = fx_pivot.reindex(date_range).ffill()
+
+        if not df_prices.empty:
+            price_pivot = df_prices.pivot_table(
+                index="date", columns="security_uuid", values="close"
+            )
+            price_pivot = price_pivot / PRICE_SCALE
+            price_pivot = price_pivot.reindex(date_range).ffill()
+        else:
+            price_pivot = pd.DataFrame(index=date_range)
+
+        return fx_pivot, price_pivot
+
+    def _augment_transactions(
+        self,
+        df_txs: pd.DataFrame,
+        fx_pivot: pd.DataFrame,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Augment transactions with FX rates and EUR values."""
+        # Create long-form FX table using melt instead of stack
+        # reset_index(names="date") guarantees the column name for merging
+        fx_long = fx_pivot.reset_index(names="date").melt(
+            id_vars="date", var_name="currency_code", value_name="daily_fx_rate"
+        )
+
+        if not df_txs.empty:
+            # Join with FX
+            df_augmented = df_txs.merge(
+                fx_long, on=["date", "currency_code"], how="left"
+            )
+            df_augmented["daily_fx_rate"] = df_augmented["daily_fx_rate"].fillna(1.0)
+            df_augmented["historic_fx_rate"] = df_augmented["daily_fx_rate"]
+            # Calculate EUR Amount (Cash Flow Value)
+            df_augmented["amount_eur"] = (
+                df_augmented["amount"] / 100.0
+            ) / df_augmented["historic_fx_rate"]
+        else:
+            df_augmented = pd.DataFrame(
+                columns=["date", "type", "amount_eur", "security", "shares"]
+            )
+
+        return df_augmented, fx_long
+
+    def _calculate_invested_capital(
+        self, df_augmented: pd.DataFrame, date_range: pd.DatetimeIndex
+    ) -> pd.Series:
+        """Calculate cumulative invested capital from external flows."""
+        flow_types = {
+            TransactionType.DEPOSIT: 1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
+        df_flows = df_augmented[df_augmented["type"].isin(flow_types)].copy()
+        if not df_flows.empty:
+            df_flows["sign"] = df_flows["type"].map(flow_types)
+            df_flows["flow_val"] = df_flows["amount_eur"] * df_flows["sign"]
+            daily_invested_flow = df_flows.groupby("date")["flow_val"].sum()
+        else:
+            daily_invested_flow = pd.Series(dtype=float)
+
+        return daily_invested_flow.reindex(date_range, fill_value=0.0).cumsum()
+
+    def _calculate_cash_accumulators(
+        self,
+        df_augmented: pd.DataFrame,
+        df_units: pd.DataFrame,
+        df_txs: pd.DataFrame,
+        fx_long: pd.DataFrame,
+        date_range: pd.DatetimeIndex,
+    ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+        """Calculate daily sums for Dividends, Interest, Fees, and Taxes."""
+
+        def _sum_by_type(tx_type: int) -> pd.Series:
+            return (
+                df_augmented[df_augmented["type"] == tx_type]
+                .groupby("date")["amount_eur"]
+                .sum()
+                .reindex(date_range, fill_value=0)
+            )
+
+        div_flow = _sum_by_type(TransactionType.DIVIDEND)
+        int_net = _sum_by_type(TransactionType.INTEREST).sub(
+            _sum_by_type(TransactionType.INTEREST_CHARGE), fill_value=0
+        )
+        fees_net = _sum_by_type(TransactionType.FEE).sub(
+            _sum_by_type(TransactionType.FEE_REFUND), fill_value=0
+        )
+        taxes_net = _sum_by_type(TransactionType.TAX).sub(
+            _sum_by_type(TransactionType.TAX_REFUND), fill_value=0
+        )
+
+        # Add transaction units (Fees/Taxes embedded)
+        if not df_units.empty and not df_txs.empty:
+            # We exclude df_txs['currency_code'] as df_units is authoritative
+            df_units_aug = df_units.merge(
+                df_txs[["uuid", "date"]],
+                left_on="transaction_uuid",
+                right_on="uuid",
+                how="left",
+            )
+            df_units_aug = df_units_aug.dropna(subset=["date"])
+
+            # Now merge FX using df_units' currency_code
+            df_units_aug = df_units_aug.merge(
+                fx_long, on=["date", "currency_code"], how="left"
+            )
+            df_units_aug["daily_fx_rate"] = df_units_aug["daily_fx_rate"].fillna(1.0)
+            df_units_aug["amount_eur"] = (
+                df_units_aug["amount"] / 100.0
+            ) / df_units_aug["daily_fx_rate"]
+
+            units_tax = (
+                df_units_aug[df_units_aug["type"] == UNIT_TYPE_TAX]
+                .groupby("date")["amount_eur"]
+                .sum()
+            )
+            units_fee = (
+                df_units_aug[df_units_aug["type"] == UNIT_TYPE_FEE]
+                .groupby("date")["amount_eur"]
+                .sum()
+            )
+
+            taxes_net = taxes_net.add(
+                units_tax.reindex(date_range, fill_value=0), fill_value=0
+            )
+            fees_net = fees_net.add(
+                units_fee.reindex(date_range, fill_value=0), fill_value=0
+            )
+
+        return div_flow, int_net, fees_net, taxes_net
+
     def _calculate_security_wealth(
         self,
         df_augmented: pd.DataFrame,
@@ -318,7 +358,7 @@ class BackdatingEngine:
         fx_pivot: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> pd.Series:
-        sec_txs = df_augmented[df_augmented["security"].notnull()].copy()
+        sec_txs = df_augmented[df_augmented["security"].notna()].copy()
         daily_sec_wealth = pd.Series(0.0, index=date_range)
 
         if sec_txs.empty:
@@ -342,12 +382,13 @@ class BackdatingEngine:
 
         sec_txs["delta_shares"] = sec_txs.apply(get_share_delta, axis=1)
 
-        sec_daily_change = (
-            sec_txs.groupby(["date", "security"])["delta_shares"]
-            .sum()
-            .unstack(fill_value=0)
-            .reindex(date_range, fill_value=0)
-        )
+        sec_daily_change = sec_txs.pivot_table(
+            index="date",
+            columns="security",
+            values="delta_shares",
+            aggfunc="sum",
+            fill_value=0,
+        ).reindex(date_range, fill_value=0)
         sec_holdings = sec_daily_change.cumsum()
 
         sec_curr_map = (
@@ -412,12 +453,13 @@ class BackdatingEngine:
         df_txs["delta_cash"] = df_txs.apply(get_cash_delta, axis=1)
         acc_txs = df_txs.dropna(subset=["account"])
 
-        acc_daily_change = (
-            acc_txs.groupby(["date", "account", "currency_code"])["delta_cash"]
-            .sum()
-            .unstack(level=[1, 2], fill_value=0)
-            .reindex(date_range, fill_value=0)
-        )
+        acc_daily_change = acc_txs.pivot_table(
+            index="date",
+            columns=["account", "currency_code"],
+            values="delta_cash",
+            aggfunc="sum",
+            fill_value=0,
+        ).reindex(date_range, fill_value=0)
         acc_balances = acc_daily_change.cumsum()
 
         for _, curr in acc_balances.columns:
