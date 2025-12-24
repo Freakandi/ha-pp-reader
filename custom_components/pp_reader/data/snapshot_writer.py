@@ -7,7 +7,7 @@ import logging
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,7 +17,6 @@ from custom_components.pp_reader.data.db_schema import (
     PORTFOLIO_SCHEMA,
 )
 from custom_components.pp_reader.data.migrations import ensure_snapshot_tables
-from custom_components.pp_reader.util.datetime import UTC
 
 if TYPE_CHECKING:
     from .normalization_pipeline import (

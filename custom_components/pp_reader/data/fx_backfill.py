@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,7 +14,6 @@ from custom_components.pp_reader.data.db_access import (
     FxRateRecord,
     upsert_fx_rates_chunked,
 )
-from custom_components.pp_reader.util.datetime import UTC
 from custom_components.pp_reader.util.fx import fetch_fx_range
 
 if TYPE_CHECKING:

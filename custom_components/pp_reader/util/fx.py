@@ -5,13 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import ssl
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import aiohttp
 from homeassistant.util import ssl as hass_ssl
 
 from custom_components.pp_reader.data.db_access import FxRateRecord
-from custom_components.pp_reader.util.datetime import UTC
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.util.fx")
 

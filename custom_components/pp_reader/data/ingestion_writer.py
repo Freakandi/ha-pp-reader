@@ -9,6 +9,7 @@ import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -19,7 +20,6 @@ from custom_components.pp_reader.util.currency import (
     ensure_exchange_rates_for_dates_sync,
     eur_to_cent,
 )
-from custom_components.pp_reader.util.datetime import UTC
 
 from .db_init import clear_ingestion_stage, ensure_ingestion_tables
 

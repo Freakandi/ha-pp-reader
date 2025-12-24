@@ -11,7 +11,7 @@ import sqlite3
 from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +40,6 @@ from custom_components.pp_reader.util.currency import (
     round_currency,
     round_price,
 )
-from custom_components.pp_reader.util.datetime import UTC
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
