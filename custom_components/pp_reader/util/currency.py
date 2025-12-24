@@ -20,6 +20,7 @@ __all__ = [
     "CENT_IN_EURO",
     "CURRENCY_DECIMALS",
     "PRICE_DECIMALS",
+    "PRICE_SCALE",
     "cent_to_eur",
     "ensure_exchange_rates_for_dates_sync",
     "eur_to_cent",

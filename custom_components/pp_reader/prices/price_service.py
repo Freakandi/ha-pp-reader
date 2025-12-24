@@ -55,11 +55,11 @@ from custom_components.pp_reader.prices.yahooquery_provider import (
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import (
+    PRICE_SCALE,
     cent_to_eur,
     eur_to_cent,
     round_currency,
 )
-from custom_components.pp_reader.util.scaling import SCALE
 
 
 async def revalue_after_price_updates(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -161,7 +161,7 @@ INVALID_SCALED_PRICE_ERROR = (
     "Ungültiger skalierten Preis (ensure_no_extra_persist Guard)"
 )
 _SCALED_INT_THRESHOLD = 10_000
-_EIGHT_DECIMAL_SCALE = int(SCALE)
+_EIGHT_DECIMAL_SCALE = PRICE_SCALE
 ZERO_QUOTES_WARN_INTERVAL = 1_800
 # Yahoo Finance benötigt teils >10s für große Chunks -
 # größere Puffer reduzieren Timeout-Abbrüche.
