@@ -1,47 +1,55 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+
+import { describe, it, after, before } from 'node:test';
+import assert from 'node:assert';
 import { installDomEnvironment } from '../../__tests__/dom';
-import { __TEST_ONLY__ } from '../updateConfigsWS';
 
-// Define minimal types to satisfy the function signature
-type PortfolioPositionRecord = {
-  name: string;
-  current_holdings: number | string;
-  purchase_value: number | string;
-  current_value: number | string;
-  security_uuid?: string;
-  performance?: unknown;
-  aggregation?: unknown;
-  average_cost?: unknown;
-  currency_code?: string;
-};
+describe('updateConfigsWS XSS Vulnerability', () => {
+  let domEnv: ReturnType<typeof installDomEnvironment>;
+  let updateConfigsWS: typeof import('../updateConfigsWS');
 
-void test('renderPositionsTableInline escapes XSS in name', () => {
-  const env = installDomEnvironment('<!doctype html><html><body></body></html>');
-  // Mock global DOMParser which might be used inside
-  global.DOMParser = env.window.DOMParser;
+  before(async () => {
+    domEnv = installDomEnvironment('<!doctype html><html><body><div id="root"><div class="fx-account-table"></div></div></body></html>');
+    // Dynamic import to ensure JSDOM globals are present when module initializes
+    updateConfigsWS = await import('../updateConfigsWS');
+  });
 
-  try {
-    const maliciousName = '<img src=x onerror=alert(1)>';
-    const positions: PortfolioPositionRecord[] = [
-      {
-        name: maliciousName,
-        current_holdings: 10,
-        purchase_value: 100,
-        current_value: 110,
-      }
-    ];
+  after(() => {
+    domEnv.restore();
+  });
 
-    // We access the internal function exposed via __TEST_ONLY__
-    // @ts-ignore - accessing private export
-    const html = __TEST_ONLY__.renderPositionsTableInline(positions);
+  it('should fix XSS vulnerability in currency_code', () => {
+    const root = domEnv.document.getElementById('root');
+    if (!root) {
+        throw new Error('Root element not found');
+    }
+    const maliciousCode = '<b>EUR</b>'; // Formatting injection as proof of concept
 
-    // Assert that the HTML is ESCAPED.
-    // Normalized or not, the < should be &lt;
-    assert.ok(html.includes('&lt;img'), 'Should contain escaped HTML (&lt;img)');
-    assert.ok(!html.includes('<img'), 'Should NOT contain raw HTML tag (<img)');
+    const update = [{
+      uuid: 'acc1',
+      name: 'Test Account',
+      currency_code: maliciousCode,
+      orig_balance: 100,
+      balance: 100,
+      badges: []
+    }];
 
-  } finally {
-    env.restore();
-  }
+    updateConfigsWS.handleAccountUpdate(update, root);
+
+    const fxTable = root.querySelector('.fx-account-table');
+    assert.ok(fxTable, 'FX table should be present');
+
+    // Check if the malicious code is present raw in the output
+    const html = fxTable.innerHTML;
+
+    // If fixed/escaped, it should contain &lt;b&gt;EUR&lt;/b&gt;
+
+    const isEscaped = html.includes('&lt;b&gt;EUR&lt;/b&gt;');
+    const isRaw = html.includes('<b>EUR</b>') && !isEscaped;
+
+    // We expect it to be escaped now.
+    assert.ok(isEscaped, 'Malicious input should be escaped');
+    assert.strictEqual(isRaw, false, 'HTML should NOT contain raw tags');
+
+    // console.log('Current HTML output segment:', html.substring(html.indexOf('100,00')));
+  });
 });

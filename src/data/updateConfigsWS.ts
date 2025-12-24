@@ -623,7 +623,7 @@ function updateAccountTable(accounts: AccountOverviewRow[], root: QueryRoot): vo
         : null;
       const fxDisplay = amountLabel
         ? currencyCode
-          ? `${amountLabel}\u00A0${currencyCode}`
+          ? `${amountLabel}\u00A0${escapeHtml(currencyCode)}`
           : amountLabel
         : '';
 
