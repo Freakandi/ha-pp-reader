@@ -5,3 +5,7 @@
 ## 2025-05-26 - [Consistent Iconography in Navigation]
 **Learning:** Replacing text-based navigation arrows ('‹', '›') with SVGs improves visual consistency but requires careful CSS sizing (`width`, `height`, `fill`) inside flex containers to prevent layout shifts.
 **Action:** When replacing text icons with SVGs, explicitly define dimensions and ensure `aria-label` is preserved for accessibility.
+
+## 2025-05-27 - [Semantic Icons for Screen Readers]
+**Learning:** Purely visual icons (like lock/status indicators) are invisible to screen readers unless explicitly wrapped in a container with `role='img'` and a descriptive `aria-label`. The internal icon should be hidden (`aria-hidden='true'`) to prevent redundant or confusing announcements.
+**Action:** Always wrap semantic status icons in a labelled span and hide the decorative icon element itself.
