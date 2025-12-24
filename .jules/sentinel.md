@@ -32,3 +32,8 @@
 **Vulnerability:** `handleLastFileUpdate` in `src/data/updateConfigsWS.ts` injected `last_file_update` payload directly into `innerHTML` without escaping.
 **Learning:** Legacy websocket handlers ported to TypeScript often retained unsafe string concatenation patterns.
 **Prevention:** Audit all functions in `src/data/updateConfigsWS.ts` and ensure `escapeHtml` is used for any user-controlled data injected into DOM.
+
+## 2025-01-05 - Stored XSS in FX Display
+**Vulnerability:** `currency_code` in `updateAccountTable` (`src/data/updateConfigsWS.ts`) was concatenated directly into HTML without escaping, bypassing `formatValue`'s regex blacklist via simple HTML formatting like `<b>EUR</b>`.
+**Learning:** Defense-in-depth sanitization (like `formatValue`'s blacklist) is not a substitute for proper escaping at the point of data use. Blacklists are easily bypassed by benign-looking tags that still allow content injection.
+**Prevention:** Explicitly escape all dynamic strings (especially those from external sources like `currency_code`) using `escapeHtml` before embedding them in HTML templates.
