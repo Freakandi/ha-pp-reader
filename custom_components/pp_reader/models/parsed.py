@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
-
-from custom_components.pp_reader.util.datetime import UTC
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

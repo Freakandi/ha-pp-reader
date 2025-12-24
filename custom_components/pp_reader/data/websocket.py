@@ -11,7 +11,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from functools import partial, wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,7 +35,6 @@ from custom_components.pp_reader.metrics.period_calculations import (
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
-from custom_components.pp_reader.util.datetime import UTC
 
 from .db_access import (
     get_accounts,
