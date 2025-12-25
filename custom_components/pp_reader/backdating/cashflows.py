@@ -12,7 +12,6 @@ from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.logic.accounting import CASH_TRANSFER_TYPE
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -331,11 +330,13 @@ def _process_transaction(  # noqa: PLR0912
     if fx_rate and is_foreign:
         covered_currencies.add(currency)
 
-    amount_eur = None
-    if fx_rate and fx_rate > 0:
-        amount_eur = cent_to_eur(amount_cents, default=0.0) or 0.0
-        if currency != "EUR":
-            amount_eur = round(amount_eur / fx_rate, 6)
+    # Optimization: Check FX availability early
+    if not fx_rate or fx_rate <= 0:
+        return
+
+    # Optimization: direct division, no function call overhead
+    amount_eur = amount_cents / 100.0
+    amount_eur = round(amount_eur / fx_rate, 6) if is_foreign else round(amount_eur, 2)
 
     bucket, sign = _classify_transaction(tx)
 
@@ -343,19 +344,33 @@ def _process_transaction(  # noqa: PLR0912
     # avoiding double-count for explicit Fee/Tax transactions
     tx_fees = tx.fees
     tx_taxes = tx.taxes
+
+    # Pre-calculate fee/tax EUR values if they exist to reuse them
+    f_eur_abs = 0.0
+    t_eur_abs = 0.0
+
     if tx_fees or tx_taxes:
-        f_eur = cent_to_eur(tx_fees, default=0.0) or 0.0
-        t_eur = cent_to_eur(tx_taxes, default=0.0) or 0.0
-        if is_foreign and fx_rate and fx_rate > 0:
-            f_eur = round(f_eur / fx_rate, 6)
-            t_eur = round(t_eur / fx_rate, 6)
+        if tx_fees:
+            f_val = tx_fees / 100.0
+            if is_foreign:
+                f_eur_abs = abs(round(f_val / fx_rate, 6))
+            else:
+                f_eur_abs = abs(round(f_val, 2))
 
-        if bucket != "fees" and tx_fees:
-            curr_buckets["fees"] += abs(f_eur)
-        if bucket != "taxes" and tx_taxes:
-            curr_buckets["taxes"] += abs(t_eur)
+            if bucket != "fees":
+                curr_buckets["fees"] += f_eur_abs
 
-    if bucket is None or amount_eur is None:
+        if tx_taxes:
+            t_val = tx_taxes / 100.0
+            if is_foreign:
+                t_eur_abs = abs(round(t_val / fx_rate, 6))
+            else:
+                t_eur_abs = abs(round(t_val, 2))
+
+            if bucket != "taxes":
+                curr_buckets["taxes"] += t_eur_abs
+
+    if bucket is None:
         return
 
     signed_value = amount_eur * sign
@@ -364,16 +379,10 @@ def _process_transaction(  # noqa: PLR0912
     # The 'amount' in DB is typically Net (payout).
     # So we add back taxes and fees to the metric for these buckets.
     if bucket in ("dividends", "interest"):
-        t_add = abs(cent_to_eur(tx_taxes, default=0.0) or 0.0)
-        f_add = abs(cent_to_eur(tx_fees, default=0.0) or 0.0)
-
-        if is_foreign and fx_rate and fx_rate > 0:
-            t_add = round(t_add / fx_rate, 6)
-            f_add = round(f_add / fx_rate, 6)
-
+        # Optimization: Reuse pre-calculated absolute values
         # Note: signed_value is positive for Div/Int (Income).
         # We add taxes/fees to make it larger (Gross).
-        curr_buckets[bucket] += signed_value + t_add + f_add
+        curr_buckets[bucket] += signed_value + t_eur_abs + f_eur_abs
     elif bucket in curr_buckets:
         curr_buckets[bucket] += signed_value
     elif bucket == "fees":
