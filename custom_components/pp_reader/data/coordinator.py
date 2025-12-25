@@ -848,6 +848,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
                     [reference],
                     currencies,
                     self.db_path,
+                    allow_fetch=True,
                 )
             except Exception:
                 _LOGGER.exception(

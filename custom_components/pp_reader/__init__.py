@@ -361,6 +361,7 @@ async def _run_fx_refresh_once(
                 [reference],
                 currencies,
                 db_path,
+                allow_fetch=True,
             )
         except Exception:  # noqa: BLE001
             _LOGGER.warning(
@@ -381,26 +382,23 @@ def _schedule_fx_interval(
     hass: HomeAssistant,
     entry: ConfigEntry,
     store: dict[str, Any],
-    interval: int,
 ) -> Callable[[], None]:
-    """Schedule recurring FX cache refresh."""
+    """Schedule FX cache refresh at fixed times (05:30 and 18:30)."""
 
     async def _scheduled_fx_cycle(_now: datetime) -> None:
         await _run_fx_refresh_once(hass, entry, store)
 
-    remove_listener = async_track_time_interval(
-        hass,
-        _scheduled_fx_cycle,
-        timedelta(seconds=interval),
+    # Schedule for 05:30 and 18:30
+    remove_jh = async_track_time_change(
+        hass, _scheduled_fx_cycle, hour=[5, 18], minute=30, second=0
     )
-    store["fx_task_cancel"] = remove_listener
-    store["fx_interval_applied"] = interval
+
+    store["fx_task_cancel"] = remove_jh
     _LOGGER.debug(
-        "FX-Service Intervall-Task geplant: every %ss (entry_id=%s)",
-        interval,
+        "FX-Service Scheduler aktiviert (05:30/18:30 lokal) pro Tag (entry_id=%s)",
         entry.entry_id,
     )
-    return remove_listener
+    return remove_jh
 
 
 async def _register_panel_if_absent(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -527,7 +525,7 @@ def _initialize_fx_tasks(
     hass: HomeAssistant,
     entry: ConfigEntry,
     store: dict[str, Any],
-    options: Mapping[str, Any],
+    _options: Mapping[str, Any],
 ) -> None:
     """Ensure FX refresh scheduling is active."""
     store.setdefault("fx_task_cancel", None)
@@ -536,8 +534,7 @@ def _initialize_fx_tasks(
         store["fx_lock"] = asyncio.Lock()
 
     if not store.get("fx_task_cancel"):
-        interval = _get_fx_interval_seconds(options)
-        _schedule_fx_interval(hass, entry, store, interval)
+        _schedule_fx_interval(hass, entry, store)
 
     hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
 
@@ -674,7 +671,6 @@ async def _async_reload_entry_on_update(
             )
 
     fx_cancel = store.get("fx_task_cancel")
-    fx_interval = store.get("fx_interval_applied")
     if fx_cancel:
         try:
             fx_cancel()
@@ -713,22 +709,7 @@ async def _async_reload_entry_on_update(
         "Preis-Service: Reload Initiallauf gestartet (entry_id=%s)", entry.entry_id
     )
 
-    new_fx_interval = _get_fx_interval_seconds(options)
-    _schedule_fx_interval(hass, entry, store, new_fx_interval)
-
-    if fx_interval is not None and fx_interval != new_fx_interval:
-        _LOGGER.info(
-            "FX-Service: Intervall geändert alt=%ss neu=%ss (entry_id=%s)",
-            fx_interval,
-            new_fx_interval,
-            entry.entry_id,
-        )
-    else:
-        _LOGGER.debug(
-            "FX-Service: Intervall (re)gesetzt=%ss (entry_id=%s)",
-            new_fx_interval,
-            entry.entry_id,
-        )
+    _schedule_fx_interval(hass, entry, store)
 
     hass.async_create_task(_run_fx_refresh_once(hass, entry, store))
 

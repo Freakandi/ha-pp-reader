@@ -36,6 +36,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ### Changed
 - **Schema Refactor**: Removed static `realized_gains_eur` and `unrealized_gains_eur` columns from the `daily_wealth` table to eliminate incorrect lifetime values in period views.
 - **Period Logic**: "Time Series" now exclusively uses dynamic calculation for Realized and Unrealized Gains, ensuring values are always relative to the selected time range.
+- **FX Strategy**: Restricted FX API calls to startup, file updates, and a fixed twice-daily schedule (05:30/18:30) to prevent rate limits.
+- **FX Fallback**: Implemented a robust "last available" fallback for all FX conversions. If a daily rate is missing, the most recent prior rate is used indefinitely.
+- **FX Warnings**: Warnings for missing FX rates are now suppressed unless the fallback rate is older than 5 days (logged once per currency/day).
 
 ### Fixed
 - **Overview Sorting**: Resolved issue where sorting headers in nested portfolio position tables did not function correctly.

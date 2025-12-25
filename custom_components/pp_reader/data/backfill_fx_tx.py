@@ -117,6 +117,7 @@ def _ensure_fx_rates(
             sorted(dates),
             currencies,
             db_path,
+            allow_fetch=True,
         )
     except Exception:  # pragma: no cover - defensive guard
         _LOGGER.exception(

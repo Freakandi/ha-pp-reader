@@ -9,7 +9,7 @@ import threading
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -140,27 +140,10 @@ async def test_fetch_exchange_rates_handles_network_issues(
 ) -> None:
     """Network errors should be logged as warnings without raising exceptions."""
 
-    class FailingRequest:
-        async def __aenter__(self) -> None:
-            raise OSError("Network is unreachable")
+    def _fake_get(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("Network is unreachable")
 
-        async def __aexit__(self, *_exc: object) -> bool:
-            return False
-
-    class FakeSession:
-        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
-            return None
-
-        async def __aenter__(self) -> Self:
-            return self
-
-        async def __aexit__(self, *_exc: object) -> bool:
-            return False
-
-        def get(self, *_args: Any, **_kwargs: Any) -> FailingRequest:
-            return FailingRequest()
-
-    monkeypatch.setattr(fx.aiohttp, "ClientSession", FakeSession)
+    monkeypatch.setattr(fx.requests, "get", _fake_get)
 
     caplog.set_level(logging.WARNING)
 
@@ -177,27 +160,10 @@ async def test_fetch_exchange_rates_logs_once(
 ) -> None:
     """Repeated failures should only emit a single warning per day/currency set."""
 
-    class FailingRequest:
-        async def __aenter__(self) -> None:
-            raise OSError("Network is unreachable")
+    def _fake_get(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("Network is unreachable")
 
-        async def __aexit__(self, *_exc: object) -> bool:
-            return False
-
-    class FakeSession:
-        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
-            return None
-
-        async def __aenter__(self) -> Self:
-            return self
-
-        async def __aexit__(self, *_exc: object) -> bool:
-            return False
-
-        def get(self, *_args: Any, **_kwargs: Any) -> FailingRequest:
-            return FailingRequest()
-
-    monkeypatch.setattr(fx.aiohttp, "ClientSession", FakeSession)
+    monkeypatch.setattr(fx.requests, "get", _fake_get)
     monkeypatch.setattr(fx, "_FAILED_WARNINGS", defaultdict(set))
 
     caplog.set_level(logging.WARNING)

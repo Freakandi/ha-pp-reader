@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from datetime import datetime
 from math import isfinite
 from typing import TYPE_CHECKING, Any
 
@@ -13,17 +14,18 @@ from custom_components.pp_reader.currencies import fx
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterable, Mapping
-    from datetime import datetime
     from pathlib import Path
 
 __all__ = [
     "CENT_IN_EURO",
     "CURRENCY_DECIMALS",
+    "MAX_FALLBACK_DAYS_WITHOUT_WARNING",
     "PRICE_DECIMALS",
     "PRICE_SCALE",
     "cent_to_eur",
     "ensure_exchange_rates_for_dates_sync",
     "eur_to_cent",
+    "get_closest_rate_sync",
     "load_cached_rate_records_sync",
     "normalize_price_to_eur_sync",
     "normalize_raw_price",
@@ -136,6 +138,66 @@ def normalize_raw_price(
     return round_price(normalized, decimals=decimals, default=default)
 
 
+# Track warned deep fallbacks to avoid spamming the log once per row
+_DEEP_FALLBACK_WARNED: set[tuple[str, str]] = set()
+
+
+MAX_FALLBACK_DAYS_WITHOUT_WARNING = 5
+
+
+def _resolve_fallback_rate(
+    db_path: Path,
+    currency_code: str,
+    reference_date: datetime,
+) -> float | None:
+    """Resolve a fallback exchange rate using the closest available record."""
+    fallback = get_closest_rate_sync(
+        db_path,
+        currency_code,
+        reference_date.strftime("%Y-%m-%d"),
+    )
+    if not fallback:
+        _LOGGER.debug(
+            "Kein Wechselkurs für %s (%s) und kein Fallback gefunden",
+            currency_code,
+            reference_date.strftime("%Y-%m-%d"),
+        )
+        return None
+
+    rate_val, date_str = fallback
+
+    # Check age
+    fallback_date = datetime.fromisoformat(date_str).date()
+    if isinstance(reference_date, datetime):
+        ref_date = reference_date.date()
+    else:
+        ref_date = reference_date
+    age_days = (ref_date - fallback_date).days
+
+    if age_days > MAX_FALLBACK_DAYS_WITHOUT_WARNING:
+        warn_key = (currency_code, date_str)
+        if warn_key not in _DEEP_FALLBACK_WARNED:
+            _DEEP_FALLBACK_WARNED.add(warn_key)
+            _LOGGER.warning(
+                "Veralteter Wechselkurs für %s: %s genutzt. Datum %s "
+                "(%d Tage alt > %d)",
+                currency_code,
+                date_str,
+                reference_date.strftime("%Y-%m-%d"),
+                age_days,
+                MAX_FALLBACK_DAYS_WITHOUT_WARNING,
+            )
+    else:
+        _LOGGER.debug(
+            "Verwende Fallback-Wechselkurs für %s: %s (statt %s)",
+            currency_code,
+            date_str,
+            reference_date.strftime("%Y-%m-%d"),
+        )
+
+    return rate_val
+
+
 def normalize_price_to_eur_sync(
     raw_price: float | None,
     currency_code: str,
@@ -153,7 +215,9 @@ def normalize_price_to_eur_sync(
     if normalized_currency == "EUR":
         return price_native
 
+    # Try exact match first
     try:
+        # Note: allow_fetch defaults to False in the implementation, so this is safe
         ensure_exchange_rates_for_dates_sync(
             [reference_date], {normalized_currency}, db_path
         )
@@ -162,17 +226,21 @@ def normalize_price_to_eur_sync(
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
         return None
 
+    rate = None
     record = fx_records.get(normalized_currency)
-    if record is None:
-        _LOGGER.warning(
-            "Kein Wechselkurs für %s (%s)",
-            normalized_currency,
-            reference_date.strftime("%Y-%m-%d"),
+
+    if record:
+        rate = float(record.rate)
+    else:
+        rate = _resolve_fallback_rate(
+            db_path, normalized_currency, reference_date
         )
+
+    if not rate:
         return None
 
     try:
-        normalized = price_native / float(record.rate)
+        normalized = price_native / rate
     except (TypeError, ValueError, ZeroDivisionError):
         _LOGGER.warning(
             "Ungültiger Wechselkurs für %s (%s)",
@@ -182,6 +250,16 @@ def normalize_price_to_eur_sync(
         return None
 
     return round_price(normalized, decimals=decimals)
+
+
+def get_closest_rate_sync(
+    db_path: Path,
+    currency: str,
+    target_date: str,
+) -> tuple[float, str] | None:
+    """Proxy to fx.get_closest_rate_sync."""
+    helper = _load_fx_helper("get_closest_rate_sync")
+    return helper(db_path, currency, target_date)
 
 
 CACHED_FX_HELPERS: dict[str, Any] = {}
@@ -202,6 +280,7 @@ def ensure_exchange_rates_for_dates_sync(
 ) -> None:
     """Proxy to the FX helper without importing it at module import time."""
     helper = _load_fx_helper("ensure_exchange_rates_for_dates_sync")
+    # Default behavior: allow_fetch=False
     result = helper(dates, currencies, db_path, conn=conn)
     if asyncio.iscoroutine(result):
         loop = asyncio.new_event_loop()

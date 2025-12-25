@@ -98,6 +98,7 @@ async def test_ensure_exchange_rates_persists_metadata(
         [datetime(2024, 3, 5, tzinfo=UTC)],
         {"USD"},
         db_path,
+        allow_fetch=True,
     )
 
     stored = load_fx_rates_for_date(db_path, "2024-03-05")

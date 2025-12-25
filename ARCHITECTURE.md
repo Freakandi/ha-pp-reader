@@ -333,9 +333,9 @@ When no symbols are available the service logs the condition once and skips the 
 `currencies.fx` provides optional EUR exchange rate support when multi-currency accounts exist:
 
 - Determines required currencies from parsed clients (`get_required_currencies`) or directly from the canonical database (`discover_active_currencies`) so enrichments and periodic refreshes share the same coverage detection.
-- Uses the Frankfurter API to fetch missing rates for a given date, stores them in the `fx_rates` table with retry-backed writes guarded by a threading lock, and deduplicates repeated WARN logs per date/currency set.
+- Uses the Frankfurter API to fetch missing rates (strict schedule: startup, file update, 05:30/18:30 via `ensure_exchange_rates_for_dates`), stores them in the `fx_rates` table with retry-backed writes guarded by a threading lock, and deduplicates repeated WARN logs per date/currency set.
 - Provides both async (`get_exchange_rates`, `ensure_exchange_rates_for_dates`) and sync (`*_sync`) entry points so ingestion can run inside executor threads without blocking Home Assistant.
-- Exposes `load_latest_rates` for WebSocket handlers to attach FX metadata to account payloads.
+- Exposes `load_latest_rates` for WebSocket handlers to attach FX metadata to account payloads, utilizing a "last available" fallback strategy when specific daily rates are missing (logging a warning only if data is older than 5 days).
 - `data.fx_backfill.backfill_fx` computes earliest/latest transaction coverage across ingestion tables, fills historical gaps per currency, and runs before each periodic refresh and after imports to keep FX coverage contiguous.
 
 The FX helper logs and returns partial results on network or database failures to avoid blocking the main coordinator.

@@ -36,12 +36,12 @@ from custom_components.pp_reader.data.fx_persistence import (
 
 _LOGGER = logging.getLogger(__name__)
 
-API_URL = "https://api.frankfurter.app"
+API_URL = "https://data-api.ecb.europa.eu/service/data/EXR"
 SQLITE_TIMEOUT = 30.0
 _WRITE_LOCK = threading.Lock()
 
-FRANKFURTER_SOURCE = "frankfurter"
-FRANKFURTER_PROVIDER = "frankfurter.app"
+FRANKFURTER_SOURCE = "ecb"
+FRANKFURTER_PROVIDER = "ecb.europa.eu"
 FETCH_RETRIES = 3
 FETCH_BACKOFF_SECONDS = 1.0
 
@@ -61,6 +61,69 @@ def _should_log_warning(date: str, currencies: set[str]) -> bool:
             return False
         logged.add(key)
     return True
+
+
+def _parse_ecb_sdmx_response(data: dict[str, Any]) -> dict[str, dict[str, float]]:
+    """Parse ECB SDMX-JSON response into date->currency->rate mapping."""
+    result: dict[str, dict[str, float]] = defaultdict(dict)
+
+    try:
+        structure = data.get("structure", {})
+        dimensions = structure.get("dimensions", {})
+        series_dims = dimensions.get("series", [])
+        obs_dims = dimensions.get("observation", [])
+
+        # Find index of CURRENCY in series keys
+        curr_idx = next(
+            (i for i, d in enumerate(series_dims) if d["id"] == "CURRENCY"), None
+        )
+        if curr_idx is None:
+            return {}
+
+        # Get currency codes mapping (index -> code)
+        currencies_map = {
+            i: val["id"] for i, val in enumerate(series_dims[curr_idx]["values"])
+        }
+
+        # Get dates mapping (index -> date_str)
+        # Time period is usually at index 0 of observation dimensions
+        time_dim = next((d for d in obs_dims if d["id"] == "TIME_PERIOD"), None)
+        if not time_dim:
+            return {}
+
+        dates_map = {str(i): val["id"] for i, val in enumerate(time_dim["values"])}
+
+        # Parse data
+        data_sets = data.get("dataSets", [])
+        if not data_sets:
+            return {}
+
+        series = data_sets[0].get("series", {})
+        for key, series_data in series.items():
+            # Key is "0:1:0:0:0" etc.
+            key_parts = key.split(":")
+            if len(key_parts) <= curr_idx:
+                continue
+
+            curr_code_idx = int(key_parts[curr_idx])
+            currency = currencies_map.get(curr_code_idx)
+            if not currency:
+                continue
+
+            observations = series_data.get("observations", {})
+            for date_idx, obs_vals in observations.items():
+                date_str = dates_map.get(str(date_idx))
+                if date_str and obs_vals:
+                    try:
+                        rate = float(obs_vals[0])
+                        result[date_str][currency] = rate
+                    except (ValueError, TypeError):
+                        pass
+
+    except Exception:
+        _LOGGER.exception("Error parsing ECB SDMX response")
+
+    return result
 
 
 def _safe_float(value: Any) -> float | None:
@@ -135,6 +198,36 @@ def _load_rates_for_date_sync(
                 record.currency,
             )
     return result
+
+
+def get_closest_rate_sync(
+    db_path: Path,
+    currency: str,
+    target_date: str,
+    conn: sqlite3.Connection | None = None,
+) -> tuple[float, str] | None:
+    """
+    Find the most recent exchange rate for a currency on or before target_date.
+
+    Returns (rate, date_str) or None.
+    """
+    query = """
+        SELECT rate, date
+        FROM fx_rates
+        WHERE currency = ? AND date <= ?
+        ORDER BY date DESC
+        LIMIT 1
+    """
+    local_conn = conn or sqlite3.connect(str(db_path), timeout=SQLITE_TIMEOUT)
+    try:
+        cursor = local_conn.execute(query, (currency, target_date))
+        row = cursor.fetchone()
+        if row:
+            return float(row[0]), row[1]
+        return None
+    finally:
+        if conn is None:
+            local_conn.close()
 
 
 def _save_rates_sync(
@@ -255,15 +348,20 @@ def _fetch_exchange_rates_sync_http(
     if not currencies:
         return {}
 
-    symbols = ",".join(currencies)
-    url = f"{API_URL}/{date_str}?from=EUR&to={symbols}"
+    symbols = "+".join(sorted(currencies))
+    url = f"{API_URL}/D.{symbols}.EUR.SP00.A"
+    params = {"startPeriod": date_str, "endPeriod": date_str, "detail": "dataonly"}
+    headers = {"Accept": "application/vnd.sdmx.data+json;version=1.0.0-wd"}
 
     try:
         # TIMEOUT is critical here. Using a standard requests session.
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
 
         if resp.status_code != 200:  # noqa: PLR2004
             if _should_log_warning(date_str, currencies):
+                # 404 is normal for holidays/weekends on some APIs, but ECB returns 404?
+                # Actually observations show ECB returns 200 with empty body
+                # for holidays.
                 _LOGGER.warning(
                     "Fehler beim Abruf der Wechselkurse (%s): Status %d",
                     date_str,
@@ -271,8 +369,29 @@ def _fetch_exchange_rates_sync_http(
                 )
             return {}
 
-        data = resp.json()
-        return {k: float(v) for k, v in data.get("rates", {}).items()}
+        # ECB API returns 200 OK with empty body for holidays/no-data.
+        # We check for empty content to avoid JSON decode errors and warnings.
+        if not resp.content:
+            _LOGGER.debug(
+                "Keine Daten (leere Antwort) für %s (Status %d)",
+                date_str,
+                resp.status_code,
+            )
+            return {}
+
+        try:
+            data = resp.json()
+        except ValueError:
+            if _should_log_warning(date_str, currencies):
+                _LOGGER.warning(
+                    "Ungültiges JSON vom ECB-Dienst (%s): %s",
+                    date_str,
+                    resp.text[:200],
+                )
+            return {}
+
+        parsed = _parse_ecb_sdmx_response(data)
+        return parsed.get(date_str, {})
     except Exception as err:  # noqa: BLE001
         if _should_log_warning(date_str, currencies):
             _LOGGER.warning(
@@ -374,19 +493,68 @@ async def load_latest_rates(
 
 
 def load_latest_rates_sync(reference_date: datetime, db_path: Path) -> dict[str, float]:
-    """Provide a synchronous wrapper for load_latest_rates."""
+    """Provide a synchronous wrapper for load_latest_rates with holiday fallback."""
     records = load_cached_rate_records_sync(reference_date, db_path)
-    return {currency: float(record.rate) for currency, record in records.items()}
+    result = {currency: float(record.rate) for currency, record in records.items()}
+
+    # If cache is empty or sparse for "latest" (today), look back.
+    # We do a naive check: if we got results, return them.
+    # A more complex check would be to see if SPECIFIC currencies are missing,
+    # but 'discover_active_currencies' is expensive to call here.
+    # Instead, if the result is completely empty, it is likely a holiday.
+    if not result:
+        # Fallback loop: Check up to 5 days into the past
+        for i in range(1, 6):
+            fallback_date = reference_date - timedelta(days=i)
+            fallback_records = load_cached_rate_records_sync(fallback_date, db_path)
+            if fallback_records:
+                _LOGGER.debug(
+                    "Verwende Fallback-Rates (Bulk) vom %s (statt %s)",
+                    fallback_date.strftime("%Y-%m-%d"),
+                    reference_date.strftime("%Y-%m-%d"),
+                )
+                result = {
+                    currency: float(record.rate)
+                    for currency, record in fallback_records.items()
+                }
+                break
+
+    return result
 
 
 async def load_cached_rate_records(
     reference_date: datetime,
     db_path: Path,
 ) -> dict[str, FxRateRecord]:
-    """Return cached FX rate records keyed by currency for the given date."""
+    """
+    Return cached FX rate records keyed by currency for the given date.
+
+    Includes fallback logic for up to 5 days if valid rates are not found
+    for the exact date.
+    """
     date_str = reference_date.strftime("%Y-%m-%d")
     records = await _execute_db(load_fx_rates_for_date, db_path, date_str)
-    return {record.currency: record for record in records}
+    result = {record.currency: record for record in records}
+
+    if not result:
+        # Fallback loop: Check up to 5 days into the past
+        for i in range(1, 6):
+            fallback_date = reference_date - timedelta(days=i)
+            fallback_str = fallback_date.strftime("%Y-%m-%d")
+            fallback_records_list = await _execute_db(
+                load_fx_rates_for_date, db_path, fallback_str
+            )
+
+            if fallback_records_list:
+                _LOGGER.debug(
+                    "Verwende Fallback-Rates (Async) vom %s (statt %s)",
+                    fallback_str,
+                    date_str,
+                )
+                result = {record.currency: record for record in fallback_records_list}
+                break
+
+    return result
 
 
 def load_cached_rate_records_sync(
@@ -420,14 +588,94 @@ def load_fx_rates_cache_range(
     return cache
 
 
+# --- Caching for failed fetches ---
+_FETCH_FAIL_CACHE: dict[tuple[str, frozenset[str]], float] = {}
+_FETCH_FAIL_TTL = 3600.0  # 1 hour
+_FETCH_FAIL_LOCK = threading.Lock()
+
+
+def _is_failed_recently(date_str: str, currencies: set[str]) -> bool:
+    """Check if we recently failed to fetch this exact combination."""
+    key = (date_str, frozenset(currencies))
+    now = datetime.now(UTC).timestamp()
+    with _FETCH_FAIL_LOCK:
+        expiry = _FETCH_FAIL_CACHE.get(key)
+        if expiry and now < expiry:
+            return True
+        # Clean up if expired
+        if expiry:
+            del _FETCH_FAIL_CACHE[key]
+    return False
+
+
+def _mark_failed(date_str: str, currencies: set[str]) -> None:
+    """Mark this combination as failed for the TTL duration."""
+    key = (date_str, frozenset(currencies))
+    now = datetime.now(UTC).timestamp()
+    with _FETCH_FAIL_LOCK:
+        _FETCH_FAIL_CACHE[key] = now + _FETCH_FAIL_TTL
+
+
+
+async def _process_fetch_missing(
+    date_str: str,
+    missing: set[str],
+    fetched_at: str,
+) -> list[FxRateRecord]:
+    """Fetch rates for a single date and return records."""
+    try:
+        fetched_rates = await _fetch_exchange_rates_with_retry(
+            date_str,
+            missing,
+            retries=FETCH_RETRIES,
+            initial_delay=FETCH_BACKOFF_SECONDS,
+        )
+
+        if not fetched_rates:
+            # Mark as failed in negative cache
+            _mark_failed(date_str, missing)
+            if _should_log_warning(date_str, missing):
+                _LOGGER.debug(
+                    "Keine Kurse erhalten für %s am %s "
+                    "(nutze Fallback falls verfügbar)",
+                    missing,
+                    date_str,
+                )
+            return []
+
+        provenance = json.dumps(
+            {"currencies": sorted(fetched_rates.keys())},
+            ensure_ascii=False,
+        )
+
+        return [
+            FxRateRecord(
+                date=date_str,
+                currency=currency,
+                rate=rate,
+                fetched_at=fetched_at,
+                data_source=FRANKFURTER_SOURCE,
+                provider=FRANKFURTER_PROVIDER,
+                provenance=provenance,
+            )
+            for currency, rate in fetched_rates.items()
+        ]
+
+    except Exception:
+        _LOGGER.exception("Fehler beim Laden der Kurse für %s", date_str)
+        return []
+
+
 async def ensure_exchange_rates_for_dates(
     dates: list[datetime],
     currencies: set[str],
     db_path: Path,
     conn: sqlite3.Connection | None = None,
+    *,
+    allow_fetch: bool = False,
 ) -> None:
     """Stellt sicher dass alle benötigten Wechselkurse verfügbar sind."""
-    if not currencies:
+    if not currencies or not allow_fetch:
         return
 
     # 1. Identify missing
@@ -437,6 +685,12 @@ async def ensure_exchange_rates_for_dates(
         existing = await _load_rates_for_date(db_path, date_str, conn=conn)
         needed = currencies - set(existing.keys())
         if needed:
+            # Check negative cache before adding to work queue
+            if _is_failed_recently(date_str, needed):
+                _LOGGER.debug(
+                    "Skipping fetch for %s on %s (negative cache hit)", needed, date_str
+                )
+                continue
             missing_by_date[date_str] = needed
 
     if not missing_by_date:
@@ -451,41 +705,8 @@ async def ensure_exchange_rates_for_dates(
     )
 
     for date_str, missing in missing_by_date.items():
-        try:
-            fetched_rates = await _fetch_exchange_rates_with_retry(
-                date_str,
-                missing,
-                retries=FETCH_RETRIES,
-                initial_delay=FETCH_BACKOFF_SECONDS,
-            )
-
-            if not fetched_rates:
-                if _should_log_warning(date_str, missing):
-                    _LOGGER.warning(
-                        "Keine Kurse erhalten für %s am %s", missing, date_str
-                    )
-                continue
-
-            provenance = json.dumps(
-                {"currencies": sorted(fetched_rates.keys())},
-                ensure_ascii=False,
-            )
-
-            for currency, rate in fetched_rates.items():
-                fetched_records.append(
-                    FxRateRecord(
-                        date=date_str,
-                        currency=currency,
-                        rate=rate,
-                        fetched_at=fetched_at,
-                        data_source=FRANKFURTER_SOURCE,
-                        provider=FRANKFURTER_PROVIDER,
-                        provenance=provenance,
-                    )
-                )
-
-        except Exception:
-            _LOGGER.exception("Fehler beim Laden der Kurse für %s", date_str)
+        records = await _process_fetch_missing(date_str, missing, fetched_at)
+        fetched_records.extend(records)
 
     # 3. Bulk save
     if fetched_records:
@@ -504,9 +725,11 @@ def ensure_exchange_rates_for_dates_sync(
     currencies: set[str],
     db_path: Path,
     conn: sqlite3.Connection | None = None,
+    *,
+    allow_fetch: bool = False,
 ) -> None:
     """Ensure required exchange rates exist using a synchronous wrapper."""
-    if not currencies or not dates:
+    if not currencies or not dates or not allow_fetch:
         return
 
     date_list = list(dates)
@@ -531,6 +754,7 @@ def ensure_exchange_rates_for_dates_sync(
         missing_currencies,
         db_path,
         conn=None if running_loop else conn,
+        allow_fetch=allow_fetch,
     )
 
     if running_loop is None:
@@ -719,11 +943,13 @@ async def _fetch_exchange_rates_range_aiohttp(
 
     Returns a dict mapping date_str -> rate.
     """
-    # Frankfurter API supports ranges: /start_date..end_date?from=EUR&to=USD
-    url = f"{API_URL}/{start_date}..{end_date}?from=EUR&to={currency}"
+    # ECB API supports ranges but structure is different
+    url = f"{API_URL}/D.{currency}.EUR.SP00.A"
+    params = {"startPeriod": start_date, "endPeriod": end_date, "detail": "dataonly"}
+    headers = {"Accept": "application/vnd.sdmx.data+json;version=1.0.0-wd"}
 
     try:
-        async with session.get(url, timeout=20) as resp:
+        async with session.get(url, params=params, headers=headers, timeout=20) as resp:
             if resp.status != 200:  # noqa: PLR2004
                 # 404 might mean no data for this range/currency
                 if resp.status != 404:  # noqa: PLR2004
@@ -737,13 +963,12 @@ async def _fetch_exchange_rates_range_aiohttp(
                 return {}
 
             data = await resp.json()
-            # Response structure: {"rates": {"2024-01-01": {"USD": 1.1}, ...}}
-            # We want: {"2024-01-01": 1.1, ...}
-            rates_by_date = data.get("rates", {})
+            parsed = _parse_ecb_sdmx_response(data)
+
             result = {}
-            for d_str, rates in rates_by_date.items():
+            for d_str, rates in parsed.items():
                 if currency in rates:
-                    result[d_str] = float(rates[currency])
+                    result[d_str] = rates[currency]
             return result
 
     except Exception as err:  # noqa: BLE001

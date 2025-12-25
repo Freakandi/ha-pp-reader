@@ -16,11 +16,13 @@ from typing import Any
 
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
+    get_closest_rate_sync,
     load_latest_rates_sync,
 )
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.util.currency import (
+    MAX_FALLBACK_DAYS_WITHOUT_WARNING,
     cent_to_eur,
     normalize_raw_price,
     round_currency,
@@ -41,6 +43,7 @@ SHARE_MATCH_EPSILON = 1e-6
 
 _FX_RATE_FAILURES: Counter[tuple[str, str]] = Counter()
 _MISSING_NATIVE_POSITIONS: Counter[tuple[str, str]] = Counter()
+_DEEP_FALLBACK_WARNED: set[tuple[str, str]] = set()
 
 
 def get_missing_fx_diagnostics() -> dict[str, Any]:
@@ -215,8 +218,41 @@ def _determine_exchange_rate(
         return 1.0, 1.0
 
     fx_rates = load_latest_rates_sync(tx_date, db_path)
-
     rate = fx_rates.get(transaction.currency_code)
+
+    if not rate:
+        # Try deep fallback
+        fallback = get_closest_rate_sync(
+            db_path,
+            transaction.currency_code,
+            tx_date.strftime("%Y-%m-%d"),
+        )
+        if fallback:
+            rate_val, date_str = fallback
+            rate = rate_val
+
+            # Check age
+            fallback_date = datetime.fromisoformat(date_str).date()
+            tx_date_only = tx_date.date()
+            age_days = (tx_date_only - fallback_date).days
+
+            if age_days > MAX_FALLBACK_DAYS_WITHOUT_WARNING:
+                warn_key = (transaction.currency_code, date_str)
+                if warn_key not in _DEEP_FALLBACK_WARNED:
+                    _DEEP_FALLBACK_WARNED.add(warn_key)
+                    _LOGGER.warning(
+                        "Veralteter Wechselkurs (Transaktion): %s für %s "
+                        "am %s (%d Tage alt > %d)",
+                        transaction.currency_code,
+                        date_str,
+                        tx_date.strftime("%Y-%m-%d"),
+                        age_days,
+                        MAX_FALLBACK_DAYS_WITHOUT_WARNING,
+                    )
+            else:
+                 # Debug logging for fallback usage? Maybe too noisy.
+                 pass
+
     if not rate:
         if missing_logged is None:
             missing_logged = set()
@@ -226,7 +262,7 @@ def _determine_exchange_rate(
             missing_logged.add(key)
             _record_rate_failure(transaction.currency_code, tx_date)
             _LOGGER.warning(
-                "Kein Wechselkurs gefunden: Datum=%s, Währung=%s",
+                "Kein Wechselkurs gefunden (auch kein Fallback): Datum=%s, Währung=%s",
                 tx_date.strftime("%Y-%m-%d"),
                 transaction.currency_code,
             )

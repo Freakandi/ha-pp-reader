@@ -44,7 +44,7 @@ def conn():
         CREATE TABLE fx_rates (
             date TEXT,
             currency TEXT,
-            rate INTEGER
+            rate REAL
         )
         """
     )
@@ -104,10 +104,10 @@ def _insert_price(conn, security, date_obj, price_norm):
 
 
 def _insert_fx(conn, date_str, currency, rate_norm):
-    # Rate stored as * PRICE_SCALE
+    # Rate stored as float (NO SCALING)
     conn.execute(
         "INSERT INTO fx_rates VALUES (?, ?, ?)",
-        (date_str, currency, int(rate_norm * PRICE_SCALE)),
+        (date_str, currency, float(rate_norm)),
     )
 
 
