@@ -182,12 +182,22 @@ export function formatValue(
       // We only apply this check if the string actually contains unescaped HTML tags (start with <).
       // If it's already escaped (&lt;...), we leave it alone to avoid double-escaping.
       if (/<[a-z]/i.test(formatted)) {
-        // Expanded check to catch <script>, javascript: URIs, and event handlers
-        // with various separators (space, tab, newline, slash) or whitespace around '='.
-        // Also catches dangerous tags like iframe, object, embed, etc.
-        // 🛡️ SENTINEL: Added data:URI check to prevent base64 XSS (matches data:MIME/TYPE...)
-        const DANGEROUS_PATTERN = /<\s*(?:script|iframe|object|embed|base|style|link|meta|form)\b|javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=/i;
-        if (DANGEROUS_PATTERN.test(formatted)) {
+        // 🛡️ SENTINEL: Strict Allowlist Approach
+        // We strictly allow only specific safe tags. If the string contains any tag
+        // that is NOT in the allowlist (like <a>, <script>, <img>, <svg>), we escape the whole string.
+        // Allowed tags: span, div, ha-icon, strong, br, p, button.
+        // Regex finds any tag <TAG that is NOT in the allowlist.
+        const DISALLOWED_TAG_PATTERN = /<\/?(?!(?:span|div|ha-icon|strong|br|p|button)\b)[a-z][a-z0-9]*\b/i;
+
+        // Expanded blacklist for attributes on allowed tags:
+        // - javascript: (catch all variations in attributes)
+        // - data: (prevent base64 XSS)
+        // - on[event]= (inline handlers)
+        // - url( (prevent CSS injection in style attributes)
+        // - href/src (allowed tags shouldn't need these, blocks potential oversight)
+        const DANGEROUS_PATTERN = /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src)\s*=/i;
+
+        if (DISALLOWED_TAG_PATTERN.test(formatted) || DANGEROUS_PATTERN.test(formatted)) {
           formatted = escapeHtml(formatted);
         }
       }
