@@ -22,6 +22,7 @@ export class DateRangePicker {
     private viewDate: Date; // The date determining which month is shown in the left calendar
     private tempRange: DateRange; // Range currently being selected in the picker
     private previousFocus: HTMLElement | null = null; // Element that had focus before opening
+    private activeDropdown: HTMLElement | null = null;
 
     // Elements
     private triggerEl!: HTMLElement;
@@ -164,6 +165,9 @@ export class DateRangePicker {
         main.appendChild(footer);
 
         this.popoverEl.appendChild(main);
+
+        // We append popover to element to ensure it's in DOM,
+        // but we use fixed positioning to escape overflow.
         this.element.appendChild(this.popoverEl);
     }
 
@@ -183,45 +187,38 @@ export class DateRangePicker {
 
         // Close on click outside
         document.addEventListener('click', (e) => {
-            // Note: In shadow DOM, event.target might be retargeted.
-            // Using composedPath() is safer.
+            // Check if click is inside dropdown
             const path = e.composedPath();
-            if (this.isOpen && !path.includes(this.element)) {
+            if (this.activeDropdown && path.includes(this.activeDropdown)) {
+                return;
+            }
+
+            if (this.isOpen && !path.includes(this.element) && !path.includes(this.popoverEl)) {
                 this.close();
+            }
+            if (this.activeDropdown) {
+                this.closeDropdown();
             }
         });
 
         // Prevent closing when clicking inside popover
         this.popoverEl.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (this.activeDropdown) {
+                this.closeDropdown();
+            }
         });
 
         // Trap focus
         this.popoverEl.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 e.stopPropagation();
-                this.close();
-                return;
-            }
-
-            if (e.key === 'Tab') {
-                const focusableElements = this.popoverEl.querySelectorAll(
-                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-                );
-                const firstElement = focusableElements[0] as HTMLElement;
-                const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-
-                if (e.shiftKey) {
-                    if (document.activeElement === firstElement) {
-                        e.preventDefault();
-                        lastElement.focus();
-                    }
+                if (this.activeDropdown) {
+                    this.closeDropdown();
                 } else {
-                    if (document.activeElement === lastElement) {
-                        e.preventDefault();
-                        firstElement.focus();
-                    }
+                    this.close();
                 }
+                return;
             }
         });
     }
@@ -237,22 +234,29 @@ export class DateRangePicker {
     private open() {
         this.isOpen = true;
         this.previousFocus = document.activeElement as HTMLElement;
-        this.popoverEl.classList.add('open'); // Using class for display: flex
-        this.popoverEl.style.display = 'flex'; // Ensure flex is applied for a11y tools to see it
+        this.popoverEl.classList.add('open');
+        this.popoverEl.style.display = 'flex';
         this.triggerEl.classList.add('active');
         this.triggerEl.setAttribute('aria-expanded', 'true');
+
+        // Fix position using standard DOM methods
+        const rect = this.triggerEl.getBoundingClientRect();
+        const top = rect.bottom + 8;
+        const left = rect.left;
+
+        // We use viewport-relative coordinates because of position: fixed
+        this.popoverEl.style.top = `${top}px`;
+        this.popoverEl.style.left = `${left}px`;
+
+        // Reset state
         this.tempRange = { ...this.range };
-        // Reset view date to end date
         this.viewDate = new Date(this.range.end.getFullYear(), this.range.end.getMonth() - 1, 1);
         this.renderCalendars();
         this.updateInputs();
-
-        // Ensure no preset is misleadingly active on reopen
         this.updatePresetState(null);
 
-        // Move focus to first preset, calendar nav, or input
+        // Move focus
         requestAnimationFrame(() => {
-            // Expanded selector to include inputs and avoid disabled elements
             const firstFocusable = this.popoverEl.querySelector(
                 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
             ) as HTMLElement;
@@ -265,7 +269,8 @@ export class DateRangePicker {
 
     private close() {
         this.isOpen = false;
-        this.popoverEl.classList.remove('open'); // Removing class to hide
+        this.closeDropdown();
+        this.popoverEl.classList.remove('open');
         this.popoverEl.style.display = '';
         this.triggerEl.classList.remove('active');
         this.triggerEl.setAttribute('aria-expanded', 'false');
@@ -274,6 +279,13 @@ export class DateRangePicker {
             this.previousFocus.focus();
         }
         this.previousFocus = null;
+    }
+
+    private closeDropdown() {
+        if (this.activeDropdown) {
+            this.activeDropdown.remove();
+            this.activeDropdown = null;
+        }
     }
 
     private apply() {
@@ -366,11 +378,11 @@ export class DateRangePicker {
             </svg>
         `;
         prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
-        prevBtn.setAttribute('title', 'Vorheriger Monat');
-        // Only show prev on left calendar
+
         if (position === 'left') {
             prevBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                this.closeDropdown();
                 this.viewDate.setMonth(this.viewDate.getMonth() - 1);
                 this.renderCalendars();
             });
@@ -378,9 +390,51 @@ export class DateRangePicker {
             prevBtn.style.visibility = 'hidden';
         }
 
-        const title = document.createElement('span');
-        title.className = 'drp-month-label';
-        title.textContent = date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+        // Title with Dropdowns
+        const titleContainer = document.createElement('div');
+        titleContainer.className = 'drp-title-container';
+        titleContainer.style.display = 'flex';
+        titleContainer.style.alignItems = 'center';
+        titleContainer.style.gap = '4px';
+
+        // Month Button
+        const monthContainer = document.createElement('div');
+        monthContainer.className = 'drp-dropdown-container';
+        const monthBtn = document.createElement('button');
+        monthBtn.className = 'drp-header-btn';
+        monthBtn.innerHTML = `<span>${date.toLocaleDateString('de-DE', { month: 'long' })}</span> <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`;
+        monthBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.toggleMonthDropdown(monthContainer, date.getMonth(), (newMonth) => {
+                const targetYear = date.getFullYear();
+                this.viewDate = new Date(targetYear, newMonth, 1);
+                this.renderCalendars();
+            });
+        };
+        monthContainer.appendChild(monthBtn);
+
+        // Year Button
+        const yearContainer = document.createElement('div');
+        yearContainer.className = 'drp-dropdown-container';
+        const yearBtn = document.createElement('button');
+        yearBtn.className = 'drp-header-btn';
+        yearBtn.innerHTML = `<span>${String(date.getFullYear())}</span> <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`;
+        yearBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.toggleYearDropdown(yearContainer, date.getFullYear(), (newYear) => {
+                // Keep month, change year
+                // If it's right calendar, we also want to jump to that year as viewDate
+                // Simple assumption: jump to that year/month
+                const targetMonth = date.getMonth();
+                this.viewDate = new Date(newYear, targetMonth, 1);
+                this.renderCalendars();
+            });
+        };
+        yearContainer.appendChild(yearBtn);
+
+        titleContainer.appendChild(monthContainer);
+        titleContainer.appendChild(yearContainer);
+
 
         const nextBtn = document.createElement('button');
         nextBtn.className = 'drp-nav-btn';
@@ -390,11 +444,11 @@ export class DateRangePicker {
             </svg>
         `;
         nextBtn.setAttribute('aria-label', 'Nächster Monat');
-        nextBtn.setAttribute('title', 'Nächster Monat');
-        // Only show next on right calendar
+
         if (position === 'right') {
             nextBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                this.closeDropdown();
                 this.viewDate.setMonth(this.viewDate.getMonth() + 1);
                 this.renderCalendars();
             });
@@ -403,7 +457,7 @@ export class DateRangePicker {
         }
 
         header.appendChild(prevBtn);
-        header.appendChild(title);
+        header.appendChild(titleContainer);
         header.appendChild(nextBtn);
         calendarEl.appendChild(header);
 
@@ -445,23 +499,19 @@ export class DateRangePicker {
             cell.textContent = d.toString();
             cell.setAttribute('role', 'button');
             cell.tabIndex = 0;
-            let label = current.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-            // Accessibility: Current Day
+            // Labels and A11y
+            let label = current.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
             if (current.getDate() === today.getDate() && current.getMonth() === today.getMonth() && current.getFullYear() === today.getFullYear()) {
                 cell.setAttribute('aria-current', 'date');
                 label = `Heute, ${label}`;
             }
-
-            // Accessibility: Selection State
             const t = current.getTime();
             const s = this.tempRange.start.getTime();
             const e = this.tempRange.end.getTime();
-
             if (t === s) label += ' (Startdatum)';
             else if (t === e) label += ' (Enddatum)';
             else if (t > s && t < e) label += ' (im Zeitraum)';
-
             cell.setAttribute('aria-label', label);
 
             this.applyDayClasses(cell, current);
@@ -488,6 +538,90 @@ export class DateRangePicker {
 
         calendarEl.appendChild(grid);
         this.calendarsContainer.appendChild(calendarEl);
+    }
+
+    private toggleMonthDropdown(container: HTMLElement, currentMonth: number, onSelect: (m: number) => void) {
+        if (this.activeDropdown && container.contains(this.activeDropdown)) {
+            this.closeDropdown();
+            return;
+        }
+        this.closeDropdown();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'drp-dropdown';
+
+        const months = [
+            'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+            'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+        ];
+
+        months.forEach((m, idx) => {
+            const item = document.createElement('button');
+            item.className = 'drp-dropdown-item';
+            if (idx === currentMonth) {
+                item.classList.add('selected');
+            }
+            item.textContent = m;
+            item.onclick = (e) => {
+                e.stopPropagation();
+                this.closeDropdown();
+                onSelect(idx);
+            };
+            dropdown.appendChild(item);
+        });
+
+        container.appendChild(dropdown);
+        this.activeDropdown = dropdown;
+
+        const selected = dropdown.querySelector('.selected');
+        if (selected) {
+            setTimeout(() => {
+                selected.scrollIntoView({ block: 'center' });
+            }, 0);
+        }
+    }
+
+    private toggleYearDropdown(container: HTMLElement, currentYear: number, onSelect: (y: number) => void) {
+        if (this.activeDropdown && container.contains(this.activeDropdown)) {
+            this.closeDropdown();
+            return;
+        }
+        this.closeDropdown();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'drp-dropdown';
+
+        // Range: +/- 100 years? User said "scroll to even earlier".
+        // Let's generate a dynamic range or a fixed large range.
+        // 1990 to 2050 covers most.
+        // Or better: center around current.
+        const startYear = currentYear - 50;
+        const endYear = currentYear + 20;
+
+        for (let y = startYear; y <= endYear; y++) {
+            const item = document.createElement('button');
+            item.className = 'drp-dropdown-item';
+            if (y === currentYear) {
+                item.classList.add('selected');
+            }
+            item.textContent = y.toString();
+            item.onclick = (e) => {
+                e.stopPropagation();
+                this.closeDropdown();
+                onSelect(y);
+            };
+            dropdown.appendChild(item);
+        }
+
+        container.appendChild(dropdown);
+        this.activeDropdown = dropdown;
+
+        const selected = dropdown.querySelector('.selected');
+        if (selected) {
+            setTimeout(() => {
+                selected.scrollIntoView({ block: 'center' });
+            }, 0);
+        }
     }
 
     private applyDayClasses(cell: HTMLElement, date: Date) {

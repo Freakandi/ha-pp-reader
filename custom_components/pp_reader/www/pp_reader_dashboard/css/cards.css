@@ -6,8 +6,7 @@
   margin-bottom: 1.5rem;
   overflow: auto;
   position: relative;
-  will-change: transform, opacity;
-  /* Performance-Optimierung */
+  /* will-change: transform, opacity; removed to fix fixed/absolute positioning context */
   background-color: var(--card-background-color);
   /* HA-Variable für Karten-Hintergrund */
   color: var(--primary-text-color);

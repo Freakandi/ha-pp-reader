@@ -32,6 +32,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Performance Calculation**: Resolved data loading issue where database locks during calculation would trigger silent failures and default FX rates to 1.0, causing massive skew in unrealized gains and FX metrics.
 - **Fix**: Corrected "FX-Veränderung" calculation in Time Series tab. Now properly handles `CASH_TRANSFER` transactions by treating them as outflows from source and inflows to target, eliminating phantom FX gains/losses and correctly tracking currency exposure on transfer-funded accounts.
 - **Fix**: Updated `PerformanceCalculator` to respect account currencies during transfers, preventing "Phantom Short" positions in base-currency accounts when transferring to foreign-currency accounts.
+- **Fix**: Date Range Picker visibility on mobile/scrolling containers. Removed `will-change: transform` from dashboard cards to preventing clipping of the fixed-position date picker.
+- **Added**: Enhanced Date Month/Year selection in Time Series tab with scrollable dropdowns for quicker navigation.
 
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.

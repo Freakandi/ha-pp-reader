@@ -181,7 +181,7 @@ const unregisterPanelHost = typeof registryApi.unregisterPanelHost === 'function
 
 const PANEL_URL = new URL(import.meta.url);
 const ASSET_BASE_URL = new URL('./', PANEL_URL);
-const ASSET_VERSION = PANEL_URL.searchParams.get('v');
+const ASSET_VERSION = PANEL_URL.searchParams.get('v') || PANEL_URL.searchParams.get('v2');
 
 class PPReaderPanel extends HTMLElement {
   constructor() {
