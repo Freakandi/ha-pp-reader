@@ -66,7 +66,17 @@ def calc(conn):
     return PerformanceCalculator(conn)
 
 
-def _insert_tx(conn, uuid, tx_type, date_str, security, shares_norm, amount_norm, currency, account="acc1"):
+def _insert_tx(
+    conn,
+    uuid,
+    tx_type,
+    date_str,
+    security,
+    shares_norm,
+    amount_norm,
+    currency,
+    account="acc1",
+):
     # shares stored as * 10^8
     # amount stored as * 100
     conn.execute(
@@ -112,14 +122,10 @@ def test_standard_share_b_example(conn, calc):
     sec_id = "share_b"
 
     # 1. Buy 1 Share at 150 EUR
-    _insert_tx(
-        conn, "tx1", TransactionType.BUY, buy_date, sec_id, 1.0, -150.0, "EUR"
-    )
+    _insert_tx(conn, "tx1", TransactionType.BUY, buy_date, sec_id, 1.0, -150.0, "EUR")
 
     # 2. Sell 1 Share at 160 EUR
-    _insert_tx(
-        conn, "tx2", TransactionType.SELL, sell_date, sec_id, 1.0, 160.0, "EUR"
-    )
+    _insert_tx(conn, "tx2", TransactionType.SELL, sell_date, sec_id, 1.0, 160.0, "EUR")
 
     # Gain = (160 * 1) - (150 * 1) = 10.
     metrics = calc.calculate(start_date, end_date)
@@ -198,7 +204,15 @@ def test_fx_performance_cash(conn, calc):
 
     # Initial Balance before start: 1000 USD
     _insert_tx(
-        conn, "tx1", TransactionType.DEPOSIT, "2022-12-01", None, 0, 1000.0, "USD", account="usd_acc"
+        conn,
+        "tx1",
+        TransactionType.DEPOSIT,
+        "2022-12-01",
+        None,
+        0,
+        1000.0,
+        "USD",
+        account="usd_acc",
     )
     # FX Rate at Deposit: 1 USD = 0.9 EUR
     _insert_fx(conn, "2022-12-01", "USD", 0.90)
@@ -208,7 +222,15 @@ def test_fx_performance_cash(conn, calc):
 
     # Transaction during period: Buy something for 500 USD (Outflow)
     _insert_tx(
-        conn, "tx2", TransactionType.BUY, "2023-01-15", "secA", 10.0, -500.0, "USD", account="usd_acc"
+        conn,
+        "tx2",
+        TransactionType.BUY,
+        "2023-01-15",
+        "secA",
+        10.0,
+        -500.0,
+        "USD",
+        account="usd_acc",
     )
     # FX Rate at Transaction: 1.00
     _insert_fx(conn, "2023-01-15", "USD", 1.00)
@@ -243,11 +265,11 @@ def test_absolute_performance(conn, calc):
     # Need Start-1 (Jan 9) and End (Jan 20)
     conn.execute(
         "INSERT INTO daily_wealth VALUES (?, ?, ?)",
-        ("2023-01-09", 1000.0, 500.0) # Start Wealth, Start Invested
+        ("2023-01-09", 1000.0, 500.0),  # Start Wealth, Start Invested
     )
     conn.execute(
         "INSERT INTO daily_wealth VALUES (?, ?, ?)",
-        ("2023-01-20", 1200.0, 600.0) # End Wealth, End Invested
+        ("2023-01-20", 1200.0, 600.0),  # End Wealth, End Invested
     )
 
     metrics = calc.calculate(start_date, end_date)
@@ -266,16 +288,56 @@ def test_filtering_by_account(conn, calc):
 
     # Account A (included)
     # Buy 1 share @ 100 EUR
-    _insert_tx(conn, "tx1", TransactionType.BUY, "2023-01-01", "sec1", 1.0, -100.0, "EUR", account="accA")
+    _insert_tx(
+        conn,
+        "tx1",
+        TransactionType.BUY,
+        "2023-01-01",
+        "sec1",
+        1.0,
+        -100.0,
+        "EUR",
+        account="accA",
+    )
     # Sell 1 share @ 120 EUR
-    _insert_tx(conn, "tx2", TransactionType.SELL, "2023-01-15", "sec1", 1.0, 120.0, "EUR", account="accA")
+    _insert_tx(
+        conn,
+        "tx2",
+        TransactionType.SELL,
+        "2023-01-15",
+        "sec1",
+        1.0,
+        120.0,
+        "EUR",
+        account="accA",
+    )
     # Realized Gain = 20
 
     # Account B (excluded)
     # Buy 1 share @ 100 EUR
-    _insert_tx(conn, "tx3", TransactionType.BUY, "2023-01-01", "sec1", 1.0, -100.0, "EUR", account="accB")
+    _insert_tx(
+        conn,
+        "tx3",
+        TransactionType.BUY,
+        "2023-01-01",
+        "sec1",
+        1.0,
+        -100.0,
+        "EUR",
+        account="accB",
+    )
     # Sell 1 share @ 200 EUR
-    _insert_tx(conn, "tx4", TransactionType.SELL, "2023-01-15", "sec1", 1.0, 200.0, "EUR", account="accB")
+    _insert_tx(
+        conn,
+        "tx4",
+        TransactionType.SELL,
+        "2023-01-15",
+        "sec1",
+        1.0,
+        200.0,
+        "EUR",
+        account="accB",
+    )
     # Realized Gain = 100
 
     # Calculate filtering only Account A
