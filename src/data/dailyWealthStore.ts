@@ -2,18 +2,18 @@
  * Daily wealth state and caching helper for the Analyse tab.
  */
 
+import type { PanelConfigLike } from '../tabs/types';
+import type { HomeAssistant } from '../types/home-assistant';
 import {
   fetchDailyWealthWS,
   type DailyWealthFetchOptions,
   type DailyWealthRange,
+  type DailyWealthRecord,
   type DailyWealthRequest,
   type DailyWealthResponse,
-  type DailyWealthRecord,
-  type DailyWealthSlices,
   type DailyWealthScopeRecord,
+  type DailyWealthSlices,
 } from './api';
-import type { HomeAssistant } from '../types/home-assistant';
-import type { PanelConfigLike } from '../tabs/types';
 
 type DailyWealthStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -187,6 +187,7 @@ function cloneResponse(response: DailyWealthResponse | null): DailyWealthRespons
     range: { ...response.range },
     records: response.records.map(cloneRecord),
     ...(clonedSlices ? { slices: clonedSlices } : {}),
+    ...(response.metrics ? { metrics: { ...response.metrics } } : {}),
   };
 }
 
