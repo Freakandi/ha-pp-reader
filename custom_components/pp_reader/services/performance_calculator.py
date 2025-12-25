@@ -368,8 +368,9 @@ class PerformanceCalculator:
                 base_price = lot.price_native
                 base_fx = lot.fx_rate
 
-            sale_val_eur = sale_price * sale_fx
-            base_val_eur = base_price * base_fx
+            # FX Rate is EUR->Foreign (e.g. 1.05 USD). Conversion is / Rate.
+            sale_val_eur = sale_price / sale_fx if sale_fx else 0.0
+            base_val_eur = base_price / base_fx if base_fx else 0.0
 
             gain_accum += (sale_val_eur - base_val_eur) * consumed
 
@@ -407,8 +408,9 @@ class PerformanceCalculator:
                     base_price = lot.price_native
                     base_fx = lot.fx_rate
 
-                end_val_eur = end_price * end_fx
-                base_val_eur = base_price * base_fx
+                # FX Rate is EUR->Foreign. Conversion is / Rate.
+                end_val_eur = (end_price / end_fx) if end_fx else 0.0
+                base_val_eur = (base_price / base_fx) if base_fx else 0.0
 
                 gain = (end_val_eur - base_val_eur) * lot.shares
                 unrealized_gains_eur += gain
@@ -421,7 +423,11 @@ class PerformanceCalculator:
         start_date: date,
         end_date: date,
     ) -> float:
-        """Calculate FX Performance for Cash Accounts."""
+        """Calculate FX Performance for Cash Accounts.
+
+        Logic: Change in EUR value of Foreign Cash held.
+        Valuation = Balance / Rate.
+        """
         start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
 
@@ -442,7 +448,7 @@ class PerformanceCalculator:
             cash_flow = abs(raw_amt) * sign
             acc_id = row.account
             curr = row.currency_code
-            if not acc_id:
+            if not acc_id or curr == "EUR":
                 continue
 
             key = (acc_id, curr)
@@ -480,8 +486,12 @@ class PerformanceCalculator:
                 base_fx = (
                     self._get_fx(curr, start_ts) if lot.date < start_ts else lot.fx_rate
                 )
-                gain = (end_fx - base_fx) * lot.shares
-                fx_gains_eur += gain
+
+                # Val Delta = (Native / End_Rate) - (Native / Base_Rate)
+                end_val = (lot.shares / end_fx) if end_fx else 0.0
+                base_val = (lot.shares / base_fx) if base_fx else 0.0
+
+                fx_gains_eur += (end_val - base_val)
 
         return fx_gains_eur
 
@@ -531,6 +541,16 @@ class PerformanceCalculator:
             base_fx = (
                 self._get_fx(curr, start_ts) if lot.date < start_ts else lot.fx_rate
             )
-            gain_accum += (tx_fx - base_fx) * consumed
+
+            # Realized FX Gain on Outflow (Spending Cash)
+            # We spent 'consumed' Native Currency.
+            # Value at Transaction = consumed / tx_fx
+            # Value at Baseline = consumed / base_fx
+            # Gain = Val_Tx - Val_Base
+
+            val_tx = (consumed / tx_fx) if tx_fx else 0.0
+            val_base = (consumed / base_fx) if base_fx else 0.0
+
+            gain_accum += (val_tx - val_base)
 
         return gain_accum

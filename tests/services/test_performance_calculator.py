@@ -214,11 +214,11 @@ def test_fx_performance_cash(conn, calc):
         "USD",
         account="usd_acc",
     )
-    # FX Rate at Deposit: 1 USD = 0.9 EUR
-    _insert_fx(conn, "2022-12-01", "USD", 0.90)
+    # FX Rate at Deposit: 1 EUR = 2.0 USD
+    _insert_fx(conn, "2022-12-01", "USD", 2.0)
 
-    # FX Rate at Start: 0.95
-    _insert_fx(conn, "2023-01-01", "USD", 0.95)
+    # FX Rate at Start: 1 EUR = 2.0 USD
+    _insert_fx(conn, "2023-01-01", "USD", 2.0)
 
     # Transaction during period: Buy something for 500 USD (Outflow)
     _insert_tx(
@@ -232,29 +232,29 @@ def test_fx_performance_cash(conn, calc):
         "USD",
         account="usd_acc",
     )
-    # FX Rate at Transaction: 1.00
-    _insert_fx(conn, "2023-01-15", "USD", 1.00)
+    # FX Rate at Transaction: 1 EUR = 4.0 USD (USD collapsed, EUR doubled)
+    _insert_fx(conn, "2023-01-15", "USD", 4.0)
 
-    # FX Rate at End: 1.10
-    _insert_fx(conn, "2023-01-31", "USD", 1.10)
+    # FX Rate at End: 1 EUR = 4.0 USD
+    _insert_fx(conn, "2023-01-31", "USD", 4.0)
 
     metrics = calc.calculate(start_date, end_date)
 
-    # 1. Outflow (Realized FX Gain on Cash spent)
+    # 1. Outflow (Realized FX Gain/Loss)
     # Consumed 500 USD.
-    # Baseline Rate @ Start = 0.95.
-    # Exit Rate @ Tx = 1.00.
-    # Gain = (1.00 - 0.95) * 500 = 0.05 * 500 = 25.0 EUR.
+    # Baseline Rate @ Start = 2.0. Value = 500 / 2.0 = 250 EUR.
+    # Exit Rate @ Tx = 4.0. Value = 500 / 4.0 = 125 EUR.
+    # Gain = 125 - 250 = -125.0 EUR.
 
-    # 2. Remaining Balance (Unrealized FX Gain on Cash held)
+    # 2. Remaining Balance (Unrealized FX Gain/Loss)
     # Remaining 500 USD.
-    # Baseline Rate @ Start = 0.95.
-    # End Rate @ End = 1.10.
-    # Gain = (1.10 - 0.95) * 500 = 0.15 * 500 = 75.0 EUR.
+    # Baseline Rate @ Start = 2.0. Value = 500 / 2.0 = 250 EUR.
+    # End Rate @ End = 4.0. Value = 500 / 4.0 = 125 EUR.
+    # Gain = 125 - 250 = -125.0 EUR.
 
-    # Total FX Gain = 25 + 75 = 100.0 EUR.
+    # Total FX Gain = -250.0 EUR.
 
-    assert metrics.fx_gains_cash == pytest.approx(100.0)
+    assert metrics.fx_gains_cash == pytest.approx(-250.0)
 
 
 def test_absolute_performance(conn, calc):
