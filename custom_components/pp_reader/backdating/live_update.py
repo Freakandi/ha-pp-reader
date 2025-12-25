@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -321,8 +320,6 @@ def _update_account_scopes(
         (run_uuid,),
     )
     new_vals = {row[0]: (cent_to_eur(row[1]) or 0.0) for row in cur.fetchall()}
-
-
 
     # Fetch latest scopes for static data preservation (though accounts usually have
     # 0 invested cap in wealth model?)
