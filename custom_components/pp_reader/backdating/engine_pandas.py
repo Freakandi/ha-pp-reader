@@ -558,7 +558,8 @@ class BackdatingEngine:
                 TransactionType.INTEREST_CHARGE,
                 TransactionType.TAX,
                 TransactionType.FEE,
-                TransactionType.CASH_TRANSFER,  # Treat as outflow for the primary record
+                # Treat as outflow for the primary record
+                TransactionType.CASH_TRANSFER,
             ):
                 sign = -1
             return (amt / 100.0) * sign
