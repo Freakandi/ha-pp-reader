@@ -1,48 +1,54 @@
-# Walkthrough - Portfolio Last Price Column
+# Bugfix: Time Series Skew & JPY Valuation
 
-## Feature Overview
-Added a new column **"Letzter Kurs"** (Last Price) to the expanded portfolio positions table in the Overview tab.
+## The Issue
+The user reported massively skewed metrics in the "Time Series" tab:
+- **Unrealized Gains**: +386,598 €
+- **FX Change**: -510,741 €
 
-- **Content**:
-  - **Native Price**: The last fetched price in the security's native currency (e.g., USD, CAD, HKD).
-  - **EUR Price**: If the security is non-EUR, the second line shows the converted EUR price using the latest FX rate.
-- **Layout**: Stacked cell design consistent with "Kaufwert" and other columns.
-- **Sorting**: Sortable by numeric value (using EUR equivalent for consistent comparison).
+This anomaly suggested a valuation error where asset values were inflated, and the "FX Change" metric (which compares End Value to Start Value) was compensating for this inflation with a massive negative swing.
 
-## Verification success
+## Root Cause Analysis
+Investigating `custom_components/pp_reader/services/performance_calculator.py` revealed a critical flaw in data loading:
 
-### Visual Verification
-Verified that the column appears and populates correctly for both EUR and non-EUR securities.
+1.  **Silent Failure**: The method `_load_data` wrapped SQL queries in `try...except pd.errors.DatabaseError`, returning **empty DataFrames** if the database was locked or busy.
+2.  **Default to 1.0**: The `_get_fx` method defaults to an exchange rate of `1.0` when rates are missing.
+3.  **The Impact**:
+    - For **JPY** assets (approx rate 1 EUR = 180 JPY), a missing rate caused the system to calculate value as `Amount / 1.0` instead of `Amount / 180.0`.
+    - This inflated the value of JPY holdings by a factor of 180x.
+    - Example: 1,000,000 JPY should be ~5,500 €. At rate 1.0, it became 1,000,000 €.
+    - This 994,500 € "phantom gain" appeared as Unrealized Gains.
+    - The "FX Change" metric, seeing the value jump from Correct (Start) to Inflated (End) purely due to "rate change" (180 -> 1), reported a massive negative currency impact.
 
-**Screenshot:**
-![Last Price Verification](./artifacts/last_price_verification.png)
-
-(See "Letzter Kurs" column with HKD value on top and EUR value below for Alibaba)
-
-### Automated Tests
-- Updated `src/tabs/__tests__/overview.render.test.ts` to include coverage for the new column and adjusted indices.
-- Validated `npm run lint:ts` passes.
-- Validated `npm test` passes.
-
-# Walkthrough - Dynamic Period Performance & FX Fixes
-
-## Feature Overview
-Implemented dynamic calculation of realized gains for the "Time Series" tab to correctly reflect performance for any selected period.
-
-- **Dynamic Realized Gains**:
-  - Sell transactions now calculate realized gains based on the requested period.
-  - **Mark-to-Market**: For positions held before the period start, the cost basis is the market value at the start of the period.
-  - **Within Period**: For positions bought during the period, the actual cost basis is used.
-  - All values are correctly converted to EUR.
-
-## Bug Fixes
-- **JPY Currency Conversion**:
-  - Fixed a critical issue where a large JPY sell transaction was using a fallback FX rate (1.0) instead of the correct JPY rate.
-  - Re-enabled FX rate preparation in the backdating pipeline and rebuilt the history.
-  - **Result**: Corrected unrealized gains and start values for portfolios containing JPY assets.
+## The Fix
+1.  **Removed Silent Exception Handling**: Modified `services/performance_calculator.py` to allow `pd.errors.DatabaseError` to propagate.
+    - **Why**: Calculations should fail explicitly rather than producing corrupt financial data. The WebSocket handler already catches generic exceptions and reports a user-friendly error.
+2.  **Log Noise Reduction**: Removed verbose "Using valid fallback rate" debug logs in `util/currency.py` to declutter the logs, as requested.
 
 ## Verification
-- **Linting & Build**:
-  - `ruff check .` -> Passed.
-  - `npm run lint:ts` -> Passed.
-  - `npm run build` -> Passed (verified fix for `update_dashboard_module.mjs`).
+- **Reproduction**: A script confirmed that forcing a 1.0 FX rate for JPY exactly reproduced the skewed numbers.
+- **Logic Check**: `pytest tests/services/test_performance_calculator.py` passed, confirming the removal of `try/except` didn't break normal operation.
+- **Linting**: Applied strict linting to all modified files.
+
+The system is now robust against partial data loads during database contention.
+
+## Additional Fixes (Backdating & Wealth Accuracy)
+Following the initial fix, substantial discrepancies remained (~12k € in Total Wealth, phantom Neutral Movements). Further investigation resolved these:
+
+1.  **Total Wealth Backdating**:
+    *   **Root Cause**: The calculation engine was slicing the transaction history *before* calculating cumulative sums (`cumsum`). This meant any assets held or cash accumulated *before* the start date were ignored.
+    *   **Fix**: Modified `engine_pandas.py` to calculate `cumsum` on the full history first, then reindex to the requested date range. Total Wealth is now accurate (~224k €).
+
+2.  **Security Valuation (SEK/EUR Mismatch)**:
+    *   **Root Cause**: Securities trading in non-EUR currencies (e.g., SEK) but bought via EUR accounts were tracking as `EUR` in transaction logs. This caused the engine to value them as `Price (SEK) / 1.0 (EUR)`, inflating values by ~11x.
+    *   **Fix**: The engine now loads the authoritative `currency_code` from the `securities` table metadata.
+
+3.  **Gross Dividends**:
+    *   **Root Cause**: Logic was double-counting dividend units by including "Type 0" (Gross Base) units alongside Tax/Fee units when reconstructing Gross amounts.
+    *   **Fix**: Strictly filter addition logic to only include `UNIT_TYPE_TAX` (1) and `UNIT_TYPE_FEE` (2). 25.44€ discrepancy resolved.
+
+4.  **Performance Neutral Movements**:
+    *   **Root Cause**: Internal transfers were summing up instead of netting to zero, and "Removals" were treated as positive inflows.
+    *   **Fix**: Excluded internal transfers and applied correct signs. Phantom 130k inflow removed.
+
+5.  **Cash Transfers**:
+    *   **Fix**: Properly split Type 5 transfers into source-debit and target-credit to ensure accurate account balances.

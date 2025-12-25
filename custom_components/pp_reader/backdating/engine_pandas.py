@@ -51,11 +51,11 @@ class BackdatingEngine:
         _LOGGER.debug("Starting Pandas backdating from %s to %s", start_date, end_date)
 
         # 1. Load Data
-        df_txs, df_units, df_prices, df_rates = self.load_data()
+        df_txs, df_units, df_prices, df_rates, df_securities = self.load_data()
 
         # 2. Calculate Daily Wealth
         daily_wealth_df = self.calculate_daily_wealth(
-            df_txs, df_units, df_prices, df_rates, start_date, end_date
+            df_txs, df_units, df_prices, df_rates, df_securities, start_date, end_date
         )
 
         # 3. Persist
@@ -69,7 +69,8 @@ class BackdatingEngine:
         # Load Transactions
         query_txs = """
             SELECT
-                uuid, type, date, account, security, shares, amount, currency_code
+                uuid, type, date, account, other_account,
+                security, shares, amount, currency_code
             FROM transactions
             ORDER BY date
         """
@@ -83,6 +84,7 @@ class BackdatingEngine:
                     "type",
                     "date",
                     "account",
+                    "other_account",
                     "security",
                     "shares",
                     "amount",
@@ -141,7 +143,14 @@ class BackdatingEngine:
         except pd.errors.DatabaseError:
             df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
 
-        return df_txs, df_units, df_prices, df_rates
+        # Load Securities Metadata (Currency)
+        query_sec = "SELECT uuid, currency_code FROM securities"
+        try:
+            df_securities = pd.read_sql_query(query_sec, self.conn)
+        except pd.errors.DatabaseError:
+             df_securities = pd.DataFrame(columns=["uuid", "currency_code"])
+
+        return df_txs, df_units, df_prices, df_rates, df_securities
 
     def calculate_daily_wealth(
         self,
@@ -149,6 +158,7 @@ class BackdatingEngine:
         df_units: pd.DataFrame,
         df_prices: pd.DataFrame,
         df_rates: pd.DataFrame,
+        df_securities: pd.DataFrame,
         start_date: date,
         end_date: date,
     ) -> pd.DataFrame:
@@ -173,11 +183,13 @@ class BackdatingEngine:
 
         # --- 5. WEALTH CALCULATION (SECURITIES) ---
         daily_sec_wealth = self._calculate_security_wealth(
-            df_augmented, price_pivot, fx_pivot, date_range
+            df_augmented, price_pivot, fx_pivot, df_securities, date_range
         )
 
         # --- 6. WEALTH CALCULATION (CASH) ---
         daily_cash_wealth = self._calculate_cash_wealth(df_txs, fx_pivot, date_range)
+
+
 
         # --- 7. ASSEMBLE RESULT ---
         result = pd.DataFrame(index=date_range)
@@ -190,21 +202,32 @@ class BackdatingEngine:
         result["taxes_eur"] = taxes_net.round(2)
 
         # Performance Neutral Movements (Spec 1D)
-        # Includes Transfers, Deposits, Removals, Deliveries
-        neutral_types = [
-            TransactionType.CASH_TRANSFER,
-            TransactionType.SECURITY_TRANSFER,
-            TransactionType.DEPOSIT,
-            TransactionType.REMOVAL,
-            TransactionType.INBOUND_DELIVERY,
-            TransactionType.OUTBOUND_DELIVERY,
-        ]
-        neutral_flow = (
-            df_augmented[df_augmented["type"].isin(neutral_types)]
-            .groupby("date")["amount_eur"]
-            .sum()
-            .reindex(date_range, fill_value=0.0)
-        )
+        # Includes Deposits (+), Removals (-), Inbound Delivery (+),
+        # Outbound Delivery (-)
+        # Internal Transfers (4, 5) are excluded from global (sum to 0)
+
+        neutral_map = {
+            TransactionType.DEPOSIT: 1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
+
+        # Helper to apply signs
+        df_neutral = df_augmented[df_augmented["type"].isin(neutral_map.keys())].copy()
+        if not df_neutral.empty:
+            df_neutral["neutral_sign"] = df_neutral["type"].map(neutral_map)
+            df_neutral["signed_amount"] = (
+                df_neutral["amount_eur"] * df_neutral["neutral_sign"]
+            )
+            neutral_flow = (
+                df_neutral.groupby("date")["signed_amount"]
+                .sum()
+                .reindex(date_range, fill_value=0.0)
+            )
+        else:
+            neutral_flow = pd.Series(0.0, index=date_range)
+
         result["performance_neutral_movements"] = neutral_flow.round(2)
 
         # Fill schema defaults
@@ -295,10 +318,14 @@ class BackdatingEngine:
             df_flows["sign"] = df_flows["type"].map(flow_types)
             df_flows["flow_val"] = df_flows["amount_eur"] * df_flows["sign"]
             daily_invested_flow = df_flows.groupby("date")["flow_val"].sum()
-        else:
-            daily_invested_flow = pd.Series(dtype=float)
+            # Cumsum on full history first
+            daily_invested_cum_full = daily_invested_flow.cumsum()
+            # reindex with ffill to carry forward state
+            return daily_invested_cum_full.reindex(
+                date_range, method="ffill"
+            ).fillna(0.0)
 
-        return daily_invested_flow.reindex(date_range, fill_value=0.0).cumsum()
+        return pd.Series(0.0, index=date_range)
 
     def _calculate_cash_accumulators(
         self,
@@ -318,10 +345,12 @@ class BackdatingEngine:
                 .reindex(date_range, fill_value=0)
             )
 
-        div_flow = _sum_by_type(TransactionType.DIVIDEND)
-        int_net = _sum_by_type(TransactionType.INTEREST).sub(
+
+        div_gross = _sum_by_type(TransactionType.DIVIDEND)
+        int_gross = _sum_by_type(TransactionType.INTEREST).sub(
             _sum_by_type(TransactionType.INTEREST_CHARGE), fill_value=0
         )
+
         fees_net = _sum_by_type(TransactionType.FEE).sub(
             _sum_by_type(TransactionType.FEE_REFUND), fill_value=0
         )
@@ -329,11 +358,12 @@ class BackdatingEngine:
             _sum_by_type(TransactionType.TAX_REFUND), fill_value=0
         )
 
-        # Add transaction units (Fees/Taxes embedded)
         if not df_units.empty and not df_txs.empty:
-            # We exclude df_txs['currency_code'] as df_units is authoritative
+            # We need parent transaction type to attribute units to Divs/Interest
             df_units_aug = df_units.merge(
-                df_txs[["uuid", "date"]],
+                df_txs[["uuid", "date", "type"]].rename(
+                    columns={"type": "parent_type"}
+                ),
                 left_on="transaction_uuid",
                 right_on="uuid",
                 how="left",
@@ -349,6 +379,39 @@ class BackdatingEngine:
                 df_units_aug["amount"] / 100.0
             ) / df_units_aug["daily_fx_rate"]
 
+            # Separate Units by Parent Type
+            # Units for Dividends (Type 8) should be added to Gross Dividend
+            # ONLY include Taxes (1) and Fees (2). Ignore Type 0 (Gross Base) or others.
+            mask_div_units = (
+                (df_units_aug["parent_type"] == TransactionType.DIVIDEND) &
+                (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
+            )
+            units_div = (
+               df_units_aug[mask_div_units]
+               .groupby("date")["amount_eur"]
+               .sum()
+            )
+            div_gross = div_gross.add(
+                units_div.reindex(date_range, fill_value=0), fill_value=0
+            )
+
+            # Units for Interest (Type 9)
+            # ONLY include Taxes and Fees.
+            mask_int_units = (
+                (df_units_aug["parent_type"] == TransactionType.INTEREST) &
+                (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
+            )
+            units_int = (
+               df_units_aug[mask_int_units]
+               .groupby("date")["amount_eur"]
+               .sum()
+            )
+            int_gross = int_gross.add(
+                units_int.reindex(date_range, fill_value=0), fill_value=0
+            )
+
+            # Total Fees/Taxes for result columns
+            # (aggregates all Taxes/Fees, including those on Divs)
             units_tax = (
                 df_units_aug[df_units_aug["type"] == UNIT_TYPE_TAX]
                 .groupby("date")["amount_eur"]
@@ -367,13 +430,14 @@ class BackdatingEngine:
                 units_fee.reindex(date_range, fill_value=0), fill_value=0
             )
 
-        return div_flow, int_net, fees_net, taxes_net
+        return div_gross, int_gross, fees_net, taxes_net
 
     def _calculate_security_wealth(
         self,
         df_augmented: pd.DataFrame,
         price_pivot: pd.DataFrame,
         fx_pivot: pd.DataFrame,
+        df_securities: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> pd.Series:
         sec_txs = df_augmented[df_augmented["security"].notna()].copy()
@@ -406,14 +470,29 @@ class BackdatingEngine:
             values="delta_shares",
             aggfunc="sum",
             fill_value=0,
-        ).reindex(date_range, fill_value=0)
-        sec_holdings = sec_daily_change.cumsum()
+        )
+        # Cumsum on full history first to establish correct levels
+        sec_holdings_full = sec_daily_change.cumsum()
+        # forward fill to handle days without transactions before slicing
+        sec_holdings = sec_holdings_full.reindex(date_range, method="ffill").fillna(0.0)
 
-        sec_curr_map = (
+        # Build Currency Map from Securities Table (Authoritative)
+        # Fallback to Transactions if missing (Legacy/Robustness)
+        if not df_securities.empty:
+            sec_curr_map = df_securities.set_index("uuid")["currency_code"].to_dict()
+        else:
+             sec_curr_map = {}
+
+        # Merge with transaction-based inference for any missing ones
+        tx_curr_map = (
             sec_txs.dropna(subset=["security"])
             .drop_duplicates("security")
             .set_index("security")["currency_code"]
         )
+        # Update missing entries in sec_curr_map with inferred ones
+        for k, v in tx_curr_map.items():
+            if k not in sec_curr_map and v:
+                sec_curr_map[k] = v
 
         for sec_uuid in sec_holdings.columns:
             if sec_uuid not in price_pivot.columns:
@@ -431,6 +510,8 @@ class BackdatingEngine:
             val = (qty * prices) / rates.replace(0, np.nan)
             daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
 
+
+
         return daily_sec_wealth
 
     def _calculate_cash_wealth(
@@ -442,6 +523,34 @@ class BackdatingEngine:
         daily_cash_wealth = pd.Series(0.0, index=date_range)
         if df_txs.empty:
             return daily_cash_wealth
+
+        # Prepare Expanded Transactions for Cash Logic
+        # Type 5 (CASH_TRANSFER) needs to impact two accounts:
+        # 1. Source (account) -> Debit (-)
+        # 2. Target (other_account) -> Credit (+)
+
+        # We split the dataframe
+        df_standard = df_txs[df_txs["type"] != TransactionType.CASH_TRANSFER].copy()
+
+        df_transfers = df_txs[df_txs["type"] == TransactionType.CASH_TRANSFER].copy()
+        df_transfers_in = df_transfers.copy()
+
+        # Outflow leg (Source)
+        # Type 5 is treated as an outflow from 'account' in get_cash_delta below
+
+        # Inflow leg (Target)
+        if not df_transfers_in.empty:
+            df_transfers_in["account"] = df_transfers_in["other_account"]
+            # We flag it as DEPOSIT (Type 6) to treat it as (+)
+            df_transfers_in["type"] = TransactionType.DEPOSIT
+            # IMPORTANT: Drop rows where other_account was NaN/None
+            # so we don't attribute to global null account
+            df_transfers_in = df_transfers_in.dropna(subset=["account"])
+
+        # Recombine
+        df_cash_calc = pd.concat(
+            [df_standard, df_transfers, df_transfers_in], ignore_index=True
+        )
 
         def get_cash_delta(row: Any) -> float:
             t = row["type"]
@@ -464,12 +573,13 @@ class BackdatingEngine:
                 TransactionType.INTEREST_CHARGE,
                 TransactionType.TAX,
                 TransactionType.FEE,
+                TransactionType.CASH_TRANSFER, # Treat as outflow for the primary record
             ):
                 sign = -1
             return (amt / 100.0) * sign
 
-        df_txs["delta_cash"] = df_txs.apply(get_cash_delta, axis=1)
-        acc_txs = df_txs.dropna(subset=["account"])
+        df_cash_calc["delta_cash"] = df_cash_calc.apply(get_cash_delta, axis=1)
+        acc_txs = df_cash_calc.dropna(subset=["account"])
 
         acc_daily_change = acc_txs.pivot_table(
             index="date",
@@ -477,8 +587,11 @@ class BackdatingEngine:
             values="delta_cash",
             aggfunc="sum",
             fill_value=0,
-        ).reindex(date_range, fill_value=0)
-        acc_balances = acc_daily_change.cumsum()
+        )
+        # Cumsum on full history first to establish correct levels
+        acc_balances_full = acc_daily_change.cumsum()
+        # forward fill to handle days without transactions before slicing
+        acc_balances = acc_balances_full.reindex(date_range, method="ffill").fillna(0.0)
 
         for _, curr in acc_balances.columns:
             bal = acc_balances[(_, curr)]

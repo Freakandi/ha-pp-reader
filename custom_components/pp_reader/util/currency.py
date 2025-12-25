@@ -187,14 +187,6 @@ def _resolve_fallback_rate(
                 age_days,
                 MAX_FALLBACK_DAYS_WITHOUT_WARNING,
             )
-    else:
-        _LOGGER.debug(
-            "Verwende Fallback-Wechselkurs für %s: %s (statt %s)",
-            currency_code,
-            date_str,
-            reference_date.strftime("%Y-%m-%d"),
-        )
-
     return rate_val
 
 

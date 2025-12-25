@@ -43,7 +43,7 @@ These values are calculated during the **Backdating / Ingestion** phase and stor
 ### A. Total Wealth (`total_wealth_eur`)
 *   **Definition**: The absolute market value of all assets (Cash + Securities) at the end of the day.
 *   **Calculation**:
-    1.  **Securities**: `Sum(Units Held * Daily Close Price * Daily FX Rate)` for all active positions.
+    1.  **Securities**: `Sum(Units Held * Daily Close Price / Daily FX Rate)` for all active positions.
     2.  **Cash Accounts**: `Sum(Daily Cash Balance / Daily FX Rate)` for all accounts.
     3.  **Result**: `Securities Value + Cash Value`.
     4.  **FX Fallback Logic**: If a daily FX rate is missing for a specific date, use the **last available rate** from prior to that date (Forward Fill). This applies even if the last known rate is well before the current calculation window.
@@ -133,14 +133,14 @@ These metrics are **derived** from the persisted series above when the user sele
 *   **Scope**: strictly **Securities** (Stocks, ETFs, etc.). Foreign Cash Account gains are excluded here (see Section D).
 *   **1. Period Realized Gains**:
     *   *Iterate*: All `SALE` transactions of securities within the period.
-    *   *Formula (EUR)*: `Sum( (Sale_Price_Native * Sale_FX_Rate) - (Baseline_Price_Native * Baseline_FX_Rate) * Units_Sold )`.
+    *   *Formula (EUR)*: `Sum( (Sale_Price_Native / Sale_FX_Rate) - (Baseline_Price_Native / Baseline_FX_Rate) * Units_Sold )`.
     *   *Baseline*: `Price/FX @ Period_Start` (if held at start) **OR** `Price/FX @ Purchase_Date` (if bought during period).
 *   **2. Period Unrealized Gains**:
     *   *Iterate*: All `Security Positions` held at the end of the period.
-    *   *Formula (EUR)*: `Sum( (End_Price_Native * End_FX_Rate) - (Baseline_Price_Native * Baseline_FX_Rate) * Units_Held )`.
+    *   *Formula (EUR)*: `Sum( (End_Price_Native / End_FX_Rate) - (Baseline_Price_Native / Baseline_FX_Rate) * Units_Held )`.
 *   **3. Informational Breakdown (The "Thereof" View)**:
     *   **Pure Price Gain (Constant Currency)**: The gain if FX rates had not changed.
-        *   `Sum( (End_Price_Native - Baseline_Price_Native) * Baseline_FX_Rate * Units )`
+        *   `Sum( (End_Price_Native - Baseline_Price_Native) / Baseline_FX_Rate * Units )`
     *   **FX Impact**: The residual portion of the gain.
         *   `Total Gain EUR - Pure Price Gain EUR`.
 
@@ -155,7 +155,7 @@ These metrics are **derived** from the persisted series above when the user sele
     *   **Price**: Constant `1.0`.
     *   **Baseline**: `FX_Rate @ Period_Start` (if balance held) **OR** `FX_Rate @ Transaction_Date` (for inflows).
 *   **Formula (EUR)**:
-    *   `Sum( (End_Balance_Native * End_FX_Rate) - (Baseline_Balance_Native * Baseline_FX_Rate) )`.
+    *   `Sum( (End_Balance_Native / End_FX_Rate) - (Baseline_Balance_Native / Baseline_FX_Rate) )`.
 *   **Result**: This bucket captures the purely FX-driven gain/loss of holding foreign cash during the period (e.g., holding USD while EUR gets stronger = Loss).
 *   **Persistence**: None (On-the-Fly).
 

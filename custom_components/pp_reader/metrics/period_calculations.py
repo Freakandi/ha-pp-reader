@@ -32,21 +32,7 @@ class PeriodDailyResult:
 _EPSILON = 1e-9
 
 
-def _get_fx_rate(
-    rates_cache: dict[str, dict[str, float]], currency: str, date_iso: str
-) -> float:
-    """Get FX rate from cache, defaulting to 1.0."""
-    if currency == "EUR":
-        return 1.0
-    # Try exact match
-    if date_iso in rates_cache and currency in rates_cache[date_iso]:
-        return rates_cache[date_iso][currency]
-    # In a real rigorous implementation, we'd latch back.
-    # For this efficient implementation, we assume the caller provided dense rates
-    # or we accept 1.0/missing if data is sparse (upstream issues).
-    # However, to be safe, we can check if the cache has it.
-    # For now, return 1.0 if missing to avoid crash. warn?
-    return 1.0
+
 
 
 def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
@@ -72,7 +58,7 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
         Dictionary mapping 'YYYY-MM-DD' -> PeriodDailyResult
 
     """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0)
     conn.row_factory = sqlite3.Row
 
     results: dict[str, PeriodDailyResult] = defaultdict(PeriodDailyResult)
@@ -273,12 +259,21 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
             tx_date_str = tx["date"][:10]  # YYYY-MM-DD
             tx_by_day[tx_date_str].append(tx)
 
-        # Latch for last known prices to handle gaps in daily price data
+        # Latch for last known prices to handle gaps (holidays/weekends)
         last_known_prices: dict[str, float] = start_prices.copy()
+
+        # Latch for last known FX rates to handle gaps (holidays/weekends)
+        # Initialize with Start FX Rates
+        last_known_rates: dict[str, float] = start_fx_rates.copy()
+        last_known_rates["EUR"] = 1.0
 
         while curr_date <= end_date:
             day_iso = curr_date.isoformat()
             daily_realized = 0.0
+
+            # Update Latches for current day if data exists
+            if day_iso in fx_rates_cache:
+                last_known_rates.update(fx_rates_cache[day_iso])
 
             # A. Process Transactions for the current day
             if day_iso in tx_by_day:
@@ -306,7 +301,9 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
 
                     raw_amount = tx["amount"] or 0
                     tx_curr = tx["currency_code"] or "EUR"
-                    fx_rate = _get_fx_rate(fx_rates_cache, tx_curr, day_iso)
+
+                    # Use Latched FX Rate
+                    fx_rate = last_known_rates.get(tx_curr, 1.0)
 
                     if tx_type in (0, 2):  # Buy, Inbound
                         # Cost Basis for new lots is the actual gross amount paid
@@ -369,10 +366,10 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                 total_shares = sum(lot.shares for lot in sec_lots)
                 total_basis = sum(lot.cost_basis_eur for lot in sec_lots)
 
-                # Market Value of remaining shares
+                # Market Value of remaining shares using Latched Price/FX
                 price_native = last_known_prices.get(sec_uuid, 0.0)
                 curr = sec_currencies.get(sec_uuid, "EUR")
-                fx_rate = _get_fx_rate(fx_rates_cache, curr, day_iso)
+                fx_rate = last_known_rates.get(curr, 1.0)
 
                 price_eur = price_native / fx_rate
                 market_value_eur = total_shares * price_eur

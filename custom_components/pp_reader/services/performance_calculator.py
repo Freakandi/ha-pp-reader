@@ -164,15 +164,12 @@ class PerformanceCalculator:
             ORDER BY date
         """  # noqa: S608
 
-        try:
-            df_txs = pd.read_sql_query(
-                query_txs,
-                self.conn,
-                params=tuple(params),
-                parse_dates=["date"],
-            )
-        except pd.errors.DatabaseError:
-            df_txs = pd.DataFrame()
+        df_txs = pd.read_sql_query(
+            query_txs,
+            self.conn,
+            params=tuple(params),
+            parse_dates=["date"],
+        )
 
         if not df_txs.empty:
             df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
@@ -199,32 +196,26 @@ class PerformanceCalculator:
             WHERE date <= ?
         """
 
-        try:
-            df_prices = pd.read_sql_query(
-                query_prices, self.conn, params=(until_date.isoformat(),)
-            )
-            if not df_prices.empty:
-                df_prices["date"] = pd.to_datetime(
-                    df_prices["date"], unit="D", origin="unix"
-                ).dt.tz_localize("UTC")
-                df_prices["close"] = df_prices["close"] / PRICE_SCALE
-        except pd.errors.DatabaseError:
-            df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
+        df_prices = pd.read_sql_query(
+            query_prices, self.conn, params=(until_date.isoformat(),)
+        )
+        if not df_prices.empty:
+            df_prices["date"] = pd.to_datetime(
+                df_prices["date"], unit="D", origin="unix"
+            ).dt.tz_localize("UTC")
+            df_prices["close"] = df_prices["close"] / PRICE_SCALE
 
         query_rates = """
             SELECT date, currency, rate FROM fx_rates WHERE date <= ?
         """
-        try:
-            df_rates = pd.read_sql_query(
-                query_rates, self.conn, params=(until_date.isoformat(),)
-            )
-            if not df_rates.empty:
-                df_rates["date"] = pd.to_datetime(
-                    df_rates["date"], utc=True
-                ).dt.normalize()
-                # FX rates are stored as floats, do not scale by PRICE_SCALE
-        except pd.errors.DatabaseError:
-            df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
+        df_rates = pd.read_sql_query(
+            query_rates, self.conn, params=(until_date.isoformat(),)
+        )
+        if not df_rates.empty:
+            df_rates["date"] = pd.to_datetime(
+                df_rates["date"], utc=True
+            ).dt.normalize()
+            # FX rates are stored as floats, do not scale by PRICE_SCALE
 
         return df_txs, df_prices, df_rates
 
@@ -248,6 +239,7 @@ class PerformanceCalculator:
     def _get_fx(self, curr: str, d: pd.Timestamp) -> float:
         if curr == "EUR":
             return 1.0
+
         try:
             if (curr, d) in self._rates_idx.index:
                 return self._rates_idx.loc[(curr, d), "rate"]
@@ -255,13 +247,16 @@ class PerformanceCalculator:
             try:
                 c_rates = self._rates_idx.loc[curr]
                 loc = c_rates.index.searchsorted(d, side="right")
+
                 if loc > 0:
                     return c_rates.iloc[loc - 1]["rate"]
-                # Fallback: If no past rate, try future (backfill)
+
                 if loc < len(c_rates):
                     return c_rates.iloc[loc]["rate"]
+
             except KeyError:
                 pass
+
         except (KeyError, IndexError):
             pass
 

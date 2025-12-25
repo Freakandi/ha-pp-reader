@@ -29,6 +29,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Gross Metrics**: Dividends and Interest in "Time Series" now correctly report Gross values (Net + Taxes + Fees).
 - **Realized Gains**: Realized Gains calculation refactored to correctly use Gross Sell Proceeds (Net + Costs) while maintaining full Cost Basis (Debit) for Buys.
 - **Dynamic Period Performance**: Implemented dynamic calculation of realized gains for "Time Series" based on requested period start date, correctly handling positions held before the period start (Mark-to-Market at Start).
+- **Performance Calculation**: Resolved data loading issue where database locks during calculation would trigger silent failures and default FX rates to 1.0, causing massive skew in unrealized gains and FX metrics.
 
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.
@@ -52,6 +53,11 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Analyze Tab Timezone**: Resolved timezone-related off-by-one error in date selection. The analyzed period now correctly aligns with the selected dates, ensuring "Start Value" reflects the closing value of the previous day, and "End Value" reflects the closing value of the selected end day.
 - **FX Calculation**: Eliminated "Phantom FX" volatility on weekends and holidays. When a security's price is stale (market closed), the system now uses the exchange rate from the price's date rather than the current day's rate, ensuring valuations remain stable and "FX-Veränderung" only reflects actual market movements.
 - **Metric Consistency**: Fixed calculation of Dividends and Interest to report **Gross** values (including taxes and fees) instead of Net payouts, aligning exactly with Portfolio Performance's reporting standards. Adjusted Start/End value calculations to better handle missing FX rates on non-trading days.
+- **Total Wealth Backdating**: Fixed extensive discrepancy in historical wealth calculation (up to ~50%) by correctly accumulating full history before slicing to the requested period, ensuring pre-existing holdings and cash balances are accounted for.
+- **Security Valuation**: Resolved massive valuation errors (11x inflation) for securities trading in non-EUR currencies (e.g., SEK) by enforcing the authoritative security currency from metadata instead of inferring it from potentially misleading transaction records.
+- **Cash Transfers**: Fixed creating/funding accounts via internal transfers (Type 5) by properly splitting them into source-debit and target-credit flows, ensuring correct cash balances across multiple accounts.
+- **Dividend Calculation**: Refined Gross Dividend logic to strictly filter for Tax/Fee units, eliminating double-counting of "Base Gross" (Type 0) units that caused inflated dividend reports for certain securities (e.g., Glencore).
+- **Performance Neutral**: Excluded internal transfers from "Performance Neutral" optimization to prevent "phantom inflows/outflows" and applied correct directional signs to Removals/Deliveries.
 
 ### Internal
 - **Documentation**: Updated `AGENT_HANDBOOK.md`, `ARCHITECTURE.md`, `README.md`, and `README-dev.md` to reflect latest workflows and setup instructions.
