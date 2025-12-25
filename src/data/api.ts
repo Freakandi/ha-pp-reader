@@ -728,10 +728,18 @@ export interface DailyWealthSlices {
   portfolios: DailyWealthScopeRecord[];
 }
 
+export interface PerformanceMetrics {
+  absolute_performance: number;
+  realized_gains: number;
+  unrealized_gains: number;
+  fx_gains_cash: number;
+}
+
 export interface DailyWealthResponse {
   range: DailyWealthRange;
   records: DailyWealthRecord[];
   slices?: DailyWealthSlices;
+  metrics?: PerformanceMetrics;
 }
 
 export async function fetchDailyWealthWS(

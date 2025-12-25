@@ -36,7 +36,7 @@
 
 ## Phase C: Integration
 **Objective**: UI Visibility.
-- [ ] **API Update**:
+- [x] **API Update**:
     - Modify `websocket_api.py` (or relevant handler) to use `PerformanceCalculator`.
-- [ ] **Frontend Check**:
+- [x] **Frontend Check**:
     - Verify `time_series.ts` maps fields correctly.

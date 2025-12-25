@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -32,6 +33,9 @@ from custom_components.pp_reader.logic.securities import (
 )
 from custom_components.pp_reader.metrics.period_calculations import (
     calculate_period_performance_series,
+)
+from custom_components.pp_reader.services.performance_calculator import (
+    PerformanceCalculator,
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
@@ -1497,6 +1501,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     # --- Period-Specific Realized Gains Calculation ---
     # Standard daily_wealth stores absolute realized gains (Buy->Sell).
     # For Period views, we need gains relative to the Period Start Value.
+    metrics_payload = None
     if params.start_date and params.end_date:
         try:
             _LOGGER.debug(
@@ -1523,6 +1528,26 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                     # No metrics found for this day (no trades + no holdings?)
                     rec["realized_gains_eur"] = 0.0
                     rec["unrealized_gains_eur"] = 0.0
+
+            # Calculate Aggregate Performance Metrics (Phase C)
+            def _calc_metrics() -> dict[str, float]:
+                with sqlite3.connect(db_path) as conn:
+                    calc = PerformanceCalculator(conn)
+                    perf = calc.calculate(
+                        params.start_date,
+                        params.end_date,
+                        account_ids=params.account_filters,
+                        portfolio_ids=params.portfolio_filters,
+                    )
+                    return {
+                        "absolute_performance": perf.absolute_performance,
+                        "realized_gains": perf.realized_gains,
+                        "unrealized_gains": perf.unrealized_gains,
+                        "fx_gains_cash": perf.fx_gains_cash,
+                    }
+
+            metrics_payload = await async_run_executor_job(hass, _calc_metrics)
+
         except Exception:
             _LOGGER.exception("Failed to calculate period performance")
 
@@ -1552,6 +1577,9 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
         "range": {"start": start_iso, "end": end_iso},
         "records": records,
     }
+    if metrics_payload:
+        payload["metrics"] = metrics_payload
+
     if params.include_slices:
         acc_records = [_serialize_daily_scope(rec) for rec in account_slices]
         port_records = [_serialize_daily_scope(rec) for rec in portfolio_slices]

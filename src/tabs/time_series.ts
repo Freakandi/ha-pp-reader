@@ -191,7 +191,7 @@ function renderTotals(
 
 
 
-function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
+function renderMetrics(card: HTMLElement, records: DailyWealthRecord[], metrics?: DailyWealthResponse['metrics']): void {
   const container = card.querySelector<HTMLElement>('.analyse-metrics-grid');
   if (!container) return;
 
@@ -200,7 +200,7 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[]): void {
     return;
   }
 
-  const bd = derivePerformance(records);
+  const bd = derivePerformance(records, metrics);
   if (!bd) return;
 
   // const rows removed - direct usage via mkRow
@@ -528,7 +528,7 @@ function renderWealthChart(chartCard: HTMLElement, data: DailyWealthResponse): v
  * The first record (index 0) is treated as the baseline (morning of start date).
  * Subsequent records are treated as the activity within the selected period.
  */
-function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown | null {
+function derivePerformance(records: DailyWealthRecord[], responseMetrics?: DailyWealthResponse['metrics']): PerformanceBreakdown | null {
   if (records.length < 1) {
     return null;
   }
@@ -559,42 +559,40 @@ function derivePerformance(records: DailyWealthRecord[]): PerformanceBreakdown |
   // Total Performance = Delta - Neutral Capital Movements (Transfers + Deliveries)
   const totalPerformance = delta - (netTransfers + neutral);
 
-  // Realized Gains during Period (Gross since purchase for all items sold)
-  const realizedGains = sumField(periodRecords, 'realized_gains_eur');
+  let realizedGains: number;
+  let unrealizedGains: number;
+  let fxGains: number;
 
-  // Unrealized Gains during Period:
-  // The backend injects 'unrealized_gains_eur' which represents the cumulative unrealized gain
-  // relative to the Period Start (Mark-to-Market).
-  // Therefore, we treat the backend value as the authoritative source.
-  const valEnd = latest.unrealized_gains_eur;
-  const valStart = records.length > 1 ? baseline.unrealized_gains_eur : 0;
+  if (responseMetrics) {
+    // Phase C: Use Server-Side Metrics as Source of Truth
+    realizedGains = responseMetrics.realized_gains;
+    unrealizedGains = responseMetrics.unrealized_gains;
+    fxGains = responseMetrics.fx_gains_cash;
+  } else {
+    // Legacy Client-Side Calculation
+    realizedGains = sumField(periodRecords, 'realized_gains_eur');
 
-  // Create a debug probe (visible in browser console) to trace the values
-  console.debug('AG-Debug: Unrealized Gains', {
-    dateStart: baseline.date,
-    dateEnd: latest.date,
-    valStart,
-    valEnd,
-    recordsLength: records.length
-  });
+    // Unrealized Gains during Period (Mark-to-Market)
+    const valEnd = latest.unrealized_gains_eur;
+    const valStart = records.length > 1 ? baseline.unrealized_gains_eur : 0;
+    const uEnd = valEnd ?? 0;
+    const uStart = valStart ?? 0;
+    unrealizedGains = uEnd - uStart;
 
-  const uEnd = valEnd ?? 0;
-  const uStart = valStart ?? 0;
-  const unrealizedGains = uEnd - uStart;
+    // Kurserfolge (Gesamt) = Realized + Period Unrealized Change (both include FX)
+    const marketGainCalc = realizedGains + unrealizedGains;
 
-  // For display: also track price-only component
+    // FX-Veränderung = Residual balance
+    fxGains = totalPerformance - marketGainCalc - ertraege - fees - taxes;
+  }
+
+  // Market Gain is always Realized + Unrealized (Total Security Performance)
+  const marketGain = realizedGains + unrealizedGains;
+
+  // For display: also track price-only component (Client-side approximation only for now)
   const uPriceEnd = latest.unrealized_price_gains_eur ?? 0;
   const uPriceStart = records.length > 1 ? baseline.unrealized_price_gains_eur ?? 0 : 0;
   const unrealizedPriceGains = uPriceEnd - uPriceStart;
-
-  // Kurserfolge (Gesamt) = Realized + Period Unrealized Change (both include FX)
-  // This is the total gain on all security positions.
-  const marketGain = realizedGains + unrealizedGains;
-
-  // FX-Veränderung = Residual balance
-  // (Everything that is not accounted for by Kurserfolge, Dividends, Interest, Fees, Taxes)
-  // This typically represents FX gains on cash accounts or rounding.
-  const fxGains = totalPerformance - marketGain - ertraege - fees - taxes;
 
   return {
     startValue,
@@ -698,7 +696,7 @@ async function loadAndRender(
     label = `Tag: ${selection.date}`;
   }
   renderTotals(card, label, data.records);
-  renderMetrics(card, data.records);
+  renderMetrics(card, data.records, data.metrics);
 
   if (chartCard) {
     renderScopeFilters(chartCard, data.slices);
@@ -902,7 +900,7 @@ export const __TEST_ONLY__ = {
         ? `Zeitraum: ${selection.range.start} – ${selection.range.end}`
         : (selection.date ? `Tag: ${selection.date}` : '');
       renderTotals(rangeCard, label, data.records);
-      renderMetrics(rangeCard, data.records);
+      renderMetrics(rangeCard, data.records, data.metrics);
       setStatus(rangeCard, 'loaded');
     }
     // perfCard removed from test helper
