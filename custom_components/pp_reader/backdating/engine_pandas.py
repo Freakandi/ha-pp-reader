@@ -187,7 +187,24 @@ class BackdatingEngine:
         result["interest_eur"] = int_net.round(2)
         result["fees_eur"] = fees_net.round(2)
         result["taxes_eur"] = taxes_net.round(2)
-        result["performance_neutral_movements"] = 0.0  # Placeholder
+
+        # Performance Neutral Movements (Spec 1D)
+        # Includes Transfers, Deposits, Removals, Deliveries
+        neutral_types = [
+            TransactionType.CASH_TRANSFER,
+            TransactionType.SECURITY_TRANSFER,
+            TransactionType.DEPOSIT,
+            TransactionType.REMOVAL,
+            TransactionType.INBOUND_DELIVERY,
+            TransactionType.OUTBOUND_DELIVERY,
+        ]
+        neutral_flow = (
+            df_augmented[df_augmented["type"].isin(neutral_types)]
+            .groupby("date")["amount_eur"]
+            .sum()
+            .reindex(date_range, fill_value=0.0)
+        )
+        result["performance_neutral_movements"] = neutral_flow.round(2)
 
         # Fill schema defaults
         result["portfolio_wealth_eur"] = 0.0
