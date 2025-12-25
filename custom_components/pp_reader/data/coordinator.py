@@ -236,6 +236,19 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             entry_id=self.entry_id,
         )
 
+    async def async_schedule_startup_backfill(self) -> None:
+        """Trigger a full wealth recalculation (backdataing) on startup."""
+        _LOGGER.info("Startup-Backfill angefordert (Reason: Startup).")
+
+        async def _run_startup_task() -> None:
+            # Let HA startup settle
+            await asyncio.sleep(15)
+            summary: dict[str, Any] = {"trigger": "startup"}
+            await self._schedule_metrics_refresh(summary, errors=[], backdating=True)
+            await self._schedule_normalization_refresh(summary)
+
+        self.hass.async_create_task(_run_startup_task())
+
     async def _sync_portfolio_file(self, last_update_truncated: datetime) -> None:
         """Parse and persist the portfolio when the file has changed."""
         _LOGGER.info("Dateiänderung erkannt, starte Datenaktualisierung...")

@@ -765,6 +765,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry_id=entry.entry_id,
         )
         await coordinator.async_config_entry_first_refresh()
+        await coordinator.async_schedule_startup_backfill()
         store["coordinator"] = coordinator
 
         _initialize_price_tasks(hass, entry, store, options)
