@@ -62,13 +62,10 @@ class PerformanceCalculator:
             start_date, end_date
         )
 
-        # 2. Load Data for Granular Metrics
-        df_txs, df_prices, df_rates = self._load_data(end_date, valid_account_ids)
+        # 2. Load Market Data (Shared)
+        df_prices, df_rates = self._load_market_data(end_date)
 
-        # Load Account Currencies for Cross-Currency handling
-        account_currencies = self._load_account_currencies()
-
-        # Prepare lookup indices once
+        # Prepare lookup indices
         if not df_prices.empty:
             self._prices_idx = df_prices.set_index(
                 ["security_uuid", "date"]
@@ -81,16 +78,24 @@ class PerformanceCalculator:
         else:
             self._rates_idx = pd.DataFrame()
 
-        # 3. Capital Gains (Securities)
+        # 3. Capital Gains (Securities) - USE LEGACY DATA LOADING
+        # Reverted to strict account filtering to restore proven values.
+        df_txs_cap = self._load_transactions_legacy(end_date, valid_account_ids)
         realized, unrealized = self._calculate_capital_gains(
-            df_txs, start_date, end_date
+            df_txs_cap, start_date, end_date
         )
         metrics.realized_gains = realized
         metrics.unrealized_gains = unrealized
 
-        # 4. FX Performance (Cash)
+        # 4. FX Performance (Cash) - USE EXTENDED DATA LOADING
+        # Uses smart filtering (Source OR Target) to correctly handle Transfers.
+        df_txs_fx = self._load_transactions_extended(end_date, valid_account_ids)
+
+        # Load Account Currencies for Cross-Currency handling
+        account_currencies = self._load_account_currencies()
+
         metrics.fx_gains_cash = self._calculate_fx_performance(
-            df_txs, start_date, end_date, account_currencies, valid_account_ids
+            df_txs_fx, start_date, end_date, account_currencies, valid_account_ids
         )
 
         # Cleanup
@@ -98,6 +103,43 @@ class PerformanceCalculator:
         self._rates_idx = pd.DataFrame()
 
         return metrics
+
+    def _load_market_data(
+        self, until_date: date
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Load prices and FX rates."""
+        query_prices = """
+            SELECT security_uuid, date, close
+            FROM historical_prices
+            WHERE date <= ?
+        """
+        try:
+            df_prices = pd.read_sql_query(
+                query_prices, self.conn, params=(until_date.isoformat(),)
+            )
+            if not df_prices.empty:
+                df_prices["date"] = pd.to_datetime(
+                    df_prices["date"], unit="D", origin="unix"
+                ).dt.tz_localize("UTC")
+                df_prices["close"] = df_prices["close"] / PRICE_SCALE
+        except pd.errors.DatabaseError:
+             df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
+
+        query_rates = """
+            SELECT date, currency, rate FROM fx_rates WHERE date <= ?
+        """
+        try:
+            df_rates = pd.read_sql_query(
+                query_rates, self.conn, params=(until_date.isoformat(),)
+            )
+            if not df_rates.empty:
+                df_rates["date"] = pd.to_datetime(
+                    df_rates["date"], utc=True
+                ).dt.normalize()
+        except pd.errors.DatabaseError:
+            df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
+
+        return df_prices, df_rates
 
     def _load_account_currencies(self) -> dict[str, str]:
         """Load currency map for all accounts."""
@@ -160,19 +202,54 @@ class PerformanceCalculator:
 
         return delta_wealth - delta_invested
 
-    def _load_data(
+    def _load_transactions_legacy(
         self,
         until_date: date,
         valid_account_ids: set[str] | None = None,
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Load transactions and market data required for calculations."""
+    ) -> pd.DataFrame:
+        """Load transactions using strict account filtering (Legacy behavior)."""
+        tx_filter_parts = ["date <= ?"]
+        params = [until_date.isoformat()]
+
+        if valid_account_ids:
+            placeholders = ",".join("?" for _ in valid_account_ids)
+            tx_filter_parts.append(f"account IN ({placeholders})")
+            params.extend(valid_account_ids)
+
+        where_clause = " AND ".join(tx_filter_parts)
+        query_txs = f"""
+            SELECT
+                uuid, type, date, account, other_account,
+                security, shares, amount, currency_code
+            FROM transactions
+            WHERE {where_clause}
+            ORDER BY date
+        """  # noqa: S608
+
+        try:
+            df_txs = pd.read_sql_query(
+                query_txs,
+                self.conn,
+                params=tuple(params),
+                parse_dates=["date"],
+            )
+        except pd.errors.DatabaseError:
+            df_txs = pd.DataFrame()
+
+        return self._normalize_tx_frame(df_txs)
+
+    def _load_transactions_extended(
+        self,
+        until_date: date,
+        valid_account_ids: set[str] | None = None,
+    ) -> pd.DataFrame:
+        """Load transactions using extended filtering for Transfers (FX Fix)."""
         tx_filter_parts = ["date <= ?"]
         params = [until_date.isoformat()]
 
         if valid_account_ids:
             placeholders = ",".join("?" for _ in valid_account_ids)
             # Fetch transactions where ANY side touches the scope (Account OR Other)
-            # This ensures we get both Inflows and Outflows for Transfers.
             clause = (
                 f"(account IN ({placeholders}) OR "
                 f"(type = {TransactionType.CASH_TRANSFER} "
@@ -183,9 +260,6 @@ class PerformanceCalculator:
             params.extend(valid_account_ids)
 
         where_clause = " AND ".join(tx_filter_parts)
-
-        # S608: Dynamic SQL construction is required for variable IN clauses.
-        # Inputs are strictly controlled (dates/uuids) and passed as parameters.
         query_txs = f"""
             SELECT
                 uuid, type, date, account, other_account,
@@ -195,13 +269,20 @@ class PerformanceCalculator:
             ORDER BY date
         """  # noqa: S608
 
-        df_txs = pd.read_sql_query(
-            query_txs,
-            self.conn,
-            params=tuple(params),
-            parse_dates=["date"],
-        )
+        try:
+            df_txs = pd.read_sql_query(
+                query_txs,
+                self.conn,
+                params=tuple(params),
+                parse_dates=["date"],
+            )
+        except pd.errors.DatabaseError:
+            df_txs = pd.DataFrame()
 
+        return self._normalize_tx_frame(df_txs)
+
+    def _normalize_tx_frame(self, df_txs: pd.DataFrame) -> pd.DataFrame:
+        """Apply standard normalizations to transaction DataFrame."""
         if not df_txs.empty:
             df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
             df_txs["shares_norm"] = df_txs["shares"] / 100000000.0
@@ -221,33 +302,7 @@ class PerformanceCalculator:
                 ]
             )
             df_txs["date"] = pd.to_datetime([], utc=True)
-
-        query_prices = """
-            SELECT security_uuid, date, close
-            FROM historical_prices
-            WHERE date <= ?
-        """
-
-        df_prices = pd.read_sql_query(
-            query_prices, self.conn, params=(until_date.isoformat(),)
-        )
-        if not df_prices.empty:
-            df_prices["date"] = pd.to_datetime(
-                df_prices["date"], unit="D", origin="unix"
-            ).dt.tz_localize("UTC")
-            df_prices["close"] = df_prices["close"] / PRICE_SCALE
-
-        query_rates = """
-            SELECT date, currency, rate FROM fx_rates WHERE date <= ?
-        """
-        df_rates = pd.read_sql_query(
-            query_rates, self.conn, params=(until_date.isoformat(),)
-        )
-        if not df_rates.empty:
-            df_rates["date"] = pd.to_datetime(df_rates["date"], utc=True).dt.normalize()
-            # FX rates are stored as floats, do not scale by PRICE_SCALE
-
-        return df_txs, df_prices, df_rates
+        return df_txs
 
     def _get_price(self, sec_id: str, d: pd.Timestamp) -> float:
         try:

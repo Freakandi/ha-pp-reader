@@ -62,7 +62,7 @@ class BackdatingEngine:
         self.persist_results(daily_wealth_df)
         _LOGGER.debug("Backdating completed.")
 
-    def load_data(
+    def load_data(  # noqa: PLR0912, PLR0915
         self,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Load raw data from SQLite into Pandas DataFrames."""
@@ -126,6 +126,39 @@ class BackdatingEngine:
         except pd.errors.DatabaseError:
             df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
 
+        # Load Latest Prices (Snapshot alignment)
+        # We merge "live" prices (last_price) to ensure "Today" in Time Series
+        # matches the "Current Value" in the Overview tab.
+        query_latest = """
+            SELECT
+                uuid as security_uuid,
+                last_price as close,
+                last_price_date
+            FROM securities
+            WHERE last_price IS NOT NULL AND last_price_date IS NOT NULL
+        """
+        try:
+            df_latest = pd.read_sql_query(query_latest, self.conn)
+            if not df_latest.empty:
+                # Convert timestamp (seconds) to datetime date (UTC midnight)
+                df_latest["date"] = pd.to_datetime(
+                    df_latest["last_price_date"], unit="s", origin="unix"
+                ).dt.tz_localize("UTC").dt.normalize()
+
+                # Cleanup
+                df_latest = df_latest.drop(columns=["last_price_date"])
+
+                # Merge with historical (Snapshot takes precedence for same-day)
+                if not df_prices.empty:
+                    df_prices = pd.concat([df_prices, df_latest])
+                    df_prices = df_prices.drop_duplicates(
+                        subset=["security_uuid", "date"], keep="last"
+                    )
+                else:
+                    df_prices = df_latest
+        except pd.errors.DatabaseError:
+            pass  # Ignore faults directly related to latest price fetching
+
         # Load FX Rates
         query_rates = """
             SELECT
@@ -142,6 +175,62 @@ class BackdatingEngine:
                 # No scaling needed (previously divided by PRICE_SCALE).
         except pd.errors.DatabaseError:
             df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
+
+        # Load Latest FX Rates (Snapshot alignment)
+        # We merge "live" FX rates from exchange_rates to ensure "Today"
+        # matches the "Current Value" in the Overview tab.
+        query_rates_live = """
+            SELECT
+                date,
+                term_currency as currency,
+                rate
+            FROM exchange_rates
+            WHERE base_currency = 'EUR'
+        """
+        try:
+            df_rates_live = pd.read_sql_query(query_rates_live, self.conn)
+            if not df_rates_live.empty:
+                df_rates_live["date"] = pd.to_datetime(
+                    df_rates_live["date"], utc=True
+                ).dt.normalize()
+
+                # exchange_rates is stored as 10^-8 integer (PRICE_SCALE)
+                # fx_rates is (historically) stored as float (1.05) or int
+                # depending on implementation.
+                # Inspecting 'fx_rates' schema in other files suggests it might be
+                # float or integer.
+                # However, the previous code block says: "FX rates are stored as
+                # floats... No scaling needed".
+                # BUT db_schema.py says fx_rates.rate is INTEGER.
+                # AND exchange_rates.rate is INTEGER.
+
+                # Let's assume BOTH are integers if schema says so, OR we trust the
+                # "No scaling needed" comment which implies fx_rates might be
+                # distinct.
+
+                # Re-reading comment in existing code:
+
+
+                # SAFE BET: If exchange_rates is INTEGER (10^8), convert to float
+                # 1.05 to match what the 'fx_rates' logic *appears* to expect if it
+                # claimed "float".
+                # BUT, if 'fx_rates' logic didn't scale, maybe it *is* stored as
+                # float (REAL) in sqlite?
+                # SQLite is loose with types.
+
+                # Let's treat exchange_rates consistently:
+                # schema says INTEGER 10^-8. So divide by 100,000,000.
+                df_rates_live["rate"] = df_rates_live["rate"] / PRICE_SCALE
+
+                if not df_rates.empty:
+                    df_rates = pd.concat([df_rates, df_rates_live])
+                    df_rates = df_rates.drop_duplicates(
+                        subset=["date", "currency"], keep="last"
+                    )
+                else:
+                    df_rates = df_rates_live
+        except pd.errors.DatabaseError:
+            pass
 
         # Load Securities Metadata (Currency)
         query_sec = "SELECT uuid, currency_code FROM securities"
@@ -499,7 +588,8 @@ class BackdatingEngine:
 
         return daily_sec_wealth
 
-    def _calculate_cash_wealth(
+    def _calculate_cash_wealth(  # noqa: PLR0915
+
         self,
         df_txs: pd.DataFrame,
         fx_pivot: pd.DataFrame,
@@ -508,6 +598,14 @@ class BackdatingEngine:
         daily_cash_wealth = pd.Series(0.0, index=date_range)
         if df_txs.empty:
             return daily_cash_wealth
+
+        # Load Account Currencies
+        try:
+            query = "SELECT uuid, currency_code FROM accounts"
+            rows = self.conn.execute(query).fetchall()
+            account_currencies = {r[0]: (r[1] or "EUR") for r in rows}
+        except sqlite3.Error:
+            account_currencies = {}
 
         # Prepare Expanded Transactions for Cash Logic
         # Type 5 (CASH_TRANSFER) needs to impact two accounts:
@@ -518,10 +616,68 @@ class BackdatingEngine:
         df_standard = df_txs[df_txs["type"] != TransactionType.CASH_TRANSFER].copy()
 
         df_transfers = df_txs[df_txs["type"] == TransactionType.CASH_TRANSFER].copy()
+
+        # --- Handle Transfers Special Logic (Cross-Currency Protection) ---
+        df_transfers_out = df_transfers.copy()
         df_transfers_in = df_transfers.copy()
 
-        # Outflow leg (Source)
-        # Type 5 is treated as an outflow from 'account' in get_cash_delta below
+        # FX Rates for conversion derived from fx_pivot
+        # We need a lookup function. Since this runs on vectorized DataFrames,
+        # we can pre-join FX? No, row-based logic is tricky here.
+        # But we can use apply().
+
+        # Prepare FX lookup dictionary for apply() speed
+
+
+        # Optimization: We only need to fix the Amount/Currency for the Source Leg
+        # if Source Currency != Transaction Currency.
+
+        def fix_transfer_outflow(row: Any) -> Any:
+            source_acc = row["account"]
+            if not source_acc:
+                return row
+
+            source_curr = account_currencies.get(source_acc, "EUR")
+            tx_curr = row["currency_code"]
+
+            # If currencies match, no change needed (standard logic works)
+            if source_curr == tx_curr:
+                return row
+
+            # Cross-Currency: We need to convert the amount to Source Currency
+            # The transaction amount is in 'tx_curr'.
+            # We need to find the rate for 'tx_curr' on 'date'
+            # AND 'source_curr' on 'date'.
+
+            d = row["date"]
+
+            # Helper to get rate from pivot
+            def get_rate(c: str) -> float:
+                if c == "EUR":
+                    return 1.0
+                try:
+                    return fx_pivot.loc[d, c]
+                except (KeyError, IndexError):
+                    return 1.0
+
+            rate_tx = get_rate(tx_curr)
+            rate_source = get_rate(source_curr)
+
+            amount_target = row["amount"]
+
+            # Value in EUR
+            val_eur = (amount_target / rate_tx) if rate_tx else 0.0
+
+            # Value in Source
+            amount_source = val_eur * rate_source
+
+            # Update Row
+            row["amount"] = amount_source
+            row["currency_code"] = source_curr
+            return row
+
+        if not df_transfers_out.empty:
+             df_transfers_out = df_transfers_out.apply(fix_transfer_outflow, axis=1)
 
         # Inflow leg (Target)
         if not df_transfers_in.empty:
@@ -534,7 +690,7 @@ class BackdatingEngine:
 
         # Recombine
         df_cash_calc = pd.concat(
-            [df_standard, df_transfers, df_transfers_in], ignore_index=True
+            [df_standard, df_transfers_out, df_transfers_in], ignore_index=True
         )
 
         def get_cash_delta(row: Any) -> float:
