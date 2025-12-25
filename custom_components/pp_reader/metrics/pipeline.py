@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from custom_components.pp_reader.backdating.live_update import update_today_wealth
 from custom_components.pp_reader.backdating.pipeline import (
     BackdatingResult,
     async_run_backdating_rebuild,
@@ -173,6 +174,21 @@ async def async_refresh_all(
         _LOGGER.exception("Metric run failed (run_uuid=%s)", run.run_uuid)
         raise
     else:
+        # --- NEW: Live Update for Daily Wealth (Today) ---
+        try:
+            await async_run_executor_job(
+                hass,
+                update_today_wealth,
+                db_path,
+                final_run.run_uuid,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Live-Update für daily_wealth fehlgeschlagen (non-critical)",
+                exc_info=True,
+            )
+        # -------------------------------------------------
+
         _emit(
             "completed",
             run_uuid=final_run.run_uuid,

@@ -31,7 +31,7 @@ Derived from `.docs/wealth-backdating-plan.md` (Backend data handling / computat
   - [ ] (Optional) Compute performance-neutral movements (net transfers/adjustments) for UI mapping.
   - [x] Modules: `data/db_access.py` (transaction_units), `logic/accounting.py` transaction typing; follow existing enums/type markers.
   - [x] Pitfalls: classify by transaction type reliably; avoid double-counting internal transfers; ensure sign conventions are consistent (inbound positive, outbound negative).
-- [ ] Coverage/provenance
+- [x] Coverage/provenance
   - [x] Compute `price_coverage_ratio`, `stale_price`, set `provenance` per run (e.g., metrics_pipeline vs backfill).
   - [x] Modules: backdating computation module (new helper) or `metrics/pipeline.py`; reuse `coverage_ratio` pattern from `metrics/common.py`.
 - [x] Persistence
@@ -47,12 +47,13 @@ Derived from `.docs/wealth-backdating-plan.md` (Backend data handling / computat
   - [x] Emit coverage warnings in payload (not silent nulls).
   - [x] Modules: `data/websocket.py` (command registration/handler), `data/api.ts` deserializer later for frontend.
   - [x] Pitfalls: do not break existing commands; keep payload shape stable; guard large ranges with limits.
-- [ ] Wiring
+- [x] Wiring
   - [x] Hook computation into metrics pipeline after existing metrics finish.
   - [x] Ensure coordinator schedules rebuild on import completion.
   - [x] Modules: `metrics/pipeline.py` (invoke backdating stage after metrics persistence); `data/coordinator.py` (emit progress, schedule run).
   - [x] Pitfalls: avoid race with HA startup
-- [ ] Tests (backend)
+  - [x] Hook live update of daily_wealth into metrics pipeline (for 'today' synchronization).
+- [x] Tests (backend)
   - [x] Unit tests for holdings valuation with price fallback and FX coverage.
   - [x] Unit tests for cashflow buckets and internal transfer exclusion.
   - [x] Tests for per-scope slice generation.
