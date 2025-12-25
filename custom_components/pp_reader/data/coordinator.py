@@ -241,8 +241,8 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Startup-Backfill angefordert (Reason: Startup).")
 
         async def _run_startup_task() -> None:
-            # Let HA startup settle
-            await asyncio.sleep(15)
+            # Let HA startup settle (short delay only)
+            await asyncio.sleep(1)
             summary: dict[str, Any] = {"trigger": "startup"}
             await self._schedule_metrics_refresh(summary, errors=[], backdating=True)
             await self._schedule_normalization_refresh(summary)
