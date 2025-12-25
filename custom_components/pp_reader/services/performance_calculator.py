@@ -258,10 +258,15 @@ class PerformanceCalculator:
                 loc = c_rates.index.searchsorted(d, side="right")
                 if loc > 0:
                     return c_rates.iloc[loc - 1]["rate"]
+                # Fallback: If no past rate, try future (backfill)
+                if loc < len(c_rates):
+                    return c_rates.iloc[loc]["rate"]
             except KeyError:
                 pass
         except (KeyError, IndexError):
             pass
+
+        _LOGGER.warning("Missing FX rate for %s at %s - defaulting to 1.0", curr, d)
         return 1.0
 
     def _calculate_capital_gains(

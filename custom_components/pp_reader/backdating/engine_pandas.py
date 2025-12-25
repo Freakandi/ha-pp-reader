@@ -238,14 +238,14 @@ class BackdatingEngine:
             fx_pivot = pd.DataFrame(index=date_range)
 
         fx_pivot["EUR"] = 1.0
-        fx_pivot = fx_pivot.reindex(date_range).ffill()
+        fx_pivot = fx_pivot.reindex(date_range).ffill().bfill()
 
         if not df_prices.empty:
             price_pivot = df_prices.pivot_table(
                 index="date", columns="security_uuid", values="close"
             )
             price_pivot = price_pivot / PRICE_SCALE
-            price_pivot = price_pivot.reindex(date_range).ffill()
+            price_pivot = price_pivot.reindex(date_range).ffill().bfill()
         else:
             price_pivot = pd.DataFrame(index=date_range)
 
