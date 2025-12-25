@@ -19,7 +19,7 @@ Acceptance criteria or example UX/data (optional):
 1. **Cleanup**: Kill stale processes.
 2. **Start Services**:
    - HA: `source .venv/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &`
-   The integration UI can then be reached at 192.168.5.108:8123/ppreader once HA has started. User / PW: dev / dev
+   The integration UI (visual) can then only be reached at 192.168.5.108:8123/ppreader once HA has started. User / PW: dev / dev
    - Vite: `npm run dev -- --host 127.0.0.1 --port 5173`
 3. **Shutdown**: Stop processes when done.
 

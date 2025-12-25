@@ -104,9 +104,7 @@ class PerformanceCalculator:
 
         return metrics
 
-    def _load_market_data(
-        self, until_date: date
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _load_market_data(self, until_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Load prices and FX rates."""
         query_prices = """
             SELECT security_uuid, date, close
@@ -123,7 +121,7 @@ class PerformanceCalculator:
                 ).dt.tz_localize("UTC")
                 df_prices["close"] = df_prices["close"] / PRICE_SCALE
         except pd.errors.DatabaseError:
-             df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
+            df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
 
         query_rates = """
             SELECT date, currency, rate FROM fx_rates WHERE date <= ?

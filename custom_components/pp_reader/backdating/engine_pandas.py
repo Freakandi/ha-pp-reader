@@ -141,9 +141,13 @@ class BackdatingEngine:
             df_latest = pd.read_sql_query(query_latest, self.conn)
             if not df_latest.empty:
                 # Convert timestamp (seconds) to datetime date (UTC midnight)
-                df_latest["date"] = pd.to_datetime(
-                    df_latest["last_price_date"], unit="s", origin="unix"
-                ).dt.tz_localize("UTC").dt.normalize()
+                df_latest["date"] = (
+                    pd.to_datetime(
+                        df_latest["last_price_date"], unit="s", origin="unix"
+                    )
+                    .dt.tz_localize("UTC")
+                    .dt.normalize()
+                )
 
                 # Cleanup
                 df_latest = df_latest.drop(columns=["last_price_date"])
@@ -209,7 +213,6 @@ class BackdatingEngine:
                 # distinct.
 
                 # Re-reading comment in existing code:
-
 
                 # SAFE BET: If exchange_rates is INTEGER (10^8), convert to float
                 # 1.05 to match what the 'fx_rates' logic *appears* to expect if it
@@ -589,7 +592,6 @@ class BackdatingEngine:
         return daily_sec_wealth
 
     def _calculate_cash_wealth(  # noqa: PLR0915
-
         self,
         df_txs: pd.DataFrame,
         fx_pivot: pd.DataFrame,
@@ -627,7 +629,6 @@ class BackdatingEngine:
         # But we can use apply().
 
         # Prepare FX lookup dictionary for apply() speed
-
 
         # Optimization: We only need to fix the Amount/Currency for the Source Leg
         # if Source Currency != Transaction Currency.
@@ -677,7 +678,7 @@ class BackdatingEngine:
             return row
 
         if not df_transfers_out.empty:
-             df_transfers_out = df_transfers_out.apply(fix_transfer_outflow, axis=1)
+            df_transfers_out = df_transfers_out.apply(fix_transfer_outflow, axis=1)
 
         # Inflow leg (Target)
         if not df_transfers_in.empty:

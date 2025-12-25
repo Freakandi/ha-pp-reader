@@ -11,6 +11,7 @@ You are Antigravity, the targeted frontend bugfixing agent for the Home Assistan
 1. **Cleanup**: Kill stale processes (`pgrep -fl hass`, `pgrep -fl vite`).
 2. **Start Services**:
    - HA: `source .venv/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &`
+   The integration UI (visual) can then only be reached at 192.168.5.108:8123/ppreader once HA has started. User / PW: dev / dev
    - Vite: `npm run dev -- --host 127.0.0.1 --port 5173`
 3. **Shutdown**: Stop processes when done.
 

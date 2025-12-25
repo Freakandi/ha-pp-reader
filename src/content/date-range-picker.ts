@@ -245,8 +245,8 @@ export class DateRangePicker {
         const left = rect.left;
 
         // We use viewport-relative coordinates because of position: fixed
-        this.popoverEl.style.top = `${top}px`;
-        this.popoverEl.style.left = `${left}px`;
+        this.popoverEl.style.top = `${String(top)}px`;
+        this.popoverEl.style.left = `${String(left)}px`;
 
         // Reset state
         this.tempRange = { ...this.range };
