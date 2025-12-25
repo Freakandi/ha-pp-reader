@@ -223,7 +223,6 @@ class PerformanceCalculator:
                     df_rates["date"], utc=True
                 ).dt.normalize()
                 # FX rates are stored as floats, do not scale by PRICE_SCALE
-                # df_rates["rate"] = df_rates["rate"]
         except pd.errors.DatabaseError:
             df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
 
@@ -428,7 +427,8 @@ class PerformanceCalculator:
         start_date: date,
         end_date: date,
     ) -> float:
-        """Calculate FX Performance for Cash Accounts.
+        """
+        Calculate FX Performance for Cash Accounts.
 
         Logic: Change in EUR value of Foreign Cash held.
         Valuation = Balance / Rate.
@@ -549,9 +549,9 @@ class PerformanceCalculator:
 
             # Realized FX Gain on Outflow (Spending Cash)
             # We spent 'consumed' Native Currency.
-            # Value at Transaction = consumed / tx_fx
-            # Value at Baseline = consumed / base_fx
-            # Gain = Val_Tx - Val_Base
+            # Value at Transaction is consumed / tx_fx.
+            # Value at Baseline is consumed / base_fx.
+            # Gain is the difference: Val_Tx - Val_Base.
 
             val_tx = (consumed / tx_fx) if tx_fx else 0.0
             val_base = (consumed / base_fx) if base_fx else 0.0

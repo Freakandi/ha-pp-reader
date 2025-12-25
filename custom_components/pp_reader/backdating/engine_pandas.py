@@ -136,9 +136,8 @@ class BackdatingEngine:
                 df_rates["date"] = pd.to_datetime(
                     df_rates["date"], utc=True
                 ).dt.normalize()
-                # FX rates are stored as floats in the DB (e.g. 1.05), no scaling needed.
-                # Previously this was divided by PRICE_SCALE, assuming integer storage.
-                # df_rates["rate"] = df_rates["rate"]
+                # FX rates are stored as floats in the DB (e.g. 1.05).
+                # No scaling needed (previously divided by PRICE_SCALE).
         except pd.errors.DatabaseError:
             df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
 
