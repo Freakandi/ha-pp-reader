@@ -22,16 +22,16 @@
 
 ## Phase B: The Calculator (Logic Core)
 **Objective**: accurate dynamic performance math.
-- [ ] **Service Creation**:
+- [x] **Service Creation**:
     - Create `custom_components/pp_reader/services/performance_calculator.py`.
-- [ ] **Capital Gains Logic (Securities)**:
+- [x] **Capital Gains Logic (Securities)**:
     - Implement Spec Section 2-C.
     - `Period Realized`: Iterate Sales.
     - `Period Unrealized`: Iterate Holdings.
-- [ ] **FX Logic (Cash Accounts)**:
+- [x] **FX Logic (Cash Accounts)**:
     - Implement Spec Section 2-D.
     - Iterate Cash Flows/Balances.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
     - Verify "Standard Share B" example (Buy 150 -> Sell 160 = +10 Realized).
 
 ## Phase C: Integration
