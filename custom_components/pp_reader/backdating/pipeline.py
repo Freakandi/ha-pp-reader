@@ -11,17 +11,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from custom_components.pp_reader.backdating.accounts import (
-    async_compute_daily_account_snapshots,
-)
-from custom_components.pp_reader.backdating.aggregate import build_daily_wealth_records
-from custom_components.pp_reader.backdating.cashflows import (
-    async_compute_daily_cashflows,
-)
-from custom_components.pp_reader.backdating.holdings import (
-    async_compute_daily_holdings_snapshots,
-)
-from custom_components.pp_reader.backdating.persist import persist_daily_wealth
+from custom_components.pp_reader.backdating.engine_pandas import BackdatingEngine
 from custom_components.pp_reader.currencies.fx import (
     async_prepare_exchange_rates_for_backdating,
 )
@@ -205,68 +195,25 @@ async def async_run_backdating_rebuild(
                 emit_progress=(lambda stage, payload: _emit(f"fx_{stage}", **payload)),
             )
 
-            holdings = await async_compute_daily_holdings_snapshots(
-                hass,
-                db_path,
-                plan.start_date,
-                plan.end_date,
-                emit_progress=(
-                    lambda stage, payload: _emit(
-                        f"backdating_holdings_{stage}", **payload
-                    )
-                ),
-            )
-            _emit("backdating_holdings_completed", days=len(holdings))
-
-            accounts = await async_compute_daily_account_snapshots(
-                hass,
-                db_path,
-                plan.start_date,
-                plan.end_date,
-            )
-            _emit("backdating_accounts_completed", days=len(accounts))
-
-            cashflows = await async_compute_daily_cashflows(
-                hass,
-                db_path,
-                plan.start_date,
-                plan.end_date,
-            )
-            _emit("backdating_cashflows_completed", days=len(cashflows))
-
-            aggregates = build_daily_wealth_records(
-                plan.start_date,
-                plan.end_date,
-                holdings=holdings,
-                accounts=accounts,
-                cashflows=cashflows,
-                provenance=provenance_value,
-            )
-            _emit("backdating_aggregate_completed", days=len(aggregates))
-
-            def _persist(
+            def _run_pandas_engine(
                 db_path_param: Path,
-                aggregates_param: Any,
-                holdings_param: Any,
-                accounts_param: Any,
-                provenance_param: str | None,
+                start_date: date,
+                end_date: date,
             ) -> None:
-                persist_daily_wealth(
-                    db_path_param,
-                    aggregates_param,
-                    holdings_snapshots=holdings_param,
-                    account_snapshots=accounts_param,
-                    provenance=provenance_param,
-                )
+                with sqlite3.connect(str(db_path_param)) as conn:
+                    engine = BackdatingEngine(conn)
+                    engine.run(start_date, end_date)
 
             await async_run_executor_job(
                 hass,
-                _persist,
+                _run_pandas_engine,
                 Path(db_path),
-                aggregates,
-                holdings,
-                accounts,
-                provenance_value,
+                plan.start_date,
+                plan.end_date,
+            )
+            _emit(
+                "backdating_pandas_completed",
+                days=(plan.end_date - plan.start_date).days + 1,
             )
         except Exception as err:
             finished_at = _utc_now_isoformat()
