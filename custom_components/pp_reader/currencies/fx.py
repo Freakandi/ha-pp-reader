@@ -616,7 +616,6 @@ def _mark_failed(date_str: str, currencies: set[str]) -> None:
         _FETCH_FAIL_CACHE[key] = now + _FETCH_FAIL_TTL
 
 
-
 async def _process_fetch_missing(
     date_str: str,
     missing: set[str],

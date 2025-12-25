@@ -30,6 +30,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Realized Gains**: Realized Gains calculation refactored to correctly use Gross Sell Proceeds (Net + Costs) while maintaining full Cost Basis (Debit) for Buys.
 - **Dynamic Period Performance**: Implemented dynamic calculation of realized gains for "Time Series" based on requested period start date, correctly handling positions held before the period start (Mark-to-Market at Start).
 - **Performance Calculation**: Resolved data loading issue where database locks during calculation would trigger silent failures and default FX rates to 1.0, causing massive skew in unrealized gains and FX metrics.
+- **Fix**: Corrected "FX-Veränderung" calculation in Time Series tab. Now properly handles `CASH_TRANSFER` transactions by treating them as outflows from source and inflows to target, eliminating phantom FX gains/losses and correctly tracking currency exposure on transfer-funded accounts.
+- **Fix**: Updated `PerformanceCalculator` to respect account currencies during transfers, preventing "Phantom Short" positions in base-currency accounts when transferring to foreign-currency accounts.
 
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.

@@ -23,6 +23,7 @@ def conn():
             type INTEGER,
             date TEXT,
             account TEXT,
+            other_account TEXT,
             security TEXT,
             shares INTEGER,
             amount INTEGER,
@@ -76,16 +77,18 @@ def _insert_tx(
     amount_norm,
     currency,
     account="acc1",
+    other_account=None,
 ):
     # shares stored as * 10^8
     # amount stored as * 100
     conn.execute(
-        "INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             uuid,
             tx_type,
             date_str,
             account,
+            other_account,
             security,
             int(shares_norm * 100000000),
             int(amount_norm * 100),
@@ -340,7 +343,47 @@ def test_filtering_by_account(conn, calc):
     )
     # Realized Gain = 100
 
-    # Calculate filtering only Account A
     metrics = calc.calculate(start_date, end_date, account_ids=["accA"])
 
     assert metrics.realized_gains == 20.0
+
+
+def test_fx_performance_cross_account_transfer(conn, calc):
+    """Test FX Performance captures Inflow from Transfer."""
+    start_date = date(2023, 1, 1)
+    end_date = date(2023, 1, 31)
+
+    # Transfer 1000 USD from Ext to MyAccount (in scope)
+    # This is type 5. account=Ext, other_account=MyAccount.
+    _insert_tx(
+        conn,
+        "tx1",
+        TransactionType.CASH_TRANSFER,
+        "2023-01-01",
+        None,
+        0,
+        -1000.0,  # Amount is usually negative for outflow from Source
+        "USD",
+        account="accExt",
+        other_account="accMy",
+    )
+
+    # Start FX: 1.0 (EUR=USD parity)
+    _insert_fx(conn, "2023-01-01", "USD", 1.0)
+    # End FX: 2.0 (EUR=2 USD, USD halved in value)
+    _insert_fx(conn, "2023-01-31", "USD", 2.0)
+
+    # We only care about accMy.
+    metrics = calc.calculate(start_date, end_date, account_ids=["accMy"])
+
+    # Expectation:
+    # 1. Inflow to accMy created by transfer logic (at 1.0 rate).
+    #    Balance = 1000 USD.
+    #    Baseline Value = 1000 EUR.
+    # 2. End Value:
+    #    Balance = 1000 USD.
+    #    End Value = 1000 / 2.0 = 500 EUR.
+    # 3. Unrealized FX Gain = 500 - 1000 = -500 EUR.
+
+    # If the bug is present, accMy sees no inflow, Balance 0, Gain 0.
+    assert metrics.fx_gains_cash == pytest.approx(-500.0)

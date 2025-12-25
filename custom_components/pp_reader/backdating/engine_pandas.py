@@ -148,7 +148,7 @@ class BackdatingEngine:
         try:
             df_securities = pd.read_sql_query(query_sec, self.conn)
         except pd.errors.DatabaseError:
-             df_securities = pd.DataFrame(columns=["uuid", "currency_code"])
+            df_securities = pd.DataFrame(columns=["uuid", "currency_code"])
 
         return df_txs, df_units, df_prices, df_rates, df_securities
 
@@ -188,8 +188,6 @@ class BackdatingEngine:
 
         # --- 6. WEALTH CALCULATION (CASH) ---
         daily_cash_wealth = self._calculate_cash_wealth(df_txs, fx_pivot, date_range)
-
-
 
         # --- 7. ASSEMBLE RESULT ---
         result = pd.DataFrame(index=date_range)
@@ -321,9 +319,9 @@ class BackdatingEngine:
             # Cumsum on full history first
             daily_invested_cum_full = daily_invested_flow.cumsum()
             # reindex with ffill to carry forward state
-            return daily_invested_cum_full.reindex(
-                date_range, method="ffill"
-            ).fillna(0.0)
+            return daily_invested_cum_full.reindex(date_range, method="ffill").fillna(
+                0.0
+            )
 
         return pd.Series(0.0, index=date_range)
 
@@ -344,7 +342,6 @@ class BackdatingEngine:
                 .sum()
                 .reindex(date_range, fill_value=0)
             )
-
 
         div_gross = _sum_by_type(TransactionType.DIVIDEND)
         int_gross = _sum_by_type(TransactionType.INTEREST).sub(
@@ -383,14 +380,9 @@ class BackdatingEngine:
             # Units for Dividends (Type 8) should be added to Gross Dividend
             # ONLY include Taxes (1) and Fees (2). Ignore Type 0 (Gross Base) or others.
             mask_div_units = (
-                (df_units_aug["parent_type"] == TransactionType.DIVIDEND) &
-                (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
-            )
-            units_div = (
-               df_units_aug[mask_div_units]
-               .groupby("date")["amount_eur"]
-               .sum()
-            )
+                df_units_aug["parent_type"] == TransactionType.DIVIDEND
+            ) & (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
+            units_div = df_units_aug[mask_div_units].groupby("date")["amount_eur"].sum()
             div_gross = div_gross.add(
                 units_div.reindex(date_range, fill_value=0), fill_value=0
             )
@@ -398,14 +390,9 @@ class BackdatingEngine:
             # Units for Interest (Type 9)
             # ONLY include Taxes and Fees.
             mask_int_units = (
-                (df_units_aug["parent_type"] == TransactionType.INTEREST) &
-                (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
-            )
-            units_int = (
-               df_units_aug[mask_int_units]
-               .groupby("date")["amount_eur"]
-               .sum()
-            )
+                df_units_aug["parent_type"] == TransactionType.INTEREST
+            ) & (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
+            units_int = df_units_aug[mask_int_units].groupby("date")["amount_eur"].sum()
             int_gross = int_gross.add(
                 units_int.reindex(date_range, fill_value=0), fill_value=0
             )
@@ -481,7 +468,7 @@ class BackdatingEngine:
         if not df_securities.empty:
             sec_curr_map = df_securities.set_index("uuid")["currency_code"].to_dict()
         else:
-             sec_curr_map = {}
+            sec_curr_map = {}
 
         # Merge with transaction-based inference for any missing ones
         tx_curr_map = (
@@ -509,8 +496,6 @@ class BackdatingEngine:
 
             val = (qty * prices) / rates.replace(0, np.nan)
             daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
-
-
 
         return daily_sec_wealth
 
@@ -573,7 +558,7 @@ class BackdatingEngine:
                 TransactionType.INTEREST_CHARGE,
                 TransactionType.TAX,
                 TransactionType.FEE,
-                TransactionType.CASH_TRANSFER, # Treat as outflow for the primary record
+                TransactionType.CASH_TRANSFER,  # Treat as outflow for the primary record
             ):
                 sign = -1
             return (amt / 100.0) * sign

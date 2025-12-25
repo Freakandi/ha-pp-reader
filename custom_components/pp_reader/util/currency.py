@@ -224,9 +224,7 @@ def normalize_price_to_eur_sync(
     if record:
         rate = float(record.rate)
     else:
-        rate = _resolve_fallback_rate(
-            db_path, normalized_currency, reference_date
-        )
+        rate = _resolve_fallback_rate(db_path, normalized_currency, reference_date)
 
     if not rate:
         return None

@@ -250,8 +250,8 @@ def _determine_exchange_rate(
                         MAX_FALLBACK_DAYS_WITHOUT_WARNING,
                     )
             else:
-                 # Debug logging for fallback usage? Maybe too noisy.
-                 pass
+                # Debug logging for fallback usage? Maybe too noisy.
+                pass
 
     if not rate:
         if missing_logged is None:

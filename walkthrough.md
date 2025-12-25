@@ -52,3 +52,12 @@ Following the initial fix, substantial discrepancies remained (~12k € in Total
 
 5.  **Cash Transfers**:
     *   **Fix**: Properly split Type 5 transfers into source-debit and target-credit to ensure accurate account balances.
+
+## 6. FX Calculation (Time Series)
+- **Issue**: "FX-Veränderung" line showed a gain (+51.93 €) instead of expected loss (-1.67 €).
+- **Root Cause**: `PerformanceCalculator` (used for Time Series analysis) was **ignoring the Inflow leg** of `CASH_TRANSFER` transactions (Type 5). It counted the Outflow from source but not the Inflow to target.
+- **Impact**: Foreign cash balances funded via transfer (e.g., USD) were seen as 0.00. Consequently, FX losses/gains on holding that cash were calculated as 0.00.
+- **Fix**: Updated `PerformanceCalculator` to:
+    1.  Explicitly split `CASH_TRANSFER` transactions into Source (Outflow) and Target (Inflow) components.
+    2.  Check both `account` and `other_account` against the target scope to ensure all relevant legs are processed.
+- **Result**: FX gains/losses on transfer-funded cash accounts are now correctly calculated.

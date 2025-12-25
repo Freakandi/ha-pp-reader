@@ -32,9 +32,6 @@ class PeriodDailyResult:
 _EPSILON = 1e-9
 
 
-
-
-
 def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
     db_path: "Path",
     start_date: date,

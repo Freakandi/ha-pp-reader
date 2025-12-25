@@ -54,15 +54,19 @@ class PerformanceCalculator:
         """Calculate performance metrics for the given period."""
         metrics = PerformanceMetrics()
 
+        # Resolve effective account IDs
+        valid_account_ids = self._resolve_scope_accounts(portfolio_ids, account_ids)
+
         # 1. Absolute Performance (from persisted daily_wealth)
         metrics.absolute_performance = self._calculate_absolute_performance(
             start_date, end_date
         )
 
         # 2. Load Data for Granular Metrics
-        df_txs, df_prices, df_rates = self._load_data(
-            end_date, portfolio_ids, account_ids
-        )
+        df_txs, df_prices, df_rates = self._load_data(end_date, valid_account_ids)
+
+        # Load Account Currencies for Cross-Currency handling
+        account_currencies = self._load_account_currencies()
 
         # Prepare lookup indices once
         if not df_prices.empty:
@@ -86,7 +90,7 @@ class PerformanceCalculator:
 
         # 4. FX Performance (Cash)
         metrics.fx_gains_cash = self._calculate_fx_performance(
-            df_txs, start_date, end_date
+            df_txs, start_date, end_date, account_currencies, valid_account_ids
         )
 
         # Cleanup
@@ -94,6 +98,35 @@ class PerformanceCalculator:
         self._rates_idx = pd.DataFrame()
 
         return metrics
+
+    def _load_account_currencies(self) -> dict[str, str]:
+        """Load currency map for all accounts."""
+        try:
+            query = "SELECT uuid, currency_code FROM accounts"
+            rows = self.conn.execute(query).fetchall()
+            return {r[0]: (r[1] or "EUR") for r in rows}
+        except sqlite3.Error:
+            return {}
+
+    def _resolve_scope_accounts(
+        self,
+        portfolio_ids: list[str] | None,
+        account_ids: list[str] | None,
+    ) -> set[str] | None:
+        """Resolve all explicitly or implicitly requested account UUIDs."""
+        if not portfolio_ids and not account_ids:
+            return None  # Global scope
+
+        valid_ids = set(account_ids or [])
+        if portfolio_ids:
+            placeholders = ",".join("?" for _ in portfolio_ids)
+            query = (
+                f"SELECT uuid FROM accounts WHERE portfolio_uuid IN ({placeholders})"  # noqa: S608
+            )
+            rows = self.conn.execute(query, tuple(portfolio_ids)).fetchall()
+            valid_ids.update(r[0] for r in rows)
+
+        return valid_ids
 
     def _calculate_absolute_performance(
         self, start_date: date, end_date: date
@@ -130,27 +163,24 @@ class PerformanceCalculator:
     def _load_data(
         self,
         until_date: date,
-        portfolio_ids: list[str] | None = None,
-        account_ids: list[str] | None = None,
+        valid_account_ids: set[str] | None = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Load transactions and market data required for calculations."""
         tx_filter_parts = ["date <= ?"]
         params = [until_date.isoformat()]
 
-        if account_ids:
-            placeholders = ",".join("?" for _ in account_ids)
-            tx_filter_parts.append(f"account IN ({placeholders})")
-            params.extend(account_ids)
-
-        if portfolio_ids and not account_ids:
-            # Merging portfolio_ids as account IDs (simplification)
-            all_ids = (portfolio_ids or []) + (account_ids or [])
-            if all_ids:
-                placeholders = ",".join("?" for _ in all_ids)
-                params = [until_date.isoformat()]
-                tx_filter_parts = ["date <= ?"]
-                tx_filter_parts.append(f"account IN ({placeholders})")
-                params.extend(all_ids)
+        if valid_account_ids:
+            placeholders = ",".join("?" for _ in valid_account_ids)
+            # Fetch transactions where ANY side touches the scope (Account OR Other)
+            # This ensures we get both Inflows and Outflows for Transfers.
+            clause = (
+                f"(account IN ({placeholders}) OR "
+                f"(type = {TransactionType.CASH_TRANSFER} "
+                f"AND other_account IN ({placeholders})))"
+            )
+            tx_filter_parts.append(clause)
+            params.extend(valid_account_ids)
+            params.extend(valid_account_ids)
 
         where_clause = " AND ".join(tx_filter_parts)
 
@@ -158,7 +188,8 @@ class PerformanceCalculator:
         # Inputs are strictly controlled (dates/uuids) and passed as parameters.
         query_txs = f"""
             SELECT
-                uuid, type, date, account, security, shares, amount, currency_code
+                uuid, type, date, account, other_account,
+                security, shares, amount, currency_code
             FROM transactions
             WHERE {where_clause}
             ORDER BY date
@@ -186,6 +217,7 @@ class PerformanceCalculator:
                     "currency_code",
                     "security",
                     "account",
+                    "other_account",
                 ]
             )
             df_txs["date"] = pd.to_datetime([], utc=True)
@@ -212,9 +244,7 @@ class PerformanceCalculator:
             query_rates, self.conn, params=(until_date.isoformat(),)
         )
         if not df_rates.empty:
-            df_rates["date"] = pd.to_datetime(
-                df_rates["date"], utc=True
-            ).dt.normalize()
+            df_rates["date"] = pd.to_datetime(df_rates["date"], utc=True).dt.normalize()
             # FX rates are stored as floats, do not scale by PRICE_SCALE
 
         return df_txs, df_prices, df_rates
@@ -284,6 +314,7 @@ class PerformanceCalculator:
             TransactionType.SECURITY_TRANSFER,
         ]
 
+        # Optimization: Filter types before sorting
         txs = df_txs[df_txs["type"].isin(sec_types)].sort_values("date")
 
         for row in txs.itertuples():
@@ -416,11 +447,13 @@ class PerformanceCalculator:
 
         return unrealized_gains_eur
 
-    def _calculate_fx_performance(
+    def _calculate_fx_performance(  # noqa: PLR0912, PLR0915
         self,
         df_txs: pd.DataFrame,
         start_date: date,
         end_date: date,
+        account_currencies: dict[str, str],
+        valid_account_ids: set[str] | None = None,
     ) -> float:
         """
         Calculate FX Performance for Cash Accounts.
@@ -434,50 +467,126 @@ class PerformanceCalculator:
         inventory: dict[tuple[str, str], deque[Lot]] = {}
         fx_gains_eur = 0.0
 
+        # === 1. SORTED TX STREAM ===
         txs = df_txs.sort_values("date")
 
         for row in txs.itertuples():
+            is_transfer = row.type == TransactionType.CASH_TRANSFER
+
+            # --- SCOPE FILTER (Account) ---
+            if valid_account_ids is not None:
+                if is_transfer:
+                    # Transfer: Included if EITHER Source OR Target in scope
+                    in_scope = (row.account in valid_account_ids) or (
+                        row.other_account in valid_account_ids
+                    )
+                    if not in_scope:
+                        continue
+                elif row.account not in valid_account_ids:
+                    continue
+
             raw_amt = row.amount_norm
             if raw_amt == 0:
                 continue
 
-            sign = self._get_cash_flow_sign(row.type)
-            if sign == 0:
-                continue
+            # === 2. DETERMINE SIDES TO PROCESS ===
+            # List of (account_uuid, currency, amount_signed)
+            operations = []
 
-            cash_flow = abs(raw_amt) * sign
-            acc_id = row.account
-            curr = row.currency_code
-            if not acc_id or curr == "EUR":
-                continue
+            if is_transfer:
+                # --- TRANSFER LOGIC ---
+                # A Transfer has two legs: Outflow (Source) and Inflow (Target).
+                # We must determine the currency/amount for each leg individually
+                # to avoid "Phantom FX" on Base Currency accounts.
 
-            key = (acc_id, curr)
-            tx_fx = self._get_fx(curr, row.date)
+                # 1. Target Leg (Inflow)
+                # 'row.currency_code' and 'row.amount' implicitly define the Target
+                # (based on standard single-row transfer convention in this app).
+                target_acc = row.other_account
+                target_curr = row.currency_code
+                target_amt = abs(raw_amt)  # Inflow is positive
 
-            if cash_flow > 0:
-                if key not in inventory:
-                    inventory[key] = deque()
-                inventory[key].append(
-                    Lot(
-                        date=row.date,
-                        shares=cash_flow,
-                        price_native=1.0,
-                        fx_rate=tx_fx,
+                if target_acc:
+                    operations.append((target_acc, target_curr, target_amt))
+
+                # 2. Source Leg (Outflow)
+                source_acc = row.account
+                if source_acc:
+                    source_curr = account_currencies.get(source_acc, "EUR")
+
+                    if source_curr == target_curr:
+                        # Same Currency Transfer
+                        source_amt = -abs(raw_amt)
+                        operations.append((source_acc, source_curr, source_amt))
+                    else:
+                        # Cross-Currency Transfer
+                        # We need to calculate how much Source Currency triggered this.
+
+                        target_rate = self._get_fx(target_curr, row.date)
+                        source_rate = self._get_fx(source_curr, row.date)
+
+                        # Value in EUR
+                        val_eur = (target_amt / target_rate) if target_rate else 0.0
+
+                        # Value in Source
+                        amt_source = val_eur * source_rate
+                        operations.append((source_acc, source_curr, -amt_source))
+
+            else:
+                # --- STANDARD TX LOGIC ---
+                sign = self._get_cash_flow_sign(row.type)
+                if sign == 0:
+                    continue
+
+                # Check Account Currency vs Transaction Currency
+                # Usually standard transactions act on the Account's currency balance.
+                # However, for Cash Accumulators, we usually care about the
+                # Account Currency.
+
+                cash_flow = abs(raw_amt) * sign
+                operations.append((row.account, row.currency_code, cash_flow))
+
+            # === 3. PROCESS OPERATIONS ===
+            for acc_id, curr, cash_flow in operations:
+                if not acc_id or curr == "EUR":
+                    continue
+
+                # Scope Check (Granular)
+                # If we are analyzing Account A, ignore the leg for Account B
+                if valid_account_ids is not None and acc_id not in valid_account_ids:
+                    continue
+
+                key = (acc_id, curr)
+                tx_fx = self._get_fx(curr, row.date)
+
+                if cash_flow > 0:
+                    if key not in inventory:
+                        inventory[key] = deque()
+                    inventory[key].append(
+                        Lot(
+                            date=row.date,
+                            shares=cash_flow,
+                            price_native=1.0,
+                            fx_rate=tx_fx,
+                        )
                     )
-                )
 
-            elif cash_flow < 0:
-                if inventory.get(key):
-                    is_eligible = row.date >= start_ts
-                    gain = self._process_cash_outflow(
-                        inventory[key], abs(cash_flow), tx_fx, start_ts, curr
-                    )
-                    if is_eligible:
-                        fx_gains_eur += gain
+                elif cash_flow < 0:
+                    if inventory.get(key):
+                        is_eligible = row.date >= start_ts
+                        gain = self._process_cash_outflow(
+                            inventory[key], abs(cash_flow), tx_fx, start_ts, curr
+                        )
+                        if is_eligible:
+                            fx_gains_eur += gain
 
         # Unrealized Gains on Cash
-        for (_acc_id, curr), lots in inventory.items():
+        for (acc_id, curr), lots in inventory.items():
             if not lots:
+                continue
+
+            # SCOPE CHECK (Redundant if we didn't add to inventory, but safe)
+            if valid_account_ids is not None and acc_id not in valid_account_ids:
                 continue
 
             end_fx = self._get_fx(curr, end_ts)
@@ -491,7 +600,7 @@ class PerformanceCalculator:
                 end_val = (lot.shares / end_fx) if end_fx else 0.0
                 base_val = (lot.shares / base_fx) if base_fx else 0.0
 
-                fx_gains_eur += (end_val - base_val)
+                fx_gains_eur += end_val - base_val
 
         return fx_gains_eur
 
@@ -551,6 +660,6 @@ class PerformanceCalculator:
             val_tx = (consumed / tx_fx) if tx_fx else 0.0
             val_base = (consumed / base_fx) if base_fx else 0.0
 
-            gain_accum += (val_tx - val_base)
+            gain_accum += val_tx - val_base
 
         return gain_accum
