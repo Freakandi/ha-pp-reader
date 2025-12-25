@@ -92,17 +92,17 @@ def test_engine_basic(conn):
     engine = BackdatingEngine(conn)
     engine.run(date(2023, 1, 1), date(2023, 1, 3))
 
-    df = pd.read_sql("SELECT * FROM daily_wealth ORDER BY date", conn)
-    assert len(df) == 3
+    daily_wealth = pd.read_sql("SELECT * FROM daily_wealth ORDER BY date", conn)
+    assert len(daily_wealth) == 3
 
     # Day 1: Deposit 1000 EUR. Invested = 1000. Wealth (Cash) = 1000.
     # Why Wealth 1000? Deposit increases cash balance of account (if account specified).
     # The test insert above didn't specify account.
     # If account is NULL, my code filters it out from Cash Wealth.
 
-    assert df.iloc[0]["invested_capital_eur"] == 1000.0
+    assert daily_wealth.iloc[0]["invested_capital_eur"] == 1000.0
     # Because account is null, Wealth should be 0 (Securities 0 + Cash 0).
-    assert df.iloc[0]["total_wealth_eur"] == 0.0
+    assert daily_wealth.iloc[0]["total_wealth_eur"] == 0.0
 
 
 def test_engine_full_flow(conn):
@@ -129,19 +129,19 @@ def test_engine_full_flow(conn):
     engine = BackdatingEngine(conn)
     engine.run(date(2023, 1, 1), date(2023, 1, 3))
 
-    df = pd.read_sql("SELECT * FROM daily_wealth ORDER BY date", conn)
+    daily_wealth = pd.read_sql("SELECT * FROM daily_wealth ORDER BY date", conn)
 
     # Day 1: Cash 1000. Sec 0. Total 1000.
-    assert df.iloc[0]["date"] == "2023-01-01"
-    assert df.iloc[0]["total_wealth_eur"] == 1000.0
-    assert df.iloc[0]["invested_capital_eur"] == 1000.0
+    assert daily_wealth.iloc[0]["date"] == "2023-01-01"
+    assert daily_wealth.iloc[0]["total_wealth_eur"] == 1000.0
+    assert daily_wealth.iloc[0]["invested_capital_eur"] == 1000.0
 
     # Day 2: Cash 900. Sec 10 * 12 = 120. Total 1020.
-    assert df.iloc[1]["date"] == "2023-01-02"
-    assert df.iloc[1]["total_wealth_eur"] == 1020.0
+    assert daily_wealth.iloc[1]["date"] == "2023-01-02"
+    assert daily_wealth.iloc[1]["total_wealth_eur"] == 1020.0
 
     # Day 3: Price same (ffill). Total 1020.
-    assert df.iloc[2]["total_wealth_eur"] == 1020.0
+    assert daily_wealth.iloc[2]["total_wealth_eur"] == 1020.0
 
 
 def test_engine_fx(conn):
@@ -162,12 +162,12 @@ def test_engine_fx(conn):
     engine = BackdatingEngine(conn)
     engine.run(date(2023, 1, 1), date(2023, 1, 1))
 
-    df = pd.read_sql("SELECT * FROM daily_wealth", conn)
+    daily_wealth = pd.read_sql("SELECT * FROM daily_wealth", conn)
 
     # Invested: 100 USD / 0.5 = 200 EUR.
     # Wealth: 100 USD balance / 0.5 = 200 EUR.
-    assert df.iloc[0]["invested_capital_eur"] == 200.0
-    assert df.iloc[0]["total_wealth_eur"] == 200.0
+    assert daily_wealth.iloc[0]["invested_capital_eur"] == 200.0
+    assert daily_wealth.iloc[0]["total_wealth_eur"] == 200.0
 
 
 def test_engine_with_fees_and_taxes(conn):
@@ -194,7 +194,7 @@ def test_engine_with_fees_and_taxes(conn):
     engine = BackdatingEngine(conn)
     engine.run(date(2023, 1, 1), date(2023, 1, 1))
 
-    df = pd.read_sql("SELECT * FROM daily_wealth", conn)
+    daily_wealth = pd.read_sql("SELECT * FROM daily_wealth", conn)
 
     # Dividend Flow = Sum of Dividend Transactions (85).
     # Wait, spec says: "dividends_eur: Sum of DIVIDEND transactions."
@@ -211,6 +211,6 @@ def test_engine_with_fees_and_taxes(conn):
     # My engine sums the transaction amount for DIVIDEND type.
     # And sums Units for FEES/TAXES.
 
-    assert df.iloc[0]["dividends_eur"] == 85.0
-    assert df.iloc[0]["taxes_eur"] == 10.0
-    assert df.iloc[0]["fees_eur"] == 5.0
+    assert daily_wealth.iloc[0]["dividends_eur"] == 85.0
+    assert daily_wealth.iloc[0]["taxes_eur"] == 10.0
+    assert daily_wealth.iloc[0]["fees_eur"] == 5.0
