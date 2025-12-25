@@ -922,3 +922,13 @@ ON historical_prices (security_uuid, date)
 with suppress(NameError):
     ALL_SCHEMAS.append(SCHEMA_LIVE_AGGREGATION_INDEX)  # type: ignore[attr-defined]
     ALL_SCHEMAS.append(HISTORICAL_PRICES_INDEX)  # type: ignore[attr-defined]
+
+INGESTION_TABLES: tuple[str, ...] = (
+    "ingestion_historical_prices",
+    "ingestion_transaction_units",
+    "ingestion_transactions",
+    "ingestion_securities",
+    "ingestion_portfolios",
+    "ingestion_accounts",
+    "ingestion_metadata",
+)
