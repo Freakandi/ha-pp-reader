@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data import ingestion_reader
+from custom_components.pp_reader.data.db_schema import INGESTION_TABLES
 from custom_components.pp_reader.data.normalized_store import (
     async_load_latest_snapshot_bundle,
 )
@@ -18,15 +19,6 @@ from custom_components.pp_reader.feature_flags import snapshot as feature_flag_s
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-
-INGESTION_TABLES = (
-    "ingestion_accounts",
-    "ingestion_portfolios",
-    "ingestion_securities",
-    "ingestion_transactions",
-    "ingestion_transaction_units",
-    "ingestion_historical_prices",
-)
 
 __all__ = ["async_get_parser_diagnostics"]
 _LOGGER = logging.getLogger("custom_components.pp_reader.util.diagnostics")

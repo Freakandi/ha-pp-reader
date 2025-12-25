@@ -9,6 +9,7 @@ from .db_schema import (
     ACCOUNT_METRICS_SCHEMA,
     ALL_SCHEMAS,
     INGESTION_SCHEMA,
+    INGESTION_TABLES,
     METRIC_RUNS_SCHEMA,
     PORTFOLIO_METRICS_SCHEMA,
     SECURITY_METRICS_SCHEMA,
@@ -164,17 +165,6 @@ def initialize_database_schema(db_path: Path) -> None:
     except Exception:
         _LOGGER.exception("Kritischer Fehler bei DB-Initialisierung")
         raise
-
-
-INGESTION_TABLES: tuple[str, ...] = (
-    "ingestion_historical_prices",
-    "ingestion_transaction_units",
-    "ingestion_transactions",
-    "ingestion_securities",
-    "ingestion_portfolios",
-    "ingestion_accounts",
-    "ingestion_metadata",
-)
 
 
 def ensure_ingestion_tables(conn: sqlite3.Connection) -> None:
