@@ -251,6 +251,10 @@ export function getDailyWealthState(): DailyWealthState {
   };
 }
 
+export function invalidateDailyWealthCache(): void {
+  lastRequestKey = null;
+}
+
 export async function loadDailyWealth(
   hass: HomeAssistant | null | undefined,
   panelConfig: PanelConfigLike | null | undefined,

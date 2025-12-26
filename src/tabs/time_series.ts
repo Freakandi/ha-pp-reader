@@ -705,6 +705,24 @@ async function loadAndRender(
   setStatus(card, 'loaded');
 }
 
+export async function refreshAnalyseData(
+  root: HTMLElement,
+  hass: HomeAssistant | null | undefined,
+  panelConfig: PanelConfigLike | null | undefined,
+): Promise<void> {
+  const card = root.querySelector<HTMLElement>('#analyse-range-card');
+  const chartCard = root.querySelector<HTMLElement>('#analyse-chart-card');
+  if (!card) {
+    return;
+  }
+  const state = getDailyWealthState();
+  if (state.selection) {
+    // loadAndRender will call loadDailyWealth.
+    // Ensure cache is invalidated before calling this if you want fresh data.
+    await loadAndRender(card, chartCard, hass, panelConfig, state.selection);
+  }
+}
+
 function initRangeCard(
   card: HTMLElement,
   // performanceCard removed

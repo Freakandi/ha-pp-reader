@@ -11,6 +11,7 @@ import {
   unregisterPanelHost,
 } from './dashboard/registry';
 import { getEntryId } from './data/api';
+import { invalidateDailyWealthCache } from './data/dailyWealthStore';
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -27,7 +28,7 @@ import {
   updatePortfolioFooterFromDom,
 } from './tabs/overview';
 import { registerSecurityDetailTab } from './tabs/security_detail';
-import { renderAnalyse } from './tabs/time_series';
+import { refreshAnalyseData, renderAnalyse } from './tabs/time_series';
 import { registerTradeDetailTab } from './tabs/trade_detail';
 import { renderTrades, setOpenTradeDetail } from './tabs/trades';
 import type {
@@ -65,13 +66,15 @@ type DashboardUpdateType =
   | 'accounts'
   | 'last_file_update'
   | 'portfolio_values'
-  | 'portfolio_positions';
+  | 'portfolio_positions'
+  | 'daily_wealth';
 
 type DashboardUpdatePayloadMap = {
   accounts: AccountsUpdatePayload;
   last_file_update: LastFileUpdatePayload;
   portfolio_values: PortfolioValuesUpdatePayload;
   portfolio_positions: PortfolioPositionsUpdatePayload;
+  daily_wealth: Record<string, unknown> | null;
 };
 
 type DashboardUpdateQueueEntry<T extends DashboardUpdateType = DashboardUpdateType> = {
@@ -169,7 +172,8 @@ function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
     value === 'accounts' ||
     value === 'last_file_update' ||
     value === 'portfolio_values' ||
-    value === 'portfolio_positions'
+    value === 'portfolio_positions' ||
+    value === 'daily_wealth'
   );
 }
 
@@ -241,6 +245,8 @@ function normalizeDashboardUpdate(
         return { type: dataType, data: data as PortfolioPositionsUpdatePayload };
       }
       return { type: dataType, data: null };
+    case 'daily_wealth':
+      return { type: dataType, data: null }; // Payload ignored
     default:
       return null;
   }
@@ -1212,6 +1218,15 @@ class PPReaderDashboard extends HTMLElement {
           pushedData as DashboardUpdatePayloadMap['portfolio_positions'],
           this._root,
         );
+        break;
+      case 'daily_wealth':
+        invalidateDailyWealthCache();
+        {
+          const activeTab = getTabAtIndex(currentPage);
+          if (activeTab && activeTab.key === ANALYSE_TAB_KEY) {
+            void refreshAnalyseData(this._root, this._hass, this._panel);
+          }
+        }
         break;
       default:
         console.warn('PPReaderDashboard: Unbekannter Datentyp:', dataType);

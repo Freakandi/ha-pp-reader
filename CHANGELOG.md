@@ -37,6 +37,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ### Added
 - **Overview Last Price**: Added "Letzter Kurs" column to the expanded portfolio positions table, displaying the last fetched price in native currency (and EUR equivalent for foreign securities), searchable and sortable.
+- **Auto-Update Time Series**: The Time Series tab now automatically refreshes its data (end value, unrealized gains, etc.) whenever new live prices are fetched, keeping the current day's performance metrics strictly in sync with the Overview tab without manual reloads.
 
 ### Changed
 - **Schema Refactor**: Removed static `realized_gains_eur` and `unrealized_gains_eur` columns from the `daily_wealth` table to eliminate incorrect lifetime values in period views.

@@ -136,6 +136,13 @@ async def _schedule_metrics_after_price_change(
                         "portfolio_values",
                         portfolio_payload,
                     )
+                    # Signal that daily wealth (time series) data has likely changed
+                    _push_update(
+                        hass,
+                        entry_id,
+                        "daily_wealth",
+                        {},
+                    )
         except Exception:  # noqa: BLE001 - defensive logging
             _LOGGER.warning(
                 "prices_cycle: Metrics-Refresh nach Preis-Update fehlgeschlagen",
