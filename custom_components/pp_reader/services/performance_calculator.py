@@ -4,7 +4,7 @@ import logging
 import sqlite3
 from collections import deque
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import pandas as pd
 
@@ -104,6 +104,8 @@ class PerformanceCalculator:
 
         return metrics
 
+        return df_prices, df_rates
+
     def _load_market_data(self, until_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Load prices and FX rates."""
         query_prices = """
@@ -120,6 +122,34 @@ class PerformanceCalculator:
                     df_prices["date"], unit="D", origin="unix"
                 ).dt.tz_localize("UTC")
                 df_prices["close"] = df_prices["close"] / PRICE_SCALE
+            else:
+                df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
+
+            # [Change] Inject Live Prices if until_date is today/future
+            # This ensures we capture intraday moves for "Today" end dates.
+            today = datetime.now(UTC).date()
+            if until_date >= today:
+                query_live = """
+                    SELECT uuid as security_uuid, last_price
+                    FROM securities
+                    WHERE last_price IS NOT NULL AND last_price > 0
+                """
+                df_live = pd.read_sql_query(query_live, self.conn)
+                if not df_live.empty:
+                    # Current UTC midnight timestamp for "today"
+                    ts_today = pd.Timestamp(today).tz_localize("UTC")
+                    df_live["date"] = ts_today
+                    df_live["close"] = df_live["last_price"] / PRICE_SCALE
+                    df_live = df_live.drop(columns=["last_price"])
+
+                    # Merge: We want to OVERRIDE historical data for today if it exists,
+                    # or append if it doesn't.
+                    # Simplest way: Concatenate and drop duplicates keeping last (live).
+                    df_prices = pd.concat([df_prices, df_live])
+                    df_prices = df_prices.sort_values("date").drop_duplicates(
+                        subset=["security_uuid", "date"], keep="last"
+                    )
+
         except pd.errors.DatabaseError:
             df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
 
@@ -343,8 +373,12 @@ class PerformanceCalculator:
         except (KeyError, IndexError):
             pass
 
-        _LOGGER.warning("Missing FX rate for %s at %s - defaulting to 1.0", curr, d)
-        return 1.0
+        _LOGGER.warning(
+            "Missing FX rate for %s at %s - returning 0.0 (preventing 1.0 default)",
+            curr,
+            d,
+        )
+        return 0.0
 
     def _calculate_capital_gains(
         self,
@@ -370,6 +404,13 @@ class PerformanceCalculator:
         # Optimization: Filter types before sorting
         txs = df_txs[df_txs["type"].isin(sec_types)].sort_values("date")
 
+        if txs.empty:
+            return 0.0, 0.0
+
+        # Load Units (Fees/Taxes) to calculate Gross Proceeds for Sells
+        tx_uuids = txs["uuid"].tolist()
+        units_payload = self._load_transaction_units(tx_uuids)
+
         for row in txs.itertuples():
             sec_id = row.security
             if not sec_id or row.shares_norm == 0:
@@ -377,8 +418,22 @@ class PerformanceCalculator:
 
             shares = abs(row.shares_norm)
             tx_price = 0.0
-            if row.amount_norm != 0:
-                tx_price = abs(row.amount_norm) / shares
+
+            # Gross Amount Logic
+            # BUY: amount is Total Cost (already Gross).
+            # SELL: amount is Net Payout. Fees/Taxes must be added for Gross.
+
+            fees = units_payload.get(row.uuid, {}).get("fees", 0)
+            taxes = units_payload.get(row.uuid, {}).get("taxes", 0)
+
+            if row.type in (TransactionType.SELL, TransactionType.OUTBOUND_DELIVERY):
+                 # Reconstruct Gross Proceeds: Net + Fees + Taxes
+                 gross_amt_cents = abs(row.amount) + fees + taxes
+                 if shares > 0:
+                     tx_price = (gross_amt_cents / 100.0) / shares
+            elif row.amount_norm != 0:
+                 # BUY / INBOUND (Amount is Total Cost)
+                 tx_price = abs(row.amount_norm) / shares
 
             tx_fx = self._get_fx(row.currency_code, row.date)
 
@@ -419,6 +474,41 @@ class PerformanceCalculator:
         )
 
         return realized_gains_eur, unrealized_gains_eur
+
+    def _load_transaction_units(self, tx_uuids: list[str]) -> dict[str, dict[str, int]]:
+        """Load fees and taxes for a list of transactions."""
+        if not tx_uuids:
+             return {}
+
+        # Chunking to avoid SQL limits
+        chunk_size = 900
+        result = {}
+
+        for i in range(0, len(tx_uuids), chunk_size):
+            chunk = tx_uuids[i : i + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            query = f"""
+                SELECT transaction_uuid, type, amount
+                FROM transaction_units
+                WHERE transaction_uuid IN ({placeholders})
+                  AND type IN (1, 2, 11, 13)
+            """ # noqa: S608
+
+            try:
+                rows = self.conn.execute(query, tuple(chunk)).fetchall()
+                for r in rows:
+                    tuuid, ttype, amt = r
+                    if tuuid not in result:
+                        result[tuuid] = {"fees": 0, "taxes": 0}
+
+                    if ttype in (2, 13):
+                        result[tuuid]["fees"] += amt
+                    elif ttype in (1, 11):
+                        result[tuuid]["taxes"] += amt
+            except sqlite3.Error:
+                pass
+
+        return result
 
     def _process_security_sale(
         self,

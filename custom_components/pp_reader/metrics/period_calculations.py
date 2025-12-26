@@ -4,7 +4,7 @@ import logging
 import sqlite3
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -179,6 +179,29 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                 d_iso = (date(1970, 1, 1) + timedelta(days=r["date"])).isoformat()
                 daily_prices[d_iso][r["security_uuid"]] = r["close"] / 100000000.0
 
+        # [Change] Inject Live Prices for 'Today'
+        # If the period includes today, we MUST use the latest live price
+        # instead of the historical close (which might be yesterday's).
+        today_iso = datetime.now(UTC).date().isoformat()
+        if today_iso <= end_date.isoformat():
+            # We need live prices for ALL securities involved
+            for i in range(0, len(all_sec_list), chunk_size):
+                chunk = all_sec_list[i : i + chunk_size]
+                live_rows = cur.execute(
+                    f"""
+                    SELECT uuid, last_price
+                    FROM securities
+                    WHERE uuid IN ({",".join(["?"] * len(chunk))})
+                      AND last_price IS NOT NULL
+                      AND last_price > 0
+                    """,  # noqa: S608
+                    chunk,
+                ).fetchall()
+
+                # Overwrite or set the price for today
+                for r in live_rows:
+                    daily_prices[today_iso][r["uuid"]] = r["last_price"] / 100000000.0
+
         # 3. Fetch FX Rates
         # We need rates for all currencies involved.
         needed_currencies = set(sec_currencies.values()) | {
@@ -216,8 +239,7 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                 ).fetchone()
                 if r_row:
                     start_fx_rates[curr] = float(r_row["rate"])
-                else:
-                    start_fx_rates[curr] = 1.0  # Default to 1.0 if no rate found
+                # ELSE: Do NOT default to 1.0. Let it be missing.
 
             # Inject start rates into cache for start_date if missing
             if start_iso not in fx_rates_cache:
@@ -240,8 +262,21 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
 
                 # We need FX rate at START date specifically
                 start_rate = 1.0
-                if curr != "EUR" and curr in start_fx_rates:  # type: ignore[operator]
-                    start_rate = start_fx_rates[curr]  # type: ignore[index]
+                if curr != "EUR":
+                    if curr in start_fx_rates:  # type: ignore[operator]
+                        start_rate = start_fx_rates[curr]  # type: ignore[index]
+                    else:
+                        _LOGGER.warning(
+                            "PeriodCalc: Missing start FX rate for %s at %s. Valuation "
+                            "might be wrong.",
+                            curr,
+                            start_date,
+                        )
+                        # We have no rate. We cannot invent one.
+                        # Leaving start_rate=1.0 is the 'default' the user dislikes,
+                        # but without data, we are stuck.
+                        # However, since we removed the filler in the dictionary,
+                        # this warning is now the visible indicator.
 
                 price_eur = price_native / start_rate
                 cost_basis_eur = shares * price_eur
