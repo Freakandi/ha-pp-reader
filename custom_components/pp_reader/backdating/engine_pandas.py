@@ -94,6 +94,16 @@ class BackdatingEngine:
 
         if not df_txs.empty:
             df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
+            # Ensure type is integer
+            if df_txs["type"].dtype == "object":
+                df_txs["type"] = (
+                    pd.to_numeric(df_txs["type"], errors="coerce")
+                    .fillna(-1)
+                    .astype(int)
+                )
+            # Ensure shares is numeric
+            if df_txs["shares"].dtype == "object":
+                df_txs["shares"] = pd.to_numeric(df_txs["shares"], errors="coerce")
         else:
             # Ensure date column is datetime even if empty, for later merging
             df_txs["date"] = pd.to_datetime([], utc=True)
@@ -343,6 +353,7 @@ class BackdatingEngine:
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Prepare FX and Price pivot tables."""
         if not df_rates.empty:
+            df_rates["currency"] = df_rates["currency"].astype(str)
             fx_pivot = df_rates.pivot_table(
                 index="date", columns="currency", values="rate"
             )
@@ -374,14 +385,28 @@ class BackdatingEngine:
         fx_long = fx_pivot.reset_index(names="date").melt(
             id_vars="date", var_name="currency_code", value_name="daily_fx_rate"
         )
+        # Ensure join keys are compatible
+        fx_long["currency_code"] = fx_long["currency_code"].astype(str)
+        fx_long["date"] = pd.to_datetime(fx_long["date"], utc=True).dt.normalize()
 
         if not df_txs.empty:
+            df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
+            df_txs["currency_code"] = df_txs["currency_code"].astype(str)
+
             # Join with FX
             df_augmented = df_txs.merge(
                 fx_long, on=["date", "currency_code"], how="left"
             )
             df_augmented["daily_fx_rate"] = df_augmented["daily_fx_rate"].fillna(1.0)
             df_augmented["historic_fx_rate"] = df_augmented["daily_fx_rate"]
+
+            # Ensure amount is numeric (handle potential object dtype from
+            # empty initial reads)
+            if df_augmented["amount"].dtype == "object":
+                df_augmented["amount"] = pd.to_numeric(
+                    df_augmented["amount"], errors="coerce"
+                ).fillna(0)
+
             # Calculate EUR Amount (Cash Flow Value)
             df_augmented["amount_eur"] = (
                 df_augmented["amount"] / 100.0
@@ -390,6 +415,13 @@ class BackdatingEngine:
             df_augmented = pd.DataFrame(
                 columns=["date", "type", "amount_eur", "security", "shares"]
             )
+
+        # Ensure numeric types
+        if not df_augmented.empty:
+            df_augmented["amount_eur"] = df_augmented["amount_eur"].astype(float)
+        else:
+            # Even if empty, ensure correct dtypes for downstream operations
+            df_augmented = df_augmented.astype({"amount_eur": float})
 
         return df_augmented, fx_long
 
@@ -525,23 +557,23 @@ class BackdatingEngine:
         if sec_txs.empty:
             return daily_sec_wealth
 
-        def get_share_delta(row: Any) -> float:
-            t = row["type"]
-            s = row["shares"]
-            if pd.isna(s):
-                return 0.0
-            s_norm = s / 100000000.0  # 10^8 scale
-            if t in (
-                TransactionType.BUY,
-                TransactionType.INBOUND_DELIVERY,
-                TransactionType.SECURITY_TRANSFER,
-            ):
-                return s_norm
-            if t in (TransactionType.SELL, TransactionType.OUTBOUND_DELIVERY):
-                return -s_norm
-            return 0.0
+        # Vectorized share delta calculation
+        share_signs = {
+            TransactionType.BUY: 1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.SECURITY_TRANSFER: 1,
+            TransactionType.SELL: -1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
 
-        sec_txs["delta_shares"] = sec_txs.apply(get_share_delta, axis=1)
+        # Map types to signs (defaults to NaN, which fillna(0) handles)
+        # Note: map is significantly faster than apply
+        signs = sec_txs["type"].map(share_signs).fillna(0)
+
+        # Vectorized calculation
+        # We fillna(0) on shares first to avoid propagating NaNs
+        shares_norm = sec_txs["shares"].fillna(0) / 100000000.0
+        sec_txs["delta_shares"] = shares_norm * signs
 
         sec_daily_change = sec_txs.pivot_table(
             index="date",
@@ -694,34 +726,38 @@ class BackdatingEngine:
             [df_standard, df_transfers_out, df_transfers_in], ignore_index=True
         )
 
-        def get_cash_delta(row: Any) -> float:
-            t = row["type"]
-            amt = row["amount"]
-            if pd.isna(amt):
-                amt = 0
-            sign = 0
-            if t in (
-                TransactionType.SELL,
-                TransactionType.DEPOSIT,
-                TransactionType.DIVIDEND,
-                TransactionType.INTEREST,
-                TransactionType.TAX_REFUND,
-                TransactionType.FEE_REFUND,
-            ):
-                sign = 1
-            elif t in (
-                TransactionType.BUY,
-                TransactionType.REMOVAL,
-                TransactionType.INTEREST_CHARGE,
-                TransactionType.TAX,
-                TransactionType.FEE,
-                # Treat as outflow for the primary record
-                TransactionType.CASH_TRANSFER,
-            ):
-                sign = -1
-            return (amt / 100.0) * sign
+        # Vectorized cash delta calculation
+        # (+1) Inflows
+        cash_plus = {
+            TransactionType.SELL: 1,
+            TransactionType.DEPOSIT: 1,
+            TransactionType.DIVIDEND: 1,
+            TransactionType.INTEREST: 1,
+            TransactionType.TAX_REFUND: 1,
+            TransactionType.FEE_REFUND: 1,
+        }
+        # (-1) Outflows
+        cash_minus = {
+            TransactionType.BUY: -1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.INTEREST_CHARGE: -1,
+            TransactionType.TAX: -1,
+            TransactionType.FEE: -1,
+            TransactionType.CASH_TRANSFER: -1,
+        }
+        # Merge dictionaries
+        cash_signs = {**cash_plus, **cash_minus}
 
-        df_cash_calc["delta_cash"] = df_cash_calc.apply(get_cash_delta, axis=1)
+        # Ensure 'type' is integer to match dictionary keys
+        if not df_cash_calc.empty:
+            df_cash_calc["type"] = (
+                pd.to_numeric(df_cash_calc["type"], errors="coerce")
+                .fillna(-1)
+                .astype(int)
+            )
+
+        signs = df_cash_calc["type"].map(cash_signs).fillna(0)
+        df_cash_calc["delta_cash"] = (df_cash_calc["amount"].fillna(0) / 100.0) * signs
         acc_txs = df_cash_calc.dropna(subset=["account"])
 
         acc_daily_change = acc_txs.pivot_table(

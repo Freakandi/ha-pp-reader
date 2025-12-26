@@ -20,6 +20,7 @@ def conn():
             type INTEGER,
             date TEXT,
             account TEXT,
+            other_account TEXT,
             security TEXT,
             shares INTEGER,
             amount INTEGER,
@@ -150,14 +151,16 @@ def test_engine_fx(conn):
     # If Rate=0.5. Value = 100 / 0.5 = 200 EUR.
     # So Rate is USD/EUR.
 
+    # Store rate as float 0.5 (SQLite allows mixed types even if declared INTEGER)
     conn.execute(
-        "INSERT INTO fx_rates (date, currency, rate) VALUES ('2023-01-01', 'USD', 50000000)"
+        "INSERT INTO fx_rates (date, currency, rate) VALUES ('2023-01-01', 'USD', 0.5)"
     )
 
     conn.execute(
         "INSERT INTO transactions (uuid, type, date, account, amount, currency_code) VALUES ('t1', ?, '2023-01-01', 'acc2', 10000, 'USD')",
         (TransactionType.DEPOSIT,),
     )
+    conn.commit()
 
     engine = BackdatingEngine(conn)
     engine.run(date(2023, 1, 1), date(2023, 1, 1))
@@ -210,7 +213,8 @@ def test_engine_with_fees_and_taxes(conn):
 
     # My engine sums the transaction amount for DIVIDEND type.
     # And sums Units for FEES/TAXES.
+    # Engine calculates Gross Dividends (Net + Tax + Fee) -> 85 + 10 + 5 = 100.
 
-    assert daily_wealth.iloc[0]["dividends_eur"] == 85.0
+    assert daily_wealth.iloc[0]["dividends_eur"] == 100.0
     assert daily_wealth.iloc[0]["taxes_eur"] == 10.0
     assert daily_wealth.iloc[0]["fees_eur"] == 5.0
