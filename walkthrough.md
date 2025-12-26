@@ -1,63 +1,23 @@
-# Bugfix: Time Series Skew & JPY Valuation
+# Bugfix: Portfolio File Detection and Coordinator Loop
 
-## The Issue
-The user reported massively skewed metrics in the "Time Series" tab:
-- **Unrealized Gains**: +386,598 €
-- **FX Change**: -510,741 €
+## Issue Description
+The user reported that copying a new `.portfolio` file did not trigger an update even after 5 minutes. The coordinator should have detected the change and updated the database, as it is configured to run every minute.
 
-This anomaly suggested a valuation error where asset values were inflated, and the "FX Change" metric (which compares End Value to Start Value) was compensating for this inflation with a massive negative swing.
+## Problem Analysis
+The `PPReaderCoordinator` inherits from `DataUpdateCoordinator`.
+- **Coordinator Logic**: `DataUpdateCoordinator` has an internal loop (`_async_refresh` -> `_schedule_refresh`) that *only* reschedules the next update if `self._listeners` is not empty.
+- **Project Context**: The integration currently does not have any entities (sensors) subscribed to the coordinator. The dashboard consumes data via separate WebSocket and DB channels.
+- **Outcome**: The coordinator runs once on startup (`first_refresh`), finds no listeners, and terminates the update loop.
 
-## Root Cause Analysis
-Investigating `custom_components/pp_reader/services/performance_calculator.py` revealed a critical flaw in data loading:
-
-1.  **Silent Failure**: The method `_load_data` wrapped SQL queries in `try...except pd.errors.DatabaseError`, returning **empty DataFrames** if the database was locked or busy.
-2.  **Default to 1.0**: The `_get_fx` method defaults to an exchange rate of `1.0` when rates are missing.
-3.  **The Impact**:
-    - For **JPY** assets (approx rate 1 EUR = 180 JPY), a missing rate caused the system to calculate value as `Amount / 1.0` instead of `Amount / 180.0`.
-    - This inflated the value of JPY holdings by a factor of 180x.
-    - Example: 1,000,000 JPY should be ~5,500 €. At rate 1.0, it became 1,000,000 €.
-    - This 994,500 € "phantom gain" appeared as Unrealized Gains.
-    - The "FX Change" metric, seeing the value jump from Correct (Start) to Inflated (End) purely due to "rate change" (180 -> 1), reported a massive negative currency impact.
-
-## The Fix
-1.  **Removed Silent Exception Handling**: Modified `services/performance_calculator.py` to allow `pd.errors.DatabaseError` to propagate.
-    - **Why**: Calculations should fail explicitly rather than producing corrupt financial data. The WebSocket handler already catches generic exceptions and reports a user-friendly error.
-2.  **Log Noise Reduction**: Removed verbose "Using valid fallback rate" debug logs in `util/currency.py` to declutter the logs, as requested.
+## Fix
+The clean solution is to register a dummy listener on the coordinator. This satisfies the `DataUpdateCoordinator` logic, keeping the periodic polling active.
+- **Modified**: `custom_components/pp_reader/data/coordinator.py`
+- **Change**: Added `self.async_add_listener(lambda: None)` in `__init__`.
+- **Reverted**: Removed the hacky manual refresh scheduling in `async_set_updated_data` (which was fragile as it didn't cover idle polling).
 
 ## Verification
-- **Reproduction**: A script confirmed that forcing a 1.0 FX rate for JPY exactly reproduced the skewed numbers.
-- **Logic Check**: `pytest tests/services/test_performance_calculator.py` passed, confirming the removal of `try/except` didn't break normal operation.
-- **Linting**: Applied strict linting to all modified files.
-
-The system is now robust against partial data loads during database contention.
-
-## Additional Fixes (Backdating & Wealth Accuracy)
-Following the initial fix, substantial discrepancies remained (~12k € in Total Wealth, phantom Neutral Movements). Further investigation resolved these:
-
-1.  **Total Wealth Backdating**:
-    *   **Root Cause**: The calculation engine was slicing the transaction history *before* calculating cumulative sums (`cumsum`). This meant any assets held or cash accumulated *before* the start date were ignored.
-    *   **Fix**: Modified `engine_pandas.py` to calculate `cumsum` on the full history first, then reindex to the requested date range. Total Wealth is now accurate (~224k €).
-
-2.  **Security Valuation (SEK/EUR Mismatch)**:
-    *   **Root Cause**: Securities trading in non-EUR currencies (e.g., SEK) but bought via EUR accounts were tracking as `EUR` in transaction logs. This caused the engine to value them as `Price (SEK) / 1.0 (EUR)`, inflating values by ~11x.
-    *   **Fix**: The engine now loads the authoritative `currency_code` from the `securities` table metadata.
-
-3.  **Gross Dividends**:
-    *   **Root Cause**: Logic was double-counting dividend units by including "Type 0" (Gross Base) units alongside Tax/Fee units when reconstructing Gross amounts.
-    *   **Fix**: Strictly filter addition logic to only include `UNIT_TYPE_TAX` (1) and `UNIT_TYPE_FEE` (2). 25.44€ discrepancy resolved.
-
-4.  **Performance Neutral Movements**:
-    *   **Root Cause**: Internal transfers were summing up instead of netting to zero, and "Removals" were treated as positive inflows.
-    *   **Fix**: Excluded internal transfers and applied correct signs. Phantom 130k inflow removed.
-
-5.  **Cash Transfers**:
-    *   **Fix**: Properly split Type 5 transfers into source-debit and target-credit to ensure accurate account balances.
-
-## 6. FX Calculation (Time Series)
-- **Issue**: "FX-Veränderung" line showed a gain (+51.93 €) instead of expected loss (-1.67 €).
-- **Root Cause**: `PerformanceCalculator` (used for Time Series analysis) was **ignoring the Inflow leg** of `CASH_TRANSFER` transactions (Type 5). It counted the Outflow from source but not the Inflow to target.
-- **Impact**: Foreign cash balances funded via transfer (e.g., USD) were seen as 0.00. Consequently, FX losses/gains on holding that cash were calculated as 0.00.
-- **Fix**: Updated `PerformanceCalculator` to:
-    1.  Explicitly split `CASH_TRANSFER` transactions into Source (Outflow) and Target (Inflow) components.
-    2.  Check both `account` and `other_account` against the target scope to ensure all relevant legs are processed.
-- **Result**: FX gains/losses on transfer-funded cash accounts are now correctly calculated.
+1. **Loop Logic**: By adding a listener, `DataUpdateCoordinator`'s native logic (`should_schedule_refresh = bool(self._listeners)`) remains true, ensuring `call_at` is scheduled for the next interval.
+2. **Code Cleanliness**:
+   - `ruff check .`: Passed.
+   - `npm run lint:ts`: Passed.
+   - `npm run typecheck`: Passed.

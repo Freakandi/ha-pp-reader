@@ -191,6 +191,10 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         self._manual_update_window_started: float | None = None
         self._history_lock = asyncio.Lock()
 
+        # Register a dummy listener to ensure the coordinator loop continues
+        # even if no entities are subscribed (DataUpdateCoordinator design).
+        self.async_add_listener(lambda: None)
+
     async def _async_update_data(self) -> dict:
         """Überwache Dateiänderungen und orchestriere den Pipeline-Status."""
         try:
