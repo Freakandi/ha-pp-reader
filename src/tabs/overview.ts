@@ -67,6 +67,12 @@ const STYLES = `
     opacity: 1;
     text-decoration: underline;
   }
+  .sort-item:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 2px;
+    opacity: 1;
+  }
   .sort-item.sort-active {
     opacity: 1;
     font-weight: bold;
@@ -91,6 +97,11 @@ const STYLES = `
   }
   .simple-sort-header:hover {
     text-decoration: underline;
+  }
+  .simple-sort-header:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
   .simple-sort-header.sort-active {
      font-weight: bold;
