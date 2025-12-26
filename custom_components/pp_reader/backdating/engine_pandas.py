@@ -420,7 +420,7 @@ class BackdatingEngine:
         if not df_augmented.empty:
             df_augmented["amount_eur"] = df_augmented["amount_eur"].astype(float)
         else:
-             # Even if empty, ensure correct dtypes for downstream operations
+            # Even if empty, ensure correct dtypes for downstream operations
             df_augmented = df_augmented.astype({"amount_eur": float})
 
         return df_augmented, fx_long
@@ -757,9 +757,7 @@ class BackdatingEngine:
             )
 
         signs = df_cash_calc["type"].map(cash_signs).fillna(0)
-        df_cash_calc["delta_cash"] = (
-            df_cash_calc["amount"].fillna(0) / 100.0
-        ) * signs
+        df_cash_calc["delta_cash"] = (df_cash_calc["amount"].fillna(0) / 100.0) * signs
         acc_txs = df_cash_calc.dropna(subset=["account"])
 
         acc_daily_change = acc_txs.pivot_table(
