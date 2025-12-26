@@ -72,6 +72,7 @@ export class DateRangePicker {
         this.triggerEl.setAttribute('aria-expanded', 'false');
         this.triggerEl.setAttribute('aria-haspopup', 'dialog');
         this.triggerEl.setAttribute('tabindex', '0');
+        this.triggerEl.setAttribute('title', 'Zeitraum wählen');
         this.triggerEl.innerHTML = `
       <svg class="drp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -378,6 +379,7 @@ export class DateRangePicker {
             </svg>
         `;
         prevBtn.setAttribute('aria-label', 'Vorheriger Monat');
+        prevBtn.setAttribute('title', 'Vorheriger Monat');
 
         if (position === 'left') {
             prevBtn.addEventListener('click', (e) => {
@@ -444,6 +446,7 @@ export class DateRangePicker {
             </svg>
         `;
         nextBtn.setAttribute('aria-label', 'Nächster Monat');
+        nextBtn.setAttribute('title', 'Nächster Monat');
 
         if (position === 'right') {
             nextBtn.addEventListener('click', (e) => {
