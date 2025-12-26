@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
+
+from custom_components.pp_reader.backdating.engine_pandas import TransactionType
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -184,6 +187,7 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
         needed_currencies.discard("EUR")
 
         fx_rates_cache: dict[str, dict[str, float]] = defaultdict(dict)
+        start_fx_rates = {}
         if needed_currencies:
             needed_list = list(needed_currencies)
             fx_rows = cur.execute(
@@ -302,8 +306,19 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                     # Use Latched FX Rate
                     fx_rate = last_known_rates.get(tx_curr, 1.0)
 
-                    if tx_type in (0, 2):  # Buy, Inbound
-                        # Cost Basis for new lots is the actual gross amount paid
+                    if tx_type == TransactionType.BUY:
+                        # Cost Basis for new lots is the actual gross amount paid.
+                        # For BUY, 'amount' is total cash outflow (inc. fees/taxes).
+                        gross_native = raw_amount / 100.0
+                        gross_eur = gross_native / fx_rate
+
+                        lots[sec_uuid].append(
+                            PeriodLot(shares=shares, cost_basis_eur=gross_eur)
+                        )
+
+                    elif tx_type == TransactionType.INBOUND_DELIVERY:
+                        # For Delivery, 'amount' is typically the Security Value.
+                        # Fees/Taxes are separate and increase the Cost Basis.
                         gross_native = (raw_amount + fees_cents + taxes_cents) / 100.0
                         gross_eur = gross_native / fx_rate
 

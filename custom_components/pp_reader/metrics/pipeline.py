@@ -229,6 +229,22 @@ async def async_refresh_all_with_backdating(
         today=backdating_today,
     )
 
+    # Ensure "today" matches live metrics, overriding any backfill discrepancy
+    # because backdating engine might have overwritten our live values with
+    # "close" values.
+    try:
+        await async_run_executor_job(
+            hass,
+            update_today_wealth,
+            db_path,
+            metric_run.run_uuid,
+        )
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "Final Live-Update für daily_wealth nach Backfill fehlgeschlagen",
+            exc_info=True,
+        )
+
     return MetricsPipelineResult(metric_run=metric_run, backdating=backdating_result)
 
 
