@@ -11,6 +11,7 @@ type DomGlobals = typeof globalThis & {
   HTMLTableElement?: typeof HTMLTableElement;
   Element?: typeof Element;
   Node?: typeof Node;
+  customElements?: CustomElementRegistry;
 };
 
 export interface InstalledDomEnvironment {
@@ -43,6 +44,7 @@ export function installDomEnvironment(markup: string = DEFAULT_MARKUP): Installe
   const previousHTMLTableElement = globalRef.HTMLTableElement;
   const previousElement = globalRef.Element;
   const previousNode = globalRef.Node;
+  const previousCustomElements = globalRef.customElements;
 
   const hadWindow = Object.prototype.hasOwnProperty.call(globalRef, 'window');
   const hadDocument = Object.prototype.hasOwnProperty.call(globalRef, 'document');
@@ -53,6 +55,7 @@ export function installDomEnvironment(markup: string = DEFAULT_MARKUP): Installe
   );
   const hadElement = Object.prototype.hasOwnProperty.call(globalRef, 'Element');
   const hadNode = Object.prototype.hasOwnProperty.call(globalRef, 'Node');
+  const hadCustomElements = Object.prototype.hasOwnProperty.call(globalRef, 'customElements');
 
   const windowInstance = dom.window as unknown as Window & typeof globalThis;
   globalRef.window = windowInstance;
@@ -61,6 +64,7 @@ export function installDomEnvironment(markup: string = DEFAULT_MARKUP): Installe
   globalRef.HTMLTableElement = dom.window.HTMLTableElement;
   globalRef.Element = dom.window.Element;
   globalRef.Node = dom.window.Node;
+  globalRef.customElements = dom.window.customElements;
 
   return {
     window: windowInstance,
@@ -102,6 +106,12 @@ export function installDomEnvironment(markup: string = DEFAULT_MARKUP): Installe
         target.Node = previousNode;
       } else {
         Reflect.deleteProperty(target, 'Node');
+      }
+
+      if (hadCustomElements) {
+        target.customElements = previousCustomElements;
+      } else {
+        Reflect.deleteProperty(target, 'customElements');
       }
 
       dom.window.close();

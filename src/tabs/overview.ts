@@ -889,7 +889,7 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     if (partialValue) rowAttributes += ' data-partial="true"';
 
     html += `<tr class="portfolio-row"
-                  data-portfolio="${d.uuid}"
+                  data-portfolio="${escapeAttribute(d.uuid)}"
                   data-position-count="${positionCountAttr}"
                   data-current-value="${escapeAttribute(datasetCurrentValue)}"
                   data-purchase-sum="${escapeAttribute(purchaseSum)}"
@@ -908,9 +908,9 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     html += `<td>
         <button type="button"
                 class="${toggleClass}"
-                data-portfolio="${d.uuid}"
+                data-portfolio="${escapeAttribute(d.uuid)}"
                 aria-expanded="${expanded ? 'true' : 'false'}"
-                aria-controls="${detailId}">
+                aria-controls="${escapeAttribute(detailId)}">
           <span class="caret" aria-hidden="true">${expanded ? '▼' : '▶'}</span>
           <span class="portfolio-name">${safeName}</span>${badgeMarkup}
         </button>
@@ -923,8 +923,8 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
     html += '</tr>';
 
     html += `<tr class="portfolio-details${expanded ? '' : ' hidden'}"
-                data-portfolio="${d.uuid}"
-                id="${detailId}"
+                data-portfolio="${escapeAttribute(d.uuid)}"
+                id="${escapeAttribute(detailId)}"
                 role="region"
                 aria-label="Positionen für ${d.name}">
       <td colspan="${cols.length.toString()}">
