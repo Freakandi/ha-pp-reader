@@ -279,7 +279,7 @@ function formatPriceWithCurrency(
     minimumFractionDigits: PRICE_FRACTION_DIGITS.min,
     maximumFractionDigits: PRICE_FRACTION_DIGITS.max,
   });
-  return `${formatted}${currency ? `\u00A0${currency}` : ''}`;
+  return `${formatted}${currency ? `\u00A0${escapeHtml(currency)}` : ''}`;
 }
 
 function buildPurchasePriceDisplay(

@@ -1,52 +1,47 @@
+
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert';
-import { after, before, describe, test } from 'node:test';
 import { installDomEnvironment } from '../../__tests__/dom';
 
-describe('XSS Vulnerability Check', () => {
-    let domEnv: ReturnType<typeof installDomEnvironment>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let renderPortfolioPositions: any;
+describe('src/tabs/overview.ts security', () => {
+  before(async () => {
+    // eslint-disable-next-line @typescript-eslint/await-thenable
+    await installDomEnvironment();
+    // Mock customElements
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (global as any).customElements = {
+        define: () => {},
+        get: () => undefined,
+        whenDefined: () => Promise.resolve(),
+        upgrade: () => {}
+    };
+  });
 
-    before(async () => {
-        domEnv = installDomEnvironment();
-        // Polyfill customElements
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-        (globalThis as any).customElements = (domEnv.window as any).customElements;
-        // Polyfill Image for some other parts if needed
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-        (globalThis as any).Image = (domEnv.window as any).Image;
+  it('should escape currency code in purchase price display', async () => {
+    const { __TEST_ONLY__ } = await import('../overview');
+    const { buildPurchasePriceDisplayForTest } = __TEST_ONLY__;
 
-        // Dynamic import to ensure DOM is ready
-        const module = await import('../overview');
+    const maliciousCurrency = '<img src=x onerror=alert(1)>';
+    const position = {
+      name: 'Test Security',
+      currency_code: maliciousCurrency,
+      average_cost: {
+        native: 100,
+      },
+      security_currency_code: null,
+      security_currency: null,
+      native_currency_code: null,
+      native_currency: null,
+      account_currency_code: null,
+      account_currency: null,
+      purchase_currency_code: null,
+    };
 
-        renderPortfolioPositions = module.renderPortfolioPositions;
-    });
+    // @ts-ignore
+    const result = buildPurchasePriceDisplayForTest(position);
 
-    after(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (domEnv) domEnv.restore();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-        delete (globalThis as any).customElements;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-        delete (globalThis as any).Image;
-    });
-
-    test('renderPortfolioPositions escapes XSS in name', () => {
-        const maliciousName = '<img src=x onerror=alert(1)>';
-        const positions = [{
-            security_uuid: 'sec123',
-            uuid: '123',
-            name: maliciousName,
-            current_holdings: 10,
-            current_value: 100,
-            purchase_value: 90
-        }];
-
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const html = renderPortfolioPositions(positions) as string;
-
-        // Vulnerable if html contains the raw tag
-        assert.ok(!html.includes('<img src=x onerror=alert(1)>'), 'HTML should not contain raw malicious tag: ' + html);
-        assert.ok(html.includes('&lt;img'), 'HTML should contain escaped tag');
-    });
+    // Assert that we have caught the vulnerability (so this test fails currently)
+    assert.strictEqual(result.markup.includes('<img'), false, 'Markup should not contain unescaped image tag');
+    assert.strictEqual(result.markup.includes('&lt;img'), true, 'Markup should contain escaped image tag');
+  });
 });
