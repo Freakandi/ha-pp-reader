@@ -37,3 +37,8 @@
 **Vulnerability:** `currency_code` in `updateAccountTable` (`src/data/updateConfigsWS.ts`) was concatenated directly into HTML without escaping, bypassing `formatValue`'s regex blacklist via simple HTML formatting like `<b>EUR</b>`.
 **Learning:** Defense-in-depth sanitization (like `formatValue`'s blacklist) is not a substitute for proper escaping at the point of data use. Blacklists are easily bypassed by benign-looking tags that still allow content injection.
 **Prevention:** Explicitly escape all dynamic strings (especially those from external sources like `currency_code`) using `escapeHtml` before embedding them in HTML templates.
+
+## 2025-01-06 - Stored XSS in Currency Display
+**Vulnerability:** `formatPriceWithCurrency` in `src/tabs/overview.ts` concatenated `currency` directly into HTML without escaping, allowing XSS via crafted currency codes.
+**Learning:** Even simple formatting helpers can be vectors if they assume data is safe. This helper was used in `buildPurchasePriceDisplay` which interpolated the result into HTML.
+**Prevention:** Always escape currency codes and other string inputs in formatting functions that produce HTML output. Verified with `src/tabs/__tests__/overview_security.test.ts`.
