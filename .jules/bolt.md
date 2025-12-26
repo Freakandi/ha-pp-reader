@@ -13,3 +13,7 @@
 ## 2024-12-21 - [Optimized Cashflow Loops]
 **Learning:** `cent_to_eur` helper function calls (including `is_finite` checks and try-except blocks) inside tight transaction loops add significant overhead when inputs are guaranteed integers.
 **Action:** Replaced `cent_to_eur(val)` with direct `val / 100.0` division and reused calculated absolute fee/tax values instead of recalculating them. Benchmarks showed a ~49% speedup in `_process_transaction`. Also fixed a bug where missing FX rates caused foreign fees to be added as-is (1:1) to EUR buckets.
+
+## 2025-02-18 - [Optimized Holdings Transaction Values]
+**Learning:** Similar to cashflows, `holdings.py` was using `cent_to_eur` inside `_calculate_transaction_amounts` and `_calculate_cost_in_eur`, adding overhead in tight loops.
+**Action:** Replaced `cent_to_eur(val)` with direct `val / 100.0` division. This mirrors the earlier optimization in `cashflows.py` and avoids unnecessary function calls and validation for values guaranteed to be integers.
