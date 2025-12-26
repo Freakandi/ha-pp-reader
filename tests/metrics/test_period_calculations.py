@@ -1,4 +1,3 @@
-
 import datetime
 import sqlite3
 
@@ -68,6 +67,7 @@ def test_db(tmp_path):
     conn.close()
     return db_path
 
+
 def test_realized_gains_calculation_gross_not_double_counted(test_db):
     """
     Verify that Realized Gains are calculated as Gross Gains.
@@ -79,7 +79,9 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     cur = conn.cursor()
 
     sec_uuid = "sec1"
-    cur.execute("INSERT INTO securities (uuid, currency_code) VALUES (?, ?)", (sec_uuid, "EUR"))
+    cur.execute(
+        "INSERT INTO securities (uuid, currency_code) VALUES (?, ?)", (sec_uuid, "EUR")
+    )
 
     # 1. BUY 1 share.
     # Price 100 EUR. Fee 5 EUR.
@@ -87,15 +89,29 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     # Transaction Units: Fee 500 cents.
     #
     # Correct Cost Basis = 105.00 EUR.
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO transactions (uuid, type, date, amount, shares, security, currency_code)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, ("tx_buy", TransactionType.BUY, "2025-01-01T12:00:00", 10500, 100000000, sec_uuid, "EUR"))
+    """,
+        (
+            "tx_buy",
+            TransactionType.BUY,
+            "2025-01-01T12:00:00",
+            10500,
+            100000000,
+            sec_uuid,
+            "EUR",
+        ),
+    )
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO transaction_units (transaction_uuid, type, amount, currency_code)
         VALUES (?, ?, ?, ?)
-    """, ("tx_buy", 2, 500, "EUR")) # Fee
+    """,
+        ("tx_buy", 2, 500, "EUR"),
+    )  # Fee
 
     # 2. SELL 1 share.
     # Gross Price 120 EUR. Fee 5 EUR. Tax 5 EUR.
@@ -103,20 +119,37 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     # Transaction Units: Fee 500, Tax 500.
     #
     # Correct Gross Proceeds = 120.00 EUR.
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO transactions (uuid, type, date, amount, shares, security, currency_code)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, ("tx_sell", TransactionType.SELL, "2025-01-02T12:00:00", 11000, 100000000, sec_uuid, "EUR"))
+    """,
+        (
+            "tx_sell",
+            TransactionType.SELL,
+            "2025-01-02T12:00:00",
+            11000,
+            100000000,
+            sec_uuid,
+            "EUR",
+        ),
+    )
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO transaction_units (transaction_uuid, type, amount, currency_code)
         VALUES (?, ?, ?, ?)
-    """, ("tx_sell", 2, 500, "EUR")) # Fee
+    """,
+        ("tx_sell", 2, 500, "EUR"),
+    )  # Fee
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO transaction_units (transaction_uuid, type, amount, currency_code)
         VALUES (?, ?, ?, ?)
-    """, ("tx_sell", 1, 500, "EUR")) # Tax (Type 1 is Tax)
+    """,
+        ("tx_sell", 1, 500, "EUR"),
+    )  # Tax (Type 1 is Tax)
 
     conn.commit()
     conn.close()

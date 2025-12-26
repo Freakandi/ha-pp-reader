@@ -427,13 +427,13 @@ class PerformanceCalculator:
             taxes = units_payload.get(row.uuid, {}).get("taxes", 0)
 
             if row.type in (TransactionType.SELL, TransactionType.OUTBOUND_DELIVERY):
-                 # Reconstruct Gross Proceeds: Net + Fees + Taxes
-                 gross_amt_cents = abs(row.amount) + fees + taxes
-                 if shares > 0:
-                     tx_price = (gross_amt_cents / 100.0) / shares
+                # Reconstruct Gross Proceeds: Net + Fees + Taxes
+                gross_amt_cents = abs(row.amount) + fees + taxes
+                if shares > 0:
+                    tx_price = (gross_amt_cents / 100.0) / shares
             elif row.amount_norm != 0:
-                 # BUY / INBOUND (Amount is Total Cost)
-                 tx_price = abs(row.amount_norm) / shares
+                # BUY / INBOUND (Amount is Total Cost)
+                tx_price = abs(row.amount_norm) / shares
 
             tx_fx = self._get_fx(row.currency_code, row.date)
 
@@ -478,7 +478,7 @@ class PerformanceCalculator:
     def _load_transaction_units(self, tx_uuids: list[str]) -> dict[str, dict[str, int]]:
         """Load fees and taxes for a list of transactions."""
         if not tx_uuids:
-             return {}
+            return {}
 
         # Chunking to avoid SQL limits
         chunk_size = 900
@@ -492,7 +492,7 @@ class PerformanceCalculator:
                 FROM transaction_units
                 WHERE transaction_uuid IN ({placeholders})
                   AND type IN (1, 2, 11, 13)
-            """ # noqa: S608
+            """  # noqa: S608
 
             try:
                 rows = self.conn.execute(query, tuple(chunk)).fetchall()
