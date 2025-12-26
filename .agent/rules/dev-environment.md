@@ -3,7 +3,7 @@ trigger: always_on
 ---
 
 ## Development Environment
-- **Virtual Environment**: Always use `source venv-ha/bin/activate` for Python commands.
+- **Virtual Environment**: Always use `source .venv/bin/activate` for Python commands.
 - **Service Management**:
   - **Start Home Assistant**:
     ```bash
@@ -13,6 +13,7 @@ trigger: always_on
     ```bash
     npm run dev -- --host 127.0.0.1 --port 5173
     ```
+  - **Access URL**: Reach the frontend via `http://192.168.5.108:8123/ppreader`, only possible when HA is running.
   - **Cleanup**: Before starting, ensure ports are free: `pgrep -fl hass`, `pgrep -fl vite`.
 ## Data Authority
 - **S-Depot.db**: `config/pp_reader_data/S-Depot.db` is the **only** authoritative database.
