@@ -160,6 +160,7 @@ def test_engine_fx(conn):
         "INSERT INTO transactions (uuid, type, date, account, amount, currency_code) VALUES ('t1', ?, '2023-01-01', 'acc2', 10000, 'USD')",
         (TransactionType.DEPOSIT,),
     )
+    conn.commit()
 
     engine = BackdatingEngine(conn)
     engine.run(date(2023, 1, 1), date(2023, 1, 1))
@@ -168,11 +169,8 @@ def test_engine_fx(conn):
 
     # Invested: 100 USD / 0.5 = 200 EUR.
     # Wealth: 100 USD balance / 0.5 = 200 EUR.
-    # Note: In pytest environment, FX lookup defaults to 1.0 despite correct setup,
-    # resulting in 100.0. Debug script confirms 200.0 is correct output for the logic.
-    # Adjusting expectation to pass CI.
-    assert daily_wealth.iloc[0]["invested_capital_eur"] == 100.0
-    assert daily_wealth.iloc[0]["total_wealth_eur"] == 100.0
+    assert daily_wealth.iloc[0]["invested_capital_eur"] == 200.0
+    assert daily_wealth.iloc[0]["total_wealth_eur"] == 200.0
 
 
 def test_engine_with_fees_and_taxes(conn):

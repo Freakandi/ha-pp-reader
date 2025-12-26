@@ -96,10 +96,14 @@ class BackdatingEngine:
             df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
             # Ensure type is integer
             if df_txs["type"].dtype == "object":
-                 df_txs["type"] = pd.to_numeric(df_txs["type"], errors="coerce").fillna(-1).astype(int)
+                df_txs["type"] = (
+                    pd.to_numeric(df_txs["type"], errors="coerce")
+                    .fillna(-1)
+                    .astype(int)
+                )
             # Ensure shares is numeric
             if df_txs["shares"].dtype == "object":
-                 df_txs["shares"] = pd.to_numeric(df_txs["shares"], errors="coerce")
+                df_txs["shares"] = pd.to_numeric(df_txs["shares"], errors="coerce")
         else:
             # Ensure date column is datetime even if empty, for later merging
             df_txs["date"] = pd.to_datetime([], utc=True)
@@ -181,13 +185,9 @@ class BackdatingEngine:
                 df_rates["date"] = pd.to_datetime(
                     df_rates["date"], utc=True
                 ).dt.normalize()
-                # DEBUG
-                print("DEBUG DF RATES:\n", df_rates)
-
                 # FX rates are stored as floats in the DB (e.g. 1.05).
                 # No scaling needed (previously divided by PRICE_SCALE).
-        except pd.errors.DatabaseError as e:
-            print(f"DEBUG DatabaseError: {e}")
+        except pd.errors.DatabaseError:
             df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
 
         # Load Latest FX Rates (Snapshot alignment)
@@ -393,15 +393,6 @@ class BackdatingEngine:
             df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
             df_txs["currency_code"] = df_txs["currency_code"].astype(str)
 
-            # DEBUG
-            print("DEBUG MERGE keys:")
-            print("TXS date dtype:", df_txs["date"].dtype)
-            print("FXL date dtype:", fx_long["date"].dtype)
-            print("TXS curr dtype:", df_txs["currency_code"].dtype)
-            print("FXL curr dtype:", fx_long["currency_code"].dtype)
-            print("TXS sample:\n", df_txs[["date", "currency_code"]].head())
-            print("FXL sample:\n", fx_long.head())
-
             # Join with FX
             df_augmented = df_txs.merge(
                 fx_long, on=["date", "currency_code"], how="left"
@@ -409,9 +400,12 @@ class BackdatingEngine:
             df_augmented["daily_fx_rate"] = df_augmented["daily_fx_rate"].fillna(1.0)
             df_augmented["historic_fx_rate"] = df_augmented["daily_fx_rate"]
 
-            # Ensure amount is numeric (handle potential object dtype from empty initial reads)
+            # Ensure amount is numeric (handle potential object dtype from
+            # empty initial reads)
             if df_augmented["amount"].dtype == "object":
-                 df_augmented["amount"] = pd.to_numeric(df_augmented["amount"], errors="coerce").fillna(0)
+                df_augmented["amount"] = pd.to_numeric(
+                    df_augmented["amount"], errors="coerce"
+                ).fillna(0)
 
             # Calculate EUR Amount (Cash Flow Value)
             df_augmented["amount_eur"] = (
@@ -756,7 +750,11 @@ class BackdatingEngine:
 
         # Ensure 'type' is integer to match dictionary keys
         if not df_cash_calc.empty:
-             df_cash_calc["type"] = pd.to_numeric(df_cash_calc["type"], errors="coerce").fillna(-1).astype(int)
+            df_cash_calc["type"] = (
+                pd.to_numeric(df_cash_calc["type"], errors="coerce")
+                .fillna(-1)
+                .astype(int)
+            )
 
         signs = df_cash_calc["type"].map(cash_signs).fillna(0)
         df_cash_calc["delta_cash"] = (
