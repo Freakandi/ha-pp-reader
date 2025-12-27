@@ -16,7 +16,6 @@ from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.logic.accounting import CASH_TRANSFER_TYPE
 from custom_components.pp_reader.util import async_run_executor_job
-from custom_components.pp_reader.util.currency import cent_to_eur
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.backdating.accounts")
 
@@ -352,8 +351,11 @@ def _build_account_valuations(
     for account_uuid, balance_cents in balances_cents.items():
         if account_uuid not in accounts:
             continue
-        currency = accounts[account_uuid].get("currency") or "EUR"
-        balance_native = cent_to_eur(balance_cents, default=0.0) or 0.0
+
+        # Optimization: Direct dictionary access and division
+        # balance_cents is guaranteed int, accounts guaranteed to have "currency"
+        currency = accounts[account_uuid]["currency"]
+        balance_native = balance_cents / 100.0
 
         if currency == "EUR":
             fx_rate = 1.0
