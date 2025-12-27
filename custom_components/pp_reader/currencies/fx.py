@@ -63,9 +63,12 @@ def _should_log_warning(date: str, currencies: set[str]) -> bool:
     return True
 
 
-def _parse_ecb_sdmx_response(data: dict[str, Any]) -> dict[str, dict[str, float]]:
+def _parse_ecb_sdmx_response(data: Any) -> dict[str, dict[str, float]]:
     """Parse ECB SDMX-JSON response into date->currency->rate mapping."""
     result: dict[str, dict[str, float]] = defaultdict(dict)
+
+    if not isinstance(data, dict):
+        return {}
 
     try:
         structure = data.get("structure", {})
