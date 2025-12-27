@@ -11,6 +11,7 @@ import type {
   DailyWealthScopeRecord,
   DailyWealthSlices,
 } from '../data/api';
+import { getEntryId } from '../data/api';
 import {
   getDailyWealthState,
   loadDailyWealth,
@@ -39,6 +40,9 @@ type PerformanceRowKey =
   | 'neutral';
 
 type PerformanceBreakdown = Record<PerformanceRowKey, number>;
+
+interface BreakdownItem { label: string; amount: number; }
+type BreakdownResponse = Record<string, BreakdownItem[]>;
 
 const DEFAULT_RANGE_DAYS = 30;
 
@@ -191,7 +195,16 @@ function renderTotals(
 
 
 
-function renderMetrics(card: HTMLElement, records: DailyWealthRecord[], metrics?: DailyWealthResponse['metrics']): void {
+
+
+function renderMetrics(
+  card: HTMLElement,
+  records: DailyWealthRecord[],
+  metrics?: DailyWealthResponse['metrics'],
+  hass?: HomeAssistant,
+  selection?: DailyWealthSelection,
+  entryId?: string
+): void {
   const container = card.querySelector<HTMLElement>('.analyse-metrics-grid');
   if (!container) return;
 
@@ -209,23 +222,30 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[], metrics?
   // Let's stick to the requested layout: clear structure.
   // We can group Cashflows and Performance.
 
-  const mkRow = (label: string, value: number | string, cls = '', id = ''): string => `
-    <div class="metric-row ${cls}" ${id ? `id="${id}"` : ''}>
-      <span class="metric-label">${label}</span>
+  const mkRow = (label: string, value: number | string, cls = '', id = '', type = ''): string => {
+    const isInteractive = type && hass && entryId;
+    return `
+    <div class="metric-row ${cls} ${isInteractive ? 'interactive' : ''}"
+         ${id ? `id="${id}"` : ''}
+         ${type ? `data-breakdown-type="${type}"` : ''}>
+      <span class="metric-label">
+        ${isInteractive ? '<span class="toggle-icon">▶</span> ' : ''}${label}
+      </span>
       <span class="metric-value">${typeof value === 'number' ? formatCurrency(value) : value}</span>
     </div>`;
+  };
 
   const html = `
     <div class="metrics-section">
       <h3>Performance-Berechnung</h3>
       ${mkRow('Anfangswert', bd.startValue, '', 'perf-startValue')}
       ${mkRow('Kurserfolge (Gesamt)', bd.marketGain, 'sub-header')}
-      ${mkRow('&nbsp;&nbsp;↳ Realisiert', bd.realizedGains, 'indent')}
-      ${mkRow('&nbsp;&nbsp;↳ Nicht realisiert', bd.unrealizedGains, 'indent')}
-      ${mkRow('Dividenden', bd.dividends)}
-      ${mkRow('Zinsen', bd.interest)}
-      ${mkRow('Gebühren', bd.fees)}
-      ${mkRow('Steuern', bd.taxes)}
+      ${mkRow('&nbsp;&nbsp;Realisiert', bd.realizedGains, 'indent', '', 'realized_gains')}
+      ${mkRow('&nbsp;&nbsp;Nicht realisiert', bd.unrealizedGains, 'indent', '', 'unrealized_gains')}
+      ${mkRow('Dividenden', bd.dividends, '', '', 'dividends')}
+      ${mkRow('Zinsen', bd.interest, '', '', 'interest')}
+      ${mkRow('Gebühren', bd.fees, '', '', 'fees')}
+      ${mkRow('Steuern', bd.taxes, '', '', 'taxes')}
       ${mkRow('FX-Veränderung', bd.fxGains)}
       ${mkRow('Performanceneutrale Bew.', bd.neutral + bd.netTransfers)}
       ${mkRow('Endwert', bd.endValue, 'highlight', 'perf-endValue')}
@@ -233,6 +253,89 @@ function renderMetrics(card: HTMLElement, records: DailyWealthRecord[], metrics?
   `;
 
   container.innerHTML = html;
+
+  container.querySelectorAll('.metric-row.interactive').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      void (async () => {
+        if (!hass || !selection) return;
+
+        const target = e.currentTarget as HTMLElement;
+        const type = target.dataset.breakdownType;
+        if (!type) return;
+
+        const expanded = target.classList.contains('expanded');
+
+        if (expanded) {
+          target.classList.remove('expanded');
+          const icon = target.querySelector('.toggle-icon');
+          if (icon) icon.textContent = '▶';
+
+          // Remove sub-rows
+          let next = target.nextElementSibling;
+          while (next && next.classList.contains('breakdown-row')) {
+            const toRemove = next;
+            next = next.nextElementSibling;
+            toRemove.remove();
+          }
+        } else {
+          target.classList.add('expanded');
+          const icon = target.querySelector('.toggle-icon');
+          if (icon) icon.textContent = '▼';
+
+          try {
+            const loadingRow = document.createElement('div');
+            loadingRow.className = 'breakdown-row loading';
+            loadingRow.innerHTML = '<span class="metric-label">Lade Details...</span><span class="metric-value">...</span>';
+            target.after(loadingRow);
+
+            let rangeStart = selection.range?.start;
+            let rangeEnd = selection.range?.end;
+            if (!rangeStart) {
+              rangeStart = records[0].date;
+              rangeEnd = records[records.length - 1].date;
+            }
+
+            const response = await hass.connection.sendMessagePromise<BreakdownResponse>({
+              type: 'pp_reader/get_performance_breakdown',
+              entry_id: entryId,
+              start: rangeStart,
+              end: rangeEnd
+            });
+
+            loadingRow.remove();
+
+
+            const items = (response as Partial<BreakdownResponse>)[type];
+            if (!items || items.length === 0) {
+              const emptyRow = document.createElement('div');
+              emptyRow.className = 'breakdown-row empty';
+              emptyRow.innerHTML = '<span class="metric-label">Keine Details</span><span class="metric-value">—</span>';
+              target.after(emptyRow);
+            } else {
+              [...items].reverse().forEach(item => {
+                const detailRow = document.createElement('div');
+                detailRow.className = 'breakdown-row';
+                detailRow.style.animation = 'fadeIn 0.2s ease';
+                detailRow.innerHTML = `
+                 <span class="metric-label">${item.label}</span>
+                 <span class="metric-value">${formatCurrency(item.amount)}</span>
+               `;
+                target.after(detailRow);
+              });
+            }
+
+          } catch (err) {
+            console.error('Breakdown fetch failed', err);
+            const errRow = document.createElement('div');
+            errRow.className = 'breakdown-row error';
+            errRow.innerHTML = '<span class="metric-label">Fehler beim Laden</span>';
+            target.querySelector('.breakdown-row.loading')?.replaceWith(errRow);
+          }
+        }
+      })();
+    });
+  });
+
 }
 
 
@@ -696,7 +799,16 @@ async function loadAndRender(
     label = `Tag: ${selection.date}`;
   }
   renderTotals(card, label, data.records);
-  renderMetrics(card, data.records, data.metrics);
+  renderTotals(card, label, data.records);
+  if (hass) {
+    const entryId = getEntryId(hass, panelConfig);
+    if (entryId) {
+      renderMetrics(card, data.records, data.metrics, hass, selection, entryId);
+    } else {
+      // Fallback non-interactive if no entryId (should not happen if loaded)
+      renderMetrics(card, data.records, data.metrics, hass, selection, '');
+    }
+  }
 
   if (chartCard) {
     renderScopeFilters(chartCard, data.slices);
@@ -837,6 +949,60 @@ export function renderAnalyse(
           grid-template-columns: 1fr;
           gap: 1rem;
         }
+      }
+
+      /* Breakdown Styles */
+      .metric-row.interactive {
+        cursor: pointer;
+      }
+      .metric-row.interactive:hover .metric-label {
+        color: var(--primary-color, #03a9f4);
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      .toggle-icon {
+        display: inline-block;
+        width: 1.25em;
+        text-align: center;
+        font-size: 0.8em;
+        color: var(--secondary-text-color, #727272);
+      }
+
+      .breakdown-row {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: space-between;
+        padding: 0.35rem 0 0.35rem 2rem;
+        font-size: 0.9em;
+        border-bottom: 1px dashed var(--divider-color, #ddd);
+        background-color: rgba(0,0,0,0.01);
+      }
+      .breakdown-row:last-of-type {
+        border-bottom: none;
+      }
+      .breakdown-row .metric-label {
+        font-weight: 400;
+        color: var(--primary-text-color);
+      }
+      .breakdown-row .metric-value {
+        font-family: var(--code-font-family, monospace);
+        font-weight: 400;
+      }
+
+      .breakdown-row.loading, .breakdown-row.empty, .breakdown-row.error {
+        color: var(--secondary-text-color);
+        font-style: italic;
+        padding-left: 2rem;
+      }
+      .breakdown-row.error {
+        color: var(--error-color, #d32f2f);
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-3px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     </style>
   `;

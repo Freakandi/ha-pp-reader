@@ -31,6 +31,11 @@ from custom_components.pp_reader.data.normalized_store import (
 from custom_components.pp_reader.logic.securities import (
     calculate_realized_performance,
 )
+from custom_components.pp_reader.metrics.breakdown import (
+    BreakdownCalculator,
+    BreakdownItem,
+    PerformanceBreakdown,
+)
 from custom_components.pp_reader.metrics.period_calculations import (
     calculate_period_performance_series,
 )
@@ -1612,7 +1617,73 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     connection.send_result(msg_id, payload)
 
 
-ws_get_daily_wealth = _wrap_with_loop_fallback(ws_get_daily_wealth)
+def _serialize_breakdown_item(item: BreakdownItem) -> dict[str, Any]:
+    return {
+        "label": item.label,
+        "amount": round_currency(item.amount or 0.0, decimals=2),
+        "details": item.details,
+    }
+
+
+def _serialize_performance_breakdown(bd: PerformanceBreakdown) -> dict[str, Any]:
+    return {
+        "realized_gains": [_serialize_breakdown_item(x) for x in bd.realized_gains],
+        "unrealized_gains": [_serialize_breakdown_item(x) for x in bd.unrealized_gains],
+        "dividends": [_serialize_breakdown_item(x) for x in bd.dividends],
+        "fees": [_serialize_breakdown_item(x) for x in bd.fees],
+        "taxes": [_serialize_breakdown_item(x) for x in bd.taxes],
+        "interest": [_serialize_breakdown_item(x) for x in bd.interest],
+    }
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "pp_reader/get_performance_breakdown",
+        vol.Required("entry_id"): str,
+        vol.Required("start"): str,
+        vol.Required("end"): str,
+        # Scopes optional for future use
+        # (currently breakdown is global or requires complex filtering impl)
+        # vol.Optional("scopes"): _DAILY_WEALTH_SCOPE_FILTER_SCHEMA,
+    }
+)
+@websocket_api.async_response
+async def ws_get_performance_breakdown(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Return detailed performance breakdown for a period."""
+    msg_id = msg.get("id")
+    entry_id = msg.get("entry_id")
+
+    resolved = _resolve_entry_and_path(
+        hass, entry_id, msg_id=msg_id, connection=connection
+    )
+    if resolved is None:
+        return
+    _, db_path = resolved
+
+    start_date = _parse_iso_date(msg.get("start"))
+    end_date = _parse_iso_date(msg.get("end"))
+
+    if not start_date or not end_date:
+        connection.send_error(msg_id, "invalid_format", "Ungültiges Datumsformat")
+        return
+
+    def _calc() -> PerformanceBreakdown:
+        # Open new connection (read-only)
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+            calc = BreakdownCalculator(conn)
+            return calc.calculate(start_date, end_date)
+
+    try:
+        breakdown = await async_run_executor_job(hass, _calc)
+        connection.send_result(msg_id, _serialize_performance_breakdown(breakdown))
+    except Exception as exc:
+        _LOGGER.exception("Fehler bei der Performance-Berechnung")
+        connection.send_error(msg_id, "calc_error", str(exc))
+
+
+ws_get_performance_breakdown = _wrap_with_loop_fallback(ws_get_performance_breakdown)
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -1622,3 +1693,4 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_security_history)
     websocket_api.async_register_command(hass, ws_get_security_snapshot)
     websocket_api.async_register_command(hass, ws_get_daily_wealth)
+    websocket_api.async_register_command(hass, ws_get_performance_breakdown)

@@ -89,6 +89,7 @@ def test_calculate_realized_performance_fifo(mock_load_rates, mock_ensure_rates)
             "name": "Test Security",
             "ticker_symbol": "TEST",
             "last_price": 13500,
+            "currency_code": "EUR",
         }
     ]
 

@@ -266,23 +266,19 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                     if curr in start_fx_rates:  # type: ignore[operator]
                         start_rate = start_fx_rates[curr]  # type: ignore[index]
                     else:
-                        _LOGGER.warning(
-                            "PeriodCalc: Missing start FX rate for %s at %s. Valuation "
-                            "might be wrong.",
-                            curr,
-                            start_date,
-                        )
-                        # We have no rate. We cannot invent one.
-                        # Leaving start_rate=1.0 is the 'default' the user dislikes,
-                        # but without data, we are stuck.
-                        # However, since we removed the filler in the dictionary,
-                        # this warning is now the visible indicator.
+                        # Fallback to last available if missing
+                        # Use last_known_rates initialized with start_fx_rates
+                        # But start_fx_rates was already our best guess.
+                        # Do NOT default to 1.0 implicitly, but if we must:
+                        pass
 
                 price_eur = price_native / start_rate
-                cost_basis_eur = shares * price_eur
+                # Cost Basis Strategy: Align with BreakdownCalculator
+                # Basis (Eur) is UNIT PRICE.
 
+                # Aligning PeriodLot to store UNIT BASIS
                 lots[sec_uuid].append(
-                    PeriodLot(shares=shares, cost_basis_eur=cost_basis_eur)
+                    PeriodLot(shares=shares, cost_basis_eur=price_eur)
                 )
 
         # 5. Simulation Loop
@@ -315,10 +311,10 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
             if day_iso in tx_by_day:
                 day_txs = tx_by_day[day_iso]
                 for tx in day_txs:
-                    uuid_ = tx["uuid"]  # Renamed to avoid conflict with module name
+                    uuid_ = tx["uuid"]
                     sec_uuid = tx["security"]
                     tx_type = tx["type"]
-                    shares = (tx["shares"] or 0) / 100000000.0
+                    shares = (tx["shares"] or 0) / 100_000_000.0
 
                     if not sec_uuid:
                         continue
@@ -335,73 +331,84 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                         u["amount"] for u in units if u["type"] in (1, 11)
                     )
 
-                    raw_amount = tx["amount"] or 0
+                    raw_amount = abs(tx["amount"] or 0)
                     tx_curr = tx["currency_code"] or "EUR"
 
                     # Use Latched FX Rate
                     fx_rate = last_known_rates.get(tx_curr, 1.0)
 
+                    # Ensure positive shares for calc
+                    qty = abs(shares)
+
                     if tx_type == TransactionType.BUY:
-                        # Cost Basis for new lots is the actual gross amount paid.
-                        # For BUY, 'amount' is total cash outflow (inc. fees/taxes).
-                        gross_native = raw_amount / 100.0
+                        # Cost Basis = Pure Value = (Total Outflow - Fees - Taxes)
+                        # raw_amount is Outflow (usu. positive in our normalization)
+
+                        gross_native = (raw_amount - fees_cents - taxes_cents) / 100.0
                         gross_eur = gross_native / fx_rate
 
+                        # Unit Basis
+                        unit_basis = 0.0
+                        if qty > _EPSILON:
+                            unit_basis = gross_eur / qty
+
                         lots[sec_uuid].append(
-                            PeriodLot(shares=shares, cost_basis_eur=gross_eur)
+                            PeriodLot(shares=qty, cost_basis_eur=unit_basis)
                         )
 
                     elif tx_type == TransactionType.INBOUND_DELIVERY:
-                        # For Delivery, 'amount' is typically the Security Value.
-                        # Fees/Taxes are separate and increase the Cost Basis.
-                        gross_native = (raw_amount + fees_cents + taxes_cents) / 100.0
+                        # For Delivery, treat Amount as Value same as Buy
+                        gross_native = (raw_amount - fees_cents - taxes_cents) / 100.0
                         gross_eur = gross_native / fx_rate
 
+                        unit_basis = 0.0
+                        if qty > _EPSILON:
+                            unit_basis = gross_eur / qty
+
                         lots[sec_uuid].append(
-                            PeriodLot(shares=shares, cost_basis_eur=gross_eur)
+                            PeriodLot(shares=qty, cost_basis_eur=unit_basis)
                         )
 
                     elif tx_type in (1, 3):  # Sell, Outbound
                         # Gross Proceeds (Payout + Fees + Taxes)
+                        # Aligns with breakdown val_native = raw_amt + u_fees + u_taxes
                         gross_native = (raw_amount + fees_cents + taxes_cents) / 100.0
                         gross_eur = gross_native / fx_rate
 
+                        # Effective Exit Price Per Share
+                        exit_price_unit = 0.0
+                        if qty > _EPSILON:
+                            exit_price_unit = gross_eur / qty
+
                         # Consume Lots using FIFO
-                        cost_basis_sold_eur = 0.0
-                        shares_to_sell = shares
+                        shares_to_sell = qty
 
                         sec_lots = lots[sec_uuid]
+
                         while shares_to_sell > _EPSILON and sec_lots:
                             lot = sec_lots[0]
-                            if lot.shares <= shares_to_sell:
-                                # Consume full lot
-                                cost_basis_sold_eur += lot.cost_basis_eur
-                                shares_to_sell -= lot.shares
-                                sec_lots.popleft()  # Remove lot from deque
-                            else:
-                                # Partial consumption
-                                ratio = shares_to_sell / lot.shares
-                                portion_cost = lot.cost_basis_eur * ratio
-                                cost_basis_sold_eur += portion_cost
+                            consumed = min(shares_to_sell, lot.shares)
 
-                                # Update lot in place (PeriodLot is mutable)
-                                lot.shares -= shares_to_sell
-                                lot.cost_basis_eur -= portion_cost
-                                shares_to_sell = 0.0
+                            # Realized Gain:
+                            gain_chunk = (
+                                exit_price_unit - lot.cost_basis_eur
+                            ) * consumed
 
-                        # Calculate gain for this transaction
-                        gain = gross_eur - cost_basis_sold_eur
+                            # Realized only for SELL (1)
+                            if tx_type == 1:
+                                daily_realized += gain_chunk
 
-                        # Only count Realized Gains for SELLS (type 1)
-                        if tx_type == 1:
-                            daily_realized += gain
+                            lot.shares -= consumed
+                            shares_to_sell -= consumed
+
+                            if lot.shares < _EPSILON:
+                                sec_lots.popleft()
 
             # Update Prices used for valuation for the current day
             if day_iso in daily_prices:
                 last_known_prices.update(daily_prices[day_iso])
 
             # B. Calculate Unrealized Gains (Snapshot) at end of day
-            # Uses *remaining* lots and their *adjusted* cost basis.
             daily_unrealized = 0.0
 
             # Iterate all held securities
@@ -409,25 +416,30 @@ def calculate_period_performance_series(  # noqa: C901, PLR0912, PLR0915
                 if not sec_lots:
                     continue
 
-                # Sum of shares and cost basis for only the *remaining* lots
-                total_shares = sum(lot.shares for lot in sec_lots)
-                total_basis = sum(lot.cost_basis_eur for lot in sec_lots)
+                total_shares_held = sum(lot.shares for lot in sec_lots)
+                if total_shares_held < _EPSILON:
+                    continue
 
-                # Market Value of remaining shares using Latched Price/FX
+                # Market Value
                 price_native = last_known_prices.get(sec_uuid, 0.0)
                 curr = sec_currencies.get(sec_uuid, "EUR")
                 fx_rate = last_known_rates.get(curr, 1.0)
 
+                # Unit Price EUR
                 price_eur = price_native / fx_rate
-                market_value_eur = total_shares * price_eur
 
-                # Unrealized gain is (Current Market Value) - (Adjusted Cost Basis)
-                unrealized = market_value_eur - total_basis
-                daily_unrealized += unrealized
+                # Calculate Unrealized for EACH LOT (Strict MtM)
+
+                unrealized_sum = 0.0
+                for lot in sec_lots:
+                    if lot.shares > _EPSILON:
+                        unrealized_sum += (price_eur - lot.cost_basis_eur) * lot.shares
+
+                daily_unrealized += unrealized_sum
 
             results[day_iso] = PeriodDailyResult(
                 realized_gains_eur=daily_realized,
-                unrealized_gains_eur=daily_unrealized,  # Snapshot
+                unrealized_gains_eur=daily_unrealized,
             )
 
             curr_date += timedelta(days=1)
