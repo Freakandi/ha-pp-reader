@@ -16,6 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 # Constants for Transaction Unit Types
 UNIT_TYPE_TAX = 1
 UNIT_TYPE_FEE = 2
+MAX_EPOCH_DAY_CUTOFF = 100_000
 
 
 @dataclass(slots=True)
@@ -130,9 +131,41 @@ class BackdatingEngine:
         try:
             df_prices = pd.read_sql_query(query_prices, self.conn)
             if not df_prices.empty:
-                df_prices["date"] = pd.to_datetime(
-                    df_prices["date"], unit="D", origin="unix"
-                ).dt.tz_localize("UTC")
+                # Handle different date formats safely by creating a new column
+                df_prices["date_num"] = pd.to_numeric(
+                    df_prices["date"], errors="coerce"
+                )
+                df_prices["clean_date"] = pd.Series(
+                    pd.NaT, index=df_prices.index, dtype="datetime64[ns, UTC]"
+                )
+
+                # 1. YYYYMMDD (large integers)
+                mask_yyyymmdd = df_prices["date_num"] > MAX_EPOCH_DAY_CUTOFF
+                if mask_yyyymmdd.any():
+                    df_prices.loc[mask_yyyymmdd, "clean_date"] = pd.to_datetime(
+                        df_prices.loc[mask_yyyymmdd, "date_num"],
+                        format="%Y%m%d",
+                        utc=True,
+                    )
+
+                # 2. Epoch Days (small integers)
+                mask_epoch = (df_prices["date_num"] <= MAX_EPOCH_DAY_CUTOFF) & (
+                    df_prices["date_num"].notna()
+                )
+                if mask_epoch.any():
+                    df_prices.loc[mask_epoch, "clean_date"] = pd.to_datetime(
+                        df_prices.loc[mask_epoch, "date_num"], unit="D", origin="unix"
+                    ).dt.tz_localize("UTC")
+
+                # 3. Strings / ISO format (anything not caught above)
+                mask_other = df_prices["clean_date"].isna()
+                if mask_other.any():
+                    df_prices.loc[mask_other, "clean_date"] = pd.to_datetime(
+                        df_prices.loc[mask_other, "date"], utc=True, errors="coerce"
+                    )
+
+                df_prices["date"] = df_prices["clean_date"]
+                df_prices = df_prices.drop(columns=["date_num", "clean_date"])
         except pd.errors.DatabaseError:
             df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
 
@@ -333,8 +366,8 @@ class BackdatingEngine:
         result["performance_neutral_movements"] = neutral_flow.round(2)
 
         # Fill schema defaults
-        result["portfolio_wealth_eur"] = 0.0
-        result["account_wealth_eur"] = 0.0
+        result["portfolio_wealth_eur"] = daily_sec_wealth.round(2)
+        result["account_wealth_eur"] = daily_cash_wealth.round(2)
         result["inbound_transfers_eur"] = 0.0
         result["outbound_transfers_eur"] = 0.0
         result["fx_coverage_ratio"] = 1.0

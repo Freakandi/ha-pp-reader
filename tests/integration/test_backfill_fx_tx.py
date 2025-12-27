@@ -93,8 +93,8 @@ def test_backfill_skips_missing_rate(
 
     # Avoid real FX fetching during test.
     monkeypatch.setattr(
-        "custom_components.pp_reader.data.backfill_fx_tx.ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        "custom_components.pp_reader.currencies.fx.ensure_exchange_rates_for_dates_sync",
+        lambda dates, currencies, db_path, allow_fetch=False: None,
     )
 
     with sqlite3.connect(db_path) as conn:

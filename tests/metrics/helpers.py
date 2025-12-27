@@ -168,10 +168,10 @@ def install_fx_stubs(monkeypatch: Any, *, rate: float = FX_TEST_RATE) -> None:
         return {"USD": _build_record(reference_date)}
 
     monkeypatch.setattr(
-        "custom_components.pp_reader.util.currency.ensure_exchange_rates_for_dates_sync",
+        "custom_components.pp_reader.currencies.fx.ensure_exchange_rates_for_dates_sync",
         _ensure_sync,
     )
     monkeypatch.setattr(
-        "custom_components.pp_reader.util.currency.load_cached_rate_records_sync",
+        "custom_components.pp_reader.currencies.fx.load_cached_rate_records_sync",
         _load_sync,
     )

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from custom_components.pp_reader.currencies import fx
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic import securities
 
@@ -44,12 +45,12 @@ def _make_transaction(
 def _patch_fx(monkeypatch: pytest.MonkeyPatch, rate: float) -> None:
     """Stub FX helpers used during purchase aggregation."""
     monkeypatch.setattr(
-        securities,
+        fx,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda dates, currencies, db_path, conn=None: None,
     )
     monkeypatch.setattr(
-        securities,
+        fx,
         "load_latest_rates_sync",
         lambda reference_date, db_path: {"USD": rate, "CHF": rate},
     )
@@ -58,14 +59,20 @@ def _patch_fx(monkeypatch: pytest.MonkeyPatch, rate: float) -> None:
 def _patch_fx_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub FX helpers so no rates are returned."""
     monkeypatch.setattr(
-        securities,
+        fx,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda dates, currencies, db_path, conn=None: None,
     )
     monkeypatch.setattr(
-        securities,
+        fx,
         "load_latest_rates_sync",
         lambda reference_date, db_path: {},
+    )
+    # Patch fallback logic too
+    monkeypatch.setattr(
+        fx,
+        "get_closest_rate_sync",
+        lambda db_path, currency, target_date: None,
     )
 
 

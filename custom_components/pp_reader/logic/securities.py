@@ -14,11 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from custom_components.pp_reader.currencies.fx import (
-    ensure_exchange_rates_for_dates_sync,
-    get_closest_rate_sync,
-    load_latest_rates_sync,
-)
+from custom_components.pp_reader.currencies import fx
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.util.currency import (
@@ -217,12 +213,12 @@ def _determine_exchange_rate(
     if transaction.currency_code == "EUR":
         return 1.0, 1.0
 
-    fx_rates = load_latest_rates_sync(tx_date, db_path)
+    fx_rates = fx.load_latest_rates_sync(tx_date, db_path)
     rate = fx_rates.get(transaction.currency_code)
 
     if not rate:
         # Try deep fallback
-        fallback = get_closest_rate_sync(
+        fallback = fx.get_closest_rate_sync(
             db_path,
             transaction.currency_code,
             tx_date.strftime("%Y-%m-%d"),
@@ -440,7 +436,7 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915, C901
 
     fx_dates, fx_currencies = _collect_fx_requirements(transactions)
     if fx_currencies:
-        ensure_exchange_rates_for_dates_sync(
+        fx.ensure_exchange_rates_for_dates_sync(
             list(fx_dates), fx_currencies, db_path, conn=conn
         )
 
@@ -633,10 +629,12 @@ def db_calculate_holdings_value(
     # Stelle sicher, dass die Wechselkurse verfügbar sind
     # Stelle sicher, dass die Wechselkurse verfügbar sind
     today = datetime.now()  # noqa: DTZ005
-    ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path, conn=conn)
+    fx.ensure_exchange_rates_for_dates_sync(
+        [today], needed_currencies, db_path, conn=conn
+    )
 
     # Lade die Wechselkurse
-    fx_rates = load_latest_rates_sync(today, db_path)
+    fx_rates = fx.load_latest_rates_sync(today, db_path)
 
     # Lade die aktuellen Preise der Wertpapiere aus der Tabelle "securities"
     cur.execute("SELECT uuid, last_price FROM securities")
@@ -781,7 +779,7 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
     dates = {datetime.fromisoformat(tx.date) for tx in transactions}
 
     if needed_currencies:
-        ensure_exchange_rates_for_dates_sync(
+        fx.ensure_exchange_rates_for_dates_sync(
             list(dates), list(needed_currencies), db_path
         )
 
@@ -789,8 +787,8 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
     # NEW: Load LATEST exchange rates (today) to convert current_price -> EUR
     # -------------------------------------------------------------------------
     today = datetime.now()  # noqa: DTZ005
-    ensure_exchange_rates_for_dates_sync([today], list(needed_currencies), db_path)
-    latest_rates = load_latest_rates_sync(today, db_path)
+    fx.ensure_exchange_rates_for_dates_sync([today], list(needed_currencies), db_path)
+    latest_rates = fx.load_latest_rates_sync(today, db_path)
     # -------------------------------------------------------------------------
 
     missing_rates_logged: set[tuple[str, datetime]] = set()
@@ -889,7 +887,7 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
                     # Get rate for security currency
                     # We need to manually load it since _determine_exchange_rate
                     # works on Transaction
-                    fx_rates = load_latest_rates_sync(tx_date, db_path)
+                    fx_rates = fx.load_latest_rates_sync(tx_date, db_path)
                     sec_rate = fx_rates.get(sec_ccy)
                     if sec_rate:
                         sell_price_native = sell_price * sec_rate

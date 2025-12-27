@@ -11,9 +11,9 @@ from custom_components.pp_reader.logic.securities import (
 
 
 @patch(
-    "custom_components.pp_reader.logic.securities.ensure_exchange_rates_for_dates_sync"
+    "custom_components.pp_reader.currencies.fx.ensure_exchange_rates_for_dates_sync"
 )
-@patch("custom_components.pp_reader.logic.securities.load_latest_rates_sync")
+@patch("custom_components.pp_reader.currencies.fx.load_latest_rates_sync")
 def test_calculate_realized_performance_fifo(mock_load_rates, mock_ensure_rates):
     """Test FIFO logic for realized performance calculation."""
     mock_load_rates.return_value = {}
@@ -54,7 +54,7 @@ def test_calculate_realized_performance_fifo(mock_load_rates, mock_ensure_rates)
             uuid="t3",
             type=1,
             date="2023-01-03T10:00:00",
-            shares=-500000000,
+            shares=500000000,
             amount=-60000,
             security="sec1",
             portfolio="port1",
@@ -68,7 +68,7 @@ def test_calculate_realized_performance_fifo(mock_load_rates, mock_ensure_rates)
             uuid="t4",
             type=1,
             date="2023-01-04T10:00:00",
-            shares=-1000000000,
+            shares=1000000000,
             amount=-130000,
             security="sec1",
             portfolio="port1",
@@ -87,6 +87,7 @@ def test_calculate_realized_performance_fifo(mock_load_rates, mock_ensure_rates)
         {
             "uuid": "sec1",
             "name": "Test Security",
+            "currency_code": "EUR",
             "ticker_symbol": "TEST",
             "last_price": 13500,
         }
