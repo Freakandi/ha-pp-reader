@@ -404,13 +404,30 @@ export class DateRangePicker {
         monthContainer.className = 'drp-dropdown-container';
         const monthBtn = document.createElement('button');
         monthBtn.className = 'drp-header-btn';
+        monthBtn.setAttribute('aria-haspopup', 'true');
+        monthBtn.setAttribute('aria-expanded', 'false');
         monthBtn.innerHTML = `<span>${date.toLocaleDateString('de-DE', { month: 'long' })}</span> <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`;
         monthBtn.onclick = (e) => {
             e.stopPropagation();
+            // Reset ALL expanded states before toggling
+            const allHeaders = monthBtn.closest('.drp-calendar-header')?.querySelectorAll('.drp-header-btn') ?? [];
+
             this.toggleMonthDropdown(monthContainer, date.getMonth(), (newMonth) => {
                 const targetYear = date.getFullYear();
                 this.viewDate = new Date(targetYear, newMonth, 1);
                 this.renderCalendars();
+            });
+
+            // Update aria-expanded based on if it was closed or opened
+            const isNowOpen = this.activeDropdown && monthContainer.contains(this.activeDropdown);
+
+            // Sync all buttons
+            allHeaders.forEach(btn => {
+                if (btn === monthBtn) {
+                     btn.setAttribute('aria-expanded', isNowOpen ? 'true' : 'false');
+                } else {
+                     btn.setAttribute('aria-expanded', 'false');
+                }
             });
         };
         monthContainer.appendChild(monthBtn);
@@ -420,9 +437,14 @@ export class DateRangePicker {
         yearContainer.className = 'drp-dropdown-container';
         const yearBtn = document.createElement('button');
         yearBtn.className = 'drp-header-btn';
+        yearBtn.setAttribute('aria-haspopup', 'true');
+        yearBtn.setAttribute('aria-expanded', 'false');
         yearBtn.innerHTML = `<span>${String(date.getFullYear())}</span> <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`;
         yearBtn.onclick = (e) => {
             e.stopPropagation();
+            // Reset ALL expanded states before toggling
+            const allHeaders = yearBtn.closest('.drp-calendar-header')?.querySelectorAll('.drp-header-btn') ?? [];
+
             this.toggleYearDropdown(yearContainer, date.getFullYear(), (newYear) => {
                 // Keep month, change year
                 // If it's right calendar, we also want to jump to that year as viewDate
@@ -430,6 +452,17 @@ export class DateRangePicker {
                 const targetMonth = date.getMonth();
                 this.viewDate = new Date(newYear, targetMonth, 1);
                 this.renderCalendars();
+            });
+
+            const isNowOpen = this.activeDropdown && yearContainer.contains(this.activeDropdown);
+
+            // Sync all buttons
+            allHeaders.forEach(btn => {
+                if (btn === yearBtn) {
+                     btn.setAttribute('aria-expanded', isNowOpen ? 'true' : 'false');
+                } else {
+                     btn.setAttribute('aria-expanded', 'false');
+                }
             });
         };
         yearContainer.appendChild(yearBtn);
@@ -563,6 +596,7 @@ export class DateRangePicker {
             item.className = 'drp-dropdown-item';
             if (idx === currentMonth) {
                 item.classList.add('selected');
+                item.setAttribute('aria-current', 'true');
             }
             item.textContent = m;
             item.onclick = (e) => {
@@ -606,6 +640,7 @@ export class DateRangePicker {
             item.className = 'drp-dropdown-item';
             if (y === currentYear) {
                 item.classList.add('selected');
+                item.setAttribute('aria-current', 'true');
             }
             item.textContent = y.toString();
             item.onclick = (e) => {
