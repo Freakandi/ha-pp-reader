@@ -9,3 +9,7 @@
 ## 2025-05-27 - [Semantic Icons for Screen Readers]
 **Learning:** Purely visual icons (like lock/status indicators) are invisible to screen readers unless explicitly wrapped in a container with `role='img'` and a descriptive `aria-label`. The internal icon should be hidden (`aria-hidden='true'`) to prevent redundant or confusing announcements.
 **Action:** Always wrap semantic status icons in a labelled span and hide the decorative icon element itself.
+
+## 2025-06-05 - [Visual Selection vs ARIA State]
+**Learning:** Custom dropdowns often use CSS classes like `.selected` for visual indication, but this is invisible to screen readers. Elements representing a "current selection" in a list or grid (like a calendar or list of months) must use `aria-current="true"` (or `aria-selected` if a listbox) to programmatically communicate the active state.
+**Action:** When applying a `.selected` class to an interactive element, always check if a corresponding ARIA attribute (`aria-current`, `aria-selected`, `aria-pressed`) is needed.
