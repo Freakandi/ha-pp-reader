@@ -4,7 +4,7 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -289,7 +289,9 @@ class BackdatingEngine:
         )
 
         # --- 6. WEALTH CALCULATION (CASH) ---
-        daily_cash_wealth = self._calculate_cash_wealth(df_txs, fx_pivot, date_range)
+        daily_cash_wealth = self._calculate_cash_wealth(
+            df_txs, fx_pivot, fx_long, date_range
+        )
 
         # --- 7. ASSEMBLE RESULT ---
         result = pd.DataFrame(index=date_range)
@@ -627,6 +629,7 @@ class BackdatingEngine:
         self,
         df_txs: pd.DataFrame,
         fx_pivot: pd.DataFrame,
+        fx_long: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> pd.Series:
         daily_cash_wealth = pd.Series(0.0, index=date_range)
@@ -655,62 +658,107 @@ class BackdatingEngine:
         df_transfers_out = df_transfers.copy()
         df_transfers_in = df_transfers.copy()
 
-        # FX Rates for conversion derived from fx_pivot
-        # We need a lookup function. Since this runs on vectorized DataFrames,
-        # we can pre-join FX? No, row-based logic is tricky here.
-        # But we can use apply().
-
-        # Prepare FX lookup dictionary for apply() speed
-
-        # Optimization: We only need to fix the Amount/Currency for the Source Leg
-        # if Source Currency != Transaction Currency.
-
-        def fix_transfer_outflow(row: Any) -> Any:
-            source_acc = row["account"]
-            if not source_acc:
-                return row
-
-            source_curr = account_currencies.get(source_acc, "EUR")
-            tx_curr = row["currency_code"]
-
-            # If currencies match, no change needed (standard logic works)
-            if source_curr == tx_curr:
-                return row
-
-            # Cross-Currency: We need to convert the amount to Source Currency
-            # The transaction amount is in 'tx_curr'.
-            # We need to find the rate for 'tx_curr' on 'date'
-            # AND 'source_curr' on 'date'.
-
-            d = row["date"]
-
-            # Helper to get rate from pivot
-            def get_rate(c: str) -> float:
-                if c == "EUR":
-                    return 1.0
-                try:
-                    return fx_pivot.loc[d, c]
-                except (KeyError, IndexError):
-                    return 1.0
-
-            rate_tx = get_rate(tx_curr)
-            rate_source = get_rate(source_curr)
-
-            amount_target = row["amount"]
-
-            # Value in EUR
-            val_eur = (amount_target / rate_tx) if rate_tx else 0.0
-
-            # Value in Source
-            amount_source = val_eur * rate_source
-
-            # Update Row
-            row["amount"] = amount_source
-            row["currency_code"] = source_curr
-            return row
-
+        # Vectorized Cross-Currency Calculation (Replacing apply())
         if not df_transfers_out.empty:
-            df_transfers_out = df_transfers_out.apply(fix_transfer_outflow, axis=1)
+            # Map Source Currency
+            df_transfers_out["source_currency"] = (
+                df_transfers_out["account"].map(account_currencies).fillna("EUR")
+            )
+
+            # Mask identifying cross-currency transactions
+            # We must ensure we ignore rows with missing accounts (mirroring legacy
+            # logic)
+            mask_cross = (
+                df_transfers_out["currency_code"] != df_transfers_out["source_currency"]
+            ) & df_transfers_out["account"].notna()
+
+            # Optimization: Only process if there ARE cross-currency transfers
+            if mask_cross.any():
+                # Prepare Rates (Rate Transaction Currency, Rate Source Currency)
+                # We need to merge twice with fx_long
+
+                # 1. Rate for Transaction Currency
+                # Join on [date, currency_code]
+                df_merged = df_transfers_out.merge(
+                    fx_long.rename(columns={"daily_fx_rate": "rate_tx"}),
+                    on=["date", "currency_code"],
+                    how="left",
+                )
+
+                # 2. Rate for Source Currency
+                # Join on [date, source_currency] -> needs rename/mapping
+                df_merged = df_merged.merge(
+                    fx_long.rename(
+                        columns={
+                            "currency_code": "source_currency",
+                            "daily_fx_rate": "rate_source",
+                        }
+                    ),
+                    on=["date", "source_currency"],
+                    how="left",
+                )
+
+                # Fill Missing Rates with 1.0 (EUR or default)
+                df_merged["rate_tx"] = df_merged["rate_tx"].fillna(1.0)
+                df_merged["rate_source"] = df_merged["rate_source"].fillna(1.0)
+
+                # Calculate New Amount (Vectorized)
+                # Amount (Source) = (Amount(Tx) / Rate(Tx)) * Rate(Source)
+                # Apply mask to calculation
+                # (We do it on all rows in the merged df to keep indices aligned,
+                # then update original)
+
+                df_merged["amount_new"] = (
+                    df_merged["amount"] / df_merged["rate_tx"]
+                ) * df_merged["rate_source"]
+
+                # We must update the original dataframe 'df_transfers_out'.
+                # Since we filtered 'df_cross' from 'df_transfers_out', we can use
+                # the 'uuid' (which is unique) to map the calculated values back.
+
+                df_cross = df_transfers_out[mask_cross].copy()
+
+                # Merge 1
+                df_cross = df_cross.merge(
+                    fx_long.rename(columns={"daily_fx_rate": "rate_tx"}),
+                    on=["date", "currency_code"],
+                    how="left",
+                )
+                # Merge 2
+                df_cross = df_cross.merge(
+                    fx_long.rename(
+                        columns={
+                            "currency_code": "source_currency",
+                            "daily_fx_rate": "rate_source",
+                        }
+                    ),
+                    on=["date", "source_currency"],
+                    how="left",
+                )
+
+                df_cross["rate_tx"] = df_cross["rate_tx"].fillna(1.0)
+                df_cross["rate_source"] = df_cross["rate_source"].fillna(1.0)
+                df_cross["amount_calc"] = (
+                    df_cross["amount"] / df_cross["rate_tx"]
+                ) * df_cross["rate_source"]
+
+                # Now update original df_transfers_out.
+                # Problem: merge drops index (or resets it?).
+                # If we used 'uuid' as merge key we could set index back.
+                # df_transfers has 'uuid'.
+                # Let's set index to uuid before operations.
+
+                # Update logic using uuid mapping
+                updates = df_cross.set_index("uuid")["amount_calc"]
+                currency_updates = df_cross.set_index("uuid")["source_currency"]
+
+                # Apply updates
+                # We need to match rows in df_transfers_out by UUID.
+                # Set index temporarily
+                df_transfers_out = df_transfers_out.set_index("uuid")
+                df_transfers_out.update(updates.rename("amount"))
+                df_transfers_out.update(currency_updates.rename("currency_code"))
+                df_transfers_out = df_transfers_out.reset_index()
 
         # Inflow leg (Target)
         if not df_transfers_in.empty:
