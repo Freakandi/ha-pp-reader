@@ -21,7 +21,7 @@ import type {
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
 import { roundCurrency } from '../utils/currency';
-import { escapeHtml } from '../utils/html';
+import { escapeAttribute, escapeHtml } from '../utils/html';
 import { normalizePerformancePayload } from '../utils/performance';
 import type {
   AccountSummary,
@@ -394,7 +394,8 @@ function emitPortfolioPositionsDiagnostics(
 }
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
   const safeError = escapeHtml(formatErrorMessage(error));
-  return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${portfolioUuid}">Erneut laden</button></div>`;
+  const safeUuid = escapeAttribute(portfolioUuid);
+  return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${safeUuid}">Erneut laden</button></div>`;
 }
 
 function restoreSortAndInit(containerEl: HTMLElement, rootEl: QueryRoot, pid: string): void {
