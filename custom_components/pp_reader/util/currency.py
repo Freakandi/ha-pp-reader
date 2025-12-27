@@ -248,18 +248,7 @@ def get_closest_rate_sync(
     target_date: str,
 ) -> tuple[float, str] | None:
     """Proxy to fx.get_closest_rate_sync."""
-    helper = _load_fx_helper("get_closest_rate_sync")
-    return helper(db_path, currency, target_date)
-
-
-CACHED_FX_HELPERS: dict[str, Any] = {}
-
-
-def _load_fx_helper(name: str) -> Any:
-    """Dynamically import FX helper functions on first access."""
-    if name not in CACHED_FX_HELPERS:
-        CACHED_FX_HELPERS[name] = getattr(fx, name)
-    return CACHED_FX_HELPERS[name]
+    return fx.get_closest_rate_sync(db_path, currency, target_date)
 
 
 def ensure_exchange_rates_for_dates_sync(
@@ -268,10 +257,11 @@ def ensure_exchange_rates_for_dates_sync(
     db_path: Path,
     conn: sqlite3.Connection | None = None,
 ) -> None:
-    """Proxy to the FX helper without importing it at module import time."""
-    helper = _load_fx_helper("ensure_exchange_rates_for_dates_sync")
+    """Proxy to the FX helper."""
     # Default behavior: allow_fetch=False
-    result = helper(dates, currencies, db_path, conn=conn)
+    result = fx.ensure_exchange_rates_for_dates_sync(
+        list(dates), currencies, db_path, conn=conn
+    )
     if asyncio.iscoroutine(result):
         loop = asyncio.new_event_loop()
         try:
@@ -286,6 +276,5 @@ def ensure_exchange_rates_for_dates_sync(
 def load_cached_rate_records_sync(
     reference_date: datetime, db_path: Path
 ) -> Mapping[str, Any]:
-    """Proxy to the FX cache reader while avoiding circular imports."""
-    helper = _load_fx_helper("load_cached_rate_records_sync")
-    return helper(reference_date, db_path)
+    """Proxy to the FX cache reader."""
+    return fx.load_cached_rate_records_sync(reference_date, db_path)
