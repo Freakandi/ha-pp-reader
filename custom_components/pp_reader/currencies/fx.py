@@ -135,6 +135,29 @@ def _safe_float(value: Any) -> float | None:
     return numeric
 
 
+def _normalize_date_input(value: date | datetime | str) -> str:
+    """Ensure date is in ISO YYYY-MM-DD string format."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            message = "date string must not be empty"
+            raise ValueError(message)
+        return stripped
+    msg = f"Unsupported date type: {type(value)!r}"
+    raise TypeError(msg)
+
+
+def _iter_expected_dates(start: date, end: date) -> list[str]:
+    total_days = (end - start).days + 1
+    return [
+        (start + timedelta(days=offset)).isoformat() for offset in range(total_days)
+    ]
+
+
 # --- Hilfsfunktionen ---
 
 
@@ -1139,3 +1162,86 @@ async def async_prepare_exchange_rates_for_backdating(
         schedule,
         emit_progress=emit_progress,
     )
+
+
+async def fetch_fx_range(
+    currency: str,
+    start_date: date | datetime | str,
+    end_date: date | datetime | str,
+    *,
+    provider: str = "ecb",
+) -> list[FxRateRecord]:
+    """
+    Fetch historical FX rates for a currency between two dates (inclusive).
+
+    Returns a list of FxRateRecord entries; missing weekend/holiday dates are
+    logged and skipped instead of raising errors.
+    """
+    # Normalize inputs
+    if not currency:
+        message = "currency must be provided"
+        raise ValueError(message)
+    normalized_currency = currency.strip().upper()
+
+    start_str = _normalize_date_input(start_date)
+    end_str = _normalize_date_input(end_date)
+    start_dt = datetime.fromisoformat(start_str).date()
+    end_dt = datetime.fromisoformat(end_str).date()
+
+    if start_dt > end_dt:
+        message = "start_date must be on or before end_date"
+        raise ValueError(message)
+
+    fetched_at = (
+        datetime.now(tz=UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    provenance = json.dumps(
+        {
+            "provider": provider,
+            "range_start": start_str,
+            "range_end": end_str,
+        },
+        sort_keys=True,
+    )
+
+    records: list[FxRateRecord] = []
+
+    # Re-use _fetch_exchange_rates_range_aiohttp logic but with fresh session
+    async with aiohttp.ClientSession() as session:
+        # Note: _fetch_exchange_rates_range_aiohttp returns dict[date_str, rate]
+        rates_map = await _fetch_exchange_rates_range_aiohttp(
+            session, normalized_currency, start_str, end_str
+        )
+
+    # Convert to FxRateRecord list
+    observed_dates = set()
+    for day, rate_value in sorted(rates_map.items()):
+        observed_dates.add(day)
+        records.append(
+            FxRateRecord(
+                date=day,
+                currency=normalized_currency,
+                rate=rate_value,
+                fetched_at=fetched_at,
+                data_source=provider,
+                provider=FRANKFURTER_PROVIDER,
+                provenance=provenance,
+            )
+        )
+
+    # Check for gaps
+    expected_dates = set(_iter_expected_dates(start_dt, end_dt))
+    missing_dates = sorted(expected_dates - observed_dates)
+    if missing_dates:
+        preview = ", ".join(missing_dates[:5])
+        _LOGGER.warning(
+            (
+                "FX range for %s missing %d day(s) (likely weekend/holiday); "
+                "first gaps: %s"
+            ),
+            normalized_currency,
+            len(missing_dates),
+            preview,
+        )
+
+    return records

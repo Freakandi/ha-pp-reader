@@ -10,11 +10,11 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from custom_components.pp_reader.currencies.fx import fetch_fx_range
 from custom_components.pp_reader.data.db_access import (
     FxRateRecord,
     upsert_fx_rates_chunked,
 )
-from custom_components.pp_reader.util.fx import fetch_fx_range
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence

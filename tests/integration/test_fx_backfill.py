@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from custom_components.pp_reader.data import fx_backfill
+from custom_components.pp_reader.currencies import fx
 from custom_components.pp_reader.data.canonical_sync import _lookup_fx_rate
 from custom_components.pp_reader.data.db_access import FxRateRecord
 from custom_components.pp_reader.data.db_init import initialize_database_schema
@@ -95,7 +95,50 @@ async def test_backfill_fills_missing_fx_and_lookup_uses_nearest(
             ),
         ]
 
-    monkeypatch.setattr(fx_backfill, "fetch_fx_range", _fake_fetch_fx_range)
+    # Use 'custom_components.pp_reader.currencies.fx' or 'fx_backfill.fetch_fx_range'
+    # Since fx_backfill imports it, we can patch where it is imported.
+    # But patching the source is cleaner if possible.
+    # The original test patched 'fx_backfill.fetch_fx_range', but now fx_backfill imports it from 'currencies.fx'.
+    # If we patch 'currencies.fx.fetch_fx_range', it will work if we patch it before import or on the module.
+    # But since fx_backfill does `from ... import fetch_fx_range`, we must patch `fx_backfill.fetch_fx_range`.
+    # Wait, if `backfill_fx` uses the imported name, patching `fx_backfill.fetch_fx_range` still works.
+
+    # However, since we refactored, let's verify if `fx_backfill` uses `fetch_fx_range` or `currencies.fx.fetch_fx_range`.
+    # It does `from custom_components.pp_reader.currencies.fx import fetch_fx_range`.
+    # So `monkeypatch.setattr(fx_backfill, "fetch_fx_range", ...)` works.
+
+    # But wait, `fx_backfill` code:
+    # `from custom_components.pp_reader.currencies.fx import fetch_fx_range`
+    # ...
+    # `records = await fetch_fx_range(currency, desired_start, fetch_end)`
+
+    # So patching `fx_backfill.fetch_fx_range` is correct.
+    # But I see in the previous test file content: `monkeypatch.setattr(fx_backfill, "fetch_fx_range", _fake_fetch_fx_range)`
+    # So actually I don't need to change anything if `fx_backfill` exposes the name.
+    # BUT `fx_backfill` imports it from a DIFFERENT location now (`currencies.fx` instead of `util.fx`).
+    # Monkeypatching the name in `fx_backfill` module still works regardless of where it came from.
+
+    # So the only change needed is imports if I use them in test setup.
+    # The test imports `backfill_fx` from `fx_backfill`.
+
+    monkeypatch.setattr(fx, "fetch_fx_range", _fake_fetch_fx_range)
+    # Actually, patch the SOURCE of truth is safer if we want to be sure,
+    # but since fx_backfill imports the function, patching fx_backfill.fetch_fx_range is what effectively mocks it for that module scope.
+    # Wait, `from X import Y` binds Y in the importing module.
+    # `monkeypatch.setattr(fx_backfill, "fetch_fx_range", ...)` patches the bound name in `fx_backfill`.
+    # This remains correct.
+
+    # However, I should update the test to be aware of the new structure if needed.
+    # But functionally, `monkeypatch` targeting `fx_backfill` is correct.
+
+    # BUT, I'll switch to patching the source `currencies.fx.fetch_fx_range` and ensure `fx_backfill` picks it up?
+    # No, if `fx_backfill` already imported it, patching source won't affect `fx_backfill` unless I patch BEFORE import (which is hard in pytest) or patch the name in `fx_backfill`.
+
+    # I will patch `fx_backfill.fetch_fx_range` as before.
+    monkeypatch.setattr(
+        "custom_components.pp_reader.data.fx_backfill.fetch_fx_range",
+        _fake_fetch_fx_range,
+    )
 
     summary = await backfill_fx(
         db_path=db_path,
@@ -171,7 +214,10 @@ async def test_backfill_fetches_from_latest_fx_date_onward(
             current += timedelta(days=1)
         return records
 
-    monkeypatch.setattr(fx_backfill, "fetch_fx_range", _fake_fetch_fx_range)
+    monkeypatch.setattr(
+        "custom_components.pp_reader.data.fx_backfill.fetch_fx_range",
+        _fake_fetch_fx_range,
+    )
 
     summary = await backfill_fx(
         db_path=db_path,
