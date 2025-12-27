@@ -121,15 +121,15 @@ function renderTrend(value: number, formatted: string): string {
 function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
   return `
     <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0">${escapeHtml(labelTop)}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0">${escapeHtml(labelBottom)}</span>
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
     </div>
   `;
 }
 
 function createSimpleSortHeader(label: string, key: string): string {
   // Use a pseudo-selector or data-key for simple columns
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0">${escapeHtml(label)}</span>`;
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
 }
 
 function renderTradesTable(trades: readonly RealizedTrade[]): string {
