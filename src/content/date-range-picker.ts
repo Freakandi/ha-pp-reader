@@ -511,6 +511,9 @@ export class DateRangePicker {
         // Days Grid
         const grid = document.createElement('div');
         grid.className = 'drp-days-grid';
+        grid.setAttribute('role', 'listbox');
+        grid.setAttribute('aria-multiselectable', 'true');
+        grid.setAttribute('aria-label', 'Kalender');
 
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
@@ -533,7 +536,7 @@ export class DateRangePicker {
             const cell = document.createElement('div');
             cell.className = 'drp-day';
             cell.textContent = d.toString();
-            cell.setAttribute('role', 'button');
+            cell.setAttribute('role', 'option');
             cell.tabIndex = 0;
 
             // Labels and A11y
@@ -549,6 +552,9 @@ export class DateRangePicker {
             else if (t === e) label += ' (Enddatum)';
             else if (t > s && t < e) label += ' (im Zeitraum)';
             cell.setAttribute('aria-label', label);
+
+            const isSelected = (t === s || t === e);
+            cell.setAttribute('aria-selected', isSelected ? 'true' : 'false');
 
             this.applyDayClasses(cell, current);
 
