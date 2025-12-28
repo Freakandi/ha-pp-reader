@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from contextlib import suppress
 from datetime import datetime
 from math import isfinite
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from custom_components.pp_reader.currencies import fx
 
 if TYPE_CHECKING:
-    import sqlite3
-    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
 __all__ = [
@@ -23,10 +19,7 @@ __all__ = [
     "PRICE_DECIMALS",
     "PRICE_SCALE",
     "cent_to_eur",
-    "ensure_exchange_rates_for_dates_sync",
     "eur_to_cent",
-    "get_closest_rate_sync",
-    "load_cached_rate_records_sync",
     "normalize_price_to_eur_sync",
     "normalize_raw_price",
     "round_currency",
@@ -151,7 +144,7 @@ def _resolve_fallback_rate(
     reference_date: datetime,
 ) -> float | None:
     """Resolve a fallback exchange rate using the closest available record."""
-    fallback = get_closest_rate_sync(
+    fallback = fx.get_closest_rate_sync(
         db_path,
         currency_code,
         reference_date.strftime("%Y-%m-%d"),
@@ -210,10 +203,10 @@ def normalize_price_to_eur_sync(
     # Try exact match first
     try:
         # Note: allow_fetch defaults to False in the implementation, so this is safe
-        ensure_exchange_rates_for_dates_sync(
+        fx.ensure_exchange_rates_for_dates_sync(
             [reference_date], {normalized_currency}, db_path
         )
-        fx_records = load_cached_rate_records_sync(reference_date, db_path)
+        fx_records = fx.load_cached_rate_records_sync(reference_date, db_path)
     except Exception:  # pragma: no cover - defensive
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
         return None
@@ -240,41 +233,3 @@ def normalize_price_to_eur_sync(
         return None
 
     return round_price(normalized, decimals=decimals)
-
-
-def get_closest_rate_sync(
-    db_path: Path,
-    currency: str,
-    target_date: str,
-) -> tuple[float, str] | None:
-    """Proxy to fx.get_closest_rate_sync."""
-    return fx.get_closest_rate_sync(db_path, currency, target_date)
-
-
-def ensure_exchange_rates_for_dates_sync(
-    dates: Iterable[datetime],
-    currencies: set[str],
-    db_path: Path,
-    conn: sqlite3.Connection | None = None,
-) -> None:
-    """Proxy to the FX helper."""
-    # Default behavior: allow_fetch=False
-    result = fx.ensure_exchange_rates_for_dates_sync(
-        list(dates), currencies, db_path, conn=conn
-    )
-    if asyncio.iscoroutine(result):
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(result)
-        finally:
-            asyncio.set_event_loop(None)
-            with suppress(Exception):
-                loop.close()
-
-
-def load_cached_rate_records_sync(
-    reference_date: datetime, db_path: Path
-) -> Mapping[str, Any]:
-    """Proxy to the FX cache reader."""
-    return fx.load_cached_rate_records_sync(reference_date, db_path)
