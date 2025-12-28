@@ -309,8 +309,6 @@ def _load_relevant_transactions(
         tuple[date, str, str, float, int, str, int, int, int, float | None]
     ] = []
 
-    date_parse_cache: dict[Any, date | None] = {}
-
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.security or not tx.portfolio:
             continue
@@ -331,13 +329,7 @@ def _load_relevant_transactions(
         if tx.type not in _PURCHASE_TYPES | _SALE_TYPES:
             continue
 
-        raw_date = tx.date
-        if raw_date in date_parse_cache:
-            parsed_date = date_parse_cache[raw_date]
-        else:
-            parsed_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
-            date_parse_cache[raw_date] = parsed_date
-
+        parsed_date = fx_module._parse_date_value(tx.date)  # noqa: SLF001
         if parsed_date is None:
             continue
 
@@ -452,19 +444,12 @@ def _load_price_cache(
             """
         ).fetchall()
 
-    # Cache both the date object and its ISO string representation
-    date_parse_cache: dict[Any, tuple[date | None, str | None]] = {}
-
     for row in rows:
         security_uuid = row["security_uuid"]
         raw_date = row["date"]
 
-        if raw_date in date_parse_cache:
-            price_date, price_date_iso = date_parse_cache[raw_date]
-        else:
-            price_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
-            price_date_iso = price_date.isoformat() if price_date else None
-            date_parse_cache[raw_date] = (price_date, price_date_iso)
+        price_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
+        price_date_iso = price_date.isoformat() if price_date else None
 
         if security_uuid is None or price_date is None:
             continue

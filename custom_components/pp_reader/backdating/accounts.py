@@ -218,7 +218,6 @@ def _load_relevant_transactions(
 ) -> list[tuple[date, db_access.Transaction]]:
     """Return account-linked transactions excluding retired accounts."""
     relevant: list[tuple[date, db_access.Transaction]] = []
-    date_parse_cache: dict[Any, date | None] = {}
 
     for tx in db_access.get_transactions(db_path=db_path):
         if not tx.account and not tx.other_account:
@@ -229,13 +228,7 @@ def _load_relevant_transactions(
             continue
         # Removed retired check to include history
 
-        raw_date = tx.date
-        if raw_date in date_parse_cache:
-            parsed_date = date_parse_cache[raw_date]
-        else:
-            parsed_date = fx_module._parse_date_value(raw_date)  # noqa: SLF001
-            date_parse_cache[raw_date] = parsed_date
-
+        parsed_date = fx_module._parse_date_value(tx.date)  # noqa: SLF001
         if parsed_date is None:
             continue
 
