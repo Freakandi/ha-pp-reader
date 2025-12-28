@@ -248,7 +248,7 @@ export function makeTable(
     // Falls sortable: th data-sort-key setzen (nur wenn key vorhanden)
     if (sortable && c.key) {
       const sortLabel = `${escapeAttribute(c.label)} sortieren`;
-      html += `<th${alignClass} data-sort-key="${c.key}" role="button" tabindex="0" aria-sort="none" aria-label="${sortLabel}">${c.label}</th>`;
+      html += `<th${alignClass} data-sort-key="${c.key}" role="button" tabindex="0" aria-sort="none" aria-label="${sortLabel}" data-label="${escapeAttribute(c.label)}">${c.label}</th>`;
     } else {
       html += `<th${alignClass}>${c.label}</th>`;
     }

@@ -163,14 +163,14 @@ function renderTrend(value: number, formatted: string): string {
 function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
   return `
     <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" data-label="${escapeHtml(labelTop)}" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" data-label="${escapeHtml(labelBottom)}" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
     </div>
   `;
 }
 
 function createSimpleSortHeader(label: string, key: string): string {
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" data-label="${escapeHtml(label)}" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
 }
 
 function stack(topVal: number | string, topFmt: string, botVal: number | string, botFmt: string): string {
@@ -1360,9 +1360,13 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     table.querySelectorAll('thead th.sort-active').forEach(th => {
       th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
     });
-    // A11y Indikatoren zurücksetzen
-    table.querySelectorAll('.sort-active').forEach(th => {
-      th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+    // A11y Indikatoren zurücksetzen & Restore default aria-labels
+    table.querySelectorAll('.sort-active').forEach(el => {
+      el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+      const label = el.getAttribute('data-label');
+      if (label) {
+        el.setAttribute('aria-label', `${label} sortieren`);
+      }
     });
 
     // Aktives TH markieren
@@ -1373,6 +1377,12 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
       sortTrigger.classList.add('sort-active');
       sortTrigger.classList.remove('dir-asc', 'dir-desc');
       sortTrigger.classList.add(dir === 'asc' ? 'dir-asc' : 'dir-desc');
+
+      const label = sortTrigger.getAttribute('data-label');
+      if (label) {
+        const stateText = dir === 'asc' ? 'aufsteigend sortiert' : 'absteigend sortiert';
+        sortTrigger.setAttribute('aria-label', `${label} ${stateText}`);
+      }
     }
     const th = sortTrigger?.closest('th');
     if (th) {
@@ -1608,6 +1618,10 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
       table.querySelectorAll('.sort-active').forEach((el) => {
         if (el !== sortTrigger) {
           el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+          const label = el.getAttribute('data-label');
+          if (label) {
+            el.setAttribute('aria-label', `${label} sortieren`);
+          }
         }
       });
 
@@ -1622,6 +1636,12 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
       sortTrigger.classList.add('sort-active');
       sortTrigger.classList.remove('dir-asc', 'dir-desc');
       sortTrigger.classList.add(`dir-${dir}`);
+
+      const label = sortTrigger.getAttribute('data-label');
+      if (label) {
+        const stateText = dir === 'asc' ? 'aufsteigend sortiert' : 'absteigend sortiert';
+        sortTrigger.setAttribute('aria-label', `${label} ${stateText}`);
+      }
 
       const th = sortTrigger.closest('th');
       const colIndex = th
