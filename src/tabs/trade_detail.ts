@@ -78,6 +78,10 @@ const SECURITY_HISTORY_MARKER_CACHE = new Map<
 const RANGE_STATE_REGISTRY = new Map<string, SecurityHistoryRangeState>();
 const HISTORY_CHART_INSTANCES = new WeakMap<HTMLElement, ReturnType<typeof renderLineChart>>();
 
+export const __TEST_ONLY__ = {
+  buildTradeMetaCard,
+};
+
 // --- Helper Functions Copied/Adapted from security_detail.ts ---
 
 function ensureHistoryCache(securityUuid: string): Map<SecurityHistoryRangeKey, NormalizedHistoryEntry[]> {
@@ -548,7 +552,7 @@ function buildTradeMetaCard(trade: RealizedTrade): string {
   }
 
   if (isFiniteNumber(line1Value)) {
-    let line1Html = `${formatPrice(line1Value)} ${line1Curr}`;
+    let line1Html = `${formatPrice(line1Value)} ${line1Curr ? escapeHtml(line1Curr) : ''}`;
 
     const isFx = line1Curr !== 'EUR';
 
@@ -578,7 +582,7 @@ function buildTradeMetaCard(trade: RealizedTrade): string {
   const currentPrice = toFiniteNumber(trade.current_price);
   let currentPriceDisplay = '—';
   if (currentPrice != null) {
-    currentPriceDisplay = `${formatPrice(currentPrice)} ${currency ? currency : ''}`;
+    currentPriceDisplay = `${formatPrice(currentPrice)} ${currency ? escapeHtml(currency) : ''}`;
   }
 
   const changeAbs = toFiniteNumber(trade.since_sell_abs);
