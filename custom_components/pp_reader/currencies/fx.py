@@ -26,7 +26,7 @@ import aiohttp
 import requests
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from custom_components.pp_reader.data.fx_persistence import (
+from custom_components.pp_reader.currencies.persistence import (
     FxRateRecord,
     load_fx_rates_for_date,
     load_fx_rates_in_range,
