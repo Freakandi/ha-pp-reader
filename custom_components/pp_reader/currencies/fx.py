@@ -811,16 +811,36 @@ def ensure_exchange_rates_for_dates_sync(
 # --- Backdating helpers ---
 
 _COMPACT_DATE_LEN = 8
+_ISO_DATE_LEN = 10
 MAX_EPOCH_DAY_CUTOFF = 100000
 
 
-def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
+@functools.lru_cache(maxsize=1024)
+def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911, PLR0912
     """Best-effort parsing for transaction date values stored as TEXT or int."""
     if value in (None, ""):
         return None
+
+    # Optimization: Early return if already a date object
+    if isinstance(value, date):
+        if isinstance(value, datetime):
+            return value.date()
+        return value
+
     text_value = str(value).strip()
     if not text_value:
         return None
+
+    # Optimization: Fast path for ISO dates (YYYY-MM-DD) which are most common
+    if (
+        len(text_value) == _ISO_DATE_LEN
+        and text_value[4] == "-"
+        and text_value[7] == "-"
+    ):
+        try:
+            return date.fromisoformat(text_value)
+        except ValueError:
+            pass
 
     if text_value.isdigit():
         if len(text_value) == _COMPACT_DATE_LEN:
@@ -834,7 +854,11 @@ def _parse_date_value(value: Any) -> date | None:  # noqa: PLR0911
                 return None
         # Handle epoch days (e.g. 19733 for 2024-01-12)
         # 10000 days is around 1997. 100000 is 2243.
-        numeric_val = int(text_value)
+        try:
+            numeric_val = int(text_value)
+        except ValueError:
+            return None
+
         if 0 <= numeric_val <= MAX_EPOCH_DAY_CUTOFF:
             return date(1970, 1, 1) + timedelta(days=numeric_val)
 
