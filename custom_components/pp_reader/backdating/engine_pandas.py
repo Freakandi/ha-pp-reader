@@ -607,21 +607,43 @@ class BackdatingEngine:
             if k not in sec_curr_map and v:
                 sec_curr_map[k] = v
 
-        for sec_uuid in sec_holdings.columns:
-            if sec_uuid not in price_pivot.columns:
-                continue
+        # Vectorized Currency Grouping Optimization
+        # Instead of iterating securities (N_sec), we iterate currencies (N_curr).
+        # Typically N_curr << N_sec.
+        # This replaces N_sec divisions with N_curr divisions.
 
-            qty = sec_holdings[sec_uuid]
-            prices = price_pivot[sec_uuid]
-            curr = sec_curr_map.get(sec_uuid, "EUR")
-            rates = (
+        common_cols = sec_holdings.columns.intersection(price_pivot.columns)
+        if common_cols.empty:
+            return daily_sec_wealth
+
+        qty_df = sec_holdings[common_cols]
+        price_df = price_pivot[common_cols]
+
+        # 1. Calculate Value in Native Currency (Matrix Multiplication)
+        # (N_days x N_common_sec)
+        val_native = qty_df * price_df
+
+        # 2. Align currency map with common columns
+        sec_currencies = pd.Series(sec_curr_map).reindex(common_cols).fillna("EUR")
+
+        # 3. Iterate by Currency
+        for curr in sec_currencies.unique():
+            secs_in_curr = sec_currencies.index[sec_currencies == curr]
+
+            # Sum native values for all securities in this currency
+            # axis=1 sums across columns (securities) for each day
+            total_native_val = val_native[secs_in_curr].sum(axis=1)
+
+            rate_series = (
                 fx_pivot[curr]
                 if curr in fx_pivot.columns
                 else pd.Series(1.0, index=date_range)
             )
 
-            val = (qty * prices) / rates.replace(0, np.nan)
-            daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
+            # Convert to EUR (Vectorized division of Series / Series)
+            val_eur = total_native_val / rate_series.replace(0, np.nan)
+
+            daily_sec_wealth = daily_sec_wealth.add(val_eur.fillna(0.0))
 
         return daily_sec_wealth
 
