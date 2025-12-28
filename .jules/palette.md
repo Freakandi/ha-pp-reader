@@ -13,3 +13,7 @@
 ## 2025-06-05 - [Visual Selection vs ARIA State]
 **Learning:** Custom dropdowns often use CSS classes like `.selected` for visual indication, but this is invisible to screen readers. Elements representing a "current selection" in a list or grid (like a calendar or list of months) must use `aria-current="true"` (or `aria-selected` if a listbox) to programmatically communicate the active state.
 **Action:** When applying a `.selected` class to an interactive element, always check if a corresponding ARIA attribute (`aria-current`, `aria-selected`, `aria-pressed`) is needed.
+
+## 2025-02-14 - [Date Range Preview]
+**Learning:** Adding visual feedback for date range selection (preview on hover) significantly improves confidence for keyboard and mouse users, but requires careful state management to distinguish between "confirmed" and "tentative" ranges. Using existing CSS classes (`in-range`) is a lightweight way to achieve this without new styles.
+**Action:** When implementing multi-step interactions (like range picking), always consider the "in-between" state and provide visual cues. Reuse existing visual indicators where possible to maintain consistency.

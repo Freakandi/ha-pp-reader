@@ -21,6 +21,7 @@ export class DateRangePicker {
     private isOpen = false;
     private viewDate: Date; // The date determining which month is shown in the left calendar
     private tempRange: DateRange; // Range currently being selected in the picker
+    private hoverDate: Date | null = null; // Currently hovered date for preview
     private previousFocus: HTMLElement | null = null; // Element that had focus before opening
     private activeDropdown: HTMLElement | null = null;
 
@@ -251,6 +252,7 @@ export class DateRangePicker {
 
         // Reset state
         this.tempRange = { ...this.range };
+        this.hoverDate = null;
         this.viewDate = new Date(this.range.end.getFullYear(), this.range.end.getMonth() - 1, 1);
         this.renderCalendars();
         this.updateInputs();
@@ -270,6 +272,7 @@ export class DateRangePicker {
 
     private close() {
         this.isOpen = false;
+        this.hoverDate = null;
         this.closeDropdown();
         this.popoverEl.classList.remove('open');
         this.popoverEl.style.display = '';
@@ -329,6 +332,7 @@ export class DateRangePicker {
         }
 
         this.tempRange = { start, end };
+        this.hoverDate = null;
         this.viewDate = new Date(end.getFullYear(), end.getMonth() - 1, 1);
         this.renderCalendars();
         this.updateInputs();
@@ -537,6 +541,7 @@ export class DateRangePicker {
             cell.className = 'drp-day';
             cell.textContent = d.toString();
             cell.setAttribute('role', 'option');
+            cell.setAttribute('data-date', current.getTime().toString());
             cell.tabIndex = 0;
 
             // Labels and A11y
@@ -673,9 +678,27 @@ export class DateRangePicker {
         const start = this.tempRange.start.getTime();
         const end = this.tempRange.end.getTime();
 
-        if (t === start) cell.classList.add('range-start');
-        if (t === end) cell.classList.add('range-end');
-        if (t > start && t < end) cell.classList.add('in-range');
+        let isStart = t === start;
+        let isEnd = t === end;
+        let inRange = t > start && t < end;
+
+        // Preview logic
+        if (start === end && this.hoverDate) {
+             const h = this.hoverDate.getTime();
+             if (h !== start) {
+                 const pStart = Math.min(start, h);
+                 const pEnd = Math.max(start, h);
+
+                 // Update visual indicators based on preview
+                 if (t === pStart) isStart = true;
+                 if (t === pEnd) isEnd = true;
+                 if (t > pStart && t < pEnd) inRange = true;
+             }
+        }
+
+        if (isStart) cell.classList.add('range-start');
+        if (isEnd) cell.classList.add('range-end');
+        if (inRange) cell.classList.add('in-range');
 
         // Today
         const today = new Date();
@@ -692,6 +715,7 @@ export class DateRangePicker {
         if (s !== e) {
             // Complete range existed. Start new selection.
             this.tempRange = { start: date, end: date };
+            this.hoverDate = null; // Reset hover state
         } else {
             // Partial range (start only). Set end.
             if (t < s) {
@@ -700,6 +724,7 @@ export class DateRangePicker {
             } else {
                 this.tempRange = { start: this.tempRange.start, end: date };
             }
+            this.hoverDate = null;
         }
 
         this.updateInputs();
@@ -707,7 +732,32 @@ export class DateRangePicker {
         this.updatePresetState(null);
     }
 
-    private handleDayHover(_date: Date) {
-        // Optional: Preview range
+    private handleDayHover(date: Date) {
+        // If we are in "partial selection" state (start == end), show preview
+        if (this.tempRange.start.getTime() === this.tempRange.end.getTime()) {
+             // Guard clause: Avoid re-calculations if date hasn't changed
+             if (this.hoverDate && this.hoverDate.getTime() === date.getTime()) {
+                 return;
+             }
+             this.hoverDate = date;
+             this.updateVisibleDayClasses();
+        }
+    }
+
+    private updateVisibleDayClasses() {
+        // Optimized update: Don't rebuild DOM, just update classes on existing cells
+        const cells = this.popoverEl.querySelectorAll<HTMLElement>('.drp-day[data-date]');
+        cells.forEach(cell => {
+            const timestamp = Number(cell.getAttribute('data-date'));
+            if (!Number.isNaN(timestamp)) {
+                // Reset classes first? applyDayClasses handles adding range classes.
+                // But it doesn't remove them if we don't clear logic.
+                // Actually applyDayClasses adds classes. We should probably clear them first.
+                // But applyDayClasses doesn't explicitly remove 'in-range' if false.
+                // We need to reset the specific range classes before applying new ones.
+                cell.classList.remove('range-start', 'range-end', 'in-range');
+                this.applyDayClasses(cell, new Date(timestamp));
+            }
+        });
     }
 }
