@@ -161,18 +161,39 @@ def _build_sample_parsed_client() -> tuple[parsed.ParsedClient, client_pb2.PClie
     return parsed_client, client
 
 
+class MockBus:
+    """Mock the bus object."""
+
+    def async_listen_once(self, event, callback):
+        pass
+
+
 class HelperHass:
     """Minimal Hass stub."""
 
     def __init__(self, loop):
         self.loop = loop
         self.data = {}
+        self.bus = MockBus()
 
     async def async_add_executor_job(self, func, *args, **kwargs):
         # functools imported at top level
         return await self.loop.run_in_executor(
             None, functools.partial(func, *args, **kwargs)
         )
+
+
+class MockNetwork:
+    """Mock the network integration."""
+
+    @property
+    def adapters(self):
+        return []
+
+
+def install_network_mock(hass: HelperHass) -> None:
+    """Install the network integration mock into hass.data."""
+    hass.data["network"] = MockNetwork()
 
 
 @pytest.mark.asyncio
@@ -193,6 +214,7 @@ async def test_ingestion_rebuild_end_to_end(
     initialize_database_schema(db_path)
     loop = asyncio.get_running_loop()
     hass = HelperHass(loop)
+    install_network_mock(hass)
 
     # 1. Mock Parse Portfolio
     parsed_client, _ = _build_sample_parsed_client()

@@ -15,19 +15,19 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from custom_components.pp_reader.data.aggregations import (
-    AverageCostSelection,
-    HoldingsAggregation,
-    compute_holdings_aggregation,
-    select_average_cost,
-)
-from custom_components.pp_reader.data.fx_persistence import (
+from custom_components.pp_reader.currencies.persistence import (
     FxRateRecord,
     load_fx_rates_for_date,
     load_fx_rates_in_range,
     upsert_fx_rate,
     upsert_fx_rates_bulk,
     upsert_fx_rates_chunked,
+)
+from custom_components.pp_reader.data.aggregations import (
+    AverageCostSelection,
+    HoldingsAggregation,
+    compute_holdings_aggregation,
+    select_average_cost,
 )
 from custom_components.pp_reader.metrics.common import (
     compose_performance_payload,
