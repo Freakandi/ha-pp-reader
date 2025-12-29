@@ -9,7 +9,7 @@ description: Analyze a bug and create a specific NAMED task plan in tasks/ folde
 2. **Investigate & Reproduce**:
    - If applicable, check logs: `grep_search` on `/tmp/ha_pp_reader_hass.log`.
    - If applicable, inspect code locations to form a hypothesis.
-   - ONLY IF UI-investigation is needed:
+   - ONLY IF UI-investigation or HomeAssistant log inspection is needed:
       a. **Cleanup Stale Processes**:
          - Check for running instances: `pgrep -fl hass`, `pgrep -fl vite`.
          - If found and owned by the user, kill them to ensure a clean slate.

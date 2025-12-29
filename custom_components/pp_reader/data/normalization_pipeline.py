@@ -1152,14 +1152,20 @@ def _build_position_snapshot_entry(
         context.price_dates, security_uuid, context.reference_date
     )
 
+    raw_price_val = record.last_price_native_raw
+    if raw_price_val is None:
+        security_entry = context.securities.get(security_uuid)
+        if security_entry and security_entry.last_price:
+            raw_price_val = security_entry.last_price
+
     last_price_native = normalize_raw_price(
-        record.last_price_native_raw,
+        raw_price_val,
         decimals=4,
     )
     price_state = _PriceState(
         last_price_native=last_price_native,
         last_price_eur=normalize_price_to_eur_sync(
-            record.last_price_native_raw,
+            raw_price_val,
             currency_code,
             context.reference_date,
             context.db_path,
