@@ -361,7 +361,9 @@ async def test_ingestion_rebuild_end_to_end(
 
     # Verify Wealth Values
     # Jan 6 (After Deposit): Total Wealth should be ~10,000 EUR
+    # Jan 6 (After Deposit): Total Wealth should be ~10,000 EUR
     jan_6 = daily_wealth_df[daily_wealth_df["date"] == "2024-01-06"].iloc[0]
+    assert abs(jan_6["total_wealth_eur"] - 10000.0) < 0.1
     # Jan 12 (After Buy):
     # Total Wealth = 10 shares @ 102 (price) + 9000 cash = 10020
     jan_12 = daily_wealth_df[daily_wealth_df["date"] == "2024-01-12"].iloc[0]
@@ -369,7 +371,7 @@ async def test_ingestion_rebuild_end_to_end(
     # Invested Capital comes from the Deposit on Jan 5
     assert abs(jan_12["invested_capital_eur"] - 10000.0) < 0.1
     # No sales yet, so no realized gains
-    # assert jan_12["realized_gains_eur"] == 0.0
+    assert jan_12["realized_gains_eur"] == 0.0
 
     # Jan 15 (After Sell)
     jan_15 = daily_wealth_df[daily_wealth_df["date"] == "2024-01-15"].iloc[0]
@@ -380,9 +382,9 @@ async def test_ingestion_rebuild_end_to_end(
     # Fees from the sale
     assert abs(jan_15["fees_eur"] - 10.0) < 0.1
     # Realized Gain = 25 USD (FX 1.0) -> 25 EUR.
-    # assert abs(jan_15["realized_gains_eur"] - 25.0) < 0.1
+    assert abs(jan_15["realized_gains_eur"] - 25.0) < 0.1
     # Unrealized Gains: Portfolio has 525 Value. Cost Basis 500. Unrealized = 25.
-    # assert abs(jan_15["unrealized_gains_eur"] - 25.0) < 0.1
+    assert abs(jan_15["unrealized_gains_eur"] - 25.0) < 0.1
     # Implied buy price = 100 per share. Market price = 300 per share.
     # Instant profit!
     # Value on Jan 12: 10 shares * 300 = 3000. Cash = 9000. Total = 12000.
