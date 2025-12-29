@@ -671,13 +671,13 @@ def _build_holdings_valuations(
                 portfolio_uuid=portfolio_uuid,
                 security_uuid=security_uuid,
                 currency=currency,
-                shares=round(shares, 8),
+                shares=shares,
                 price_native=price_native,
                 price_date=price_date_raw,
                 price_eur=price_eur,
                 value_eur=value_eur,
-                purchase_value_eur=round(purchase_value_eur, 6),
-                purchase_value_native=round(purchase_value_native, 6),
+                purchase_value_eur=purchase_value_eur,
+                purchase_value_native=purchase_value_native,
                 unrealized_price_gains_eur=unrealized_price_gains_eur,
                 fx_rate=fx_rate,
                 stale_price=stale,
@@ -916,6 +916,12 @@ def _apply_transaction_update(
 
     if entry["shares"] <= _EPSILON:  # Filter dust
         holdings.pop(key, None)
+    else:
+        # Optimization: Round aggregated values here (rarely updated) instead of
+        # inside the daily backdating loop (frequently read).
+        entry["shares"] = round(entry["shares"], 8)
+        entry["purchase_value_eur"] = round(entry["purchase_value_eur"], 6)
+        entry["purchase_value_native"] = round(entry["purchase_value_native"], 6)
 
     return realized_gain, realized_price_gain, neutral_movement
 
