@@ -16,9 +16,13 @@ class _StubFrame:
     def __init__(self, rows: list[dict[str, object]]) -> None:
         self._rows = rows
         self.empty = not rows
+        self.columns = rows[0].keys() if rows else []
 
     def reset_index(self):  # pragma: no cover - identical object returned
         return self
+
+    def __getitem__(self, key: str) -> list[object]:
+        return [row[key] for row in self._rows]
 
     def itertuples(self):
         for row in self._rows:

@@ -15,7 +15,6 @@ from .db_schema import (
     SECURITY_METRICS_SCHEMA,
 )
 from .migrations import (
-    ensure_daily_wealth_tables,
     ensure_ingestion_transaction_eur_column,
     ensure_snapshot_tables,
 )
@@ -146,7 +145,6 @@ def initialize_database_schema(db_path: Path) -> None:
             ensure_ingestion_tables(conn)
             ensure_metric_tables(conn)
             ensure_snapshot_tables(conn)
-            ensure_daily_wealth_tables(conn)
             ensure_fx_enrichment_columns(conn)
             ensure_price_history_enrichment_columns(conn)
 

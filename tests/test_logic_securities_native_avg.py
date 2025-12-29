@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
 
 from custom_components.pp_reader.data.db_access import Transaction
+from custom_components.pp_reader.data.db_init import initialize_database_schema
 from custom_components.pp_reader.logic import securities
 
 if TYPE_CHECKING:
@@ -46,7 +48,7 @@ def _patch_fx(monkeypatch: pytest.MonkeyPatch, rate: float) -> None:
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         securities,
@@ -60,7 +62,7 @@ def _patch_fx_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         securities,
         "ensure_exchange_rates_for_dates_sync",
-        lambda dates, currencies, db_path: None,
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         securities,
@@ -234,6 +236,7 @@ def test_missing_fx_logged_once(
     _patch_fx_missing(monkeypatch)
 
     db_path = tmp_path / "fx.sqlite"
+    initialize_database_schema(db_path)
     transactions = [
         _make_transaction(
             uuid="tx-1",

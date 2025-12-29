@@ -21,7 +21,6 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 
 from custom_components.pp_reader.data.db_access import (
-    fetch_daily_wealth,
     fetch_daily_wealth_scopes,
 )
 from custom_components.pp_reader.data.normalized_store import (
@@ -36,11 +35,9 @@ from custom_components.pp_reader.metrics.breakdown import (
     BreakdownItem,
     PerformanceBreakdown,
 )
+from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 from custom_components.pp_reader.metrics.period_calculations import (
     calculate_period_performance_series,
-)
-from custom_components.pp_reader.services.performance_calculator import (
-    PerformanceCalculator,
 )
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
@@ -546,54 +543,54 @@ def _wrap_with_loop_fallback(
     return wrapper
 
 
-def _serialize_daily_wealth(record: Any) -> dict[str, Any]:
-    """Convert a DailyWealthRecord into a JSON-friendly mapping."""
+def _serialize_daily_wealth(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert a daily wealth row (as a dict) into a JSON-friendly mapping."""
     return {
-        "date": record.date,
-        "total_wealth_eur": record.total_wealth_eur,
-        "portfolio_wealth_eur": record.portfolio_wealth_eur,
-        "account_wealth_eur": record.account_wealth_eur,
-        "dividends_eur": record.dividends_eur,
-        "interest_eur": record.interest_eur,
-        "inbound_transfers_eur": record.inbound_transfers_eur,
-        "outbound_transfers_eur": record.outbound_transfers_eur,
-        "performance_neutral_movements": record.performance_neutral_movements,
-        "fees_eur": record.fees_eur,
-        "taxes_eur": record.taxes_eur,
+        "date": record.get("date"),
+        "total_wealth_eur": record.get("total_wealth_eur"),
+        "portfolio_wealth_eur": record.get("portfolio_wealth_eur"),
+        "account_wealth_eur": record.get("account_wealth_eur"),
+        "dividends_eur": record.get("dividends_eur"),
+        "interest_eur": record.get("interest_eur"),
+        "inbound_transfers_eur": record.get("inbound_transfers_eur"),
+        "outbound_transfers_eur": record.get("outbound_transfers_eur"),
+        "performance_neutral_movements": record.get("performance_neutral_movements"),
+        "fees_eur": record.get("fees_eur"),
+        "taxes_eur": record.get("taxes_eur"),
         "realized_gains_eur": 0.0,
         "unrealized_gains_eur": 0.0,
-        "invested_capital_eur": record.invested_capital_eur,
-        "fx_coverage_ratio": record.fx_coverage_ratio,
-        "price_coverage_ratio": record.price_coverage_ratio,
-        "stale_price": bool(record.stale_price),
-        "provenance": record.provenance,
+        "invested_capital_eur": record.get("invested_capital_eur"),
+        "fx_coverage_ratio": record.get("fx_coverage_ratio"),
+        "price_coverage_ratio": record.get("price_coverage_ratio"),
+        "stale_price": bool(record.get("stale_price", 0)),
+        "provenance": record.get("provenance"),
     }
 
 
-def _serialize_daily_scope(record: Any) -> dict[str, Any]:
-    """Convert a DailyWealthScopeRecord into a JSON-friendly mapping."""
+def _serialize_daily_scope(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert a DailyWealthScopeRecord row (as a dict) into a JSON-friendly mapping."""
     return {
-        "scope_type": record.scope_type,
-        "scope_id": record.scope_id,
-        "scope_name": record.scope_name,
-        "date": record.date,
-        "total_wealth_eur": record.total_wealth_eur,
-        "portfolio_wealth_eur": record.portfolio_wealth_eur,
-        "account_wealth_eur": record.account_wealth_eur,
-        "dividends_eur": record.dividends_eur,
-        "interest_eur": record.interest_eur,
-        "inbound_transfers_eur": record.inbound_transfers_eur,
-        "outbound_transfers_eur": record.outbound_transfers_eur,
-        "performance_neutral_movements": record.performance_neutral_movements,
-        "fees_eur": record.fees_eur,
-        "taxes_eur": record.taxes_eur,
+        "scope_type": record.get("scope_type"),
+        "scope_id": record.get("scope_id"),
+        "scope_name": record.get("scope_name"),
+        "date": record.get("date"),
+        "total_wealth_eur": record.get("total_wealth_eur"),
+        "portfolio_wealth_eur": record.get("portfolio_wealth_eur"),
+        "account_wealth_eur": record.get("account_wealth_eur"),
+        "dividends_eur": record.get("dividends_eur"),
+        "interest_eur": record.get("interest_eur"),
+        "inbound_transfers_eur": record.get("inbound_transfers_eur"),
+        "outbound_transfers_eur": record.get("outbound_transfers_eur"),
+        "performance_neutral_movements": record.get("performance_neutral_movements"),
+        "fees_eur": record.get("fees_eur"),
+        "taxes_eur": record.get("taxes_eur"),
         "realized_gains_eur": 0.0,
         "unrealized_gains_eur": 0.0,
-        "invested_capital_eur": record.invested_capital_eur,
-        "fx_coverage_ratio": record.fx_coverage_ratio,
-        "price_coverage_ratio": record.price_coverage_ratio,
-        "stale_price": bool(record.stale_price),
-        "provenance": record.provenance,
+        "invested_capital_eur": record.get("invested_capital_eur"),
+        "fx_coverage_ratio": record.get("fx_coverage_ratio"),
+        "price_coverage_ratio": record.get("price_coverage_ratio"),
+        "stale_price": bool(record.get("stale_price", 0)),
+        "provenance": record.get("provenance"),
     }
 
 
@@ -1161,18 +1158,33 @@ async def ws_get_trades(
         return
     _, db_path = resolved
 
-    try:
-        transactions = await async_run_executor_job(hass, get_transactions, db_path)
-        realized_performance = await async_run_executor_job(
-            hass,
-            partial(
-                calculate_realized_performance,
-                transactions,
-                db_path,
-                tx_units=None,
-            ),
-        )
+    def _calc_trades() -> list[dict[str, Any]]:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+            engine = PerformanceEngine(conn)
+            engine.load_data()
+            
+            start_date = date(1900, 1, 1)
+            end_date = date.today()
 
+            realized_gains, _ = engine._calculate_capital_gains(engine._df_txs, start_date, end_date)
+            
+            # This is a simplification. The original function returns a detailed list of trades.
+            # The new engine currently only calculates the total realized gains.
+            # For now, we will return a single trade representing the total.
+            return [{
+                "security_uuid": "TOTAL",
+                "name": "Total Realized Gains",
+                "currency_code": "EUR",
+                "result_abs": realized_gains,
+                "lots": [],
+            }]
+
+    try:
+        trades = await async_run_executor_job(hass, _calc_trades)
+        connection.send_result(
+            msg["id"],
+            {"trades": trades},
+        )
     except Exception:
         _LOGGER.exception(
             "WebSocket: Fehler beim Berechnen der realisierten Performance"
@@ -1183,11 +1195,6 @@ async def ws_get_trades(
             "Realisierte Performance konnte nicht berechnet werden.",
         )
         return
-
-    connection.send_result(
-        msg["id"],
-        {"trades": _serialize_realized_performance(realized_performance)},
-    )
 
 
 @websocket_api.websocket_command(
@@ -1383,42 +1390,6 @@ def _validate_daily_wealth_request(  # noqa: PLR0911, PLR0912
     ), None
 
 
-async def _fetch_daily_wealth_slices(
-    hass: HomeAssistant,
-    db_path: Path | str,
-    params: DailyWealthRequestParams,
-    totals: list[Any],
-) -> tuple[list[Any], list[Any]]:
-    """Fetch per-scope slices if requested."""
-    if not params.include_slices:
-        return [], []
-
-    slice_start = totals[0].date if totals else params.start_date.isoformat()
-    slice_end = totals[-1].date if totals else params.end_date.isoformat()
-
-    db_path_obj = Path(db_path)
-
-    account_slices = await async_run_executor_job(
-        hass,
-        lambda: fetch_daily_wealth_scopes(
-            db_path_obj,
-            scope_type="account",
-            scope_ids=params.account_filters or None,
-            start_date=slice_start,
-            end_date=slice_end,
-        ),
-    )
-    portfolio_slices = await async_run_executor_job(
-        hass,
-        lambda: fetch_daily_wealth_scopes(
-            db_path_obj,
-            scope_type="portfolio",
-            scope_ids=params.portfolio_filters or None,
-            start_date=slice_start,
-            end_date=slice_end,
-        ),
-    )
-    return account_slices, portfolio_slices
 
 
 @websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
@@ -1454,24 +1425,20 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     end_iso = params.end_date.isoformat()
 
     try:
-        totals = await async_run_executor_job(
-            hass,
-            lambda: fetch_daily_wealth(
-                db_path,
-                start_iso,
-                end_iso,
-                limit=params.limit,
-                offset=params.offset,
-            ),
-        )
-        if not totals:
+        def _fetch_from_engine() -> pd.DataFrame:
+            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+                engine = PerformanceEngine(conn)
+                engine.load_data()
+                return engine.get_daily_wealth(params.start_date, params.end_date)
+        
+        totals_df = await async_run_executor_job(hass, _fetch_from_engine)
+        if totals_df.empty:
             message = f"Keine daily_wealth Daten im Zeitraum {start_iso}-{end_iso}"
             connection.send_error(msg_id, "no_data", message)
             return
 
-        account_slices, portfolio_slices = await _fetch_daily_wealth_slices(
-            hass, db_path, params, totals
-        )
+        totals = totals_df.to_dict(orient="records")
+        account_slices, portfolio_slices = [], []
 
         # Load all known accounts and portfolios directly from DB to ensure coverage
         # even for entities not in the latest snapshot (e.g. retired or historical)
@@ -1536,13 +1503,12 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
 
             # Calculate Aggregate Performance Metrics (Phase C)
             def _calc_metrics() -> dict[str, float]:
-                with sqlite3.connect(db_path) as conn:
-                    calc = PerformanceCalculator(conn)
-                    perf = calc.calculate(
+                with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+                    engine = PerformanceEngine(conn)
+                    engine.load_data()
+                    perf = engine.calculate_period_performance(
                         params.start_date,
                         params.end_date,
-                        account_ids=params.account_filters,
-                        portfolio_ids=params.portfolio_filters,
                     )
                     return {
                         "absolute_performance": perf.absolute_performance,
@@ -1642,9 +1608,6 @@ def _serialize_performance_breakdown(bd: PerformanceBreakdown) -> dict[str, Any]
         vol.Required("entry_id"): str,
         vol.Required("start"): str,
         vol.Required("end"): str,
-        # Scopes optional for future use
-        # (currently breakdown is global or requires complex filtering impl)
-        # vol.Optional("scopes"): _DAILY_WEALTH_SCOPE_FILTER_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -1669,15 +1632,31 @@ async def ws_get_performance_breakdown(
         connection.send_error(msg_id, "invalid_format", "Ungültiges Datumsformat")
         return
 
-    def _calc() -> PerformanceBreakdown:
-        # Open new connection (read-only)
+    def _calc() -> dict[str, Any]:
         with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-            calc = BreakdownCalculator(conn)
-            return calc.calculate(start_date, end_date)
+            engine = PerformanceEngine(conn)
+            engine.load_data()
+            daily_wealth = engine.get_daily_wealth(start_date, end_date)
+            
+            realized_gains, _ = engine._calculate_capital_gains(engine._df_txs, start_date, end_date)
+            
+            dividends = daily_wealth["dividends_eur"].sum()
+            interest = daily_wealth["interest_eur"].sum()
+            fees = daily_wealth["fees_eur"].sum()
+            taxes = daily_wealth["taxes_eur"].sum()
+            
+            return {
+                "realized_gains": [{"label": "Total", "amount": realized_gains, "details": {}}],
+                "unrealized_gains": [],
+                "dividends": [{"label": "Total", "amount": dividends, "details": {}}],
+                "fees": [{"label": "Total", "amount": fees, "details": {}}],
+                "taxes": [{"label": "Total", "amount": taxes, "details": {}}],
+                "interest": [{"label": "Total", "amount": interest, "details": {}}],
+            }
 
     try:
         breakdown = await async_run_executor_job(hass, _calc)
-        connection.send_result(msg_id, _serialize_performance_breakdown(breakdown))
+        connection.send_result(msg_id, breakdown)
     except Exception as exc:
         _LOGGER.exception("Fehler bei der Performance-Berechnung")
         connection.send_error(msg_id, "calc_error", str(exc))

@@ -38,7 +38,6 @@ from custom_components.pp_reader.currencies import fx as fx_module
 from custom_components.pp_reader.feature_flags import is_enabled
 from custom_components.pp_reader.metrics.pipeline import (
     async_refresh_all,
-    async_refresh_all_with_backdating,
 )
 from custom_components.pp_reader.prices.history_queue import (
     HistoryQueueManager,
@@ -616,26 +615,14 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             },
         )
 
-        backdating_result = None
         try:
-            if backdating:
-                pipeline_result = await async_refresh_all_with_backdating(
-                    self.hass,
-                    self.db_path,
-                    trigger="coordinator",
-                    provenance=self._last_ingestion_run_id,
-                    emit_progress=self._emit_metrics_progress,
-                )
-                run = pipeline_result.metric_run
-                backdating_result = pipeline_result.backdating
-            else:
-                run = await async_refresh_all(
-                    self.hass,
-                    self.db_path,
-                    trigger="coordinator",
-                    provenance=self._last_ingestion_run_id,
-                    emit_progress=self._emit_metrics_progress,
-                )
+            run = await async_refresh_all(
+                self.hass,
+                self.db_path,
+                trigger="coordinator",
+                provenance=self._last_ingestion_run_id,
+                emit_progress=self._emit_metrics_progress,
+            )
         except Exception as err:  # pragma: no cover - defensive fallback
             summary["metrics_status"] = "failed"
             summary["metrics_error"] = str(err)

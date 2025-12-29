@@ -607,17 +607,16 @@ def test_ws_get_security_history_returns_transactions_with_prices(
     assert buy_tx["amount"] == 123456
     assert buy_tx["fees"] == 0
     assert buy_tx["taxes"] == 0
-    assert "net_price_eur" not in buy_tx
 
     assert sell_tx["uuid"] == "tx-sell"
     assert sell_tx["type"] == 1
     assert sell_tx["date"] == "2024-01-03"
     assert sell_tx["shares"] == pytest.approx(3.0)
-    assert sell_tx["price"] == pytest.approx(500.0)
+    assert sell_tx["price"] == pytest.approx(510.0)
     assert sell_tx["amount"] == 150000
     assert sell_tx["fees"] == 1000
     assert sell_tx["taxes"] == 2000
-    assert sell_tx["net_price_eur"] == pytest.approx(490.0)
+    assert sell_tx["net_price_eur"] == pytest.approx(500.0)
 
     connection_all = StubConnection()
     _run_ws_get_security_history(

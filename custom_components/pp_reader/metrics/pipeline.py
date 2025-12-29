@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from custom_components.pp_reader.backdating.live_update import update_today_wealth
-from custom_components.pp_reader.backdating.pipeline import (
-    BackdatingResult,
-    async_run_backdating_rebuild,
-)
 from custom_components.pp_reader.data.db_access import (
     MetricRunMetadata,
     load_metric_run,
@@ -36,14 +32,6 @@ ProgressCallback = Callable[[str, Mapping[str, Any]], None]
 StageRunner = Callable[["HomeAssistant", Path, str], Awaitable[list[Any]]]
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.pipeline")
-
-
-@dataclass(slots=True)
-class MetricsPipelineResult:
-    """Aggregate metrics and optional backdating outcomes."""
-
-    metric_run: MetricRunMetadata
-    backdating: BackdatingResult | None = None
 
 
 async def async_refresh_all(
@@ -174,21 +162,6 @@ async def async_refresh_all(
         _LOGGER.exception("Metric run failed (run_uuid=%s)", run.run_uuid)
         raise
     else:
-        # --- NEW: Live Update for Daily Wealth (Today) ---
-        try:
-            await async_run_executor_job(
-                hass,
-                update_today_wealth,
-                db_path,
-                final_run.run_uuid,
-            )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
-                "Live-Update für daily_wealth fehlgeschlagen (non-critical)",
-                exc_info=True,
-            )
-        # -------------------------------------------------
-
         _emit(
             "completed",
             run_uuid=final_run.run_uuid,
@@ -201,52 +174,7 @@ async def async_refresh_all(
         return final_run
 
 
-async def async_refresh_all_with_backdating(
-    hass: HomeAssistant,
-    db_path: Path | str,
-    *,
-    trigger: str = "coordinator",
-    provenance: str | None = None,
-    emit_progress: ProgressCallback | None = None,
-    backdating_today: date | None = None,
-) -> MetricsPipelineResult:
-    """Run the metrics pipeline and then orchestrate a backdating rebuild."""
-    metric_run = await async_refresh_all(
-        hass,
-        db_path,
-        trigger=trigger,
-        provenance=provenance,
-        emit_progress=emit_progress,
-    )
-
-    backdating_result = await async_run_backdating_rebuild(
-        hass,
-        db_path,
-        trigger=trigger,
-        ingestion_run_uuid=provenance,
-        provenance=provenance,
-        emit_progress=emit_progress,
-        today=backdating_today,
-    )
-
-    # Ensure "today" matches live metrics, overriding any backfill discrepancy
-    # because backdating engine might have overwritten our live values with
-    # "close" values.
-    try:
-        await async_run_executor_job(
-            hass,
-            update_today_wealth,
-            db_path,
-            metric_run.run_uuid,
-        )
-    except Exception:  # noqa: BLE001
-        _LOGGER.warning(
-            "Final Live-Update für daily_wealth nach Backfill fehlgeschlagen",
-            exc_info=True,
-        )
-
-    return MetricsPipelineResult(metric_run=metric_run, backdating=backdating_result)
-
+from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 
 def _utc_now_isoformat() -> str:
     """Return an ISO8601 UTC timestamp."""

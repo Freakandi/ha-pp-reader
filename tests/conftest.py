@@ -45,6 +45,15 @@ else:  # pragma: no cover - import used in fixtures only
     DATA_MISSING_PLATFORMS = loader_mod.DATA_MISSING_PLATFORMS
     DATA_PRELOAD_PLATFORMS = loader_mod.DATA_PRELOAD_PLATFORMS
 
+
+class MockNetwork:
+    """Mock the network integration."""
+
+    @property
+    def adapters(self):
+        return []
+
+
 try:
     import custom_components
     import custom_components.pp_reader
@@ -105,6 +114,7 @@ async def hass(
     hass.data.setdefault(DATA_COMPONENTS, {})
     hass.data.setdefault(DATA_MISSING_PLATFORMS, {})
     hass.data.setdefault(DATA_PRELOAD_PLATFORMS, set())
+    hass.data["network"] = MockNetwork()
 
     # Register the pp_reader integration so loader lookups succeed during tests.
 

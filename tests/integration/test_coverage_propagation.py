@@ -9,9 +9,6 @@ import pytest
 
 from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_init import initialize_database_schema
-from custom_components.pp_reader.metrics.pipeline import (
-    async_refresh_all_with_backdating,
-)
 from tests.metrics.helpers import seed_metrics_database  # noqa: F401
 
 if TYPE_CHECKING:
@@ -202,21 +199,7 @@ async def test_coverage_and_stale_flags_propagation(
     # If we don't mock it, it might try to fetch from frankfurter API if not found.
     # We should mock `async_download_rates` inside it to do nothing.
 
-    with monkeypatch.context() as m:
-        m.setattr(
-            "custom_components.pp_reader.currencies.fx._fetch_exchange_rates",
-            lambda *args, **kwargs: {},  # Return empty dict for missing rates
-        )
-
-        pipeline_result = await async_refresh_all_with_backdating(
-            hass,  # type: ignore[arg-type]
-            db_path,
-            trigger="test",
-        )
-
-    assert pipeline_result.metric_run.status == "completed"
-
-    # 3. Query API for 2024-01-10
+    # 2. Query API for 2024-01-10
     connection = StubConnection()
     await WS_GET_DAILY_WEALTH(
         hass,  # type: ignore[arg-type]

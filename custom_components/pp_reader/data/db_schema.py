@@ -699,100 +699,6 @@ METRICS_SCHEMA = [
     *SECURITY_METRICS_SCHEMA,
 ]
 
-DAILY_WEALTH_SCHEMA = [
-    """
-    CREATE TABLE IF NOT EXISTS daily_wealth (
-        date TEXT PRIMARY KEY,              -- ISO date (YYYY-MM-DD)
-        total_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        portfolio_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        account_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        dividends_eur REAL NOT NULL DEFAULT 0.0,
-        interest_eur REAL NOT NULL DEFAULT 0.0,
-        inbound_transfers_eur REAL NOT NULL DEFAULT 0.0,
-        outbound_transfers_eur REAL NOT NULL DEFAULT 0.0,
-        invested_capital_eur REAL NOT NULL DEFAULT 0.0,
-        performance_neutral_movements REAL NOT NULL DEFAULT 0.0,
-        fees_eur REAL NOT NULL DEFAULT 0.0,
-        taxes_eur REAL NOT NULL DEFAULT 0.0,
-        fx_coverage_ratio REAL,
-        price_coverage_ratio REAL,
-        stale_price INTEGER NOT NULL DEFAULT 0,
-        provenance TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-        updated_at TEXT
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS daily_wealth_scopes (
-        scope_type TEXT NOT NULL,           -- account | portfolio
-        scope_id TEXT NOT NULL,             -- UUID of the scope
-        scope_name TEXT,                    -- best-effort display name
-        date TEXT NOT NULL,                 -- ISO date (YYYY-MM-DD)
-        total_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        portfolio_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        account_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        dividends_eur REAL NOT NULL DEFAULT 0.0,
-        interest_eur REAL NOT NULL DEFAULT 0.0,
-        inbound_transfers_eur REAL NOT NULL DEFAULT 0.0,
-        outbound_transfers_eur REAL NOT NULL DEFAULT 0.0,
-        invested_capital_eur REAL NOT NULL DEFAULT 0.0,
-        performance_neutral_movements REAL NOT NULL DEFAULT 0.0,
-        fees_eur REAL NOT NULL DEFAULT 0.0,
-        taxes_eur REAL NOT NULL DEFAULT 0.0,
-        fx_coverage_ratio REAL,
-        price_coverage_ratio REAL,
-        stale_price INTEGER NOT NULL DEFAULT 0,
-        provenance TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-        updated_at TEXT,
-        PRIMARY KEY (scope_type, scope_id, date)
-    );
-    """,
-]
-
-DAILY_WEALTH_SCOPES_SCHEMA = [
-    """
-    CREATE TABLE IF NOT EXISTS daily_wealth_scopes (
-        scope_type TEXT NOT NULL,           -- account | portfolio
-        scope_id TEXT NOT NULL,             -- UUID of the scope
-        scope_name TEXT,                    -- best-effort display name
-        date TEXT NOT NULL,                 -- ISO date (YYYY-MM-DD)
-        total_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        portfolio_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        account_wealth_eur REAL NOT NULL DEFAULT 0.0,
-        dividends_eur REAL NOT NULL DEFAULT 0.0,
-        interest_eur REAL NOT NULL DEFAULT 0.0,
-        inbound_transfers_eur REAL NOT NULL DEFAULT 0.0,
-        outbound_transfers_eur REAL NOT NULL DEFAULT 0.0,
-        realized_gains_eur REAL NOT NULL DEFAULT 0.0,
-        unrealized_gains_eur REAL NOT NULL DEFAULT 0.0,
-        invested_capital_eur REAL NOT NULL DEFAULT 0.0,
-        performance_neutral_movements REAL NOT NULL DEFAULT 0.0,
-        fees_eur REAL NOT NULL DEFAULT 0.0,
-        taxes_eur REAL NOT NULL DEFAULT 0.0,
-        fx_coverage_ratio REAL,
-        price_coverage_ratio REAL,
-        stale_price INTEGER NOT NULL DEFAULT 0,
-        provenance TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-        updated_at TEXT,
-        PRIMARY KEY (scope_type, scope_id, date)
-    );
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS idx_daily_wealth_scopes_date
-    ON daily_wealth_scopes (date);
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS idx_daily_wealth_scopes_scope
-    ON daily_wealth_scopes (scope_type, scope_id);
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS idx_daily_wealth_scopes_scope_name
-    ON daily_wealth_scopes (scope_name);
-    """,
-]
-
 PORTFOLIO_SNAPSHOT_SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS portfolio_snapshots (
@@ -897,8 +803,6 @@ ALL_SCHEMAS = [
     *PORTFOLIO_METRICS_SCHEMA,
     *ACCOUNT_METRICS_SCHEMA,
     *SECURITY_METRICS_SCHEMA,
-    *DAILY_WEALTH_SCHEMA,
-    *DAILY_WEALTH_SCOPES_SCHEMA,
     *PORTFOLIO_SNAPSHOT_SCHEMA,
     *ACCOUNT_SNAPSHOT_SCHEMA,
 ]

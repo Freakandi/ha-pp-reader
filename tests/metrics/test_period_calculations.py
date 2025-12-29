@@ -4,6 +4,7 @@ import sqlite3
 import pytest
 
 from custom_components.pp_reader.backdating.engine_pandas import TransactionType
+from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 from custom_components.pp_reader.metrics.period_calculations import (
     calculate_period_performance_series,
 )
@@ -151,17 +152,33 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
         ("tx_sell", 1, 500, "EUR"),
     )  # Tax (Type 1 is Tax)
 
+    # Add historical price for the start date to allow virtual lot creation
+    cur.execute(
+        """
+        INSERT INTO historical_prices (security_uuid, date, close)
+        VALUES (?, ?, ?)
+        """,
+        (sec_uuid, 20250101, 10500000000),  # 105 EUR
+    )
+    # Add historical price for the new start date to test virtual lot creation
+    cur.execute(
+        """
+        INSERT INTO historical_prices (security_uuid, date, close)
+        VALUES (?, ?, ?)
+        """,
+        (sec_uuid, 20250102, 11000000000),  # 110 EUR
+    )
+
     conn.commit()
     conn.close()
 
-    start_date = datetime.date(2025, 1, 1)
+    # Start period after the buy, so it becomes a virtual lot
+    start_date = datetime.date(2025, 1, 2)
     end_date = datetime.date(2025, 1, 3)
 
-    results = calculate_period_performance_series(test_db, start_date, end_date)
+    engine = PerformanceEngine(sqlite3.connect(test_db))
+    engine.load_data()
+    results = engine.calculate_period_performance(start_date, end_date)
 
-    # Jan 2 is the sell date.
-    metric = results.get("2025-01-02")
-    assert metric is not None
-
-    # Expected Realized Gain = Gross Proceeds (120) - Cost Basis (105) = 15.0
-    assert metric.realized_gains_eur == 15.0
+    # Expected Realized Gain = Gross Proceeds (120) - Virtual Cost Basis (110) = 10.0
+    assert results.realized_gains == 10.0

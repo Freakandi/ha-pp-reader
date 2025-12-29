@@ -257,18 +257,19 @@ Cross-currency purchases rely on the normalisation helpers in `logic.securities`
 The persisted metrics flow through `data.db_access`, `data.websocket`, and `data.event_push` so portfolio positions and security snapshots present the structured `aggregation` and `average_cost` payloads as primary values. Account- and security-currency totals continue to back those helpers, but the deprecated flat mirrors have been removed from emitted payloads.
 
 ### Realized Performance & FIFO
-Realized gains are computed on-demand for the "Trades" tab via `logic.securities.calculate_realized_performance`:
+Realized gains are computed on-demand by the `metrics.calculator.PerformanceEngine`:
 
-- **FIFO Matching**: Sales are matched against purchase lots (`_HoldingLot`) in strictly chronological order. The logic tracks the cost basis of each sold share to determine precise realized gains.
-- **Native Currency Support**: The computation preserves native currency values (e.g., USD sales of a US stock) alongside converted EUR values, populating `sell_price_native` and `last_sell_price_native` when available.
-- **Aggregated Results**: Individual sales are grouped by security into `RealizedPerformanceResult` objects, containing both summary metrics (total sold shares, total gain/loss) and a list of contributing lots.
+- **FIFO Matching**: Sales are matched against purchase lots (`Lot`) in strictly chronological order. The engine tracks the cost basis of each sold share to determine precise realized gains for any given period.
+- **Period-Specific Baseline**: The engine correctly uses the market value at the start of the period as the cost basis for securities that were already held, ensuring accurate period performance calculation.
+- **Unified Logic**: This FIFO logic is part of the core engine and is used for both the "Trades" tab and the "Analyse" tab's realized gains calculations.
 
-### Daily Wealth Analysis
-The "Analyse" tab is powered by `data.db_access.fetch_daily_wealth`, which aggregates historical balances:
+### Daily Wealth & Performance Analysis
+The "Analyse" tab and all performance metrics are now powered by the `metrics.calculator.PerformanceEngine` on-the-fly:
 
-- **Daily Scans**: Aggregates `daily_wealth` records containing total wealth, invested capital, and flow breakdowns (dividends, fees, taxes) for a requested date range.
-- **Slicing**: Supports drilling down into specific accounts or portfolios (`fetch_daily_wealth_scopes`) to visualize performance attribution.
-- **Performance Neutrality**: Filters movements flagged as performance-neutral to ensure accurate return calculations.
+- **Vectorized Calculation**: On API request, the engine loads all transactions, prices, and FX rates into Pandas DataFrames. It calculates daily time series for total wealth, invested capital, and cashflow buckets (dividends, fees, etc.) for the requested date range.
+- **Period Performance**: Implements FIFO logic to calculate period-specific realized and unrealized gains, correctly using the market value at the period's start as the baseline for holdings that existed at that time.
+- **Cash FX Gains**: Treats foreign currency holdings as an asset with a price of 1.0 to accurately isolate and calculate gains or losses from FX fluctuations.
+- **Single Source of Truth**: This engine is the single source of truth for all performance data, ensuring consistency across the "Analyse," "Trades," and "Overview" tabs. The `daily_wealth` table has been removed.
 
 
 ### Performance and day-change metrics

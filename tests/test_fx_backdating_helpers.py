@@ -12,6 +12,14 @@ from custom_components.pp_reader.data.db_access import load_fx_rates_for_date
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 
 
+class MockNetwork:
+    """Mock the network integration."""
+
+    @property
+    def adapters(self):
+        return []
+
+
 def test_discover_currency_date_bounds_parses_mixed_dates(tmp_path):
     """Currency bounds should normalize ISO and YYYYMMDD date formats."""
     db_path = tmp_path / "fx_bounds.db"
@@ -44,10 +52,10 @@ def test_discover_currency_date_bounds_parses_mixed_dates(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_async_ensure_exchange_rates_for_schedule_fetches_missing_once(
+async def test_async_ensure_exchange_rates_for_schedule_uses_range_queries(
     hass, tmp_path, monkeypatch
 ):
-    """Schedule-based fetch should batch per-day requests and compute coverage."""
+    """Schedule-based fetch should use range queries per currency."""
     db_path = tmp_path / "fx_schedule.db"
     initialize_database_schema(db_path)
 
@@ -56,16 +64,24 @@ async def test_async_ensure_exchange_rates_for_schedule_fetches_missing_once(
         date(2024, 1, 3): {"USD"},
     }
 
-    calls: list[tuple[str, tuple[str, ...]]] = []
+    calls: list[tuple[str, str, str]] = []
 
-    async def _fake_fetch(
-        date_str: str, currencies: set[str], **_: object
+    async def _fake_fetch_range(
+        session: object, currency: str, start_date: str, end_date: str
     ) -> dict[str, float]:
-        calls.append((date_str, tuple(sorted(currencies))))
-        return {currency: idx + 1.0 for idx, currency in enumerate(sorted(currencies))}
+        calls.append((currency, start_date, end_date))
+        rates: dict[str, float] = {}
+        if currency == "GBP":
+            if start_date == "2024-01-02" and end_date == "2024-01-02":
+                rates["2024-01-02"] = 1.0
+        elif currency == "USD":
+            if start_date == "2024-01-02" and end_date == "2024-01-03":
+                rates["2024-01-02"] = 2.0
+                rates["2024-01-03"] = 1.0  # Mimic old test's expectation
+        return rates
 
     monkeypatch.setattr(
-        fx_module, "_fetch_exchange_rates_with_retry", _fake_fetch, raising=True
+        fx_module, "_fetch_exchange_rates_range_aiohttp", _fake_fetch_range, raising=True
     )
 
     coverage = await fx_module.async_ensure_exchange_rates_for_schedule(
@@ -74,20 +90,26 @@ async def test_async_ensure_exchange_rates_for_schedule_fetches_missing_once(
         schedule,
     )
 
-    assert calls == [
-        ("2024-01-02", ("GBP", "USD")),
-        ("2024-01-03", ("USD",)),
+    # Sort calls for deterministic testing
+    sorted_calls = sorted(calls)
+    assert sorted_calls == [
+        ("GBP", "2024-01-02", "2024-01-02"),
+        ("USD", "2024-01-02", "2024-01-03"),
     ]
+
     assert coverage == {
         "2024-01-02": 1.0,
         "2024-01-03": 1.0,
     }
 
-    usd_rates = load_fx_rates_for_date(db_path, "2024-01-02")
-    assert {(rec.currency, rec.rate) for rec in usd_rates} == {
+    rates_d2 = load_fx_rates_for_date(db_path, "2024-01-02")
+    assert {(rec.currency, rec.rate) for rec in rates_d2} == {
         ("GBP", 1.0),
         ("USD", 2.0),
     }
+
+    rates_d3 = load_fx_rates_for_date(db_path, "2024-01-03")
+    assert {(rec.currency, rec.rate) for rec in rates_d3} == {("USD", 1.0)}
 
 
 @pytest.mark.asyncio
