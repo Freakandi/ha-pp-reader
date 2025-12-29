@@ -15,6 +15,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Constants from TransactionType in engine_pandas.py
 class TransactionType:
+    """Enumeration of transaction types."""
+
     BUY = 0
     SELL = 1
     INBOUND_DELIVERY = 2
@@ -35,6 +37,7 @@ class TransactionType:
 # Constants from Transaction Unit Types in engine_pandas.py
 UNIT_TYPE_TAX = 1
 UNIT_TYPE_FEE = 2
+EPOCH_DAY_THRESHOLD = 100000
 
 
 @dataclass(slots=True)
@@ -80,7 +83,7 @@ class PerformanceEngine:
         self._prices_idx = pd.DataFrame()
         self._rates_idx = pd.DataFrame()
 
-    def load_data(self) -> None:
+    def load_data(self) -> None:  # noqa: PLR0912, PLR0915
         """
         Load all necessary data from the database into pandas DataFrames.
 
@@ -90,7 +93,7 @@ class PerformanceEngine:
         "today" are up-to-date.
         """
         # transactions
-        query_txs = "SELECT uuid, type, date, account, other_account, security, shares, amount, currency_code FROM transactions ORDER BY date"
+        query_txs = "SELECT uuid, type, date, account, other_account, security, shares, amount, currency_code FROM transactions ORDER BY date"  # noqa: E501
         try:
             self._df_txs = pd.read_sql_query(query_txs, self.conn, parse_dates=["date"])
         except pd.errors.DatabaseError:
@@ -120,7 +123,7 @@ class PerformanceEngine:
             self._df_txs["amount_norm"] = []
 
         # transaction units
-        query_units = "SELECT transaction_uuid, type, amount, currency_code FROM transaction_units"
+        query_units = "SELECT transaction_uuid, type, amount, currency_code FROM transaction_units"  # noqa: E501
         try:
             self._df_units = pd.read_sql_query(query_units, self.conn)
         except pd.errors.DatabaseError:
@@ -141,7 +144,7 @@ class PerformanceEngine:
             self._df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
 
         # live prices
-        query_latest = "SELECT uuid as security_uuid, last_price as close, last_price_date FROM securities WHERE last_price IS NOT NULL AND last_price_date IS NOT NULL"
+        query_latest = "SELECT uuid as security_uuid, last_price as close, last_price_date FROM securities WHERE last_price IS NOT NULL AND last_price_date IS NOT NULL"  # noqa: E501
         try:
             df_latest = pd.read_sql_query(query_latest, self.conn)
             if not df_latest.empty:
@@ -176,7 +179,7 @@ class PerformanceEngine:
             self._df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
 
         # live fx rates
-        query_rates_live = "SELECT date, term_currency as currency, rate FROM exchange_rates WHERE base_currency = 'EUR'"
+        query_rates_live = "SELECT date, term_currency as currency, rate FROM exchange_rates WHERE base_currency = 'EUR'"  # noqa: E501
         try:
             df_rates_live = pd.read_sql_query(query_rates_live, self.conn)
             if not df_rates_live.empty:
@@ -319,7 +322,7 @@ class PerformanceEngine:
         return result
 
     def _augment_transfers(
-        self, df_transfers: pd.DataFrame, fx_long: pd.DataFrame
+        self, df_transfers: pd.DataFrame, fx_long: pd.DataFrame  # noqa: ARG002
     ) -> pd.DataFrame:
         """Augment transfer transactions with source currency information."""
         if df_transfers.empty:
@@ -339,7 +342,7 @@ class PerformanceEngine:
 
     def _parse_date_value(self, value: int) -> pd.Timestamp:
         """Parse an integer date value into a pandas Timestamp."""
-        if value < 100000:  # Epoch day
+        if value < EPOCH_DAY_THRESHOLD:  # Epoch day
             return pd.to_datetime(value, unit="D", origin="unix").tz_localize("UTC")
         return pd.to_datetime(str(value), format="%Y%m%d").tz_localize("UTC")
 
@@ -389,7 +392,10 @@ class PerformanceEngine:
         return metrics
 
     def _prepare_market_data(
-        self, df_rates: pd.DataFrame, df_prices: pd.DataFrame, date_range: pd.DatetimeIndex
+        self,
+        df_rates: pd.DataFrame,
+        df_prices: pd.DataFrame,
+        date_range: pd.DatetimeIndex,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         if not df_rates.empty:
             fx_pivot = df_rates.pivot_table(
@@ -686,7 +692,7 @@ class PerformanceEngine:
         for i in range(0, len(tx_uuids), chunk_size):
             chunk = tx_uuids[i : i + chunk_size]
             placeholders = ",".join("?" for _ in chunk)
-            query = f"SELECT transaction_uuid, type, amount FROM transaction_units WHERE transaction_uuid IN ({placeholders}) AND type IN (1, 2, 11, 13)"  # noqa: S608
+            query = f"SELECT transaction_uuid, type, amount FROM transaction_units WHERE transaction_uuid IN ({placeholders}) AND type IN (1, 2, 11, 13)"  # noqa: S608, E501
             try:
                 rows = self.conn.execute(query, tuple(chunk)).fetchall()
                 for r in rows:
@@ -701,7 +707,7 @@ class PerformanceEngine:
                 pass
         return result
 
-    def _calculate_capital_gains(
+    def _calculate_capital_gains(  # noqa: PLR0912
         self, df_txs: pd.DataFrame, start_date: date, end_date: date
     ) -> tuple[float, float]:
         start_ts = pd.Timestamp(start_date, tz="UTC")
@@ -784,7 +790,7 @@ class PerformanceEngine:
         )
         return realized_gains_eur, unrealized_gains_eur
 
-    def _calculate_fifo_series(
+    def _calculate_fifo_series(  # noqa: PLR0912, PLR0915
         self, start_date: date, end_date: date
     ) -> tuple[pd.Series, pd.Series]:
         """
@@ -793,6 +799,7 @@ class PerformanceEngine:
         Returns:
             realized_flow: Series indexed by date (daily sum of realized gains)
             cost_basis: Series indexed by date (EOD cost basis of held securities)
+
         """
         inventory: dict[str, deque[Lot]] = {}
         daily_realized: dict[pd.Timestamp, float] = {}
@@ -809,7 +816,7 @@ class PerformanceEngine:
         txs = self._df_txs[self._df_txs["type"].isin(sec_types)].sort_values("date")
 
         if txs.empty:
-            return pd.Series(0.0), pd.Series(0.0)
+            return pd.Series(dtype=float), pd.Series(dtype=float)
 
         units_payload = self._load_transaction_units(txs["uuid"].tolist())
         start_ts = pd.Timestamp(start_date, tz="UTC")
@@ -819,7 +826,7 @@ class PerformanceEngine:
 
         for row in txs.itertuples():
             # Optimization: Stop loop if we passed end_date?
-            # No, need checks inside, but we can't stop early effectively if basis is needed.
+            # No, need checks inside, but we can't stop early effectively if basis is needed.  # noqa: E501
             # But the caller usually asks for "start to end".
             # For data after end_date, we can ignore for state AT end_date.
             if row.date > end_ts:
@@ -900,11 +907,11 @@ class PerformanceEngine:
                         )
 
             # Record EOD basis for this date
-            # We overwrite previous entry for same day, so last tx wins (correct EOD state)
+            # We overwrite previous entry for same day, so last tx wins (EOD state)
             daily_basis_changes[row.date] = current_total_basis
 
-        realized_series = pd.Series(daily_realized)
-        cost_basis_series = pd.Series(daily_basis_changes)
+        realized_series = pd.Series(daily_realized, dtype=float)
+        cost_basis_series = pd.Series(daily_basis_changes, dtype=float)
 
         return realized_series, cost_basis_series
 
@@ -976,7 +983,7 @@ class PerformanceEngine:
                 unrealized_gains_eur += (end_val_eur - base_val_eur) * lot.shares
         return unrealized_gains_eur
 
-    def _calculate_fx_performance(
+    def _calculate_fx_performance(  # noqa: PLR0912
         self,
         df_txs: pd.DataFrame,
         start_date: date,

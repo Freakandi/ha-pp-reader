@@ -51,30 +51,77 @@ def test_calculate_capital_gains_fifo():
 
     # Mock transactions data
     transactions_data = [
-        ("t1", 0, "2023-01-01T10:00:00", "acc1", None, "port1", "sec1", 1000000000, 100000, "EUR"),
-        ("t2", 0, "2023-01-02T10:00:00", "acc1", None, "port1", "sec1", 1000000000, 110000, "EUR"),
-        ("t3", 1, "2023-01-03T10:00:00", "acc1", None, "port1", "sec1", -500000000, 60000, "EUR"),
-        ("t4", 1, "2023-01-04T10:00:00", "acc1", None, "port1", "sec1", -1000000000, 130000, "EUR"),
+        (
+            "t1",
+            0,
+            "2023-01-01T10:00:00",
+            "acc1",
+            None,
+            "port1",
+            "sec1",
+            1000000000,
+            100000,
+            "EUR",
+        ),
+        (
+            "t2",
+            0,
+            "2023-01-02T10:00:00",
+            "acc1",
+            None,
+            "port1",
+            "sec1",
+            1000000000,
+            110000,
+            "EUR",
+        ),
+        (
+            "t3",
+            1,
+            "2023-01-03T10:00:00",
+            "acc1",
+            None,
+            "port1",
+            "sec1",
+            -500000000,
+            60000,
+            "EUR",
+        ),
+        (
+            "t4",
+            1,
+            "2023-01-04T10:00:00",
+            "acc1",
+            None,
+            "port1",
+            "sec1",
+            -1000000000,
+            130000,
+            "EUR",
+        ),
     ]
-    conn.executemany("INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", transactions_data)
+    conn.executemany(
+        "INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        transactions_data,
+    )
 
     # Mock transaction units data for sales
     transaction_units_data = [
         ("t3", 2, 500, "EUR"),  # 5 EUR fee
         ("t4", 2, 500, "EUR"),  # 5 EUR fee
     ]
-    conn.executemany("INSERT INTO transaction_units VALUES (?, ?, ?, ?)", transaction_units_data)
+    conn.executemany(
+        "INSERT INTO transaction_units VALUES (?, ?, ?, ?)", transaction_units_data
+    )
 
     # Mock securities data
-    securities_data = [
-        ("sec1", "Test Security", "EUR", "TEST", 1350000000)
-    ]
+    securities_data = [("sec1", "Test Security", "EUR", "TEST", 1350000000)]
     conn.executemany("INSERT INTO securities VALUES (?, ?, ?, ?, ?)", securities_data)
 
     # Mock historical prices for unrealized gains calculation
     prices_data = [
-            ("sec1", 20230101, 10000000000),  # Price for virtual lot (100.0)
-        ("sec1", 20230104, 13500000000), # Price at end (135.0)
+        ("sec1", 20230101, 10000000000),  # Price for virtual lot (100.0)
+        ("sec1", 20230104, 13500000000),  # Price at end (135.0)
     ]
     conn.executemany("INSERT INTO historical_prices VALUES (?, ?, ?)", prices_data)
 

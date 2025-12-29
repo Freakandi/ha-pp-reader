@@ -17,6 +17,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Trade Details Tab**: Enhanced the trade details view to match the security detail design, adding a centered security name header, a metadata grid for "Letzter Verkaufspreis" and "Änderung seit Verkauf", an interactive history chart with range selectors and purchase/sell markers, and a "Copy prompt for ChatGPT" button.
 
 ### Fixed
+- **Time Series Gains**: Fixed an issue where realized and unrealized gains were hardcoded to 0.0 in the Time Series tab.
+- **Performance Engine**: Resolved a `TypeError` in the performance calculator preventing data loading when no realized gains occurred in the selected period.
 - **Fixed**: Resolved a critical bug in `period_calculations.py` where daily prices were not updating during the simulation loop due to incorrect dictionary key access, causing flat/static performance calculations for held positions.
 - **Fixed**: Linter errors in `period_calculations.py`.
 - **Trade Detail Tab**: Resolved critical bug where the "Trade Detail" tab would not open when clicking on a security name in the "Trades" tab. Fixing this involved resolving a circular dependency between `dashboard.ts` and `trades.ts` and ensuring event listeners are attached to the correct DOM elements.

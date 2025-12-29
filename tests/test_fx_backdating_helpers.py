@@ -11,9 +11,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 # --- Legacy imports removed because the module is gone ---
-# from custom_components.pp_reader.backdating.fx_backdating_helpers import (
-#     ensure_fx_coverage_for_period,
-# )
+
 
 
 @pytest.fixture

@@ -1,6 +1,7 @@
 ---
 description: Analyze a bug and create a specific NAMED task plan in tasks/ folder
 ---
+
 1. **Analyze Input**:
    - Read the user's most recent message(s) to isolate the bug description.
    - IF the description is missing or ambiguous, ASK the user for clarification.

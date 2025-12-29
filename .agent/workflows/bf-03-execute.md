@@ -1,5 +1,5 @@
 ---
-description: Implement a specific NAMED task file (Usage: /bugfix_03_execute tasks/my_bug.md)
+description: Execute a NAMED task file
 ---
 
 1. **Identify Task File**:

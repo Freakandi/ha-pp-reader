@@ -1,6 +1,6 @@
 # Task: Fix Time Series Gains Zeros
 
-Status: [ ] Open
+Status: [x] Closed
 
 ## Issue
 Realized and Unrealized Gains appear as 0.0 in the frontend Time Series tab. This is caused by `custom_components/pp_reader/data/websocket.py` explicitly hardcoding these values to 0.0 during serialization and subsequently attempting a redundant legacy calculation (`calculate_period_performance_series`) that suppresses the authoritative `PerformanceEngine` data.

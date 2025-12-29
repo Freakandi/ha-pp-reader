@@ -17,6 +17,7 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pandas as pd  # noqa: TC002
 import voluptuous as vol
 from homeassistant.components import websocket_api
 
@@ -24,14 +25,11 @@ from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
 )
-from custom_components.pp_reader.metrics.breakdown import (
+from custom_components.pp_reader.metrics.breakdown import (  # noqa: TC001
     BreakdownItem,
     PerformanceBreakdown,
 )
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
-from custom_components.pp_reader.metrics.period_calculations import (
-    calculate_period_performance_series,
-)
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
 
@@ -550,8 +548,8 @@ def _serialize_daily_wealth(record: dict[str, Any]) -> dict[str, Any]:
         "performance_neutral_movements": record.get("performance_neutral_movements"),
         "fees_eur": record.get("fees_eur"),
         "taxes_eur": record.get("taxes_eur"),
-        "realized_gains_eur": 0.0,
-        "unrealized_gains_eur": 0.0,
+        "realized_gains_eur": record.get("realized_gains_eur"),
+        "unrealized_gains_eur": record.get("unrealized_gains_eur"),
         "invested_capital_eur": record.get("invested_capital_eur"),
         "fx_coverage_ratio": record.get("fx_coverage_ratio"),
         "price_coverage_ratio": record.get("price_coverage_ratio"),
@@ -577,8 +575,8 @@ def _serialize_daily_scope(record: dict[str, Any]) -> dict[str, Any]:
         "performance_neutral_movements": record.get("performance_neutral_movements"),
         "fees_eur": record.get("fees_eur"),
         "taxes_eur": record.get("taxes_eur"),
-        "realized_gains_eur": 0.0,
-        "unrealized_gains_eur": 0.0,
+        "realized_gains_eur": record.get("realized_gains_eur"),
+        "unrealized_gains_eur": record.get("unrealized_gains_eur"),
         "invested_capital_eur": record.get("invested_capital_eur"),
         "fx_coverage_ratio": record.get("fx_coverage_ratio"),
         "price_coverage_ratio": record.get("price_coverage_ratio"),
@@ -1157,20 +1155,24 @@ async def ws_get_trades(
             engine.load_data()
 
             start_date = date(1900, 1, 1)
-            end_date = date.today()
+            end_date = datetime.now(tz=UTC).date()
 
-            realized_gains, _ = engine._calculate_capital_gains(engine._df_txs, start_date, end_date)
+            realized_gains, _ = engine._calculate_capital_gains(  # noqa: SLF001
+                engine._df_txs, start_date, end_date  # noqa: SLF001
+            )
 
-            # This is a simplification. The original function returns a detailed list of trades.
+            # This is a simplification. The original function returns a detailed list of trades.  # noqa: E501
             # The new engine currently only calculates the total realized gains.
             # For now, we will return a single trade representing the total.
-            return [{
-                "security_uuid": "TOTAL",
-                "name": "Total Realized Gains",
-                "currency_code": "EUR",
-                "result_abs": realized_gains,
-                "lots": [],
-            }]
+            return [
+                {
+                    "security_uuid": "TOTAL",
+                    "name": "Total Realized Gains",
+                    "currency_code": "EUR",
+                    "result_abs": realized_gains,
+                    "lots": [],
+                }
+            ]
 
     try:
         trades = await async_run_executor_job(hass, _calc_trades)
@@ -1383,8 +1385,6 @@ def _validate_daily_wealth_request(  # noqa: PLR0911, PLR0912
     ), None
 
 
-
-
 @websocket_api.websocket_command(_WS_GET_DAILY_WEALTH_SCHEMA)
 @websocket_api.async_response
 async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
@@ -1418,6 +1418,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     end_iso = params.end_date.isoformat()
 
     try:
+
         def _fetch_from_engine() -> pd.DataFrame:
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
                 engine = PerformanceEngine(conn)
@@ -1469,31 +1470,6 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     metrics_payload = None
     if params.start_date and params.end_date:
         try:
-            _LOGGER.debug(
-                "Calculating period performance for %s to %s",
-                params.start_date,
-                params.end_date,
-            )
-            period_metrics = await async_run_executor_job(
-                hass,
-                calculate_period_performance_series,
-                db_path,
-                params.start_date,
-                params.end_date,
-            )
-            _LOGGER.debug("Calculated metrics for %d days", len(period_metrics))
-            # Inject into records
-            for rec in records:
-                iso = rec["date"]
-                if iso in period_metrics:
-                    pm = period_metrics[iso]
-                    rec["realized_gains_eur"] = pm.realized_gains_eur
-                    rec["unrealized_gains_eur"] = pm.unrealized_gains_eur
-                else:
-                    # No metrics found for this day (no trades + no holdings?)
-                    rec["realized_gains_eur"] = 0.0
-                    rec["unrealized_gains_eur"] = 0.0
-
             # Calculate Aggregate Performance Metrics (Phase C)
             def _calc_metrics() -> dict[str, float]:
                 with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
@@ -1631,7 +1607,9 @@ async def ws_get_performance_breakdown(
             engine.load_data()
             daily_wealth = engine.get_daily_wealth(start_date, end_date)
 
-            realized_gains, _ = engine._calculate_capital_gains(engine._df_txs, start_date, end_date)
+            realized_gains, _ = engine._calculate_capital_gains(  # noqa: SLF001
+                engine._df_txs, start_date, end_date  # noqa: SLF001
+            )
 
             dividends = daily_wealth["dividends_eur"].sum()
             interest = daily_wealth["interest_eur"].sum()
@@ -1639,7 +1617,9 @@ async def ws_get_performance_breakdown(
             taxes = daily_wealth["taxes_eur"].sum()
 
             return {
-                "realized_gains": [{"label": "Total", "amount": realized_gains, "details": {}}],
+                "realized_gains": [
+                    {"label": "Total", "amount": realized_gains, "details": {}}
+                ],
                 "unrealized_gains": [],
                 "dividends": [{"label": "Total", "amount": dividends, "details": {}}],
                 "fees": [{"label": "Total", "amount": fees, "details": {}}],

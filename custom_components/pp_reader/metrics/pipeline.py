@@ -1,3 +1,5 @@
+"""Pipeline for metrics calculation."""
+
 from __future__ import annotations
 
 import logging
@@ -169,7 +171,6 @@ async def async_refresh_all(
             duration_ms=final_run.duration_ms,
         )
         return final_run
-
 
 
 def _utc_now_isoformat() -> str:

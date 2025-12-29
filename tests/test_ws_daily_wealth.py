@@ -82,7 +82,16 @@ def _seed_engine_data(db_path: Path) -> None:
         # Buy transaction on day 10
         conn.execute(
             "INSERT INTO transactions (uuid, type, date, security, shares, amount, currency_code, account) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("tx-1", 0, "2024-01-10T12:00:00Z", "sec-1", 10 * 10**8, 1000 * 100, "USD", "acc-1"),
+            (
+                "tx-1",
+                0,
+                "2024-01-10T12:00:00Z",
+                "sec-1",
+                10 * 10**8,
+                1000 * 100,
+                "USD",
+                "acc-1",
+            ),
         )
         conn.execute(
             "INSERT INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",

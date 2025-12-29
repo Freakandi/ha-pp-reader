@@ -578,7 +578,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
         summary: dict[str, Any],
         *,
         errors: Iterable[str],
-        backdating: bool = False,
+        backdating: bool = False,  # noqa: ARG002
     ) -> None:
         """Trigger the metrics engine after enrichment tasks finished."""
         error_list = list(errors)
