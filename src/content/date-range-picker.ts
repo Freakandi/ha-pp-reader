@@ -173,6 +173,25 @@ export class DateRangePicker {
     }
 
     private bindEvents() {
+        // Reset preview state when mouse leaves the calendars area
+        this.calendarsContainer.addEventListener('mouseleave', () => {
+            if (this.tempRange.start.getTime() === this.tempRange.end.getTime()) {
+                const startTime = this.tempRange.start.getTime();
+                const cells = this.calendarsContainer.querySelectorAll('.drp-day');
+                cells.forEach(cell => {
+                    const cellDate = Number(cell.getAttribute('data-date'));
+                    if (!cellDate) return;
+                    // Reset to single day selection state
+                    if (cellDate === startTime) {
+                        cell.classList.add('range-start', 'range-end');
+                        cell.classList.remove('in-range');
+                    } else {
+                        cell.classList.remove('in-range', 'range-start', 'range-end');
+                    }
+                });
+            }
+        });
+
         const toggleHandler = (e: Event) => {
             e.stopPropagation();
             this.toggle();
@@ -536,6 +555,7 @@ export class DateRangePicker {
             const cell = document.createElement('div');
             cell.className = 'drp-day';
             cell.textContent = d.toString();
+            cell.dataset.date = String(current.getTime());
             cell.setAttribute('role', 'option');
             cell.tabIndex = 0;
 
@@ -707,7 +727,53 @@ export class DateRangePicker {
         this.updatePresetState(null);
     }
 
-    private handleDayHover(_date: Date) {
-        // Optional: Preview range
+    private handleDayHover(date: Date) {
+        // Only preview if we are in "selection mode" (start selected, waiting for end)
+        // This is indicated by start === end (since clicking once sets both to same date)
+        if (this.tempRange.start.getTime() !== this.tempRange.end.getTime()) return;
+
+        const hoverTime = date.getTime();
+        const startTime = this.tempRange.start.getTime();
+
+        const cells = this.calendarsContainer.querySelectorAll('.drp-day');
+
+        // If hovering earlier than start, or same day, clear preview (revert to single point)
+        if (hoverTime <= startTime) {
+            cells.forEach(cell => {
+                const cellDate = Number(cell.getAttribute('data-date'));
+                if (!cellDate) return;
+
+                if (cellDate === startTime) {
+                    cell.classList.add('range-start', 'range-end');
+                    cell.classList.remove('in-range');
+                } else {
+                    cell.classList.remove('in-range', 'range-start', 'range-end');
+                }
+            });
+            return;
+        }
+
+        // Apply range preview
+        cells.forEach(cell => {
+            const cellDate = Number(cell.getAttribute('data-date'));
+            if (!cellDate) return;
+
+            if (cellDate === startTime) {
+                // Start of the new potential range
+                cell.classList.add('range-start', 'in-range');
+                cell.classList.remove('range-end');
+            } else if (cellDate > startTime && cellDate < hoverTime) {
+                // Middle of range
+                cell.classList.add('in-range');
+                cell.classList.remove('range-start', 'range-end');
+            } else if (cellDate === hoverTime) {
+                // End of range (hovered cell)
+                cell.classList.add('range-end', 'in-range');
+                cell.classList.remove('range-start');
+            } else {
+                // Outside
+                cell.classList.remove('in-range', 'range-start', 'range-end');
+            }
+        });
     }
 }
