@@ -9,6 +9,15 @@ description: Analyze a bug and create a specific NAMED task plan in tasks/ folde
 2. **Investigate & Reproduce**:
    - If applicable, check logs: `grep_search` on `/tmp/ha_pp_reader_hass.log`.
    - If applicable, inspect code locations to form a hypothesis.
+   - ONLY IF UI-investigation is needed:
+      a. **Cleanup Stale Processes**:
+         - Check for running instances: `pgrep -fl hass`, `pgrep -fl vite`.
+         - If found and owned by the user, kill them to ensure a clean slate.
+      b. **Start Home Assistant**:
+         - Command: `source .venv/bin/activate && nohup hass --config ~/coding/repos/ha-pp-reader/config --debug > /tmp/ha_pp_reader_hass.log 2>&1 &`
+         - Wait a moment and use `command_status` or check logs to ensure it didn't immediately fail.
+      c. **Start Vite**:
+         - Command: `npm run dev -- --host 127.0.0.1 --port 5173`
 
 3. **Define Task**:
    - Create a short, descriptive slug for the issue (e.g., `fix_graph_jitter`, `resolve_500_error`).
