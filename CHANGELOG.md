@@ -9,15 +9,15 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ### Added
 - **Realized Performance Tab ("Trades")**: Introduced a comprehensive view for realized gains/losses, featuring stacked columns (e.g., Purchase/Sales Value), granular sorting, and "Since Sell" metrics.
 - **Accessibility**: Added tooltips to icon-only navigation buttons and `aria-hidden` attributes to decorative SVGs.
-- **Performance**: Implemented "Bolt" optimizations for transaction grouping, history ingestion, and cashflow backdating, significantly improving data processing speed.
+
 
 ### Changed
+- **Performance**: Implemented various performance optimizations including "Partial Replay" for Time Series, "Bolt" transaction grouping, and targeted snapshot updates to eliminate UI freezes.
 - **Dashboard Navigation**: Repositioned detail tabs to the left of the Overview tab for better workflow flow; enforced single detailed tab mode.
 - **Trades Tab Layout**: Optimized column layout by stacking related metrics (e.g., Gross/Net result) and ensured native currency display for price columns.
 - **Trade Details Tab**: Enhanced the trade details view to match the security detail design, adding a centered security name header, a metadata grid for "Letzter Verkaufspreis" and "Änderung seit Verkauf", an interactive history chart with range selectors and purchase/sell markers, and a "Copy prompt for ChatGPT" button.
 
 ### Fixed
-- **Performance**: Resolved critical UI freezes and slow response times when expanding portfolio positions or viewing details. The backend now partially normalizes snapshots for specific portfolios instead of recalculating the entire dataset on every request.
 - **Time Series Gains**: Fixed an issue where realized and unrealized gains were hardcoded to 0.0 in the Time Series tab.
 - **Performance Engine**: Resolved a `TypeError` in the performance calculator preventing data loading when no realized gains occurred in the selected period.
 - **Fixed**: Resolved a critical bug in `period_calculations.py` where daily prices were not updating during the simulation loop due to incorrect dictionary key access, causing flat/static performance calculations for held positions.

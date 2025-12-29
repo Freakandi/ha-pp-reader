@@ -17,7 +17,7 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import pandas as pd  # noqa: TC002
+import pandas as pd
 import voluptuous as vol
 from homeassistant.components import websocket_api
 
@@ -1443,19 +1443,52 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
 
     try:
 
-        def _fetch_from_engine() -> pd.DataFrame:
+        def _fetch_and_calculate() -> tuple[pd.DataFrame, dict[str, float] | None]:
+            # Use T-1 for chart data to ensure start-of-period valuation is available
+            chart_start = params.start_date - pd.Timedelta(days=1)
+
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
                 engine = PerformanceEngine(conn)
                 engine.load_data()
-                return engine.get_daily_wealth(params.start_date, params.end_date)
 
-        totals_df = await async_run_executor_job(hass, _fetch_from_engine)
+                # 1. Chart Data (Time Series)
+                df = engine.get_daily_wealth(chart_start, params.end_date)
+
+                # 2. Metrics (Aggregates) - Reuses loaded data!
+                metrics = None
+                if params.start_date and params.end_date:
+                    perf = engine.calculate_period_performance(
+                        params.start_date,
+                        params.end_date,
+                    )
+                    metrics = {
+                        "absolute_performance": perf.absolute_performance,
+                        "realized_gains": perf.realized_gains,
+                        "unrealized_gains": perf.unrealized_gains,
+                        "fx_gains_cash": perf.fx_gains_cash,
+                    }
+
+                return df, metrics
+
+        totals_df, metrics_payload = await async_run_executor_job(
+            hass, _fetch_and_calculate
+        )
+
         if totals_df.empty:
             message = f"Keine daily_wealth Daten im Zeitraum {start_iso}-{end_iso}"
             connection.send_error(msg_id, "no_data", message)
             return
 
-        totals = totals_df.to_dict(orient="records")
+        # Normalize dataframe slice for output (strictly params.start to params.end)
+        # Convert date column to date object for comparison if needed, or string compare
+        # The DF index is datetime, but reset_index made it a string column:
+        # "date": "YYYY-MM-DD"
+        # We can filter simply by string comparison ISO format
+        totals_df_filtered = totals_df[
+            (totals_df["date"] >= start_iso) & (totals_df["date"] <= end_iso)
+        ]
+
+        totals = totals_df_filtered.to_dict(orient="records")
         account_slices, portfolio_slices = [], []
 
         # Load all known accounts and portfolios directly from DB to ensure coverage
@@ -1491,29 +1524,10 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
     # --- Period-Specific Realized Gains Calculation ---
     # Standard daily_wealth stores absolute realized gains (Buy->Sell).
     # For Period views, we need gains relative to the Period Start Value.
-    metrics_payload = None
-    if params.start_date and params.end_date:
-        try:
-            # Calculate Aggregate Performance Metrics (Phase C)
-            def _calc_metrics() -> dict[str, float]:
-                with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-                    engine = PerformanceEngine(conn)
-                    engine.load_data()
-                    perf = engine.calculate_period_performance(
-                        params.start_date,
-                        params.end_date,
-                    )
-                    return {
-                        "absolute_performance": perf.absolute_performance,
-                        "realized_gains": perf.realized_gains,
-                        "unrealized_gains": perf.unrealized_gains,
-                        "fx_gains_cash": perf.fx_gains_cash,
-                    }
-
-            metrics_payload = await async_run_executor_job(hass, _calc_metrics)
-
-        except Exception:
-            _LOGGER.exception("Failed to calculate period performance")
+    # --- Period-Specific Realized Gains Calculation ---
+    # Standard daily_wealth stores absolute realized gains (Buy->Sell).
+    # For Period views, we need gains relative to the Period Start Value.
+    # Note: metrics_payload is now calculated in _fetch_and_calculate above.
 
     # PP Alignment: "Start Date" wealth is the baseline (End of Day).
     # Flows occurring ON the start date should be excluded from period summation.

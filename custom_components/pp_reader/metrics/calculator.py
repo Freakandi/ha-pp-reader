@@ -38,6 +38,7 @@ class TransactionType:
 UNIT_TYPE_TAX = 1
 UNIT_TYPE_FEE = 2
 EPOCH_DAY_THRESHOLD = 100000
+_SHARE_EPSILON = 1e-9
 
 
 @dataclass(slots=True)
@@ -136,9 +137,23 @@ class PerformanceEngine:
         try:
             self._df_prices = pd.read_sql_query(query_prices, self.conn)
             if not self._df_prices.empty:
-                self._df_prices["date"] = self._df_prices["date"].apply(
-                    self._parse_date_value
-                )
+                # Vectorized date parsing
+                dates = self._df_prices["date"]
+                mask_epoch = dates < EPOCH_DAY_THRESHOLD
+
+                converted = pd.Series(index=dates.index, dtype="datetime64[ns, UTC]")
+
+                if mask_epoch.any():
+                    converted.loc[mask_epoch] = pd.to_datetime(
+                        dates[mask_epoch], unit="D", origin="unix", utc=True
+                    )
+
+                if (~mask_epoch).any():
+                    converted.loc[~mask_epoch] = pd.to_datetime(
+                        dates[~mask_epoch].astype(str), format="%Y%m%d", utc=True
+                    )
+
+                self._df_prices["date"] = converted
                 self._df_prices["close"] = self._df_prices["close"] / PRICE_SCALE
         except pd.errors.DatabaseError:
             self._df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
@@ -342,12 +357,6 @@ class PerformanceEngine:
 
         return pd.concat([df_out, df_in], ignore_index=True)
 
-    def _parse_date_value(self, value: int) -> pd.Timestamp:
-        """Parse an integer date value into a pandas Timestamp."""
-        if value < EPOCH_DAY_THRESHOLD:  # Epoch day
-            return pd.to_datetime(value, unit="D", origin="unix").tz_localize("UTC")
-        return pd.to_datetime(str(value), format="%Y%m%d").tz_localize("UTC")
-
     def calculate_period_performance(
         self, start_date: date, end_date: date
     ) -> PerformanceMetrics:
@@ -381,8 +390,44 @@ class PerformanceEngine:
             end_invested - start_invested
         )
 
+        # Optimization: Use Partial Replay Strategy
+        # 1. Snapshot holdings at start date
+        start_holdings = self._get_holdings_at_date(start_date)
+
+        # 2. Create Virtual Inventory (Mark-to-Market)
+        # Each holding becomes a single lot with cost basis = price at start date
+        virtual_inventory: dict[str, deque[Lot]] = {}
+        start_ts = pd.Timestamp(start_date, tz="UTC")
+
+        for sec_uuid, share_count in start_holdings.items():
+            if share_count <= 0:
+                continue
+
+            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            start_price = self._get_price(sec_uuid, start_ts)
+            start_fx = self._get_fx(curr, start_ts)
+
+            virtual_inventory[sec_uuid] = deque(
+                [
+                    Lot(
+                        date=start_ts,
+                        shares=share_count,
+                        price_native=start_price,
+                        fx_rate=start_fx,
+                    )
+                ]
+            )
+
+        # 3. Filter Transactions for the Window
+        # We include transactions ON the start date in the window replay
+        end_ts = pd.Timestamp(end_date, tz="UTC")
+        window_mask = (self._df_txs["date"] >= start_ts) & (
+            self._df_txs["date"] <= end_ts
+        )
+        df_txs_window = self._df_txs[window_mask]
+
         realized, unrealized = self._calculate_capital_gains(
-            self._df_txs, start_date, end_date
+            df_txs_window, start_date, end_date, initial_inventory=virtual_inventory
         )
         metrics.realized_gains = realized
         metrics.unrealized_gains = unrealized
@@ -710,11 +755,17 @@ class PerformanceEngine:
         return result
 
     def _calculate_capital_gains(  # noqa: PLR0912
-        self, df_txs: pd.DataFrame, start_date: date, end_date: date
+        self,
+        df_txs: pd.DataFrame,
+        start_date: date,
+        end_date: date,
+        initial_inventory: dict[str, deque[Lot]] | None = None,
     ) -> tuple[float, float]:
         start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
-        inventory: dict[str, deque[Lot]] = {}
+        start_ts = pd.Timestamp(start_date, tz="UTC")
+        end_ts = pd.Timestamp(end_date, tz="UTC")
+        inventory: dict[str, deque[Lot]] = initial_inventory or {}
         realized_gains_eur = 0.0
 
         sec_types = [
@@ -1106,3 +1157,42 @@ class PerformanceEngine:
             val_base = (consumed / base_fx) if base_fx else 0.0
             gain_accum += val_tx - val_base
         return gain_accum
+
+    def _get_holdings_at_date(self, d: date) -> dict[str, float]:
+        """Calculate security holdings at the start of a specific date (EOD of d-1)."""
+        if self._df_txs.empty:
+            return {}
+
+        ts = pd.Timestamp(d, tz="UTC")
+
+        # Filter transactions strictly BEFORE the date
+        mask = (self._df_txs["date"] < ts) & (self._df_txs["security"].notna())
+        df_past = self._df_txs[mask].copy()
+
+        if df_past.empty:
+            return {}
+
+        share_signs = {
+            TransactionType.BUY: 1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.SECURITY_TRANSFER: 1,
+            TransactionType.SELL: -1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
+
+        # Calculate signed shares
+        # Note: We rely on the fact that `shares_norm` is already in normalized units
+        # but we need to apply the direction (Buy/Sell)
+
+        # Helper to map type to sign
+        def get_sign(t_type: int) -> int:
+            return share_signs.get(t_type, 0)
+
+        df_past["sign"] = df_past["type"].apply(get_sign)
+        df_past["delta_shares"] = df_past["shares_norm"].fillna(0.0) * df_past["sign"]
+
+        # Sum by security
+        holdings = df_past.groupby("security")["delta_shares"].sum()
+
+        # Filter out zero or near-zero holdings and return dict
+        return {k: v for k, v in holdings.items() if abs(v) > _SHARE_EPSILON}
