@@ -111,6 +111,11 @@ export class DateRangePicker {
         // Calendars
         this.calendarsContainer = document.createElement('div');
         this.calendarsContainer.className = 'drp-calendars';
+        this.calendarsContainer.addEventListener('mouseleave', () => {
+            if (this.tempRange.start.getTime() === this.tempRange.end.getTime()) {
+                this.clearHoverPreview();
+            }
+        });
         main.appendChild(this.calendarsContainer);
 
         // Footer
@@ -536,6 +541,7 @@ export class DateRangePicker {
             const cell = document.createElement('div');
             cell.className = 'drp-day';
             cell.textContent = d.toString();
+            cell.setAttribute('data-date', current.getTime().toString());
             cell.setAttribute('role', 'option');
             cell.tabIndex = 0;
 
@@ -707,7 +713,58 @@ export class DateRangePicker {
         this.updatePresetState(null);
     }
 
-    private handleDayHover(_date: Date) {
-        // Optional: Preview range
+    private handleDayHover(date: Date) {
+        // Only show preview if we have a single selected date (start == end)
+        // which implies the user is selecting the second date of the range.
+        if (this.tempRange.start.getTime() !== this.tempRange.end.getTime()) {
+            return;
+        }
+
+        const hoverTime = date.getTime();
+        const startTime = this.tempRange.start.getTime();
+
+        // If hovering same day, no preview needed (it's already start/end)
+        if (hoverTime === startTime) {
+            this.clearHoverPreview();
+            return;
+        }
+
+        const rangeStart = Math.min(startTime, hoverTime);
+        const rangeEnd = Math.max(startTime, hoverTime);
+
+        // Update classes on all visible days
+        const allDays = this.calendarsContainer.querySelectorAll('.drp-day');
+        allDays.forEach(el => {
+            const cell = el as HTMLElement;
+            const cellDateStr = cell.getAttribute('data-date');
+            if (!cellDateStr) return;
+
+            const t = parseInt(cellDateStr, 10);
+
+            // Avoid modifying start/end classes
+            if (t === startTime) return;
+
+            if (t >= rangeStart && t <= rangeEnd) {
+                // If it's the hovered end, maybe style it differently?
+                // For now, just part of range or end of range.
+                // The CSS .in-range is good.
+                cell.classList.add('in-range');
+                // Optional: add temporary range-end class to hovered cell?
+                // if (t === hoverTime) cell.classList.add('range-end');
+            } else {
+                cell.classList.remove('in-range');
+            }
+        });
+    }
+
+    private clearHoverPreview() {
+        const allDays = this.calendarsContainer.querySelectorAll('.drp-day');
+        allDays.forEach(el => {
+            // Don't remove range-start/range-end if they are part of committed selection
+            // But here we are in preview mode where start==end.
+            // So existing start/end are valid.
+            // We only want to remove .in-range which was added by preview.
+            el.classList.remove('in-range');
+        });
     }
 }
