@@ -67,6 +67,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Performance Neutral**: Excluded internal transfers from "Performance Neutral" optimization to prevent "phantom inflows/outflows" and applied correct directional signs to Removals/Deliveries.
 
 ### Internal
+- **Workflows**: Updated `push-remote` workflow to handle iterative ruff check/format cycles.
 - **Documentation**: Updated `AGENT_HANDBOOK.md`, `ARCHITECTURE.md`, `README.md`, and `README-dev.md` to reflect latest workflows and setup instructions.
 - **Refactoring**: Resolved circular dependencies in `currency` and `db_access` modules.
 - **Linting**: Applied strict `ruff` and TypeScript linting across the codebase.

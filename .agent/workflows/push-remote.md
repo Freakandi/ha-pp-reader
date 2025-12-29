@@ -2,12 +2,11 @@
 description: Verify code quality, build assets, update changelog, and push to remote.
 ---
 
-1. Apply Ruff formatting:
-// turbo
-   `ruff format .`
-
-2. Verify cleanliness with Ruff:
-   `ruff check . --fix`
+1. Ensure Python Code Quality (Iterative Cycle):
+   - Run `ruff check . --fix`
+   - Run `ruff format .`
+   - Run `ruff check .` (verify no errors remain)
+   - *Repeat this cycle if `ruff check --fix` or `ruff format` made changes that triggered new issues, until the code is stable and clean.*
 
 3. Verify TypeScript linting:
    `npm run lint:ts -- --fix`

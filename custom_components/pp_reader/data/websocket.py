@@ -1158,9 +1158,9 @@ async def ws_get_trades(
             end_date = datetime.now(tz=UTC).date()
 
             realized_gains, _ = engine._calculate_capital_gains(  # noqa: SLF001
-                engine._df_txs,
+                engine._df_txs,  # noqa: SLF001
                 start_date,
-                end_date,  # noqa: SLF001
+                end_date,
             )
 
             # This is a simplification. The original function returns a detailed list of trades.  # noqa: E501
@@ -1610,9 +1610,9 @@ async def ws_get_performance_breakdown(
             daily_wealth = engine.get_daily_wealth(start_date, end_date)
 
             realized_gains, _ = engine._calculate_capital_gains(  # noqa: SLF001
-                engine._df_txs,
+                engine._df_txs,  # noqa: SLF001
                 start_date,
-                end_date,  # noqa: SLF001
+                end_date,
             )
 
             dividends = daily_wealth["dividends_eur"].sum()
