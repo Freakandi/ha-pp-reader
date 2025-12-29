@@ -356,9 +356,7 @@ class BackdatingEngine:
         """Prepare FX and Price pivot tables."""
         if not df_rates.empty:
             df_rates["currency"] = df_rates["currency"].astype(str)
-            fx_pivot = df_rates.pivot_table(
-                index="date", columns="currency", values="rate"
-            )
+            fx_pivot = df_rates.pivot(index="date", columns="currency", values="rate")  # noqa: PD010
         else:
             fx_pivot = pd.DataFrame(index=date_range)
 
@@ -366,7 +364,7 @@ class BackdatingEngine:
         fx_pivot = fx_pivot.reindex(date_range).ffill().bfill()
 
         if not df_prices.empty:
-            price_pivot = df_prices.pivot_table(
+            price_pivot = df_prices.pivot(
                 index="date", columns="security_uuid", values="close"
             )
             price_pivot = price_pivot / PRICE_SCALE
