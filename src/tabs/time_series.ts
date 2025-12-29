@@ -317,7 +317,7 @@ function renderMetrics(
                 detailRow.className = 'breakdown-row';
                 detailRow.style.animation = 'fadeIn 0.2s ease';
                 detailRow.innerHTML = `
-                 <span class="metric-label">${item.label}</span>
+                 <span class="metric-label">${escapeHtml(item.label)}</span>
                  <span class="metric-value">${formatCurrency(item.amount)}</span>
                `;
                 target.after(detailRow);
@@ -1066,6 +1066,7 @@ export function renderAnalyse(
 }
 
 export const __TEST_ONLY__ = {
+  renderMetricsForTest: renderMetrics,
   derivePerformanceForTest: derivePerformance,
   buildSeriesForTest: buildSeries,
   renderCoverageBadgesForTest: renderCoverageBadges,
