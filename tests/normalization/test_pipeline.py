@@ -20,6 +20,7 @@ from custom_components.pp_reader.data.db_access import (
 from custom_components.pp_reader.metrics.storage import MetricBatch
 
 if TYPE_CHECKING:
+    import sqlite3
     from pathlib import Path
 
 
@@ -71,6 +72,7 @@ def test_load_position_snapshots_preserves_purchase_totals(
     snapshots = tuple(
         pipeline._load_position_snapshots(  # type: ignore[attr-defined]
             db_path=tmp_path / "positions.db",
+            conn=None,
             portfolio_uuid="portfolio-gold",
             metric_rows=metric_rows,
             securities={
@@ -101,6 +103,7 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
     """Ensure the pipeline merges metric runs, accounts, and positions."""
     run_uuid = "run-123"
     db_path = tmp_path / "portfolio.db"
+    db_path.touch()
 
     accounts = [
         Account(uuid="acct-eur", name="Cash EUR", currency_code="EUR", balance=12_300),
@@ -235,6 +238,7 @@ def test_normalize_snapshot_compiles_multi_portfolio_payload(
         db_path_arg: Path,
         *,
         decimals: int = 4,
+        conn: sqlite3.Connection | None = None,
     ) -> float | None:
         native = pipeline.normalize_raw_price(raw_price, decimals=decimals)
         if native is None:
@@ -323,6 +327,7 @@ def test_normalize_snapshot_handles_missing_metric_run(
 ) -> None:
     """Verify the pipeline emits fallback payloads without metric runs."""
     db_path = tmp_path / "missing.db"
+    db_path.touch()
 
     accounts = [
         Account(uuid="acct-eur", name="Cash EUR", currency_code="EUR", balance=50_000),

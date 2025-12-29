@@ -586,10 +586,11 @@ async def load_cached_rate_records(
 def load_cached_rate_records_sync(
     reference_date: datetime,
     db_path: Path,
+    conn: sqlite3.Connection | None = None,
 ) -> dict[str, FxRateRecord]:
     """Return cached rate records for the given date."""
     date_str = reference_date.strftime("%Y-%m-%d")
-    records = load_fx_rates_for_date(db_path, date_str)
+    records = load_fx_rates_for_date(db_path, date_str, conn=conn)
     return {record.currency: record for record in records}
 
 

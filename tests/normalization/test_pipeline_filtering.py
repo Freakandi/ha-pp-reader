@@ -27,6 +27,7 @@ def test_normalize_snapshot_repects_portfolio_filter(
     """Verify that only the requested portfolio is included in the snapshot."""
     run_uuid = "run-filter-test"
     db_path = tmp_path / "filter.db"
+    db_path.touch()
 
     # Setup 2 Portfolios
     portfolios = [

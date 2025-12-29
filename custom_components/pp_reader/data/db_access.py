@@ -747,11 +747,13 @@ def get_security_transactions(
     return transactions
 
 
-def get_securities(db_path: Path) -> dict[str, Security]:
+def get_securities(
+    db_path: Path, *, conn: sqlite3.Connection | None = None
+) -> dict[str, Security]:
     """Lädt alle Wertpapiere aus der DB."""
-    conn = sqlite3.connect(str(db_path))
+    local_conn = conn or sqlite3.connect(str(db_path))
     try:
-        cur = conn.execute(
+        cur = local_conn.execute(
             """
             SELECT uuid, name, type, currency_code,
                    isin, wkn, ticker_symbol,
@@ -761,7 +763,7 @@ def get_securities(db_path: Path) -> dict[str, Security]:
             ORDER BY name
             """
         )
-        return {
+        data = {
             row[0]: Security(
                 uuid=row[0],
                 name=row[1],
@@ -782,7 +784,9 @@ def get_securities(db_path: Path) -> dict[str, Security]:
         _LOGGER.exception("Fehler beim Laden der Wertpapiere")
         return {}
     finally:
-        conn.close()
+        if conn is None:
+            local_conn.close()
+    return data
 
 
 def get_securities_by_id(db_path: Path) -> dict[str, Security]:
@@ -2964,7 +2968,7 @@ def get_price_history_jobs_by_status(
             local_conn.close()
 
 
-def fetch_previous_close(  # noqa: PLR0912
+def fetch_previous_close(
     db_path: Path,
     security_uuid: str,
     *,
@@ -2993,42 +2997,55 @@ def fetch_previous_close(  # noqa: PLR0912
         cutoff_epoch_day = _to_epoch_day(before_epoch_day)
 
     try:
-        try:
-            cursor = local_conn.execute(
-                """
-                SELECT close, date
-                FROM historical_prices
-                WHERE security_uuid = ?
-                ORDER BY date DESC
-                """,
-                (security_uuid,),
-            )
-        except sqlite3.Error:
-            _LOGGER.exception(
-                "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
-                security_uuid,
-            )
+        # Optimization: Search latest close in last 150 entries first (~6 months).
+        # This covers almost all cases and avoids full table scans.
+        query_template = """
+            SELECT close, date
+            FROM historical_prices
+            WHERE security_uuid = ?
+            ORDER BY date DESC
+            {limit_clause}
+        """
+
+        def _fetch(limit: int | None = None) -> tuple[int | None, Any] | None:
+            limit_clause = f"LIMIT {limit}" if limit else ""
+            try:
+                cursor = local_conn.execute(
+                    query_template.format(limit_clause=limit_clause),
+                    (security_uuid,),
+                )
+            except sqlite3.Error:
+                _LOGGER.exception(
+                    "Fehler beim Laden des letzten Schlusskurses (security_uuid=%s)",
+                    security_uuid,
+                )
+                return None
+
+            selected: tuple[int | None, Any] | None = None
+            for row in cursor:
+                raw_close = row[0]
+                date_value = row[1] if len(row) > 1 else None
+                normalized_day = _to_epoch_day(date_value)
+                if normalized_day is None:
+                    continue
+                if cutoff_epoch_day is not None and normalized_day >= cutoff_epoch_day:
+                    continue
+
+                selected = (raw_close, date_value, normalized_day)
+                break
+            return selected
+
+        # First attempt with LIMIT 150
+        result = _fetch(limit=150)
+
+        # Fallback: if no valid entry found (e.g. huge gap or data error), try full scan
+        if not result:
+            result = _fetch(limit=None)
+
+        if not result:
             return None, None, None
 
-        selected: tuple[int | None, Any] | None = None
-        selected_epoch_day: int | None = None
-        for row in cursor:
-            raw_close = row[0]
-            date_value = row[1] if len(row) > 1 else None
-            normalized_day = _to_epoch_day(date_value)
-            if normalized_day is None:
-                continue
-            if cutoff_epoch_day is not None and normalized_day >= cutoff_epoch_day:
-                continue
-
-            selected = (raw_close, date_value)
-            selected_epoch_day = normalized_day
-            break
-
-        if not selected:
-            return None, None, None
-
-        raw_close, date_value = selected
+        raw_close, date_value, selected_epoch_day = result
         prev_epoch_day = selected_epoch_day
         if raw_close is None:
             return prev_epoch_day, None, None

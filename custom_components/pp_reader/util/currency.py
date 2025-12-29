@@ -197,6 +197,7 @@ def normalize_price_to_eur_sync(
     db_path: Path,
     *,
     decimals: int = PRICE_DECIMALS,
+    conn: sqlite3.Connection | None = None,
 ) -> float | None:
     """Normalize a raw price to EUR using synchronous FX helpers."""
     price_native = normalize_raw_price(raw_price, decimals=decimals)
@@ -211,9 +212,9 @@ def normalize_price_to_eur_sync(
     try:
         # Note: allow_fetch defaults to False in the implementation, so this is safe
         ensure_exchange_rates_for_dates_sync(
-            [reference_date], {normalized_currency}, db_path
+            [reference_date], {normalized_currency}, db_path, conn=conn
         )
-        fx_records = load_cached_rate_records_sync(reference_date, db_path)
+        fx_records = load_cached_rate_records_sync(reference_date, db_path, conn=conn)
     except Exception:  # pragma: no cover - defensive
         _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
         return None
@@ -274,7 +275,9 @@ def ensure_exchange_rates_for_dates_sync(
 
 
 def load_cached_rate_records_sync(
-    reference_date: datetime, db_path: Path
+    reference_date: datetime,
+    db_path: Path,
+    conn: sqlite3.Connection | None = None,
 ) -> Mapping[str, Any]:
     """Proxy to the FX cache reader."""
-    return fx.load_cached_rate_records_sync(reference_date, db_path)
+    return fx.load_cached_rate_records_sync(reference_date, db_path, conn=conn)

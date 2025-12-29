@@ -166,6 +166,7 @@ class _PositionContext:
     """Context bundle for loading position snapshots."""
 
     db_path: Path
+    conn: sqlite3.Connection
     securities: Mapping[str, Security]
     index: Mapping[str, tuple[SecurityMetricRecord, ...]]
     reference_date: datetime
@@ -177,6 +178,7 @@ class _PortfolioComposeContext:
     """Context for composing portfolio snapshots."""
 
     db_path: Path
+    conn: sqlite3.Connection
     reference_date: datetime
     include_positions: bool
     position_context: _PositionContext | None
@@ -188,6 +190,7 @@ class _DayChangeContext:
     """Context for deriving day-change values."""
 
     db_path: Path
+    conn: sqlite3.Connection
     currency_code: str
     reference_date: datetime
     price_dates: Mapping[str, int]
@@ -198,6 +201,7 @@ class _PositionSnapshotContext:
     """Context bundle for building position snapshots."""
 
     db_path: Path
+    conn: sqlite3.Connection
     reference_date: datetime
     securities: Mapping[str, Security]
     price_dates: Mapping[str, int]
@@ -549,39 +553,42 @@ def _normalize_snapshot_sync(
     price_dates = _load_security_price_dates(db_path)
     position_context: _PositionContext | None = None
     reference_date = datetime.now(UTC)
-    if include_positions:
-        securities = _load_securities(db_path)
-        position_context = _build_position_context(
-            db_path,
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+        if include_positions:
+            securities = _load_securities(db_path, conn=conn)
+            position_context = _build_position_context(
+                db_path,
+                conn,
+                metric_batch.securities,
+                securities,
+                reference_date,
+                price_dates,
+            )
+
+        account_snapshots = _compose_account_snapshots(accounts, metric_batch.accounts)
+        snapshot_context = _PortfolioComposeContext(
+            db_path=db_path,
+            conn=conn,
+            reference_date=reference_date,
+            include_positions=include_positions,
+            position_context=position_context,
+            price_dates=price_dates,
+        )
+        portfolio_snapshots = _compose_portfolio_snapshots(
+            portfolios,
+            metric_batch.portfolios,
             metric_batch.securities,
-            securities,
-            reference_date,
-            price_dates,
+            snapshot_context,
+            filter_uids=portfolio_uids,
         )
 
-    account_snapshots = _compose_account_snapshots(accounts, metric_batch.accounts)
-    snapshot_context = _PortfolioComposeContext(
-        db_path=db_path,
-        reference_date=reference_date,
-        include_positions=include_positions,
-        position_context=position_context,
-        price_dates=price_dates,
-    )
-    portfolio_snapshots = _compose_portfolio_snapshots(
-        portfolios,
-        metric_batch.portfolios,
-        metric_batch.securities,
-        snapshot_context,
-        filter_uids=portfolio_uids,
-    )
-
-    result = NormalizationResult(
-        generated_at=_utc_now_isoformat(),
-        metric_run_uuid=run_uuid,
-        accounts=tuple(account_snapshots),
-        portfolios=tuple(portfolio_snapshots),
-        diagnostics=get_missing_fx_diagnostics(),
-    )
+        result = NormalizationResult(
+            generated_at=_utc_now_isoformat(),
+            metric_run_uuid=run_uuid,
+            accounts=tuple(account_snapshots),
+            portfolios=tuple(portfolio_snapshots),
+            diagnostics=get_missing_fx_diagnostics(),
+        )
     try:
         if not portfolio_uids:
             # Only persist if it's a full snapshot update.
@@ -690,6 +697,7 @@ def _compose_portfolio_snapshots(
 
 def _build_position_context(
     db_path: Path,
+    conn: sqlite3.Connection,
     security_metrics: Sequence[SecurityMetricRecord],
     securities: Mapping[str, Security],
     reference_date: datetime,
@@ -704,6 +712,7 @@ def _build_position_context(
     }
     return _PositionContext(
         db_path=db_path,
+        conn=conn,
         securities=securities,
         index=index,
         reference_date=reference_date,
@@ -746,6 +755,7 @@ def _build_portfolio_snapshot(
         positions = tuple(
             _load_position_snapshots(
                 db_path=position_context.db_path,
+                conn=position_context.conn,
                 portfolio_uuid=portfolio.uuid,
                 metric_rows=metric_rows,
                 securities=position_context.securities,
@@ -781,7 +791,11 @@ def _safe_int(value: Any) -> int | None:
 
 
 def _safe_fetch_previous_close(
-    db_path: Path, security_uuid: str, before_epoch_day: int
+    db_path: Path,
+    security_uuid: str,
+    before_epoch_day: int,
+    *,
+    conn: sqlite3.Connection | None = None,
 ) -> tuple[int | None, int | None, float | None]:
     """Fetch previous close with defensive error handling."""
     try:
@@ -789,6 +803,7 @@ def _safe_fetch_previous_close(
             db_path,
             security_uuid,
             before_epoch_day=before_epoch_day,
+            conn=conn,
         )
     except (sqlite3.Error, ValueError):
         _LOGGER.exception(
@@ -854,15 +869,21 @@ def _compute_security_day_change_delta(
         currency_code,
         context.reference_date,
         context.db_path,
+        conn=context.conn,
     )
     _prev_date, prev_raw, prev_native = _safe_fetch_previous_close(
         context.db_path,
         record.security_uuid,
         before_epoch_day=reference_epoch_day,
+        conn=context.conn,
     )
     prev_close_eur = (
         normalize_price_to_eur_sync(
-            prev_raw, currency_code, context.reference_date, context.db_path
+            prev_raw,
+            currency_code,
+            context.reference_date,
+            context.db_path,
+            conn=context.conn,
         )
         if prev_raw is not None
         else None
@@ -906,6 +927,7 @@ def _aggregate_portfolio_day_change(
             raise TypeError(msg)
         resolved_context = _PortfolioComposeContext(
             db_path=db_path,
+            conn=sqlite3.connect(f"file:{db_path}?mode=ro", uri=True),
             reference_date=reference_date,
             include_positions=False,
             position_context=None,
@@ -1030,6 +1052,7 @@ def _portfolio_data_state(missing_value_positions: int) -> SnapshotDataState:
 def _load_position_snapshots(
     *,
     db_path: Path,
+    conn: sqlite3.Connection | None,
     portfolio_uuid: str,
     metric_rows: Sequence[SecurityMetricRecord] | tuple[()] | None,
     securities: Mapping[str, Security],
@@ -1048,6 +1071,7 @@ def _load_position_snapshots(
     )
     context = _PositionSnapshotContext(
         db_path=db_path,
+        conn=conn,
         reference_date=normalized_reference,
         securities=securities,
         price_dates=price_dates,
@@ -1169,6 +1193,7 @@ def _build_position_snapshot_entry(
             currency_code,
             context.reference_date,
             context.db_path,
+            conn=context.conn,
         ),
         last_close_native=normalize_raw_price(
             record.last_close_native_raw,
@@ -1179,11 +1204,13 @@ def _build_position_snapshot_entry(
             currency_code,
             context.reference_date,
             context.db_path,
+            conn=context.conn,
         ),
         last_price_date=price_ts,
     )
     day_change_context = _DayChangeContext(
         db_path=context.db_path,
+        conn=context.conn,
         currency_code=currency_code,
         reference_date=context.reference_date,
         price_dates=context.price_dates,
@@ -1367,26 +1394,29 @@ def load_portfolio_position_snapshots(
         metric_batch.securities or ()
     )
 
-    securities = _load_securities(resolved_path)
-    grouped_metrics = _index_security_metrics_by_portfolio(security_metrics)
     price_dates = _load_security_price_dates(resolved_path)
 
-    snapshots: dict[str, tuple[PositionSnapshot, ...]] = {}
-    reference_date = datetime.now(UTC)
-    for portfolio_uuid in normalized_ids:
-        rows = grouped_metrics.get(portfolio_uuid, ())
-        entries = tuple(
-            _load_position_snapshots(
-                db_path=resolved_path,
-                portfolio_uuid=portfolio_uuid,
-                metric_rows=rows,
-                securities=securities,
-                reference_date=reference_date,
-                price_dates=price_dates,
+    with sqlite3.connect(f"file:{resolved_path}?mode=ro", uri=True) as conn:
+        securities = _load_securities(resolved_path, conn=conn)
+        grouped_metrics = _index_security_metrics_by_portfolio(security_metrics)
+
+        snapshots: dict[str, tuple[PositionSnapshot, ...]] = {}
+        reference_date = datetime.now(UTC)
+        for portfolio_uuid in normalized_ids:
+            rows = grouped_metrics.get(portfolio_uuid, ())
+            entries = tuple(
+                _load_position_snapshots(
+                    db_path=resolved_path,
+                    conn=conn,
+                    portfolio_uuid=portfolio_uuid,
+                    metric_rows=rows,
+                    securities=securities,
+                    reference_date=reference_date,
+                    price_dates=price_dates,
+                )
             )
-        )
-        snapshots[portfolio_uuid] = entries
-    return snapshots
+            snapshots[portfolio_uuid] = entries
+        return snapshots
 
 
 def _build_security_snapshot_from_positions(
@@ -1632,10 +1662,12 @@ def _index_security_metrics_by_portfolio(
     return index
 
 
-def _load_securities(db_path: Path) -> dict[str, Security]:
+def _load_securities(
+    db_path: Path, conn: sqlite3.Connection | None = None
+) -> dict[str, Security]:
     """Load security metadata for downstream labeling."""
     try:
-        return get_securities(db_path)
+        return get_securities(db_path, conn=conn)
     except Exception:
         _LOGGER.exception(
             "normalization_pipeline: Fehler beim Laden der securities (db_path=%s)",
