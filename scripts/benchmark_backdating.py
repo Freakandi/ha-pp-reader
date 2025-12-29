@@ -15,6 +15,7 @@ from typing import Any
 sys.path.append(str(Path(__file__).parents[1]))
 
 from custom_components.pp_reader.backdating.pipeline import async_run_backdating_rebuild
+
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 
 # Configure logging
