@@ -322,7 +322,9 @@ class PerformanceEngine:
         return result
 
     def _augment_transfers(
-        self, df_transfers: pd.DataFrame, fx_long: pd.DataFrame  # noqa: ARG002
+        self,
+        df_transfers: pd.DataFrame,
+        fx_long: pd.DataFrame,  # noqa: ARG002
     ) -> pd.DataFrame:
         """Augment transfer transactions with source currency information."""
         if df_transfers.empty:

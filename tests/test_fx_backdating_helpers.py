@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 # --- Legacy imports removed because the module is gone ---
 
 
-
 @pytest.fixture
 def mock_db_path(tmp_path: Path) -> Path:
     """Provide a temporary DB path."""
