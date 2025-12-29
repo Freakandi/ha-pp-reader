@@ -5,9 +5,6 @@ import pytest
 
 from custom_components.pp_reader.backdating.engine_pandas import TransactionType
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
-from custom_components.pp_reader.metrics.period_calculations import (
-    calculate_period_performance_series,
-)
 
 
 @pytest.fixture

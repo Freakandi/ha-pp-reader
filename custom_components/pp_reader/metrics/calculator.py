@@ -3,10 +3,9 @@
 import logging
 import sqlite3
 from collections import deque
-from dataclasses import dataclass, field
-from datetime import date, datetime, UTC
+from dataclasses import dataclass
+from datetime import date, datetime
 
-import numpy as np
 import pandas as pd
 
 from custom_components.pp_reader.util.currency import PRICE_SCALE
@@ -38,6 +37,7 @@ UNIT_TYPE_FEE = 2
 @dataclass(slots=True)
 class Lot:
     """A tax lot for FIFO tracking."""
+
     date: datetime
     shares: float
     price_native: float
@@ -46,6 +46,7 @@ class Lot:
 @dataclass
 class PerformanceMetrics:
     """Result container for performance calculations."""
+
     absolute_performance: float = 0.0
     realized_gains: float = 0.0
     unrealized_gains: float = 0.0
@@ -285,10 +286,10 @@ class PerformanceEngine:
         start and end dates.
         """
         metrics = PerformanceMetrics()
-        
+
         start_prev = start_date - pd.Timedelta(days=1)
         daily_wealth = self.get_daily_wealth(start_prev, end_date)
-        
+
         start_row = daily_wealth[daily_wealth["date"] == start_prev.isoformat()]
         end_row = daily_wealth[daily_wealth["date"] == end_date.isoformat()]
 

@@ -13,25 +13,18 @@ import sqlite3
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from functools import partial, wraps
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
 
-from custom_components.pp_reader.data.db_access import (
-    fetch_daily_wealth_scopes,
-)
 from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
 )
-from custom_components.pp_reader.logic.securities import (
-    calculate_realized_performance,
-)
 from custom_components.pp_reader.metrics.breakdown import (
-    BreakdownCalculator,
     BreakdownItem,
     PerformanceBreakdown,
 )
@@ -1162,12 +1155,12 @@ async def ws_get_trades(
         with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
             engine = PerformanceEngine(conn)
             engine.load_data()
-            
+
             start_date = date(1900, 1, 1)
             end_date = date.today()
 
             realized_gains, _ = engine._calculate_capital_gains(engine._df_txs, start_date, end_date)
-            
+
             # This is a simplification. The original function returns a detailed list of trades.
             # The new engine currently only calculates the total realized gains.
             # For now, we will return a single trade representing the total.
@@ -1430,7 +1423,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                 engine = PerformanceEngine(conn)
                 engine.load_data()
                 return engine.get_daily_wealth(params.start_date, params.end_date)
-        
+
         totals_df = await async_run_executor_job(hass, _fetch_from_engine)
         if totals_df.empty:
             message = f"Keine daily_wealth Daten im Zeitraum {start_iso}-{end_iso}"
@@ -1637,14 +1630,14 @@ async def ws_get_performance_breakdown(
             engine = PerformanceEngine(conn)
             engine.load_data()
             daily_wealth = engine.get_daily_wealth(start_date, end_date)
-            
+
             realized_gains, _ = engine._calculate_capital_gains(engine._df_txs, start_date, end_date)
-            
+
             dividends = daily_wealth["dividends_eur"].sum()
             interest = daily_wealth["interest_eur"].sum()
             fees = daily_wealth["fees_eur"].sum()
             taxes = daily_wealth["taxes_eur"].sum()
-            
+
             return {
                 "realized_gains": [{"label": "Total", "amount": realized_gains, "details": {}}],
                 "unrealized_gains": [],

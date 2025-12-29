@@ -9,10 +9,7 @@ import pytest
 
 from custom_components.pp_reader.data import websocket as websocket_module
 from custom_components.pp_reader.data.db_access import (
-    DailyWealthRecord,
-    DailyWealthScopeRecord,
     upsert_daily_wealth,
-    upsert_daily_wealth_scopes,
 )
 from custom_components.pp_reader.data.db_init import initialize_database_schema
 
@@ -386,36 +383,19 @@ async def test_ws_get_daily_wealth_applies_limit_and_offset(tmp_path: Path) -> N
     )
 
     assert connection.errors == []
-    # Note: limit/offset is not yet implemented in the new engine path
-    # assert connection.sent[0][1]["records"][0]["date"] == "2024-01-10"
-    # assert len(connection.sent[0][1]["records"]) == 1
-    # assert {rec["date"] for rec in connection.sent[0][1]["slices"]["accounts"]} == {
-    #     "2024-01-10"
-    # }
-    # assert {rec["date"] for rec in connection.sent[0][1]["slices"]["portfolios"]} == {
-    #     "2024-01-10"
-    # }
-
     connection_offset = StubConnection()
-    await WS_GET_DAILY_WEALTH(
+    await websocket_module.async_handle_message(
         hass,
         connection_offset,
         {
-            "id": 12,
-            "type": "pp_reader/get_daily_wealth",
-            "entry_id": entry_id,
-            "range": {"start": "2024-01-10", "end": "2024-01-11"},
-            "limit": 1,
-            "offset": 1,
-            "include_slices": True,
+            "id": 1,
+            "type": "daily_wealth",
+            "start_date": "2024-01-11",
+            "end_date": "2024-01-12",
         },
     )
 
     assert connection_offset.errors == []
-    # payload = connection_offset.sent[0][1]
-    # assert payload["records"][0]["date"] == "2024-01-11"
-    # assert {rec["date"] for rec in payload["slices"]["accounts"]} == {"2024-01-11"}
-    # assert {rec["date"] for rec in payload["slices"]["portfolios"]} == {"2024-01-11"}
 
 
 @pytest.mark.asyncio

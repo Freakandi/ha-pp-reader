@@ -2,15 +2,15 @@
 
 import sqlite3
 from datetime import date
-from pathlib import Path
 
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
+
 
 def test_calculate_capital_gains_fifo():
     """Test FIFO logic for capital gains calculation in PerformanceEngine."""
     # In-memory SQLite database for testing
     conn = sqlite3.connect(":memory:")
-    
+
     # Create necessary tables
     conn.execute(
         """
@@ -77,7 +77,7 @@ def test_calculate_capital_gains_fifo():
         ("sec1", 20230104, 1350000000),
     ]
     conn.executemany("INSERT INTO historical_prices VALUES (?, ?, ?)", prices_data)
-    
+
     conn.commit()
 
     # Create PerformanceEngine instance
@@ -91,9 +91,9 @@ def test_calculate_capital_gains_fifo():
 
     # Assertions
     assert round(realized_gains, 2) == 350.0
-    
+
     # 5 shares remaining @ 110 cost basis. Current price is 135.
     # Unrealized gain = 5 * (135 - 110) = 125
     assert round(unrealized_gains, 2) == 125.0
-    
+
     conn.close()

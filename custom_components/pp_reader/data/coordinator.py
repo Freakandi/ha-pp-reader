@@ -573,7 +573,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
 
         return summary
 
-    async def _schedule_metrics_refresh(  # noqa: PLR0912, PLR0915
+    async def _schedule_metrics_refresh(
         self,
         summary: dict[str, Any],
         *,
@@ -596,6 +596,7 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             return
 
         summary["metrics_status"] = "running"
+        summary["metrics_reason"] = "scheduled_by_coordinator"
 
         try:
             await asyncio.to_thread(_ensure_metric_schema, self.db_path)
@@ -645,32 +646,6 @@ class PPReaderCoordinator(DataUpdateCoordinator):
             summary["metrics_error"] = run.error_message
         else:
             summary.pop("metrics_error", None)
-        if backdating_result is not None:
-            summary.update(
-                {
-                    "backdating_status": backdating_result.status,
-                    "backdating_reason": backdating_result.reason,
-                }
-            )
-            if backdating_result.plan is not None:
-                summary["backdating_start_date"] = (
-                    backdating_result.plan.start_date.isoformat()
-                )
-                summary["backdating_end_date"] = (
-                    backdating_result.plan.end_date.isoformat()
-                )
-                if backdating_result.plan.ingestion_run_uuid:
-                    summary["backdating_ingestion_run_uuid"] = (
-                        backdating_result.plan.ingestion_run_uuid
-                    )
-            if backdating_result.error:
-                summary["backdating_error"] = backdating_result.error
-            if backdating_result.started_at:
-                summary["backdating_started_at"] = backdating_result.started_at
-            if backdating_result.finished_at:
-                summary["backdating_finished_at"] = backdating_result.finished_at
-            if backdating_result.provenance:
-                summary["backdating_provenance"] = backdating_result.provenance
 
     async def _schedule_normalization_refresh(self, summary: dict[str, Any]) -> None:
         """Run the normalization pipeline once metrics finished."""

@@ -23,6 +23,7 @@ uv pip install -r requirements-dev.txt
 
 # Install frontend dependencies and build assets
 npm install
+npx playwright install
 npm run build:types
 npm run build
 

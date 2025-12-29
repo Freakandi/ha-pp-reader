@@ -1,12 +1,9 @@
-"""Pipeline orchestration helpers for the metrics engine."""
-
 from __future__ import annotations
 
 import logging
-import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -174,7 +171,6 @@ async def async_refresh_all(
         return final_run
 
 
-from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 
 def _utc_now_isoformat() -> str:
     """Return an ISO8601 UTC timestamp."""
