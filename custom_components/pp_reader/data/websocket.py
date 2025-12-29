@@ -978,11 +978,32 @@ async def ws_get_security_snapshot(  # noqa: PLR0911
         connection.send_error(msg_id, "db_error", str(err))
         return
 
+    # Optimization: Only normalize portfolios that contain this security.
+    # We query the DB for relevant portfolio UUIDs first.
+    try:
+
+        def _get_relevant_portfolios() -> list[str]:
+            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+                rows = conn.execute(
+                    "SELECT DISTINCT portfolio FROM transactions WHERE security = ?",
+                    (security_uuid,),
+                ).fetchall()
+                return [r[0] for r in rows if r[0]]
+
+        relevant_guids = await async_run_executor_job(hass, _get_relevant_portfolios)
+    except Exception:  # noqa: BLE001
+        # Fallback to full normalization if optimization query fails
+        _LOGGER.warning(
+            "Could not filter portfolios for security snap; falling back to full scan"
+        )
+        relevant_guids = None
+
     try:
         snapshot = await async_normalize_security_snapshot(
             hass,
             db_path,
             security_uuid,
+            portfolio_uids=relevant_guids,
         )
     except LookupError as err:
         connection.send_error(msg_id, "not_found", str(err))
@@ -1242,6 +1263,7 @@ async def ws_get_portfolio_positions(
             hass,
             db_path,
             include_positions=True,
+            portfolio_uids=[portfolio_uuid],
         )
     except Exception:
         _LOGGER.exception(

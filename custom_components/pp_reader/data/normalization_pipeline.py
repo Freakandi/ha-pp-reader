@@ -219,12 +219,14 @@ async def async_normalize_snapshot(
     db_path: Path | str,
     *,
     include_positions: bool = False,
+    portfolio_uids: Collection[str] | None = None,
 ) -> NormalizationResult:
     """Asynchronously assemble the canonical snapshot."""
     resolved_path = Path(db_path)
     normalize = functools.partial(
         _normalize_snapshot_sync,
         include_positions=include_positions,
+        portfolio_uids=portfolio_uids,
     )
     return await async_run_executor_job(
         hass,
@@ -353,6 +355,7 @@ async def async_normalize_security_snapshot(
     hass: HomeAssistant,
     db_path: Path | str,
     security_uuid: str,
+    portfolio_uids: Collection[str] | None = None,
 ) -> dict[str, Any]:
     """Return a security snapshot, preferring normalization data."""
     resolved_path = Path(db_path)
@@ -360,6 +363,7 @@ async def async_normalize_security_snapshot(
         hass,
         resolved_path,
         include_positions=True,
+        portfolio_uids=portfolio_uids,
     )
     snapshot = _build_security_snapshot_from_positions(normalized, security_uuid)
     if snapshot is not None:
@@ -532,12 +536,15 @@ def _normalize_snapshot_sync(
     db_path: Path,
     *,
     include_positions: bool,
+    portfolio_uids: Collection[str] | None = None,
 ) -> NormalizationResult:
     """Build the snapshot synchronously for executor execution."""
     run_metadata, metric_batch = load_latest_metric_batch(db_path)
     run_uuid = run_metadata.run_uuid if run_metadata else None
 
     accounts = _safe_load(get_accounts, db_path, "accounts")
+    # If partial, we still load all portfolios metadata to ensure consistency
+    # or should we filter here too? Loading is cheap, composing is expensive.
     portfolios = _safe_load(get_portfolios, db_path, "portfolios")
     price_dates = _load_security_price_dates(db_path)
     position_context: _PositionContext | None = None
@@ -565,6 +572,7 @@ def _normalize_snapshot_sync(
         metric_batch.portfolios,
         metric_batch.securities,
         snapshot_context,
+        filter_uids=portfolio_uids,
     )
 
     result = NormalizationResult(
@@ -575,12 +583,15 @@ def _normalize_snapshot_sync(
         diagnostics=get_missing_fx_diagnostics(),
     )
     try:
-        persist_normalization_result(
-            db_path,
-            result,
-            account_serializer=serialize_account_snapshot,
-            portfolio_serializer=serialize_portfolio_snapshot,
-        )
+        if not portfolio_uids:
+            # Only persist if it's a full snapshot update.
+            # Partial updates (filtered) should NOT overwrite the authoritative state.
+            persist_normalization_result(
+                db_path,
+                result,
+                account_serializer=serialize_account_snapshot,
+                portfolio_serializer=serialize_portfolio_snapshot,
+            )
     except Exception:
         _LOGGER.exception(
             "normalization_pipeline: Fehler beim Persistieren der Canonical Snapshots "
@@ -643,12 +654,14 @@ def _compose_portfolio_snapshots(
     portfolio_metrics: Sequence[PortfolioMetricRecord],
     security_metrics: Sequence[SecurityMetricRecord],
     context: _PortfolioComposeContext,
+    filter_uids: Collection[str] | None = None,
 ) -> list[PortfolioSnapshot]:
     """Combine staged portfolios with persisted aggregate metrics."""
     portfolio_index = {
         portfolio.uuid: portfolio
         for portfolio in portfolios
         if not getattr(portfolio, "is_retired", False)
+        and (filter_uids is None or portfolio.uuid in filter_uids)
     }
     metric_index = {
         record.portfolio_uuid: record

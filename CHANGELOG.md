@@ -17,6 +17,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Trade Details Tab**: Enhanced the trade details view to match the security detail design, adding a centered security name header, a metadata grid for "Letzter Verkaufspreis" and "Änderung seit Verkauf", an interactive history chart with range selectors and purchase/sell markers, and a "Copy prompt for ChatGPT" button.
 
 ### Fixed
+- **Performance**: Resolved critical UI freezes and slow response times when expanding portfolio positions or viewing details. The backend now partially normalizes snapshots for specific portfolios instead of recalculating the entire dataset on every request.
 - **Time Series Gains**: Fixed an issue where realized and unrealized gains were hardcoded to 0.0 in the Time Series tab.
 - **Performance Engine**: Resolved a `TypeError` in the performance calculator preventing data loading when no realized gains occurred in the selected period.
 - **Fixed**: Resolved a critical bug in `period_calculations.py` where daily prices were not updating during the simulation loop due to incorrect dictionary key access, causing flat/static performance calculations for held positions.
