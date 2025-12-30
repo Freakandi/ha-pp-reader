@@ -607,20 +607,45 @@ class BackdatingEngine:
             if k not in sec_curr_map and v:
                 sec_curr_map[k] = v
 
-        for sec_uuid in sec_holdings.columns:
-            if sec_uuid not in price_pivot.columns:
-                continue
+        # --- OPTIMIZED CALCULATION ---
+        # Instead of iterating O(Securities) * O(Days), we perform vectorized operations.
+        # 1. Calculate Native Value for all securities (Qty * Price) in one go.
+        # 2. Group by Currency and sum.
+        # 3. Divide by FX rates per Currency (O(Currencies) operations).
 
-            qty = sec_holdings[sec_uuid]
-            prices = price_pivot[sec_uuid]
-            curr = sec_curr_map.get(sec_uuid, "EUR")
+        # Intersect columns to ensure we have both holdings and prices
+        common_securities = sec_holdings.columns.intersection(price_pivot.columns)
+        if common_securities.empty:
+            return daily_sec_wealth
+
+        # 1. Native Values (Matrix Multiplication Element-wise)
+        # Using subset to ensure alignment
+        native_values = (
+            sec_holdings[common_securities] * price_pivot[common_securities]
+        )
+
+        # 2. Group by Currency
+        # Construct mapping array aligned with columns
+        securities_currencies = [
+            sec_curr_map.get(uuid, "EUR") for uuid in common_securities
+        ]
+
+        # Use Transpose trick to group columns (avoids axis=1 deprecation warning)
+        # T -> groupby index (currencies) -> sum -> T
+        native_values_by_curr = (
+            native_values.T.groupby(securities_currencies).sum().T
+        )
+
+        # 3. Apply FX Conversion per Currency Group
+        for curr in native_values_by_curr.columns:
+            curr_val = native_values_by_curr[curr]
             rates = (
                 fx_pivot[curr]
                 if curr in fx_pivot.columns
                 else pd.Series(1.0, index=date_range)
             )
-
-            val = (qty * prices) / rates.replace(0, np.nan)
+            # Avoid division by zero
+            val = curr_val / rates.replace(0, np.nan)
             daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
 
         return daily_sec_wealth
