@@ -545,6 +545,29 @@ export function renderLoadingState(message = "Laden..."): string {
   `;
 }
 
+export function renderErrorState(message: string, retryAction?: { label: string; attrs: Record<string, string> }): string {
+  const safeMessage = escapeHtml(message);
+  const icon = `
+    <svg class="error-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width: 1.25em; height: 1.25em; color: var(--error-color, #db4437); min-width: 1.25em;">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+    </svg>
+  `;
+
+  let actionHtml = '';
+  if (retryAction) {
+    const attrs = Object.entries(retryAction.attrs).map(([k, v]) => `${k}="${escapeAttribute(v)}"`).join(' ');
+    actionHtml = `<button ${attrs} style="margin-left: 0.5rem;">${escapeHtml(retryAction.label)}</button>`;
+  }
+
+  return `
+    <div class="error" role="alert" style="display: flex; align-items: center; gap: 0.5rem; color: var(--error-color, #db4437);">
+      ${icon}
+      <span>${safeMessage}</span>
+      ${actionHtml}
+    </div>
+  `;
+}
+
 /**
  * Neue Utility: sortTableRows
  * Sortiert die Datenzeilen (<tr>) einer Tabelle anhand eines Keys.
