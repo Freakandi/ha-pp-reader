@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from custom_components.pp_reader.currencies.fx import normalize_price_to_eur_sync
 from custom_components.pp_reader.currencies.persistence import (
     FxRateRecord,
     load_fx_rates_for_date,
@@ -35,7 +36,6 @@ from custom_components.pp_reader.metrics.common import (
 )
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
-    normalize_price_to_eur_sync,
     normalize_raw_price,
     round_currency,
     round_price,

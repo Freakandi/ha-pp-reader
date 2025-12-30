@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - runtime fallback for type hints
     HomeAssistant = Any  # type: ignore[assignment]
 
+from custom_components.pp_reader.currencies.fx import normalize_price_to_eur_sync
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.logic.securities import (
     PURCHASE_TYPES,
@@ -28,7 +29,6 @@ from custom_components.pp_reader.metrics.storage import load_latest_metric_batch
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
-    normalize_price_to_eur_sync,
     normalize_raw_price,
     round_currency,
     round_price,

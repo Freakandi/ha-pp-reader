@@ -154,6 +154,7 @@ async def test_ws_get_portfolio_positions_normalises_currency(
         db_path_arg,
         *,
         include_positions: bool,
+        portfolio_uids: Any = None,
     ) -> NormalizationResult:
         assert Path(db_path_arg) == db_path
         assert include_positions is True

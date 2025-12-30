@@ -33,6 +33,12 @@ from custom_components.pp_reader.currencies.persistence import (
     upsert_fx_rate,
     upsert_fx_rates_chunked,
 )
+from custom_components.pp_reader.util.currency import (
+    MAX_FALLBACK_DAYS_WITHOUT_WARNING,
+    PRICE_DECIMALS,
+    normalize_raw_price,
+    round_price,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +55,10 @@ FETCH_BACKOFF_SECONDS = 1.0
 _FAILED_WARNINGS: dict[str, set[frozenset[str]]] = defaultdict(set)
 _FAILED_WARNINGS_LOCK = threading.Lock()
 _COMPACT_DATE_LEN = 8
+
+
+# Track warned deep fallbacks to avoid spamming the log once per row
+_DEEP_FALLBACK_WARNED: set[tuple[str, str]] = set()
 
 
 def _should_log_warning(date: str, currencies: set[str]) -> bool:
@@ -432,6 +442,104 @@ async def _fetch_exchange_rates(date: str, currencies: set[str]) -> dict[str, fl
     return await _execute_db(_fetch_exchange_rates_sync_http, date, currencies)
 
 
+def _resolve_fallback_rate(
+    db_path: Path,
+    currency_code: str,
+    reference_date: datetime,
+) -> float | None:
+    """Resolve a fallback exchange rate using the closest available record."""
+    fallback = get_closest_rate_sync(
+        db_path,
+        currency_code,
+        reference_date.strftime("%Y-%m-%d"),
+    )
+    if not fallback:
+        _LOGGER.debug(
+            "Kein Wechselkurs für %s (%s) und kein Fallback gefunden",
+            currency_code,
+            reference_date.strftime("%Y-%m-%d"),
+        )
+        return None
+
+    rate_val, date_str = fallback
+
+    # Check age
+    fallback_date = datetime.fromisoformat(date_str).date()
+    if isinstance(reference_date, datetime):
+        ref_date = reference_date.date()
+    else:
+        ref_date = reference_date
+    age_days = (ref_date - fallback_date).days
+
+    if age_days > MAX_FALLBACK_DAYS_WITHOUT_WARNING:
+        warn_key = (currency_code, date_str)
+        if warn_key not in _DEEP_FALLBACK_WARNED:
+            _DEEP_FALLBACK_WARNED.add(warn_key)
+            _LOGGER.warning(
+                "Veralteter Wechselkurs für %s: %s genutzt. Datum %s "
+                "(%d Tage alt > %d)",
+                currency_code,
+                date_str,
+                reference_date.strftime("%Y-%m-%d"),
+                age_days,
+                MAX_FALLBACK_DAYS_WITHOUT_WARNING,
+            )
+    return rate_val
+
+
+def normalize_price_to_eur_sync(
+    raw_price: float | None,
+    currency_code: str,
+    reference_date: datetime,
+    db_path: Path,
+    *,
+    decimals: int = PRICE_DECIMALS,
+    conn: sqlite3.Connection | None = None,
+) -> float | None:
+    """Normalize a raw price to EUR using synchronous FX helpers."""
+    price_native = normalize_raw_price(raw_price, decimals=decimals)
+    if price_native is None:
+        return None
+
+    normalized_currency = (currency_code or "EUR").upper()
+    if normalized_currency == "EUR":
+        return price_native
+
+    # Try exact match first
+    try:
+        # Note: allow_fetch defaults to False in the implementation, so this is safe
+        ensure_exchange_rates_for_dates_sync(
+            [reference_date], {normalized_currency}, db_path, conn=conn
+        )
+        fx_records = load_cached_rate_records_sync(reference_date, db_path, conn=conn)
+    except Exception:  # pragma: no cover - defensive
+        _LOGGER.exception("Fehler beim Laden der Wechselkurse für %s", currency_code)
+        return None
+
+    rate = None
+    record = fx_records.get(normalized_currency)
+
+    if record:
+        rate = float(record.rate)
+    else:
+        rate = _resolve_fallback_rate(db_path, normalized_currency, reference_date)
+
+    if not rate:
+        return None
+
+    try:
+        normalized = price_native / rate
+    except (TypeError, ValueError, ZeroDivisionError):
+        _LOGGER.warning(
+            "Ungültiger Wechselkurs für %s (%s)",
+            normalized_currency,
+            reference_date.strftime("%Y-%m-%d"),
+        )
+        return None
+
+    return round_price(normalized, decimals=decimals)
+
+
 # --- Öffentliche Funktionen ---
 
 
@@ -566,7 +674,6 @@ async def load_cached_rate_records(
         # Fallback loop: Check up to 5 days into the past
         for i in range(1, 6):
             fallback_date = reference_date - timedelta(days=i)
-            fallback_str = fallback_date.strftime("%Y-%m-%d")
             fallback_records_list = await _execute_db(
                 load_fx_rates_for_date, db_path, fallback_str
             )
