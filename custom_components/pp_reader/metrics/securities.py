@@ -14,9 +14,9 @@ from custom_components.pp_reader.data.db_access import (
 )
 from custom_components.pp_reader.metrics.common import select_performance_metrics
 from custom_components.pp_reader.util import async_run_executor_job
+from custom_components.pp_reader.currencies.fx import normalize_price_to_eur_sync
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
-    normalize_price_to_eur_sync,
     normalize_raw_price,
     round_price,
 )

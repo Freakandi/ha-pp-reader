@@ -11,10 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from custom_components.pp_reader.currencies.fx import ensure_exchange_rates_for_dates_sync
 from custom_components.pp_reader.data.canonical_sync import _lookup_fx_rate
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
-    ensure_exchange_rates_for_dates_sync,
     eur_to_cent,
 )
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from custom_components.pp_reader.currencies.fx import (
+    MAX_FALLBACK_DAYS_WITHOUT_WARNING,
     ensure_exchange_rates_for_dates_sync,
     get_closest_rate_sync,
     load_latest_rates_sync,
@@ -22,7 +23,6 @@ from custom_components.pp_reader.currencies.fx import (
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.util.currency import (
-    MAX_FALLBACK_DAYS_WITHOUT_WARNING,
     cent_to_eur,
     normalize_raw_price,
     round_currency,
