@@ -97,7 +97,8 @@ export function formatValue(
             const metric =
               key === "day_change_pct"
                 ? (dayChange as Record<string, unknown>).change_pct
-                : ((dayChange as Record<string, unknown>).value_change_eur ??
+                : ((dayChange as Record<string, unknown>)
+                  .value_change_eur ??
                   (dayChange as Record<string, unknown>).price_change_eur);
             if (typeof metric === "number") {
               value = metric;
@@ -541,6 +542,39 @@ export function renderLoadingState(message = "Laden..."): string {
     <div class="loading" role="status" aria-live="polite" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--secondary-text-color);">
       ${spinnerSvg}
       <span>${safeMessage}</span>
+    </div>
+  `;
+}
+
+export interface RetryConfig {
+  label: string;
+  attrs: Record<string, string>;
+}
+
+export function renderErrorState(message: string, retryConfig?: RetryConfig): string {
+  const safeMessage = escapeHtml(message);
+
+  // Material Design Alert Icon
+  const icon = `
+    <svg class="error-icon" viewBox="0 0 24 24" aria-hidden="true" style="width: 1.25em; height: 1.25em; flex-shrink: 0; fill: var(--error-color, #db4437);">
+      <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+    </svg>
+  `;
+
+  let buttonHtml = '';
+  if (retryConfig) {
+    const attrs = Object.entries(retryConfig.attrs)
+      .map(([k, v]) => `${k}="${escapeAttribute(v)}"`)
+      .join(' ');
+    buttonHtml = `<button class="retry-pos" ${attrs} style="margin-left: auto;">${escapeHtml(retryConfig.label)}</button>`;
+  }
+
+  // Use inline styles to ensure visibility without external CSS changes, but utilize theme variables.
+  return `
+    <div class="error" role="alert" style="display: flex; align-items: center; gap: 0.75rem; color: var(--error-color, #db4437); padding: 8px; border: 1px solid var(--error-color, #db4437); border-radius: 4px; background-color: rgba(219, 68, 55, 0.1);">
+      ${icon}
+      <span>${safeMessage}</span>
+      ${buttonHtml}
     </div>
   `;
 }

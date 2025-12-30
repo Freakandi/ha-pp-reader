@@ -3,7 +3,7 @@
  */
 
 import type { SortDirection } from '../content/elements';
-import { formatValue, makeTable, sortTableRows } from '../content/elements';
+import { formatValue, makeTable, renderErrorState, sortTableRows } from '../content/elements';
 import { getOverviewHelpers } from '../dashboard/registry';
 import { deserializePortfolioSnapshot } from '../lib/api/portfolio';
 import {
@@ -21,7 +21,7 @@ import type {
   PortfolioPositionsUpdatedEventDetail,
 } from '../tabs/types';
 import { roundCurrency } from '../utils/currency';
-import { escapeAttribute, escapeHtml } from '../utils/html';
+import { escapeHtml } from '../utils/html';
 import { normalizePerformancePayload } from '../utils/performance';
 import type {
   AccountSummary,
@@ -393,9 +393,11 @@ function emitPortfolioPositionsDiagnostics(
   emitDiagnosticsSnapshot('portfolio_positions', 'portfolio_positions', portfolioUuid, snapshot);
 }
 function renderPositionsError(error: unknown, portfolioUuid: string): string {
-  const safeError = escapeHtml(formatErrorMessage(error));
-  const safeUuid = escapeAttribute(portfolioUuid);
-  return `<div class="error">${safeError} <button class="retry-pos" data-portfolio="${safeUuid}">Erneut laden</button></div>`;
+  const safeError = formatErrorMessage(error);
+  return renderErrorState(safeError, {
+    label: 'Erneut laden',
+    attrs: { 'data-portfolio': portfolioUuid }
+  });
 }
 
 function restoreSortAndInit(containerEl: HTMLElement, rootEl: QueryRoot, pid: string): void {
