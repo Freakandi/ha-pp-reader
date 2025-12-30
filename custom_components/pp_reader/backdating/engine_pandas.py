@@ -393,7 +393,8 @@ class BackdatingEngine:
         # Note: fx_long["date"] is already datetime from fx_pivot index (via load_data)
 
         if not df_txs.empty:
-            # Note: df_txs["date"] and ["currency_code"] are already normalized in load_data
+            # Note: df_txs["date"] and ["currency_code"] are already normalized
+            # in load_data
 
             # Join with FX
             df_augmented = df_txs.merge(
