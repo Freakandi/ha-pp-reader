@@ -109,6 +109,24 @@ export function normalizeCurrencyValue(
   return roundCurrency(value, options);
 }
 
+export function normalizeCurrencyCode(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const upper = trimmed.toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper)) {
+    return upper;
+  }
+  if (upper === '€') {
+    return 'EUR';
+  }
+  return null;
+}
+
 export function normalizePercentValue(
   value: unknown,
   options: RoundCurrencyOptions = {},

@@ -1,9 +1,17 @@
 
+import { normalizeCurrencyCode } from "./currency";
+
 export function formatCurrency(value: number | null | undefined, currency = "EUR"): string {
   if (value === null || typeof value === "undefined") return "";
+
+  // 🛡️ SECURITY: Validate currency code to prevent Intl.NumberFormat injection/errors
+  // and ensure consistent output. normalizeCurrencyCode handles trimming and "EUR" aliases.
+  // Fallback to "EUR" if invalid or missing to fail safe and maintain UI stability.
+  const safeCurrency = normalizeCurrencyCode(currency) || "EUR";
+
   const formatter = new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency,
+    currency: safeCurrency,
   });
   return formatter.format(value);
 }

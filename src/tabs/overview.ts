@@ -38,7 +38,7 @@ import {
 } from '../lib/store/selectors/portfolio';
 import { renderBadgeList, renderNameWithBadges } from '../lib/ui/badges';
 import type { HomeAssistant } from '../types/home-assistant';
-import { toFiniteCurrency } from '../utils/currency';
+import { normalizeCurrencyCode, toFiniteCurrency } from '../utils/currency';
 import { formatCurrency, formatPercent } from '../utils/format';
 import { escapeAttribute, escapeHtml } from '../utils/html';
 import { normalizePerformancePayload } from '../utils/performance';
@@ -266,24 +266,6 @@ function toNullableNumber(value: unknown): number | null {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function normalizeCurrencyCode(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const upper = trimmed.toUpperCase();
-  if (/^[A-Z]{3}$/.test(upper)) {
-    return upper;
-  }
-  if (upper === '€') {
-    return 'EUR';
-  }
-  return null;
 }
 
 function resolveCurrencyFromPosition(
