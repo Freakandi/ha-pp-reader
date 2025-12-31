@@ -14,8 +14,8 @@ from typing import Any
 # Add project root to sys.path
 sys.path.append(str(Path(__file__).parents[1]))
 
-from custom_components.pp_reader.backdating.pipeline import async_run_backdating_rebuild
-from custom_components.pp_reader.data.db_init import initialize_database_schema
+from custom_components.pp_reader.backdating.pipeline import async_run_backdating_rebuild  # noqa: I001
+from custom_components.pp_reader.data.db_init import initialize_database_schema  # noqa: I001
 
 # Configure logging
 logging.basicConfig(
