@@ -2140,6 +2140,8 @@ function scheduleNewsPromptSetup(options: {
       button.disabled = true;
       button.classList.add('loading');
       const originalText = button.textContent;
+      button.innerHTML = createInlineSpinner();
+      button.append(document.createTextNode(` ${originalText || ''}`));
 
       try {
         const { body, link } = buildPromptPayload(symbol);

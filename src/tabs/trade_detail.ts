@@ -811,6 +811,8 @@ function scheduleNewsPromptSetup(options: {
         button.disabled = true;
         button.classList.add('loading');
         const originalText = button.textContent;
+        button.innerHTML = createInlineSpinner();
+        button.append(document.createTextNode(` ${originalText || ''}`));
 
         try {
           const placeholder = (cachedPrompt?.placeholder || NEWS_PROMPT_PLACEHOLDER_FALLBACK).trim() || NEWS_PROMPT_PLACEHOLDER_FALLBACK;
