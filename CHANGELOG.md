@@ -7,7 +7,15 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 
 ### Added
-- **Performance Metrics**: Added "Time-Weighted Return (TWR)" and "Internal Rate of Return (IRR)" to the "Time Series" tab's performance calculation section, providing standardized percentage yield metrics alongside absolute gains.
+- **Performance Breakdown**: Implemented detailed performance breakdown in the "Time Series" tab. Realized/Unrealized Gains, Dividends, Fees, Taxes, and Interest can now be expanded to show contributing Securities and Accounts with their respective amounts.
+- **Unit Tests**: Added comprehensive test coverage for performance breakdown logic, ensuring accurate aggregation and handling of edge cases (e.g., partial sales, dividends with tax deductions).
+
+### Changed
+- **Performance Engine**: Refactored `PerformanceEngine` to support granular outcome tracking. `calculate_period_breakdown` logic now drives both high-level metrics and detailed views, ensuring consistency.
+
+### Fixed
+- **Realized Gains Calculation**: Fixed "Gross" realized gains calculation to correctly include fees and taxes in the proceeds, ensuring accurate P&L reporting relative to the net cash flow.
+- **Test Infrastructure**: Resolved schema mismatches in `test_period_calculations.py` that were causing false positive test failures.
 - **Documentation**: Performance Calculation Logic and Data Model Specification, clarifying the "Source of Truth" (Java) vs "Implementation Plan" (Python) and mapping the data structures.
 - **Realized Performance Tab ("Trades")**: Introduced a comprehensive view for realized gains/losses, featuring stacked columns (e.g., Purchase/Sales Value), granular sorting, and "Since Sell" metrics.
 - **Accessibility**: Added tooltips to icon-only navigation buttons and `aria-hidden` attributes to decorative SVGs.

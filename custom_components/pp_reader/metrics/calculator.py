@@ -9,11 +9,17 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
+from custom_components.pp_reader.metrics.breakdown import (
+    BreakdownItem,
+    PerformanceBreakdown,
+)
 from custom_components.pp_reader.util.currency import PRICE_SCALE
 
 _LOGGER = logging.getLogger(__name__)
 
 _CONVERGENCE_THRESHOLD = 1e-6
+_BREAKDOWN_THRESHOLD = 0.01
+_GAIN_EPSILON = 1e-6
 
 
 # Constants from TransactionType in engine_pandas.py
@@ -85,7 +91,9 @@ class PerformanceEngine:
         self._df_rates = pd.DataFrame()
         self._df_securities = pd.DataFrame()
         self._account_currencies: dict[str, str] = {}
+        self._account_name_map: dict[str, str] = {}
         self._sec_curr_map: dict[str, str] = {}
+        self._sec_name_map: dict[str, str] = {}
         self._prices_idx = pd.DataFrame()
         self._rates_idx = pd.DataFrame()
 
@@ -218,23 +226,29 @@ class PerformanceEngine:
             pass
 
         # securities
-        query_sec = "SELECT uuid, currency_code FROM securities"
+        query_sec = "SELECT uuid, currency_code, name FROM securities"
         try:
             self._df_securities = pd.read_sql_query(query_sec, self.conn)
             self._sec_curr_map = self._df_securities.set_index("uuid")[
                 "currency_code"
             ].to_dict()
+            self._sec_name_map = self._df_securities.set_index("uuid")["name"].to_dict()
         except (pd.errors.DatabaseError, KeyError):
-            self._df_securities = pd.DataFrame(columns=["uuid", "currency_code"])
+            self._df_securities = pd.DataFrame(
+                columns=["uuid", "currency_code", "name"]
+            )
             self._sec_curr_map = {}
+            self._sec_name_map = {}
 
         # account currencies
         try:
-            query = "SELECT uuid, currency_code FROM accounts"
+            query = "SELECT uuid, currency_code, name FROM accounts"
             rows = self.conn.execute(query).fetchall()
             self._account_currencies = {r[0]: (r[1] or "EUR") for r in rows}
+            self._account_name_map = {r[0]: (r[2] or "Unknown Account") for r in rows}
         except sqlite3.Error:
             self._account_currencies = {}
+            self._account_name_map = {}
 
         if not self._df_prices.empty:
             self._prices_idx = self._df_prices.set_index(
@@ -482,6 +496,235 @@ class PerformanceEngine:
         metrics.irr = self._calculate_irr(start_wealth, end_wealth, daily_flows)
 
         return metrics
+
+    def calculate_period_breakdown(
+        self, start_date: date, end_date: date
+    ) -> PerformanceBreakdown:
+        """Calculate detailed performance breakdown for a specific period."""
+        start_ts = pd.Timestamp(start_date, tz="UTC")
+        end_ts = pd.Timestamp(end_date, tz="UTC")
+
+        # 1. Virtual Inventory Setup
+        start_holdings = self._get_holdings_at_date(start_date)
+        virtual_inventory: dict[str, deque[Lot]] = {}
+
+        for sec_uuid, share_count in start_holdings.items():
+            if share_count <= 0:
+                continue
+            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            start_price = self._get_price(sec_uuid, start_ts)
+            start_fx = self._get_fx(curr, start_ts)
+            virtual_inventory[sec_uuid] = deque(
+                [
+                    Lot(
+                        date=start_ts,
+                        shares=share_count,
+                        price_native=start_price,
+                        fx_rate=start_fx,
+                    )
+                ]
+            )
+
+        # 2. Capital Gains
+        window_mask = (self._df_txs["date"] >= start_ts) & (
+            self._df_txs["date"] <= end_ts
+        )
+        df_txs_window = self._df_txs[window_mask].copy()
+
+        realized_map, unrealized_map = self._calculate_capital_gains_detailed(
+            df_txs_window, start_date, end_date, initial_inventory=virtual_inventory
+        )
+
+        # 3. Other Metrics Aggregation
+        date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
+        # Prepare FX for window augmentation
+        fx_pivot, _, _ = self._prepare_market_data(
+            self._df_rates, pd.DataFrame(), date_range
+        )
+        df_augmented, fx_long = self._augment_transactions(df_txs_window, fx_pivot)
+
+        divs = self._aggregate_dividends(df_augmented, fx_long)
+        fees = self._aggregate_fees(df_augmented, fx_long)
+        taxes = self._aggregate_taxes(df_augmented, fx_long)
+        interest = self._aggregate_interest(df_augmented)
+
+        # 4. Format Results
+        realized_items = [
+            BreakdownItem(label=self._resolve_sec_name(k), amount=v)
+            for k, v in realized_map.items()
+            if abs(v) > _BREAKDOWN_THRESHOLD
+        ]
+        unrealized_items = [
+            BreakdownItem(label=self._resolve_sec_name(k), amount=v)
+            for k, v in unrealized_map.items()
+            if abs(v) > _BREAKDOWN_THRESHOLD
+        ]
+
+        realized_items.sort(key=lambda x: x.amount, reverse=True)
+        unrealized_items.sort(key=lambda x: x.amount, reverse=True)
+
+        return PerformanceBreakdown(
+            realized_gains=realized_items,
+            unrealized_gains=unrealized_items,
+            dividends=divs,
+            fees=fees,
+            taxes=taxes,
+            interest=interest,
+        )
+
+    def _resolve_sec_name(self, uuid_val: str) -> str:
+        return self._sec_name_map.get(uuid_val, f"Security {uuid_val[:8]}")
+
+    def _resolve_acc_name(self, uuid_val: str) -> str:
+        return self._account_name_map.get(uuid_val, f"Account {uuid_val[:8]}")
+
+    def _format_breakdown_list(
+        self, items: list[BreakdownItem], threshold: float = _BREAKDOWN_THRESHOLD
+    ) -> list[BreakdownItem]:
+        filtered = [x for x in items if abs(x.amount) >= threshold]
+        filtered.sort(key=lambda x: x.amount, reverse=True)
+        return filtered
+
+    def _aggregate_dividends(
+        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
+    ) -> list[BreakdownItem]:
+        # 1. Base Dividends
+        div_txs = df_augmented[df_augmented["type"] == TransactionType.DIVIDEND]
+        base_sums = div_txs.groupby("security")["amount_eur"].sum()
+
+        # 2. Units (Tax/Fee on Dividend) - Treated as ADDITION to Gross Dividend?
+        # PP Logic: Gross Dividend = Net Amount + Taxes + Fees.
+        # DB 'amount' for DIVIDEND is usually Net Inflow.
+        # So yes, we add Taxes/Fees from Units.
+
+        gross_additions = pd.Series(dtype=float)
+        if not self._df_units.empty and not df_augmented.empty:
+            df_u_aug = self._df_units.merge(
+                df_augmented[["uuid", "type", "security", "date"]].rename(
+                    columns={
+                        "type": "parent_type",
+                        "security": "parent_sec",
+                        "uuid": "tx_uuid",
+                    }
+                ),
+                left_on="transaction_uuid",
+                right_on="tx_uuid",
+                how="inner",
+            )
+            if not df_u_aug.empty:
+                df_u_aug = df_u_aug.merge(
+                    fx_long, on=["date", "currency_code"], how="left"
+                )
+                df_u_aug["daily_fx_rate"] = df_u_aug["daily_fx_rate"].fillna(1.0)
+                df_u_aug["amount_eur"] = (df_u_aug["amount"] / 100.0) / df_u_aug[
+                    "daily_fx_rate"
+                ]
+
+                mask_gross = (df_u_aug["parent_type"] == TransactionType.DIVIDEND) & (
+                    df_u_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE])
+                )
+                gross_additions = (
+                    df_u_aug[mask_gross].groupby("parent_sec")["amount_eur"].sum()
+                )
+
+        total_sums = base_sums.add(gross_additions, fill_value=0)
+        results = [
+            BreakdownItem(label=self._resolve_sec_name(k), amount=v)
+            for k, v in total_sums.items()
+        ]
+        return self._format_breakdown_list(results)
+
+    def _aggregate_interest(self, df_augmented: pd.DataFrame) -> list[BreakdownItem]:
+        # Interest - InterestCharge
+        df_int = df_augmented[df_augmented["type"] == TransactionType.INTEREST]
+        df_chg = df_augmented[df_augmented["type"] == TransactionType.INTEREST_CHARGE]
+
+        # Group by Account
+        pos = df_int.groupby("account")["amount_eur"].sum()
+        neg = df_chg.groupby("account")["amount_eur"].sum()
+
+        net = pos.sub(neg, fill_value=0)
+        results = [
+            BreakdownItem(label=self._resolve_acc_name(k), amount=v)
+            for k, v in net.items()
+        ]
+        return self._format_breakdown_list(results)
+
+    def _aggregate_fees_taxes_generic(
+        self,
+        df_augmented: pd.DataFrame,
+        fx_long: pd.DataFrame,
+        main_type: int,
+        unit_type: int,
+    ) -> list[BreakdownItem]:
+        # 1. Explicit Transactions (e.g. Type=TAX or FEE)
+        # Note: In PP, standalone Fees/Taxes exist.
+        # But also attached to Buy/Sell/Div as Units.
+
+        df_main = df_augmented[df_augmented["type"] == main_type].copy()
+        # Group by Security if present, else Account
+        df_main["group_id"] = df_main["security"].fillna(df_main["account"])
+        # Some rows might have neither? fallback to 'Unknown'
+        df_main["group_id"] = df_main["group_id"].fillna("Unknown")
+
+        base_sums = df_main.groupby("group_id")["amount_eur"].sum()
+
+        # 2. Units
+        unit_sums = pd.Series(dtype=float)
+        if not self._df_units.empty and not df_augmented.empty:
+            df_u_aug = self._df_units.merge(
+                df_augmented[["uuid", "security", "account", "date"]].rename(
+                    columns={"uuid": "tx_uuid", "security": "p_sec", "account": "p_acc"}
+                ),
+                left_on="transaction_uuid",
+                right_on="tx_uuid",
+                how="inner",
+            )
+            if not df_u_aug.empty:
+                df_u_aug = df_u_aug.merge(
+                    fx_long, on=["date", "currency_code"], how="left"
+                )
+                df_u_aug["daily_fx_rate"] = df_u_aug["daily_fx_rate"].fillna(1.0)
+                df_u_aug["amount_eur"] = (df_u_aug["amount"] / 100.0) / df_u_aug[
+                    "daily_fx_rate"
+                ]
+
+                df_target = df_u_aug[df_u_aug["type"] == unit_type].copy()
+                df_target["group_id"] = (
+                    df_target["p_sec"].fillna(df_target["p_acc"]).fillna("Unknown")
+                )
+                unit_sums = df_target.groupby("group_id")["amount_eur"].sum()
+
+        total = base_sums.add(unit_sums, fill_value=0)
+
+        # Resolve names
+        results = []
+        for uid, val in total.items():
+            if uid == "Unknown":
+                name = "Unknown"
+            elif uid in self._sec_name_map:
+                name = self._resolve_sec_name(uid)
+            elif uid in self._account_name_map:
+                name = self._resolve_acc_name(uid)
+            else:
+                name = str(uid)
+            results.append(BreakdownItem(label=name, amount=val))
+
+        return self._format_breakdown_list(results)
+
+    def _aggregate_fees(
+        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
+    ) -> list[BreakdownItem]:
+        return self._aggregate_fees_taxes_generic(
+            df_augmented, fx_long, TransactionType.FEE, UNIT_TYPE_FEE
+        )
+
+    def _aggregate_taxes(
+        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
+    ) -> list[BreakdownItem]:
+        return self._aggregate_fees_taxes_generic(
+            df_augmented, fx_long, TransactionType.TAX, UNIT_TYPE_TAX
+        )
 
     def _prepare_market_data(
         self,
@@ -799,19 +1042,29 @@ class PerformanceEngine:
                 pass
         return result
 
-    def _calculate_capital_gains(  # noqa: PLR0912
+    def _calculate_capital_gains(
         self,
         df_txs: pd.DataFrame,
         start_date: date,
         end_date: date,
         initial_inventory: dict[str, deque[Lot]] | None = None,
     ) -> tuple[float, float]:
-        start_ts = pd.Timestamp(start_date, tz="UTC")
-        end_ts = pd.Timestamp(end_date, tz="UTC")
+        realized_map, unrealized_map = self._calculate_capital_gains_detailed(
+            df_txs, start_date, end_date, initial_inventory
+        )
+        return sum(realized_map.values()), sum(unrealized_map.values())
+
+    def _calculate_capital_gains_detailed(  # noqa: PLR0912
+        self,
+        df_txs: pd.DataFrame,
+        start_date: date,
+        end_date: date,
+        initial_inventory: dict[str, deque[Lot]] | None = None,
+    ) -> tuple[dict[str, float], dict[str, float]]:
         start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
         inventory: dict[str, deque[Lot]] = initial_inventory or {}
-        realized_gains_eur = 0.0
+        realized_gains_map: dict[str, float] = {}
 
         sec_types = [
             TransactionType.BUY,
@@ -823,7 +1076,7 @@ class PerformanceEngine:
         txs = df_txs[df_txs["type"].isin(sec_types)].sort_values("date")
 
         if txs.empty:
-            return 0.0, 0.0
+            return {}, {}
 
         units_payload = self._load_transaction_units(txs["uuid"].tolist())
 
@@ -831,6 +1084,10 @@ class PerformanceEngine:
             sec_id = row.security
             if not sec_id or row.shares_norm == 0:
                 continue
+
+            # Ensure map entry exists
+            if sec_id not in realized_gains_map:
+                realized_gains_map[sec_id] = 0.0
 
             shares = abs(row.shares_norm)
             tx_price = 0.0
@@ -881,12 +1138,12 @@ class PerformanceEngine:
                         row.currency_code,
                     )
                     if row.date >= start_ts:
-                        realized_gains_eur += gain
+                        realized_gains_map[sec_id] += gain
 
-        unrealized_gains_eur = self._calculate_unrealized_security_gains(
+        unrealized_gains_map = self._calculate_unrealized_security_gains_detailed(
             inventory, start_ts, end_ts
         )
-        return realized_gains_eur, unrealized_gains_eur
+        return realized_gains_map, unrealized_gains_map
 
     def _calculate_fifo_series(  # noqa: PLR0912, PLR0915
         self, start_date: date, end_date: date
@@ -1067,19 +1324,21 @@ class PerformanceEngine:
             gain_accum += (sale_val_eur - base_val_eur) * consumed
         return gain_accum
 
-    def _calculate_unrealized_security_gains(
+    def _calculate_unrealized_security_gains_detailed(
         self,
         inventory: dict[str, deque[Lot]],
         start_ts: pd.Timestamp,
         end_ts: pd.Timestamp,
-    ) -> float:
-        unrealized_gains_eur = 0.0
+    ) -> dict[str, float]:
+        unrealized_gains_map: dict[str, float] = {}
         for sec_id, lots in inventory.items():
             if not lots:
                 continue
             curr = self._sec_curr_map.get(sec_id, "EUR")
             end_price = self._get_price(sec_id, end_ts)
             end_fx = self._get_fx(curr, end_ts)
+
+            gain_accum = 0.0
             for lot in lots:
                 # Implement "virtual lot" logic for unrealized gains as well.
                 base_price = (
@@ -1094,8 +1353,12 @@ class PerformanceEngine:
                 )
                 end_val_eur = end_price / end_fx if end_fx else 0.0
                 base_val_eur = base_price / base_fx if base_fx else 0.0
-                unrealized_gains_eur += (end_val_eur - base_val_eur) * lot.shares
-        return unrealized_gains_eur
+                gain_accum += (end_val_eur - base_val_eur) * lot.shares
+
+            if abs(gain_accum) > _GAIN_EPSILON:
+                unrealized_gains_map[sec_id] = gain_accum
+
+        return unrealized_gains_map
 
     def _calculate_fx_performance(  # noqa: PLR0912
         self,

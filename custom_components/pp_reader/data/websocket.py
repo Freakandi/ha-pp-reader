@@ -1645,29 +1645,8 @@ async def ws_get_performance_breakdown(
         with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
             engine = PerformanceEngine(conn)
             engine.load_data()
-            daily_wealth = engine.get_daily_wealth(start_date, end_date)
-
-            realized_gains, _ = engine._calculate_capital_gains(  # noqa: SLF001
-                engine._df_txs,  # noqa: SLF001
-                start_date,
-                end_date,
-            )
-
-            dividends = daily_wealth["dividends_eur"].sum()
-            interest = daily_wealth["interest_eur"].sum()
-            fees = daily_wealth["fees_eur"].sum()
-            taxes = daily_wealth["taxes_eur"].sum()
-
-            return {
-                "realized_gains": [
-                    {"label": "Total", "amount": realized_gains, "details": {}}
-                ],
-                "unrealized_gains": [],
-                "dividends": [{"label": "Total", "amount": dividends, "details": {}}],
-                "fees": [{"label": "Total", "amount": fees, "details": {}}],
-                "taxes": [{"label": "Total", "amount": taxes, "details": {}}],
-                "interest": [{"label": "Total", "amount": interest, "details": {}}],
-            }
+            breakdown = engine.calculate_period_breakdown(start_date, end_date)
+            return _serialize_performance_breakdown(breakdown)
 
     try:
         breakdown = await async_run_executor_job(hass, _calc)

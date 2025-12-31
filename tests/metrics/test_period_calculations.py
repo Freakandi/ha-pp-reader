@@ -19,6 +19,7 @@ def test_db(tmp_path):
         uuid TEXT PRIMARY KEY,
         type INTEGER NOT NULL,
         account TEXT,
+        other_account TEXT,
         date TEXT NOT NULL,
         currency_code TEXT,
         amount INTEGER,
@@ -39,7 +40,8 @@ def test_db(tmp_path):
     cur.execute("""
     CREATE TABLE IF NOT EXISTS securities (
         uuid TEXT PRIMARY KEY,
-        currency_code TEXT
+        currency_code TEXT,
+        name TEXT
     );
     """)
 

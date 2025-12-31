@@ -146,10 +146,10 @@ def install_fx_stubs(monkeypatch: Any, *, rate: float = FX_TEST_RATE) -> None:
             provenance='{"source":"tests"}',
         )
 
-    async def _ensure_async(_dates, _currencies, _db_path) -> None:
+    async def _ensure_async(_dates, _currencies, _db_path, **kwargs) -> None:
         return None
 
-    async def _load_async(reference_date, _db_path):
+    async def _load_async(reference_date, _db_path, **kwargs):
         return {"USD": _build_record(reference_date)}
 
     monkeypatch.setattr(
@@ -161,10 +161,10 @@ def install_fx_stubs(monkeypatch: Any, *, rate: float = FX_TEST_RATE) -> None:
         _load_async,
     )
 
-    def _ensure_sync(_dates, _currencies, _db_path) -> None:
+    def _ensure_sync(_dates, _currencies, _db_path, **kwargs) -> None:
         return None
 
-    def _load_sync(reference_date, _db_path):
+    def _load_sync(reference_date, _db_path, **kwargs):
         return {"USD": _build_record(reference_date)}
 
     monkeypatch.setattr(
