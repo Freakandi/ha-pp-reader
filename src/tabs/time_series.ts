@@ -227,9 +227,10 @@ function renderMetrics(
     return `
     <div class="metric-row ${cls} ${isInteractive ? 'interactive' : ''}"
          ${id ? `id="${id}"` : ''}
-         ${type ? `data-breakdown-type="${type}"` : ''}>
+         ${type ? `data-breakdown-type="${type}"` : ''}
+         ${isInteractive ? 'role="button" tabindex="0" aria-expanded="false" aria-label="' + escapeAttribute(label) + ' Details anzeigen"' : ''}>
       <span class="metric-label">
-        ${isInteractive ? '<span class="toggle-icon">▶</span> ' : ''}${label}
+        ${isInteractive ? '<span class="toggle-icon" aria-hidden="true">▶</span> ' : ''}${label}
       </span>
       <span class="metric-value">${typeof value === 'number' ? formatCurrency(value) : value}</span>
     </div>`;
@@ -254,85 +255,96 @@ function renderMetrics(
 
   container.innerHTML = html;
 
-  container.querySelectorAll('.metric-row.interactive').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      void (async () => {
-        if (!hass || !selection) return;
+  const handleRowInteraction = (target: HTMLElement) => {
+    void (async () => {
+      if (!hass || !selection) return;
 
-        const target = e.currentTarget as HTMLElement;
-        const type = target.dataset.breakdownType;
-        if (!type) return;
+      const type = target.dataset.breakdownType;
+      if (!type) return;
 
-        const expanded = target.classList.contains('expanded');
+      const expanded = target.classList.contains('expanded');
+      target.setAttribute('aria-expanded', expanded ? 'false' : 'true');
 
-        if (expanded) {
-          target.classList.remove('expanded');
-          const icon = target.querySelector('.toggle-icon');
-          if (icon) icon.textContent = '▶';
+      if (expanded) {
+        target.classList.remove('expanded');
+        const icon = target.querySelector('.toggle-icon');
+        if (icon) icon.textContent = '▶';
 
-          // Remove sub-rows
-          let next = target.nextElementSibling;
-          while (next && next.classList.contains('breakdown-row')) {
-            const toRemove = next;
-            next = next.nextElementSibling;
-            toRemove.remove();
+        // Remove sub-rows
+        let next = target.nextElementSibling;
+        while (next && next.classList.contains('breakdown-row')) {
+          const toRemove = next;
+          next = next.nextElementSibling;
+          toRemove.remove();
+        }
+      } else {
+        target.classList.add('expanded');
+        const icon = target.querySelector('.toggle-icon');
+        if (icon) icon.textContent = '▼';
+
+        try {
+          const loadingRow = document.createElement('div');
+          loadingRow.className = 'breakdown-row loading';
+          loadingRow.innerHTML = '<span class="metric-label">Lade Details...</span><span class="metric-value">...</span>';
+          target.after(loadingRow);
+
+          let rangeStart = selection.range?.start;
+          let rangeEnd = selection.range?.end;
+          if (!rangeStart) {
+            rangeStart = records[0].date;
+            rangeEnd = records[records.length - 1].date;
           }
-        } else {
-          target.classList.add('expanded');
-          const icon = target.querySelector('.toggle-icon');
-          if (icon) icon.textContent = '▼';
 
-          try {
-            const loadingRow = document.createElement('div');
-            loadingRow.className = 'breakdown-row loading';
-            loadingRow.innerHTML = '<span class="metric-label">Lade Details...</span><span class="metric-value">...</span>';
-            target.after(loadingRow);
+          const response = await hass.connection.sendMessagePromise<BreakdownResponse>({
+            type: 'pp_reader/get_performance_breakdown',
+            entry_id: entryId,
+            start: rangeStart,
+            end: rangeEnd
+          });
 
-            let rangeStart = selection.range?.start;
-            let rangeEnd = selection.range?.end;
-            if (!rangeStart) {
-              rangeStart = records[0].date;
-              rangeEnd = records[records.length - 1].date;
-            }
-
-            const response = await hass.connection.sendMessagePromise<BreakdownResponse>({
-              type: 'pp_reader/get_performance_breakdown',
-              entry_id: entryId,
-              start: rangeStart,
-              end: rangeEnd
-            });
-
-            loadingRow.remove();
+          loadingRow.remove();
 
 
-            const items = (response as Partial<BreakdownResponse>)[type];
-            if (!items || items.length === 0) {
-              const emptyRow = document.createElement('div');
-              emptyRow.className = 'breakdown-row empty';
-              emptyRow.innerHTML = '<span class="metric-label">Keine Details</span><span class="metric-value">—</span>';
-              target.after(emptyRow);
-            } else {
-              [...items].reverse().forEach(item => {
-                const detailRow = document.createElement('div');
-                detailRow.className = 'breakdown-row';
-                detailRow.style.animation = 'fadeIn 0.2s ease';
-                detailRow.innerHTML = `
+          const items = (response as Partial<BreakdownResponse>)[type];
+          if (!items || items.length === 0) {
+            const emptyRow = document.createElement('div');
+            emptyRow.className = 'breakdown-row empty';
+            emptyRow.innerHTML = '<span class="metric-label">Keine Details</span><span class="metric-value">—</span>';
+            target.after(emptyRow);
+          } else {
+            [...items].reverse().forEach(item => {
+              const detailRow = document.createElement('div');
+              detailRow.className = 'breakdown-row';
+              detailRow.style.animation = 'fadeIn 0.2s ease';
+              detailRow.innerHTML = `
                  <span class="metric-label">${item.label}</span>
                  <span class="metric-value">${formatCurrency(item.amount)}</span>
                `;
-                target.after(detailRow);
-              });
-            }
-
-          } catch (err) {
-            console.error('Breakdown fetch failed', err);
-            const errRow = document.createElement('div');
-            errRow.className = 'breakdown-row error';
-            errRow.innerHTML = '<span class="metric-label">Fehler beim Laden</span>';
-            target.querySelector('.breakdown-row.loading')?.replaceWith(errRow);
+              target.after(detailRow);
+            });
           }
+
+        } catch (err) {
+          console.error('Breakdown fetch failed', err);
+          const errRow = document.createElement('div');
+          errRow.className = 'breakdown-row error';
+          errRow.innerHTML = '<span class="metric-label">Fehler beim Laden</span>';
+          target.querySelector('.breakdown-row.loading')?.replaceWith(errRow);
         }
-      })();
+      }
+    })();
+  };
+
+  container.querySelectorAll('.metric-row.interactive').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      handleRowInteraction(e.currentTarget as HTMLElement);
+    });
+    row.addEventListener('keydown', (e) => {
+      const keyEvent = e as KeyboardEvent;
+      if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+        keyEvent.preventDefault();
+        handleRowInteraction(e.currentTarget as HTMLElement);
+      }
     });
   });
 
@@ -1066,6 +1078,7 @@ export function renderAnalyse(
 }
 
 export const __TEST_ONLY__ = {
+  renderMetrics: renderMetrics,
   derivePerformanceForTest: derivePerformance,
   buildSeriesForTest: buildSeries,
   renderCoverageBadgesForTest: renderCoverageBadges,
