@@ -59,6 +59,7 @@ max-complexity = 25
 "scripts/**/*" = [
     "D",
     "PLR",
+    "I001",
 ]
 
 # Allow many arguments in integration components (dependency injection, etc)
