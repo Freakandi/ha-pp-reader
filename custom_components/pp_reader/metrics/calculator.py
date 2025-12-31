@@ -869,7 +869,11 @@ class PerformanceEngine:
         txs = self._df_txs[self._df_txs["type"].isin(sec_types)].sort_values("date")
 
         if txs.empty:
-            return pd.Series(dtype=float), pd.Series(dtype=float)
+            return pd.Series(
+                dtype=float, index=pd.DatetimeIndex([], dtype="datetime64[ns, UTC]")
+            ), pd.Series(
+                dtype=float, index=pd.DatetimeIndex([], dtype="datetime64[ns, UTC]")
+            )
 
         units_payload = self._load_transaction_units(txs["uuid"].tolist())
         start_ts = pd.Timestamp(start_date, tz="UTC")
@@ -963,8 +967,20 @@ class PerformanceEngine:
             # We overwrite previous entry for same day, so last tx wins (EOD state)
             daily_basis_changes[row.date] = current_total_basis
 
-        realized_series = pd.Series(daily_realized, dtype=float)
-        cost_basis_series = pd.Series(daily_basis_changes, dtype=float)
+        # Ensure index is datetime even if empty
+        if not daily_realized:
+            realized_series = pd.Series(
+                dtype=float, index=pd.DatetimeIndex([], dtype="datetime64[ns, UTC]")
+            )
+        else:
+            realized_series = pd.Series(daily_realized, dtype=float)
+
+        if not daily_basis_changes:
+            cost_basis_series = pd.Series(
+                dtype=float, index=pd.DatetimeIndex([], dtype="datetime64[ns, UTC]")
+            )
+        else:
+            cost_basis_series = pd.Series(daily_basis_changes, dtype=float)
 
         return realized_series, cost_basis_series
 
