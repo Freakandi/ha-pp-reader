@@ -618,9 +618,7 @@ class BackdatingEngine:
         for curr, sec_uuids in securities_by_currency.items():
             # Sum native value for all securities in this currency
             # (Dates x Securities) * (Dates x Securities) -> Sum(axis=1) -> (Dates,)
-            native_val = (
-                sec_holdings[sec_uuids] * price_pivot[sec_uuids]
-            ).sum(axis=1)
+            native_val = (sec_holdings[sec_uuids] * price_pivot[sec_uuids]).sum(axis=1)
 
             rates = (
                 fx_pivot[curr]
@@ -831,9 +829,7 @@ class BackdatingEngine:
         if not acc_balances.empty:
             # Sum balances by currency (Level 1 of MultiIndex)
             # Use T.groupby(...).T to avoid axis=1 deprecation warning
-            balances_by_currency = (
-                acc_balances.T.groupby(level="currency_code").sum().T
-            )
+            balances_by_currency = acc_balances.T.groupby(level="currency_code").sum().T
 
             for curr in balances_by_currency.columns:
                 bal = balances_by_currency[curr]
