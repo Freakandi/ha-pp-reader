@@ -1452,7 +1452,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                 engine.load_data()
 
                 # 1. Chart Data (Time Series)
-                df = engine.get_daily_wealth(chart_start, params.end_date)
+                daily_wealth_df = engine.get_daily_wealth(chart_start, params.end_date)
 
                 # 2. Metrics (Aggregates) - Reuses loaded data!
                 metrics = None
@@ -1468,7 +1468,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                         "fx_gains_cash": perf.fx_gains_cash,
                     }
 
-                return df, metrics
+                return daily_wealth_df, metrics
 
         totals_df, metrics_payload = await async_run_executor_job(
             hass, _fetch_and_calculate

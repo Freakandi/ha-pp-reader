@@ -607,20 +607,27 @@ class BackdatingEngine:
             if k not in sec_curr_map and v:
                 sec_curr_map[k] = v
 
+        # Group securities by currency to vectorize FX division
+        # Reduces loop overhead from O(Securities) to O(Currencies)
+        securities_by_currency = {}
         for sec_uuid in sec_holdings.columns:
-            if sec_uuid not in price_pivot.columns:
-                continue
+            if sec_uuid in price_pivot.columns:
+                curr = sec_curr_map.get(sec_uuid, "EUR")
+                securities_by_currency.setdefault(curr, []).append(sec_uuid)
 
-            qty = sec_holdings[sec_uuid]
-            prices = price_pivot[sec_uuid]
-            curr = sec_curr_map.get(sec_uuid, "EUR")
+        for curr, sec_uuids in securities_by_currency.items():
+            # Sum native value for all securities in this currency
+            # (Dates x Securities) * (Dates x Securities) -> Sum(axis=1) -> (Dates,)
+            native_val = (
+                sec_holdings[sec_uuids] * price_pivot[sec_uuids]
+            ).sum(axis=1)
+
             rates = (
                 fx_pivot[curr]
                 if curr in fx_pivot.columns
                 else pd.Series(1.0, index=date_range)
             )
-
-            val = (qty * prices) / rates.replace(0, np.nan)
+            val = native_val / rates.replace(0, np.nan)
             daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
 
         return daily_sec_wealth
@@ -820,15 +827,23 @@ class BackdatingEngine:
         # forward fill to handle days without transactions before slicing
         acc_balances = acc_balances_full.reindex(date_range, method="ffill").fillna(0.0)
 
-        for _, curr in acc_balances.columns:
-            bal = acc_balances[(_, curr)]
-            rates = (
-                fx_pivot[curr]
-                if curr in fx_pivot.columns
-                else pd.Series(1.0, index=date_range)
+        # Group accounts by currency to vectorize FX division
+        if not acc_balances.empty:
+            # Sum balances by currency (Level 1 of MultiIndex)
+            # Use T.groupby(...).T to avoid axis=1 deprecation warning
+            balances_by_currency = (
+                acc_balances.T.groupby(level="currency_code").sum().T
             )
-            val = bal / rates.replace(0, np.nan)
-            daily_cash_wealth = daily_cash_wealth.add(val.fillna(0.0))
+
+            for curr in balances_by_currency.columns:
+                bal = balances_by_currency[curr]
+                rates = (
+                    fx_pivot[curr]
+                    if curr in fx_pivot.columns
+                    else pd.Series(1.0, index=date_range)
+                )
+                val = bal / rates.replace(0, np.nan)
+                daily_cash_wealth = daily_cash_wealth.add(val.fillna(0.0))
 
         return daily_cash_wealth
 
