@@ -6,11 +6,14 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import date, datetime
 
+import numpy as np
 import pandas as pd
 
 from custom_components.pp_reader.util.currency import PRICE_SCALE
 
 _LOGGER = logging.getLogger(__name__)
+
+_CONVERGENCE_THRESHOLD = 1e-6
 
 
 # Constants from TransactionType in engine_pandas.py
@@ -59,6 +62,8 @@ class PerformanceMetrics:
     realized_gains: float = 0.0
     unrealized_gains: float = 0.0
     fx_gains_cash: float = 0.0
+    twr: float = 0.0
+    irr: float = 0.0
 
 
 class PerformanceEngine:
@@ -435,6 +440,46 @@ class PerformanceEngine:
         metrics.fx_gains_cash = self._calculate_fx_performance(
             self._df_txs, start_date, end_date, self._account_currencies
         )
+
+        # 4. Filter Cash Flows (TWR/IRR)
+        # We need external flows: Deposits, Removals (including fees/taxes on them?)
+        # PP Standard: TWR uses daily valuations and external flows.
+        # IRR uses initial value, final value, and stream of external flows.
+
+        # Helper to extract relevant flows for the period
+        # Note: df_txs_window includes flows on start_date.
+        # PP Logic: Flows > Start-1day and <= End.
+
+        # We need ALL flows for the window to calculate TWR properly day-by-day
+        # We reuse daily_wealth which already has daily totals.
+
+        # Extract flows from daily_wealth
+        # daily_wealth info:
+        # invested_capital_eur = cumulative sum of flows.
+        # So daily flow = diff(invested_capital_eur)
+
+        daily_wealth_window = daily_wealth[
+            (daily_wealth["date"] >= start_date.isoformat())
+            & (daily_wealth["date"] <= end_date.isoformat())
+        ].copy()
+
+        # Recalculate daily flow from the window's perspective or use diff
+        # Since invested_capital is cumulative from dawn of time, diff gives daily flow.
+        daily_invested = daily_wealth_window["invested_capital_eur"]
+        # We need the flow for the first day too.
+        # previous day invested
+        prev_invested = start_invested
+
+        # Vectorized flow calculation
+        daily_flows = daily_invested.diff().fillna(
+            daily_invested.iloc[0] - prev_invested
+        )
+
+        metrics.twr = self._calculate_twr(
+            daily_wealth_window, daily_flows, start_wealth
+        )
+
+        metrics.irr = self._calculate_irr(start_wealth, end_wealth, daily_flows)
 
         return metrics
 
@@ -1173,6 +1218,154 @@ class PerformanceEngine:
             val_base = (consumed / base_fx) if base_fx else 0.0
             gain_accum += val_tx - val_base
         return gain_accum
+
+    def _calculate_twr(
+        self, daily_wealth: pd.DataFrame, daily_flows: pd.Series, start_value: float
+    ) -> float:
+        """
+        Calculate Time-Weighted Rate of Return (TWR).
+
+        Formula: Product( (EndVal - Flow) / StartVal ) - 1
+        Where StartVal for day t is EndVal for day t-1.
+        """
+        if daily_wealth.empty:
+            return 0.0
+
+        # Aligntment
+        vals = daily_wealth["total_wealth_eur"].to_numpy()
+        flows = daily_flows.to_numpy()
+
+        # We need a series of start_values.
+        # Day 0 Start = start_value
+        # Day i Start = Day i-1 End (vals[i-1])
+
+        start_vals = np.empty_like(vals)
+        start_vals[0] = start_value
+        start_vals[1:] = vals[:-1]
+
+        # Prevent division by zero
+        # If start value is 0, and we have a flow, the return is undefined.
+        # If start is 0 and we have inflow 100 and end is 110? Gain 10.
+        # But (110 - 100) / 0 is inf.
+        # Strategy: Skip days where start_val is 0.
+
+        # TWR Formula: (End - Flow) / Start
+        # If Start is 0, we treat the factor as 1.0 (no return impact).
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            adj_end = vals - flows
+            factors = adj_end / start_vals
+
+            # Fix valid entries
+            mask_valid = start_vals != 0
+
+            # Where start_vals is 0:
+            # If flow == end, then factor is 0/0 = nan.
+            # Implies just cash in, no gain. Factor 1.0 needed.
+            # If flow != end (e.g. intraday gain on new cash?),
+            # we can't capture it with EOD data perfectly.
+            # We assume factor 1.0
+
+            factors[~mask_valid] = 1.0
+            factors[np.isnan(factors)] = 1.0
+
+            # If factor is 0 (total loss?), it is valid.
+
+        twr = np.prod(factors) - 1.0
+        return float(twr)
+
+    def _calculate_irr(
+        self,
+        start_value: float,
+        end_value: float,
+        daily_flows: pd.Series,
+    ) -> float:
+        """Calculate Internal Rate of Return (IRR) using Newton-Raphson method."""
+        # 1. Construct Cash Flow Stream
+        # 1. Construct Cash Flow Stream
+
+        # We need to map flows to their relative day counts
+        # daily_flows index is aligned with daily_wealth_window.
+        # We need to map flows to their relative day counts
+
+        # Let's fix the call site to pass a Series with DatetimeIndex if possible,
+        # OR just reconstruct dates since we know it is daily from start_date
+
+        # daily_flows covers start_date to end_date (inclusive or not?)
+        # So daily_flows has length same as window.
+        # daily_flows[0] is for start_date.
+
+        # Dates relative to start_date
+        # Dates relative to start_date
+        days = np.arange(len(daily_flows))
+        amounts = -daily_flows.to_numpy()  # Negate flows (Deposit is negative)
+
+        # Add Start Value at t=0
+        # If daily_flows[0] is the flow ON start_date, we have:
+        # Initial Stock (Start Value) AND Flow on Day 0.
+        # We can combine them or treat them as same day.
+        amounts[0] -= start_value
+
+        # Add End Value at t=end
+        # The stream currently is only flows.
+        # The End Value is at end_date.
+        # valid_flows are daily_flows. The last element corresponds to end_date.
+        # We don't add to amounts[-1],
+        # we treat End Value as a separate positive flow at the end.
+
+        # Append End Value
+        days = np.append(days, days[-1])  # Same day as last flow
+        amounts = np.append(amounts, end_value)
+
+        # Filter out zeros to speed up solver
+        mask = amounts != 0
+        days = days[mask]
+        amounts = amounts[mask]
+
+        if len(amounts) < 1:
+            return 0.0
+
+        # 2. Solver (Newton-Raphson)
+        # 2. Solver (Newton-Raphson)
+
+        # Guess 0.1 (10%)
+        rate = 0.1
+
+        for _ in range(20):  # Max iterations
+            # Optimization: Precompute factor
+            # f(r) = sum( C_i * (1+r)^(-t_i) )
+            years = days / 365.0
+
+            # Avoid negative base if rate <= -1
+            if rate <= -1.0:
+                rate = -0.99
+
+            base = 1.0 + rate
+
+            # np.power might be slow, but fine for N < 1000
+            pow_factor = np.power(base, -years)
+            f_val = np.dot(amounts, pow_factor)
+
+            if abs(f_val) < _CONVERGENCE_THRESHOLD:
+                return float(rate)
+
+            # Derivative
+            # f'(r) = sum( C_i * (-t_i) * (1+r)^(-t_i - 1) )
+            #       = sum( C_i * (-t_i) * pow_factor / base )
+
+            f_prime = np.dot(amounts, -years * pow_factor) / base
+
+            if f_prime == 0:
+                break
+
+            new_rate = rate - f_val / f_prime
+
+            if abs(new_rate - rate) < _CONVERGENCE_THRESHOLD:
+                return float(new_rate)
+
+            rate = new_rate
+
+        return float(rate)
 
     def _get_holdings_at_date(self, d: date) -> dict[str, float]:
         """Calculate security holdings at the start of a specific date (EOD of d-1)."""

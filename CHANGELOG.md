@@ -7,12 +7,14 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 
 ### Added
+- **Performance Metrics**: Added "Time-Weighted Return (TWR)" and "Internal Rate of Return (IRR)" to the "Time Series" tab's performance calculation section, providing standardized percentage yield metrics alongside absolute gains.
 - **Documentation**: Performance Calculation Logic and Data Model Specification, clarifying the "Source of Truth" (Java) vs "Implementation Plan" (Python) and mapping the data structures.
 - **Realized Performance Tab ("Trades")**: Introduced a comprehensive view for realized gains/losses, featuring stacked columns (e.g., Purchase/Sales Value), granular sorting, and "Since Sell" metrics.
 - **Accessibility**: Added tooltips to icon-only navigation buttons and `aria-hidden` attributes to decorative SVGs.
 
 
 ### Changed
+- **Reactivity**: The "Time Series" tab now automatically refreshes the underlying wealth data when live price or portfolio update events occur, ensuring displayed metrics (including TWR/IRR) remain current without manual reloading.
 - **CI**: Lint workflow now installs dependencies from `requirements-dev.txt` instead of using a hardcoded `ruff` version, ensuring strictly consistent linting standards between local dev and CI.
 - **Performance**: Implemented various performance optimizations including "Partial Replay" for Time Series, "Bolt" transaction grouping, and targeted snapshot updates to eliminate UI freezes.
 - **Dashboard Navigation**: Repositioned detail tabs to the left of the Overview tab for better workflow flow; enforced single detailed tab mode.

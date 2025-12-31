@@ -1212,12 +1212,22 @@ class PPReaderDashboard extends HTMLElement {
           pushedData as DashboardUpdatePayloadMap['portfolio_values'],
           this._root,
         );
+        // Portfolio/Price updates affect wealth calculations
+        invalidateDailyWealthCache();
+        if (getTabAtIndex(currentPage)?.key === ANALYSE_TAB_KEY) {
+          void refreshAnalyseData(this._root, this._hass, this._panel);
+        }
         break;
       case 'portfolio_positions':
         handlePortfolioPositionsUpdate(
           pushedData as DashboardUpdatePayloadMap['portfolio_positions'],
           this._root,
         );
+        // Position updates (buying/selling) affect wealth calculations
+        invalidateDailyWealthCache();
+        if (getTabAtIndex(currentPage)?.key === ANALYSE_TAB_KEY) {
+          void refreshAnalyseData(this._root, this._hass, this._panel);
+        }
         break;
       case 'daily_wealth':
         invalidateDailyWealthCache();

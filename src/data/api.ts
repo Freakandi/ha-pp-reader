@@ -733,6 +733,8 @@ export interface PerformanceMetrics {
   realized_gains: number;
   unrealized_gains: number;
   fx_gains_cash: number;
+  twr?: number;
+  irr?: number;
 }
 
 export interface DailyWealthResponse {

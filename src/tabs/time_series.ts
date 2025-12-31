@@ -37,7 +37,9 @@ type PerformanceRowKey =
   | 'fees'
   | 'taxes'
   | 'netTransfers'
-  | 'neutral';
+  | 'neutral'
+  | 'twr'
+  | 'irr';
 
 type PerformanceBreakdown = Record<PerformanceRowKey, number>;
 
@@ -235,6 +237,12 @@ function renderMetrics(
     </div>`;
   };
 
+  const formatPct = (val: number) => {
+    const pct = (val * 100).toFixed(2);
+    const cls = val > 0 ? 'meta-badge--positive' : (val < 0 ? 'meta-badge--warning' : 'meta-badge--neutral');
+    return `<span class="meta-badge ${cls}" style="font-size: 1.1em; padding: 0.1em 0.5em;">${pct} %</span>`;
+  };
+
   const html = `
     <div class="metrics-section">
       <h3>Performance-Berechnung</h3>
@@ -249,6 +257,10 @@ function renderMetrics(
       ${mkRow('FX-Veränderung', bd.fxGains)}
       ${mkRow('Performanceneutrale Bew.', bd.neutral + bd.netTransfers)}
       ${mkRow('Endwert', bd.endValue, 'highlight', 'perf-endValue')}
+
+      <h3>Rendite (Zeitraum)</h3>
+      ${mkRow('Time-Weighted Return (TWR)', formatPct(bd.twr))}
+      ${mkRow('Internal Rate of Return (IRR)', formatPct(bd.irr))}
     </div>
   `;
 
@@ -665,12 +677,16 @@ function derivePerformance(records: DailyWealthRecord[], responseMetrics?: Daily
   let realizedGains: number;
   let unrealizedGains: number;
   let fxGains: number;
+  let twr = 0;
+  let irr = 0;
 
   if (responseMetrics) {
     // Phase C: Use Server-Side Metrics as Source of Truth
     realizedGains = responseMetrics.realized_gains;
     unrealizedGains = responseMetrics.unrealized_gains;
     fxGains = responseMetrics.fx_gains_cash;
+    twr = responseMetrics.twr ?? 0;
+    irr = responseMetrics.irr ?? 0;
   } else {
     // Legacy Client-Side Calculation
     realizedGains = sumField(periodRecords, 'realized_gains_eur');
@@ -712,6 +728,8 @@ function derivePerformance(records: DailyWealthRecord[], responseMetrics?: Daily
     taxes,
     netTransfers,
     neutral,
+    twr,
+    irr,
   };
 }
 

@@ -1466,6 +1466,8 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                         "realized_gains": perf.realized_gains,
                         "unrealized_gains": perf.unrealized_gains,
                         "fx_gains_cash": perf.fx_gains_cash,
+                        "twr": perf.twr,
+                        "irr": perf.irr,
                     }
 
                 return daily_wealth_df, metrics
