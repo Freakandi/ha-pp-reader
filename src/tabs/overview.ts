@@ -176,8 +176,8 @@ function createSimpleSortHeader(label: string, key: string): string {
 function stack(topVal: number | string, topFmt: string, botVal: number | string, botFmt: string): string {
   return `
       <div class="cell-stack">
-        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
       </div>
     `;
 }
