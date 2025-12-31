@@ -26,8 +26,8 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install Ruff
-        run: python3 -m pip install "ruff==0.11.13"
+      - name: Install dependencies
+        run: python3 -m pip install -r requirements-dev.txt
 
       - name: Ruff check
         run: python3 -m ruff check .
