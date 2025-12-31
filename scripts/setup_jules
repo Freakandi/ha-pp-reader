@@ -19,7 +19,7 @@ source .venv/bin/activate
 
 # Install dependencies fast using uv (preinstalled in Jules)
 # Syncing ensures exact match with requirements
-uv pip install -r requirements-dev.txt
+uv pip install -r requirements.txt -r requirements-dev.txt
 
 # Install frontend dependencies and build assets
 npm install
