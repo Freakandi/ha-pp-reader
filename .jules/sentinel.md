@@ -42,3 +42,8 @@
 **Vulnerability:** `formatPriceWithCurrency` in `src/tabs/overview.ts` concatenated `currency` directly into HTML without escaping, allowing XSS via crafted currency codes.
 **Learning:** Even simple formatting helpers can be vectors if they assume data is safe. This helper was used in `buildPurchasePriceDisplay` which interpolated the result into HTML.
 **Prevention:** Always escape currency codes and other string inputs in formatting functions that produce HTML output. Verified with `src/tabs/__tests__/overview_security.test.ts`.
+
+## 2025-01-20 - Stored XSS in Stacked Cells
+**Vulnerability:** Found a Stored XSS vulnerability in the `stack` helper function used in `src/tabs/trades.ts` and `src/tabs/overview.ts`. The function interpolated values into `data-val` attributes without escaping, allowing attribute injection.
+**Learning:** Even if data is typed as `number | string`, runtime data or malicious inputs can break out of attributes if not escaped. Simple type assertions are not security boundaries.
+**Prevention:** Always use `escapeAttribute` for any variable interpolated into an HTML attribute, regardless of its expected type. Updated `stack` helper to wrap values in `escapeAttribute`.

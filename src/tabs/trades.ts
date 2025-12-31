@@ -172,8 +172,8 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
   // Helper for stacked cells
   const stack = (topVal: number | string, topFmt: string, botVal: number | string, botFmt: string) => `
       <div class="cell-stack">
-        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
       </div>
     `;
 
@@ -289,8 +289,8 @@ function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
     // Helper for stacked cells -- same structure as parent for alignment
     const stack = (topVal: number, topFmt: string, botVal: number | string, botFmt: string) => `
       <div class="cell-stack">
-        <span class="val-top" data-val="${String(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${String(botVal)}">${botFmt}</span>
+        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
       </div>
     `;
 
