@@ -1657,10 +1657,7 @@ class PerformanceEngine:
         # but we need to apply the direction (Buy/Sell)
 
         # Helper to map type to sign
-        def get_sign(t_type: int) -> int:
-            return share_signs.get(t_type, 0)
-
-        df_past["sign"] = df_past["type"].apply(get_sign)
+        df_past["sign"] = df_past["type"].map(share_signs).fillna(0)
         df_past["delta_shares"] = df_past["shares_norm"].fillna(0.0) * df_past["sign"]
 
         # Sum by security
