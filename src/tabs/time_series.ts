@@ -226,10 +226,11 @@ function renderMetrics(
 
   const mkRow = (label: string, value: number | string, cls = '', id = '', type = ''): string => {
     const isInteractive = type && hass && entryId;
+    const a11yAttrs = isInteractive ? ' role="button" tabindex="0" aria-expanded="false"' : '';
     return `
     <div class="metric-row ${cls} ${isInteractive ? 'interactive' : ''}"
          ${id ? `id="${id}"` : ''}
-         ${type ? `data-breakdown-type="${type}"` : ''}>
+         ${type ? `data-breakdown-type="${type}"` : ''}${a11yAttrs}>
       <span class="metric-label">
         ${isInteractive ? '<span class="toggle-icon">▶</span> ' : ''}${label}
       </span>
@@ -266,36 +267,36 @@ function renderMetrics(
 
   container.innerHTML = html;
 
-  container.querySelectorAll('.metric-row.interactive').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      void (async () => {
-        if (!hass || !selection) return;
+  const handleInteraction = (e: Event) => {
+    void (async () => {
+      if (!hass || !selection) return;
 
-        const target = e.currentTarget as HTMLElement;
-        const type = target.dataset.breakdownType;
-        if (!type) return;
+      const target = e.currentTarget as HTMLElement;
+      const type = target.dataset.breakdownType;
+      if (!type) return;
 
-        const expanded = target.classList.contains('expanded');
+      const expanded = target.classList.contains('expanded');
+      target.setAttribute('aria-expanded', expanded ? 'false' : 'true');
 
-        if (expanded) {
-          target.classList.remove('expanded');
-          const icon = target.querySelector('.toggle-icon');
-          if (icon) icon.textContent = '▶';
+      if (expanded) {
+        target.classList.remove('expanded');
+        const icon = target.querySelector('.toggle-icon');
+        if (icon) icon.textContent = '▶';
 
-          // Remove sub-rows
-          let next = target.nextElementSibling;
-          while (next && next.classList.contains('breakdown-row')) {
-            const toRemove = next;
-            next = next.nextElementSibling;
-            toRemove.remove();
-          }
-        } else {
-          target.classList.add('expanded');
-          const icon = target.querySelector('.toggle-icon');
-          if (icon) icon.textContent = '▼';
+        // Remove sub-rows
+        let next = target.nextElementSibling;
+        while (next && next.classList.contains('breakdown-row')) {
+          const toRemove = next;
+          next = next.nextElementSibling;
+          toRemove.remove();
+        }
+      } else {
+        target.classList.add('expanded');
+        const icon = target.querySelector('.toggle-icon');
+        if (icon) icon.textContent = '▼';
 
-          try {
-            const loadingRow = document.createElement('div');
+        try {
+          const loadingRow = document.createElement('div');
             loadingRow.className = 'breakdown-row loading';
             loadingRow.innerHTML = '<span class="metric-label">Lade Details...</span><span class="metric-value">...</span>';
             target.after(loadingRow);
@@ -307,44 +308,54 @@ function renderMetrics(
               rangeEnd = records[records.length - 1].date;
             }
 
-            const response = await hass.connection.sendMessagePromise<BreakdownResponse>({
-              type: 'pp_reader/get_performance_breakdown',
-              entry_id: entryId,
-              start: rangeStart,
-              end: rangeEnd
-            });
+          const response = await hass.connection.sendMessagePromise<BreakdownResponse>({
+            type: 'pp_reader/get_performance_breakdown',
+            entry_id: entryId,
+            start: rangeStart,
+            end: rangeEnd
+          });
 
-            loadingRow.remove();
+          loadingRow.remove();
 
 
-            const items = (response as Partial<BreakdownResponse>)[type];
-            if (!items || items.length === 0) {
-              const emptyRow = document.createElement('div');
-              emptyRow.className = 'breakdown-row empty';
-              emptyRow.innerHTML = '<span class="metric-label">Keine Details</span><span class="metric-value">—</span>';
-              target.after(emptyRow);
-            } else {
-              [...items].reverse().forEach(item => {
-                const detailRow = document.createElement('div');
-                detailRow.className = 'breakdown-row';
-                detailRow.style.animation = 'fadeIn 0.2s ease';
-                detailRow.innerHTML = `
+          const items = (response as Partial<BreakdownResponse>)[type];
+          if (!items || items.length === 0) {
+            const emptyRow = document.createElement('div');
+            emptyRow.className = 'breakdown-row empty';
+            emptyRow.innerHTML = '<span class="metric-label">Keine Details</span><span class="metric-value">—</span>';
+            target.after(emptyRow);
+          } else {
+            [...items].reverse().forEach(item => {
+              const detailRow = document.createElement('div');
+              detailRow.className = 'breakdown-row';
+              detailRow.style.animation = 'fadeIn 0.2s ease';
+              detailRow.innerHTML = `
                  <span class="metric-label">${item.label}</span>
                  <span class="metric-value">${formatCurrency(item.amount)}</span>
                `;
-                target.after(detailRow);
-              });
-            }
-
-          } catch (err) {
-            console.error('Breakdown fetch failed', err);
-            const errRow = document.createElement('div');
-            errRow.className = 'breakdown-row error';
-            errRow.innerHTML = '<span class="metric-label">Fehler beim Laden</span>';
-            target.querySelector('.breakdown-row.loading')?.replaceWith(errRow);
+              target.after(detailRow);
+            });
           }
+
+        } catch (err) {
+          console.error('Breakdown fetch failed', err);
+          const errRow = document.createElement('div');
+          errRow.className = 'breakdown-row error';
+          errRow.innerHTML = '<span class="metric-label">Fehler beim Laden</span>';
+          target.querySelector('.breakdown-row.loading')?.replaceWith(errRow);
         }
-      })();
+      }
+    })();
+  };
+
+  container.querySelectorAll('.metric-row.interactive').forEach((row) => {
+    row.addEventListener('click', handleInteraction);
+    row.addEventListener('keydown', (e) => {
+      const key = (e as KeyboardEvent).key;
+      if (key === 'Enter' || key === ' ') {
+        e.preventDefault();
+        handleInteraction(e);
+      }
     });
   });
 
@@ -974,11 +985,17 @@ export function renderAnalyse(
       .metric-row.interactive {
         cursor: pointer;
       }
-      .metric-row.interactive:hover .metric-label {
+      .metric-row.interactive:hover .metric-label,
+      .metric-row.interactive:focus-visible .metric-label {
         color: var(--primary-color, #03a9f4);
         text-decoration: underline;
         text-decoration-thickness: 1px;
         text-underline-offset: 3px;
+      }
+      .metric-row.interactive:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
+        border-radius: 2px;
       }
 
       .toggle-icon {
@@ -1085,6 +1102,7 @@ export function renderAnalyse(
 }
 
 export const __TEST_ONLY__ = {
+  renderMetrics,
   derivePerformanceForTest: derivePerformance,
   buildSeriesForTest: buildSeries,
   renderCoverageBadgesForTest: renderCoverageBadges,
