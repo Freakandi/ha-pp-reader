@@ -17,3 +17,7 @@
 ## 2025-02-18 - [Optimized Holdings Transaction Values]
 **Learning:** Similar to cashflows, `holdings.py` was using `cent_to_eur` inside `_calculate_transaction_amounts` and `_calculate_cost_in_eur`, adding overhead in tight loops.
 **Action:** Replaced `cent_to_eur(val)` with direct `val / 100.0` division. This mirrors the earlier optimization in `cashflows.py` and avoids unnecessary function calls and validation for values guaranteed to be integers.
+
+## 2025-03-04 - [Vectorized FX Lookups in Loops]
+**Learning:** `PerformanceEngine` was using iterative `searchsorted` (via `_get_fx`) inside transaction loops to find exchange rates. This is O(N log M) or worse.
+**Action:** Implemented `pd.merge_asof` (O(N + M)) to pre-calculate and attach FX rates to all transactions before looping. This reduced execution time by ~50x (11.8s -> 0.23s) in benchmarks for 50k transactions. Critical details: explicit string casting for join keys and handling `direction='backward'`.

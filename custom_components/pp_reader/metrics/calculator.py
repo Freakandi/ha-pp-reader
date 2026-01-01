@@ -780,6 +780,51 @@ class PerformanceEngine:
 
         return df_augmented, fx_long
 
+    def _augment_txs_with_market_data(self, df_txs: pd.DataFrame) -> pd.DataFrame:
+        """
+        Augment transactions with FX rates using merge_asof for efficiency.
+
+        This replaces O(N log M) lookups in loops with vectorized O(N + M) merge.
+        """
+        if df_txs.empty:
+            if "fx_rate" not in df_txs.columns:
+                df_txs["fx_rate"] = 1.0
+            return df_txs
+
+        # Prepare rates table
+        # We need a table with columns: date, currency, rate
+        # Sorted by date
+        if self._df_rates.empty:
+            df_txs = df_txs.copy()
+            df_txs["fx_rate"] = 1.0
+            return df_txs
+
+        rates_lookup = self._df_rates.sort_values("date").copy()
+        # Ensure compatible types for merge_asof 'by'
+        rates_lookup["currency"] = rates_lookup["currency"].astype(str)
+
+        # Prepare TX table
+        df_txs_sorted = df_txs.sort_values("date").copy()
+        df_txs_sorted["currency_code"] = df_txs_sorted["currency_code"].astype(str)
+
+        # Perform merge_asof
+        # We want the last available rate <= tx date (direction='backward')
+        merged = pd.merge_asof(
+            df_txs_sorted,
+            rates_lookup,
+            left_on="date",
+            right_on="date",
+            left_by="currency_code",
+            right_by="currency",
+            direction="backward",
+        )
+
+        # Fill missing rates (e.g. EUR or gaps) with 1.0
+        merged["rate"] = merged["rate"].fillna(1.0)
+
+        # Rename to 'fx_rate'
+        return merged.rename(columns={"rate": "fx_rate"})
+
     def _calculate_invested_capital(
         self, df_augmented: pd.DataFrame, date_range: pd.DatetimeIndex
     ) -> pd.Series:
@@ -1073,10 +1118,18 @@ class PerformanceEngine:
             TransactionType.OUTBOUND_DELIVERY,
             TransactionType.SECURITY_TRANSFER,
         ]
-        txs = df_txs[df_txs["type"].isin(sec_types)].sort_values("date")
+
+        # Pre-filter
+        txs = df_txs[df_txs["type"].isin(sec_types)]
 
         if txs.empty:
             return {}, {}
+
+        # Augment with FX Rates (Vectorized Optimization)
+        txs = self._augment_txs_with_market_data(txs)
+        # Ensure sorting by date after augmentation (merge_asof requires it, but result is sorted by date too)  # noqa: E501
+        # However, let's be safe as we need it sorted for FIFO replay
+        # merge_asof returns sorted if left is sorted.
 
         units_payload = self._load_transaction_units(txs["uuid"].tolist())
 
@@ -1109,7 +1162,8 @@ class PerformanceEngine:
                 # For transfers, assume price is based on market value at the time
                 tx_price = self._get_price(sec_id, row.date)
 
-            tx_fx = self._get_fx(row.currency_code, row.date)
+            # Use pre-calculated FX rate
+            tx_fx = row.fx_rate
 
             if row.type in (
                 TransactionType.BUY,
@@ -1168,7 +1222,8 @@ class PerformanceEngine:
             TransactionType.OUTBOUND_DELIVERY,
             TransactionType.SECURITY_TRANSFER,
         ]
-        txs = self._df_txs[self._df_txs["type"].isin(sec_types)].sort_values("date")
+        # Pre-filter
+        txs = self._df_txs[self._df_txs["type"].isin(sec_types)]
 
         if txs.empty:
             return pd.Series(
@@ -1176,6 +1231,12 @@ class PerformanceEngine:
             ), pd.Series(
                 dtype=float, index=pd.DatetimeIndex([], dtype="datetime64[ns, UTC]")
             )
+
+        # Augment with FX Rates (Vectorized Optimization)
+        txs = self._augment_txs_with_market_data(txs)
+        # Result of merge_asof is sorted by date if we sorted inputs (we did inside helper)  # noqa: E501
+        # But let's rely on helper to return it sorted (merge_asof does preserve left order usually)  # noqa: E501
+        # The helper sorts left input.
 
         units_payload = self._load_transaction_units(txs["uuid"].tolist())
         start_ts = pd.Timestamp(start_date, tz="UTC")
@@ -1212,7 +1273,8 @@ class PerformanceEngine:
             elif row.type == TransactionType.SECURITY_TRANSFER:
                 tx_price = self._get_price(sec_id, row.date)
 
-            tx_fx = self._get_fx(row.currency_code, row.date)
+            # Use pre-calculated FX rate
+            tx_fx = row.fx_rate
 
             if row.type in (
                 TransactionType.BUY,
