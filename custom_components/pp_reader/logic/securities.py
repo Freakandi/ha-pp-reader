@@ -106,9 +106,12 @@ def _normalize_transaction_amounts(
 ) -> _NormalizedTransactionAmounts:
     """Convert raw transaction figures into floats with fee/tax breakdown."""
     shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
-    gross = cent_to_eur(transaction.amount, default=0.0) or 0.0
-    fees = cent_to_eur(transaction.fees, default=0.0) or 0.0
-    taxes = cent_to_eur(transaction.taxes, default=0.0) or 0.0
+
+    # Optimize hot path: direct division instead of cent_to_eur helper
+    # Transaction fields are typed int, so we can skip validation/casting overhead.
+    gross = transaction.amount / 100.0 if transaction.amount else 0.0
+    fees = transaction.fees / 100.0 if transaction.fees else 0.0
+    taxes = transaction.taxes / 100.0 if transaction.taxes else 0.0
 
     if tx_units:
         units = tx_units.get(transaction.uuid)
