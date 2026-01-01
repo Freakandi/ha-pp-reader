@@ -1962,6 +1962,10 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         `.security-range-button[data-range="${rangeKey}"]`,
       );
       if (button) {
+        // PALETTE: Preserve accessible name before replacing content with spinner
+        if (!button.getAttribute('aria-label') && button.textContent) {
+          button.setAttribute('aria-label', button.textContent);
+        }
         button.disabled = true;
         button.classList.add('loading');
         // PALETTE: visual feedback
