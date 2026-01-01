@@ -22,6 +22,12 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ### Changed
 - **Performance Engine**: Refactored `PerformanceEngine` to support granular outcome tracking. `calculate_period_breakdown` logic now drives both high-level metrics and detailed views, ensuring consistency.
+- **Performance Calculation**: Refined "Performance Calculation" logic in the Time Series tab to align metrics start date with user selection while maintaining an extended date range for chart baselines. This resolves discrepancies between aggregate totals and breakdown lists when the selected period start differs from the data fetch window.
+
+### Fixed
+- **Unrealized Gains**: Fixed discrepancy in Unrealized Gains calculation where the dashboard displayed a large loss while individual line items summed to a small gain.
+- **Dividend Aggregation**: Ensure aggregated "Dividends" total matches the sum of detailed breakdown items by correctly handling gross values (including taxes/fees).
+- **Summation Mismatch**: Resolved mismatch between `AbsPerf` and the sum of its components by correcting the derived performance formula.
 
 ### Fixed
 - **Realized Gains Calculation**: Fixed "Gross" realized gains calculation to correctly include fees and taxes in the proceeds, ensuring accurate P&L reporting relative to the net cash flow.

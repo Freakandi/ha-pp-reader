@@ -677,6 +677,7 @@ export interface DailyWealthRange {
 export interface DailyWealthFetchOptions {
   date?: string | null;
   range?: DailyWealthRange | null;
+  metrics_start?: string | null;
   scopes?: {
     accounts?: string[];
     portfolios?: string[];

@@ -353,6 +353,15 @@ class PerformanceEngine:
         result = result.reset_index().rename(columns={"index": "date"})
         result["date"] = result["date"].dt.strftime("%Y-%m-%d")
 
+        if not result.empty:
+            last_row = result.iloc[-1]
+            _LOGGER.debug(
+                "Performance End Wealth Debug: Date=%s, Total=%.2f, Invested=%.2f",
+                last_row["date"],
+                last_row["total_wealth_eur"],
+                last_row["invested_capital_eur"],
+            )
+
         return result
 
     def _augment_transfers(
@@ -375,6 +384,47 @@ class PerformanceEngine:
         df_in["type"] = TransactionType.DEPOSIT
 
         return pd.concat([df_out, df_in], ignore_index=True)
+
+    def _setup_virtual_inventory(
+        self, start_date: date
+    ) -> tuple[dict[str, deque[Lot]], pd.Timestamp, pd.Timestamp]:
+        """
+        Initialize virtual inventory for start of period.
+
+        Returns:
+            virtual_inventory: Mark-to-Market holdings at start_prev (t-1).
+            start_ts: Timestamp for start_date.
+            basis_ts: Timestamp for start_prev (t-1).
+
+        """
+        start_ts = pd.Timestamp(start_date, tz="UTC")
+        start_prev = start_date - pd.Timedelta(days=1)
+        basis_ts = pd.Timestamp(start_prev, tz="UTC")
+
+        # Snapshot holdings at start date
+        start_holdings = self._get_holdings_at_date(start_date)
+        virtual_inventory: dict[str, deque[Lot]] = {}
+
+        for sec_uuid, share_count in start_holdings.items():
+            if share_count <= 0:
+                continue
+
+            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            # Use basis_ts (t-1) for Mark-to-Market Valuation
+            start_price = self._get_price(sec_uuid, basis_ts)
+            start_fx = self._get_fx(curr, basis_ts)
+
+            virtual_inventory[sec_uuid] = deque(
+                [
+                    Lot(
+                        date=basis_ts,  # Set date to t-1
+                        shares=share_count,
+                        price_native=start_price,
+                        fx_rate=start_fx,
+                    )
+                ]
+            )
+        return virtual_inventory, start_ts, basis_ts
 
     def calculate_period_performance(
         self, start_date: date, end_date: date
@@ -410,32 +460,9 @@ class PerformanceEngine:
         )
 
         # Optimization: Use Partial Replay Strategy
-        # 1. Snapshot holdings at start date
-        start_holdings = self._get_holdings_at_date(start_date)
-
-        # 2. Create Virtual Inventory (Mark-to-Market)
-        # Each holding becomes a single lot with cost basis = price at start date
-        virtual_inventory: dict[str, deque[Lot]] = {}
-        start_ts = pd.Timestamp(start_date, tz="UTC")
-
-        for sec_uuid, share_count in start_holdings.items():
-            if share_count <= 0:
-                continue
-
-            curr = self._sec_curr_map.get(sec_uuid, "EUR")
-            start_price = self._get_price(sec_uuid, start_ts)
-            start_fx = self._get_fx(curr, start_ts)
-
-            virtual_inventory[sec_uuid] = deque(
-                [
-                    Lot(
-                        date=start_ts,
-                        shares=share_count,
-                        price_native=start_price,
-                        fx_rate=start_fx,
-                    )
-                ]
-            )
+        virtual_inventory, start_ts, basis_ts = self._setup_virtual_inventory(
+            start_date
+        )
 
         # 3. Filter Transactions for the Window
         # We include transactions ON the start date in the window replay
@@ -446,14 +473,73 @@ class PerformanceEngine:
         df_txs_window = self._df_txs[window_mask]
 
         realized, unrealized = self._calculate_capital_gains(
-            df_txs_window, start_date, end_date, initial_inventory=virtual_inventory
+            df_txs_window,
+            start_date,
+            end_date,
+            initial_inventory=virtual_inventory,
+            basis_ts=basis_ts,
         )
         metrics.realized_gains = realized
         metrics.unrealized_gains = unrealized
 
         metrics.fx_gains_cash = self._calculate_fx_performance(
-            self._df_txs, start_date, end_date, self._account_currencies
+            self._df_txs,
+            start_date,
+            end_date,
+            self._account_currencies,
+            basis_ts=basis_ts,
         )
+
+        # Verification: Summation Consistency Check
+        # Re-derive components from daily_wealth for the window
+        dw_win = daily_wealth[
+            (daily_wealth["date"] >= start_date.isoformat())
+            & (daily_wealth["date"] <= end_date.isoformat())
+        ]
+        sum_div = dw_win["dividends_eur"].sum()
+        sum_int = dw_win["interest_eur"].sum()
+        sum_fee = dw_win["fees_eur"].sum()
+        sum_tax = dw_win["taxes_eur"].sum()
+        sum_neu = dw_win["performance_neutral_movements"].sum()
+
+        derived_abs = (
+            metrics.realized_gains
+            + metrics.unrealized_gains
+            + metrics.fx_gains_cash
+            + sum_div
+            + sum_int
+            - sum_fee
+            - sum_tax
+        )
+
+        diff = abs(metrics.absolute_performance - derived_abs)
+        if diff > _BREAKDOWN_THRESHOLD:
+            _LOGGER.warning(
+                "Performance Summation Mismatch for %s to %s: "
+                "AbsPerf=%.2f vs Derived=%.2f (Diff=%.2f). "
+                "Components: R=%.2f, U=%.2f, FX=%.2f, "
+                "Div=%.2f, Int=%.2f, Fee=%.2f, Tax=%.2f, Neu=%.2f",
+                start_date,
+                end_date,
+                metrics.absolute_performance,
+                derived_abs,
+                diff,
+                metrics.realized_gains,
+                metrics.unrealized_gains,
+                metrics.fx_gains_cash,
+                sum_div,
+                sum_int,
+                sum_fee,
+                sum_tax,
+                sum_neu,
+            )
+        else:
+            _LOGGER.debug(
+                "Performance Summation Verified (Diff=%.4f) for %s:%s",
+                diff,
+                start_date,
+                end_date,
+            )
 
         # 4. Filter Cash Flows (TWR/IRR)
         # We need external flows: Deposits, Removals (including fees/taxes on them?)
@@ -501,29 +587,11 @@ class PerformanceEngine:
         self, start_date: date, end_date: date
     ) -> PerformanceBreakdown:
         """Calculate detailed performance breakdown for a specific period."""
-        start_ts = pd.Timestamp(start_date, tz="UTC")
-        end_ts = pd.Timestamp(end_date, tz="UTC")
-
         # 1. Virtual Inventory Setup
-        start_holdings = self._get_holdings_at_date(start_date)
-        virtual_inventory: dict[str, deque[Lot]] = {}
-
-        for sec_uuid, share_count in start_holdings.items():
-            if share_count <= 0:
-                continue
-            curr = self._sec_curr_map.get(sec_uuid, "EUR")
-            start_price = self._get_price(sec_uuid, start_ts)
-            start_fx = self._get_fx(curr, start_ts)
-            virtual_inventory[sec_uuid] = deque(
-                [
-                    Lot(
-                        date=start_ts,
-                        shares=share_count,
-                        price_native=start_price,
-                        fx_rate=start_fx,
-                    )
-                ]
-            )
+        virtual_inventory, start_ts, basis_ts = self._setup_virtual_inventory(
+            start_date
+        )
+        end_ts = pd.Timestamp(end_date, tz="UTC")
 
         # 2. Capital Gains
         window_mask = (self._df_txs["date"] >= start_ts) & (
@@ -532,7 +600,11 @@ class PerformanceEngine:
         df_txs_window = self._df_txs[window_mask].copy()
 
         realized_map, unrealized_map = self._calculate_capital_gains_detailed(
-            df_txs_window, start_date, end_date, initial_inventory=virtual_inventory
+            df_txs_window,
+            start_date,
+            end_date,
+            initial_inventory=virtual_inventory,
+            basis_ts=basis_ts,
         )
 
         # 3. Other Metrics Aggregation
@@ -830,7 +902,9 @@ class PerformanceEngine:
 
         if not df_units.empty and not df_txs.empty:
             df_units_aug = df_units.merge(
-                df_txs[["uuid", "date"]],
+                df_txs[["uuid", "date", "type"]].rename(
+                    columns={"type": "parent_type"}
+                ),
                 left_on="transaction_uuid",
                 right_on="uuid",
                 how="left",
@@ -853,6 +927,19 @@ class PerformanceEngine:
                 df_units_aug[df_units_aug["type"] == UNIT_TYPE_FEE]
                 .groupby("date")["amount_eur"]
                 .sum()
+            )
+
+            # Gross up Dividends: Add Taxes + Fees specifically for Dividend Parent Txs
+            mask_div_units = (
+                df_units_aug["parent_type"] == TransactionType.DIVIDEND
+            ) & (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
+
+            div_additions = (
+                df_units_aug[mask_div_units].groupby("date")["amount_eur"].sum()
+            )
+
+            div_gross = div_gross.add(
+                div_additions.reindex(date_range, fill_value=0), fill_value=0
             )
 
             taxes_net = taxes_net.add(
@@ -1048,9 +1135,10 @@ class PerformanceEngine:
         start_date: date,
         end_date: date,
         initial_inventory: dict[str, deque[Lot]] | None = None,
+        basis_ts: pd.Timestamp | None = None,
     ) -> tuple[float, float]:
         realized_map, unrealized_map = self._calculate_capital_gains_detailed(
-            df_txs, start_date, end_date, initial_inventory
+            df_txs, start_date, end_date, initial_inventory, basis_ts
         )
         return sum(realized_map.values()), sum(unrealized_map.values())
 
@@ -1060,9 +1148,14 @@ class PerformanceEngine:
         start_date: date,
         end_date: date,
         initial_inventory: dict[str, deque[Lot]] | None = None,
+        basis_ts: pd.Timestamp | None = None,
     ) -> tuple[dict[str, float], dict[str, float]]:
         start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
+        # Default basis_ts to start_ts if not provided (fallback)
+        if basis_ts is None:
+            basis_ts = start_ts
+
         inventory: dict[str, deque[Lot]] = initial_inventory or {}
         realized_gains_map: dict[str, float] = {}
 
@@ -1134,6 +1227,7 @@ class PerformanceEngine:
                         tx_price,
                         tx_fx,
                         start_ts,
+                        basis_ts,
                         sec_id,
                         row.currency_code,
                     )
@@ -1141,7 +1235,7 @@ class PerformanceEngine:
                         realized_gains_map[sec_id] += gain
 
         unrealized_gains_map = self._calculate_unrealized_security_gains_detailed(
-            inventory, start_ts, end_ts
+            inventory, start_ts, basis_ts, end_ts
         )
         return realized_gains_map, unrealized_gains_map
 
@@ -1293,6 +1387,7 @@ class PerformanceEngine:
         sale_price: float,
         sale_fx: float,
         start_ts: pd.Timestamp,
+        basis_ts: pd.Timestamp,
         sec_id: str,
         currency: str,
     ) -> float:
@@ -1307,16 +1402,16 @@ class PerformanceEngine:
                 lots.popleft()
 
             # Implement "virtual lot" logic: if lot was created before the start
-            # date, its cost basis is the market price at the start date.
+            # date, its cost basis is the market price at the basis date (t-1).
             base_price = (
                 lot.price_native
                 if lot.date >= start_ts
-                else self._get_price(sec_id, start_ts)
+                else self._get_price(sec_id, basis_ts)
             )
             base_fx = (
                 lot.fx_rate
                 if lot.date >= start_ts
-                else self._get_fx(currency, start_ts)
+                else self._get_fx(currency, basis_ts)
             )
 
             sale_val_eur = sale_price / sale_fx if sale_fx else 0.0
@@ -1328,6 +1423,7 @@ class PerformanceEngine:
         self,
         inventory: dict[str, deque[Lot]],
         start_ts: pd.Timestamp,
+        basis_ts: pd.Timestamp,
         end_ts: pd.Timestamp,
     ) -> dict[str, float]:
         unrealized_gains_map: dict[str, float] = {}
@@ -1338,18 +1434,27 @@ class PerformanceEngine:
             end_price = self._get_price(sec_id, end_ts)
             end_fx = self._get_fx(curr, end_ts)
 
+            if _LOGGER.isEnabledFor(logging.DEBUG):
+                _LOGGER.debug(
+                    "Unrealized End Price Debug: Sec=%s, Date=%s, Price=%.4f, FX=%.4f",
+                    sec_id,
+                    end_ts,
+                    end_price,
+                    end_fx,
+                )
+
             gain_accum = 0.0
             for lot in lots:
                 # Implement "virtual lot" logic for unrealized gains as well.
                 base_price = (
                     lot.price_native
                     if lot.date >= start_ts
-                    else self._get_price(sec_id, start_ts)
+                    else self._get_price(sec_id, basis_ts)
                 )
                 base_fx = (
                     lot.fx_rate
                     if lot.date >= start_ts
-                    else self._get_fx(curr, start_ts)
+                    else self._get_fx(curr, basis_ts)
                 )
                 end_val_eur = end_price / end_fx if end_fx else 0.0
                 base_val_eur = base_price / base_fx if base_fx else 0.0
@@ -1366,9 +1471,13 @@ class PerformanceEngine:
         start_date: date,
         end_date: date,
         account_currencies: dict[str, str],
+        basis_ts: pd.Timestamp | None = None,
     ) -> float:
         start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
+        if basis_ts is None:
+            basis_ts = start_ts
+
         inventory: dict[tuple[str, str], deque[Lot]] = {}
         fx_gains_eur = 0.0
         txs = df_txs.sort_values("date")
@@ -1418,7 +1527,12 @@ class PerformanceEngine:
                 elif cash_flow < 0:
                     if inventory.get(key):
                         gain = self._process_cash_outflow(
-                            inventory[key], abs(cash_flow), tx_fx, start_ts, curr
+                            inventory[key],
+                            abs(cash_flow),
+                            tx_fx,
+                            start_ts,
+                            basis_ts,
+                            curr,
                         )
                         if row.date >= start_ts:
                             fx_gains_eur += gain
@@ -1429,7 +1543,7 @@ class PerformanceEngine:
             end_fx = self._get_fx(curr, end_ts)
             for lot in lots:
                 base_fx = (
-                    self._get_fx(curr, start_ts) if lot.date < start_ts else lot.fx_rate
+                    self._get_fx(curr, basis_ts) if lot.date < start_ts else lot.fx_rate
                 )
                 end_val = (lot.shares / end_fx) if end_fx else 0.0
                 base_val = (lot.shares / base_fx) if base_fx else 0.0
@@ -1463,6 +1577,7 @@ class PerformanceEngine:
         amount: float,
         tx_fx: float,
         start_ts: pd.Timestamp,
+        basis_ts: pd.Timestamp,
         curr: str,
     ) -> float:
         remaining = amount
@@ -1475,7 +1590,7 @@ class PerformanceEngine:
             if lot.shares == 0:
                 lots.popleft()
             base_fx = (
-                self._get_fx(curr, start_ts) if lot.date < start_ts else lot.fx_rate
+                self._get_fx(curr, basis_ts) if lot.date < start_ts else lot.fx_rate
             )
             val_tx = (consumed / tx_fx) if tx_fx else 0.0
             val_base = (consumed / base_fx) if base_fx else 0.0

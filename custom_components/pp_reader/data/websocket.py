@@ -80,6 +80,7 @@ _WS_GET_DAILY_WEALTH_SCHEMA = vol.All(
             vol.Optional("scopes"): _DAILY_WEALTH_SCOPE_FILTER_SCHEMA,
             vol.Optional("limit"): vol.Coerce(int),
             vol.Optional("offset", default=0): vol.Coerce(int),
+            vol.Optional("metrics_start"): str,
         },
         extra=vol.ALLOW_EXTRA,
     )
@@ -1457,8 +1458,16 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                 # 2. Metrics (Aggregates) - Reuses loaded data!
                 metrics = None
                 if params.start_date and params.end_date:
+                    # Check if explicit metrics_start is provided
+                    # (e.g. for aligning with UI selection while fetching
+                    # chart info from start-1)
+                    calc_start = params.start_date
+                    explicit_start = _parse_iso_date(msg.get("metrics_start"))
+                    if explicit_start:
+                        calc_start = explicit_start
+
                     perf = engine.calculate_period_performance(
-                        params.start_date,
+                        calc_start,
                         params.end_date,
                     )
                     metrics = {

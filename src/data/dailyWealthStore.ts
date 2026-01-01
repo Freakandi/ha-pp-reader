@@ -112,6 +112,9 @@ function normalizeSelection(input: DailyWealthSelection): DailyWealthSelection {
   if (range) {
     normalizedSelection.range = range;
   }
+  if (input.metrics_start) {
+    normalizedSelection.metrics_start = input.metrics_start;
+  }
 
   const includeSlices =
     (input as { include_slices?: boolean }).include_slices ?? input.includeSlices ?? undefined;
@@ -155,7 +158,8 @@ function serializeSelection(selection: DailyWealthSelection): string {
   const includeScopes = selection.includeScopes ? '1' : '0';
   const limit = selection.limit ?? '';
   const offset = selection.offset ?? '';
-  return [datePart, rangePart, scopePart, includeSlices, includeScopes, limit, offset].join('::');
+  const metricsStart = selection.metrics_start ?? '';
+  return [datePart, rangePart, scopePart, includeSlices, includeScopes, limit, offset, metricsStart].join('::');
 }
 
 function cloneRecord(record: DailyWealthRecord): DailyWealthRecord {
@@ -201,6 +205,9 @@ function cloneSelection(selection: DailyWealthSelection | null): DailyWealthSele
   }
   if (selection.range) {
     cloned.range = { ...selection.range };
+  }
+  if (selection.metrics_start) {
+    cloned.metrics_start = selection.metrics_start;
   }
   if (selection.scopes) {
     cloned.scopes = {

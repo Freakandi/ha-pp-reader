@@ -763,6 +763,7 @@ async function loadAndRender(
         start: toIsoDateString(startDate),
         end: selection.range.end,
       },
+      metrics_start: selection.range.start,
     };
   }
 
