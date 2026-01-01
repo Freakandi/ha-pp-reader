@@ -10,6 +10,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **Time Series Auto-Update**: Implemented an automated refresh trigger for the "Time Series" tab. The backend now immediately notifies the frontend when daily wealth calculations are complete, ensuring the performance charts and metrics update automatically after a file change without requiring a manual page refresh.
 - **Import Error**: Resolved an `ImportError` on startup caused by a missing synchronous wrapper for the FX rate helper (`ensure_exchange_rates_for_dates_sync`), preventing integration boot loops.
 - **Shutdown Cleanliness**: Fixed an issue where data processing threads (`_fetch_and_calculate`) would hang during Home Assistant shutdown, causing delays or unclean exits.
+- **Thread Safety**: Fixed `RuntimeError` during system startup by ensuring the event bridge calls `hass.bus.async_fire` via `call_soon_threadsafe`, resolving crashes caused by dispatching events from worker threads.
 
 ### Internal
 - **Event Bridge**: Introduced a dedicated event bridge in `__init__.py` to translate internal coordinator signals (`SIGNAL_METRICS_PROGRESS`) into frontend-consumable `panels_updated` events.

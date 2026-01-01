@@ -595,7 +595,9 @@ def _setup_event_bridge(hass: HomeAssistant, entry: ConfigEntry) -> None:
                 "data_type": "daily_wealth",
                 "data": None,
             }
-            hass.bus.async_fire(EVENT_PANELS_UPDATED, event_payload)
+            hass.loop.call_soon_threadsafe(
+                hass.bus.async_fire, EVENT_PANELS_UPDATED, event_payload
+            )
             _LOGGER.debug(
                 "Event Bridge: panels_updated (daily_wealth) gefeuert für entry_id=%s",
                 entry.entry_id,
