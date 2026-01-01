@@ -22,7 +22,9 @@ from homeassistant.components.panel_custom import (
     DEFAULT_EMBED_IFRAME,
     DEFAULT_TRUST_EXTERNAL,
 )
+from homeassistant.const import EVENT_PANELS_UPDATED
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import (
     async_track_time_change,
     async_track_time_interval,
@@ -38,6 +40,7 @@ from .const import (
     DEFAULT_FX_UPDATE_INTERVAL_SECONDS,
     DOMAIN,
     MIN_FX_UPDATE_INTERVAL_SECONDS,
+    SIGNAL_METRICS_PROGRESS,
 )
 from .currencies import fx as fx_module
 from .data import backup_db as backup_db_module
@@ -574,6 +577,36 @@ def _initialize_history_tasks(
         )
 
 
+def _setup_event_bridge(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register listeners to bridge coordinator signals to frontend events."""
+
+    def _handle_metrics_progress(payload: dict[str, Any]) -> None:
+        stage = payload.get("stage")
+        entry_id = payload.get("entry_id")
+
+        if entry_id != entry.entry_id:
+            return
+
+        if stage == "completed":
+            # Metrics finished -> daily_wealth data is ready.
+            # Emit 'panels_updated' with 'daily_wealth' to trigger frontend refresh.
+            event_payload = {
+                "entry_id": entry.entry_id,
+                "data_type": "daily_wealth",
+                "data": None,
+            }
+            hass.bus.async_fire(EVENT_PANELS_UPDATED, event_payload)
+            _LOGGER.debug(
+                "Event Bridge: panels_updated (daily_wealth) gefeuert für entry_id=%s",
+                entry.entry_id,
+            )
+
+    remove_metrics_listener = async_dispatcher_connect(
+        hass, SIGNAL_METRICS_PROGRESS, _handle_metrics_progress
+    )
+    entry.async_on_unload(remove_metrics_listener)
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
     """Set up your component."""
     # Dashboard-Dateien registrieren
@@ -774,6 +807,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _initialize_price_tasks(hass, entry, store, options)
         _initialize_fx_tasks(hass, entry, store, options)
         _initialize_history_tasks(hass, entry, store)
+
+        _setup_event_bridge(hass, entry)
 
         entry.async_on_unload(entry.add_update_listener(_async_reload_entry_on_update))
 

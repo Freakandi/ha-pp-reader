@@ -6,6 +6,15 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 
 ## [Unreleased]
 
+### Fixed
+- **Time Series Auto-Update**: Implemented an automated refresh trigger for the "Time Series" tab. The backend now immediately notifies the frontend when daily wealth calculations are complete, ensuring the performance charts and metrics update automatically after a file change without requiring a manual page refresh.
+- **Import Error**: Resolved an `ImportError` on startup caused by a missing synchronous wrapper for the FX rate helper (`ensure_exchange_rates_for_dates_sync`), preventing integration boot loops.
+- **Shutdown Cleanliness**: Fixed an issue where data processing threads (`_fetch_and_calculate`) would hang during Home Assistant shutdown, causing delays or unclean exits.
+
+### Internal
+- **Event Bridge**: Introduced a dedicated event bridge in `__init__.py` to translate internal coordinator signals (`SIGNAL_METRICS_PROGRESS`) into frontend-consumable `panels_updated` events.
+- **Constants**: Refactored event emission to use the standard `EVENT_PANELS_UPDATED` constant for better maintainability.
+
 ### Added
 - **Performance Breakdown**: Implemented detailed performance breakdown in the "Time Series" tab. Realized/Unrealized Gains, Dividends, Fees, Taxes, and Interest can now be expanded to show contributing Securities and Accounts with their respective amounts.
 - **Unit Tests**: Added comprehensive test coverage for performance breakdown logic, ensuring accurate aggregation and handling of edge cases (e.g., partial sales, dividends with tax deductions).

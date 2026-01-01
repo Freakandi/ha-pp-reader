@@ -311,6 +311,7 @@ Event payloads and price revaluation updates rely on the shared helper when back
 - Canonical ingestion (metrics + normalization + snapshot persistence) and the price service invoke the helper after writes so dashboard/websocket clients receive consistent payloads whenever new data lands or revaluations complete.
 - Portfolio value and position events ship the `performance` object derived by the shared helper. When upstream payloads omit the structure, the compactor recomputes it so gain/percentage totals and nested day-change metrics always share the same rounding semantics and metadata as the database responses. Legacy flat fields are no longer emitted with the event payload.【F:custom_components/pp_reader/data/event_push.py†L13-L209】
 - The TypeScript dashboard controller (`src/dashboard.ts`) subscribes to the Home Assistant `panels_updated` event, filters bus messages by the active `entry_id`, and enqueues clones of each payload in `_pendingUpdates` so re-renders can replay every update after navigation or tab changes.【F:src/dashboard.ts†L815-L933】【F:src/dashboard.ts†L972-L1040】
+- `__init__.py` implements an event bridge that listens for `SIGNAL_METRICS_PROGRESS` from the coordinator and emits `EVENT_PANELS_UPDATED` with `data_type="daily_wealth"` (data=None). This signal triggers the Time Series tab to invalidate its cache and re-fetch the calculated wealth data from the WebSocket API.【F:custom_components/pp_reader/__init__.py】
 
 ---
 
