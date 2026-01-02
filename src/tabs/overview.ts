@@ -472,6 +472,7 @@ export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
   buildLastPriceDisplayForTest: buildLastPriceDisplay,
   attachPortfolioOverviewSorting,
+  buildExpandablePortfolioTableForTest: buildExpandablePortfolioTable,
 };
 
 function computePositionDayChange(position: PortfolioPositionRecord): { value: number | null; pct: number | null } {
@@ -783,6 +784,19 @@ export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolio
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
 function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]): string {
   console.debug('buildExpandablePortfolioTable: render', depots.length, 'portfolios');
+
+  if (depots.length === 0) {
+    return `
+      <div class="empty-state">
+        <svg class="empty-state__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+        </svg>
+        <p class="empty-state__title">Keine Depots gefunden</p>
+        <p class="empty-state__text">Bitte konfigurieren Sie Portfolio Performance in Home Assistant oder laden Sie eine Datei hoch.</p>
+      </div>
+    `;
+  }
+
   const escapeAttribute = (value: unknown): string => {
     if (value == null) {
       return '';
