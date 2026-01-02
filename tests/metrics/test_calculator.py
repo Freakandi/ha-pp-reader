@@ -246,19 +246,25 @@ def test_augment_transfers_explicit_fx():
         ]
     )
 
-    # Mock FX Pivot/Long
-    # Rates: USD=1.1, JPY=160.0. EUR=1.0.
-    # Long format
-    dates = [pd.Timestamp("2023-01-01", tz="UTC")]
-    fx_long = pd.DataFrame(
-        {
-            "date": dates * 2,
-            "currency_code": ["USD", "JPY"],
-            "daily_fx_rate": [1.1, 160.0],
-        }
+    # Mock FX Rates directly in Engine (as we use _get_fx now)
+    engine._df_rates = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2023-01-01", tz="UTC"),
+                "currency": "USD",
+                "rate": 1.1,
+            },
+            {
+                "date": pd.Timestamp("2023-01-01", tz="UTC"),
+                "currency": "JPY",
+                "rate": 160.0,
+            },
+        ]
     )
+    # Ensure index is sorted for searchsorted
+    engine._rates_idx = engine._df_rates.set_index(["currency", "date"]).sort_index()
 
-    augmented = engine._augment_transfers(df_transfers, fx_long)
+    augmented = engine._augment_transfers(df_transfers)
 
     # Verify Results
     # Should have 2 rows: Removal from USD, Deposit to JPY
