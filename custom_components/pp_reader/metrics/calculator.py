@@ -382,9 +382,9 @@ class PerformanceEngine:
         # unified_scalar: Maintain compatibility fields for _calculate_cash_accumulators
         df_augmented["daily_fx_rate"] = df_augmented["fx_rate"]
         # Note: _augment_txs_with_market_data guarantees fx_rate != 0 (defaults to 1.0)
-        df_augmented["amount_eur"] = (
-            df_augmented["amount"] / 100.0
-        ) / df_augmented["daily_fx_rate"]
+        df_augmented["amount_eur"] = (df_augmented["amount"] / 100.0) / df_augmented[
+            "daily_fx_rate"
+        ]
 
         # unified_scalar: Recreate fx_long manually for _calculate_cash_wealth
         # (legacy vector requirement)
@@ -660,7 +660,6 @@ class PerformanceEngine:
         df_out = df_out.drop(columns=drop_cols, errors="ignore")
 
         return pd.concat([df_out, df_in], ignore_index=True)
-
 
     def _setup_virtual_inventory(
         self, start_date: date
@@ -1406,18 +1405,25 @@ class PerformanceEngine:
             sec_daily_change.cumsum().reindex(date_range, method="ffill").fillna(0.0)
         )
 
+        # Group securities by currency to vectorize FX division
+        # Reduces loop overhead from O(Securities) to O(Currencies)
+        securities_by_currency = {}
         for sec_uuid in sec_holdings.columns:
-            if sec_uuid not in price_pivot.columns:
-                continue
-            qty = sec_holdings[sec_uuid]
-            prices = price_pivot[sec_uuid]
-            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            if sec_uuid in price_pivot.columns:
+                curr = self._sec_curr_map.get(sec_uuid, "EUR")
+                securities_by_currency.setdefault(curr, []).append(sec_uuid)
+
+        for curr, sec_uuids in securities_by_currency.items():
+            # Sum native value for all securities in this currency
+            # (Dates x Securities) * (Dates x Securities) -> Sum(axis=1) -> (Dates,)
+            native_val = (sec_holdings[sec_uuids] * price_pivot[sec_uuids]).sum(axis=1)
+
             rates = (
                 fx_pivot[curr]
                 if curr in fx_pivot.columns
                 else pd.Series(1.0, index=date_range)
             )
-            val = (qty * prices) / rates.where(rates > 0, 1.0)
+            val = native_val / rates.where(rates > 0, 1.0)
             daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
 
         return daily_sec_wealth, sec_holdings
