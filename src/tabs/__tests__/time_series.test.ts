@@ -10,9 +10,9 @@ function installDom(): JSDOM {
     url: 'http://localhost/',
     pretendToBeVisual: true,
   });
-  Object.defineProperty(globalThis, 'window', { value: dom.window });
-  Object.defineProperty(globalThis, 'document', { value: dom.window.document });
-  Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator });
+  Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true });
+  Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true });
+  Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
   return dom;
 }
 
@@ -157,6 +157,69 @@ test('derivePerformanceForTest reconciles totals and cashflows', () => {
     breakdown.fees +
     breakdown.taxes +
     breakdown.netTransfers +
-    breakdown.neutral;
+    breakdown.neutral +
+    breakdown.fxGains;
   assert.ok(Math.abs(delta - 200) < 1e-6, 'components should sum to total change');
+});
+
+test('renderMetrics escapes XSS in breakdown labels', async () => {
+  const dom = installDom();
+  const document = dom.window.document;
+  const root = document.getElementById('root') as HTMLElement;
+
+  // Create container for metrics
+  const card = document.createElement('div');
+  card.innerHTML = '<div class="analyse-metrics-grid"></div>';
+  root.appendChild(card);
+
+  // Mock Home Assistant
+  const xssPayload = '<img src=x onerror=alert(1)>';
+  const mockHass = {
+    connection: {
+      sendMessagePromise: async () => {
+        return {
+          taxes: [
+            { label: xssPayload, amount: 123.45 }
+          ]
+        };
+      }
+    }
+  };
+
+  const selection = {
+    range: { start: '2024-01-01', end: '2024-01-02' },
+    includeSlices: true,
+    includeScopes: true
+  };
+
+  // Render metrics
+  ANALYSE_TEST_ONLY.renderMetrics(
+    card,
+    sampleData.records,
+    undefined, // no server metrics
+    mockHass as any,
+    selection,
+    'test_entry_id'
+  );
+
+  // Find the 'taxes' row (it should be interactive)
+  const taxesRow = card.querySelector('[data-breakdown-type="taxes"]') as HTMLElement;
+  assert.ok(taxesRow, 'Taxes row not found');
+
+  // Simulate click
+  taxesRow.click();
+
+  // Wait for async operations (microtasks)
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  // Check that the XSS payload is NOT present as an image tag
+  const injectedImg = card.querySelector('img');
+  assert.strictEqual(injectedImg, null, 'XSS payload should NOT be present in DOM');
+
+  // Check that it IS present as text content (escaped)
+  const metricLabel = card.querySelector('.breakdown-row .metric-label');
+  assert.ok(metricLabel?.textContent?.includes(xssPayload) || metricLabel?.innerHTML.includes('&lt;img'), 'Payload should be visible as text');
+
+  // Specifically check for &lt;
+  assert.ok(metricLabel?.innerHTML.includes('&lt;img'), 'HTML should be escaped');
 });
