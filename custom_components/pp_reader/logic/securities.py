@@ -533,24 +533,30 @@ def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915, C901
             if native_amount is not None and shares > 0:
                 native_price = native_amount / shares
 
-            holdings.setdefault(key, []).append(
-                _HoldingLot(
-                    shares=shares,
-                    price_eur=price_per_share_eur,
-                    timestamp=tx_date,
-                    native_price=native_price,
-                    native_currency=native_currency,
-                    security_price=security_price,
-                    security_currency=security_currency,
-                    account_price=account_price,
-                    account_currency=tx.currency_code,
-                )
+            new_lot = _HoldingLot(
+                shares=shares,
+                price_eur=price_per_share_eur,
+                timestamp=tx_date,
+                native_price=native_price,
+                native_currency=native_currency,
+                security_price=security_price,
+                security_currency=security_currency,
+                account_price=account_price,
+                account_currency=tx.currency_code,
             )
+            if key in holdings:
+                holdings[key].append(new_lot)
+            else:
+                holdings[key] = [new_lot]
+
         elif tx.type in SALE_TYPES:
             shares_to_sell = abs(shares)
             if shares_to_sell <= 0:
                 continue
-            holdings[key] = _apply_sale_fifo(holdings.get(key, []), shares_to_sell)
+
+            current_holdings = holdings.get(key)
+            if current_holdings:
+                holdings[key] = _apply_sale_fifo(current_holdings, shares_to_sell)
 
     for key, positions in holdings.items():
         total_purchase = sum(
@@ -823,20 +829,26 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
                 (normalized.net_trade_account / shares) / rate if shares > 0 else 0.0
             )
 
-            purchase_queue.setdefault(key, []).append(
-                _HoldingLot(
-                    shares=shares,
-                    price_eur=price_per_share_eur,
-                    timestamp=tx_date,
-                )
+            new_lot = _HoldingLot(
+                shares=shares,
+                price_eur=price_per_share_eur,
+                timestamp=tx_date,
             )
+            if key in purchase_queue:
+                purchase_queue[key].append(new_lot)
+            else:
+                purchase_queue[key] = [new_lot]
 
         elif tx.type in SALE_TYPES:
             shares_to_sell = abs(shares)
             if shares_to_sell <= 0:
                 continue
 
-            lots = purchase_queue.get(key, [])
+            lots = purchase_queue.get(key)
+            if not lots:
+                # Nothing to sell or key missing
+                continue
+
             cost_basis_sold = 0.0
             remaining_to_sell = shares_to_sell
             consumed_lots_indices = []
@@ -854,9 +866,10 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
                     consumed_lots_indices.append(i)
 
             # Clean up consumed lots
-            purchase_queue[key] = [
-                lot for i, lot in enumerate(lots) if i not in consumed_lots_indices
-            ]
+            if consumed_lots_indices:
+                purchase_queue[key] = [
+                    lot for i, lot in enumerate(lots) if i not in consumed_lots_indices
+                ]
 
             # Amount (normalized.gross) is Net Inflow (Credit) for Sales.
             # True Gross (Market Value) = Amount + Fees + Taxes
@@ -897,23 +910,25 @@ def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
                     if sec_rate:
                         sell_price_native = sell_price * sec_rate
 
-            realized_gains.setdefault(key, []).append(
-                RealizedPerformanceLot(
-                    date=tx_date.strftime("%Y-%m-%d"),
-                    shares=shares_to_sell,
-                    sell_price=round_price(sell_price),
-                    sell_price_native=(
-                        round_price(sell_price_native)
-                        if sell_price_native is not None
-                        else None
-                    ),
-                    purchase_value_gross=round_currency(cost_basis_sold),
-                    sales_value_gross=round_currency(sales_value_gross),
-                    sales_value_net=round_currency(sales_value_net),
-                    result_abs=round_currency(result_abs),
-                    result_pct=round_currency(result_pct, decimals=2),
-                )
+            new_gain = RealizedPerformanceLot(
+                date=tx_date.strftime("%Y-%m-%d"),
+                shares=shares_to_sell,
+                sell_price=round_price(sell_price),
+                sell_price_native=(
+                    round_price(sell_price_native)
+                    if sell_price_native is not None
+                    else None
+                ),
+                purchase_value_gross=round_currency(cost_basis_sold),
+                sales_value_gross=round_currency(sales_value_gross),
+                sales_value_net=round_currency(sales_value_net),
+                result_abs=round_currency(result_abs),
+                result_pct=round_currency(result_pct, decimals=2),
             )
+            if key in realized_gains:
+                realized_gains[key].append(new_gain)
+            else:
+                realized_gains[key] = [new_gain]
 
     # Second pass: Aggregate results
     aggregated_results: list[RealizedPerformanceResult] = []
