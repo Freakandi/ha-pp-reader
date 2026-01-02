@@ -12,6 +12,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 - **EOD Valuation**: Adjusted timestamp logic to correctly capture price changes occurring on the final day of a reporting period.
 - **Performance Summation**: Finalized resolution of summation mismatches (e.g. 0.80 € discrepancy) by correcting neutral flow logic for security transfers and deliveries.
 - **Cost Basis Initialization**: Switched to "t-1" (previous day) pricing for initial cost basis to ensure perfect alignment of Start Wealth and Unrealized Gains.
+- **Valuation Consistency**: Fixed a discrepancy in Realized Gains logic where Sell calculations were incorrectly using Net proceeds (intended for Buys) instead of Gross proceeds, restoring accurate P&L reporting.
+- **Investment Capital**: Resolved a discrepancy in Invested Capital calculation by harmonizing Fee/Tax deduction logic in Unrealized Gains to prevent double-counting of costs.
+- **Interest Metrics**: Corrected the "Interest" and "Interest Charge" components to properly "Gross Up" net amounts by adding back attached taxes and fees, ensuring the breakdown matches the net cash flow.
 - **Time Series Auto-Update**: Implemented an automated refresh trigger for the "Time Series" tab. The backend now immediately notifies the frontend when daily wealth calculations are complete, ensuring the performance charts and metrics update automatically after a file change without requiring a manual page refresh.
 - **Import Error**: Resolved an `ImportError` on startup caused by a missing synchronous wrapper for the FX rate helper (`ensure_exchange_rates_for_dates_sync`), preventing integration boot loops.
 - **Shutdown Cleanliness**: Fixed an issue where data processing threads (`_fetch_and_calculate`) would hang during Home Assistant shutdown, causing delays or unclean exits.

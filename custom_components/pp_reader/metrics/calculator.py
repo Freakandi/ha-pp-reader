@@ -921,7 +921,7 @@ class PerformanceEngine:
         divs = self._aggregate_dividends(df_augmented, fx_long)
         fees = self._aggregate_fees(df_augmented, fx_long)
         taxes = self._aggregate_taxes(df_augmented, fx_long)
-        interest = self._aggregate_interest(df_augmented)
+        interest = self._aggregate_interest(df_augmented, fx_long)
 
         # 4. Format Results
         realized_items = [
@@ -1009,19 +1009,67 @@ class PerformanceEngine:
         ]
         return self._format_breakdown_list(results)
 
-    def _aggregate_interest(self, df_augmented: pd.DataFrame) -> list[BreakdownItem]:
+    def _aggregate_interest(
+        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
+    ) -> list[BreakdownItem]:
         # Interest - InterestCharge
+        # PP Logic: Gross Interest = Net Amount + Taxes + Fees.
+        # PP Logic: Gross Charge = Net Amount - Taxes - Fees (Magnitude reduces).
+
+        # 1. Base Net Amounts
         df_int = df_augmented[df_augmented["type"] == TransactionType.INTEREST]
         df_chg = df_augmented[df_augmented["type"] == TransactionType.INTEREST_CHARGE]
 
-        # Group by Account
         pos = df_int.groupby("account")["amount_eur"].sum()
         neg = df_chg.groupby("account")["amount_eur"].sum()
 
         net = pos.sub(neg, fill_value=0)
+
+        # 2. Adjust for Units (Gross Up)
+        # For Interest (Gain): We received Net. We want Gross. Add Tax/Fee.
+        # For Charge (Loss): We paid Net. We want Gross Expense.
+        #   If Net=110 (paid), Tax=10. Gross=100.
+        #   Component should correspond to -100.
+        #   Current 'neg' is 110. 'net' has -110.
+        #   We want 'net' to be -100. So we ADD 10.
+        # Conclusion: ALWAYS ADD the Tax/Fee amount to the Net Result.
+
+        gross_additions = pd.Series(dtype=float)
+        if not self._df_units.empty and not df_augmented.empty:
+            # Filter augmented for Interest types
+            mask_int = df_augmented["type"].isin(
+                [TransactionType.INTEREST, TransactionType.INTEREST_CHARGE]
+            )
+            df_int_aug = df_augmented[mask_int]
+
+            if not df_int_aug.empty:
+                df_u_aug = self._df_units.merge(
+                    df_int_aug[["uuid", "account", "date"]].rename(
+                        columns={"uuid": "tx_uuid", "account": "parent_acc"}
+                    ),
+                    left_on="transaction_uuid",
+                    right_on="tx_uuid",
+                    how="inner",
+                )
+                if not df_u_aug.empty:
+                    df_u_aug = df_u_aug.merge(
+                        fx_long, on=["date", "currency_code"], how="left"
+                    )
+                    df_u_aug["daily_fx_rate"] = df_u_aug["daily_fx_rate"].fillna(1.0)
+                    df_u_aug["amount_eur"] = (df_u_aug["amount"] / 100.0) / df_u_aug[
+                        "daily_fx_rate"
+                    ]
+
+                    mask_gross = df_u_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE])
+                    gross_additions = (
+                        df_u_aug[mask_gross].groupby("parent_acc")["amount_eur"].sum()
+                    )
+
+        total = net.add(gross_additions, fill_value=0)
+
         results = [
             BreakdownItem(label=self._resolve_acc_name(k), amount=v)
-            for k, v in net.items()
+            for k, v in total.items()
         ]
         return self._format_breakdown_list(results)
 
@@ -1629,15 +1677,16 @@ class PerformanceEngine:
                     # For sells, reconstitute gross proceeds from net amount
                     # + fees/taxes
                     gross_amt_cents = abs(row.amount) + fees + taxes
-                    if shares > 0:
-                        tx_price = (gross_amt_cents / 100.0) / shares
+                    tx_price = (gross_amt_cents / 100.0) / shares
                 elif row.type in (
                     TransactionType.BUY,
                     TransactionType.INBOUND_DELIVERY,
                 ):
                     # For buys, cost basis is the total cash outflow (amount)
+                    # Deduct Fees/Taxes from Amount to get pure Cost Basis
                     if shares > 0 and row.amount is not None and row.amount != 0:
-                        tx_price = abs(row.amount) / 100.0 / shares
+                        net_amt_cents = abs(row.amount) - fees - taxes
+                        tx_price = (net_amt_cents / 100.0) / shares
                     else:  # Fallback for deliveries without amount
                         tx_price = self._get_price(sec_id, row.date)
                 elif row.type == TransactionType.SECURITY_TRANSFER:
@@ -1753,7 +1802,9 @@ class PerformanceEngine:
                     tx_price = (gross_amt_cents / 100.0) / shares
             elif row.type in (TransactionType.BUY, TransactionType.INBOUND_DELIVERY):
                 if shares > 0 and row.amount is not None and row.amount != 0:
-                    tx_price = abs(row.amount) / 100.0 / shares
+                    # Deduct Fees/Taxes from Amount to get pure Cost Basis
+                    net_amt_cents = abs(row.amount) - fees - taxes
+                    tx_price = (net_amt_cents / 100.0) / shares
                 else:
                     tx_price = self._get_price(sec_id, row.date)
             elif row.type == TransactionType.SECURITY_TRANSFER:
@@ -1932,7 +1983,7 @@ class PerformanceEngine:
 
         return unrealized_gains_map
 
-    def _calculate_fx_performance(  # noqa: PLR0915
+    def _calculate_fx_performance(
         self,
         df_txs: pd.DataFrame,
         start_date: date,
@@ -1986,32 +2037,6 @@ class PerformanceEngine:
 
         # Identify Foreign Accounts (UNION of start keys, end keys)
         all_keys = set(bal_start.index) | set(bal_end.index)
-
-        for acc_id, curr_code in all_keys:
-            if curr_code == "EUR":
-                continue
-
-            qty_start = bal_start.get((acc_id, curr_code), 0.0)
-            qty_end = bal_end.get((acc_id, curr_code), 0.0)
-
-            # Use basis_ts (T-1) for Start Valuation to match Start Wealth logic
-            rate_start = self._get_fx(curr_code, basis_ts)
-            rate_end = self._get_fx(curr_code, end_ts)
-
-            # Value = Quantity / Rate (if Rate is Foreign/EUR)
-            val_start_eur = qty_start / rate_start if rate_start else 0.0
-            val_end_eur = qty_end / rate_end if rate_end else 0.0
-
-            # 4. Calculate Flows for this Account
-            # Scan transactions in period [start_ts, end_ts]
-            # (mask_per removed as unused)
-
-            # We need to process Transfers specially (via augment logic)
-            # OR we can assume 'df_txs' passed here is RAW.
-            # If Raw, we need to apply 'augment' to get 'flow_eur'.
-            # BUT 'augment' works on the whole block usually.
-
-            # Let's augment the WHOLE period slice once.
 
         # --- Augmentation & Flow Calculation ---
         # Filter for the relevant time window first to save time?
@@ -2126,7 +2151,7 @@ class PerformanceEngine:
             qty_start = bal_start.get((acc_id, curr_code), 0.0)
             qty_end = bal_end.get((acc_id, curr_code), 0.0)
 
-            rate_start = self._get_fx(curr_code, start_ts)
+            rate_start = self._get_fx(curr_code, basis_ts)
             rate_end = self._get_fx(curr_code, end_ts)
 
             val_start_eur = qty_start / rate_start if rate_start else 0.0
