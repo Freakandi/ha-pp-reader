@@ -284,6 +284,56 @@ class PerformanceEngine:
         else:
             self._rates_idx = pd.DataFrame()
 
+    def _calculate_portfolio_state_at_date(self, d: date) -> dict[str, float]:
+        """
+        Calculate portfolio valuation (Wealth) at a specific date (EOD of d-1).
+
+        This aligns with _setup_virtual_inventory which sets Cost Basis at T-1.
+        It provides a Single Source of Truth for point-in-time valuation using
+        direct scalar lookups, avoiding pivot/resample discrepancies.
+
+        Returns:
+            dict with keys:
+            - total_wealth: Total Value in EUR
+            - securities_wealth: Securities Value in EUR
+            - cash_wealth: Cash Value in EUR
+
+        """
+        # Valuation Timestamp: EOD of d-1 (Start of d)
+        start_ts = pd.Timestamp(d, tz="UTC")
+        basis_ts = start_ts - pd.Timedelta(days=1)
+
+        # 1. Securities Wealth
+        # _get_holdings_at_date returns holdings strictly < d (so EOD d-1)
+        holdings = self._get_holdings_at_date(d)
+        sec_wealth = 0.0
+
+        for sec_uuid, qty in holdings.items():
+            # Use basis_ts (T-1) for Price/FX to match Virtual Inventory Cost Basis
+            price = self._get_price(sec_uuid, basis_ts)
+            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            rate = self._get_fx(curr, basis_ts)
+
+            val_eur = (qty * price) / (rate if rate else 1.0)
+            sec_wealth += val_eur
+
+        # 2. Cash Wealth
+        # _get_account_balances returns balances strictly < start_ts (so EOD d-1)
+        balances = self._get_account_balances(start_ts)
+        cash_wealth = 0.0
+
+        for (acc_id, curr), bal in balances.items():  # noqa: B007
+            # Use basis_ts (T-1) for FX
+            rate = self._get_fx(curr, basis_ts)
+            val_eur = bal / (rate if rate else 1.0)
+            cash_wealth += val_eur
+
+        return {
+            "total_wealth": sec_wealth + cash_wealth,
+            "securities_wealth": sec_wealth,
+            "cash_wealth": cash_wealth,
+        }
+
     def get_daily_wealth(  # noqa: PLR0912, PLR0915
         self, start_date: date, end_date: date
     ) -> pd.DataFrame:
@@ -329,7 +379,7 @@ class PerformanceEngine:
         df_augmented, fx_long = self._augment_transactions(self._df_txs, fx_pivot)
 
         daily_neutral_flow = self._calculate_gross_neutral_flows(
-            df_augmented, date_range, price_pivot, fx_pivot, fx_long
+            df_augmented, date_range
         )
         daily_invested_cum = daily_neutral_flow.cumsum().fillna(0.0)
 
@@ -763,16 +813,30 @@ class PerformanceEngine:
         start_prev = start_date - pd.Timedelta(days=1)
         daily_wealth = self.get_daily_wealth(start_prev, end_date)
 
+        # Use Scalar Valuation for Start/End Wealth (Single Source of Truth)
+        # Start Wealth: State at Start of start_date (EOD T-1)
+        start_state = self._calculate_portfolio_state_at_date(start_date)
+        start_wealth = start_state["total_wealth"]
+
+        # End Wealth: State at End of end_date (Start of T+1)
+        end_state = self._calculate_portfolio_state_at_date(
+            end_date + pd.Timedelta(days=1)
+        )
+        end_wealth = end_state["total_wealth"]
+
+        # Invested Capital: Derive delta from daily_wealth flow accumulation
+        # daily_wealth covers [start_prev, end_date].
+        # start_row is at start_prev. end_row is at end_date.
+        # Delta = end_cum - start_cum = Sum of flows in (start_prev, end_date].
+        # Since start_prev = start-1, this covers flows ON start_date up to end_date.
+        # This matches PP logic (usually).
+
         start_row = daily_wealth[daily_wealth["date"] == start_prev.isoformat()]
         end_row = daily_wealth[daily_wealth["date"] == end_date.isoformat()]
 
-        start_wealth = (
-            start_row.iloc[0]["total_wealth_eur"] if not start_row.empty else 0.0
-        )
         start_invested = (
             start_row.iloc[0]["invested_capital_eur"] if not start_row.empty else 0.0
         )
-        end_wealth = end_row.iloc[0]["total_wealth_eur"] if not end_row.empty else 0.0
         end_invested = (
             end_row.iloc[0]["invested_capital_eur"] if not end_row.empty else 0.0
         )
@@ -1189,56 +1253,37 @@ class PerformanceEngine:
 
     def _augment_txs_with_market_data(self, df_txs: pd.DataFrame) -> pd.DataFrame:
         """
-        Augment transactions with FX rates using merge_asof for efficiency.
+        Augment transactions with FX rates using unified _get_fx logic.
 
-        This replaces O(N log M) lookups in loops with vectorized O(N + M) merge.
+        We deprecate merge_asof to ensure that Flow Valuations exactly match
+        Point-in-Time Valuations (which use _get_fx). This sacrifices some performance
+        for consistency, preventing "Two Watches" summation errors.
         """
         if df_txs.empty:
             if "fx_rate" not in df_txs.columns:
                 df_txs["fx_rate"] = 1.0
-            return df_txs
+            return df_txs.copy()
 
-        # Prepare rates table
-        # We need a table with columns: date, currency, rate
-        # Sorted by date
-        if self._df_rates.empty:
-            df_txs = df_txs.copy()
-            df_txs["fx_rate"] = 1.0
-            return df_txs
+        # Create a copy to avoid SettingWithCopy warnings on the input
+        df_out = df_txs.copy()
 
-        rates_lookup = self._df_rates.sort_values("date").copy()
-        # Ensure compatible types for merge_asof 'by'
-        rates_lookup["currency"] = rates_lookup["currency"].astype(str)
+        # Improve performance by pre-validating columns?
+        # Assuming date and currency_code exist as per usage.
 
-        # Prepare TX table
-        df_txs_sorted = df_txs.sort_values("date").copy()
-        df_txs_sorted["currency_code"] = df_txs_sorted["currency_code"].astype(str)
+        # Explicitly use the scalar lookup to match the valuation engine exactly.
+        # This handles 'searchsorted', 'backward limits', and 'pre-history' logic
+        # uniformly.
+        rates = [
+            self._get_fx(row.currency_code, row.date) for row in df_out.itertuples()
+        ]
 
-        # Perform merge_asof
-        # We want the last available rate <= tx date (direction='backward')
-        merged = pd.merge_asof(
-            df_txs_sorted,
-            rates_lookup,
-            left_on="date",
-            right_on="date",
-            left_by="currency_code",
-            right_by="currency",
-            direction="backward",
-        )
+        df_out["fx_rate"] = rates
+        return df_out
 
-        # Fill missing rates (e.g. EUR or gaps) with 1.0
-        merged["rate"] = merged["rate"].fillna(1.0)
-
-        # Rename to 'fx_rate'
-        return merged.rename(columns={"rate": "fx_rate"})
-
-    def _calculate_gross_neutral_flows(  # noqa: PLR0915
+    def _calculate_gross_neutral_flows(
         self,
         df_augmented: pd.DataFrame,
         date_range: pd.DatetimeIndex,
-        price_pivot: pd.DataFrame,
-        fx_pivot: pd.DataFrame,
-        fx_long: pd.DataFrame,
     ) -> pd.Series:
         """
         Calculate daily gross neutral flows (Invested Capital changes).
@@ -1249,148 +1294,97 @@ class PerformanceEngine:
         - Grossing Up/Down: Adds Fees/Taxes to the neutral flow to reflect
           pure external movements before expenses.
         """
-        neutral_types = {
-            TransactionType.DEPOSIT: 1,
-            TransactionType.INBOUND_DELIVERY: 1,
-            TransactionType.REMOVAL: -1,
-            TransactionType.OUTBOUND_DELIVERY: -1,
-            TransactionType.SECURITY_TRANSFER: 1,
-        }
+        neutral_types = [
+            TransactionType.DEPOSIT,
+            TransactionType.INBOUND_DELIVERY,
+            TransactionType.REMOVAL,
+            TransactionType.OUTBOUND_DELIVERY,
+            TransactionType.SECURITY_TRANSFER,
+        ]
 
         daily_flow = pd.Series(0.0, index=date_range)
 
-        # 1. Base Flows
-        df_neutral = df_augmented[
-            df_augmented["type"].isin(neutral_types.keys())
-        ].copy()
-
-        if df_neutral.empty:
+        # Filter for neutral types using the UUIDs from df_augmented
+        mask_neutral = df_augmented["type"].isin(neutral_types)
+        if not mask_neutral.any():
             return daily_flow
 
-        df_neutral["sign"] = df_neutral["type"].map(neutral_types)
+        neutral_uuids = df_augmented.loc[mask_neutral, "uuid"]
+        df_neutral_raw = self._df_txs[self._df_txs["uuid"].isin(neutral_uuids)].copy()
 
-        # --- A. Standard Cash (Net Amount) ---
-        # Value equals AmountEUR * Sign
-        # Note: 'amount_eur' is derived from 'amount' (magnitude)
-        # in _augment_transactions.
-        # We assume 'amount' >= 0 there usually.
-        # But if 'amount' is 0, we skip here.
-        mask_cash = df_neutral["amount"].abs() > 1e-6  # noqa: PLR2004
-        if mask_cash.any():
-            df_cash = df_neutral[mask_cash].copy()
-            df_cash["flow_val"] = df_cash["amount_eur"] * df_cash["sign"]
-            sum_cash = (
-                df_cash.groupby("date")["flow_val"]
-                .sum()
-                .reindex(date_range, fill_value=0.0)
-            )
-            daily_flow = daily_flow.add(sum_cash, fill_value=0)
+        if df_neutral_raw.empty:
+            return daily_flow
 
-        # --- B. Share Value (if Amount ~ 0) ---
-        # Applicable for Deliveries and Transfers
-        mask_share = (df_neutral["amount"].abs() <= 1e-6) & (  # noqa: PLR2004
-            df_neutral["security"].notna()
-        )
-        if mask_share.any():
-            df_share = df_neutral[mask_share].copy()
-            share_sums = {}
+        # Augment using the SAME method as Capital Gains (merge_asof for FX)
+        # to ensure Cost Basis and Neutral Flow valuations are identical.
+        df_neutral = self._augment_txs_with_market_data(df_neutral_raw)
 
-            # Iterate for valuation
-            # (simpler than vectorizing pivot lookup with sparse data)
-            for row in df_share.itertuples():
-                d = row.date
-                sec_id = row.security
-                qty = row.shares / 100000000.0
-                sign = row.sign
+        type_signs = {
+            TransactionType.DEPOSIT: 1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.SECURITY_TRANSFER: 1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
+        df_neutral["sign"] = df_neutral["type"].map(type_signs)
 
-                # Price
-                price = 0.0
-                if sec_id in price_pivot.columns:
-                    try:
-                        price = price_pivot.loc[d, sec_id]
-                    except KeyError:
-                        price = 0.0
+        flow_sums = {}
 
-                # FX
-                curr = row.currency_code
-                rate = 1.0
-                if curr in fx_pivot.columns:
-                    try:
-                        rate = fx_pivot.loc[d, curr]
-                    except KeyError:
-                        rate = 1.0
+        for row in df_neutral.itertuples():
+            d = row.date
+            val_eur = 0.0
 
-                # Value
-                # For Transfer (Sign=1), Qty can be negative
-                # -> reducing invested capital?
-                # or positive -> increasing.
-                # For DeliveryOut (Sign=-1), Qty usually positive -> negative flow.
-                val_eur = (qty * price) / rate
-                # Apply Type Sign
-                # Transfer (4, Sign=1) * Negative Qty = Negative Value. OK.
-                # DeliveryOut (3, Sign=-1) * Positive Qty = Negative Value. OK.
-                val_signed = val_eur * sign
+            # FX Rate (from merge_asof, consistent with CapGains)
+            fx = row.fx_rate if row.fx_rate else 1.0
 
-                share_sums[d] = share_sums.get(d, 0.0) + val_signed
+            # Logic A: Amount-based (Cash or Delivery w/ Amount)
+            if row.amount is not None and abs(row.amount) > _GAIN_EPSILON:
+                val_eur = (abs(row.amount) / 100.0) / fx
 
-            if share_sums:
-                daily_share = pd.Series(share_sums).reindex(date_range, fill_value=0.0)
-                daily_flow = daily_flow.add(daily_share, fill_value=0)
+            # Logic B: Price-based (Delivery w/o Amount or Share Transfer)
+            elif row.security and abs(row.shares_norm) > 0:
+                price = self._get_price(row.security, d)
+                val_eur = (abs(row.shares_norm) * price) / fx
+
+            if val_eur != 0.0:
+                val_signed = val_eur * row.sign
+                flow_sums[d] = flow_sums.get(d, 0.0) + val_signed
+
+        if flow_sums:
+            daily_main = pd.Series(flow_sums).reindex(date_range, fill_value=0.0)
+            daily_flow = daily_flow.add(daily_main, fill_value=0)
 
         # --- C. Gross Adjustment (Fees/Taxes) ---
-        # Flow = Net_Signed + Fee_Amount (Positive Expense).
-        # Check units for these transactions.
         if not self._df_units.empty:
-            neutral_uuids = df_neutral["uuid"]
             df_u_neutral = self._df_units[
-                self._df_units["transaction_uuid"].isin(neutral_uuids)
+                self._df_units["transaction_uuid"].isin(df_neutral["uuid"])
             ].copy()
 
             if not df_u_neutral.empty:
-                # Filter for Fees/Taxes
                 df_u_neutral = df_u_neutral[
                     df_u_neutral["type"].isin([UNIT_TYPE_FEE, UNIT_TYPE_TAX])
                 ]
 
             if not df_u_neutral.empty:
-                # Merge to get Date/Currency
-                df_u_calc = df_u_neutral.merge(
+                # Merge date to handle FX
+                df_u_aug = df_u_neutral.merge(
                     df_neutral[["uuid", "date"]],
                     left_on="transaction_uuid",
                     right_on="uuid",
                     how="left",
                 )
-                # Merge FX
-                df_u_calc = df_u_calc.merge(
-                    fx_long,
-                    on=["date", "currency_code"],
-                    how="left",
-                )
-                df_u_calc["daily_fx_rate"] = df_u_calc["daily_fx_rate"].fillna(1.0)
-                df_u_calc["val_eur"] = (df_u_calc["amount"] / 100.0) / df_u_calc[
-                    "daily_fx_rate"
-                ]
 
-                # Sum per day
-                adj_sums = (
-                    df_u_calc.groupby("date")["val_eur"]
-                    .sum()
-                    .reindex(date_range, fill_value=0.0)
-                )
+                unit_sums = {}
+                for u_row in df_u_aug.itertuples():
+                    d = u_row.date
+                    # Use _get_fx to ensure precision matching
+                    r = self._get_fx(u_row.currency_code, d)
+                    u_val = (u_row.amount / 100.0) / (r if r else 1.0)
+                    unit_sums[d] = unit_sums.get(d, 0.0) + u_val
 
-                # ALWAYS ADD Fees/Taxes to the flow.
-                # Deposit (Positive) + Fee = Larger Positive (Gross Inflow).
-                # Removal (Negative) + Fee = Smaller Negative
-                # (Gross Outflow/Net External).
-                # Wait. Removal (-100) + Fee (10) = -90.
-                # This implies I removed 90 from external world, and 10 was lost to fee?
-                # Or I requested 100 removal, got 90?
-                # Task: Neutral Movement is the amount of money/value that cleanly
-                # entered/left the portfolio boundary.
-                # Scenario B: 100 deducted (includes 10 fee). Recipient gets 90.
-                # Neutral Flow should be -90.
-                # Calculation: -100 (Net Amt) + 10 (Fee) = -90. Correct.
-                daily_flow = daily_flow.add(adj_sums, fill_value=0)
+                if unit_sums:
+                    daily_adj = pd.Series(unit_sums).reindex(date_range, fill_value=0.0)
+                    daily_flow = daily_flow.add(daily_adj, fill_value=0)
 
         return daily_flow
 
@@ -1606,6 +1600,7 @@ class PerformanceEngine:
             loc = sec_prices.index.searchsorted(d, side="right")
             if loc > 0:
                 return sec_prices.iloc[loc - 1]["close"]
+
         except (KeyError, IndexError):
             pass
         return 0.0
@@ -1672,7 +1667,10 @@ class PerformanceEngine:
         basis_ts: pd.Timestamp | None = None,
     ) -> tuple[dict[str, float], dict[str, float]]:
         start_ts = pd.Timestamp(start_date, tz="UTC")
-        end_ts = pd.Timestamp(end_date, tz="UTC")
+        end_ts = pd.Timestamp(end_date, tz="UTC") + pd.Timedelta(
+            days=1, microseconds=-1
+        )
+
         # Default basis_ts to start_ts if not provided (fallback)
         if basis_ts is None:
             basis_ts = start_ts
@@ -1691,78 +1689,86 @@ class PerformanceEngine:
         # Pre-filter
         txs = df_txs[df_txs["type"].isin(sec_types)]
 
-        if txs.empty:
-            return {}, {}
+        if not txs.empty:
+            # Augment with FX Rates (Vectorized Optimization)
+            txs = self._augment_txs_with_market_data(txs)
+            # Ensure sorting by date after augmentation (merge_asof requires it, but result is sorted by date too)  # noqa: E501
+            # However, let's be safe as we need it sorted for FIFO replay
+            # merge_asof returns sorted if left is sorted.
 
-        # Augment with FX Rates (Vectorized Optimization)
-        txs = self._augment_txs_with_market_data(txs)
-        # Ensure sorting by date after augmentation (merge_asof requires it, but result is sorted by date too)  # noqa: E501
-        # However, let's be safe as we need it sorted for FIFO replay
-        # merge_asof returns sorted if left is sorted.
+            units_payload = self._load_transaction_units(txs["uuid"].tolist())
 
-        units_payload = self._load_transaction_units(txs["uuid"].tolist())
+            for row in txs.itertuples():
+                sec_id = row.security
+                if not sec_id or row.shares_norm == 0:
+                    continue
 
-        for row in txs.itertuples():
-            sec_id = row.security
-            if not sec_id or row.shares_norm == 0:
-                continue
+                # Ensure map entry exists
+                if sec_id not in realized_gains_map:
+                    realized_gains_map[sec_id] = 0.0
 
-            # Ensure map entry exists
-            if sec_id not in realized_gains_map:
-                realized_gains_map[sec_id] = 0.0
+                shares = abs(row.shares_norm)
+                tx_price = 0.0
+                fees = units_payload.get(row.uuid, {}).get("fees", 0)
+                taxes = units_payload.get(row.uuid, {}).get("taxes", 0)
 
-            shares = abs(row.shares_norm)
-            tx_price = 0.0
-            fees = units_payload.get(row.uuid, {}).get("fees", 0)
-            taxes = units_payload.get(row.uuid, {}).get("taxes", 0)
-
-            if row.type in (TransactionType.SELL, TransactionType.OUTBOUND_DELIVERY):
-                # For sells, reconstitute gross proceeds from net amount + fees/taxes
-                gross_amt_cents = abs(row.amount) + fees + taxes
-                if shares > 0:
-                    tx_price = (gross_amt_cents / 100.0) / shares
-            elif row.type in (TransactionType.BUY, TransactionType.INBOUND_DELIVERY):
-                # For buys, cost basis is the total cash outflow (amount)
-                if shares > 0 and row.amount is not None and row.amount != 0:
-                    tx_price = abs(row.amount) / 100.0 / shares
-                else:  # Fallback for deliveries without amount
+                if row.type in (
+                    TransactionType.SELL,
+                    TransactionType.OUTBOUND_DELIVERY,
+                ):
+                    # For sells, reconstitute gross proceeds from net amount
+                    # + fees/taxes
+                    gross_amt_cents = abs(row.amount) + fees + taxes
+                    if shares > 0:
+                        tx_price = (gross_amt_cents / 100.0) / shares
+                elif row.type in (
+                    TransactionType.BUY,
+                    TransactionType.INBOUND_DELIVERY,
+                ):
+                    # For buys, cost basis is the total cash outflow (amount)
+                    if shares > 0 and row.amount is not None and row.amount != 0:
+                        tx_price = abs(row.amount) / 100.0 / shares
+                    else:  # Fallback for deliveries without amount
+                        tx_price = self._get_price(sec_id, row.date)
+                elif row.type == TransactionType.SECURITY_TRANSFER:
+                    # For transfers, assume price is based on market value at the time
                     tx_price = self._get_price(sec_id, row.date)
-            elif row.type == TransactionType.SECURITY_TRANSFER:
-                # For transfers, assume price is based on market value at the time
-                tx_price = self._get_price(sec_id, row.date)
 
-            # Use pre-calculated FX rate
-            tx_fx = row.fx_rate
+                # Use pre-calculated FX rate
+                tx_fx = row.fx_rate
 
-            if row.type in (
-                TransactionType.BUY,
-                TransactionType.INBOUND_DELIVERY,
-                TransactionType.SECURITY_TRANSFER,
-            ):
-                if sec_id not in inventory:
-                    inventory[sec_id] = deque()
-                inventory[sec_id].append(
-                    Lot(
-                        date=row.date,
-                        shares=shares,
-                        price_native=tx_price,
-                        fx_rate=tx_fx,
+                if row.type in (
+                    TransactionType.BUY,
+                    TransactionType.INBOUND_DELIVERY,
+                    TransactionType.SECURITY_TRANSFER,
+                ):
+                    if sec_id not in inventory:
+                        inventory[sec_id] = deque()
+                    inventory[sec_id].append(
+                        Lot(
+                            date=row.date,
+                            shares=shares,
+                            price_native=tx_price,
+                            fx_rate=tx_fx,
+                        )
                     )
-                )
-            elif row.type in (TransactionType.SELL, TransactionType.OUTBOUND_DELIVERY):
-                if inventory.get(sec_id):
-                    gain = self._process_security_sale(
-                        inventory[sec_id],
-                        shares,
-                        tx_price,
-                        tx_fx,
-                        start_ts,
-                        basis_ts,
-                        sec_id,
-                        row.currency_code,
-                    )
-                    if row.date >= start_ts:
-                        realized_gains_map[sec_id] += gain
+                elif row.type in (
+                    TransactionType.SELL,
+                    TransactionType.OUTBOUND_DELIVERY,
+                ):
+                    if inventory.get(sec_id):
+                        gain = self._process_security_sale(
+                            inventory[sec_id],
+                            shares,
+                            tx_price,
+                            tx_fx,
+                            start_ts,
+                            basis_ts,
+                            sec_id,
+                            row.currency_code,
+                        )
+                        if row.date >= start_ts:
+                            realized_gains_map[sec_id] += gain
 
         unrealized_gains_map = self._calculate_unrealized_security_gains_detailed(
             inventory, start_ts, basis_ts, end_ts
@@ -2030,7 +2036,9 @@ class PerformanceEngine:
         Where Net_Inflows = Sum(Inflows_EUR) - Sum(Outflows_EUR)
         """
         start_ts = pd.Timestamp(start_date, tz="UTC")
-        end_ts = pd.Timestamp(end_date, tz="UTC")
+        end_ts = pd.Timestamp(end_date, tz="UTC") + pd.Timedelta(
+            days=1, microseconds=-1
+        )
         if basis_ts is None:
             basis_ts = start_ts
 
@@ -2100,7 +2108,8 @@ class PerformanceEngine:
             qty_start = bal_start.get((acc_id, curr_code), 0.0)
             qty_end = bal_end.get((acc_id, curr_code), 0.0)
 
-            rate_start = self._get_fx(curr_code, start_ts)
+            # Use basis_ts (T-1) for Start Valuation to match Start Wealth logic
+            rate_start = self._get_fx(curr_code, basis_ts)
             rate_end = self._get_fx(curr_code, end_ts)
 
             # Value = Quantity / Rate (if Rate is Foreign/EUR)
@@ -2487,14 +2496,14 @@ class PerformanceEngine:
         # Filter out zero or near-zero holdings and return dict
         return {k: v for k, v in holdings.items() if abs(v) > _SHARE_EPSILON}
 
-    def _get_account_balances(self, ts: pd.Timestamp) -> pd.DataFrame:
+    def _get_account_balances(self, ts: pd.Timestamp) -> pd.Series:
         """
         Calculate account balances at a specific timestamp (EOD of previous day).
 
-        Returns DataFrame with index [account, currency] and column 'balance'.
+        Returns Series with index [account, currency] and values as balance.
         """
         if self._df_txs.empty:
-            return pd.DataFrame(columns=["balance"])
+            return pd.Series(dtype=float)
 
         # Filter transactions strictly BEFORE the ts (ts is Start of Day)
         # We want End of Prev Day.
@@ -2506,7 +2515,7 @@ class PerformanceEngine:
         df_past = self._df_txs[mask].copy()
 
         if df_past.empty:
-            return pd.DataFrame(columns=["balance"])
+            return pd.Series(dtype=float)
 
         # Calculate signs
         # We can't vector-map _get_cash_flow_sign efficiently via apply row-by-row

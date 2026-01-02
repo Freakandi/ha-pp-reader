@@ -1,6 +1,7 @@
 # artifacts
 artifacts/
 S-Depot.db
+.prompts
 
 .worktrees/
 __pycache__

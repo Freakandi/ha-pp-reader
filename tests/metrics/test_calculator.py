@@ -370,7 +370,7 @@ def test_calculate_fx_performance_with_override():
     # load_data populates it.
 
     fx_gain = engine._calculate_fx_performance(
-        engine._df_txs, date(2023, 1, 1), date(2023, 1, 2), engine._account_currencies
+        engine._df_txs, date(2023, 1, 1), date(2023, 1, 2)
     )
 
     # Expected (Balance Sheet with Symmetric Flow):

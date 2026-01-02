@@ -55,3 +55,8 @@ The mismatch is caused by divergent logic between `Invested Capital` calculation
     - Add test case for Removal with Fee (ensure summation holds).
     - Add test case for Security Transfer (ensure summation holds).
     - Run `pytest tests/metrics/test_performance_summation.py`.
+
+### Chunk 3: Valuation Harmonization (0.80 Fix)
+- [x] **Investigate**: Identified root cause as structural divergence in valuation sources (Pivot vs Merge) for Incoming Assets (Transfers/Deliveries).
+- [x] **Refactor**: Rewrite `_calculate_gross_neutral_flows` to use `_augment_txs_with_market_data` and `_get_price` to match Capital Gains logic exactly.
+- [x] **Verify**: Ensure code quality (ruff).

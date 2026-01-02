@@ -7,6 +7,9 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 
 ### Fixed
+- **Negative Zero Display**: Fixed cosmetic issue where zero fees and taxes appeared as `-0.00 €` in the performance breakdown.
+- **FX Valuation Logic**: Unified FX rate lookups across flow and valuation calculations, removing `merge_asof` dependency to resolve summation mismatches.
+- **EOD Valuation**: Adjusted timestamp logic to correctly capture price changes occurring on the final day of a reporting period.
 - **Performance Summation**: Finalized resolution of summation mismatches (e.g. 0.80 € discrepancy) by correcting neutral flow logic for security transfers and deliveries.
 - **Cost Basis Initialization**: Switched to "t-1" (previous day) pricing for initial cost basis to ensure perfect alignment of Start Wealth and Unrealized Gains.
 - **Time Series Auto-Update**: Implemented an automated refresh trigger for the "Time Series" tab. The backend now immediately notifies the frontend when daily wealth calculations are complete, ensuring the performance charts and metrics update automatically after a file change without requiring a manual page refresh.
