@@ -6,45 +6,46 @@ import {
   createHeaderCard,
   formatNumber,
   makeTable,
-  renderLoadingState
-} from '../content/elements';
-import { openSecurityDetail } from '../dashboard';
-import { registerOverviewHelpers } from '../dashboard/registry';
-import type { PortfolioPositionsResponse } from '../data/api';
+  renderLoadingState,
+} from "../content/elements";
+import { openSecurityDetail } from "../dashboard";
+import { registerOverviewHelpers } from "../dashboard/registry";
+import type { PortfolioPositionsResponse } from "../data/api";
 import {
   fetchAccountsWS,
   fetchLastFileUpdateWS,
   fetchPortfolioPositionsWS,
   fetchPortfoliosWS,
-} from '../data/api';
-import type { PortfolioPositionRecord } from '../data/positionsCache';
+} from "../data/api";
+import type { PortfolioPositionRecord } from "../data/positionsCache";
 import {
   getPortfolioPositions,
   hasPortfolioPositions,
   normalizePositionRecords,
   setPortfolioPositions,
-} from '../data/positionsCache';
-import { flushAllPendingPositions, flushPendingPositions } from '../data/updateConfigsWS';
+} from "../data/positionsCache";
+import {
+  flushAllPendingPositions,
+  flushPendingPositions,
+} from "../data/updateConfigsWS";
 import {
   replacePortfolioSnapshots,
   setAccountSnapshots,
   setPortfolioPositionsSnapshot,
-} from '../lib/store/portfolioStore';
+} from "../lib/store/portfolioStore";
 import {
   selectAccountOverviewRows,
   selectPortfolioOverviewRows,
   type AccountOverviewRow,
   type PortfolioOverviewRow,
-} from '../lib/store/selectors/portfolio';
-import { renderBadgeList, renderNameWithBadges } from '../lib/ui/badges';
-import type { HomeAssistant } from '../types/home-assistant';
-import { toFiniteCurrency } from '../utils/currency';
-import { formatCurrency, formatPercent } from '../utils/format';
-import { escapeAttribute, escapeHtml } from '../utils/html';
-import { normalizePerformancePayload } from '../utils/performance';
-import type {
-  PanelConfigLike,
-} from './types';
+} from "../lib/store/selectors/portfolio";
+import { renderBadgeList, renderNameWithBadges } from "../lib/ui/badges";
+import type { HomeAssistant } from "../types/home-assistant";
+import { toFiniteCurrency } from "../utils/currency";
+import { formatCurrency, formatPercent } from "../utils/format";
+import { escapeAttribute, escapeHtml } from "../utils/html";
+import { normalizePerformancePayload } from "../utils/performance";
+import type { PanelConfigLike } from "./types";
 
 // CSS for stacked columns and sorting (Copied from trades.ts)
 const STYLES = `
@@ -156,11 +157,16 @@ const STYLES = `
 
 // Helper functions for stacked columns
 function renderTrend(value: number, formatted: string): string {
-  const cls = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+  const cls = value > 0 ? "positive" : value < 0 ? "negative" : "neutral";
   return `<span class="${cls}">${formatted}</span>`;
 }
 
-function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
+function createSortHeader(
+  labelTop: string,
+  selectorTop: string,
+  labelBottom: string,
+  selectorBottom: string,
+): string {
   return `
     <div class="sort-stack">
         <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" data-label="${escapeHtml(labelTop)}" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
@@ -173,7 +179,12 @@ function createSimpleSortHeader(label: string, key: string): string {
   return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" data-label="${escapeHtml(label)}" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
 }
 
-function stack(topVal: number | string, topFmt: string, botVal: number | string, botFmt: string): string {
+function stack(
+  topVal: number | string,
+  topFmt: string,
+  botVal: number | string,
+  botFmt: string,
+): string {
   return `
       <div class="cell-stack">
         <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
@@ -182,34 +193,33 @@ function stack(topVal: number | string, topFmt: string, botVal: number | string,
     `;
 }
 
-
 type PortfolioQueryRoot = Document | HTMLElement;
 
 type PortfolioPositionsSortKey =
-  | 'name'
-  | 'current_holdings'
-  | 'average_price'
-  | 'purchase_value'
-  | 'current_value'
-  | 'day_change_abs'
-  | 'day_change_pct'
-  | 'gain_abs'
-  | 'gain_pct'
-  | 'last_price';
+  | "name"
+  | "current_holdings"
+  | "average_price"
+  | "purchase_value"
+  | "current_value"
+  | "day_change_abs"
+  | "day_change_pct"
+  | "gain_abs"
+  | "gain_pct"
+  | "last_price";
 
-type PortfolioSortDirection = 'asc' | 'desc';
+type PortfolioSortDirection = "asc" | "desc";
 
 const PORTFOLIO_SORT_KEYS: readonly PortfolioPositionsSortKey[] = [
-  'name',
-  'current_holdings',
-  'last_price',
-  'average_price',
-  'purchase_value',
-  'current_value',
-  'day_change_abs',
-  'day_change_pct',
-  'gain_abs',
-  'gain_pct',
+  "name",
+  "current_holdings",
+  "last_price",
+  "average_price",
+  "purchase_value",
+  "current_value",
+  "day_change_abs",
+  "day_change_pct",
+  "gain_abs",
+  "gain_pct",
 ];
 
 function isPortfolioPositionsSortKey(
@@ -221,7 +231,7 @@ function isPortfolioPositionsSortKey(
 function isPortfolioSortDirection(
   value: string | null | undefined,
 ): value is PortfolioSortDirection {
-  return value === 'asc' || value === 'desc';
+  return value === "asc" || value === "desc";
 }
 
 type ToggleContainerElement = HTMLElement & {
@@ -240,15 +250,19 @@ type SortableTableElement = HTMLTableElement & {
   __ppReaderOverviewSortingBound?: boolean;
 };
 
-type OverviewBadgeList = AccountOverviewRow['badges'];
+type OverviewBadgeList = AccountOverviewRow["badges"];
 
-function withoutCoverageBadges(badges: OverviewBadgeList | undefined): OverviewBadgeList {
-  return (badges ?? []).filter((badge) => !badge.key.endsWith('-coverage'));
+function withoutCoverageBadges(
+  badges: OverviewBadgeList | undefined,
+): OverviewBadgeList {
+  return (badges ?? []).filter((badge) => !badge.key.endsWith("-coverage"));
 }
 
-function stripAccountBadges(badges: OverviewBadgeList | undefined): OverviewBadgeList {
+function stripAccountBadges(
+  badges: OverviewBadgeList | undefined,
+): OverviewBadgeList {
   return withoutCoverageBadges(badges).filter(
-    (badge) => !badge.key.startsWith('provenance-'),
+    (badge) => !badge.key.startsWith("provenance-"),
   );
 }
 
@@ -265,11 +279,11 @@ function toNullableNumber(value: unknown): number | null {
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function normalizeCurrencyCode(value: unknown): string | null {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
   const trimmed = value.trim();
@@ -280,8 +294,8 @@ function normalizeCurrencyCode(value: unknown): string | null {
   if (/^[A-Z]{3}$/.test(upper)) {
     return upper;
   }
-  if (upper === '€') {
-    return 'EUR';
+  if (upper === "€") {
+    return "EUR";
   }
   return null;
 }
@@ -308,38 +322,44 @@ function formatPriceWithCurrency(
     return null;
   }
 
-  const formatted = value.toLocaleString('de-DE', {
+  const formatted = value.toLocaleString("de-DE", {
     minimumFractionDigits: PRICE_FRACTION_DIGITS.min,
     maximumFractionDigits: PRICE_FRACTION_DIGITS.max,
   });
-  return `${formatted}${currency ? `\u00A0${escapeHtml(currency)}` : ''}`;
+  return `${formatted}${currency ? `\u00A0${escapeHtml(currency)}` : ""}`;
 }
 
-function buildPurchasePriceDisplay(
-  position: PortfolioPositionRecord,
-): { markup: string; sortValue: number; ariaLabel: string } {
+function buildPurchasePriceDisplay(position: PortfolioPositionRecord): {
+  markup: string;
+  sortValue: number;
+  ariaLabel: string;
+} {
   const record = position as Record<string, unknown>;
   const averageCost = position.average_cost ?? null;
   const aggregation = position.aggregation ?? null;
 
-  const securityCurrency = resolveCurrencyFromPosition(record, [
-    'security_currency_code',
-    'security_currency',
-    'native_currency_code',
-    'native_currency',
-  ], position.currency_code ?? null);
+  const securityCurrency = resolveCurrencyFromPosition(
+    record,
+    [
+      "security_currency_code",
+      "security_currency",
+      "native_currency_code",
+      "native_currency",
+    ],
+    position.currency_code ?? null,
+  );
 
   const accountCurrency =
     resolveCurrencyFromPosition(
       record,
       [
-        'account_currency_code',
-        'account_currency',
-        'purchase_currency_code',
-        'currency_code',
+        "account_currency_code",
+        "account_currency",
+        "purchase_currency_code",
+        "currency_code",
       ],
-      securityCurrency === 'EUR' ? 'EUR' : null,
-    ) ?? 'EUR';
+      securityCurrency === "EUR" ? "EUR" : null,
+    ) ?? "EUR";
 
   const averageNative = toNullableNumber(averageCost?.native);
   const averageSecurity = toNullableNumber(averageCost?.security);
@@ -347,9 +367,10 @@ function buildPurchasePriceDisplay(
   const averageEur = toNullableNumber(averageCost?.eur);
 
   const nativeAverage = averageSecurity ?? averageNative;
-  const eurAverage = averageEur ?? (accountCurrency === 'EUR' ? averageAccount : null);
+  const eurAverage =
+    averageEur ?? (accountCurrency === "EUR" ? averageAccount : null);
   const resolvedSecurityCurrency = securityCurrency ?? accountCurrency;
-  const isEurSecurity = resolvedSecurityCurrency === 'EUR';
+  const isEurSecurity = resolvedSecurityCurrency === "EUR";
 
   let primaryCurrency: string | null;
   let primaryValue: number | null;
@@ -362,21 +383,20 @@ function buildPurchasePriceDisplay(
       primaryCurrency = accountCurrency;
       primaryValue = averageAccount;
     } else {
-      primaryCurrency = 'EUR';
+      primaryCurrency = "EUR";
       primaryValue = eurAverage ?? null;
     }
   } else {
-    primaryCurrency = 'EUR';
+    primaryCurrency = "EUR";
     primaryValue = eurAverage ?? nativeAverage ?? averageAccount ?? null;
   }
 
   const primaryText = formatPriceWithCurrency(primaryValue, primaryCurrency);
   const formattedEur = !isEurSecurity
-    ? formatPriceWithCurrency(eurAverage, 'EUR')
+    ? formatPriceWithCurrency(eurAverage, "EUR")
     : null;
 
-  const shouldRenderAccount =
-    !!formattedEur && formattedEur !== primaryText;
+  const shouldRenderAccount = !!formattedEur && formattedEur !== primaryText;
 
   const parts: string[] = [];
   const ariaParts: string[] = [];
@@ -385,35 +405,37 @@ function buildPurchasePriceDisplay(
     parts.push(
       `<span class="purchase-price purchase-price--primary">${primaryText}</span>`,
     );
-    ariaParts.push(primaryText.replace(/\u00A0/g, ' '));
+    ariaParts.push(primaryText.replace(/\u00A0/g, " "));
   } else {
     const missing =
       '<span class="missing-value" role="note" aria-label="Kein Kaufpreis verfügbar" title="Kein Kaufpreis verfügbar">—</span>';
     parts.push(missing);
-    ariaParts.push('Kein Kaufpreis verfügbar');
+    ariaParts.push("Kein Kaufpreis verfügbar");
   }
 
   if (shouldRenderAccount && formattedEur) {
     parts.push(
       `<span class="purchase-price purchase-price--secondary">${formattedEur}</span>`,
     );
-    ariaParts.push(formattedEur.replace(/\u00A0/g, ' '));
+    ariaParts.push(formattedEur.replace(/\u00A0/g, " "));
   }
 
-  const markup = parts.join('<br>');
+  const markup = parts.join("<br>");
   const sortValue = toNullableNumber(aggregation?.purchase_value_eur) ?? 0;
-  const ariaLabel = ariaParts.join(', ');
+  const ariaLabel = ariaParts.join(", ");
 
   return { markup, sortValue, ariaLabel };
 }
 
-function buildLastPriceDisplay(
-  position: PortfolioPositionRecord,
-): { markup: string; sortValue: number; ariaLabel: string } {
+function buildLastPriceDisplay(position: PortfolioPositionRecord): {
+  markup: string;
+  sortValue: number;
+  ariaLabel: string;
+} {
   const nativePrice = toNullableNumber(position.last_price_native);
   const eurPrice = toNullableNumber(position.last_price_eur);
-  const currency = position.currency_code ?? 'EUR';
-  const isEur = currency === 'EUR';
+  const currency = position.currency_code ?? "EUR";
+  const isEur = currency === "EUR";
 
   const parts: string[] = [];
   const ariaParts: string[] = [];
@@ -427,10 +449,10 @@ function buildLastPriceDisplay(
     sortValue = val ?? 0;
 
     if (val != null) {
-      const formatted = formatPriceWithCurrency(val, 'EUR');
+      const formatted = formatPriceWithCurrency(val, "EUR");
       if (formatted) {
         parts.push(`<span class="val-top">${formatted}</span>`);
-        ariaParts.push(formatted.replace(/\u00A0/g, ' '));
+        ariaParts.push(formatted.replace(/\u00A0/g, " "));
       }
     }
   } else {
@@ -442,29 +464,29 @@ function buildLastPriceDisplay(
       const formattedNative = formatPriceWithCurrency(nativePrice, currency);
       if (formattedNative) {
         parts.push(`<span class="val-top">${formattedNative}</span>`);
-        ariaParts.push(formattedNative.replace(/\u00A0/g, ' '));
+        ariaParts.push(formattedNative.replace(/\u00A0/g, " "));
       }
     }
 
     // Line 2: EUR Price
     if (eurPrice != null) {
-      const formattedEur = formatPriceWithCurrency(eurPrice, 'EUR');
+      const formattedEur = formatPriceWithCurrency(eurPrice, "EUR");
       if (formattedEur) {
         parts.push(`<span class="val-bottom">${formattedEur}</span>`);
-        ariaParts.push(formattedEur.replace(/\u00A0/g, ' '));
+        ariaParts.push(formattedEur.replace(/\u00A0/g, " "));
       }
     }
   }
 
   if (parts.length === 0) {
     parts.push('<span class="missing-value">—</span>');
-    ariaParts.push('Kein aktueller Kurs');
+    ariaParts.push("Kein aktueller Kurs");
   }
 
   return {
-    markup: `<div class="cell-stack">${parts.join('')}</div>`,
+    markup: `<div class="cell-stack">${parts.join("")}</div>`,
     sortValue, // Using EUR value for consistent sorting across different currencies
-    ariaLabel: ariaParts.join(', '),
+    ariaLabel: ariaParts.join(", "),
   };
 }
 
@@ -472,16 +494,24 @@ export const __TEST_ONLY__ = {
   buildPurchasePriceDisplayForTest: buildPurchasePriceDisplay,
   buildLastPriceDisplayForTest: buildLastPriceDisplay,
   attachPortfolioOverviewSorting,
+  buildExpandablePortfolioTableForTest: buildExpandablePortfolioTable,
 };
 
-function computePositionDayChange(position: PortfolioPositionRecord): { value: number | null; pct: number | null } {
+function computePositionDayChange(position: PortfolioPositionRecord): {
+  value: number | null;
+  pct: number | null;
+} {
   const holdings = toFiniteCurrency(position.current_holdings);
   if (holdings == null) {
     return { value: null, pct: null };
   }
 
-  const lastPriceEur = toFiniteCurrency((position as { last_price_eur?: unknown }).last_price_eur);
-  const lastCloseEur = toFiniteCurrency((position as { last_close_eur?: unknown }).last_close_eur);
+  const lastPriceEur = toFiniteCurrency(
+    (position as { last_price_eur?: unknown }).last_price_eur,
+  );
+  const lastCloseEur = toFiniteCurrency(
+    (position as { last_close_eur?: unknown }).last_close_eur,
+  );
 
   let dayChangeValue: number | null = null;
   let dayChangePct: number | null = null;
@@ -521,25 +551,31 @@ function computePositionDayChange(position: PortfolioPositionRecord): { value: n
       ? Math.round(dayChangeValue * 100) / 100
       : null;
   const roundedPct =
-    dayChangePct != null && Number.isFinite(dayChangePct) ? Math.round(dayChangePct * 100) / 100 : null;
+    dayChangePct != null && Number.isFinite(dayChangePct)
+      ? Math.round(dayChangePct * 100) / 100
+      : null;
 
   return { value: roundedValue, pct: roundedPct };
 }
 
 // Global cache exports have been removed; cache interactions now flow through
 // the shared data/positionsCache module.
-const expandedPortfolios = new Set<string>();           // gemerkte geöffnete Depots (persistiert über Re-Renders)
+const expandedPortfolios = new Set<string>(); // gemerkte geöffnete Depots (persistiert über Re-Renders)
 
 // ENTFERNT: Globaler document-Listener (Section 6 Hardening)
 // Stattdessen scoped Listener über attachPortfolioToggleHandler(root)
 
 // Rendert die Positions-Tabelle für ein Depot
-function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): void {
+function applyGainPctMetadata(
+  tableEl: HTMLTableElement | null | undefined,
+): void {
   if (!tableEl) {
     return;
   }
-  const bodyRows = Array.from(tableEl.querySelectorAll<HTMLTableRowElement>('tbody tr'));
-  bodyRows.forEach(row => {
+  const bodyRows = Array.from(
+    tableEl.querySelectorAll<HTMLTableRowElement>("tbody tr"),
+  );
+  bodyRows.forEach((row) => {
     const gainAbsCell = row.cells.item(7);
     const gainPctCell = row.cells.item(8);
     if (!gainAbsCell || !gainPctCell) {
@@ -548,20 +584,24 @@ function applyGainPctMetadata(tableEl: HTMLTableElement | null | undefined): voi
     if (gainAbsCell.dataset.gainPct && gainAbsCell.dataset.gainSign) {
       return;
     }
-    const pctText = (gainPctCell.textContent || '').trim() || '—';
-    let pctSign: 'positive' | 'negative' | 'neutral' = 'neutral';
-    if (gainPctCell.querySelector('.positive')) {
-      pctSign = 'positive';
-    } else if (gainPctCell.querySelector('.negative')) {
-      pctSign = 'negative';
+    const pctText = (gainPctCell.textContent || "").trim() || "—";
+    let pctSign: "positive" | "negative" | "neutral" = "neutral";
+    if (gainPctCell.querySelector(".positive")) {
+      pctSign = "positive";
+    } else if (gainPctCell.querySelector(".negative")) {
+      pctSign = "negative";
     }
     gainAbsCell.dataset.gainPct = pctText;
     gainAbsCell.dataset.gainSign = pctSign;
   });
 }
 
-function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): string {
-  const activePositions = positions.filter((p) => Number(p.current_holdings) > 0);
+function renderPositionsTable(
+  positions: readonly PortfolioPositionRecord[],
+): string {
+  const activePositions = positions.filter(
+    (p) => Number(p.current_holdings) > 0,
+  );
 
   if (activePositions.length === 0) {
     const emptyState = `
@@ -582,64 +622,71 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
   let totalDayChangeAbs = 0;
   let totalGainAbs = 0;
 
-
   const rows = activePositions.map((p) => {
     const performance = normalizePerformancePayload(p.performance);
-    const gainAbs = typeof performance?.gain_abs === 'number' ? performance.gain_abs : 0;
-    const gainPct = typeof performance?.gain_pct === 'number' ? performance.gain_pct : 0;
+    const gainAbs =
+      typeof performance?.gain_abs === "number" ? performance.gain_abs : 0;
+    const gainPct =
+      typeof performance?.gain_pct === "number" ? performance.gain_pct : 0;
     const dayChange = computePositionDayChange(p);
     const dayChangeAbs = dayChange.value ?? 0;
     const dayChangePct = dayChange.pct ?? 0;
 
-    const purchaseVal = typeof p.purchase_value === 'number' ? p.purchase_value : 0;
-    const currentVal = typeof p.current_value === 'number' ? p.current_value : 0;
+    const purchaseVal =
+      typeof p.purchase_value === "number" ? p.purchase_value : 0;
+    const currentVal =
+      typeof p.current_value === "number" ? p.current_value : 0;
 
-    if (typeof p.purchase_value === 'number') {
+    if (typeof p.purchase_value === "number") {
       totalPurchase += purchaseVal;
     }
-    if (typeof p.current_value === 'number') {
+    if (typeof p.current_value === "number") {
       totalCurrent += currentVal;
     }
     if (dayChange.value != null) totalDayChangeAbs += dayChangeAbs;
-    if (typeof performance?.gain_abs === 'number') totalGainAbs += gainAbs;
+    if (typeof performance?.gain_abs === "number") totalGainAbs += gainAbs;
 
     // Build stacked cells
     const valueCombo = stack(
       purchaseVal,
       formatCurrency(purchaseVal),
       currentVal,
-      formatCurrency(currentVal)
+      formatCurrency(currentVal),
     );
 
     const dayCombo = stack(
       dayChangeAbs,
       renderTrend(dayChangeAbs, formatCurrency(dayChangeAbs)),
       dayChangePct,
-      renderTrend(dayChangePct, formatPercent(dayChangePct / 100))
+      renderTrend(dayChangePct, formatPercent(dayChangePct / 100)),
     );
 
     const gainCombo = stack(
       gainAbs,
       renderTrend(gainAbs, formatCurrency(gainAbs)),
       gainPct,
-      renderTrend(gainPct, formatPercent(gainPct / 100))
+      renderTrend(gainPct, formatPercent(gainPct / 100)),
     );
 
     // Reuse buildPurchasePriceDisplay to get the complex average price display
-    const { markup: avgPriceMarkup, sortValue: avgPriceSortVal } = buildPurchasePriceDisplay(p);
+    const { markup: avgPriceMarkup, sortValue: avgPriceSortVal } =
+      buildPurchasePriceDisplay(p);
 
     // Build Last Price display
-    const { markup: lastPriceMarkup, sortValue: lastPriceSortVal } = buildLastPriceDisplay(p);
+    const { markup: lastPriceMarkup, sortValue: lastPriceSortVal } =
+      buildLastPriceDisplay(p);
 
     const row: Record<string, unknown> = {
-      _uuid: typeof p.security_uuid === 'string' ? p.security_uuid : '',
-      name: typeof p.name === 'string'
-        ? escapeHtml(p.name)
-        : typeof p.name === 'number'
-          ? String(p.name)
-          : '',
+      _uuid: typeof p.security_uuid === "string" ? p.security_uuid : "",
+      name:
+        typeof p.name === "string"
+          ? escapeHtml(p.name)
+          : typeof p.name === "number"
+            ? String(p.name)
+            : "",
       current_holdings:
-        typeof p.current_holdings === 'number' || typeof p.current_holdings === 'string'
+        typeof p.current_holdings === "number" ||
+        typeof p.current_holdings === "string"
           ? p.current_holdings
           : null,
       last_price: `<span data-sort-value="${String(lastPriceSortVal)}">${lastPriceMarkup}</span>`,
@@ -654,113 +701,146 @@ function renderPositionsTable(positions: readonly PortfolioPositionRecord[]): st
   });
 
   // Calculate Footer Aggregates
-  const totalDayChangePct = (totalCurrent - totalDayChangeAbs !== 0)
-    ? (totalDayChangeAbs / (totalCurrent - totalDayChangeAbs)) * 100
-    : 0;
+  const totalDayChangePct =
+    totalCurrent - totalDayChangeAbs !== 0
+      ? (totalDayChangeAbs / (totalCurrent - totalDayChangeAbs)) * 100
+      : 0;
 
-  const totalGainPct = (totalPurchase !== 0)
-    ? (totalGainAbs / totalPurchase) * 100
-    : 0;
+  const totalGainPct =
+    totalPurchase !== 0 ? (totalGainAbs / totalPurchase) * 100 : 0;
 
   const footerValues = {
-    name: 'Summe',
-    current_holdings: '',
-    last_price: '',
-    average_price: '',
+    name: "Summe",
+    current_holdings: "",
+    last_price: "",
+    average_price: "",
     value_combo: stack(
       totalPurchase,
       formatCurrency(totalPurchase),
       totalCurrent,
-      formatCurrency(totalCurrent)
+      formatCurrency(totalCurrent),
     ),
     day_combo: stack(
       totalDayChangeAbs,
       renderTrend(totalDayChangeAbs, formatCurrency(totalDayChangeAbs)),
       totalDayChangePct,
-      renderTrend(totalDayChangePct, formatPercent(totalDayChangePct / 100))
+      renderTrend(totalDayChangePct, formatPercent(totalDayChangePct / 100)),
     ),
     gain_combo: stack(
       totalGainAbs,
       renderTrend(totalGainAbs, formatCurrency(totalGainAbs)),
       totalGainPct,
-      renderTrend(totalGainPct, formatPercent(totalGainPct / 100))
-    )
+      renderTrend(totalGainPct, formatPercent(totalGainPct / 100)),
+    ),
   };
 
   // Define Columns
   const cols = [
-    { key: 'name', label: createSimpleSortHeader('Wertpapier', 'name') },
-    { key: 'current_holdings', label: createSimpleSortHeader('Bestand', 'current_holdings'), align: 'right' as const },
-    { key: 'last_price', label: createSimpleSortHeader('Letzter Kurs', 'last_price'), align: 'right' as const },
-    { key: 'average_price', label: createSimpleSortHeader('Ø Kaufpreis', 'average_price'), align: 'right' as const },
+    { key: "name", label: createSimpleSortHeader("Wertpapier", "name") },
+    {
+      key: "current_holdings",
+      label: createSimpleSortHeader("Bestand", "current_holdings"),
+      align: "right" as const,
+    },
+    {
+      key: "last_price",
+      label: createSimpleSortHeader("Letzter Kurs", "last_price"),
+      align: "right" as const,
+    },
+    {
+      key: "average_price",
+      label: createSimpleSortHeader("Ø Kaufpreis", "average_price"),
+      align: "right" as const,
+    },
 
     // Stacked Columns
     {
-      key: 'value_combo',
-      label: createSortHeader('Kaufwert', 'purchase_value', 'Aktueller Wert', 'current_value'),
-      align: 'right' as const
+      key: "value_combo",
+      label: createSortHeader(
+        "Kaufwert",
+        "purchase_value",
+        "Aktueller Wert",
+        "current_value",
+      ),
+      align: "right" as const,
     },
     {
-      key: 'day_combo',
-      label: createSortHeader('Heute +/-', 'day_change_abs', 'Heute %', 'day_change_pct'),
-      align: 'right' as const
+      key: "day_combo",
+      label: createSortHeader(
+        "Heute +/-",
+        "day_change_abs",
+        "Heute %",
+        "day_change_pct",
+      ),
+      align: "right" as const,
     },
     {
-      key: 'gain_combo',
-      label: createSortHeader('Gesamt +/-', 'gain_abs', 'Gesamt %', 'gain_pct'),
-      align: 'right' as const
-    }
+      key: "gain_combo",
+      label: createSortHeader("Gesamt +/-", "gain_abs", "Gesamt %", "gain_pct"),
+      align: "right" as const,
+    },
   ];
 
-  return STYLES + makeTable(rows, cols, ['sortable-positions'], {
-    sortable: false,
-    footerValues,
-    rowAttributes: (row: Record<string, unknown>) => {
-      const uuid = row._uuid as string;
-      const attrs: Record<string, string> = { class: 'position-row' };
-      if (uuid) attrs['data-security'] = uuid;
-      return attrs;
-    }
-  }).replace('<table', '<table class="sortable-positions"');
+  return (
+    STYLES +
+    makeTable(rows, cols, ["sortable-positions"], {
+      sortable: false,
+      footerValues,
+      rowAttributes: (row: Record<string, unknown>) => {
+        const uuid = row._uuid as string;
+        const attrs: Record<string, string> = { class: "position-row" };
+        if (uuid) attrs["data-security"] = uuid;
+        return attrs;
+      },
+    }).replace("<table", '<table class="sortable-positions"')
+  );
 }
 
 // NEU: Export / Global bereitstellen für Push-Handler (Konsistenz Push vs Lazy)
 export function renderPortfolioPositions(
-  positions: readonly (PortfolioPositionRecord | Record<string, unknown>)[] | null | undefined,
+  positions:
+    | readonly (PortfolioPositionRecord | Record<string, unknown>)[]
+    | null
+    | undefined,
 ): string {
   const normalized = normalizePositionRecords(positions ?? []);
   return renderPositionsTable(normalized);
 }
 
-function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid: string): void {
+function attachSecurityDetailDelegation(
+  root: PortfolioQueryRoot,
+  portfolioUuid: string,
+): void {
   if (!portfolioUuid) return;
   const detailsRow = root.querySelector<HTMLTableRowElement>(
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
   );
   if (!detailsRow) return;
-  const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+  const container = detailsRow.querySelector<ToggleContainerElement>(
+    ".positions-container",
+  );
   if (!container) return;
   if (container.__ppReaderSecurityClickBound) return;
 
   container.__ppReaderSecurityClickBound = true;
 
-  container.addEventListener('click', (event: MouseEvent) => {
+  container.addEventListener("click", (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
     }
 
-    const interactive = target.closest('button, a');
+    const interactive = target.closest("button, a");
     if (interactive && container.contains(interactive)) {
       return;
     }
 
-    const row = target.closest<HTMLTableRowElement>('tr[data-security]');
+    const row = target.closest<HTMLTableRowElement>("tr[data-security]");
     if (!row || !container.contains(row)) {
       return;
     }
 
-    const securityUuid = row.getAttribute('data-security');
+    const securityUuid = row.getAttribute("data-security");
     if (!securityUuid) {
       return;
     }
@@ -768,90 +848,168 @@ function attachSecurityDetailDelegation(root: PortfolioQueryRoot, portfolioUuid:
     try {
       const opened = openSecurityDetail(securityUuid);
       if (!opened) {
-        console.warn('attachSecurityDetailDelegation: Detail-Tab konnte nicht geöffnet werden für', securityUuid);
+        console.warn(
+          "attachSecurityDetailDelegation: Detail-Tab konnte nicht geöffnet werden für",
+          securityUuid,
+        );
       }
     } catch (err) {
-      console.error('attachSecurityDetailDelegation: Fehler beim Öffnen des Detail-Tabs', err);
+      console.error(
+        "attachSecurityDetailDelegation: Fehler beim Öffnen des Detail-Tabs",
+        err,
+      );
     }
   });
 }
 
-export function attachSecurityDetailListener(root: PortfolioQueryRoot, portfolioUuid: string): void {
+export function attachSecurityDetailListener(
+  root: PortfolioQueryRoot,
+  portfolioUuid: string,
+): void {
   attachSecurityDetailDelegation(root, portfolioUuid);
 }
 
 // (1) Entferne evtl. doppelte frühere Definitionen von buildExpandablePortfolioTable – nur diese Version behalten
-function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]): string {
-  console.debug('buildExpandablePortfolioTable: render', depots.length, 'portfolios');
+function buildExpandablePortfolioTable(
+  depots: readonly PortfolioOverviewRow[],
+): string {
+  console.debug(
+    "buildExpandablePortfolioTable: render",
+    depots.length,
+    "portfolios",
+  );
+
+  if (depots.length === 0) {
+    return `
+      <div class="empty-state">
+        <svg class="empty-state__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+        </svg>
+        <p class="empty-state__title">Keine Depots gefunden</p>
+        <p class="empty-state__text">Bitte konfigurieren Sie Portfolio Performance in Home Assistant oder laden Sie eine Datei hoch.</p>
+      </div>
+    `;
+  }
+
   const escapeAttribute = (value: unknown): string => {
     if (value == null) {
-      return '';
+      return "";
     }
-    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-      return '';
+    if (
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    ) {
+      return "";
     }
     return escapeHtml(value);
   };
 
-  let html = '<table class="expandable-portfolio-table sortable-table"><thead><tr>';
+  let html =
+    '<table class="expandable-portfolio-table sortable-table"><thead><tr>';
   const cols = [
-    { key: 'name', label: createSimpleSortHeader('Name', 'name') },
-    { key: 'position_count', label: createSimpleSortHeader('Anzahl Positionen', 'position_count'), align: 'right' as const },
-    { key: 'value_combo', label: createSortHeader('Kaufwert', '.val-top', 'Aktueller Wert', '.val-bottom'), align: 'right' as const },
-    { key: 'day_combo', label: createSortHeader('Heute +/-', '.val-top', 'Heute %', '.val-bottom'), align: 'right' as const },
-    { key: 'gain_combo', label: createSortHeader('Gesamt +/-', '.val-top', 'Gesamt %', '.val-bottom'), align: 'right' as const }
+    { key: "name", label: createSimpleSortHeader("Name", "name") },
+    {
+      key: "position_count",
+      label: createSimpleSortHeader("Anzahl Positionen", "position_count"),
+      align: "right" as const,
+    },
+    {
+      key: "value_combo",
+      label: createSortHeader(
+        "Kaufwert",
+        ".val-top",
+        "Aktueller Wert",
+        ".val-bottom",
+      ),
+      align: "right" as const,
+    },
+    {
+      key: "day_combo",
+      label: createSortHeader(
+        "Heute +/-",
+        ".val-top",
+        "Heute %",
+        ".val-bottom",
+      ),
+      align: "right" as const,
+    },
+    {
+      key: "gain_combo",
+      label: createSortHeader(
+        "Gesamt +/-",
+        ".val-top",
+        "Gesamt %",
+        ".val-bottom",
+      ),
+      align: "right" as const,
+    },
   ];
-  cols.forEach(c => {
-    const align = c.align === 'right' ? ' class="align-right"' : '';
+  cols.forEach((c) => {
+    const align = c.align === "right" ? ' class="align-right"' : "";
     html += `<th${align}>${c.label}</th>`;
   });
-  html += '</tr></thead><tbody>';
+  html += "</tr></thead><tbody>";
 
-  depots.forEach(d => {
-    const positionCount = Number.isFinite(d.position_count) ? d.position_count : 0;
+  depots.forEach((d) => {
+    const positionCount = Number.isFinite(d.position_count)
+      ? d.position_count
+      : 0;
     const purchaseSum = Number.isFinite(d.purchase_sum) ? d.purchase_sum : 0;
     const currentValue =
-      d.hasValue && typeof d.current_value === 'number' && Number.isFinite(d.current_value)
+      d.hasValue &&
+      typeof d.current_value === "number" &&
+      Number.isFinite(d.current_value)
         ? d.current_value
         : null;
     const hasValue = currentValue !== null;
     const performance = d.performance;
     const gainAbs =
-      typeof d.gain_abs === 'number'
+      typeof d.gain_abs === "number"
         ? d.gain_abs
-        : typeof performance?.gain_abs === 'number'
+        : typeof performance?.gain_abs === "number"
           ? performance.gain_abs
           : null;
     const gainPct =
-      typeof d.gain_pct === 'number'
+      typeof d.gain_pct === "number"
         ? d.gain_pct
-        : typeof performance?.gain_pct === 'number'
+        : typeof performance?.gain_pct === "number"
           ? performance.gain_pct
           : null;
     const dayChangePayload =
-      performance && typeof performance === 'object'
+      performance && typeof performance === "object"
         ? (performance as Record<string, unknown>).day_change
         : null;
     const dayChangeAbs =
-      typeof d.day_change_abs === 'number'
+      typeof d.day_change_abs === "number"
         ? d.day_change_abs
-        : dayChangePayload && typeof dayChangePayload === 'object'
-          ? ((dayChangePayload as Record<string, unknown>).value_change_eur as number | null ??
-            (dayChangePayload as Record<string, unknown>).price_change_eur as number | null)
+        : dayChangePayload && typeof dayChangePayload === "object"
+          ? (((dayChangePayload as Record<string, unknown>).value_change_eur as
+              | number
+              | null) ??
+            ((dayChangePayload as Record<string, unknown>).price_change_eur as
+              | number
+              | null))
           : null;
     const dayChangePct =
-      typeof d.day_change_pct === 'number'
+      typeof d.day_change_pct === "number"
         ? d.day_change_pct
-        : dayChangePayload && typeof dayChangePayload === 'object' && typeof (dayChangePayload as Record<string, unknown>).change_pct === 'number'
-          ? (dayChangePayload as Record<string, unknown>).change_pct as number
+        : dayChangePayload &&
+            typeof dayChangePayload === "object" &&
+            typeof (dayChangePayload as Record<string, unknown>).change_pct ===
+              "number"
+          ? ((dayChangePayload as Record<string, unknown>).change_pct as number)
           : null;
     const partialValue = d.fx_unavailable && hasValue;
-    const datasetProvenance = typeof d.provenance === 'string' ? d.provenance : '';
+    const datasetProvenance =
+      typeof d.provenance === "string" ? d.provenance : "";
     const datasetMetricRunUuid =
-      typeof d.metric_run_uuid === 'string' ? d.metric_run_uuid : '';
+      typeof d.metric_run_uuid === "string" ? d.metric_run_uuid : "";
 
     const expanded = expandedPortfolios.has(d.uuid);
-    const toggleClass = expanded ? 'portfolio-toggle expanded' : 'portfolio-toggle';
+    const toggleClass = expanded
+      ? "portfolio-toggle expanded"
+      : "portfolio-toggle";
     const detailId = `portfolio-details-${d.uuid}`;
 
     // Stacked Cells
@@ -859,32 +1017,43 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
       purchaseSum,
       formatCurrency(purchaseSum),
       currentValue ?? 0,
-      currentValue != null ? formatCurrency(currentValue) : '—'
+      currentValue != null ? formatCurrency(currentValue) : "—",
     );
 
     const dayCombo = stack(
       dayChangeAbs ?? 0,
-      dayChangeAbs != null ? renderTrend(dayChangeAbs, formatCurrency(dayChangeAbs)) : '—',
+      dayChangeAbs != null
+        ? renderTrend(dayChangeAbs, formatCurrency(dayChangeAbs))
+        : "—",
       dayChangePct ?? 0,
-      dayChangePct != null ? renderTrend(dayChangePct, formatPercent(dayChangePct / 100)) : '—'
+      dayChangePct != null
+        ? renderTrend(dayChangePct, formatPercent(dayChangePct / 100))
+        : "—",
     );
 
     const gainCombo = stack(
       gainAbs ?? 0,
-      gainAbs != null ? renderTrend(gainAbs, formatCurrency(gainAbs)) : '—',
+      gainAbs != null ? renderTrend(gainAbs, formatCurrency(gainAbs)) : "—",
       gainPct ?? 0,
-      gainPct != null ? renderTrend(gainPct, formatPercent(gainPct / 100)) : '—'
+      gainPct != null
+        ? renderTrend(gainPct, formatPercent(gainPct / 100))
+        : "—",
     );
 
     // Dataset values for sorting (using simple properties, logic maps later)
-    const datasetCurrentValue = hasValue && typeof currentValue === 'number' ? currentValue : '';
-    const datasetGainAbs = hasValue && typeof gainAbs === 'number' ? gainAbs : '';
-    const datasetGainPct = hasValue && typeof gainPct === 'number' ? gainPct : '';
-    const datasetDayChangeAbs = hasValue && typeof dayChangeAbs === 'number' ? dayChangeAbs : '';
-    const datasetDayChangePct = hasValue && typeof dayChangePct === 'number' ? dayChangePct : '';
+    const datasetCurrentValue =
+      hasValue && typeof currentValue === "number" ? currentValue : "";
+    const datasetGainAbs =
+      hasValue && typeof gainAbs === "number" ? gainAbs : "";
+    const datasetGainPct =
+      hasValue && typeof gainPct === "number" ? gainPct : "";
+    const datasetDayChangeAbs =
+      hasValue && typeof dayChangeAbs === "number" ? dayChangeAbs : "";
+    const datasetDayChangePct =
+      hasValue && typeof dayChangePct === "number" ? dayChangePct : "";
     const positionCountAttr = String(positionCount);
 
-    let rowAttributes = '';
+    let rowAttributes = "";
     if (d.fx_unavailable) rowAttributes += ' data-fx-unavailable="true"';
     if (partialValue) rowAttributes += ' data-partial="true"';
 
@@ -897,74 +1066,88 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
                   data-day-change-pct="${escapeAttribute(datasetDayChangePct)}"
                   data-gain-abs="${escapeAttribute(datasetGainAbs)}"
                 data-gain-pct="${escapeAttribute(datasetGainPct)}"
-                data-has-value="${hasValue ? 'true' : 'false'}"
+                data-has-value="${hasValue ? "true" : "false"}"
                 data-provenance="${escapeAttribute(datasetProvenance)}"
                 data-metric-run-uuid="${escapeAttribute(datasetMetricRunUuid)}"
                 ${rowAttributes}>`;
     const safeName = escapeHtml(d.name);
     const badgeMarkup = renderBadgeList(withoutCoverageBadges(d.badges), {
-      containerClass: 'portfolio-badges',
+      containerClass: "portfolio-badges",
     });
     html += `<td>
         <button type="button"
                 class="${toggleClass}"
                 data-portfolio="${escapeAttribute(d.uuid)}"
-                aria-expanded="${expanded ? 'true' : 'false'}"
+                aria-expanded="${expanded ? "true" : "false"}"
                 aria-controls="${escapeAttribute(detailId)}">
-          <span class="caret" aria-hidden="true">${expanded ? '▼' : '▶'}</span>
+          <span class="caret" aria-hidden="true">${expanded ? "▼" : "▶"}</span>
           <span class="portfolio-name">${safeName}</span>${badgeMarkup}
         </button>
       </td>`;
-    const positionCountDisplay = positionCount.toLocaleString('de-DE');
+    const positionCountDisplay = positionCount.toLocaleString("de-DE");
     html += `<td class="align-right"><span data-val="${String(positionCount)}">${positionCountDisplay}</span></td>`;
     html += `<td class="align-right">${valueCombo}</td>`;
     html += `<td class="align-right">${dayCombo}</td>`;
     html += `<td class="align-right">${gainCombo}</td>`;
-    html += '</tr>';
+    html += "</tr>";
 
-    html += `<tr class="portfolio-details${expanded ? '' : ' hidden'}"
+    html += `<tr class="portfolio-details${expanded ? "" : " hidden"}"
                 data-portfolio="${escapeAttribute(d.uuid)}"
                 id="${escapeAttribute(detailId)}"
                 role="region"
                 aria-label="Positionen für ${d.name}">
       <td colspan="${cols.length.toString()}">
-        <div class="positions-container">${expanded
-        ? (hasPortfolioPositions(d.uuid)
-          ? renderPositionsTable(getPortfolioPositions(d.uuid))
-          : renderLoadingState('Lade Positionen...'))
-        : ''
-      }</div>
+        <div class="positions-container">${
+          expanded
+            ? hasPortfolioPositions(d.uuid)
+              ? renderPositionsTable(getPortfolioPositions(d.uuid))
+              : renderLoadingState("Lade Positionen...")
+            : ""
+        }</div>
       </td>
     </tr>`;
   });
 
-  const availableDepots = depots.filter(d => typeof d.current_value === 'number' && Number.isFinite(d.current_value));
-  const sumPositions = depots.reduce((a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0), 0);
+  const availableDepots = depots.filter(
+    (d) =>
+      typeof d.current_value === "number" && Number.isFinite(d.current_value),
+  );
+  const sumPositions = depots.reduce(
+    (a, d) => a + (Number.isFinite(d.position_count) ? d.position_count : 0),
+    0,
+  );
   const sumCurrent = availableDepots.reduce((a, d) => {
-    if (typeof d.current_value === 'number' && Number.isFinite(d.current_value)) {
+    if (
+      typeof d.current_value === "number" &&
+      Number.isFinite(d.current_value)
+    ) {
       return a + d.current_value;
     }
     return a;
   }, 0);
-  const sumPurchase = availableDepots.reduce((a, d) => a + (d.purchase_sum || 0), 0);
+  const sumPurchase = availableDepots.reduce(
+    (a, d) => a + (d.purchase_sum || 0),
+    0,
+  );
 
-  const dayChangeValues = availableDepots
-    .map(d => {
-      const perfDayChange = d.performance && typeof d.performance === 'object'
+  const dayChangeValues = availableDepots.map((d) => {
+    const perfDayChange =
+      d.performance && typeof d.performance === "object"
         ? (d.performance as Record<string, unknown>).day_change
         : null;
-      if (typeof d.day_change_abs === 'number') return d.day_change_abs;
-      if (perfDayChange && typeof perfDayChange === 'object') {
-        const vc = (perfDayChange as Record<string, unknown>).value_change_eur;
-        return typeof vc === 'number' ? vc : 0;
-      }
-      return 0;
-    });
+    if (typeof d.day_change_abs === "number") return d.day_change_abs;
+    if (perfDayChange && typeof perfDayChange === "object") {
+      const vc = (perfDayChange as Record<string, unknown>).value_change_eur;
+      return typeof vc === "number" ? vc : 0;
+    }
+    return 0;
+  });
 
   const sumDayChangeAbs = dayChangeValues.reduce((a, value) => a + value, 0);
   const sumGainAbs = availableDepots.reduce((a, d) => {
     // Logic for gain sum
-    if (typeof d.performance?.gain_abs === 'number') return a + d.performance.gain_abs;
+    if (typeof d.performance?.gain_abs === "number")
+      return a + d.performance.gain_abs;
     // fallback
     const cur = d.current_value as number;
     const pur = d.purchase_sum;
@@ -977,67 +1160,78 @@ function buildExpandablePortfolioTable(depots: readonly PortfolioOverviewRow[]):
   const sumDayChangePct =
     dayChangeHasValue && sumHasValue && sumCurrent !== 0
       ? (() => {
-        const previousClose = sumCurrent - sumDayChangeAbs;
-        if (!previousClose) return 0;
-        return (sumDayChangeAbs / previousClose) * 100;
-      })()
+          const previousClose = sumCurrent - sumDayChangeAbs;
+          if (!previousClose) return 0;
+          return (sumDayChangeAbs / previousClose) * 100;
+        })()
       : 0;
-  const sumGainPct = sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
+  const sumGainPct =
+    sumHasValue && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : 0;
 
   // Footer Row
   const footerValueCombo = stack(
     sumPurchase,
     formatCurrency(sumPurchase),
     sumCurrent,
-    formatCurrency(sumCurrent)
+    formatCurrency(sumCurrent),
   );
   const footerDayCombo = stack(
     sumDayChangeAbs,
     renderTrend(sumDayChangeAbs, formatCurrency(sumDayChangeAbs)),
     sumDayChangePct,
-    renderTrend(sumDayChangePct, formatPercent(sumDayChangePct / 100))
+    renderTrend(sumDayChangePct, formatPercent(sumDayChangePct / 100)),
   );
   const footerGainCombo = stack(
     sumGainAbs,
     renderTrend(sumGainAbs, formatCurrency(sumGainAbs)),
     sumGainPct,
-    renderTrend(sumGainPct, formatPercent(sumGainPct / 100))
+    renderTrend(sumGainPct, formatPercent(sumGainPct / 100)),
   );
 
   html += '<tr class="footer-row">';
-  html += '<td>Summe</td>';
-  html += `<td class="align-right">${sumPositions.toLocaleString('de-DE')}</td>`;
+  html += "<td>Summe</td>";
+  html += `<td class="align-right">${sumPositions.toLocaleString("de-DE")}</td>`;
   html += `<td class="align-right">${footerValueCombo}</td>`;
   html += `<td class="align-right">${footerDayCombo}</td>`;
   html += `<td class="align-right">${footerGainCombo}</td>`;
 
-  html += '</tr>';
-  html += '</tbody></table>';
+  html += "</tr>";
+  html += "</tbody></table>";
 
   return html;
 }
 
-
-function resolvePortfolioTable(target: Element | PortfolioQueryRoot | null | undefined): HTMLTableElement | null {
+function resolvePortfolioTable(
+  target: Element | PortfolioQueryRoot | null | undefined,
+): HTMLTableElement | null {
   if (target instanceof HTMLTableElement) {
     return target;
   }
-  if (target && 'querySelector' in target) {
-    const scoped = (target as ParentNode).querySelector<HTMLTableElement>('table.expandable-portfolio-table');
+  if (target && "querySelector" in target) {
+    const scoped = (target as ParentNode).querySelector<HTMLTableElement>(
+      "table.expandable-portfolio-table",
+    );
     if (scoped) {
       return scoped;
     }
-    const nested = (target as ParentNode).querySelector<HTMLTableElement>('.portfolio-table table');
+    const nested = (target as ParentNode).querySelector<HTMLTableElement>(
+      ".portfolio-table table",
+    );
     if (nested) {
       return nested;
     }
-    const generic = (target as ParentNode).querySelector<HTMLTableElement>('table');
+    const generic = (target as ParentNode).querySelector<HTMLTableElement>(
+      "table",
+    );
     if (generic) {
       return generic;
     }
   }
-  return document.querySelector<HTMLTableElement>('.portfolio-table table.expandable-portfolio-table') ||
-    document.querySelector<HTMLTableElement>('.portfolio-table table');
+  return (
+    document.querySelector<HTMLTableElement>(
+      ".portfolio-table table.expandable-portfolio-table",
+    ) || document.querySelector<HTMLTableElement>(".portfolio-table table")
+  );
 }
 
 function readDatasetNumber(value: string | undefined): number | null {
@@ -1048,7 +1242,9 @@ function readDatasetNumber(value: string | undefined): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoot | null | undefined): void {
+export function updatePortfolioFooterFromDom(
+  target: Element | PortfolioQueryRoot | null | undefined,
+): void {
   const table = resolvePortfolioTable(target);
   if (!table) {
     return;
@@ -1057,7 +1253,9 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   if (!tbody) {
     return;
   }
-  const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr.portfolio-row'));
+  const rows = Array.from(
+    tbody.querySelectorAll<HTMLTableRowElement>("tr.portfolio-row"),
+  );
   if (!rows.length) {
     return;
   }
@@ -1078,17 +1276,21 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
       sumPositions += posCount;
     }
 
-    if (row.dataset.fxUnavailable === 'true') {
+    if (row.dataset.fxUnavailable === "true") {
       fxUnavailable = true;
     }
 
     const hasValueAttr = row.dataset.hasValue;
-    const hasValue = !(hasValueAttr === 'false' || hasValueAttr === '0' || hasValueAttr === '' || hasValueAttr == null);
+    const hasValue = !(
+      hasValueAttr === "false" ||
+      hasValueAttr === "0" ||
+      hasValueAttr === "" ||
+      hasValueAttr == null
+    );
     if (!hasValue) {
       // Only if we expect a value but don't have it, we might mark incomplete.
       // But typically partial rows just skip accumulation.
-    }
-    else {
+    } else {
       hasValueRow = true;
     }
 
@@ -1112,20 +1314,21 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
   }
 
   const totalsComplete = hasValueRow && allRowsComplete;
-  const sumGainPct = totalsComplete && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
+  const sumGainPct =
+    totalsComplete && sumPurchase > 0 ? (sumGainAbs / sumPurchase) * 100 : null;
   const sumDayChangePct =
     hasDayChangeRow && totalsComplete && sumCurrent !== 0
       ? (() => {
-        const previousClose = sumCurrent - sumDayChange;
-        if (!previousClose) {
-          return null;
-        }
-        return (sumDayChange / previousClose) * 100;
-      })()
+          const previousClose = sumCurrent - sumDayChange;
+          if (!previousClose) {
+            return null;
+          }
+          return (sumDayChange / previousClose) * 100;
+        })()
       : null;
 
   // Ensure unique footer
-  const existingFooters = tbody.querySelectorAll('tr.footer-row');
+  const existingFooters = tbody.querySelectorAll("tr.footer-row");
   if (existingFooters.length > 1) {
     // Remove duplicates, keep first
     for (let i = 1; i < existingFooters.length; i++) {
@@ -1133,38 +1336,49 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     }
   }
 
-  let footer = existingFooters.length > 0 ? (existingFooters[0] as HTMLTableRowElement) : null;
+  let footer =
+    existingFooters.length > 0
+      ? (existingFooters[0] as HTMLTableRowElement)
+      : null;
 
   if (!footer) {
-    footer = document.createElement('tr');
-    footer.classList.add('footer-row');
+    footer = document.createElement("tr");
+    footer.classList.add("footer-row");
     tbody.appendChild(footer);
   }
 
-  const sumPositionsDisplay = Math.round(sumPositions).toLocaleString('de-DE');
+  const sumPositionsDisplay = Math.round(sumPositions).toLocaleString("de-DE");
 
   // Build Stacked Cells
   // Note: formatValue internally handles escaping somewhat, but here we use simple formatters + stack
 
   const footerValueCombo = stack(
     totalsComplete ? sumPurchase : 0,
-    totalsComplete ? formatCurrency(sumPurchase) : '—',
+    totalsComplete ? formatCurrency(sumPurchase) : "—",
     totalsComplete ? sumCurrent : 0,
-    totalsComplete ? formatCurrency(sumCurrent) : '—'
+    totalsComplete ? formatCurrency(sumCurrent) : "—",
   );
 
   const footerDayCombo = stack(
     hasDayChangeRow && totalsComplete ? sumDayChange : 0,
-    hasDayChangeRow && totalsComplete ? renderTrend(sumDayChange, formatCurrency(sumDayChange)) : '—',
-    hasDayChangeRow && totalsComplete && sumDayChangePct != null ? sumDayChangePct : 0,
-    hasDayChangeRow && totalsComplete && sumDayChangePct != null ? renderTrend(sumDayChangePct, formatPercent(sumDayChangePct / 100)) : '—'
+    hasDayChangeRow && totalsComplete
+      ? renderTrend(sumDayChange, formatCurrency(sumDayChange))
+      : "—",
+    hasDayChangeRow && totalsComplete && sumDayChangePct != null
+      ? sumDayChangePct
+      : 0,
+    hasDayChangeRow && totalsComplete && sumDayChangePct != null
+      ? renderTrend(sumDayChangePct, formatPercent(sumDayChangePct / 100))
+      : "—",
   );
 
   const footerGainCombo = stack(
     totalsComplete ? sumGainAbs : 0,
-    totalsComplete ? renderTrend(sumGainAbs, formatCurrency(sumGainAbs)) : '—',
+    totalsComplete ? renderTrend(sumGainAbs, formatCurrency(sumGainAbs)) : "—",
     totalsComplete && sumGainPct != null ? sumGainPct : 0,
-    totalsComplete && sumGainPct != null ? renderTrend(sumGainPct, formatPercent(sumGainPct / 100)) : '—'
+    totalsComplete && sumGainPct != null
+      ? renderTrend(sumGainPct, formatPercent(sumGainPct / 100))
+      : "—",
   );
 
   footer.innerHTML = `
@@ -1176,30 +1390,21 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
     `;
 
   footer.dataset.positionCount = String(Math.round(sumPositions));
-  footer.dataset.currentValue = totalsComplete ? String(sumCurrent) : '';
-  footer.dataset.purchaseSum = totalsComplete ? String(sumPurchase) : '';
-  footer.dataset.dayChange = totalsComplete && hasDayChangeRow ? String(sumDayChange) : '';
+  footer.dataset.currentValue = totalsComplete ? String(sumCurrent) : "";
+  footer.dataset.purchaseSum = totalsComplete ? String(sumPurchase) : "";
+  footer.dataset.dayChange =
+    totalsComplete && hasDayChangeRow ? String(sumDayChange) : "";
   footer.dataset.dayChangePct =
-    totalsComplete && hasDayChangeRow && typeof sumDayChangePct === 'number'
+    totalsComplete && hasDayChangeRow && typeof sumDayChangePct === "number"
       ? String(sumDayChangePct)
-      : '';
-  footer.dataset.gainAbs = totalsComplete ? String(sumGainAbs) : '';
-  footer.dataset.gainPct = totalsComplete && typeof sumGainPct === 'number' ? String(sumGainPct) : '';
-  footer.dataset.hasValue = totalsComplete ? 'true' : 'false';
-  footer.dataset.fxUnavailable = (fxUnavailable || !totalsComplete) ? 'true' : 'false';
+      : "";
+  footer.dataset.gainAbs = totalsComplete ? String(sumGainAbs) : "";
+  footer.dataset.gainPct =
+    totalsComplete && typeof sumGainPct === "number" ? String(sumGainPct) : "";
+  footer.dataset.hasValue = totalsComplete ? "true" : "false";
+  footer.dataset.fxUnavailable =
+    fxUnavailable || !totalsComplete ? "true" : "false";
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 /**
  * Utility-Funktionen zum Auslesen und Wiederherstellen des Expand-States.
@@ -1209,20 +1414,24 @@ export function updatePortfolioFooterFromDom(target: Element | PortfolioQueryRoo
 export function getExpandedPortfolios(): string[] {
   // Primär DOM lesen (falls Tabelle gerendert), Fallback: interner Set
   const domRows = Array.from(
-    document.querySelectorAll<HTMLTableRowElement>('.portfolio-details:not(.hidden)[data-portfolio]'),
+    document.querySelectorAll<HTMLTableRowElement>(
+      ".portfolio-details:not(.hidden)[data-portfolio]",
+    ),
   );
   if (domRows.length) {
     return domRows
-      .map((row) => row.getAttribute('data-portfolio'))
+      .map((row) => row.getAttribute("data-portfolio"))
       .filter((value): value is string => Boolean(value));
   }
   return Array.from(expandedPortfolios.values());
 }
 
-export function setExpandedPortfolios(portfolioIds: Array<string | null | undefined> | null | undefined): void {
+export function setExpandedPortfolios(
+  portfolioIds: Array<string | null | undefined> | null | undefined,
+): void {
   expandedPortfolios.clear();
   if (Array.isArray(portfolioIds)) {
-    portfolioIds.forEach(id => {
+    portfolioIds.forEach((id) => {
       if (id) {
         expandedPortfolios.add(id);
       }
@@ -1231,15 +1440,22 @@ export function setExpandedPortfolios(portfolioIds: Array<string | null | undefi
 }
 
 // NEU: Helper zum Anhängen der Sortier-Logik an eine Positions-Tabelle eines bestimmten Portfolios
-export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfolioUuid: string): void {
+export function attachPortfolioPositionsSorting(
+  root: PortfolioQueryRoot,
+  portfolioUuid: string,
+): void {
   if (!portfolioUuid) return;
   const detailsRow = root.querySelector<HTMLTableRowElement>(
     `.portfolio-details[data-portfolio="${portfolioUuid}"]`,
   );
   if (!detailsRow) return;
-  const container = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+  const container = detailsRow.querySelector<ToggleContainerElement>(
+    ".positions-container",
+  );
   if (!container) return;
-  const table = container.querySelector<SortableTableElement>('table.sortable-positions');
+  const table = container.querySelector<SortableTableElement>(
+    "table.sortable-positions",
+  );
   if (!table || table.__ppReaderSortingBound) return;
 
   table.__ppReaderSortingBound = true;
@@ -1248,21 +1464,22 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     key: PortfolioPositionsSortKey,
     dir: PortfolioSortDirection,
   ): void => {
-    const tbody = table.querySelector<HTMLTableSectionElement>('tbody');
+    const tbody = table.querySelector<HTMLTableSectionElement>("tbody");
     if (!tbody) return;
-    const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr'))
-      .filter(r => !r.classList.contains('footer-row'));
-    const footer = tbody.querySelector<HTMLTableRowElement>('tr.footer-row');
+    const rows = Array.from(
+      tbody.querySelectorAll<HTMLTableRowElement>("tr"),
+    ).filter((r) => !r.classList.contains("footer-row"));
+    const footer = tbody.querySelector<HTMLTableRowElement>("tr.footer-row");
 
     const parseNum = (txt: string | null | undefined): number => {
       if (txt == null) return 0;
       // Entferne Währungs-/Prozent-Symbole, geschützte Leerzeichen
       const cleaned = txt
-        .replace(/\u00A0/g, ' ')
-        .replace(/[%€]/g, '')
-        .replace(/\./g, '')
-        .replace(',', '.')
-        .replace(/[^\d.-]/g, '');
+        .replace(/\u00A0/g, " ")
+        .replace(/[%€]/g, "")
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace(/[^\d.-]/g, "");
       const numeric = Number.parseFloat(cleaned);
       return Number.isFinite(numeric) ? numeric : 0;
     };
@@ -1286,12 +1503,12 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
         current_holdings: null,
         last_price: null,
         average_price: null,
-        purchase_value: '.val-top',
-        current_value: '.val-bottom',
-        day_change_abs: '.val-top',
-        day_change_pct: '.val-bottom',
-        gain_abs: '.val-top',
-        gain_pct: '.val-bottom',
+        purchase_value: ".val-top",
+        current_value: ".val-bottom",
+        day_change_abs: ".val-top",
+        day_change_pct: ".val-bottom",
+        gain_abs: ".val-top",
+        gain_pct: ".val-bottom",
       };
       const colIdx = idxMap[key];
       const aCellEl = a.cells.item(colIdx);
@@ -1299,44 +1516,54 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
 
       const subSel = subSelectorMap[key];
 
-      let aCell = '';
+      let aCell = "";
       if (aCellEl) {
         let raw: string | null = null;
         if (subSel) {
           const subEl = aCellEl.querySelector(subSel);
-          raw = subEl ? (subEl.getAttribute('data-val') || subEl.textContent) : null;
+          raw = subEl
+            ? subEl.getAttribute("data-val") || subEl.textContent
+            : null;
         } else {
           // For simple columns like Name, just text
           // But average_price/holdings might have data-sort-value on inner span?
           // Existing logic read textContent. Let's stick closer to textContent but check data-val
-          const el = aCellEl.querySelector('[data-sort-value]') || aCellEl.querySelector('[data-val]');
-          raw = el ? (el.getAttribute('data-sort-value') || el.getAttribute('data-val')) : aCellEl.textContent;
+          const el =
+            aCellEl.querySelector("[data-sort-value]") ||
+            aCellEl.querySelector("[data-val]");
+          raw = el
+            ? el.getAttribute("data-sort-value") || el.getAttribute("data-val")
+            : aCellEl.textContent;
         }
 
-        if (typeof raw === 'string') {
+        if (typeof raw === "string") {
           aCell = raw.trim();
         }
       }
 
-      let bCell = '';
+      let bCell = "";
       if (bCellEl) {
         let raw: string | null = null;
         if (subSel) {
           const subEl = bCellEl.querySelector(subSel);
-          raw = subEl ? (subEl.getAttribute('data-val') || subEl.textContent) : null;
+          raw = subEl
+            ? subEl.getAttribute("data-val") || subEl.textContent
+            : null;
         } else {
-          const el = bCellEl.querySelector('[data-sort-value]') || bCellEl.querySelector('[data-val]');
-          raw = el ? (el.getAttribute('data-sort-value') || el.getAttribute('data-val')) : bCellEl.textContent;
+          const el =
+            bCellEl.querySelector("[data-sort-value]") ||
+            bCellEl.querySelector("[data-val]");
+          raw = el
+            ? el.getAttribute("data-sort-value") || el.getAttribute("data-val")
+            : bCellEl.textContent;
         }
 
-        if (typeof raw === 'string') {
+        if (typeof raw === "string") {
           bCell = raw.trim();
         }
       }
 
-      const resolveSortValue = (
-        text: string,
-      ): number => {
+      const resolveSortValue = (text: string): number => {
         // Try parsing as standard float first (e.g. from data-val="1234.56")
         // Standard JS float format: optional minus, digits, optional dot, digits.
         if (/^-?\d+(\.\d+)?$/.test(text)) {
@@ -1346,51 +1573,54 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
       };
 
       let comp: number;
-      if (key === 'name') {
-        comp = aCell.localeCompare(bCell, 'de', { sensitivity: 'base' });
+      if (key === "name") {
+        comp = aCell.localeCompare(bCell, "de", { sensitivity: "base" });
       } else {
         const aValue = resolveSortValue(aCell);
         const bValue = resolveSortValue(bCell);
         comp = aValue - bValue;
       }
-      return dir === 'asc' ? comp : -comp;
+      return dir === "asc" ? comp : -comp;
     });
 
     // Visuelle Indikatoren zurücksetzen
-    table.querySelectorAll('thead th.sort-active').forEach(th => {
-      th.classList.remove('sort-active', 'dir-asc', 'dir-desc');
+    table.querySelectorAll("thead th.sort-active").forEach((th) => {
+      th.classList.remove("sort-active", "dir-asc", "dir-desc");
     });
     // A11y Indikatoren zurücksetzen & Restore default aria-labels
-    table.querySelectorAll('.sort-active').forEach(el => {
-      el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
-      const label = el.getAttribute('data-label');
+    table.querySelectorAll(".sort-active").forEach((el) => {
+      el.classList.remove("sort-active", "dir-asc", "dir-desc");
+      const label = el.getAttribute("data-label");
       if (label) {
-        el.setAttribute('aria-label', `${label} sortieren`);
+        el.setAttribute("aria-label", `${label} sortieren`);
       }
     });
 
     // Aktives TH markieren
     // Aktives Element markieren
     // Wir suchen entweder TH mit data-sort-key ODER ein .sort-item mit dem selector
-    const sortTrigger = table.querySelector(`[data-sort-key="${key}"], [data-sort-selector="${key}"]`);
+    const sortTrigger = table.querySelector(
+      `[data-sort-key="${key}"], [data-sort-selector="${key}"]`,
+    );
     if (sortTrigger) {
-      sortTrigger.classList.add('sort-active');
-      sortTrigger.classList.remove('dir-asc', 'dir-desc');
-      sortTrigger.classList.add(dir === 'asc' ? 'dir-asc' : 'dir-desc');
+      sortTrigger.classList.add("sort-active");
+      sortTrigger.classList.remove("dir-asc", "dir-desc");
+      sortTrigger.classList.add(dir === "asc" ? "dir-asc" : "dir-desc");
 
-      const label = sortTrigger.getAttribute('data-label');
+      const label = sortTrigger.getAttribute("data-label");
       if (label) {
-        const stateText = dir === 'asc' ? 'aufsteigend sortiert' : 'absteigend sortiert';
-        sortTrigger.setAttribute('aria-label', `${label} ${stateText}`);
+        const stateText =
+          dir === "asc" ? "aufsteigend sortiert" : "absteigend sortiert";
+        sortTrigger.setAttribute("aria-label", `${label} ${stateText}`);
       }
     }
-    const th = sortTrigger?.closest('th');
+    const th = sortTrigger?.closest("th");
     if (th) {
-      th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+      th.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
     }
 
     // Neu einfügen
-    rows.forEach(r => tbody.appendChild(r));
+    rows.forEach((r) => tbody.appendChild(r));
     if (footer) tbody.appendChild(footer);
   };
 
@@ -1404,12 +1634,12 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     ? containerKey
     : isPortfolioPositionsSortKey(defaultKey)
       ? defaultKey
-      : 'name';
+      : "name";
   const currentDir = isPortfolioSortDirection(containerDir)
     ? containerDir
     : isPortfolioSortDirection(defaultDir)
       ? defaultDir
-      : 'asc';
+      : "asc";
 
   applySort(currentKey, currentDir);
 
@@ -1418,32 +1648,34 @@ export function attachPortfolioPositionsSorting(root: PortfolioQueryRoot, portfo
     if (!(target instanceof Element)) {
       return;
     }
-    const sortItem = target.closest('[data-sort-key], [data-sort-selector]');
+    const sortItem = target.closest("[data-sort-key], [data-sort-selector]");
     if (!sortItem || !table.contains(sortItem)) return;
 
-    const keyAttr = sortItem.getAttribute('data-sort-key') || sortItem.getAttribute('data-sort-selector');
+    const keyAttr =
+      sortItem.getAttribute("data-sort-key") ||
+      sortItem.getAttribute("data-sort-selector");
     if (!isPortfolioPositionsSortKey(keyAttr)) {
       return;
     }
 
-    let dir: PortfolioSortDirection = 'asc';
+    let dir: PortfolioSortDirection = "asc";
     if (container.dataset.sortKey === keyAttr) {
       const existing = isPortfolioSortDirection(container.dataset.sortDir)
         ? container.dataset.sortDir
-        : 'asc';
-      dir = existing === 'asc' ? 'desc' : 'asc';
+        : "asc";
+      dir = existing === "asc" ? "desc" : "asc";
     }
     container.dataset.sortKey = keyAttr;
     container.dataset.sortDir = dir;
     applySort(keyAttr, dir);
   };
 
-  table.addEventListener('click', (event: MouseEvent) => {
+  table.addEventListener("click", (event: MouseEvent) => {
     handleSort(event);
   });
 
-  table.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+  table.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault(); // Prevent page scroll on Space
       handleSort(event);
     }
@@ -1458,19 +1690,22 @@ async function reloadPortfolioPositions(
 ): Promise<void> {
   if (!portfolioUuid || !_hassRef || !_panelConfigRef) return;
 
-  const targetContainer = containerEl || root.querySelector<HTMLElement>(
-    `.portfolio-details[data-portfolio="${portfolioUuid}"] .positions-container`
-  );
+  const targetContainer =
+    containerEl ||
+    root.querySelector<HTMLElement>(
+      `.portfolio-details[data-portfolio="${portfolioUuid}"] .positions-container`,
+    );
   if (!targetContainer) {
     return;
   }
 
-  const detailsRow = targetContainer.closest<HTMLTableRowElement>('.portfolio-details');
-  if (detailsRow && detailsRow.classList.contains('hidden')) {
+  const detailsRow =
+    targetContainer.closest<HTMLTableRowElement>(".portfolio-details");
+  if (detailsRow && detailsRow.classList.contains("hidden")) {
     return; // Hidden Rows sollen keinen Silent-Preload anstoßen
   }
 
-  targetContainer.innerHTML = renderLoadingState('Neu laden...');
+  targetContainer.innerHTML = renderLoadingState("Neu laden...");
   try {
     const resp: PortfolioPositionsResponse = await fetchPortfolioPositionsWS(
       _hassRef,
@@ -1478,7 +1713,8 @@ async function reloadPortfolioPositions(
       portfolioUuid,
     );
     if (resp.error) {
-      const errorText = typeof resp.error === 'string' ? resp.error : String(resp.error);
+      const errorText =
+        typeof resp.error === "string" ? resp.error : String(resp.error);
       const safeUuid = escapeAttribute(portfolioUuid);
       targetContainer.innerHTML = `<div class="error">${escapeHtml(errorText)} <button class="retry-pos" data-portfolio="${safeUuid}">Erneut laden</button></div>`;
       return;
@@ -1493,12 +1729,18 @@ async function reloadPortfolioPositions(
     try {
       attachPortfolioPositionsSorting(root, portfolioUuid);
     } catch (error) {
-      console.warn('attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:', error);
+      console.warn(
+        "attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:",
+        error,
+      );
     }
     try {
       attachSecurityDetailListener(root, portfolioUuid);
     } catch (error) {
-      console.warn('reloadPortfolioPositions: Security-Listener konnte nicht gebunden werden:', error);
+      console.warn(
+        "reloadPortfolioPositions: Security-Listener konnte nicht gebunden werden:",
+        error,
+      );
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1532,24 +1774,32 @@ async function waitForElement<T extends Element>(
   });
 }
 
-function sortOverviewTable(table: HTMLTableElement, colIndex: number, valueSelector: string | null, dir: 'asc' | 'desc') {
+function sortOverviewTable(
+  table: HTMLTableElement,
+  colIndex: number,
+  valueSelector: string | null,
+  dir: "asc" | "desc",
+) {
   const tbody = table.tBodies[0];
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!tbody) return;
 
   // Move ALL footer rows to the end (cleanup if multiple exist)
-  const footers = Array.from(tbody.children).filter(child => child.classList.contains('footer-row'));
+  const footers = Array.from(tbody.children).filter((child) =>
+    child.classList.contains("footer-row"),
+  );
 
   // Pairs of rows { main, detail }
-  const rowPairs: { main: HTMLTableRowElement; detail: HTMLTableRowElement }[] = [];
+  const rowPairs: { main: HTMLTableRowElement; detail: HTMLTableRowElement }[] =
+    [];
   let currentMain: HTMLTableRowElement | null = null;
 
-  Array.from(tbody.children).forEach(child => {
-    if (child.classList.contains('footer-row')) return;
+  Array.from(tbody.children).forEach((child) => {
+    if (child.classList.contains("footer-row")) return;
     if (child instanceof HTMLTableRowElement) {
-      if (child.classList.contains('portfolio-row')) {
+      if (child.classList.contains("portfolio-row")) {
         currentMain = child;
-      } else if (child.classList.contains('portfolio-details') && currentMain) {
+      } else if (child.classList.contains("portfolio-details") && currentMain) {
         rowPairs.push({ main: currentMain, detail: child });
         currentMain = null;
       }
@@ -1562,31 +1812,31 @@ function sortOverviewTable(table: HTMLTableElement, colIndex: number, valueSelec
     const aCell = a.cells[colIndex];
     const bCell = b.cells[colIndex];
 
-    let aValText = '';
-    let bValText = '';
+    let aValText = "";
+    let bValText = "";
 
     if (valueSelector) {
       const aEl = aCell.querySelector<HTMLElement>(valueSelector);
       const bEl = bCell.querySelector<HTMLElement>(valueSelector);
-      aValText = aEl?.getAttribute('data-val') || '';
-      bValText = bEl?.getAttribute('data-val') || '';
+      aValText = aEl?.getAttribute("data-val") || "";
+      bValText = bEl?.getAttribute("data-val") || "";
     } else {
-      const aEl = aCell.querySelector<HTMLElement>('[data-val]');
-      const bEl = bCell.querySelector<HTMLElement>('[data-val]');
-      aValText = aEl?.getAttribute('data-val') || aCell.textContent || '';
-      bValText = bEl?.getAttribute('data-val') || bCell.textContent || '';
+      const aEl = aCell.querySelector<HTMLElement>("[data-val]");
+      const bEl = bCell.querySelector<HTMLElement>("[data-val]");
+      aValText = aEl?.getAttribute("data-val") || aCell.textContent || "";
+      bValText = bEl?.getAttribute("data-val") || bCell.textContent || "";
     }
 
     const aNum = Number(aValText);
     const bNum = Number(bValText);
 
     if (!isNaN(aNum) && !isNaN(bNum)) {
-      return (aNum - bNum) * (dir === 'asc' ? 1 : -1);
+      return (aNum - bNum) * (dir === "asc" ? 1 : -1);
     }
-    return aValText.localeCompare(bValText) * (dir === 'asc' ? 1 : -1);
+    return aValText.localeCompare(bValText) * (dir === "asc" ? 1 : -1);
   });
 
-  rowPairs.forEach(pair => {
+  rowPairs.forEach((pair) => {
     tbody.appendChild(pair.main);
     tbody.appendChild(pair.detail);
   });
@@ -1600,7 +1850,9 @@ function sortOverviewTable(table: HTMLTableElement, colIndex: number, valueSelec
 }
 
 function attachPortfolioOverviewSorting(root: HTMLElement) {
-  const table = root.querySelector<HTMLTableElement>('.expandable-portfolio-table');
+  const table = root.querySelector<HTMLTableElement>(
+    ".expandable-portfolio-table",
+  );
   if (!table) return;
   const sortableTable = table as SortableTableElement;
   if (sortableTable.__ppReaderOverviewSortingBound) return;
@@ -1608,42 +1860,45 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
 
   const handleSort = (event: Event) => {
     const target = event.target as HTMLElement;
-    const sortTrigger = target.closest('[data-sort-selector]') || target.closest('[data-sort-key]');
+    const sortTrigger =
+      target.closest("[data-sort-selector]") ||
+      target.closest("[data-sort-key]");
     if (sortTrigger) {
       // Ensure the event came from this table's header, not a nested table
-      const triggerTable = sortTrigger.closest('table');
+      const triggerTable = sortTrigger.closest("table");
       if (triggerTable !== table) return;
 
       // Clean up previous sort indicators
-      table.querySelectorAll('.sort-active').forEach((el) => {
+      table.querySelectorAll(".sort-active").forEach((el) => {
         if (el !== sortTrigger) {
-          el.classList.remove('sort-active', 'dir-asc', 'dir-desc');
-          const label = el.getAttribute('data-label');
+          el.classList.remove("sort-active", "dir-asc", "dir-desc");
+          const label = el.getAttribute("data-label");
           if (label) {
-            el.setAttribute('aria-label', `${label} sortieren`);
+            el.setAttribute("aria-label", `${label} sortieren`);
           }
         }
       });
 
-      let dir: 'asc' | 'desc' = 'asc';
+      let dir: "asc" | "desc" = "asc";
       if (
-        sortTrigger.classList.contains('sort-active') &&
-        sortTrigger.classList.contains('dir-asc')
+        sortTrigger.classList.contains("sort-active") &&
+        sortTrigger.classList.contains("dir-asc")
       ) {
-        dir = 'desc';
+        dir = "desc";
       }
 
-      sortTrigger.classList.add('sort-active');
-      sortTrigger.classList.remove('dir-asc', 'dir-desc');
+      sortTrigger.classList.add("sort-active");
+      sortTrigger.classList.remove("dir-asc", "dir-desc");
       sortTrigger.classList.add(`dir-${dir}`);
 
-      const label = sortTrigger.getAttribute('data-label');
+      const label = sortTrigger.getAttribute("data-label");
       if (label) {
-        const stateText = dir === 'asc' ? 'aufsteigend sortiert' : 'absteigend sortiert';
-        sortTrigger.setAttribute('aria-label', `${label} ${stateText}`);
+        const stateText =
+          dir === "asc" ? "aufsteigend sortiert" : "absteigend sortiert";
+        sortTrigger.setAttribute("aria-label", `${label} ${stateText}`);
       }
 
-      const th = sortTrigger.closest('th');
+      const th = sortTrigger.closest("th");
       const colIndex = th
         ? Array.from(th.parentElement?.children ?? []).indexOf(th)
         : -1;
@@ -1656,12 +1911,12 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
     }
   };
 
-  table.addEventListener('click', (event) => {
+  table.addEventListener("click", (event) => {
     handleSort(event);
   });
 
-  table.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+  table.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       handleSort(event);
     }
@@ -1669,26 +1924,36 @@ function attachPortfolioOverviewSorting(root: HTMLElement) {
 }
 
 export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
-  const previousToken = typeof root.__ppReaderAttachToken === 'number' ? root.__ppReaderAttachToken : 0;
+  const previousToken =
+    typeof root.__ppReaderAttachToken === "number"
+      ? root.__ppReaderAttachToken
+      : 0;
   const token = previousToken + 1;
   root.__ppReaderAttachToken = token;
   root.__ppReaderAttachInProgress = true;
 
   void (async () => {
     try {
-      const container = await waitForElement<ToggleContainerElement>(root, '.portfolio-table');
+      const container = await waitForElement<ToggleContainerElement>(
+        root,
+        ".portfolio-table",
+      );
       if (token !== root.__ppReaderAttachToken) {
         return; // Ein neuer Versuch läuft bereits – diesen abbrechen
       }
       if (!container) {
-        console.warn("attachPortfolioToggleHandler: .portfolio-table nicht gefunden (Timeout)");
+        console.warn(
+          "attachPortfolioToggleHandler: .portfolio-table nicht gefunden (Timeout)",
+        );
         return;
       }
 
       // Buttons generiert?
-      const btnCount = container.querySelectorAll('.portfolio-toggle').length;
+      const btnCount = container.querySelectorAll(".portfolio-toggle").length;
       if (btnCount === 0) {
-        console.debug("attachPortfolioToggleHandler: Noch keine Buttons – evtl. Recovery später");
+        console.debug(
+          "attachPortfolioToggleHandler: Noch keine Buttons – evtl. Recovery später",
+        );
       }
 
       if (container.__ppReaderPortfolioToggleBound) {
@@ -1697,7 +1962,7 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
       container.__ppReaderPortfolioToggleBound = true;
       console.debug("attachPortfolioToggleHandler: Listener registriert");
 
-      container.addEventListener('click', (event: MouseEvent) => {
+      container.addEventListener("click", (event: MouseEvent) => {
         void (async () => {
           try {
             const target = event.target;
@@ -1705,23 +1970,25 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
               return;
             }
 
-            const retryBtn = target.closest<HTMLButtonElement>('.retry-pos');
+            const retryBtn = target.closest<HTMLButtonElement>(".retry-pos");
             if (retryBtn && container.contains(retryBtn)) {
-              const pid = retryBtn.getAttribute('data-portfolio');
+              const pid = retryBtn.getAttribute("data-portfolio");
               if (pid) {
                 const detailsRow = root.querySelector<HTMLTableRowElement>(
                   `.portfolio-details[data-portfolio="${pid}"]`,
                 );
-                const cont = detailsRow?.querySelector<ToggleContainerElement>('.positions-container');
+                const cont = detailsRow?.querySelector<ToggleContainerElement>(
+                  ".positions-container",
+                );
                 await reloadPortfolioPositions(pid, cont ?? null, root);
               }
               return;
             }
 
-            const btn = target.closest<HTMLButtonElement>('.portfolio-toggle');
+            const btn = target.closest<HTMLButtonElement>(".portfolio-toggle");
             if (!btn || !container.contains(btn)) return;
 
-            const portfolioUuid = btn.getAttribute('data-portfolio');
+            const portfolioUuid = btn.getAttribute("data-portfolio");
             if (!portfolioUuid) return;
 
             const detailsRow = root.querySelector<HTMLTableRowElement>(
@@ -1729,35 +1996,46 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
             );
             if (!detailsRow) return;
 
-            const caretEl = btn.querySelector<HTMLElement>('.caret');
-            const isHidden = detailsRow.classList.contains('hidden');
+            const caretEl = btn.querySelector<HTMLElement>(".caret");
+            const isHidden = detailsRow.classList.contains("hidden");
 
             if (isHidden) {
-              detailsRow.classList.remove('hidden');
-              btn.classList.add('expanded');
-              btn.setAttribute('aria-expanded', 'true');
-              if (caretEl) caretEl.textContent = '▼';
+              detailsRow.classList.remove("hidden");
+              btn.classList.add("expanded");
+              btn.setAttribute("aria-expanded", "true");
+              if (caretEl) caretEl.textContent = "▼";
               expandedPortfolios.add(portfolioUuid);
 
               try {
                 flushPendingPositions(root, portfolioUuid);
               } catch (error) {
-                console.warn('attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:', error);
+                console.warn(
+                  "attachPortfolioToggleHandler: Pending-Flush fehlgeschlagen:",
+                  error,
+                );
               }
 
               if (!hasPortfolioPositions(portfolioUuid)) {
-                const containerEl = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+                const containerEl =
+                  detailsRow.querySelector<ToggleContainerElement>(
+                    ".positions-container",
+                  );
                 if (containerEl) {
-                  containerEl.innerHTML = renderLoadingState('Lade Positionen...');
+                  containerEl.innerHTML =
+                    renderLoadingState("Lade Positionen...");
                 }
                 try {
-                  const resp: PortfolioPositionsResponse = await fetchPortfolioPositionsWS(
-                    _hassRef,
-                    _panelConfigRef,
-                    portfolioUuid,
-                  );
+                  const resp: PortfolioPositionsResponse =
+                    await fetchPortfolioPositionsWS(
+                      _hassRef,
+                      _panelConfigRef,
+                      portfolioUuid,
+                    );
                   if (resp.error) {
-                    const errorText = typeof resp.error === 'string' ? resp.error : String(resp.error);
+                    const errorText =
+                      typeof resp.error === "string"
+                        ? resp.error
+                        : String(resp.error);
                     if (containerEl) {
                       const safeUuid = escapeAttribute(portfolioUuid);
                       containerEl.innerHTML = `<div class="error">${escapeHtml(errorText)} <button class="retry-pos" data-portfolio="${safeUuid}">Erneut laden</button></div>`;
@@ -1773,30 +2051,47 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
                     normalizedPositions,
                   );
                   if (containerEl) {
-                    containerEl.innerHTML = renderPositionsTable(normalizedPositions);
+                    containerEl.innerHTML =
+                      renderPositionsTable(normalizedPositions);
                     // Änderung 11: Nach erstmaligem Lazy-Load Sortierung initialisieren
                     try {
                       attachPortfolioPositionsSorting(root, portfolioUuid);
                     } catch (error) {
-                      console.warn('attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:', error);
+                      console.warn(
+                        "attachPortfolioToggleHandler: Sort-Init (Lazy) fehlgeschlagen:",
+                        error,
+                      );
                     }
                     try {
                       attachSecurityDetailListener(root, portfolioUuid);
                     } catch (error) {
-                      console.warn('attachPortfolioToggleHandler: Security-Listener konnte nicht gebunden werden:', error);
+                      console.warn(
+                        "attachPortfolioToggleHandler: Security-Listener konnte nicht gebunden werden:",
+                        error,
+                      );
                     }
                   }
                 } catch (error) {
-                  const message = error instanceof Error ? error.message : String(error);
-                  const containerEl = detailsRow.querySelector<ToggleContainerElement>('.positions-container');
+                  const message =
+                    error instanceof Error ? error.message : String(error);
+                  const containerEl =
+                    detailsRow.querySelector<ToggleContainerElement>(
+                      ".positions-container",
+                    );
                   if (containerEl) {
                     const safeUuid = escapeAttribute(portfolioUuid);
                     containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${escapeHtml(message)} <button class="retry-pos" data-portfolio="${safeUuid}">Retry</button></div>`;
                   }
-                  console.error('Fehler beim Lazy Load für', portfolioUuid, error);
+                  console.error(
+                    "Fehler beim Lazy Load für",
+                    portfolioUuid,
+                    error,
+                  );
                 }
               } else {
-                const containerEl = detailsRow.querySelector<HTMLElement>('.positions-container');
+                const containerEl = detailsRow.querySelector<HTMLElement>(
+                  ".positions-container",
+                );
                 if (containerEl) {
                   containerEl.innerHTML = renderPositionsTable(
                     getPortfolioPositions(portfolioUuid),
@@ -1805,19 +2100,25 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
                   try {
                     attachSecurityDetailListener(root, portfolioUuid);
                   } catch (error) {
-                    console.warn('attachPortfolioToggleHandler: Security-Listener (Cache) Fehler:', error);
+                    console.warn(
+                      "attachPortfolioToggleHandler: Security-Listener (Cache) Fehler:",
+                      error,
+                    );
                   }
                 }
               }
             } else {
-              detailsRow.classList.add('hidden');
-              btn.classList.remove('expanded');
-              btn.setAttribute('aria-expanded', 'false');
-              if (caretEl) caretEl.textContent = '▶';
+              detailsRow.classList.add("hidden");
+              btn.classList.remove("expanded");
+              btn.setAttribute("aria-expanded", "false");
+              if (caretEl) caretEl.textContent = "▶";
               expandedPortfolios.delete(portfolioUuid);
             }
           } catch (error) {
-            console.error('attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler', error);
+            console.error(
+              "attachPortfolioToggleHandler: Ungefangener Fehler im Click-Handler",
+              error,
+            );
           }
         })();
       });
@@ -1830,22 +2131,27 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
 }
 
 // Fallback: direkter Listener auf die Tabelle selbst (falls outer container nicht klickt)
-export function ensurePortfolioRowFallbackListener(root: ToggleRootElement): void {
-  const table = root.querySelector<SortableTableElement>('.expandable-portfolio-table');
+export function ensurePortfolioRowFallbackListener(
+  root: ToggleRootElement,
+): void {
+  const table = root.querySelector<SortableTableElement>(
+    ".expandable-portfolio-table",
+  );
   if (!table) return;
   if (table.__ppReaderPortfolioFallbackBound) return;
   table.__ppReaderPortfolioFallbackBound = true;
-  table.addEventListener('click', (event: MouseEvent) => {
+  table.addEventListener("click", (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
     }
-    const btn = target.closest<HTMLButtonElement>('.portfolio-toggle');
+    const btn = target.closest<HTMLButtonElement>(".portfolio-toggle");
     if (!btn) return;
     // Falls der Haupt-Listener schon aktiv war, nichts doppelt machen
-    const primaryContainer = root.querySelector<ToggleContainerElement>('.portfolio-table');
+    const primaryContainer =
+      root.querySelector<ToggleContainerElement>(".portfolio-table");
     if (primaryContainer?.__ppReaderPortfolioToggleBound) return;
-    console.debug('Fallback-Listener aktiv – re-attach Hauptlistener');
+    console.debug("Fallback-Listener aktiv – re-attach Hauptlistener");
     attachPortfolioToggleHandler(root);
   });
 }
@@ -1858,9 +2164,9 @@ export async function renderDashboard(
   _hassRef = hass ?? null;
   _panelConfigRef = panelConfig ?? null;
   console.debug(
-    'renderDashboard: start – panelConfig:',
+    "renderDashboard: start – panelConfig:",
     panelConfig?.config,
-    'derived entry_id?',
+    "derived entry_id?",
     panelConfig?.config?._panel_custom?.config?.entry_id,
   );
 
@@ -1873,36 +2179,59 @@ export async function renderDashboard(
   const depots = selectPortfolioOverviewRows();
 
   // 3. Last file update (optional – falls bereits WS-Command vorhanden)
-  let lastFileUpdate = '';
+  let lastFileUpdate = "";
   try {
     lastFileUpdate = await fetchLastFileUpdateWS(hass, panelConfig);
   } catch {
-    lastFileUpdate = '';
+    lastFileUpdate = "";
   }
 
   // 4. Gesamtvermögen berechnen (nur Anzeige)
   const totalAccounts = accountRows.reduce(
-    (sum, account) => sum + (typeof account.balance === 'number' && Number.isFinite(account.balance) ? account.balance : 0),
+    (sum, account) =>
+      sum +
+      (typeof account.balance === "number" && Number.isFinite(account.balance)
+        ? account.balance
+        : 0),
     0,
   );
-  const anyPortfolioMissing = depots.some(depot => depot.fx_unavailable);
-  const anyAccountMissing = accountRows.some(account => account.fx_unavailable && (account.balance == null || !Number.isFinite(account.balance)));
+  const anyPortfolioMissing = depots.some((depot) => depot.fx_unavailable);
+  const anyAccountMissing = accountRows.some(
+    (account) =>
+      account.fx_unavailable &&
+      (account.balance == null || !Number.isFinite(account.balance)),
+  );
   const totalDepots = depots.reduce((sum, depot) => {
-    if (depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value)) {
+    if (
+      depot.hasValue &&
+      typeof depot.current_value === "number" &&
+      Number.isFinite(depot.current_value)
+    ) {
       return sum + depot.current_value;
     }
     return sum;
   }, 0);
   const totalWealth = totalAccounts + totalDepots;
-  const missingWealthReason = 'Teilw. fehlende FX-Kurse – Gesamtvermögen abweichend';
-  const wealthValueAvailable = depots.some(depot => depot.hasValue && typeof depot.current_value === 'number' && Number.isFinite(depot.current_value))
-    || accountRows.some(account => typeof account.balance === 'number' && Number.isFinite(account.balance));
+  const missingWealthReason =
+    "Teilw. fehlende FX-Kurse – Gesamtvermögen abweichend";
+  const wealthValueAvailable =
+    depots.some(
+      (depot) =>
+        depot.hasValue &&
+        typeof depot.current_value === "number" &&
+        Number.isFinite(depot.current_value),
+    ) ||
+    accountRows.some(
+      (account) =>
+        typeof account.balance === "number" && Number.isFinite(account.balance),
+    );
   const wealthValueMarkup = wealthValueAvailable
     ? `${formatNumber(totalWealth)}&nbsp;€`
     : `<span class="missing-value" role="note" aria-label="${missingWealthReason}" title="${missingWealthReason}">—</span>`;
-  const wealthNote = (anyPortfolioMissing || anyAccountMissing)
-    ? `<span class="total-wealth-note">${missingWealthReason}</span>`
-    : '';
+  const wealthNote =
+    anyPortfolioMissing || anyAccountMissing
+      ? `<span class="total-wealth-note">${missingWealthReason}</span>`
+      : "";
 
   // 5. Header (ohne Last-File-Update – kommt jetzt wieder in Footer-Karte)
   const headerMeta = `
@@ -1910,7 +2239,7 @@ export async function renderDashboard(
       💰 Gesamtvermögen: <strong class="total-wealth-value">${wealthValueMarkup}</strong>${wealthNote}
     </div>
   `;
-  const headerCard = createHeaderCard('Übersicht', headerMeta);
+  const headerCard = createHeaderCard("Übersicht", headerMeta);
 
   // 6. Sicherstellen, dass die Struktur exakt der erwartet wird:
   //    - .portfolio-table (Wrapper)
@@ -1918,10 +2247,14 @@ export async function renderDashboard(
   const portfolioTableHtml = buildExpandablePortfolioTable(depots);
 
   // 7. Konten-Tabellen
-  const eurAccounts = accountRows.filter(a => (a.currency_code ?? 'EUR') === 'EUR');
-  const fxAccounts = accountRows.filter(a => (a.currency_code ?? 'EUR') !== 'EUR');
+  const eurAccounts = accountRows.filter(
+    (a) => (a.currency_code ?? "EUR") === "EUR",
+  );
+  const fxAccounts = accountRows.filter(
+    (a) => (a.currency_code ?? "EUR") !== "EUR",
+  );
 
-  const fxWarningNeeded = fxAccounts.some(a => a.fx_unavailable);
+  const fxWarningNeeded = fxAccounts.some((a) => a.fx_unavailable);
   const fxWarning = fxWarningNeeded
     ? `
         <p class="table-note" role="note">
@@ -1929,62 +2262,79 @@ export async function renderDashboard(
           <span>Wechselkurse konnten nicht geladen werden. EUR-Werte werden derzeit nicht angezeigt.</span>
         </p>
       `
-    : '';
+    : "";
 
   const accountsHtml = `
     <div class="card">
       <h2>Liquidität</h2>
       <div class="scroll-container account-table">
         ${makeTable(
-    eurAccounts.map(account => ({
-      name: renderNameWithBadges(account.name, stripAccountBadges(account.badges), {
-        containerClass: 'account-name',
-        labelClass: 'account-name__label',
-      }),
-      balance: account.balance ?? null,
-    })),
-    [
-      { key: 'name', label: 'Name' },
-      { key: 'balance', label: 'Kontostand (EUR)', align: 'right' as const },
-    ],
-    ['balance'],
-  )}
+          eurAccounts.map((account) => ({
+            name: renderNameWithBadges(
+              account.name,
+              stripAccountBadges(account.badges),
+              {
+                containerClass: "account-name",
+                labelClass: "account-name__label",
+              },
+            ),
+            balance: account.balance ?? null,
+          })),
+          [
+            { key: "name", label: "Name" },
+            {
+              key: "balance",
+              label: "Kontostand (EUR)",
+              align: "right" as const,
+            },
+          ],
+          ["balance"],
+        )}
       </div>
     </div>
-    ${fxAccounts.length ? `
+    ${
+      fxAccounts.length
+        ? `
       <div class="card">
         <h2>Fremdwährungen</h2>
         <div class="scroll-container fx-account-table">
           ${makeTable(
-    fxAccounts.map(account => {
-      const origBalance = account.orig_balance;
-      const hasOrigBalance = typeof origBalance === 'number' && Number.isFinite(origBalance);
-      const fxDisplay = hasOrigBalance
-        ? `${origBalance.toLocaleString('de-DE', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}&nbsp;${account.currency_code ?? ''}`
-        : '';
+            fxAccounts.map((account) => {
+              const origBalance = account.orig_balance;
+              const hasOrigBalance =
+                typeof origBalance === "number" && Number.isFinite(origBalance);
+              const fxDisplay = hasOrigBalance
+                ? `${origBalance.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}&nbsp;${account.currency_code ?? ""}`
+                : "";
 
-      return {
-        name: renderNameWithBadges(account.name, stripAccountBadges(account.badges), {
-          containerClass: 'account-name',
-          labelClass: 'account-name__label',
-        }),
-        fx_display: fxDisplay,
-        balance: account.balance ?? null,
-      };
-    }),
-    [
-      { key: 'name', label: 'Name' },
-      { key: 'fx_display', label: 'Betrag (FX)' },
-      { key: 'balance', label: 'EUR', align: 'right' as const },
-    ],
-    ['balance'],
-  )}
+              return {
+                name: renderNameWithBadges(
+                  account.name,
+                  stripAccountBadges(account.badges),
+                  {
+                    containerClass: "account-name",
+                    labelClass: "account-name__label",
+                  },
+                ),
+                fx_display: fxDisplay,
+                balance: account.balance ?? null,
+              };
+            }),
+            [
+              { key: "name", label: "Name" },
+              { key: "fx_display", label: "Betrag (FX)" },
+              { key: "balance", label: "EUR", align: "right" as const },
+            ],
+            ["balance"],
+          )}
         </div>
         ${fxWarning}
-      </div>` : ''}
+      </div>`
+        : ""
+    }
   `;
 
   // 8. Footer-Karte mit letztem Datei-Änderungszeitpunkt (reintroduziert)
@@ -1992,7 +2342,7 @@ export async function renderDashboard(
     <div class="card footer-card">
       <div class="meta">
         <div class="last-file-update">
-          📂 Letzte Aktualisierung der Datei: <strong>${escapeHtml(lastFileUpdate) || 'Unbekannt'}</strong>
+          📂 Letzte Aktualisierung der Datei: <strong>${escapeHtml(lastFileUpdate) || "Unbekannt"}</strong>
         </div>
       </div>
     </div>
@@ -2016,7 +2366,10 @@ export async function renderDashboard(
   return markup;
 }
 
-function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonly PortfolioOverviewRow[]): void {
+function schedulePostRenderSetup(
+  root: ToggleRootElement | null,
+  depots: readonly PortfolioOverviewRow[],
+): void {
   if (!root) {
     return;
   }
@@ -2024,9 +2377,12 @@ function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonl
   const run = () => {
     try {
       const wrapper = root;
-      const tableHost = wrapper.querySelector<HTMLElement>('.portfolio-table');
-      if (tableHost && tableHost.querySelectorAll('.portfolio-toggle').length === 0) {
-        console.debug('Recovery: Tabelle ohne Buttons – erneuter Aufbau');
+      const tableHost = wrapper.querySelector<HTMLElement>(".portfolio-table");
+      if (
+        tableHost &&
+        tableHost.querySelectorAll(".portfolio-toggle").length === 0
+      ) {
+        console.debug("Recovery: Tabelle ohne Buttons – erneuter Aufbau");
         tableHost.innerHTML = buildExpandablePortfolioTable(depots);
       }
 
@@ -2041,31 +2397,45 @@ function schedulePostRenderSetup(root: ToggleRootElement | null, depots: readonl
             attachSecurityDetailListener(root, pid);
           }
         } catch (error) {
-          console.warn('Init-Sortierung für expandiertes Depot fehlgeschlagen:', pid, error);
+          console.warn(
+            "Init-Sortierung für expandiertes Depot fehlgeschlagen:",
+            pid,
+            error,
+          );
         }
       });
 
       try {
         updatePortfolioFooterFromDom(wrapper);
       } catch (footerErr) {
-        console.warn('renderDashboard: Footer-Summe konnte nicht aktualisiert werden:', footerErr);
+        console.warn(
+          "renderDashboard: Footer-Summe konnte nicht aktualisiert werden:",
+          footerErr,
+        );
       }
 
       try {
         flushAllPendingPositions(root);
       } catch (pendingErr) {
-        console.warn('renderDashboard: Pending-Positions konnten nicht angewendet werden:', pendingErr);
+        console.warn(
+          "renderDashboard: Pending-Positions konnten nicht angewendet werden:",
+          pendingErr,
+        );
       }
 
-      console.debug('renderDashboard: portfolio-toggle Buttons:', wrapper.querySelectorAll('.portfolio-toggle').length);
+      console.debug(
+        "renderDashboard: portfolio-toggle Buttons:",
+        wrapper.querySelectorAll(".portfolio-toggle").length,
+      );
     } catch (error) {
-      console.error('renderDashboard: Fehler bei Recovery/Listener', error);
+      console.error("renderDashboard: Fehler bei Recovery/Listener", error);
     }
   };
 
-  const schedule = typeof requestAnimationFrame === 'function'
-    ? (cb: () => void) => requestAnimationFrame(cb)
-    : (cb: () => void) => setTimeout(cb, 0);
+  const schedule =
+    typeof requestAnimationFrame === "function"
+      ? (cb: () => void) => requestAnimationFrame(cb)
+      : (cb: () => void) => setTimeout(cb, 0);
 
   schedule(() => schedule(run));
 }
