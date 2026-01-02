@@ -382,9 +382,9 @@ class PerformanceEngine:
         # unified_scalar: Maintain compatibility fields for _calculate_cash_accumulators
         df_augmented["daily_fx_rate"] = df_augmented["fx_rate"]
         # Note: _augment_txs_with_market_data guarantees fx_rate != 0 (defaults to 1.0)
-        df_augmented["amount_eur"] = (
-            df_augmented["amount"] / 100.0
-        ) / df_augmented["daily_fx_rate"]
+        df_augmented["amount_eur"] = (df_augmented["amount"] / 100.0) / df_augmented[
+            "daily_fx_rate"
+        ]
 
         # unified_scalar: Recreate fx_long manually for _calculate_cash_wealth
         # (legacy vector requirement)
@@ -660,7 +660,6 @@ class PerformanceEngine:
         df_out = df_out.drop(columns=drop_cols, errors="ignore")
 
         return pd.concat([df_out, df_in], ignore_index=True)
-
 
     def _setup_virtual_inventory(
         self, start_date: date
