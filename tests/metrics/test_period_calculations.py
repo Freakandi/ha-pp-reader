@@ -179,5 +179,6 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     engine.load_data()
     results = engine.calculate_period_performance(start_date, end_date)
 
-    # Expected Realized Gain = Gross Proceeds (120) - Virtual Cost Basis (110) = 10.0
-    assert results.realized_gains == 10.0
+    # Expected Realized Gain = Gross Proceeds (120) - Virtual Cost Basis (105) = 15.0
+    # Note: Virtual Cost Basis uses price at T-1 (Jan 1) which is 105.
+    assert results.realized_gains == 15.0

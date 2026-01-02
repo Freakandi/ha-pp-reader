@@ -137,12 +137,19 @@ class PerformanceEngine:
             self._df_txs["amount_norm"] = []
 
         # transaction units
-        query_units = "SELECT transaction_uuid, type, amount, currency_code FROM transaction_units"  # noqa: E501
+        query_units = "SELECT transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code FROM transaction_units"  # noqa: E501
         try:
             self._df_units = pd.read_sql_query(query_units, self.conn)
         except pd.errors.DatabaseError:
             self._df_units = pd.DataFrame(
-                columns=["transaction_uuid", "type", "amount", "currency_code"]
+                columns=[
+                    "transaction_uuid",
+                    "type",
+                    "amount",
+                    "currency_code",
+                    "fx_amount",
+                    "fx_currency_code",
+                ]
             )
 
         # historical prices
@@ -176,13 +183,26 @@ class PerformanceEngine:
         try:
             df_latest = pd.read_sql_query(query_latest, self.conn)
             if not df_latest.empty:
-                df_latest["date"] = (
-                    pd.to_datetime(
-                        df_latest["last_price_date"], unit="s", origin="unix"
+                # Adaptive Date Parsing (Seconds vs Days)
+                dates = df_latest["last_price_date"]
+                mask_epoch = dates < EPOCH_DAY_THRESHOLD
+
+                converted = pd.Series(index=dates.index, dtype="datetime64[ns, UTC]")
+
+                # Case 1: Days since Epoch (small numbers)
+                if mask_epoch.any():
+                    converted.loc[mask_epoch] = pd.to_datetime(
+                        dates[mask_epoch], unit="D", origin="unix", utc=True
                     )
-                    .dt.tz_localize("UTC")
-                    .dt.normalize()
-                )
+
+                # Case 2: Seconds since Epoch (large numbers)
+                # Note: pd.to_datetime with unit='s' handles standard unix timestamps
+                if (~mask_epoch).any():
+                    converted.loc[~mask_epoch] = pd.to_datetime(
+                        dates[~mask_epoch], unit="s", origin="unix", utc=True
+                    )
+
+                df_latest["date"] = converted.dt.normalize()
                 df_latest = df_latest.drop(columns=["last_price_date"])
                 df_latest["close"] = df_latest["close"] / PRICE_SCALE
 
@@ -264,7 +284,9 @@ class PerformanceEngine:
         else:
             self._rates_idx = pd.DataFrame()
 
-    def get_daily_wealth(self, start_date: date, end_date: date) -> pd.DataFrame:
+    def get_daily_wealth(  # noqa: PLR0912, PLR0915
+        self, start_date: date, end_date: date
+    ) -> pd.DataFrame:
         """
         Calculate daily wealth metrics for a given date range.
 
@@ -274,13 +296,42 @@ class PerformanceEngine:
         """
         date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
 
+        # Create extended range for FX/Prices to cover full history (for Balances)
+        # Assuming earliest transaction matters.
+        first_tx = self._df_txs["date"].min()
+
+        # Ensure start_date is a Timestamp for comparison.
+        # Since we use tz="UTC" for date_range, we assume UTC here.
+        start_date_ts = pd.Timestamp(start_date)
+        if start_date_ts.tzinfo is None:
+            start_date_ts = start_date_ts.tz_localize("UTC")
+
+        if pd.notna(first_tx) and first_tx < start_date_ts:
+            start_hist = first_tx
+        else:
+            start_hist = start_date_ts
+
+        # Ensure end_date is also UTC for range generation
+        end_date_ts = pd.Timestamp(end_date)
+        if end_date_ts.tzinfo is None:
+            end_date_ts = end_date_ts.tz_localize("UTC")
+
+        # Add buffer (e.g. 7 days before first tx for initial prices)
+        start_hist = pd.Timestamp(start_hist).floor("D") - pd.Timedelta(days=7)
+        date_range_hist = pd.date_range(
+            start=start_hist, end=end_date_ts, freq="D", tz="UTC"
+        )
+
         fx_pivot, price_pivot, price_exists_mask = self._prepare_market_data(
-            self._df_rates, self._df_prices, date_range
+            self._df_rates, self._df_prices, date_range_hist
         )
 
         df_augmented, fx_long = self._augment_transactions(self._df_txs, fx_pivot)
 
-        daily_invested_cum = self._calculate_invested_capital(df_augmented, date_range)
+        daily_neutral_flow = self._calculate_gross_neutral_flows(
+            df_augmented, date_range, price_pivot, fx_pivot, fx_long
+        )
+        daily_invested_cum = daily_neutral_flow.cumsum().fillna(0.0)
 
         div_flow, int_net, fees_net, taxes_net = self._calculate_cash_accumulators(
             df_augmented, self._df_units, self._df_txs, fx_long, date_range
@@ -290,7 +341,7 @@ class PerformanceEngine:
             df_augmented, price_pivot, fx_pivot, self._df_securities, date_range
         )
 
-        daily_cash_wealth = self._calculate_cash_wealth(
+        daily_cash_wealth, acc_balances = self._calculate_cash_wealth(
             self._df_txs, fx_pivot, fx_long, date_range
         )
 
@@ -324,27 +375,7 @@ class PerformanceEngine:
         result["realized_gains_eur"] = daily_realized.round(2)
         result["unrealized_gains_eur"] = daily_unrealized.round(2)
 
-        neutral_map = {
-            TransactionType.DEPOSIT: 1,
-            TransactionType.INBOUND_DELIVERY: 1,
-            TransactionType.REMOVAL: -1,
-            TransactionType.OUTBOUND_DELIVERY: -1,
-        }
-        df_neutral = df_augmented[df_augmented["type"].isin(neutral_map.keys())].copy()
-        if not df_neutral.empty:
-            df_neutral["neutral_sign"] = df_neutral["type"].map(neutral_map)
-            df_neutral["signed_amount"] = (
-                df_neutral["amount_eur"] * df_neutral["neutral_sign"]
-            )
-            neutral_flow = (
-                df_neutral.groupby("date")["signed_amount"]
-                .sum()
-                .reindex(date_range, fill_value=0.0)
-            )
-        else:
-            neutral_flow = pd.Series(0.0, index=date_range)
-
-        result["performance_neutral_movements"] = neutral_flow.round(2)
+        result["performance_neutral_movements"] = daily_neutral_flow.round(2)
         result["inbound_transfers_eur"] = 0.0
         result["outbound_transfers_eur"] = 0.0
         result["stale_price"] = daily_stale_flag.astype(int)
@@ -362,26 +393,317 @@ class PerformanceEngine:
                 last_row["invested_capital_eur"],
             )
 
+            # --- DEBUG: Detailed Breakdown Logic ---
+            try:
+                # End state only
+                e_ts = pd.Timestamp(end_date, tz="UTC")
+
+                # Securities
+                if not sec_holdings.empty and e_ts in sec_holdings.index:
+                    sh_row = sec_holdings.loc[e_ts]
+                    held = sh_row[sh_row.abs() > 1e-6]  # noqa: PLR2004
+                    if not held.empty:
+                        _LOGGER.debug("--- Security Breakdown for %s ---", end_date)
+                        for sec_uuid, qty in held.items():
+                            sec_name = self._resolve_sec_name(sec_uuid)
+                            # Price
+                            price = 0.0
+                            if sec_uuid in price_pivot.columns:
+                                price = price_pivot.loc[e_ts, sec_uuid]
+                            # FX
+                            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+                            rate = 1.0
+                            if curr != "EUR" and curr in fx_pivot.columns:
+                                rate = fx_pivot.loc[e_ts, curr]
+
+                            val_eur = (qty * price) / rate if rate else 0.0
+                            _LOGGER.debug(
+                                "SEC: %s | Qty=%.4f | P=%.4f | "
+                                "FX=%.4f (%s) | ValEUR=%.2f",
+                                sec_name,
+                                qty,
+                                price,
+                                rate,
+                                curr,
+                                val_eur,
+                            )
+
+                # Cash
+                if not acc_balances.empty and e_ts in acc_balances.index:
+                    ab_row = acc_balances.loc[e_ts]
+                    held_cash = ab_row[ab_row.abs() > 0.005]  # noqa: PLR2004
+                    if not held_cash.empty:
+                        _LOGGER.debug("--- Cash Breakdown for %s ---", end_date)
+                        for (acc_uuid, curr), balance in held_cash.items():
+                            acc_name = self._resolve_acc_name(acc_uuid)
+                            rate = 1.0
+                            if curr != "EUR" and curr in fx_pivot.columns:
+                                rate = fx_pivot.loc[e_ts, curr]
+                            val_eur = balance / rate if rate else 0.0
+                            _LOGGER.debug(
+                                "CASH: %s (%s) | Bal=%.2f | FX=%.4f | ValEUR=%.2f",
+                                acc_name,
+                                curr,
+                                balance,
+                                rate,
+                                val_eur,
+                            )
+            except Exception:
+                _LOGGER.exception("Failed to dump breakdown debug logs")
+
         return result
 
-    def _augment_transfers(
+    def _augment_transfers(  # noqa: PLR0915
         self,
         df_transfers: pd.DataFrame,
-        fx_long: pd.DataFrame,  # noqa: ARG002
+        fx_long: pd.DataFrame,
     ) -> pd.DataFrame:
-        """Augment transfer transactions with source currency information."""
+        """Augment transfer transactions with source and target currency information."""
         if df_transfers.empty:
             return df_transfers
 
-        df_out = df_transfers.copy()
-        df_out["currency_code"] = (
-            df_out["account"].map(self._account_currencies).fillna("EUR")
-        )
-        df_out["type"] = TransactionType.REMOVAL
+        # Pre-process Units for FX Overrides
+        # We look for units that have explicit FX targets
+        df_fx_units = pd.DataFrame()
+        if not self._df_units.empty:
+            # Filter for units with explicit FX data
+            mask_fx = (
+                self._df_units["fx_amount"].notna()
+                & self._df_units["fx_currency_code"].notna()
+            )
+            if mask_fx.any():
+                df_fx_units = self._df_units[mask_fx][
+                    ["transaction_uuid", "fx_amount", "fx_currency_code"]
+                ].drop_duplicates(subset=["transaction_uuid"])
 
+        # 1. Incoming Side (Target Account)
         df_in = df_transfers.copy()
         df_in["account"] = df_in["other_account"]
         df_in["type"] = TransactionType.DEPOSIT
+
+        # Resolve Target Currencies
+        target_currencies = df_in["account"].map(self._account_currencies).fillna("EUR")
+        df_in["currency_code_target"] = target_currencies
+
+        # Merge Explicit FX Data (Use join to preserve/align index)
+        if not df_fx_units.empty:
+            df_in = df_in.join(
+                df_fx_units.set_index("transaction_uuid"),
+                on="uuid",
+                how="left",
+            )
+        else:
+            df_in["fx_amount"] = np.nan
+            df_in["fx_currency_code"] = None
+
+        # 2. Outgoing Side (Source Account)
+        df_out = df_transfers.copy()
+        # Ensure type is explicitly int
+        df_out["type"] = int(TransactionType.REMOVAL)
+
+        # Resolve Source Currencies
+        source_currencies = (
+            df_out["account"].map(self._account_currencies).fillna("EUR")
+        )
+        df_out["currency_code_source"] = source_currencies
+
+        # --- Value Conversion & Flow Euro Value Logic ---
+        # We need 'flow_eur' to be the symmetric EUR value of the transfer.
+        # Strategy:
+        # 1. Calc Value_EUR for Source (from Amount_Source + Rate_Source)
+        # 2. Calc Value_EUR for Target (from Amount_Target + Rate_Target)
+        #    [Amount_Target from FX Units or Amount_Source]
+        # 3. If one is EUR, use that. Else Average.
+
+        # To do this, we need 'amount' and 'rate' for both sides available in one place.
+        # df_out has 'amount' (source). df_in has 'amount'
+        # (target - but currently it is copy of source!).
+        # Need to fix df_in 'amount' first using FX units.
+
+        # Fix df_in "amount" using Explicit FX Data (matches Target Side)
+        # Check if we have matching fx_currency_code
+        # - df_in already has merged data if available
+        mask_fx = pd.Series(data=False, index=df_in.index)
+        if "fx_amount" in df_in.columns:
+            mask_fx = df_in["fx_amount"].notna()
+            if mask_fx.any():
+                df_in.loc[mask_fx, "amount"] = df_in.loc[mask_fx, "fx_amount"]
+                df_in.loc[mask_fx, "currency_code_target"] = df_in.loc[
+                    mask_fx, "fx_currency_code"
+                ]  # Ensure currency matches fx
+
+            df_in = df_in.drop(
+                columns=["transaction_uuid", "fx_amount", "fx_currency_code"],
+                errors="ignore",
+            )
+
+        # Now we attach rates to both DFs
+        if not fx_long.empty:
+            # Create efficient lookup (MultiIndex)
+            rates_lookup = fx_long.set_index(["date", "currency_code"])["daily_fx_rate"]
+
+            # Helper to get rates preserving index
+            def get_rates(df: pd.DataFrame, curr_col: str) -> pd.Series:
+                # join preserves left index. 'on' maps columns to 'rates_lookup'.
+                # Result is DataFrame with added 'daily_fx_rate' column.
+                return df.join(rates_lookup, on=["date", curr_col])[
+                    "daily_fx_rate"
+                ].fillna(1.0)
+
+            rate_source = get_rates(df_out, "currency_code_source")
+            rate_target = get_rates(df_in, "currency_code_target")
+
+            # We need to perform the calculation row-wise.
+            # Since df_out and df_in are derived from same df_transfers,
+            # indices match if we didn't filter?
+            # They are copies. Reset index to be safe or align by UUID.
+            # But strictly, line-by-line alignment holds if we didn't drop rows.
+
+            val_source_eur = (df_out["amount"] / 100.0) / rate_source
+            val_target_eur = (df_in["amount"] / 100.0) / rate_target
+
+            is_source_eur = df_out["currency_code_source"] == "EUR"
+            is_target_eur = df_in["currency_code_target"] == "EUR"
+
+            # Vector allocation
+            final_flow_eur = pd.Series(0.0, index=df_out.index)
+
+            # Case 1: Source is EUR -> Use Source Val
+            final_flow_eur[is_source_eur] = val_source_eur[is_source_eur]
+
+            # Case 2: Target is EUR (and Source not) -> Use Target Val
+            mask_t_eur = is_target_eur & (~is_source_eur)
+            final_flow_eur[mask_t_eur] = val_target_eur[mask_t_eur]
+
+            # Case 3: Neither -> Average
+            mask_neither = (~is_source_eur) & (~is_target_eur)
+            final_flow_eur[mask_neither] = (
+                val_source_eur[mask_neither] + val_target_eur[mask_neither]
+            ) / 2.0
+
+            # Assign back
+            df_out["flow_eur"] = final_flow_eur
+            df_in["flow_eur"] = final_flow_eur
+
+            # Also Update Amounts (Legacy Logic required by other parts?)
+            # The existing logic updated 'df_in["amount"]' etc using rates.
+            # We already fixed 'amount' via FX units.
+            # Do we need to convert amounts if NO FX units?
+            # Yes, if no FX units, df_in["amount"] is still Source Amount!
+            # We must convert it to Target Currency.
+
+            # Identify where we need calc conversion (No FX Unit Override, mismatch)
+            # mask_fx check?
+            # We can re-check simple equality
+
+            # For simplicity, revert to 'apply_conversion' style logic
+            # strictly for adjusting AMOUNTS
+            # But using the rates we just fetched.
+
+            # Update df_in["amount"] where needed
+            # Valid only if not already fixed by FX Units
+            # (we assume if we merged, it's fixed? No check mask)
+            # We can trust our 'val_target_eur' * expected_rate_target? No.
+
+            # We leave amount adjustment to legacy logic below if needed?
+            # Actually, let's just REPLACE 'apply_conversion' with a simpler standard.
+
+            # Fix df_in Amount (Target) where it is just a copy of Source
+            # If Source!=TargetCurr AND No FX Unit.
+            # We can detect 'No FX Unit' by checking if we touched it?
+            # Or just: val_target_eur * rate_target * 100? No circular.
+            # Legacy logic:
+            # if mask_mismatch.any():
+            #    factor equals rate_acc / rate_tx
+            #    amount equals amount * factor
+
+            # We can replicate that inline:
+
+            # Note: df_in currently has 'amount' = Source Amount
+            # (unless overwritten by FX).
+            # We didn't keep a flag, but we assume:
+            # Re-implementation of 'apply_conversion' is safe if we inject 'flow_eur'.
+
+            # Use 'final_flow_eur' to derive amounts if we want consistency?
+            # Amount_Source equals final_flow_eur * rate_source * 100
+            # Amount_Target equals final_flow_eur * rate_target * 100
+            # (Ensures Amount / Rate == flow_eur EXACTLY).
+
+            # Correct df_in["amount"] (Target) if it makes no sense
+            # (i.e. copy of Source).
+            # Conditions: Currency Mismatch AND No FX Unit Override.
+            # Convert 'amount' to target currency using Rate if needed.
+
+            # We TRUST that the previous FX Unit merge block handled overrides.
+            # We ONLY touch rows that have mismatch currency AND were not fixed.
+            # Check: df_in["currency_code"] vs df_out["currency_code"]. Matches?
+
+            # Let's perform conversion for ALL mismatch rows where
+            # we assume no override exists?
+            # If we leave it, we have 20000 USD in a JPY account -> 20000 JPY.
+            # This would be a HUGE ERROR.
+
+            # We MUST convert df_in["amount"] if it's currently Source Amount.
+            # We can iterate or vector calculate using 'rate_target' and 'rate_source'.
+            # AmountTarget = ValueTarget * rate_target.
+
+            # We calculate 'final_flow_eur', let's use it to derive AmountTarget?
+            # BUT Test `test_augment_transfers_explicit_fx` showed that
+            # `final_flow_eur` (Average) breaks the Explicit Override Amount.
+
+            # Correct Logic:
+            # 1. df_out["amount"] -> Keep as is (Source Reality).
+            # 2. df_in["amount"] ->
+            #    If Explicit Override -> Keep as is.
+            #    If No Override -> Convert using Market Rate (Source->EUR->Target).
+
+            # ...
+
+            # So we check: Is `amount` consistent with Source?
+            # If `amount` == `df_out["amount"]` AND different currencies.
+            # Then it's a raw copy. We convert.
+            # If `amount` != `df_out["amount"]`, it was overridden. We keep it.
+
+            mask_needs_conv = (df_in["amount"] == df_out["amount"]) & (
+                df_in["currency_code_target"] != df_out["currency_code_source"]
+            )
+
+            if mask_needs_conv.any():
+                conv_factor = (1.0 / rate_source) * rate_target  # From Source to Target
+                # Be careful with 0 rates
+                # If rate_source is 0?
+                with np.errstate(divide="ignore"):
+                    new_amts = (
+                        (
+                            df_in.loc[mask_needs_conv, "amount"]
+                            * conv_factor[mask_needs_conv]
+                        )
+                        .fillna(0)
+                        .round()
+                        .astype(int)
+                    )
+
+                df_in.loc[mask_needs_conv, "amount"] = new_amts
+
+            # Logic cleanup
+            df_in["currency_code"] = df_in["currency_code_target"]
+            df_out["currency_code"] = df_out["currency_code_source"]
+
+            drop_cols = ["currency_code_target", "currency_code_source"]
+            df_in = df_in.drop(columns=drop_cols, errors="ignore")
+            df_out = df_out.drop(columns=drop_cols, errors="ignore")
+
+        else:
+            # Fallback (No rates)
+            df_in["currency_code"] = df_in["currency_code_target"]
+            df_out["currency_code"] = df_out["currency_code_source"]
+
+            df_in["flow_eur"] = 0.0
+            df_out["flow_eur"] = 0.0
+
+            # Drop temporary cols
+            df_in = df_in.drop(columns=["currency_code_target"])
+            df_out = df_out.drop(columns=["currency_code_source"])
 
         return pd.concat([df_out, df_in], ignore_index=True)
 
@@ -486,7 +808,6 @@ class PerformanceEngine:
             self._df_txs,
             start_date,
             end_date,
-            self._account_currencies,
             basis_ts=basis_ts,
         )
 
@@ -513,14 +834,35 @@ class PerformanceEngine:
         )
 
         diff = abs(metrics.absolute_performance - derived_abs)
-        if diff > _BREAKDOWN_THRESHOLD:
-            _LOGGER.warning(
-                "Performance Summation Mismatch for %s to %s: "
-                "AbsPerf=%.2f vs Derived=%.2f (Diff=%.2f). "
-                "Components: R=%.2f, U=%.2f, FX=%.2f, "
-                "Div=%.2f, Int=%.2f, Fee=%.2f, Tax=%.2f, Neu=%.2f",
+        if diff > _BREAKDOWN_THRESHOLD or _LOGGER.isEnabledFor(logging.DEBUG):
+            log_level = (
+                logging.WARNING if diff > _BREAKDOWN_THRESHOLD else logging.DEBUG
+            )
+            _LOGGER.log(
+                log_level,
+                "Performance Summation: %s to %s\n"
+                "  > Wealth: Start=%.2f, End=%.2f, Delta=%.2f\n"
+                "  > Invested: Start=%.2f, End=%.2f, Delta=%.2f\n"
+                "  > AbsPerf (WealthDelta - InvDelta) = %.2f\n"
+                "  > Derived (Sum of Components)    = %.2f\n"
+                "  > Difference                     = %.2f\n"
+                "  > Components:\n"
+                "      Realized   = %.2f\n"
+                "      Unrealized = %.2f\n"
+                "      FX Cash    = %.2f\n"
+                "      Dividends  = %.2f\n"
+                "      Interest   = %.2f\n"
+                "      Fees       = %.2f\n"
+                "      Taxes      = %.2f\n"
+                "      Neutral    = %.2f",
                 start_date,
                 end_date,
+                start_wealth,
+                end_wealth,
+                end_wealth - start_wealth,
+                start_invested,
+                end_invested,
+                end_invested - start_invested,
                 metrics.absolute_performance,
                 derived_abs,
                 diff,
@@ -532,13 +874,6 @@ class PerformanceEngine:
                 sum_fee,
                 sum_tax,
                 sum_neu,
-            )
-        else:
-            _LOGGER.debug(
-                "Performance Summation Verified (Diff=%.4f) for %s:%s",
-                diff,
-                start_date,
-                end_date,
             )
 
         # 4. Filter Cash Flows (TWR/IRR)
@@ -897,26 +1232,167 @@ class PerformanceEngine:
         # Rename to 'fx_rate'
         return merged.rename(columns={"rate": "fx_rate"})
 
-    def _calculate_invested_capital(
-        self, df_augmented: pd.DataFrame, date_range: pd.DatetimeIndex
+    def _calculate_gross_neutral_flows(  # noqa: PLR0915
+        self,
+        df_augmented: pd.DataFrame,
+        date_range: pd.DatetimeIndex,
+        price_pivot: pd.DataFrame,
+        fx_pivot: pd.DataFrame,
+        fx_long: pd.DataFrame,
     ) -> pd.Series:
-        flow_types = {
+        """
+        Calculate daily gross neutral flows (Invested Capital changes).
+
+        Includes:
+        - Cash Flows: Deposits (In), Removals (Out).
+        - Asset Flows: Deliveries (In/Out), Transfers (Internal/External).
+        - Grossing Up/Down: Adds Fees/Taxes to the neutral flow to reflect
+          pure external movements before expenses.
+        """
+        neutral_types = {
             TransactionType.DEPOSIT: 1,
             TransactionType.INBOUND_DELIVERY: 1,
             TransactionType.REMOVAL: -1,
             TransactionType.OUTBOUND_DELIVERY: -1,
+            TransactionType.SECURITY_TRANSFER: 1,
         }
-        df_flows = df_augmented[df_augmented["type"].isin(flow_types)].copy()
-        if not df_flows.empty:
-            df_flows["sign"] = df_flows["type"].map(flow_types)
-            df_flows["flow_val"] = df_flows["amount_eur"] * df_flows["sign"]
-            daily_invested_flow = df_flows.groupby("date")["flow_val"].sum()
-            return (
-                daily_invested_flow.cumsum()
-                .reindex(date_range, method="ffill")
-                .fillna(0.0)
+
+        daily_flow = pd.Series(0.0, index=date_range)
+
+        # 1. Base Flows
+        df_neutral = df_augmented[
+            df_augmented["type"].isin(neutral_types.keys())
+        ].copy()
+
+        if df_neutral.empty:
+            return daily_flow
+
+        df_neutral["sign"] = df_neutral["type"].map(neutral_types)
+
+        # --- A. Standard Cash (Net Amount) ---
+        # Value equals AmountEUR * Sign
+        # Note: 'amount_eur' is derived from 'amount' (magnitude)
+        # in _augment_transactions.
+        # We assume 'amount' >= 0 there usually.
+        # But if 'amount' is 0, we skip here.
+        mask_cash = df_neutral["amount"].abs() > 1e-6  # noqa: PLR2004
+        if mask_cash.any():
+            df_cash = df_neutral[mask_cash].copy()
+            df_cash["flow_val"] = df_cash["amount_eur"] * df_cash["sign"]
+            sum_cash = (
+                df_cash.groupby("date")["flow_val"]
+                .sum()
+                .reindex(date_range, fill_value=0.0)
             )
-        return pd.Series(0.0, index=date_range)
+            daily_flow = daily_flow.add(sum_cash, fill_value=0)
+
+        # --- B. Share Value (if Amount ~ 0) ---
+        # Applicable for Deliveries and Transfers
+        mask_share = (df_neutral["amount"].abs() <= 1e-6) & (  # noqa: PLR2004
+            df_neutral["security"].notna()
+        )
+        if mask_share.any():
+            df_share = df_neutral[mask_share].copy()
+            share_sums = {}
+
+            # Iterate for valuation
+            # (simpler than vectorizing pivot lookup with sparse data)
+            for row in df_share.itertuples():
+                d = row.date
+                sec_id = row.security
+                qty = row.shares / 100000000.0
+                sign = row.sign
+
+                # Price
+                price = 0.0
+                if sec_id in price_pivot.columns:
+                    try:
+                        price = price_pivot.loc[d, sec_id]
+                    except KeyError:
+                        price = 0.0
+
+                # FX
+                curr = row.currency_code
+                rate = 1.0
+                if curr in fx_pivot.columns:
+                    try:
+                        rate = fx_pivot.loc[d, curr]
+                    except KeyError:
+                        rate = 1.0
+
+                # Value
+                # For Transfer (Sign=1), Qty can be negative
+                # -> reducing invested capital?
+                # or positive -> increasing.
+                # For DeliveryOut (Sign=-1), Qty usually positive -> negative flow.
+                val_eur = (qty * price) / rate
+                # Apply Type Sign
+                # Transfer (4, Sign=1) * Negative Qty = Negative Value. OK.
+                # DeliveryOut (3, Sign=-1) * Positive Qty = Negative Value. OK.
+                val_signed = val_eur * sign
+
+                share_sums[d] = share_sums.get(d, 0.0) + val_signed
+
+            if share_sums:
+                daily_share = pd.Series(share_sums).reindex(date_range, fill_value=0.0)
+                daily_flow = daily_flow.add(daily_share, fill_value=0)
+
+        # --- C. Gross Adjustment (Fees/Taxes) ---
+        # Flow = Net_Signed + Fee_Amount (Positive Expense).
+        # Check units for these transactions.
+        if not self._df_units.empty:
+            neutral_uuids = df_neutral["uuid"]
+            df_u_neutral = self._df_units[
+                self._df_units["transaction_uuid"].isin(neutral_uuids)
+            ].copy()
+
+            if not df_u_neutral.empty:
+                # Filter for Fees/Taxes
+                df_u_neutral = df_u_neutral[
+                    df_u_neutral["type"].isin([UNIT_TYPE_FEE, UNIT_TYPE_TAX])
+                ]
+
+            if not df_u_neutral.empty:
+                # Merge to get Date/Currency
+                df_u_calc = df_u_neutral.merge(
+                    df_neutral[["uuid", "date"]],
+                    left_on="transaction_uuid",
+                    right_on="uuid",
+                    how="left",
+                )
+                # Merge FX
+                df_u_calc = df_u_calc.merge(
+                    fx_long,
+                    on=["date", "currency_code"],
+                    how="left",
+                )
+                df_u_calc["daily_fx_rate"] = df_u_calc["daily_fx_rate"].fillna(1.0)
+                df_u_calc["val_eur"] = (df_u_calc["amount"] / 100.0) / df_u_calc[
+                    "daily_fx_rate"
+                ]
+
+                # Sum per day
+                adj_sums = (
+                    df_u_calc.groupby("date")["val_eur"]
+                    .sum()
+                    .reindex(date_range, fill_value=0.0)
+                )
+
+                # ALWAYS ADD Fees/Taxes to the flow.
+                # Deposit (Positive) + Fee = Larger Positive (Gross Inflow).
+                # Removal (Negative) + Fee = Smaller Negative
+                # (Gross Outflow/Net External).
+                # Wait. Removal (-100) + Fee (10) = -90.
+                # This implies I removed 90 from external world, and 10 was lost to fee?
+                # Or I requested 100 removal, got 90?
+                # Task: Neutral Movement is the amount of money/value that cleanly
+                # entered/left the portfolio boundary.
+                # Scenario B: 100 deducted (includes 10 fee). Recipient gets 90.
+                # Neutral Flow should be -90.
+                # Calculation: -100 (Net Amt) + 10 (Fee) = -90. Correct.
+                daily_flow = daily_flow.add(adj_sums, fill_value=0)
+
+        return daily_flow
 
     def _calculate_cash_accumulators(
         self,
@@ -1053,10 +1529,10 @@ class PerformanceEngine:
         fx_pivot: pd.DataFrame,
         fx_long: pd.DataFrame,
         date_range: pd.DatetimeIndex,
-    ) -> pd.Series:
+    ) -> tuple[pd.Series, pd.DataFrame]:
         daily_cash_wealth = pd.Series(0.0, index=date_range)
         if df_txs.empty:
-            return daily_cash_wealth
+            return daily_cash_wealth, pd.DataFrame(index=date_range)
 
         df_standard = df_txs[df_txs["type"] != TransactionType.CASH_TRANSFER].copy()
         df_transfers = df_txs[df_txs["type"] == TransactionType.CASH_TRANSFER].copy()
@@ -1070,17 +1546,17 @@ class PerformanceEngine:
             df_cash_calc = df_standard
 
         cash_signs = {
-            TransactionType.SELL: 1,
-            TransactionType.DEPOSIT: 1,
-            TransactionType.DIVIDEND: 1,
-            TransactionType.INTEREST: 1,
-            TransactionType.TAX_REFUND: 1,
-            TransactionType.FEE_REFUND: 1,
-            TransactionType.BUY: -1,
-            TransactionType.REMOVAL: -1,
-            TransactionType.INTEREST_CHARGE: -1,
-            TransactionType.TAX: -1,
-            TransactionType.FEE: -1,
+            int(TransactionType.SELL): 1,
+            int(TransactionType.DEPOSIT): 1,
+            int(TransactionType.DIVIDEND): 1,
+            int(TransactionType.INTEREST): 1,
+            int(TransactionType.TAX_REFUND): 1,
+            int(TransactionType.FEE_REFUND): 1,
+            int(TransactionType.BUY): -1,
+            int(TransactionType.REMOVAL): -1,
+            int(TransactionType.INTEREST_CHARGE): -1,
+            int(TransactionType.TAX): -1,
+            int(TransactionType.FEE): -1,
         }
 
         if not df_cash_calc.empty:
@@ -1116,7 +1592,7 @@ class PerformanceEngine:
             val = bal / rates.where(rates > 0, 1.0)
             daily_cash_wealth = daily_cash_wealth.add(val.fillna(0.0))
 
-        return daily_cash_wealth
+        return daily_cash_wealth, acc_balances
 
     def _get_price(self, sec_id: str, d: pd.Timestamp) -> float:
         try:
@@ -1524,93 +2000,260 @@ class PerformanceEngine:
 
             if abs(gain_accum) > _GAIN_EPSILON:
                 unrealized_gains_map[sec_id] = gain_accum
+                if abs(gain_accum) > 100.0 and _LOGGER.isEnabledFor(  # noqa: PLR2004
+                    logging.DEBUG
+                ):
+                    # Only log significant items
+                    _LOGGER.debug(
+                        "Detailed Unrealized: Sec=%s, EndPrice=%.4f (FX=%.4f), "
+                        "Gain=%.2f. InvCount=%d",
+                        sec_id,
+                        end_price,
+                        end_fx,
+                        gain_accum,
+                        len(lots),
+                    )
 
         return unrealized_gains_map
 
-    def _calculate_fx_performance(  # noqa: PLR0912
+    def _calculate_fx_performance(  # noqa: PLR0912, PLR0915
         self,
         df_txs: pd.DataFrame,
         start_date: date,
         end_date: date,
-        account_currencies: dict[str, str],
         basis_ts: pd.Timestamp | None = None,
     ) -> float:
+        """
+        Calculate FX gains on Cash Accounts using Balance Sheet method.
+
+        Formula: Gain = (End_Val_EUR - Start_Val_EUR) - (Net_Inflows_EUR)
+        Where Net_Inflows = Sum(Inflows_EUR) - Sum(Outflows_EUR)
+        """
         start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
         if basis_ts is None:
             basis_ts = start_ts
 
-        inventory: dict[tuple[str, str], deque[Lot]] = {}
-        fx_gains_eur = 0.0
-        txs = df_txs.sort_values("date")
-        for row in txs.itertuples():
-            operations = []
-            if row.type == TransactionType.CASH_TRANSFER:
-                target_acc = row.other_account
-                target_curr = row.currency_code
-                target_amt = abs(row.amount_norm)
-                if target_acc:
-                    operations.append((target_acc, target_curr, target_amt))
-                source_acc = row.account
-                if source_acc:
-                    source_curr = account_currencies.get(source_acc, "EUR")
-                    if source_curr == target_curr:
-                        source_amt = -abs(row.amount_norm)
-                        operations.append((source_acc, source_curr, source_amt))
-                    else:
-                        target_rate = self._get_fx(target_curr, row.date)
-                        source_rate = self._get_fx(source_curr, row.date)
-                        val_eur = (target_amt / target_rate) if target_rate else 0.0
-                        amt_source = val_eur * source_rate
-                        operations.append((source_acc, source_curr, -amt_source))
-            else:
-                sign = self._get_cash_flow_sign(row.type)
-                if sign != 0:
-                    operations.append(
-                        (row.account, row.currency_code, row.amount_norm * sign)
-                    )
+        if df_txs.empty:
+            return 0.0
 
-            for acc_id, curr, cash_flow in operations:
-                if not acc_id or curr == "EUR":
-                    continue
-                key = (acc_id, curr)
-                tx_fx = self._get_fx(curr, row.date)
-                if cash_flow > 0:
-                    if key not in inventory:
-                        inventory[key] = deque()
-                    inventory[key].append(
-                        Lot(
-                            date=row.date,
-                            shares=cash_flow,
-                            price_native=1.0,
-                            fx_rate=tx_fx,
-                        )
-                    )
-                elif cash_flow < 0:
-                    if inventory.get(key):
-                        gain = self._process_cash_outflow(
-                            inventory[key],
-                            abs(cash_flow),
-                            tx_fx,
-                            start_ts,
-                            basis_ts,
-                            curr,
-                        )
-                        if row.date >= start_ts:
-                            fx_gains_eur += gain
-        # Unrealized
-        for (_acc_id, curr), lots in inventory.items():
-            if not lots:
-                continue
-            end_fx = self._get_fx(curr, end_ts)
-            for lot in lots:
-                base_fx = (
-                    self._get_fx(curr, basis_ts) if lot.date < start_ts else lot.fx_rate
+        # 1. Prepare Market Data (FX)
+        min_date = df_txs["date"].min()
+        if pd.isna(min_date):
+            min_date = start_ts
+        full_range = pd.date_range(start=min_date, end=end_ts, freq="D", tz="UTC")
+
+        if not self._df_rates.empty:
+            if not self._rates_idx.empty:
+                fx_pivot = self._rates_idx["rate"].unstack(level=0)  # noqa: PD010
+            else:
+                fx_pivot = self._df_rates.pivot_table(
+                    index="date", columns="currency", values="rate"
                 )
-                end_val = (lot.shares / end_fx) if end_fx else 0.0
-                base_val = (lot.shares / base_fx) if base_fx else 0.0
-                fx_gains_eur += end_val - base_val
-        return fx_gains_eur
+
+            fx_pivot = fx_pivot.reindex(full_range).ffill().bfill()
+            fx_pivot["EUR"] = 1.0
+
+            fx_long = fx_pivot.reset_index(names="date").melt(
+                id_vars="date", var_name="currency_code", value_name="daily_fx_rate"
+            )
+            fx_long["currency_code"] = fx_long["currency_code"].astype(str)
+        else:
+            fx_long = pd.DataFrame(columns=["date", "currency_code", "daily_fx_rate"])
+
+        # 2. Get Start and End Balances
+        # Start Balance is at 'start_date'.
+        # (which is effectively end of previous day/start of this day)
+        # Note: 'get_account_balances' returns PRE-start balances if passed start_ts.
+        # Yes, Gain period is [start_ts, end_ts].
+        # Start Value = Value at start_ts (End of Day t-1).
+        # End Value = Value at end_ts.
+
+        # Note: get_daily_wealth uses start_prev for Basis.
+        # But 'basis_ts' arg here is 'start_prev'.
+        # We need balances at 'basis_ts' (t-1) for START value?
+        # NO. We need Balances at Start of Period. Start of Period is T.
+        # So we need Balances at End of T-1.
+
+        # _get_account_balances(start_ts) returns balances at start_ts
+        # (exclusive of txs ON start_ts).
+        # Which is exactly what we want for "Start of Day" Balance.
+
+        bal_start = self._get_account_balances(start_ts)
+        bal_end = self._get_account_balances(
+            end_ts + pd.Timedelta(days=1)
+        )  # Inclusive of end_ts?
+        # end_date is usually inclusive in PP.
+        # So we want Balances AFTER end_date transactions.
+        # So pass end_ts + 1 day.
+
+        # 3. Calculate Valuation Changes
+        fx_gains_total = 0.0
+
+        # Identify Foreign Accounts (UNION of start keys, end keys)
+        all_keys = set(bal_start.index) | set(bal_end.index)
+
+        for acc_id, curr_code in all_keys:
+            if curr_code == "EUR":
+                continue
+
+            qty_start = bal_start.get((acc_id, curr_code), 0.0)
+            qty_end = bal_end.get((acc_id, curr_code), 0.0)
+
+            rate_start = self._get_fx(curr_code, start_ts)
+            rate_end = self._get_fx(curr_code, end_ts)
+
+            # Value = Quantity / Rate (if Rate is Foreign/EUR)
+            val_start_eur = qty_start / rate_start if rate_start else 0.0
+            val_end_eur = qty_end / rate_end if rate_end else 0.0
+
+            # 4. Calculate Flows for this Account
+            # Scan transactions in period [start_ts, end_ts]
+            # (mask_per removed as unused)
+
+            # We need to process Transfers specially (via augment logic)
+            # OR we can assume 'df_txs' passed here is RAW.
+            # If Raw, we need to apply 'augment' to get 'flow_eur'.
+            # BUT 'augment' works on the whole block usually.
+
+            # Let's augment the WHOLE period slice once.
+
+        # --- Augmentation & Flow Calculation ---
+        # Filter for the relevant time window first to save time?
+        mask_window = (df_txs["date"] >= start_ts) & (df_txs["date"] <= end_ts)
+        df_window = df_txs[mask_window].copy()
+
+        transfers = df_window[df_window["type"] == TransactionType.CASH_TRANSFER].copy()
+        standard = df_window[df_window["type"] != TransactionType.CASH_TRANSFER].copy()
+
+        augmented_transfers = self._augment_transfers(transfers, fx_long)
+
+        # Combine
+        combined = pd.concat([standard, augmented_transfers], ignore_index=True)
+
+        # Now iterate Combined to sum Flows by Account
+        # We need Net Flow EUR.
+        # If 'flow_eur' exists (from transfers), use it.
+        # Else compute: amount_norm / rate_at_date.
+
+        def calc_flow_val(row: pd.Series) -> float:
+            if (
+                hasattr(row, "flow_eur")
+                and pd.notna(row.flow_eur)
+                and row.flow_eur != 0
+            ):
+                # We need to apply sign.
+                return float(row.flow_eur)
+
+            # Standard logic
+            r = self._get_fx(row.currency_code, row.date)
+            return (
+                (row.amount_norm if hasattr(row, "amount_norm") else row.amount / 100.0)
+                / r
+                if r
+                else 0.0
+            )
+
+        # Apply signs
+        # DEPOSIT = Inflow (+). REMOVAL = Outflow (-).
+
+        # We can iterate or group.
+        # Group by [account, currency]
+
+        # We need to apply signs to the flows!
+        # We need to apply signs to the flows!
+        type_signs = {
+            TransactionType.SELL: 1,
+            TransactionType.DEPOSIT: 1,
+            TransactionType.DIVIDEND: 1,
+            TransactionType.INTEREST: 1,
+            TransactionType.TAX_REFUND: 1,
+            TransactionType.FEE_REFUND: 1,
+            TransactionType.BUY: -1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.INTEREST_CHARGE: -1,
+            TransactionType.TAX: -1,
+            TransactionType.FEE: -1,
+            TransactionType.CASH_TRANSFER: -1,
+        }
+
+        combined["sign"] = combined["type"].map(type_signs).fillna(0)
+
+        # Calculate EUR value for each row
+        # We can vectorizing lookup of rates
+        # But 'augment' did complex logic.
+        # We need to respect 'flow_eur' if present.
+
+        # Optimization: Indices of rows with flow_eur
+        if "flow_eur" in combined.columns:
+            mask_fe = combined["flow_eur"].notna() & (combined["flow_eur"] != 0)
+        else:
+            mask_fe = pd.Series(data=False, index=combined.index)
+
+        # For rows WITHOUT flow_eur, we need rates.
+        if (~mask_fe).any():
+            # We rely on loop or expensive merge?
+            # Merge is acceptable for window.
+            # Or loop.
+            pass
+
+        # Actually, let's just loop combined.itertuples() for summation.
+        # Or construct a groupby.
+
+        # Merge rates for everything non-flow_eur
+        if (~mask_fe).any():
+            # Get rates
+            # Helper:
+            tmp = combined[~mask_fe].copy()
+            # If amount_norm missing?
+            if "amount_norm" not in tmp.columns:
+                tmp["amount_norm"] = tmp["amount"] / 100.0
+
+            # Merge FX
+            # We need to use 'self._get_fx' logic (cache/lookup)
+            # Vectorized using fx_long (which we prepared).
+            tmp = tmp.merge(fx_long, how="left", on=["date", "currency_code"])
+            tmp["daily_fx_rate"] = tmp["daily_fx_rate"].fillna(1.0)
+
+            calc_vals = tmp["amount_norm"] / tmp["daily_fx_rate"]
+            combined.loc[~mask_fe, "final_val_eur"] = calc_vals
+
+        if "final_val_eur" not in combined.columns:
+            combined["final_val_eur"] = 0.0
+
+        if "flow_eur" in combined.columns:
+            combined.loc[mask_fe, "final_val_eur"] = combined.loc[mask_fe, "flow_eur"]
+
+        combined["signed_flow_eur"] = combined["final_val_eur"] * combined["sign"]
+
+        # Sum by Account/Currency
+        net_flows = combined.groupby(["account", "currency_code"])[
+            "signed_flow_eur"
+        ].sum()
+
+        # Now Calc Gains per Account
+        for acc_id, curr_code in all_keys:
+            if curr_code == "EUR":
+                continue
+
+            qty_start = bal_start.get((acc_id, curr_code), 0.0)
+            qty_end = bal_end.get((acc_id, curr_code), 0.0)
+
+            rate_start = self._get_fx(curr_code, start_ts)
+            rate_end = self._get_fx(curr_code, end_ts)
+
+            val_start_eur = qty_start / rate_start if rate_start else 0.0
+            val_end_eur = qty_end / rate_end if rate_end else 0.0
+
+            flow_eur = net_flows.get((acc_id, curr_code), 0.0)
+
+            # Calc Gain
+            gain = (val_end_eur - val_start_eur) - flow_eur
+
+            if abs(gain) > 0.005:  # noqa: PLR2004
+                fx_gains_total += gain
+
+        return fx_gains_total
 
     def _get_cash_flow_sign(self, t_type: int) -> int:
         if t_type in [
@@ -1830,10 +2473,11 @@ class PerformanceEngine:
         }
 
         # Calculate signed shares
-        # Note: We rely on the fact that `shares_norm` is already in normalized units
-        # but we need to apply the direction (Buy/Sell)
+        # Note: We rely on the fact that `shares_norm` is usually positive in DB,
+        # but apply the direction map to handle Buy/Sell correctly.
+        # If shares_norm is negative (legacy), this might double-flip,
+        # but we align with engine_pandas.
 
-        # Helper to map type to sign
         df_past["sign"] = df_past["type"].map(share_signs).fillna(0)
         df_past["delta_shares"] = df_past["shares_norm"].fillna(0.0) * df_past["sign"]
 
@@ -1842,3 +2486,109 @@ class PerformanceEngine:
 
         # Filter out zero or near-zero holdings and return dict
         return {k: v for k, v in holdings.items() if abs(v) > _SHARE_EPSILON}
+
+    def _get_account_balances(self, ts: pd.Timestamp) -> pd.DataFrame:
+        """
+        Calculate account balances at a specific timestamp (EOD of previous day).
+
+        Returns DataFrame with index [account, currency] and column 'balance'.
+        """
+        if self._df_txs.empty:
+            return pd.DataFrame(columns=["balance"])
+
+        # Filter transactions strictly BEFORE the ts (ts is Start of Day)
+        # We want End of Prev Day.
+        # Actually ts is usually Start Date 00:00:00.
+        # So transactions ON ts should NOT be included in "Starting Balance".
+        # Transactions < ts.
+
+        mask = (self._df_txs["date"] < ts) & (self._df_txs["account"].notna())
+        df_past = self._df_txs[mask].copy()
+
+        if df_past.empty:
+            return pd.DataFrame(columns=["balance"])
+
+        # Calculate signs
+        # We can't vector-map _get_cash_flow_sign efficiently via apply row-by-row
+        # if performance matters, but map using a dict is fast.
+
+        # Build map
+        type_signs = {
+            TransactionType.SELL: 1,
+            TransactionType.DEPOSIT: 1,
+            TransactionType.DIVIDEND: 1,
+            TransactionType.INTEREST: 1,
+            TransactionType.TAX_REFUND: 1,
+            TransactionType.FEE_REFUND: 1,
+            TransactionType.BUY: -1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.INTEREST_CHARGE: -1,
+            TransactionType.TAX: -1,
+            TransactionType.FEE: -1,
+            # In native df_txs, CASH_TRANSFER rows are Outflows from 'account'.
+            TransactionType.CASH_TRANSFER: -1,
+        }
+
+        df_past["sign"] = df_past["type"].map(type_signs).fillna(0)
+
+        # We need to handle Transfers carefully if they appear once or twice.
+        # IF source/target logic is tricky, we rely on normalization elsewhere
+        # but here we approximate.
+        # In HA-PP: CASH_TRANSFER is typically filtered/normalized.
+        # If the DB has two rows (one for each side), great.
+
+        # Quick fix: Double the transfer rows for the target side.
+        mask_transfers = df_past["type"] == TransactionType.CASH_TRANSFER
+        if mask_transfers.any():
+            transfers = df_past[mask_transfers].copy()
+            transfers["account"] = transfers["other_account"]
+            transfers["sign"] = 1  # Deposit
+
+            # Currency for target?
+            # In 'transactions' table, 'currency_code' is for the 'amount'.
+            # If transfer is Cross-Currency, we need the Target Currency.
+            # We can look it up from account map.
+
+            # Vectorized lookup
+            target_accs = transfers["account"]
+            # self._account_currencies is dict.
+            mapped_curr = target_accs.map(self._account_currencies)
+            transfers["currency_code"] = mapped_curr.fillna(transfers["currency_code"])
+
+            # Amount? If FX involved, we ideally look at transaction_units.
+            # But for speed in this helper, we might drift if we don't look at Units.
+            # Let's assume simplest case (Balance Sheet is robust-ish).
+            # Or assume we rely on 'augment' elsewhere.
+            # BUT this function is used for Start/End Balance. Accuracy matters.
+
+            # Try to fetch fx_amount from df_units if loaded
+            if not self._df_units.empty:
+                # Merge
+                transfers = transfers.merge(
+                    self._df_units[
+                        ["transaction_uuid", "fx_amount", "fx_currency_code"]
+                    ],
+                    left_on="uuid",
+                    right_on="transaction_uuid",
+                    how="left",
+                )
+
+                # If fx_amount present, use it
+                mask_fx = transfers["fx_amount"].notna()
+                if mask_fx.any():
+                    # amount_norm update
+                    transfers.loc[mask_fx, "amount_norm"] = (
+                        transfers.loc[mask_fx, "fx_amount"] / 100.0
+                    )
+
+                # cleanup
+                transfers = transfers.drop(
+                    columns=["transaction_uuid", "fx_amount", "fx_currency_code"],
+                    errors="ignore",
+                )
+
+            df_past = pd.concat([df_past, transfers], ignore_index=True)
+
+        df_past["signed_amount"] = df_past["amount_norm"] * df_past["sign"]
+
+        return df_past.groupby(["account", "currency_code"])["signed_amount"].sum()

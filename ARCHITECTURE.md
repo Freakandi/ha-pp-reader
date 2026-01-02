@@ -268,7 +268,7 @@ The "Analyse" tab and all performance metrics are now powered by the `metrics.ca
 
 - **Vectorized Calculation**: On API request, the engine loads all transactions, prices, and FX rates into Pandas DataFrames. It calculates daily time series for total wealth, invested capital, and cashflow buckets (dividends, fees, etc.) for the requested date range.
 - **Period Performance**: Implements FIFO logic to calculate period-specific realized and unrealized gains, correctly using the market value at the period's start as the baseline for holdings that existed at that time.
-- **Cash FX Gains**: Treats foreign currency holdings as an asset with a price of 1.0 to accurately isolate and calculate gains or losses from FX fluctuations.
+- **Cash FX Gains**: Uses the "Balance Sheet" method: Gain = (End Value - Start Value) - Net Inflow. This aligns with Portfolio Performance logic and accurately captures valuation changes even for accounts with 0 balance.
 - **Single Source of Truth**: This engine is the single source of truth for all performance data, ensuring consistency across the "Analyse," "Trades," and "Overview" tabs. The `daily_wealth` table has been removed.
 
 
