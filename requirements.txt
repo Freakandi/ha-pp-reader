@@ -2,9 +2,9 @@ colorlog==6.10.1
 homeassistant==2025.12.1
 pip>=21.3.1
 
-pycares<5
-# aiodns is pinned to 3.5.0 to be compatible with pycares<5
-aiodns==3.5.0
+pycares<6
+# aiodns is pinned to 3.6.1 to be compatible with pycares<6
+aiodns==3.6.1
 # Dependencies from manifest.json
 protobuf>=4.25.0
 pandas>=2.2.0
