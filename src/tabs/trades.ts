@@ -3,7 +3,13 @@
  */
 
 import type { TableRow } from '../content/elements';
-import { createHeaderCard, makeTable } from '../content/elements';
+import {
+  createHeaderCard,
+  createSimpleSortHeader,
+  createSortHeader,
+  makeTable,
+  stack,
+} from '../content/elements';
 // import { openTradeDetail } from '../dashboard';
 import type { RealizedLot, RealizedTrade } from '../data/api';
 import { fetchRealizedPerformance } from '../data/api';
@@ -140,20 +146,6 @@ function renderTrend(value: number, formatted: string): string {
   return `<span class="${cls}">${formatted}</span>`;
 }
 
-function createSortHeader(labelTop: string, selectorTop: string, labelBottom: string, selectorBottom: string): string {
-  return `
-    <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
-    </div>
-  `;
-}
-
-function createSimpleSortHeader(label: string, key: string): string {
-  // Use a pseudo-selector or data-key for simple columns
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
-}
-
 function renderTradesTable(trades: readonly RealizedTrade[]): string {
   if (trades.length === 0) {
     return STYLES + `
@@ -198,14 +190,6 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
       align: 'right' as const,
     },
   ];
-
-  // Helper for stacked cells
-  const stack = (topVal: number | string, topFmt: string, botVal: number | string, botFmt: string) => `
-      <div class="cell-stack">
-        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
-      </div>
-    `;
 
   const rows: TradesTableRow[] = trades.map((trade) => {
     const currentPrice = trade.current_price ?? 0;
@@ -316,14 +300,6 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
 
 function renderLots(lots: RealizedLot[], trade: RealizedTrade): string {
   const lotRows = lots.map((lot) => {
-    // Helper for stacked cells -- same structure as parent for alignment
-    const stack = (topVal: number, topFmt: string, botVal: number | string, botFmt: string) => `
-      <div class="cell-stack">
-        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
-      </div>
-    `;
-
     const sinceSellAbs = lot.since_sell_abs;
     const sinceSellPct = lot.since_sell_pct;
 

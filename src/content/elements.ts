@@ -545,6 +545,39 @@ export function renderLoadingState(message = "Laden..."): string {
   `;
 }
 
+// === Stacked Column Helpers ===
+export function stack(
+  topVal: number | string,
+  topFmt: string,
+  botVal: number | string,
+  botFmt: string,
+): string {
+  return `
+      <div class="cell-stack">
+        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
+        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
+      </div>
+    `;
+}
+
+export function createSortHeader(
+  labelTop: string,
+  selectorTop: string,
+  labelBottom: string,
+  selectorBottom: string,
+): string {
+  return `
+    <div class="sort-stack">
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" data-label="${escapeHtml(labelTop)}" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" data-label="${escapeHtml(labelBottom)}" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
+    </div>
+  `;
+}
+
+export function createSimpleSortHeader(label: string, key: string): string {
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" data-label="${escapeHtml(label)}" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
+}
+
 /**
  * Neue Utility: sortTableRows
  * Sortiert die Datenzeilen (<tr>) einer Tabelle anhand eines Keys.

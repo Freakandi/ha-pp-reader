@@ -4,9 +4,12 @@
 
 import {
   createHeaderCard,
+  createSimpleSortHeader,
+  createSortHeader,
   formatNumber,
   makeTable,
   renderLoadingState,
+  stack,
 } from "../content/elements";
 import { openSecurityDetail } from "../dashboard";
 import { registerOverviewHelpers } from "../dashboard/registry";
@@ -179,37 +182,6 @@ function renderTrend(value: number, formatted: string): string {
   return `<span class="${cls}">${formatted}</span>`;
 }
 
-function createSortHeader(
-  labelTop: string,
-  selectorTop: string,
-  labelBottom: string,
-  selectorBottom: string,
-): string {
-  return `
-    <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" data-label="${escapeHtml(labelTop)}" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" data-label="${escapeHtml(labelBottom)}" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
-    </div>
-  `;
-}
-
-function createSimpleSortHeader(label: string, key: string): string {
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" data-label="${escapeHtml(label)}" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
-}
-
-function stack(
-  topVal: number | string,
-  topFmt: string,
-  botVal: number | string,
-  botFmt: string,
-): string {
-  return `
-      <div class="cell-stack">
-        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
-      </div>
-    `;
-}
 
 type PortfolioQueryRoot = Document | HTMLElement;
 
@@ -908,20 +880,6 @@ function buildExpandablePortfolioTable(
       </div>
     `;
   }
-
-  const escapeAttribute = (value: unknown): string => {
-    if (value == null) {
-      return "";
-    }
-    if (
-      typeof value !== "string" &&
-      typeof value !== "number" &&
-      typeof value !== "boolean"
-    ) {
-      return "";
-    }
-    return escapeHtml(value);
-  };
 
   let html =
     '<table class="expandable-portfolio-table sortable-table"><thead><tr>';
