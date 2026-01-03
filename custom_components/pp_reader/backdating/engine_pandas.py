@@ -389,10 +389,10 @@ class BackdatingEngine:
         )
         # Ensure join keys are compatible
         fx_long["currency_code"] = fx_long["currency_code"].astype(str)
-        fx_long["date"] = pd.to_datetime(fx_long["date"], utc=True).dt.normalize()
+        # fx_long["date"] is already correct (DatetimeIndex from pivot)
 
         if not df_txs.empty:
-            df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
+            # df_txs["date"] is already normalized in load_data
             df_txs["currency_code"] = df_txs["currency_code"].astype(str)
 
             # Join with FX
