@@ -2051,29 +2051,6 @@ class PerformanceEngine:
         # Combine
         combined = pd.concat([standard, augmented_transfers], ignore_index=True)
 
-        # Now iterate Combined to sum Flows by Account
-        # We need Net Flow EUR.
-        # If 'flow_eur' exists (from transfers), use it.
-        # Else compute: amount_norm / rate_at_date.
-
-        def calc_flow_val(row: pd.Series) -> float:
-            if (
-                hasattr(row, "flow_eur")
-                and pd.notna(row.flow_eur)
-                and row.flow_eur != 0
-            ):
-                # We need to apply sign.
-                return float(row.flow_eur)
-
-            # Standard logic
-            r = self._get_fx(row.currency_code, row.date)
-            return (
-                (row.amount_norm if hasattr(row, "amount_norm") else row.amount / 100.0)
-                / r
-                if r
-                else 0.0
-            )
-
         # Apply signs
         # DEPOSIT = Inflow (+). REMOVAL = Outflow (-).
 
@@ -2105,36 +2082,9 @@ class PerformanceEngine:
         # We need to respect 'flow_eur' if present.
 
         # Calculate EUR value for each row
-        # Scalar Logic:
+        # Vectorized Logic:
         # For Transfer rows, use "flow_eur". For others, use (Amount / Rate).
-
-        def _get_val(row: pd.Series) -> float:
-            # Check if we have pre-calculated flow (Transfers)
-            f_eur = getattr(row, "flow_eur", np.nan)
-            if pd.notna(f_eur) and f_eur != 0:
-                return float(f_eur)
-
-            # Standard Calculation
-            curr = getattr(row, "currency_code", "EUR")
-            amt_cents = getattr(row, "amount", 0.0)
-
-            if curr == "EUR":
-                return amt_cents / 100.0
-
-            rate = self._get_fx(curr, row["date"])
-            return (amt_cents / 100.0) / rate if rate else 0.0
-
-        if not combined.empty:
-            combined["final_val_eur"] = combined.apply(_get_val, axis=1)
-        else:
-            combined["final_val_eur"] = 0.0
-
-        if "flow_eur" in combined.columns:
-            mask_fe = combined["flow_eur"].notna() & (combined["flow_eur"] != 0)
-            if mask_fe.any():
-                combined.loc[mask_fe, "final_val_eur"] = combined.loc[
-                    mask_fe, "flow_eur"
-                ]
+        self._calculate_eur_flows_vectorized(combined)
 
         combined["signed_flow_eur"] = combined["final_val_eur"] * combined["sign"]
 
@@ -2166,6 +2116,48 @@ class PerformanceEngine:
                 fx_gains_total += gain
 
         return fx_gains_total
+
+    def _calculate_eur_flows_vectorized(self, combined: pd.DataFrame) -> None:
+        """Calculate EUR value for flows using vectorized operations."""
+        if combined.empty:
+            combined["final_val_eur"] = 0.0
+            return
+
+        # 1. Initialize with pre-calculated flow (from transfers) if available
+        if "flow_eur" in combined.columns:
+            combined["final_val_eur"] = combined["flow_eur"]
+        else:
+            combined["final_val_eur"] = np.nan
+
+        # 2. Identify rows needing calculation
+        # (Standard transactions OR Transfers with missing/zero flow_eur)
+        mask_calc = combined["final_val_eur"].isna() | (combined["final_val_eur"] == 0)
+
+        if mask_calc.any():
+            df_calc = combined.loc[mask_calc].copy()
+
+            # Augment with FX rates (itertuples ~ fast scalar lookup)
+            # We reuse _augment_txs_with_market_data logic which is optimized
+            # to match point-in-time valuation.
+            df_calc = self._augment_txs_with_market_data(df_calc)
+
+            # Vectorized calculation
+            # Use amount_norm if available, else amount/100
+            if "amount_norm" in df_calc.columns:
+                # Fill NaN in amount_norm with amount/100 just in case
+                amt = df_calc["amount_norm"].fillna(df_calc["amount"] / 100.0)
+            else:
+                amt = df_calc["amount"] / 100.0
+
+            fx = df_calc["fx_rate"].replace(0, np.nan)
+            val = amt / fx
+
+            # Handle potential NaNs (if fx was 0/NaN -> result NaN) -> 0.0
+            val = val.fillna(0.0)
+
+            # Update main dataframe
+            # We align by index
+            combined.loc[mask_calc, "final_val_eur"] = val
 
     def _get_cash_flow_sign(self, t_type: int) -> int:
         if t_type in [
