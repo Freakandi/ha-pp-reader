@@ -52,6 +52,11 @@ let lastSelection: DailyWealthSelection | null = null;
 let lastWealthData: DailyWealthResponse | null = null;
 const selectedScopeKeys = new Set<string>();
 
+const ICON_CHEVRON_DOWN =
+  "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z";
+const ICON_CHEVRON_RIGHT =
+  "M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z";
+
 type WealthSeries = {
   key: string;
   label: string;
@@ -227,12 +232,15 @@ function renderMetrics(
   const mkRow = (label: string, value: number | string, cls = '', id = '', type = ''): string => {
     const isInteractive = type && hass && entryId;
     const a11yAttrs = isInteractive ? ' role="button" tabindex="0" aria-expanded="false"' : '';
+    const icon = isInteractive
+      ? `<span class="toggle-icon"><svg viewBox="0 0 24 24"><path d="${ICON_CHEVRON_RIGHT}" /></svg></span> `
+      : '';
     return `
     <div class="metric-row ${cls} ${isInteractive ? 'interactive' : ''}"
          ${id ? `id="${id}"` : ''}
          ${type ? `data-breakdown-type="${type}"` : ''}${a11yAttrs}>
       <span class="metric-label">
-        ${isInteractive ? '<span class="toggle-icon">▶</span> ' : ''}${label}
+        ${icon}${label}
       </span>
       <span class="metric-value">${typeof value === 'number' ? formatCurrency(value) : value}</span>
     </div>`;
@@ -281,7 +289,7 @@ function renderMetrics(
       if (expanded) {
         target.classList.remove('expanded');
         const icon = target.querySelector('.toggle-icon');
-        if (icon) icon.textContent = '▶';
+        if (icon) icon.innerHTML = `<svg viewBox="0 0 24 24"><path d="${ICON_CHEVRON_RIGHT}" /></svg>`;
 
         // Remove sub-rows
         let next = target.nextElementSibling;
@@ -293,7 +301,7 @@ function renderMetrics(
       } else {
         target.classList.add('expanded');
         const icon = target.querySelector('.toggle-icon');
-        if (icon) icon.textContent = '▼';
+        if (icon) icon.innerHTML = `<svg viewBox="0 0 24 24"><path d="${ICON_CHEVRON_DOWN}" /></svg>`;
 
         try {
           const loadingRow = document.createElement('div');
@@ -330,7 +338,7 @@ function renderMetrics(
               detailRow.className = 'breakdown-row';
               detailRow.style.animation = 'fadeIn 0.2s ease';
               detailRow.innerHTML = `
-                 <span class="metric-label">${item.label}</span>
+                 <span class="metric-label">${escapeHtml(item.label)}</span>
                  <span class="metric-value">${formatCurrency(item.amount)}</span>
                `;
               target.after(detailRow);
@@ -999,11 +1007,20 @@ export function renderAnalyse(
       }
 
       .toggle-icon {
-        display: inline-block;
+        display: inline-flex;
         width: 1.25em;
+        height: 1.25em;
+        vertical-align: middle;
         text-align: center;
+        align-items: center;
+        justify-content: center;
         font-size: 0.8em;
         color: var(--secondary-text-color, #727272);
+      }
+      .toggle-icon svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
       }
 
       .breakdown-row {
