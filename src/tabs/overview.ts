@@ -47,9 +47,27 @@ import { escapeAttribute, escapeHtml } from "../utils/html";
 import { normalizePerformancePayload } from "../utils/performance";
 import type { PanelConfigLike } from "./types";
 
+const ICON_CHEVRON_DOWN =
+  "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z";
+const ICON_CHEVRON_RIGHT =
+  "M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z";
+
 // CSS for stacked columns and sorting (Copied from trades.ts)
 const STYLES = `
 <style>
+  .portfolio-toggle .caret {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 24px !important;
+    height: 24px !important;
+  }
+  .portfolio-toggle .caret svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    display: block;
+  }
   .sort-stack {
     display: flex;
     flex-direction: column;
@@ -1080,7 +1098,7 @@ function buildExpandablePortfolioTable(
                 data-portfolio="${escapeAttribute(d.uuid)}"
                 aria-expanded="${expanded ? "true" : "false"}"
                 aria-controls="${escapeAttribute(detailId)}">
-          <span class="caret" aria-hidden="true">${expanded ? "▼" : "▶"}</span>
+          <span class="caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${expanded ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT}" /></svg></span>
           <span class="portfolio-name">${safeName}</span>${badgeMarkup}
         </button>
       </td>`;
@@ -2003,7 +2021,8 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
               detailsRow.classList.remove("hidden");
               btn.classList.add("expanded");
               btn.setAttribute("aria-expanded", "true");
-              if (caretEl) caretEl.textContent = "▼";
+              if (caretEl)
+                caretEl.innerHTML = `<svg viewBox="0 0 24 24"><path d="${ICON_CHEVRON_DOWN}" /></svg>`;
               expandedPortfolios.add(portfolioUuid);
 
               try {
@@ -2111,7 +2130,8 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
               detailsRow.classList.add("hidden");
               btn.classList.remove("expanded");
               btn.setAttribute("aria-expanded", "false");
-              if (caretEl) caretEl.textContent = "▶";
+              if (caretEl)
+                caretEl.innerHTML = `<svg viewBox="0 0 24 24"><path d="${ICON_CHEVRON_RIGHT}" /></svg>`;
               expandedPortfolios.delete(portfolioUuid);
             }
           } catch (error) {
