@@ -42,6 +42,7 @@ def _sync_ingestion_to_canonical(db_path: Path) -> None:
         _sync_securities(conn)
         _sync_portfolio_securities(conn, db_path)
         _sync_historical_prices(conn)
+        _apply_transfer_protocol(conn)
         _sync_transactions(conn)
         conn.commit()
     except Exception:
@@ -49,6 +50,88 @@ def _sync_ingestion_to_canonical(db_path: Path) -> None:
         raise
     finally:
         conn.close()
+
+
+def _apply_transfer_protocol(conn: sqlite3.Connection) -> None:
+    """Enforce Zero-Sum invariant for transfers in the ingestion table."""
+    cursor = conn.cursor()
+
+    # Select pairs of transfers, ensuring we only process each pair once
+    try:
+        cursor.execute(
+            """
+            SELECT
+                t1.uuid as uuid1,
+                t1.currency_code as currency1,
+                t1.amount_eur_cents as eur1,
+                t2.uuid as uuid2,
+                t2.currency_code as currency2,
+                t2.amount_eur_cents as eur2
+            FROM ingestion_transactions t1
+            JOIN ingestion_transactions t2 ON t1.other_uuid = t2.uuid
+            WHERE
+                t1.type IN (4, 5) AND t2.type IN (4, 5) -- 4:TRANSFER_OUT, 5:TRANSFER_IN
+                AND t1.amount < 0 -- Process from the outbound leg
+                AND t1.uuid = t2.other_uuid -- Ensure strict pairing
+            """
+        )
+    except sqlite3.Error:
+        _LOGGER.exception("Error querying for transfer pairs")
+        raise
+
+    updates = []
+    for row in cursor.fetchall():
+        # Defensive: Skip if either leg is missing a pre-calculated EUR value
+        if row["eur1"] is None or row["eur2"] is None:
+            _LOGGER.warning(
+                "Skipping transfer pair due to missing eur value: %s <-> %s",
+                row["uuid1"],
+                row["uuid2"],
+            )
+            continue
+
+        is_c1_eur = (row["currency1"] or "").upper() == "EUR"
+        is_c2_eur = (row["currency2"] or "").upper() == "EUR"
+
+        eur1 = int(row["eur1"])
+        eur2 = int(row["eur2"])
+
+        # Case 1: Mixed (EUR / Foreign)
+        if is_c1_eur and not is_c2_eur:
+            # t1 is EUR, t2 is Foreign. t2 should be the inverse of t1.
+            new_eur2 = -eur1
+            if new_eur2 != eur2:
+                updates.append((new_eur2, row["uuid2"]))
+        elif not is_c1_eur and is_c2_eur:
+            # t2 is EUR, t1 is Foreign. t1 should be the inverse of t2.
+            new_eur1 = -eur2
+            if new_eur1 != eur1:
+                updates.append((new_eur1, row["uuid1"]))
+
+        # Case 2: Foreign / Foreign
+        elif not is_c1_eur and not is_c2_eur:
+            # Average the MAGNITUDES
+            avg_magnitude = round((abs(eur1) + abs(eur2)) / 2)
+
+            # t1 is the sender (amount < 0), t2 is the receiver
+            new_eur1 = -avg_magnitude
+            new_eur2 = avg_magnitude
+
+            if new_eur1 != eur1:
+                updates.append((new_eur1, row["uuid1"]))
+            if new_eur2 != eur2:
+                updates.append((new_eur2, row["uuid2"]))
+
+    if updates:
+        try:
+            conn.executemany(
+                "UPDATE ingestion_transactions SET amount_eur_cents = ? WHERE uuid = ?",
+                updates,
+            )
+            _LOGGER.info("Applied Transfer Protocol to %d legs.", len(updates))
+        except sqlite3.Error:
+            _LOGGER.exception("Error applying transfer protocol")
+            raise
 
 
 def _normalize_scaled_quantity(value: float | None) -> float:
