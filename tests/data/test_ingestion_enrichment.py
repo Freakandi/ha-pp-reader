@@ -1,8 +1,9 @@
 """Test the ingestion enrichment logic for EUR valuations."""
 
 import sqlite3
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -65,13 +66,20 @@ def test_valuation_buy_usd_implicit_rate(
     tx = ParsedTransaction(
         uuid="tx_buy_usd",
         type=0,
-        date="2023-01-01T12:00:00Z",
+        date=datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC),
         account="acc_usd",
         portfolio="port_main",
         currency_code="USD",
         amount=-10000,
         shares=10 * 10**8,
         security="sec_usd",
+        other_account=None,
+        other_portfolio=None,
+        other_uuid=None,
+        other_updated_at=None,
+        note=None,
+        source=None,
+        updated_at=None,
     )
 
     writer = IngestionWriter(conn, db_path=mock_db)
@@ -99,27 +107,47 @@ def test_valuation_transfer_usd_eur_protocol(
     tx_eur_out = ParsedTransaction(
         uuid="tx_eur_out",
         type=4,
-        date="2023-01-02T12:00:00Z",
+        date=datetime(2023, 1, 2, 12, 0, 0, tzinfo=UTC),
         account="acc_eur",
         portfolio="port_main",
         other_uuid="tx_usd_in",
         currency_code="EUR",
         amount=-10000,
+        other_account=None,
+        other_portfolio=None,
+        other_updated_at=None,
+        shares=None,
+        note=None,
+        security=None,
+        source=None,
+        updated_at=None,
     )
     tx_usd_in = ParsedTransaction(
         uuid="tx_usd_in",
         type=5,
-        date="2023-01-02T12:00:00Z",
+        date=datetime(2023, 1, 2, 12, 0, 0, tzinfo=UTC),
         account="acc_usd",
         portfolio="port_main",
         other_uuid="tx_eur_out",
         currency_code="USD",
         amount=9250,
+        other_account=None,
+        other_portfolio=None,
+        other_updated_at=None,
+        shares=None,
+        note=None,
+        security=None,
+        source=None,
+        updated_at=None,
     )
 
     writer = IngestionWriter(conn, db_path=mock_db)
     writer.write_transactions([tx_eur_out, tx_usd_in])
+    conn.commit()
+    conn.close()
     _sync_ingestion_to_canonical(mock_db)
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
 
     eur_leg = _get_transaction(conn, "tx_eur_out", table=TABLE_TRANSACTIONS)
     usd_leg = _get_transaction(conn, "tx_usd_in", table=TABLE_TRANSACTIONS)
@@ -161,27 +189,47 @@ def test_valuation_transfer_usd_jpy_protocol(
     tx_usd_out = ParsedTransaction(
         uuid="tx_usd_out",
         type=4,
-        date="2023-01-03T12:00:00Z",
+        date=datetime(2023, 1, 3, 12, 0, 0, tzinfo=UTC),
         account="acc_usd",
         portfolio="port_main",
         other_uuid="tx_jpy_in",
         currency_code="USD",
         amount=-10000,
+        other_account=None,
+        other_portfolio=None,
+        other_updated_at=None,
+        shares=None,
+        note=None,
+        security=None,
+        source=None,
+        updated_at=None,
     )
     tx_jpy_in = ParsedTransaction(
         uuid="tx_jpy_in",
         type=5,
-        date="2023-01-03T12:00:00Z",
+        date=datetime(2023, 1, 3, 12, 0, 0, tzinfo=UTC),
         account="acc_jpy",
         portfolio="port_main",
         other_uuid="tx_usd_out",
         currency_code="JPY",
         amount=1400000,
+        other_account=None,
+        other_portfolio=None,
+        other_updated_at=None,
+        shares=None,
+        note=None,
+        security=None,
+        source=None,
+        updated_at=None,
     )
 
     writer = IngestionWriter(conn, db_path=mock_db)
     writer.write_transactions([tx_usd_out, tx_jpy_in])
+    conn.commit()
+    conn.close()
     _sync_ingestion_to_canonical(mock_db)
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
 
     usd_leg = _get_transaction(conn, "tx_usd_out", table=TABLE_TRANSACTIONS)
     jpy_leg = _get_transaction(conn, "tx_jpy_in", table=TABLE_TRANSACTIONS)
@@ -215,13 +263,20 @@ def test_enrichment_of_transaction_units(
     tx = ParsedTransaction(
         uuid="tx_with_fees",
         type=0,
-        date="2023-01-04T12:00:00Z",
+        date=datetime(2023, 1, 4, 12, 0, 0, tzinfo=UTC),
         account="acc_usd",
         portfolio="port_main",
         currency_code="USD",
         amount=-10200,
         shares=10 * 10**8,
         security="sec_usd",
+        other_account=None,
+        other_portfolio=None,
+        other_uuid=None,
+        other_updated_at=None,
+        note=None,
+        source=None,
+        updated_at=None,
         units=[
             ParsedTransactionUnit(
                 type="FEE", amount=-200, currency_code="USD", fx_rate_to_base=None
@@ -231,7 +286,11 @@ def test_enrichment_of_transaction_units(
 
     writer = IngestionWriter(conn, db_path=mock_db)
     writer.write_transactions([tx])
+    conn.commit()
+    conn.close()
     _sync_ingestion_to_canonical(mock_db)
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
 
     cursor = conn.execute(
         "SELECT * FROM transaction_units WHERE transaction_uuid = ?",
