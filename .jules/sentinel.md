@@ -47,3 +47,8 @@
 **Vulnerability:** Found a Stored XSS vulnerability in the `stack` helper function used in `src/tabs/trades.ts` and `src/tabs/overview.ts`. The function interpolated values into `data-val` attributes without escaping, allowing attribute injection.
 **Learning:** Even if data is typed as `number | string`, runtime data or malicious inputs can break out of attributes if not escaped. Simple type assertions are not security boundaries.
 **Prevention:** Always use `escapeAttribute` for any variable interpolated into an HTML attribute, regardless of its expected type. Updated `stack` helper to wrap values in `escapeAttribute`.
+
+## 2025-02-07 - Stored XSS in Time Series Breakdown
+**Vulnerability:** `renderMetrics` in `src/tabs/time_series.ts` injected `item.label` from the backend `get_performance_breakdown` command directly into `innerHTML` without escaping.
+**Learning:** Breakdown rows are rendered asynchronously after a user interaction (click), which often bypasses initial scan attention. Data from the backend, even if numeric-looking, can contain arbitrary labels.
+**Prevention:** Explicitly escape all text content interpolated into `innerHTML` using `escapeHtml`. Verified with `src/tabs/__tests__/time_series_security.test.ts`.
