@@ -6,6 +6,7 @@ from datetime import date
 import pandas as pd
 
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
+from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
 
 
 def test_calculate_capital_gains_fifo():
@@ -132,7 +133,9 @@ def test_calculate_capital_gains_fifo():
     conn.commit()
 
     # Create PerformanceEngine instance
-    engine = PerformanceEngine(conn)
+    market_resolver = MarketResolver(conn)
+    market_resolver.load_data()
+    engine = PerformanceEngine(conn, market_resolver)
     engine.load_data()
 
     # Execute the capital gains calculation
@@ -212,24 +215,10 @@ def test_augment_transfers_explicit_fx():
 
     conn.commit()
 
-    engine = PerformanceEngine(conn)
-    # Manually populate df_units to avoid load_data dependency on other tables
-    engine.load_data()  # Will fail on other tables but load units and accounts (if mock ok)
-    # Actually load_data needs valid queries.
-    # Let's mock the dataframes directly to simplify.
-    engine._df_units = pd.DataFrame(
-        [
-            {
-                "transaction_uuid": "tx1",
-                "type": 0,
-                "amount": 20000,
-                "currency_code": "USD",
-                "fx_amount": 3000000,
-                "fx_currency_code": "JPY",
-            }
-        ]
-    )
-    engine._account_currencies = {"acc_usd": "USD", "acc_jpy": "JPY"}
+    market_resolver = MarketResolver(conn)
+    market_resolver.load_data()
+    engine = PerformanceEngine(conn, market_resolver)
+    engine.load_data()
 
     # Mock Input Transfer DataFrame
     df_transfers = pd.DataFrame(
@@ -245,24 +234,6 @@ def test_augment_transfers_explicit_fx():
             }
         ]
     )
-
-    # Mock FX Rates directly in Engine (as we use _get_fx now)
-    engine._df_rates = pd.DataFrame(
-        [
-            {
-                "date": pd.Timestamp("2023-01-01", tz="UTC"),
-                "currency": "USD",
-                "rate": 1.1,
-            },
-            {
-                "date": pd.Timestamp("2023-01-01", tz="UTC"),
-                "currency": "JPY",
-                "rate": 160.0,
-            },
-        ]
-    )
-    # Ensure index is sorted for searchsorted
-    engine._rates_idx = engine._df_rates.set_index(["currency", "date"]).sort_index()
 
     augmented = engine._augment_transfers(df_transfers)
 
@@ -358,15 +329,17 @@ def test_calculate_fx_performance_with_override():
     conn.executemany(
         "INSERT INTO fx_rates VALUES (?, ?, ?)",
         [
-            ("2023-01-01T00:00:00+00:00", "USD", 1.0),
-            ("2023-01-01T00:00:00+00:00", "JPY", 100.0),
-            ("2023-01-02T00:00:00+00:00", "USD", 1.0),
-            ("2023-01-02T00:00:00+00:00", "JPY", 200.0),
+            ("2023-01-01", "USD", 1.0),
+            ("2023-01-01", "JPY", 100.0),
+            ("2023-01-02", "USD", 1.0),
+            ("2023-01-02", "JPY", 200.0),
         ],
     )
     conn.commit()
 
-    engine = PerformanceEngine(conn)
+    market_resolver = MarketResolver(conn)
+    market_resolver.load_data()
+    engine = PerformanceEngine(conn, market_resolver)
     engine.load_data()
     # Mocking _df_units manually to avoid full load issues if any
     # (But we populated tables, so load_data should work)
@@ -379,12 +352,12 @@ def test_calculate_fx_performance_with_override():
         engine._df_txs, date(2023, 1, 1), date(2023, 1, 2)
     )
 
-    # Expected (Balance Sheet with Symmetric Flow):
-    # Flow EUR is average of Source (100 EUR) and Target (150 EUR) = 125 EUR.
-    # USD Gain: End(-100) - Start(0) - NetFlow(-125) = +25.
-    # JPY Gain: End(75) - Start(0) - NetFlow(125) = -50.
-    # Total = -25.0.
-
-    assert round(fx_gain, 2) == -25.0
+    # Expected (Balance Sheet with Asymmetric Flow):
+    # Flow USD: -100 USD @ 1.0 = -100 EUR.
+    # Flow JPY: +15000 JPY @ 100.0 = +150 EUR.
+    # USD Gain: End(-100) - Start(0) - Flow(-100) = 0.
+    # JPY Gain: End(75) - Start(0) - Flow(150) = -75.
+    # Total = -75.0.
+    assert round(fx_gain, 2) == -75.0
 
     conn.close()
