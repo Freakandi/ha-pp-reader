@@ -5,6 +5,7 @@ import sqlite3
 from collections import deque
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,10 @@ from custom_components.pp_reader.metrics.breakdown import (
     BreakdownItem,
     PerformanceBreakdown,
 )
-from custom_components.pp_reader.util.currency import PRICE_SCALE
+
+if TYPE_CHECKING:
+    from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,22 +86,19 @@ class PerformanceEngine:
     using pandas for speed and efficiency.
     """
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, market_resolver: "MarketResolver"
+    ) -> None:
         """Initialize with a database connection."""
         self.conn = conn
+        self.market_resolver = market_resolver
         self._df_txs = pd.DataFrame()
         self._df_units = pd.DataFrame()
-        self._df_prices = pd.DataFrame()
-        self._df_rates = pd.DataFrame()
-        self._df_securities = pd.DataFrame()
         self._account_currencies: dict[str, str] = {}
         self._account_name_map: dict[str, str] = {}
-        self._sec_curr_map: dict[str, str] = {}
         self._sec_name_map: dict[str, str] = {}
-        self._prices_idx = pd.DataFrame()
-        self._rates_idx = pd.DataFrame()
 
-    def load_data(self) -> None:  # noqa: PLR0912, PLR0915
+    def load_data(self) -> None:
         """
         Load all necessary data from the database into pandas DataFrames.
 
@@ -152,112 +153,12 @@ class PerformanceEngine:
                 ]
             )
 
-        # historical prices
-        query_prices = "SELECT security_uuid, date, close FROM historical_prices"
-        try:
-            self._df_prices = pd.read_sql_query(query_prices, self.conn)
-            if not self._df_prices.empty:
-                # Vectorized date parsing
-                dates = self._df_prices["date"]
-                mask_epoch = dates < EPOCH_DAY_THRESHOLD
-
-                converted = pd.Series(index=dates.index, dtype="datetime64[ns, UTC]")
-
-                if mask_epoch.any():
-                    converted.loc[mask_epoch] = pd.to_datetime(
-                        dates[mask_epoch], unit="D", origin="unix", utc=True
-                    )
-
-                if (~mask_epoch).any():
-                    converted.loc[~mask_epoch] = pd.to_datetime(
-                        dates[~mask_epoch].astype(str), format="%Y%m%d", utc=True
-                    )
-
-                self._df_prices["date"] = converted
-                self._df_prices["close"] = self._df_prices["close"] / PRICE_SCALE
-        except pd.errors.DatabaseError:
-            self._df_prices = pd.DataFrame(columns=["security_uuid", "date", "close"])
-
-        # live prices
-        query_latest = "SELECT uuid as security_uuid, last_price as close, last_price_date FROM securities WHERE last_price IS NOT NULL AND last_price_date IS NOT NULL"  # noqa: E501
-        try:
-            df_latest = pd.read_sql_query(query_latest, self.conn)
-            if not df_latest.empty:
-                # Adaptive Date Parsing (Seconds vs Days)
-                dates = df_latest["last_price_date"]
-                mask_epoch = dates < EPOCH_DAY_THRESHOLD
-
-                converted = pd.Series(index=dates.index, dtype="datetime64[ns, UTC]")
-
-                # Case 1: Days since Epoch (small numbers)
-                if mask_epoch.any():
-                    converted.loc[mask_epoch] = pd.to_datetime(
-                        dates[mask_epoch], unit="D", origin="unix", utc=True
-                    )
-
-                # Case 2: Seconds since Epoch (large numbers)
-                # Note: pd.to_datetime with unit='s' handles standard unix timestamps
-                if (~mask_epoch).any():
-                    converted.loc[~mask_epoch] = pd.to_datetime(
-                        dates[~mask_epoch], unit="s", origin="unix", utc=True
-                    )
-
-                df_latest["date"] = converted.dt.normalize()
-                df_latest = df_latest.drop(columns=["last_price_date"])
-                df_latest["close"] = df_latest["close"] / PRICE_SCALE
-
-                if not self._df_prices.empty:
-                    self._df_prices = pd.concat(
-                        [self._df_prices, df_latest]
-                    ).drop_duplicates(subset=["security_uuid", "date"], keep="last")
-                else:
-                    self._df_prices = df_latest
-        except pd.errors.DatabaseError:
-            pass
-
-        # fx rates
-        query_rates = "SELECT date, currency, rate FROM fx_rates"
-        try:
-            self._df_rates = pd.read_sql_query(query_rates, self.conn)
-            if not self._df_rates.empty:
-                self._df_rates["date"] = pd.to_datetime(
-                    self._df_rates["date"], utc=True
-                ).dt.normalize()
-        except pd.errors.DatabaseError:
-            self._df_rates = pd.DataFrame(columns=["date", "currency", "rate"])
-
-        # live fx rates
-        query_rates_live = "SELECT date, term_currency as currency, rate FROM exchange_rates WHERE base_currency = 'EUR'"  # noqa: E501
-        try:
-            df_rates_live = pd.read_sql_query(query_rates_live, self.conn)
-            if not df_rates_live.empty:
-                df_rates_live["date"] = pd.to_datetime(
-                    df_rates_live["date"], utc=True
-                ).dt.normalize()
-                df_rates_live["rate"] = df_rates_live["rate"] / PRICE_SCALE
-
-                if not self._df_rates.empty:
-                    self._df_rates = pd.concat(
-                        [self._df_rates, df_rates_live]
-                    ).drop_duplicates(subset=["date", "currency"], keep="last")
-                else:
-                    self._df_rates = df_rates_live
-        except pd.errors.DatabaseError:
-            pass
-
         # securities
-        query_sec = "SELECT uuid, currency_code, name FROM securities"
+        query_sec = "SELECT uuid, name FROM securities"
         try:
-            self._df_securities = pd.read_sql_query(query_sec, self.conn)
-            self._sec_curr_map = self._df_securities.set_index("uuid")[
-                "currency_code"
-            ].to_dict()
-            self._sec_name_map = self._df_securities.set_index("uuid")["name"].to_dict()
+            df_securities = pd.read_sql_query(query_sec, self.conn)
+            self._sec_name_map = df_securities.set_index("uuid")["name"].to_dict()
         except (pd.errors.DatabaseError, KeyError):
-            self._df_securities = pd.DataFrame(
-                columns=["uuid", "currency_code", "name"]
-            )
-            self._sec_curr_map = {}
             self._sec_name_map = {}
 
         # account currencies
@@ -269,20 +170,6 @@ class PerformanceEngine:
         except sqlite3.Error:
             self._account_currencies = {}
             self._account_name_map = {}
-
-        if not self._df_prices.empty:
-            self._prices_idx = self._df_prices.set_index(
-                ["security_uuid", "date"]
-            ).sort_index()
-        else:
-            self._prices_idx = pd.DataFrame()
-
-        if not self._df_rates.empty:
-            self._rates_idx = self._df_rates.set_index(
-                ["currency", "date"]
-            ).sort_index()
-        else:
-            self._rates_idx = pd.DataFrame()
 
     def _calculate_portfolio_state_at_date(self, d: date) -> dict[str, float]:
         """
@@ -311,7 +198,7 @@ class PerformanceEngine:
         for sec_uuid, qty in holdings.items():
             # Use basis_ts (T-1) for Price/FX to match Virtual Inventory Cost Basis
             price = self._get_price(sec_uuid, basis_ts)
-            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            curr = self.market_resolver.get_security_currency(sec_uuid)
             rate = self._get_fx(curr, basis_ts)
 
             val_eur = (qty * price) / (rate if rate else 1.0)
@@ -373,7 +260,7 @@ class PerformanceEngine:
         )
 
         fx_pivot, price_pivot, price_exists_mask = self._prepare_market_data(
-            self._df_rates, self._df_prices, date_range_hist
+            date_range_hist
         )
 
         # unified_scalar: Use scalar lookup for main DF to match Wealth Delta logic
@@ -404,7 +291,7 @@ class PerformanceEngine:
         )
 
         daily_sec_wealth, sec_holdings = self._calculate_security_wealth(
-            df_augmented, price_pivot, fx_pivot, self._df_securities, date_range
+            df_augmented, price_pivot, fx_pivot, date_range
         )
 
         daily_cash_wealth, acc_balances = self._calculate_cash_wealth(
@@ -477,7 +364,7 @@ class PerformanceEngine:
                             if sec_uuid in price_pivot.columns:
                                 price = price_pivot.loc[e_ts, sec_uuid]
                             # FX
-                            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+                            curr = self.market_resolver.get_security_currency(sec_uuid)
                             rate = 1.0
                             if curr != "EUR" and curr in fx_pivot.columns:
                                 rate = fx_pivot.loc[e_ts, curr]
@@ -685,7 +572,7 @@ class PerformanceEngine:
             if share_count <= 0:
                 continue
 
-            curr = self._sec_curr_map.get(sec_uuid, "EUR")
+            curr = self.market_resolver.get_security_currency(sec_uuid)
             # Use basis_ts (t-1) for Mark-to-Market Valuation
             start_price = self._get_price(sec_uuid, basis_ts)
             start_fx = self._get_fx(curr, basis_ts)
@@ -913,9 +800,7 @@ class PerformanceEngine:
         # 3. Other Metrics Aggregation
         date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
         # Prepare FX for window augmentation
-        fx_pivot, _, _ = self._prepare_market_data(
-            self._df_rates, pd.DataFrame(), date_range
-        )
+        fx_pivot, _, _ = self._prepare_market_data(date_range)
         df_augmented, fx_long = self._augment_transactions(df_txs_window, fx_pivot)
 
         divs = self._aggregate_dividends(df_augmented, fx_long)
@@ -1151,29 +1036,29 @@ class PerformanceEngine:
 
     def _prepare_market_data(
         self,
-        df_rates: pd.DataFrame,
-        df_prices: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        if not df_rates.empty:
-            fx_pivot = df_rates.pivot_table(
-                index="date", columns="currency", values="rate"
-            )
-        else:
-            fx_pivot = pd.DataFrame(index=date_range)
-        fx_pivot["EUR"] = 1.0
-        fx_pivot = fx_pivot.reindex(date_range).ffill().bfill()
+        """
+        Prepare vectorized market data pivot tables for a given date range.
 
-        if not df_prices.empty:
-            price_pivot_unfilled = df_prices.pivot_table(
-                index="date", columns="security_uuid", values="close"
-            )
-            price_pivot = price_pivot_unfilled.reindex(date_range)
-            price_exists_mask = price_pivot.notna()
-            price_pivot = price_pivot.ffill().bfill()
-        else:
-            price_pivot = pd.DataFrame(index=date_range)
-            price_exists_mask = pd.DataFrame(index=date_range)
+        This method leverages the MarketResolver to obtain pivot tables for FX rates
+        and security prices, ensuring that the data is correctly indexed and
+        forward-filled for use in vectorized calculations.
+        """
+        all_currencies = self._df_txs["currency_code"].dropna().unique().tolist()
+        all_securities = self._df_txs["security"].dropna().unique().tolist()
+
+        # Ensure EUR is always present
+        if "EUR" not in all_currencies:
+            all_currencies.append("EUR")
+
+        fx_pivot = self.market_resolver.get_fx_pivot(all_currencies, date_range)
+        price_pivot, price_exists_mask = self.market_resolver.get_prices_pivot(
+            all_securities, date_range
+        )
+
+        # Ensure EUR column exists and is filled with 1.0
+        fx_pivot["EUR"] = 1.0
 
         return fx_pivot, price_pivot, price_exists_mask
 
@@ -1423,7 +1308,6 @@ class PerformanceEngine:
         df_augmented: pd.DataFrame,
         price_pivot: pd.DataFrame,
         fx_pivot: pd.DataFrame,
-        _df_securities: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> tuple[pd.Series, pd.DataFrame]:
         sec_txs = df_augmented[df_augmented["security"].notna()].copy()
@@ -1458,7 +1342,7 @@ class PerformanceEngine:
         securities_by_currency = {}
         for sec_uuid in sec_holdings.columns:
             if sec_uuid in price_pivot.columns:
-                curr = self._sec_curr_map.get(sec_uuid, "EUR")
+                curr = self.market_resolver.get_security_currency(sec_uuid)
                 securities_by_currency.setdefault(curr, []).append(sec_uuid)
 
         for curr, sec_uuids in securities_by_currency.items():
@@ -1547,38 +1431,10 @@ class PerformanceEngine:
         return daily_cash_wealth, acc_balances
 
     def _get_price(self, sec_id: str, d: pd.Timestamp) -> float:
-        try:
-            # Ensure the input datetime is timezone-aware to match the index
-            if d.tzinfo is None:
-                d = d.tz_localize("UTC")
-            idx = (sec_id, d)
-            if idx in self._prices_idx.index:
-                return self._prices_idx.loc[idx, "close"]
-            sec_prices = self._prices_idx.loc[sec_id]
-            loc = sec_prices.index.searchsorted(d, side="right")
-            if loc > 0:
-                return sec_prices.iloc[loc - 1]["close"]
-
-        except (KeyError, IndexError):
-            pass
-        return 0.0
+        return self.market_resolver.get_price(sec_id, d)
 
     def _get_fx(self, curr: str, d: pd.Timestamp) -> float:
-        if curr == "EUR":
-            return 1.0
-        try:
-            if (curr, d) in self._rates_idx.index:
-                return self._rates_idx.loc[(curr, d), "rate"]
-            c_rates = self._rates_idx.loc[curr]
-            loc = c_rates.index.searchsorted(d, side="right")
-            if loc > 0:
-                return c_rates.iloc[loc - 1]["rate"]
-            if loc < len(c_rates):
-                return c_rates.iloc[loc]["rate"]
-        except (KeyError, IndexError):
-            pass
-        _LOGGER.warning("Missing FX rate for %s at %s - returning 1.0", curr, d)
-        return 1.0
+        return self.market_resolver.get_fx(curr, d)
 
     def _load_transaction_units(self, tx_uuids: list[str]) -> dict[str, dict[str, int]]:
         if not tx_uuids:
@@ -1935,7 +1791,7 @@ class PerformanceEngine:
         for sec_id, lots in inventory.items():
             if not lots:
                 continue
-            curr = self._sec_curr_map.get(sec_id, "EUR")
+            curr = self.market_resolver.get_security_currency(sec_id)
             end_price = self._get_price(sec_id, end_ts)
             end_fx = self._get_fx(curr, end_ts)
 
@@ -2109,12 +1965,9 @@ class PerformanceEngine:
         # For Transfer rows, use "flow_eur". For others, use (Amount / Rate).
 
         def _get_val(row: pd.Series) -> float:
-            # Check if we have pre-calculated flow (Transfers)
-            f_eur = getattr(row, "flow_eur", np.nan)
-            if pd.notna(f_eur) and f_eur != 0:
-                return float(f_eur)
-
             # Standard Calculation
+            # NOTE: We intentionally do NOT use the symmetric 'flow_eur' for FX gain
+            # calculations, as we need the actual value of each leg of the transfer.
             curr = getattr(row, "currency_code", "EUR")
             amt_cents = getattr(row, "amount", 0.0)
 
@@ -2129,12 +1982,7 @@ class PerformanceEngine:
         else:
             combined["final_val_eur"] = 0.0
 
-        if "flow_eur" in combined.columns:
-            mask_fe = combined["flow_eur"].notna() & (combined["flow_eur"] != 0)
-            if mask_fe.any():
-                combined.loc[mask_fe, "final_val_eur"] = combined.loc[
-                    mask_fe, "flow_eur"
-                ]
+        # This redundant block is removed as _get_val is now the single source of truth.
 
         combined["signed_flow_eur"] = combined["final_val_eur"] * combined["sign"]
 

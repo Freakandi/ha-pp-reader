@@ -99,7 +99,8 @@ class MarketResolver:
     def get_price(self, sec_id: str, d: date | pd.Timestamp) -> float:
         """Get the price for a security on a specific date with forward-fill."""
         try:
-            ts = pd.Timestamp(d, tz="UTC")
+            ts = pd.Timestamp(d)
+            ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
             idx = (sec_id, ts)
 
             if idx in self._prices_idx.index:
@@ -149,3 +150,42 @@ class MarketResolver:
 
         # Reindex with forward fill
         return sec_prices["close"].reindex(date_range, method="ffill")
+
+    def get_prices_pivot(
+        self, securities: list[str], date_range: pd.DatetimeIndex
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Get a forward-filled pivot table of prices for multiple securities."""
+        if self._df_prices.empty or not securities:
+            return pd.DataFrame(index=date_range), pd.DataFrame(index=date_range)
+
+        df_filtered = self._df_prices[self._df_prices["security_uuid"].isin(securities)]
+
+        if df_filtered.empty:
+            return pd.DataFrame(index=date_range), pd.DataFrame(index=date_range)
+
+        pivot_unfilled = df_filtered.pivot_table(
+            index="date", columns="security_uuid", values="close"
+        )
+        pivot_reindexed = pivot_unfilled.reindex(date_range)
+        price_exists_mask = pivot_reindexed.notna()
+        pivot_filled = pivot_reindexed.ffill().bfill()
+
+        return pivot_filled, price_exists_mask
+
+    def get_fx_pivot(
+        self, currencies: list[str], date_range: pd.DatetimeIndex
+    ) -> pd.DataFrame:
+        """Get a forward-filled pivot table of FX rates for multiple currencies."""
+        if self._df_rates.empty or not currencies:
+            return pd.DataFrame(index=date_range)
+
+        df_filtered = self._df_rates[self._df_rates["currency"].isin(currencies)]
+
+        if df_filtered.empty:
+            return pd.DataFrame(index=date_range)
+
+        pivot_unfilled = df_filtered.pivot_table(
+            index="date", columns="currency", values="rate"
+        )
+        pivot_reindexed = pivot_unfilled.reindex(date_range)
+        return pivot_reindexed.ffill().bfill()

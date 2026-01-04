@@ -49,7 +49,7 @@ Modify `custom_components/pp_reader/metrics/calculator.py`.
     - Test Case: `test_live_price_priority` (Securities table overrides/appends to history).
     - Test Case: `test_get_security_currency` (Verify metadata lookup).
 
-- [ ] **Step 3: Integrate into PerformanceEngine**
+- [x] **Step 3: Integrate into PerformanceEngine**
     - Modify `custom_components/pp_reader/metrics/calculator.py`.
     - Update `__init__` to take `market_resolver: MarketResolver`.
     - Remove `_df_prices`, `_df_rates`, `_df_securities` initialization.
