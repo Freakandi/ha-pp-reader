@@ -23,15 +23,15 @@ See [Refactor Context](tasks/refactor_context.md).
 - **Create** `tests/metrics/core/test_fx_access.py` with the migrated test cases to verify the new module directly.
 
 ## Detailed Steps
-1.  Create `metrics/core/` directory and `__init__.py`.
-2.  Create `metrics/core/fx_access.py` implementing `get_best_available_fx_rate` (copy-paste of `_lookup_fx_rate` with type hints and logging).
-3.  Modify `custom_components/pp_reader/data/canonical_sync.py`: Delete `_lookup_fx_rate`.
-4.  Modify `custom_components/pp_reader/data/backfill_fx_tx.py`: Import and use `get_best_available_fx_rate`.
-5.  Modify `custom_components/pp_reader/data/ingestion_writer.py`: Import and use `get_best_available_fx_rate`.
-6.  Create `tests/metrics/core/test_fx_access.py` containing the test case removed from `test_canonical_sync.py`.
-7.  Modify `tests/test_canonical_sync.py`: Remove the now-irrelevant test case.
-8.  Run `pytest tests/metrics/core/test_fx_access.py` to verify the extraction.
-9.  Run `pytest tests/integration/test_backfill_fx_tx.py tests/integration/test_ingestion_writer.py` to ensure regression safety.
+[x] 1.  Create `metrics/core/` directory and `__init__.py`.
+[x] 2.  Create `metrics/core/fx_access.py` implementing `get_best_available_fx_rate` (copy-paste of `_lookup_fx_rate` with type hints and logging).
+[x] 3.  Modify `custom_components/pp_reader/data/canonical_sync.py`: Delete `_lookup_fx_rate`.
+[x] 4.  Modify `custom_components/pp_reader/data/backfill_fx_tx.py`: Import and use `get_best_available_fx_rate`.
+[x] 5.  Modify `custom_components/pp_reader/data/ingestion_writer.py`: Import and use `get_best_available_fx_rate`.
+[x] 6.  Create `tests/metrics/core/test_fx_access.py` containing the test case removed from `test_canonical_sync.py`.
+[x] 7.  Modify `tests/test_canonical_sync.py`: Remove the now-irrelevant test case.
+[x] 8.  Run `pytest tests/metrics/core/test_fx_access.py` to verify the extraction.
+[x] 9.  Run `pytest tests/integration/test_backfill_fx_tx.py tests/integration/test_ingestion_writer.py` to ensure regression safety.
 
 ## Test Plan
 - **Primary:** `tests/metrics/core/test_fx_access.py`
