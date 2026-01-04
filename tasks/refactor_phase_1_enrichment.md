@@ -54,12 +54,12 @@ Establish a **Single Source of Truth** for EUR valuations by persisting canonica
         - **Case 2 (Foreign/Foreign):** Calculate average magnitude `(|v_out| + |v_in|) / 2`. Updates both legs.
     - Call `_apply_transfer_protocol(conn)` inside `async_sync_ingestion_to_canonical` (or `_sync_ingestion_to_canonical`), *before* the final sync to canonical.
 
-- [ ] **Step 4: Update Sync Logic**
+- [x] **Step 4: Update Sync Logic**
     - Modify `_sync_transactions` in `custom_components/pp_reader/data/canonical_sync.py`.
     - Update the `INSERT ... SELECT` statement to include `amount_eur_cents` and `fx_rate_used`.
     - Update `transaction_units` sync similarly.
 
-- [ ] **Step 5: Verification & Testing**
+- [x] **Step 5: Verification & Testing**
     - Create `tests/data/test_ingestion_enrichment.py`.
     - Test cases:
         - `test_valuation_buy_usd_implicit_rate`

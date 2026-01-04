@@ -156,23 +156,18 @@ This phase centralizes all "Value at Time T" logic, eliminating redundant SQL qu
 1.  **Create `metrics/core/market_resolver.py`**:
     *   **Class:** `MarketResolver`
     *   **Responsibilities:**
-        *   Load Reference Data (`historical_prices`, `securities` (latest), `fx_rates`, `exchange_rates` (live)) into memory ONCE.
+        *   Load Reference Data (`historical_prices`, `securities` (latest)) into memory ONCE.
         *   Provide fast O(1) or O(log N) lookups for Price and FX.
     *   **API Signature:**
         ```python
         class MarketResolver:
             def __init__(self, conn: sqlite3.Connection):
                 self._prices = pd.Series() # MultiIndex (sec_uuid, date)
-                self._rates = pd.Series()  # MultiIndex (currency, date)
 
             def load_data(self) -> None: ...
                 # 1. Load historical_prices (bulk).
                 # 2. Load securities(last_price) -> Append to history as "Today".
-                # 3. Load fx_rates (bulk).
-                # 4. Load exchange_rates(live) -> Append to rates as "Now".
-                # 5. Load "First Known Rates" from `transactions` (Query: `min(date), currency, fx_rate_used`).
-                #    Stored as `self._fallback_rates = {curr: rate}`.
-                # 6. Sort indices for fast searchsorted lookups.
+                # 3. Sort indices for fast searchsorted lookups.
 
             def get_price(self, sec_uuid: str, date: datetime) -> float: ...
                 # Logic:
@@ -180,15 +175,10 @@ This phase centralizes all "Value at Time T" logic, eliminating redundant SQL qu
                 # 2. If missing, look for `max(t) < date` (Forward Fill).
                 # 3. If no history < date, return 0.0 (Log Warning).
 
-            def get_fx(self, currency: str, date: datetime) -> float: ...
-                # Logic: Returns rate 'R' such that 1 EUR = R * CurrencyUnits.
-                # (e.g. USD=1.05 means 1 EUR gets you 1.05 USD).
-                # To convert to EUR: value_eur = value_native / get_fx(curr, date).
-                # 1. If currency == 'EUR', return 1.0.
-                # 2. Forward Fill lookup (similar to price).
-                # 3. **Fallback:** If date < min(history_date), return `self._fallback_rates[currency]`.
-                #    *Rationale:* If we have no market data for a time (e.g. 1990), use the implied rate from the first transaction the user actually made in that currency.
-                #    *Safety:* If `_fallback_rates` is empty (fresh DB), return None/Exception? The consumer must handle this.
+            def get_fx(self, currency: str, date: datetime) -> float | None: ...
+                # Logic: Delegate to `metrics.core.fx_access.get_best_available_fx_rate(self.conn, currency, date)`.
+                # Rationale: Ensures identical "Latest <= Date" logic is used for both Ingestion (Phase 1) and Valuation (Phase 2),
+                # preventing logic drift between the two engines.
 
             def get_price_series(self, sec_uuid: str, start_date: datetime, end_date: datetime) -> pd.Series: ...
                 # Logic: Returns a daily series of prices for the interval [start_date, end_date].
@@ -206,8 +196,8 @@ This phase centralizes all "Value at Time T" logic, eliminating redundant SQL qu
 
 3.  **Integration with Existing Logic (Data Sources)**:
     *   **FX Source (`currencies/fx.py`)**:
-        *   `MarketResolver` reads FROM `fx_rates` (Historical) and `exchange_rates` (Live).
-        *   *No Change Needed* to fetching logic (`ensure_exchange_rates_for_dates`). The Resolver is a *Consumer*, not a *Producer*.
+        *   `MarketResolver` delegates to `metrics.core.fx_access` which reads from `fx_rates`.
+        *   *No Change Needed* to fetching logic. The Resolver is a *Consumer*, not a *Producer*.
     *   **Price Source (`prices/price_service.py`)**:
         *   `MarketResolver` reads FROM `historical_prices` and `securities`.
         *   *No Change Needed* to the `PriceService` or `HistoryQueue`. They continue to fill the DB; the Resolver just reads the result.

@@ -24,14 +24,14 @@ This workflow triggers the execution of a specific `tasks/refactor_phase_[N]_[sl
 *   **Prompt Construction:**
     *   Construct a detailed prompt string comprising:
         1.  **Task:** "Execute the task defined in [Task_File_Path]."
-        2.  **Scope:** "Identity the FIRST unchecked step (`- [ ]`) in 'Detailed Steps'. Execute ONLY that step (and any strictly interdependent sub-steps). Do NOT proceed to subsequent steps unless they are trivial."
+        2.  **Scope:** "Identity the FIRST unchecked step (`- [ ]`) in 'Detailed Steps'. You MUST execute this step. You MAY also execute the immediate next step **ONLY IF** it is a 'Test' step directly corresponding to your implementation. **PROHIBITION:** Do NOT proceed to 'Integration', 'Cleanup', or unrelated steps."
         3.  **Context:** "Refer to `tasks/refactor_calculations.md` and `tasks/refactor_context.md` for architectural guidelines."
-        4.  **Action:** "Mark the completed step with `[x]` in the Task File."
-        5.  **Mandatory Compliance:** "You MUST run `ruff check .`, `ruff format .`, and `ruff check .` (for Python) or `npm run lint:ts` and `npm run typecheck` (for TS). Fix ALL errors. Do not use workarounds provided by linter (e.g. noqa) unless absolutely necessary."
+        4.  **Mandatory Compliance:** "You MUST run `ruff check .`, `ruff format .`, and `ruff check .` (for Python) or `npm run lint:ts` and `npm run typecheck` (for TS). Fix ALL errors. Do not use workarounds provided by linter (e.g. noqa) unless absolutely necessary."
+        5.  **CRITICAL FINAL ACTION:** "Before submitting your PR, you **MUST** update `[Task_File_Path]` and change the step(s) you completed from `- [ ]` to `- [x]`. If you fail to do this, your work is incomplete."
         6.  **Goal:** "Create a Pull Request with the changes."
 *   **Execution:**
     *   Run the command using `run_command`.
-    *   *Template:* `jules new --repo Freakandi/ha-pp-reader "Execute [Task_File_Path]. Single Step Only. STRICT: Run ruff/lint."`
+    *   *Template:* `jules new --repo Freakandi/ha-pp-reader "Execute [Task_File_Path]. Logical Unit (Impl+Test). STRICT: Run `ruff check .`, `ruff format .`, and `ruff check .` (for Python) or `npm run lint:ts` and `npm run typecheck` (for TS)"`
     *   **Wait** for the command to output the **Session ID**.
 
 ## 4. Handover
