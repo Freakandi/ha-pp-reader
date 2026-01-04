@@ -30,7 +30,7 @@ Modify `custom_components/pp_reader/metrics/calculator.py`.
 
 ## Detailed Steps
 
-- [ ] **Step 1: Create Market Resolver Implementation**
+- [x] **Step 1: Create Market Resolver Implementation**
     - Create `custom_components/pp_reader/metrics/core/market_resolver.py`.
     - Implement `__init__` and `load_data`:
         - Load `historical_prices` (bulk).
@@ -41,7 +41,7 @@ Modify `custom_components/pp_reader/metrics/calculator.py`.
     - Implement `get_security_currency(sec_uuid) -> str`: Return the cached currency code (default to 'EUR' if missing).
     - Implement `get_price_series` (vectorized slice).
 
-- [ ] **Step 2: Test Market Resolver (Unit)**
+- [x] **Step 2: Test Market Resolver (Unit)**
     - Create `tests/metrics/core/test_market_resolver.py`.
     - Test Case: `test_price_lookup_exact_match`.
     - Test Case: `test_price_lookup_forward_fill` (T+5 uses T).
