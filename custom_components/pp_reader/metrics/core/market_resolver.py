@@ -1,4 +1,5 @@
 """Unified Market Data Resolver."""
+
 from __future__ import annotations
 
 import logging
@@ -88,9 +89,9 @@ class MarketResolver:
         query_sec = "SELECT uuid, currency_code FROM securities"
         try:
             self._df_securities = pd.read_sql_query(query_sec, self.conn)
-            self._sec_curr_map = (
-                self._df_securities.set_index("uuid")["currency_code"].to_dict()
-            )
+            self._sec_curr_map = self._df_securities.set_index("uuid")[
+                "currency_code"
+            ].to_dict()
         except (pd.errors.DatabaseError, KeyError):
             self._df_securities = pd.DataFrame(columns=["uuid", "currency_code"])
             self._sec_curr_map = {}
@@ -135,9 +136,7 @@ class MarketResolver:
         """Get the currency code for a given security UUID."""
         return self._sec_curr_map.get(sec_uuid, "EUR")
 
-    def get_price_series(
-        self, sec_uuid: str, start: date, end: date
-    ) -> pd.Series:
+    def get_price_series(self, sec_uuid: str, start: date, end: date) -> pd.Series:
         """Get a time series of prices for a security over a date range."""
         if (
             self._prices_idx.empty

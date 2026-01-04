@@ -1,4 +1,5 @@
 """Unit tests for the MarketResolver class."""
+
 from __future__ import annotations
 
 import sqlite3
