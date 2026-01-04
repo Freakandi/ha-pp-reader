@@ -31,12 +31,13 @@ This workflow transforms a high-level "Phase" from `tasks/refactor_calculations.
 *   Create a new file: `tasks/refactor_phase_[N]_[slug].md`.
 *   **Format:** Standard Task format (Goal, Context, Implementation Steps).
 *   **Content Requirements:**
+    0.  **Context - Always reference tasks/refactor_calculations.md and tasks/refactor_context.md as relevant context for the task
     1.  **User Story/Goal:** "Implement Phase X of the Refactor: [Title]".
-    2.  **Proposed Changes:** List specific files and functions to modify.
-    3.  **Detailed Steps:** Break down the work into 3-5 atomic "Chunks" (e.g., "Step 1: DB Schema", "Step 2: Migration", "Step 3: Writer Logic").
-    4.  **Test Plan:** Explicitly list tests to create or run.
+    2.  **Proposed Changes:** List specific files, dataclasses, methods and functions to create, modify and remove.
+    3.  **Detailed Steps:** Break down the work into as many atomic "Chunks" as necessary, wheras "necessary" is defined as "sizing the chunk to small/medium code changes of low or medium complexity" (e.g., "Step 1: DB Schema", "Step 2: Migration", "Step 3: Writer Logic").
+    4.  **Test Plan:** Define incremental/unit tests ONLY (NO E2E/Integration as system will be broken). **Crucial:** Identify and list existing tests that become obsolete; provide instructions to remove/update them.
     5.  **Complexity Rating:** Estimate the effort (Story Points or T-Shirt size).
 
 ## 5. Review & Approval
 *   Present the created `tasks/refactor_phase_[N]_[slug].md` to the user.
-*   Ask for approval to proceed to execution (User will likely switch to `/nf-03-execute` after this).
+*   Ask for approval to proceed to execution, DO NOT EXECUTE WITHOUT EXPLICIT USER CONSENT (User will likely switch to `/nf-03-execute` after this).
