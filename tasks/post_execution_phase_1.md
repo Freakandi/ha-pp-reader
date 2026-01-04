@@ -46,3 +46,29 @@
 ## Recommendations
 - **Proceed to Step 4:** Update the `_sync_transactions` SQL to actually promote the Enriched columns (`amount_eur_cents`, `fx_rate_used`) from Ingestion to Canonical tables.
 - **Proceed to Step 5:** Expand `test_ingestion_enrichment.py` to verify the Transfer Protocol logic with specific mock cases (Orphan, Mixed, Foreign).
+
+# Assessment: PR #762 - Update Sync Logic & Transfer Protocol
+
+## Execution Summary
+*   **Result:** **Partial Success** (Code implemented, but tests fail).
+*   **PR:** #762
+*   **Files Changed:**
+    *   `custom_components/pp_reader/data/canonical_sync.py`: Implemented `_apply_transfer_protocol` and updated `_sync_transactions` to persist `amount_eur_cents` and `fx_rate_used`.
+    *   `tests/data/test_ingestion_enrichment.py`: Added new tests for transfer protocol and unit enrichment.
+
+## Quality Check
+*   **Architecture:** The implementation closely follows `refactor_calculations.md` (Phase 1).
+    *   Transfer Protocol logic correctly handles Mixed and Foreign/Foreign transfers using the "Average Magnitude" rule.
+    *   Sync logic correctly persists the enriched valuations to the canonical tables.
+*   **Breaking Changes:** The code correctly utilizes the new schema columns `amount_eur_cents` and `fx_rate_used`.
+*   **Linting:** **Failed**. 1 error (`UP035`: Import `Iterable` from `collections.abc` instead of `typing`).
+
+## Test Results
+*   **Status:** **Failed** (4 errors).
+*   **Details:** The new tests in `tests/data/test_ingestion_enrichment.py` crash with `TypeError: ParsedTransaction.__init__() missing X required positional arguments`.
+*   **Cause:** The test code constructs `ParsedTransaction` objects without providing values for all required fields (e.g., `other_account`, `other_portfolio`, `source`, `updated_at`). The `ParsedTransaction` dataclass likely does not have default values for these fields.
+
+## Recommendations
+1.  **Fix Tests:** Update `tests/data/test_ingestion_enrichment.py` to provide `None` or appropriate dummy values for all required arguments of `ParsedTransaction`.
+2.  **Fix Linting:** Apply the auto-fix for `UP035` (`from collections.abc import Iterable`).
+3.  **Merge:** Once tests pass, the logic appears sound and ready for merge.

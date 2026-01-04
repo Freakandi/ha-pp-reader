@@ -64,9 +64,11 @@ def _apply_transfer_protocol(conn: sqlite3.Connection) -> None:
                 t1.uuid as uuid1,
                 t1.currency_code as currency1,
                 t1.amount_eur_cents as eur1,
+                t1.amount as amount1,
                 t2.uuid as uuid2,
                 t2.currency_code as currency2,
-                t2.amount_eur_cents as eur2
+                t2.amount_eur_cents as eur2,
+                t2.amount as amount2
             FROM ingestion_transactions t1
             JOIN ingestion_transactions t2 ON t1.other_uuid = t2.uuid
             WHERE
@@ -101,12 +103,22 @@ def _apply_transfer_protocol(conn: sqlite3.Connection) -> None:
             # t1 is EUR, t2 is Foreign. t2 should be the inverse of t1.
             new_eur2 = -eur1
             if new_eur2 != eur2:
-                updates.append((new_eur2, row["uuid2"]))
+                # Calculate the effective exchange rate for t2 (EUR per foreign unit)
+                # amount2 is in cents, new_eur2 is in cents.
+                # Rate = (new_eur2 / 100) / (amount2 / 100) = new_eur2 / amount2
+                # Since rate must be positive, take absolute values.
+                new_rate2 = (
+                    abs(new_eur2) / abs(row["amount2"]) if row["amount2"] else 1.0
+                )
+                updates.append((new_eur2, new_rate2, row["uuid2"]))
         elif not is_c1_eur and is_c2_eur:
             # t2 is EUR, t1 is Foreign. t1 should be the inverse of t2.
             new_eur1 = -eur2
             if new_eur1 != eur1:
-                updates.append((new_eur1, row["uuid1"]))
+                new_rate1 = (
+                    abs(new_eur1) / abs(row["amount1"]) if row["amount1"] else 1.0
+                )
+                updates.append((new_eur1, new_rate1, row["uuid1"]))
 
         # Case 2: Foreign / Foreign
         elif not is_c1_eur and not is_c2_eur:
@@ -118,14 +130,22 @@ def _apply_transfer_protocol(conn: sqlite3.Connection) -> None:
             new_eur2 = avg_magnitude
 
             if new_eur1 != eur1:
-                updates.append((new_eur1, row["uuid1"]))
+                new_rate1 = (
+                    abs(new_eur1) / abs(row["amount1"]) if row["amount1"] else 1.0
+                )
+                updates.append((new_eur1, new_rate1, row["uuid1"]))
             if new_eur2 != eur2:
-                updates.append((new_eur2, row["uuid2"]))
+                new_rate2 = (
+                    abs(new_eur2) / abs(row["amount2"]) if row["amount2"] else 1.0
+                )
+                updates.append((new_eur2, new_rate2, row["uuid2"]))
 
     if updates:
         try:
             conn.executemany(
-                "UPDATE ingestion_transactions SET amount_eur_cents = ? WHERE uuid = ?",
+                "UPDATE ingestion_transactions "
+                "SET amount_eur_cents = ?, fx_rate_used = ? "
+                "WHERE uuid = ?",
                 updates,
             )
             _LOGGER.info("Applied Transfer Protocol to %d legs.", len(updates))
