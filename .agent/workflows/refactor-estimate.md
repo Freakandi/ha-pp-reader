@@ -35,6 +35,8 @@ This workflow transforms a high-level "Phase" from `tasks/refactor_calculations.
     1.  **User Story/Goal:** "Implement Phase X of the Refactor: [Title]".
     2.  **Proposed Changes:** List specific files, dataclasses, methods and functions to create, modify and remove.
     3.  **Detailed Steps:** Break down the work into as many atomic "Chunks" as necessary, wheras "necessary" is defined as "sizing the chunk to small/medium code changes of low or medium complexity" (e.g., "Step 1: DB Schema", "Step 2: Migration", "Step 3: Writer Logic").
+        *   **Grouping:** If two actions are strictly interdependent (cannot be compiled/tested separately), group them into a SINGLE step.
+        *   **Format:** Use Markdown Checkboxes (e.g., `- [ ] Step 1: ...`) for these atomic/grouped steps.
     4.  **Test Plan:** Define incremental/unit tests ONLY (NO E2E/Integration as system will be broken). **Crucial:** Identify and list existing tests that become obsolete; provide instructions to remove/update them.
     5.  **Complexity Rating:** Estimate the effort (Story Points or T-Shirt size).
 

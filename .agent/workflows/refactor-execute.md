@@ -24,12 +24,14 @@ This workflow triggers the execution of a specific `tasks/refactor_phase_[N]_[sl
 *   **Prompt Construction:**
     *   Construct a detailed prompt string comprising:
         1.  **Task:** "Execute the task defined in [Task_File_Path]."
-        2.  **Context:** "Refer to `tasks/refactor_calculations.md` and `tasks/refactor_context.md` for architectural guidelines."
-        3.  **Mandatory Compliance:** "You MUST run `ruff check .`, `ruff format .`, and `ruff check .` (for Python) or `npm run lint:ts` and `npm run typecheck` (for TS). Fix ALL errors. Do not use workarounds provided by linter (e.g. noqa) unless absolutely necessary."
-        4.  **Goal:** "Create a Pull Request with the changes."
+        2.  **Scope:** "Identity the FIRST unchecked step (`- [ ]`) in 'Detailed Steps'. Execute ONLY that step (and any strictly interdependent sub-steps). Do NOT proceed to subsequent steps unless they are trivial."
+        3.  **Context:** "Refer to `tasks/refactor_calculations.md` and `tasks/refactor_context.md` for architectural guidelines."
+        4.  **Action:** "Mark the completed step with `[x]` in the Task File."
+        5.  **Mandatory Compliance:** "You MUST run `ruff check .`, `ruff format .`, and `ruff check .` (for Python) or `npm run lint:ts` and `npm run typecheck` (for TS). Fix ALL errors. Do not use workarounds provided by linter (e.g. noqa) unless absolutely necessary."
+        6.  **Goal:** "Create a Pull Request with the changes."
 *   **Execution:**
     *   Run the command using `run_command`.
-    *   *Template:* `jules new "Execute [Task_File_Path]. See refactor_calculations.md. STRICT: Run ruff/lint, no errors allowed."` (Or pipe the longer formulated prompt).
+    *   *Template:* `jules new "Execute [Task_File_Path]. Single Step Only. STRICT: Run ruff/lint."`
     *   **Wait** for the command to output the **Session ID**.
 
 ## 4. Handover
