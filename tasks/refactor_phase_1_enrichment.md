@@ -46,7 +46,7 @@ Establish a **Single Source of Truth** for EUR valuations by persisting canonica
         3. Check Level 4 (Feed-Forward) via `latest_rates`.
     - *Constraint:* Ensure `fx_rate_used` is returned and persisted.
 
-- [ ] **Step 3: Implement Transfer Protocol**
+- [x] **Step 3: Implement Transfer Protocol**
     - Modify `custom_components/pp_reader/data/canonical_sync.py`.
     - Add `_apply_transfer_protocol(conn)`:
         - Select pairs linked by `other_uuid`.
