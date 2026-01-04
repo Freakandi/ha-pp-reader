@@ -648,9 +648,7 @@ class IngestionWriter:
     ) -> list[dict[str, Any]]:
         """Enrich and serialize transaction units."""
         enriched_units = []
-        parent_currency = _normalize_currency_code(
-            getattr(txn, "currency_code", None)
-        )
+        parent_currency = _normalize_currency_code(getattr(txn, "currency_code", None))
 
         for unit in txn.units:
             unit_amount_eur_cents = None
@@ -670,9 +668,7 @@ class IngestionWriter:
                 if native_value is not None:
                     try:
                         eur_value = native_value * float(unit_fx_rate_used)
-                        unit_amount_eur_cents = eur_to_cent(
-                            eur_value, default=None
-                        )
+                        unit_amount_eur_cents = eur_to_cent(eur_value, default=None)
                     except (TypeError, ValueError, ZeroDivisionError):
                         pass
 

@@ -31,6 +31,7 @@ class MockParsedTransaction:
         self.source = kwargs.get("source")
         self.updated_at = kwargs.get("updated_at")
 
+
 class MockParsedTransactionUnit:
     def __init__(self, **kwargs):
         self.type = kwargs.get("type")
@@ -62,7 +63,7 @@ def test_valuation_buy_usd_implicit_rate(conn):
     transactions = [
         MockParsedTransaction(
             uuid="tx1",
-            type=1, # Buy
+            type=1,  # Buy
             date=tx_date,
             amount=-10000,  # -100.00 USD
             currency_code="USD",
@@ -71,9 +72,9 @@ def test_valuation_buy_usd_implicit_rate(conn):
                     type=10,  # Fee
                     amount=-100,  # -1.00 USD
                     currency_code="USD",
-                        fx_amount=-93,  # This implies a rate of 0.9276
+                    fx_amount=-93,  # This implies a rate of 0.9276
                     fx_currency_code="EUR",
-                        fx_rate_to_base=0.9276,
+                    fx_rate_to_base=0.9276,
                 )
             ],
         )
@@ -84,7 +85,9 @@ def test_valuation_buy_usd_implicit_rate(conn):
 
     # Assert
     cursor = conn.cursor()
-    cursor.execute("SELECT amount_eur_cents, fx_rate_used FROM ingestion_transactions WHERE uuid='tx1'")
+    cursor.execute(
+        "SELECT amount_eur_cents, fx_rate_used FROM ingestion_transactions WHERE uuid='tx1'"
+    )
     row = cursor.fetchone()
 
     assert row is not None
@@ -92,7 +95,9 @@ def test_valuation_buy_usd_implicit_rate(conn):
     assert row[0] == -9276
     assert row[1] == pytest.approx(0.9276)
 
-    cursor.execute("SELECT amount_eur_cents, fx_rate_used FROM ingestion_transaction_units WHERE transaction_uuid='tx1'")
+    cursor.execute(
+        "SELECT amount_eur_cents, fx_rate_used FROM ingestion_transaction_units WHERE transaction_uuid='tx1'"
+    )
     unit_row = cursor.fetchone()
     assert unit_row is not None
     # The unit amount is -1.00 USD. With a rate of 0.9276, this should be -0.9276 EUR, or -93 cents (rounded).
