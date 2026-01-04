@@ -526,6 +526,39 @@ class IngestionWriter:
         ] = []
         latest_rates: dict[str, float] = {}
 
+        latest_rates: dict[str, float] = {}
+
+        self._collect_and_ensure_fx_rates(transactions, fx_requests)
+
+        for txn in transactions:
+            txn_row, unit_data_list = self._process_transaction(txn, latest_rates)
+            txn_rows.append(txn_row)
+            if unit_data_list:
+                unit_payload.append((txn.uuid, unit_data_list))
+
+        self._conn.executemany(
+            """
+            INSERT OR REPLACE INTO ingestion_transactions (
+                uuid, type, account, portfolio, other_account, other_portfolio,
+                other_uuid, other_updated_at, date, currency_code, amount,
+                amount_eur_cents, fx_rate_used, shares, note, security, source,
+                updated_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            txn_rows,
+        )
+
+        if unit_payload:
+            self.write_transaction_units(unit_payload)
+
+    def _collect_and_ensure_fx_rates(
+        self,
+        transactions: Sequence[parsed_models.ParsedTransaction],
+        fx_requests: dict[Any, set[str]],
+    ) -> None:
+        """Collect and fetch necessary FX rates for the batch."""
         for txn in transactions:
             currency = _normalize_currency_code(getattr(txn, "currency_code", None))
             has_date = getattr(txn, "date", None) is not None
@@ -543,118 +576,130 @@ class IngestionWriter:
         if fx_requests:
             self._ensure_fx_rates(fx_requests)
 
-        for txn in transactions:
-            if txn.units:
-                for unit in txn.units:
-                    if (
-                        hasattr(unit, "fx_rate_to_base")
-                        and unit.fx_rate_to_base is not None
-                        and hasattr(unit, "fx_currency_code")
-                        and unit.fx_currency_code is not None
-                    ):
-                        currency = _normalize_currency_code(getattr(txn, "currency_code", None))
-                        rate = unit.fx_rate_to_base
-                        if currency and isinstance(rate, (int, float)) and rate > 0:
-                            latest_rates[currency] = float(rate)
+    def _update_latest_rates(
+        self,
+        txn: parsed_models.ParsedTransaction,
+        latest_rates: dict[str, float],
+    ) -> None:
+        """Update feed-forward rates from explicit transaction units."""
+        if not txn.units:
+            return
+        for unit in txn.units:
+            if (
+                hasattr(unit, "fx_rate_to_base")
+                and unit.fx_rate_to_base is not None
+                and hasattr(unit, "fx_currency_code")
+                and unit.fx_currency_code is not None
+            ):
+                currency = _normalize_currency_code(getattr(txn, "currency_code", None))
+                rate = unit.fx_rate_to_base
+                if currency and isinstance(rate, (int, float)) and rate > 0:
+                    latest_rates[currency] = float(rate)
 
-            amount_eur_cents, fx_rate_used = self._compute_amount_eur_cents(
-                getattr(txn, "amount", None),
-                getattr(txn, "currency_code", None),
-                getattr(txn, "date", None),
-                latest_rates,
-            )
-            txn_rows.append(
-                (
-                    txn.uuid,
-                    txn.type,
-                    txn.account,
-                    txn.portfolio,
-                    txn.other_account,
-                    txn.other_portfolio,
-                    txn.other_uuid,
-                    _to_iso(txn.other_updated_at),
-                    _to_iso(txn.date),
-                    txn.currency_code,
-                    txn.amount,
-                    amount_eur_cents,
-                    fx_rate_used,
-                    txn.shares,
-                    txn.note,
-                    txn.security,
-                    txn.source,
-                    _to_iso(txn.updated_at),
-                )
-            )
+    def _process_transaction(
+        self,
+        txn: parsed_models.ParsedTransaction,
+        latest_rates: dict[str, float],
+    ) -> tuple[tuple[Any, ...], list[dict[str, Any]] | None]:
+        """Process a single transaction and its units."""
+        self._update_latest_rates(txn, latest_rates)
 
-            if txn.units:
-                enriched_units = []
-                parent_currency = _normalize_currency_code(
-                    getattr(txn, "currency_code", None)
-                )
-
-                for unit in txn.units:
-                    unit_amount_eur_cents = None
-                    unit_fx_rate_used = None
-                    unit_currency = _normalize_currency_code(
-                        getattr(unit, "currency_code", None)
-                    )
-
-                    if (
-                        unit_currency == parent_currency
-                        and fx_rate_used is not None
-                        and unit.amount is not None
-                    ):
-                        unit_fx_rate_used = fx_rate_used
-                        native_value = cent_to_eur(unit.amount, default=None)
-                        if native_value is not None:
-                            try:
-                                eur_value = native_value * float(unit_fx_rate_used)
-                                unit_amount_eur_cents = eur_to_cent(
-                                    eur_value, default=None
-                                )
-                            except (TypeError, ValueError, ZeroDivisionError):
-                                pass  # Fallback to full lookup
-
-                    if unit_amount_eur_cents is None:
-                        (
-                            unit_amount_eur_cents,
-                            unit_fx_rate_used,
-                        ) = self._compute_amount_eur_cents(
-                            getattr(unit, "amount", None),
-                            unit_currency,
-                            getattr(txn, "date", None),
-                            latest_rates,
-                        )
-
-                    enriched_units.append(
-                        {
-                            "type": unit.type,
-                            "amount": unit.amount,
-                            "currency_code": unit.currency_code,
-                            "fx_amount": unit.fx_amount,
-                            "fx_currency_code": unit.fx_currency_code,
-                            "fx_rate_to_base": unit.fx_rate_to_base,
-                            "amount_eur_cents": unit_amount_eur_cents,
-                            "fx_rate_used": unit_fx_rate_used,
-                        }
-                    )
-                unit_payload.append((txn.uuid, enriched_units))
-
-        self._conn.executemany(
-            """
-            INSERT OR REPLACE INTO ingestion_transactions (
-                uuid, type, account, portfolio, other_account, other_portfolio,
-                other_uuid, other_updated_at, date, currency_code, amount,
-                amount_eur_cents, fx_rate_used, shares, note, security, source, updated_at
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-            )
-            """,
-            txn_rows,
+        amount_eur_cents, fx_rate_used = self._compute_amount_eur_cents(
+            getattr(txn, "amount", None),
+            getattr(txn, "currency_code", None),
+            getattr(txn, "date", None),
+            latest_rates,
         )
 
-        if unit_payload:
-            self.write_transaction_units(unit_payload)
+        txn_row = (
+            txn.uuid,
+            txn.type,
+            txn.account,
+            txn.portfolio,
+            txn.other_account,
+            txn.other_portfolio,
+            txn.other_uuid,
+            _to_iso(txn.other_updated_at),
+            _to_iso(txn.date),
+            txn.currency_code,
+            txn.amount,
+            amount_eur_cents,
+            fx_rate_used,
+            txn.shares,
+            txn.note,
+            txn.security,
+            txn.source,
+            _to_iso(txn.updated_at),
+        )
+
+        unit_data_list = None
+        if txn.units:
+            unit_data_list = self._process_transaction_units(
+                txn, fx_rate_used, latest_rates
+            )
+
+        return txn_row, unit_data_list
+
+    def _process_transaction_units(
+        self,
+        txn: parsed_models.ParsedTransaction,
+        parent_fx_rate_used: float | None,
+        latest_rates: dict[str, float],
+    ) -> list[dict[str, Any]]:
+        """Enrich and serialize transaction units."""
+        enriched_units = []
+        parent_currency = _normalize_currency_code(
+            getattr(txn, "currency_code", None)
+        )
+
+        for unit in txn.units:
+            unit_amount_eur_cents = None
+            unit_fx_rate_used = None
+            unit_currency = _normalize_currency_code(
+                getattr(unit, "currency_code", None)
+            )
+
+            # Optimization: Inherit parent rate if currency matches
+            if (
+                unit_currency == parent_currency
+                and parent_fx_rate_used is not None
+                and unit.amount is not None
+            ):
+                unit_fx_rate_used = parent_fx_rate_used
+                native_value = cent_to_eur(unit.amount, default=None)
+                if native_value is not None:
+                    try:
+                        eur_value = native_value * float(unit_fx_rate_used)
+                        unit_amount_eur_cents = eur_to_cent(
+                            eur_value, default=None
+                        )
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        pass
+
+            if unit_amount_eur_cents is None:
+                (
+                    unit_amount_eur_cents,
+                    unit_fx_rate_used,
+                ) = self._compute_amount_eur_cents(
+                    getattr(unit, "amount", None),
+                    unit_currency,
+                    getattr(txn, "date", None),
+                    latest_rates,
+                )
+
+            enriched_units.append(
+                {
+                    "type": unit.type,
+                    "amount": unit.amount,
+                    "currency_code": unit.currency_code,
+                    "fx_amount": unit.fx_amount,
+                    "fx_currency_code": unit.fx_currency_code,
+                    "fx_rate_to_base": unit.fx_rate_to_base,
+                    "amount_eur_cents": unit_amount_eur_cents,
+                    "fx_rate_used": unit_fx_rate_used,
+                }
+            )
+        return enriched_units
 
     def write_transaction_units(
         self,
@@ -686,7 +731,8 @@ class IngestionWriter:
             """
             INSERT OR REPLACE INTO ingestion_transaction_units (
                 transaction_uuid, unit_index, type, amount, amount_eur_cents,
-                fx_rate_used, currency_code, fx_amount, fx_currency_code, fx_rate_to_base
+                fx_rate_used, currency_code, fx_amount, fx_currency_code,
+                fx_rate_to_base
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,

@@ -1,12 +1,13 @@
 """Tests for the ingestion enrichment logic."""
 
 import sqlite3
-from datetime import datetime
-from unittest.mock import MagicMock
+from datetime import UTC, datetime
 
 import pytest
 
+from custom_components.pp_reader.data.db_schema import FX_SCHEMA, INGESTION_SCHEMA
 from custom_components.pp_reader.data.ingestion_writer import IngestionWriter
+
 
 # A mock object to simulate the structure of parsed_models
 class MockParsedTransaction:
@@ -45,7 +46,6 @@ def conn():
     """Fixture for an in-memory SQLite database connection."""
     db_conn = sqlite3.connect(":memory:")
     # The writer expects the ingestion tables to exist.
-    from custom_components.pp_reader.data.db_schema import INGESTION_SCHEMA, FX_SCHEMA
     for schema in INGESTION_SCHEMA + FX_SCHEMA:
         db_conn.execute(schema)
     yield db_conn
@@ -56,7 +56,7 @@ def test_valuation_buy_usd_implicit_rate(conn):
     """Test valuation of a USD transaction with an implicit FX rate in its units."""
     # Arrange
     writer = IngestionWriter(conn)
-    tx_date = datetime(2023, 1, 15)
+    tx_date = datetime(2023, 1, 15, tzinfo=UTC)
 
     # Mock transaction with a fee unit that contains an implicit FX rate
     transactions = [
