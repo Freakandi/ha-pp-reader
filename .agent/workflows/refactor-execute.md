@@ -31,7 +31,7 @@ This workflow triggers the execution of a specific `tasks/refactor_phase_[N]_[sl
         6.  **Goal:** "Create a Pull Request with the changes."
 *   **Execution:**
     *   Run the command using `run_command`.
-    *   *Template:* `jules new "Execute [Task_File_Path]. Single Step Only. STRICT: Run ruff/lint."`
+    *   *Template:* `jules new --repo Freakandi/ha-pp-reader "Execute [Task_File_Path]. Single Step Only. STRICT: Run ruff/lint."`
     *   **Wait** for the command to output the **Session ID**.
 
 ## 4. Handover
