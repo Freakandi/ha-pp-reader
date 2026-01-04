@@ -11,10 +11,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from custom_components.pp_reader.data.canonical_sync import _lookup_fx_rate
+from custom_components.pp_reader.metrics.core.fx_access import (
+    get_best_available_fx_rate,
+)
+from custom_components.pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates_sync,
+)
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
-    ensure_exchange_rates_for_dates_sync,
     eur_to_cent,
 )
 
@@ -135,7 +139,7 @@ def _compute_amount_eur_cents(
     if tx.currency_code == "EUR":
         return tx.amount
 
-    rate = _lookup_fx_rate(conn, tx.currency_code, tx.date)
+    rate = get_best_available_fx_rate(conn, tx.currency_code, tx.date)
     native_value = cent_to_eur(tx.amount, default=None)
     if rate in (None, 0) or native_value is None:
         _LOGGER.warning(

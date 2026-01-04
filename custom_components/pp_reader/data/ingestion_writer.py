@@ -17,7 +17,9 @@ from uuid import uuid4
 from custom_components.pp_reader.currencies.fx import (
     ensure_exchange_rates_for_dates_sync,
 )
-from custom_components.pp_reader.data.canonical_sync import _lookup_fx_rate
+from custom_components.pp_reader.metrics.core.fx_access import (
+    get_best_available_fx_rate,
+)
 from custom_components.pp_reader.util.currency import (
     cent_to_eur,
     eur_to_cent,
@@ -330,7 +332,7 @@ class IngestionWriter:
             )
             return None
 
-        rate = _lookup_fx_rate(self._conn, currency, date_str)
+        rate = get_best_available_fx_rate(self._conn, currency, date_str)
         native_value = cent_to_eur(amount, default=None)
         if rate in (None, 0) or native_value is None:
             _LOGGER.warning(
