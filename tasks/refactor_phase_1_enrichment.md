@@ -29,7 +29,7 @@ Establish a **Single Source of Truth** for EUR valuations by persisting canonica
 
 ## Detailed Steps
 
-- [ ] **Step 1: Update Database Schema**
+- [x] **Step 1: Update Database Schema**
     - Modify `custom_components/pp_reader/data/db_schema.py` to add `amount_eur_cents` and `fx_rate_used` to `transactions` and `transaction_units` tables.
     - *Note:* `ingestion_transactions` already has `amount_eur_cents`. We are adding it to the canonical table and enhancing `transaction_units`.
 

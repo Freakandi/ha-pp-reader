@@ -444,6 +444,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
                 date TEXT,
                 currency_code TEXT,
                 amount INTEGER,
+                amount_eur_cents INTEGER,
+                fx_rate_used REAL,
                 shares INTEGER,
                 note TEXT,
                 security TEXT,
@@ -462,6 +464,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
                 date TEXT,
                 currency_code TEXT,
                 amount INTEGER,
+                amount_eur_cents INTEGER,
+                fx_rate_used REAL,
                 shares INTEGER,
                 note TEXT,
                 security TEXT,
@@ -472,6 +476,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
                 transaction_uuid TEXT,
                 type INTEGER,
                 amount INTEGER,
+                amount_eur_cents INTEGER,
+                fx_rate_used REAL,
                 currency_code TEXT,
                 fx_amount INTEGER,
                 fx_currency_code TEXT,
@@ -481,6 +487,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
                 transaction_uuid TEXT,
                 type INTEGER,
                 amount INTEGER,
+                amount_eur_cents INTEGER,
+                fx_rate_used REAL,
                 currency_code TEXT,
                 fx_amount INTEGER,
                 fx_currency_code TEXT,
@@ -492,8 +500,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
         conn.executemany(
             """
             INSERT INTO ingestion_transactions (
-                uuid, type, portfolio, date, currency_code, amount, shares, security
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                uuid, type, portfolio, date, currency_code, amount, amount_eur_cents, fx_rate_used, shares, security
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -503,6 +511,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
                     "2024-01-02",
                     "EUR",
                     12_345,
+                    12_345,
+                    1.0,
                     250_000_000,
                     "sec-1",
                 ),
@@ -513,6 +523,8 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
                     "2024-02-03",
                     "USD",
                     45_600,
+                    42_300,
+                    0.9276,
                     300_000_000,
                     "sec-1",
                 ),
@@ -521,12 +533,12 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
         conn.executemany(
             """
             INSERT INTO ingestion_transaction_units (
-                transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code, fx_rate_to_base
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                transaction_uuid, type, amount, amount_eur_cents, fx_rate_used, currency_code, fx_amount, fx_currency_code, fx_rate_to_base
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                ("tx-b", 2, 1_000, "USD", None, None, None),
-                ("tx-b", 1, 2_000, "USD", 1_800, "EUR", 10789),
+                ("tx-b", 2, 1_000, 927, 0.9276, "USD", None, None, None),
+                ("tx-b", 1, 2_000, 1855, 0.9276, "USD", 1_800, "EUR", 10789),
             ],
         )
         conn.execute(
@@ -547,27 +559,30 @@ def test_sync_transactions_mirrors_ingestion(tmp_path: Path) -> None:
 
         rows = conn.execute(
             """
-            SELECT uuid, type, portfolio, date, currency_code, amount, shares, security
+            SELECT uuid, amount_eur_cents, fx_rate_used
             FROM transactions
             ORDER BY uuid
             """
         ).fetchall()
-        assert [row["uuid"] for row in rows] == ["tx-a", "tx-b"]
-        assert rows[0]["shares"] == 250_000_000
-        assert rows[1]["amount"] == 45_600
+        assert len(rows) == 2
+        assert rows[0]["amount_eur_cents"] == 12_345
+        assert rows[0]["fx_rate_used"] == 1.0
+        assert rows[1]["amount_eur_cents"] == 42_300
+        assert rows[1]["fx_rate_used"] == pytest.approx(0.9276)
 
         unit_rows = conn.execute(
             """
-            SELECT transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code, fx_rate_to_base
+            SELECT transaction_uuid, type, amount_eur_cents, fx_rate_used
             FROM transaction_units
             ORDER BY transaction_uuid, type
             """
         ).fetchall()
         assert len(unit_rows) == 2
         by_type = {(row["transaction_uuid"], row["type"]): row for row in unit_rows}
-        assert by_type[("tx-b", 2)]["amount"] == 1_000
+        assert by_type[("tx-b", 2)]["amount_eur_cents"] == 927
+        assert by_type[("tx-b", 2)]["fx_rate_used"] == pytest.approx(0.9276)
         tax_row = by_type[("tx-b", 1)]
-        assert tax_row["fx_amount"] == 1_800
-        assert tax_row["fx_currency_code"] == "EUR"
+        assert tax_row["amount_eur_cents"] == 1855
+        assert tax_row["fx_rate_used"] == pytest.approx(0.9276)
     finally:
         conn.close()

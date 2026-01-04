@@ -141,6 +141,8 @@ TRANSACTION_SCHEMA = [
         date TEXT NOT NULL,     -- ISO8601 Format
         currency_code TEXT,
         amount INTEGER,         -- Cent-Betrag
+        amount_eur_cents INTEGER,
+        fx_rate_used REAL,
         shares INTEGER,         -- *10^8 für Genauigkeit
         note TEXT,
         security TEXT,
@@ -156,6 +158,8 @@ TRANSACTION_SCHEMA = [
         transaction_uuid TEXT NOT NULL,
         type INTEGER NOT NULL,         -- Explizit INTEGER
         amount INTEGER,                -- Cent-Betrag
+        amount_eur_cents INTEGER,
+        fx_rate_used REAL,
         currency_code TEXT,
         fx_amount INTEGER,             -- Optional: Cent-Betrag
         fx_currency_code TEXT,         -- Optional
@@ -490,6 +494,7 @@ INGESTION_SCHEMA = [
         currency_code TEXT,
         amount INTEGER,
         amount_eur_cents INTEGER,        -- Kaufwert in EUR-Cent (FX-berechnet)
+        fx_rate_used REAL,
         shares INTEGER,
         note TEXT,
         security TEXT,
@@ -506,6 +511,8 @@ INGESTION_SCHEMA = [
         unit_index INTEGER NOT NULL,
         type INTEGER NOT NULL,
         amount INTEGER,
+        amount_eur_cents INTEGER,
+        fx_rate_used REAL,
         currency_code TEXT,
         fx_amount INTEGER,
         fx_currency_code TEXT,
