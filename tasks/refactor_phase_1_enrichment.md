@@ -33,7 +33,7 @@ Establish a **Single Source of Truth** for EUR valuations by persisting canonica
     - Modify `custom_components/pp_reader/data/db_schema.py` to add `amount_eur_cents` and `fx_rate_used` to `transactions` and `transaction_units` tables.
     - *Note:* `ingestion_transactions` already has `amount_eur_cents`. We are adding it to the canonical table and enhancing `transaction_units`.
 
-- [ ] **Step 2: Implement Ingestion Enrichment Logic**
+- [x] **Step 2: Implement Ingestion Enrichment Logic**
     - Modify `custom_components/pp_reader/data/ingestion_writer.py`.
     - Update `write_transactions` to:
         - Maintain `latest_rates = {}`.
