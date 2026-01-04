@@ -1,105 +1,244 @@
-"""Tests for the ingestion enrichment logic."""
+"""Test the ingestion enrichment logic for EUR valuations."""
 
 import sqlite3
-from datetime import UTC, datetime
+from pathlib import Path
+from typing import Iterable
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.pp_reader.data.db_schema import FX_SCHEMA, INGESTION_SCHEMA
-from custom_components.pp_reader.data.ingestion_writer import IngestionWriter
+from custom_components.pp_reader.data.canonical_sync import (
+    _sync_ingestion_to_canonical,
+)
+from custom_components.pp_reader.data.db_schema import (
+    ALL_SCHEMAS,
+)
+from custom_components.pp_reader.data.ingestion_writer import (
+    IngestionWriter,
+)
+from custom_components.pp_reader.models.parsed import (
+    ParsedTransaction,
+    ParsedTransactionUnit,
+)
+from custom_components.pp_reader.util.currency import cent_to_eur
+
+TABLE_INGESTION_TRANSACTIONS = "ingestion_transactions"
+TABLE_TRANSACTIONS = "transactions"
 
 
-# A mock object to simulate the structure of parsed_models
-class MockParsedTransaction:
-    def __init__(self, **kwargs):
-        self.uuid = kwargs.get("uuid")
-        self.type = kwargs.get("type")
-        self.date = kwargs.get("date")
-        self.amount = kwargs.get("amount")
-        self.currency_code = kwargs.get("currency_code")
-        self.units = kwargs.get("units", [])
-        # Add other fields as needed for tests
-        self.account = kwargs.get("account")
-        self.portfolio = kwargs.get("portfolio")
-        self.other_account = kwargs.get("other_account")
-        self.other_portfolio = kwargs.get("other_portfolio")
-        self.other_uuid = kwargs.get("other_uuid")
-        self.other_updated_at = kwargs.get("other_updated_at")
-        self.shares = kwargs.get("shares")
-        self.note = kwargs.get("note")
-        self.security = kwargs.get("security")
-        self.source = kwargs.get("source")
-        self.updated_at = kwargs.get("updated_at")
-
-
-class MockParsedTransactionUnit:
-    def __init__(self, **kwargs):
-        self.type = kwargs.get("type")
-        self.amount = kwargs.get("amount")
-        self.currency_code = kwargs.get("currency_code")
-        self.fx_amount = kwargs.get("fx_amount")
-        self.fx_currency_code = kwargs.get("fx_currency_code")
-        self.fx_rate_to_base = kwargs.get("fx_rate_to_base")
+def _create_schema(conn: sqlite3.Connection, schema: Iterable[str]) -> None:
+    """Execute a series of SQL statements to create the database schema."""
+    for statement in schema:
+        conn.execute(statement)
 
 
 @pytest.fixture
-def conn():
-    """Fixture for an in-memory SQLite database connection."""
-    db_conn = sqlite3.connect(":memory:")
-    # The writer expects the ingestion tables to exist.
-    for schema in INGESTION_SCHEMA + FX_SCHEMA:
-        db_conn.execute(schema)
-    yield db_conn
-    db_conn.close()
+def mock_db(tmp_path: Path) -> Path:
+    """Create a mock database with the required schema."""
+    db_path = tmp_path / "test.db"
+    conn = sqlite3.connect(db_path)
+    _create_schema(conn, ALL_SCHEMAS)
+    conn.close()
+    return db_path
 
 
-def test_valuation_buy_usd_implicit_rate(conn):
-    """Test valuation of a USD transaction with an implicit FX rate in its units."""
-    # Arrange
-    writer = IngestionWriter(conn)
-    tx_date = datetime(2023, 1, 15, tzinfo=UTC)
+def _get_transaction(
+    conn: sqlite3.Connection, uuid: str, table: str = TABLE_INGESTION_TRANSACTIONS
+) -> sqlite3.Row | None:
+    """Fetch a transaction from the database by UUID."""
+    cursor = conn.execute(f"SELECT * FROM {table} WHERE uuid = ?", (uuid,))
+    return cursor.fetchone()
 
-    # Mock transaction with a fee unit that contains an implicit FX rate
-    transactions = [
-        MockParsedTransaction(
-            uuid="tx1",
-            type=1,  # Buy
-            date=tx_date,
-            amount=-10000,  # -100.00 USD
-            currency_code="USD",
-            units=[
-                MockParsedTransactionUnit(
-                    type=10,  # Fee
-                    amount=-100,  # -1.00 USD
-                    currency_code="USD",
-                    fx_amount=-93,  # This implies a rate of 0.9276
-                    fx_currency_code="EUR",
-                    fx_rate_to_base=0.9276,
-                )
-            ],
-        )
-    ]
 
-    # Act
-    writer.write_transactions(transactions)
+@patch(
+    "custom_components.pp_reader.data.ingestion_writer.ensure_exchange_rates_for_dates_sync"
+)
+@patch("custom_components.pp_reader.data.ingestion_writer.get_best_available_fx_rate")
+def test_valuation_buy_usd_implicit_rate(
+    mock_get_rate: MagicMock, mock_ensure_rates: MagicMock, mock_db: Path
+) -> None:
+    """Test valuation of a USD purchase with an implicit (calculated) rate."""
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
+    mock_get_rate.return_value = 0.8333  # Divisive rate: 1 USD = 0.8333 EUR
 
-    # Assert
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT amount_eur_cents, fx_rate_used FROM ingestion_transactions WHERE uuid='tx1'"
+    tx = ParsedTransaction(
+        uuid="tx_buy_usd",
+        type=0,
+        date="2023-01-01T12:00:00Z",
+        account="acc_usd",
+        portfolio="port_main",
+        currency_code="USD",
+        amount=-10000,
+        shares=10 * 10**8,
+        security="sec_usd",
     )
-    row = cursor.fetchone()
 
-    assert row is not None
-    # The amount is -100.00 USD. With a rate of 0.9276, this should be -92.76 EUR, or -9276 cents.
-    assert row[0] == -9276
-    assert row[1] == pytest.approx(0.9276)
+    writer = IngestionWriter(conn, db_path=mock_db)
+    writer.write_transactions([tx])
 
-    cursor.execute(
-        "SELECT amount_eur_cents, fx_rate_used FROM ingestion_transaction_units WHERE transaction_uuid='tx1'"
+    result = _get_transaction(conn, "tx_buy_usd")
+    assert result is not None
+    assert result["amount_eur_cents"] == -12000
+    assert result["fx_rate_used"] == pytest.approx(1 / 0.8333)
+    mock_get_rate.assert_called_once()
+
+
+@patch(
+    "custom_components.pp_reader.data.ingestion_writer.ensure_exchange_rates_for_dates_sync"
+)
+@patch("custom_components.pp_reader.data.ingestion_writer.get_best_available_fx_rate")
+def test_valuation_transfer_usd_eur_protocol(
+    mock_get_rate: MagicMock, mock_ensure_rates: MagicMock, mock_db: Path
+) -> None:
+    """Test the Transfer Protocol where the EUR leg dictates the final value."""
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
+    mock_get_rate.return_value = 1.075  # 1 USD = 1/1.075 EUR
+
+    tx_eur_out = ParsedTransaction(
+        uuid="tx_eur_out",
+        type=4,
+        date="2023-01-02T12:00:00Z",
+        account="acc_eur",
+        portfolio="port_main",
+        other_uuid="tx_usd_in",
+        currency_code="EUR",
+        amount=-10000,
     )
-    unit_row = cursor.fetchone()
-    assert unit_row is not None
-    # The unit amount is -1.00 USD. With a rate of 0.9276, this should be -0.9276 EUR, or -93 cents (rounded).
-    assert unit_row[0] == -93
-    assert unit_row[1] == pytest.approx(0.9276)
+    tx_usd_in = ParsedTransaction(
+        uuid="tx_usd_in",
+        type=5,
+        date="2023-01-02T12:00:00Z",
+        account="acc_usd",
+        portfolio="port_main",
+        other_uuid="tx_eur_out",
+        currency_code="USD",
+        amount=9250,
+    )
+
+    writer = IngestionWriter(conn, db_path=mock_db)
+    writer.write_transactions([tx_eur_out, tx_usd_in])
+    _sync_ingestion_to_canonical(mock_db)
+
+    eur_leg = _get_transaction(conn, "tx_eur_out", table=TABLE_TRANSACTIONS)
+    usd_leg = _get_transaction(conn, "tx_usd_in", table=TABLE_TRANSACTIONS)
+
+    assert eur_leg is not None
+    assert usd_leg is not None
+    assert eur_leg["amount_eur_cents"] == -10000
+    assert eur_leg["fx_rate_used"] == 1.0
+
+    # The USD leg's value is forced to be the inverse of the EUR leg.
+    assert usd_leg["amount_eur_cents"] == 10000
+
+    # The effective rate is EUR value / native value.
+    # 100 EUR / 92.50 USD = 1.081...
+    effective_rate = cent_to_eur(10000) / cent_to_eur(9250)
+    assert usd_leg["fx_rate_used"] == pytest.approx(effective_rate)
+
+
+@patch(
+    "custom_components.pp_reader.data.ingestion_writer.ensure_exchange_rates_for_dates_sync"
+)
+@patch("custom_components.pp_reader.data.ingestion_writer.get_best_available_fx_rate")
+def test_valuation_transfer_usd_jpy_protocol(
+    mock_get_rate: MagicMock, mock_ensure_rates: MagicMock, mock_db: Path
+) -> None:
+    """Test the Transfer Protocol averaging for a Foreign/Foreign transfer."""
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
+
+    def mock_rate_selector(conn, from_currency, for_date):
+        if from_currency == "USD":
+            return 1.1111
+        if from_currency == "JPY":
+            return 166.6667
+        return 1.0
+
+    mock_get_rate.side_effect = mock_rate_selector
+
+    tx_usd_out = ParsedTransaction(
+        uuid="tx_usd_out",
+        type=4,
+        date="2023-01-03T12:00:00Z",
+        account="acc_usd",
+        portfolio="port_main",
+        other_uuid="tx_jpy_in",
+        currency_code="USD",
+        amount=-10000,
+    )
+    tx_jpy_in = ParsedTransaction(
+        uuid="tx_jpy_in",
+        type=5,
+        date="2023-01-03T12:00:00Z",
+        account="acc_jpy",
+        portfolio="port_main",
+        other_uuid="tx_usd_out",
+        currency_code="JPY",
+        amount=1400000,
+    )
+
+    writer = IngestionWriter(conn, db_path=mock_db)
+    writer.write_transactions([tx_usd_out, tx_jpy_in])
+    _sync_ingestion_to_canonical(mock_db)
+
+    usd_leg = _get_transaction(conn, "tx_usd_out", table=TABLE_TRANSACTIONS)
+    jpy_leg = _get_transaction(conn, "tx_jpy_in", table=TABLE_TRANSACTIONS)
+
+    assert usd_leg is not None
+    assert jpy_leg is not None
+
+    avg_magnitude = 8700
+    assert usd_leg["amount_eur_cents"] == -avg_magnitude
+    assert jpy_leg["amount_eur_cents"] == avg_magnitude
+
+    # Assert effective rates based on the final averaged EUR value.
+    effective_rate_usd = cent_to_eur(avg_magnitude) / cent_to_eur(10000)
+    effective_rate_jpy = cent_to_eur(avg_magnitude) / cent_to_eur(1400000)
+    assert usd_leg["fx_rate_used"] == pytest.approx(effective_rate_usd)
+    assert jpy_leg["fx_rate_used"] == pytest.approx(effective_rate_jpy)
+
+
+@patch(
+    "custom_components.pp_reader.data.ingestion_writer.ensure_exchange_rates_for_dates_sync"
+)
+@patch("custom_components.pp_reader.data.ingestion_writer.get_best_available_fx_rate")
+def test_enrichment_of_transaction_units(
+    mock_get_rate: MagicMock, mock_ensure_rates: MagicMock, mock_db: Path
+) -> None:
+    """Ensure fees/taxes in transaction_units are also enriched."""
+    conn = sqlite3.connect(mock_db)
+    conn.row_factory = sqlite3.Row
+    mock_get_rate.return_value = 0.8333
+
+    tx = ParsedTransaction(
+        uuid="tx_with_fees",
+        type=0,
+        date="2023-01-04T12:00:00Z",
+        account="acc_usd",
+        portfolio="port_main",
+        currency_code="USD",
+        amount=-10200,
+        shares=10 * 10**8,
+        security="sec_usd",
+        units=[
+            ParsedTransactionUnit(
+                type="FEE", amount=-200, currency_code="USD", fx_rate_to_base=None
+            )
+        ],
+    )
+
+    writer = IngestionWriter(conn, db_path=mock_db)
+    writer.write_transactions([tx])
+    _sync_ingestion_to_canonical(mock_db)
+
+    cursor = conn.execute(
+        "SELECT * FROM transaction_units WHERE transaction_uuid = ?",
+        ("tx_with_fees",),
+    )
+    unit = cursor.fetchone()
+
+    assert unit is not None
+    assert unit["amount_eur_cents"] == -240
+    assert unit["fx_rate_used"] == pytest.approx(1 / 0.8333)
