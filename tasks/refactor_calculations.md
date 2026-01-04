@@ -44,9 +44,9 @@ When ingesting a transaction, we determine `amount_eur` using the following hier
 2.  **Explicit Cross-Currency Pair**:
     *   If a transaction involves two accounts (e.g., Transfer) with different currencies, PP implicitly provides the rate via the pair of values (`amount_source` vs `amount_target`).
     *   See Section C below.
-3.  **Market Oracle Fallback**:
-    *   If, and ONLY if, no explicit rate is provided in the file (e.g. valid "Pure" FX transaction like Fee in USD on USD Account without rate), consult the `MarketOracle` (your internal DB of FX rates).
-    *   `amount_eur = amount / Oracle.get_fx(currency, date)`.
+3.  **Market Resolver Fallback**:
+    *   If, and ONLY if, no explicit rate is provided in the file (e.g. valid "Pure" FX transaction like Fee in USD on USD Account without rate), consult the `MarketResolver` (your internal DB of FX rates).
+    *   `amount_eur = amount / Resolver.get_fx(currency, date)`.
 
 ### B. Valuation by Transaction Type
 
@@ -89,7 +89,7 @@ We explicitly retain the redundant `ingestion_` schema to function as a **Transa
 1.  **Schema Update (`custom_components/pp_reader/data/db_schema.py`)**:
     *   Modify `TRANSACTION_SCHEMA`:
         *   Add `amount_eur` (INTEGER) -> Stores value in Cent.
-        *   Add `fx_rate_used` (REAL) -> Stores the rate applied (Implied, Explicit, or Oracle).
+        *   Add `fx_rate_used` (REAL) -> Stores the rate applied (Implied, Explicit, or Resolver).
     *   Modify `transaction_units` table definition in `TRANSACTION_SCHEMA`:
         *   Add `amount_eur` (INTEGER).
         *   Add `fx_rate_used` (REAL).
@@ -287,19 +287,26 @@ This phase reimplements the core mathematical verification: `Start Wealth + Flow
         *   `test_transfer_neutrality`: Create a chain of transfers (EUR -> USD -> JPY -> EUR). Assert Global Net Flow = 0.00.
         *   `test_twr_irr_independence`: Verify TWR/IRR remain constant even if we artificially toggle a Gain from "Realized" to "Unrealized" (proving they depend only on Wealth/Flows, not Breakdown).
         *   `test_flow_enrichment_consistency`: Verify `sum(amount_eur)` in `transactions` equals the runtime aggregation of the old engine (minus the fixes).
-    *   **Regression:** Ensure `tests/metrics/test_calculator.py` passes with the decimated engine.
+        *   **Regression:** Ensure `tests/metrics/test_calculator.py` passes with the decimated engine.
 
 ### Phase 4: UI Data Cleanup & Consistency
 This phase ensures the Frontend receives data solely from the *invariant* backend machinery, guaranteeing that "What you see in the Graph" matches "What you see in the Breakdown".
 
-1.  **Overview Tab (Dashboard)**
-    *   **Goal:** Preserve the *exact* current display (Lifetime Performance, Day Change) but ensure the numbers match the `PerformanceEngine`'s "History".
-    *   **Constraint:** The JSON structure (`SnapshotBundle`) and the aggregation logic (Sum of Securities) MUST remain unchanged.
+1.  **Overview Tab & Security Detail (Active Holdings)**
+    *   **Goal:** Preserve the *exact* current display:
+        *   **Overview:** List of active positions with Day Change, Gain/Loss, and Values.
+        *   **Security Detail:** Deep dive into a single position including "History Chart", "Purchase/Sell Markers", and "News Prompt".
     *   **Refactor `metrics/securities.py`:**
-        *   Currently, it uses ad-hoc `normalize_price_to_eur_sync` and direct SQL queries.
-        *   **Change:** Inject/Use the `MarketResolver` (Phase 2) inside `_compute_security_metrics_sync`.
-        *   **Action:** Replace `fetch_previous_close` and `normalize_price_to_eur_sync` with `MarketResolver.get_price(...)` and `MarketResolver.get_fx(...)`.
-    *   **Result:** The "Live" view uses the exact same Price/FX data as the "History" view, eliminating "Why is the chart different from the number?" bugs, without altering the UI code.
+        *   **Current:** Ad-hoc linear SQL queries and `normalize_price_to_eur_sync`.
+        *   **New:** Inject/Use `MarketResolver` (Phase 2).
+    *   **Endpoints:**
+        *   `get_portfolio_positions`:
+            *   Use `PerformanceEngine.get_snapshot(Today)` for quantities and cost basis.
+            *   Use `MarketResolver.get_price(Today)` for current valuations.
+        *   `get_security_snapshot`:
+            *   Detailed view. Requires `MarketResolver` for full price history.
+            *   History Chart: `MarketResolver.get_price_history(start, end)`.
+            *   Transactions: Query `transactions` (Enriched) for markers.
 
 2.  **Time Series Tab (History)**
     *   **Goal:** Graph "Historical Wealth" (Value over Time) using a persisted `daily_wealth` table.
@@ -324,20 +331,23 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
         *   `backdating/engine_pandas.py`: **DELETE**.
         *   `PerformanceEngine.get_daily_wealth`: **DELETE**. (The engine no longer loops; the *history module* loops and calls the engine for points).
 
-3.  **Trades Tab (Realized Performance)**
-    *   **Goal:** Restore the "Trades" tab functionality to show closed/partially closed positions with their realized performance (Gains/Losses).
-    *   **Context:** This was previously working but lost during the migration to `PerformanceEngine`. It relies on calculating the difference between Sell Value and Buy Value (FIFO) for closed lots.
-    *   **Backend Support (`custom_components/pp_reader/data/websocket.py`):**
-        *   **Current state:** `ws_get_trades` returns a dummy "Total Realized Gains".
-        *   **Requirement:** It must return a list of *closed security positions* with:
-            *   `security_uuid`, `name`, `currency_code`
-            *   `realized_gain_abs` (Total Profit/Loss in EUR)
-            *   `realized_gain_pct` (Internal Rate of Return or simple ROI for the trade)
-            *   `exit_date` (Last sell date)
-    *   **Refactor `metrics/calculator.py`:**
-        *   Ensure `_calculate_capital_gains` (or a similar method) exposes the *detailed* list of realized gain events per security, not just the sum.
-        *   The `PerformanceEngine` must return identifying info (Lot ID or Security ID) alongside the calculated Gain amount.
-    *   **UI Impact:** The Frontend receives a JSON list of trades. No changes needed if the JSON structure matches the previous contract (Security Name, P/L, Date).
+3.  **Trades Tab & Trade Detail (Realized & Prior Holdings)**
+    *   **Goal:** Restore the "Trades" tab functionality to show closed/partially closed positions with their realized performance (Gains/Losses), plus the "Trade Detail" view for deep analysis.
+    *   **Context:** This was previously working but lost duplication/divergence. It relies on calculating the difference between Sell Value and Buy Value (FIFO) for closed lots.
+    *   **Trade Detail View (Prior Holdings):**
+        *   Accessible via clicking a Realized Trade.
+        *   **Key Feature:** "Performance Since Sell" (Opportunity Cost). comparing `Sell_Price` vs `Current_Market_Price`.
+    *   **Backend Refactor (`metrics/calculator.py` & `data/websocket.py`):**
+        *   **`ws_get_trades` Endpoint:**
+            *   Must return a detailed list of *closed security lots*.
+            *   **Enrichment:**
+                *   `realized_gain_abs` (Total Profit/Loss in EUR) -> From `PerformanceEngine` FIFO logic.
+                *   `realized_gain_pct` (ROI/IRR for the trade).
+                *   `current_price` -> From `MarketResolver` (Even if user holds 0, we need the price).
+                *   `since_sell_abs` -> `(Current_Price - Sell_Price) * Shares`.
+        *   **`PerformanceEngine`:**
+            *   Must expose `calculate_realized_performance()` which processes the "Enriched Transactions" stream to build the FIFO matchings.
+    *   **UI Impact:** The Frontend `trade_detail.ts` expects `RealizedTrade` objects. Ensure the backend JSON structure matches precisely.
 
 4.  **Integration Tests**
     *   **New Test:** `tests/metrics/test_history_consistency.py`.
@@ -347,19 +357,22 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
 
 ## 3. Risks & Considerations
 
-1.  **"Today's" Data:** The `ledger` is a database table. What about a trade I just entered 1 second ago?
-    *   *Solution:* The Ingestion Pipeline (when you save a trade) must immediately trigger `ledger.insert()`.
-    *   *Fallback:* `PerformanceEngine` can have an "In-Memory Overlay" for dirty/uncommitted transactions, running the `normalize_transaction` logic on the fly for them.
+1.  **Ingestion/Enrichment Latency:**
+    *   **Risk:** Calculating `amount_eur` for every transaction during XML parsing (specifically the Transfer Protocol averaging) adds overhead to the ingestion process.
+    *   **Mitigation:** The logic is linear O(N). For < 10k transactions, it should remain under 1s. If needed, we can optimize `_apply_transfer_protocol` to use bulk SQL updates on the staging table.
 
-2.  **Reviewing History:**
-    *   If you change an FX rate for 2023, you must trigger a `rebuild_ledger_values(2023-01-01 -> Now)` job. This might take 5-10 seconds. The UI needs to handle this "Revalidating..." state.
+2.  **Stale Enrichment Data:**
+    *   **Risk:** If `amount_eur` is derived using the "Market Resolver Fallback" (Level 3), and we subsequently update the Resolver's FX rates for that date, the persisted `amount_eur` remains "old" unless we re-ingest.
+    *   **Acceptance:** This is "Working as Designed". The Database is the Source of Truth. If the user wants to update the valuation, they should trigger a "Re-Process" or simply re-save the PP file.
+    *   **Constraint:** The `PerformanceEngine` must *always* trust the `amount_eur` in the DB, even if it looks wrong compared to a fresh Resolver lookup. This guarantees consistency between Granular Breakdown and Top-Level Delta.
 
-3.  **Zero-Sum Transfers:**
-    *   The Ledger must enforce that a Transfer (Out + In) sums to exactly 0.00 EUR (or the difference is explicitly booked as a Fee).
-    *   Current Logic: "Average the two EUR values".
-    *   New Logic: Calculate `Val = Average`. Write `Out = -Val`, `In = +Val` to Ledger.
+3.  **Transfer Protocol & Orphans:**
+    *   **Risk:** A "Transfer" usually consists of two transactions. If one is missing (orphaned) or they are not correctly linked by `pp_xml` parser, the "Averaging" logic fails.
+    *   **Mitigation:** The `_apply_transfer_protocol` must be robust. If a partner is missing, it should fall back to "Level 2" (Standard standard FX conversion) for the single leg, rather than crashing or zeroing out the value.
 
 ## 4. Next Actions
-1.  Approve this architectural shift.
-2.  Execute `tasks/init_ledger_schema.py`.
-3.  Write the `normalize_transaction` logic (The hardest part, effectively porting `_augment_transfers` to a standalone function).
+1.  **Approve** this architectural shift.
+2.  **Phase 1 (Data):** Modify `db_schema.py` and implement `ingestion_writer.py` enrichment logic.
+3.  **Phase 2 (Core):** Implement `metrics/core/market_resolver.py`.
+4.  **Phase 3 (Calculation):** Rewrite `calculate_period_performance` in `calculator.py`.
+5.  **Phase 4 (UI Consistency):** Wire `securities.py` and `trade_detail.ts` to the new engines.

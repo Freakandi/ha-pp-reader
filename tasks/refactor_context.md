@@ -21,3 +21,15 @@
 *   **Clarification:** Performance calculation for Period Start `T` uses stored state at `T-1`.
 *   **Correction:** `daily_wealth` will NOT store Flows. It only stores `total_wealth_eur` (Snapshot @ EOD) for simple graphing purposes. No TWR/Delta calculation is performed on the graph.
 *   **Correction:** "Trades" Tab is for **Realized Performance**, not just transaction listing. `ws_get_trades` must return detailed per-security realized gains (Buy vs Sell FIFO), not a dummy sum.
+
+### Session: Refine Detail Tabs (2026-01-03)
+*   **Refinement:** Phase 4 now explicitly covers "Security Detail View" (Active) and "Trade Detail View" (Prior/Closed).
+*   **Decision:** `Trade Detail` requires `since_sell_*` metrics (Opportunity Cost), necessitating `MarketResolver` lookups for assets *no longer held*.
+*   **Wiring:** `get_security_snapshot` -> `MarketResolver` (History). `get_trades` -> `PerformanceEngine` (FIFO & Ghost Positions).
+
+### Session: Refine Risks & Next Actions (2026-01-03)
+*   **Cleanup:** Removed obsolete "Ledger" terminology from Risks and Next Actions.
+*   **Correction:** "Today's Data" is now handled by standard `transactions` table.
+*   **Refinement:** "Zero-Sum Transfers" risk rephrased as "Transfer Protocol & Orphans".
+*   **Definition:** "Stale Enrichment" explicitly accepted as a trade-off for consistency.
+*   **Terminology:** Replaced "Market Oracle" with "Market Resolver" to match Phase 2 specs.
