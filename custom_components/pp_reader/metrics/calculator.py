@@ -88,6 +88,20 @@ class PerformanceBreakdown:
     total: float = 0.0
 
 
+@dataclass
+class RealizedTrade:
+    """Represents a closed trade calculated via FIFO."""
+
+    security_uuid: str
+    buy_date: datetime
+    sell_date: datetime
+    shares: float
+    buy_cost_eur: float
+    sell_value_eur: float
+    realized_gain_eur: float
+    opportunity_gain_eur: float | None = None
+
+
 class PerformanceEngine:
     """
     Unified performance calculation engine.
@@ -115,26 +129,18 @@ class PerformanceEngine:
         Calculate portfolio valuation (Wealth) at a specific date.
 
         Provides a Single Source of Truth for point-in-time valuation.
-
-        Returns
-        -------
-            A dictionary containing:
-            - "total_wealth": Total portfolio value in EUR.
-            - "securities_wealth": Value of all securities in EUR.
-            - "cash_wealth": Value of all cash accounts in EUR.
-            - "invested_capital": Total invested capital in EUR.
-
+        This method relies on the dataframes loaded by `load_data()`.
         """
-        transactions = self._get_transactions_up_to(snapshot_date)
-        valuation_ts = datetime(
-            snapshot_date.year,
-            snapshot_date.month,
-            snapshot_date.day,
-            tzinfo=UTC,
-        )
+        if self._df_txs.empty:
+            self.load_data()
+
+        valuation_ts = pd.Timestamp(snapshot_date, tz="UTC")
 
         # 1. Securities Wealth
-        security_inventory = self._calculate_security_inventory(transactions)
+        # _get_holdings_at_date is exclusive of the date passed, so we add a day
+        # to get holdings at the end of snapshot_date.
+        holdings_date = snapshot_date + pd.Timedelta(days=1)
+        security_inventory = self._get_holdings_at_date(holdings_date)
         securities_wealth = 0.0
         for sec_uuid, quantity in security_inventory.items():
             price = self.market_resolver.get_price(sec_uuid, valuation_ts)
@@ -144,17 +150,27 @@ class PerformanceEngine:
             securities_wealth += value_eur
 
         # 2. Cash Wealth
-        cash_inventory = self._calculate_cash_inventory(transactions)
+        # _get_account_balances is exclusive, so add a day.
+        balances_ts = valuation_ts + pd.Timedelta(days=1)
+        cash_balances = self._get_account_balances(balances_ts)
         cash_wealth = 0.0
-        for (
-            _,
-            currency,
-        ), balance in cash_inventory.items():
-            fx_rate = self.market_resolver.get_fx(currency, valuation_ts)
-            value_eur = balance / (fx_rate if fx_rate else 1.0)
-            cash_wealth += value_eur
+        if not cash_balances.empty:
+            for (_acc_uuid, currency), balance in cash_balances.items():
+                fx_rate = self.market_resolver.get_fx(currency, valuation_ts)
+                value_eur = balance / (fx_rate if fx_rate else 1.0)
+                cash_wealth += value_eur
 
         # 3. Invested Capital
+        # Create a transaction list from the dataframe up to the snapshot date.
+        end_ts_inclusive = valuation_ts + pd.Timedelta(days=1, microseconds=-1)
+        df_txs_up_to = self._df_txs[self._df_txs["date"] <= end_ts_inclusive]
+
+        valid_fields = {f.name for f in dataclasses.fields(Transaction)}
+        txs_dict = df_txs_up_to.to_dict("records")
+        filtered_txs_dict = [
+            {k: v for k, v in row.items() if k in valid_fields} for row in txs_dict
+        ]
+        transactions = [Transaction(**row) for row in filtered_txs_dict]
         invested_capital = self._calculate_invested_capital(transactions)
 
         return {
@@ -745,6 +761,183 @@ class PerformanceEngine:
             taxes=taxes,
             interest=interest,
         )
+
+    def calculate_realized_performance(
+        self, scope_uuid: str | None = None
+    ) -> list[RealizedTrade]:
+        """
+        Calculate all realized trades over the entire transaction history using FIFO logic.
+
+        This method processes all security transactions to match buys and sells,
+        calculating the realized gain for each closed trade.
+
+        Args:
+            scope_uuid: Optional UUID of a portfolio or account to limit the scope.
+                        If None, calculates for all portfolios, treating transfers
+                        between portfolios as internal and thus not realizing gains.
+
+        Returns:
+            A list of RealizedTrade objects representing all closed trades.
+        """
+        if self._df_txs.empty:
+            self.load_data()
+
+        df_txs = self._df_txs.copy()
+
+        # --- Scoping Logic ---
+        if scope_uuid:
+            # For a scoped view, a transfer out is a "sell", a transfer in is a "buy".
+            is_source = df_txs["portfolio"] == scope_uuid
+            is_target = (df_txs["type"] == TransactionType.SECURITY_TRANSFER) & (
+                df_txs["other_portfolio"] == scope_uuid
+            )
+            df_txs = df_txs[is_source | is_target].copy()
+
+            # Remap transfer types to buy/sell based on direction relative to scope
+            mask_transfer_out = (
+                df_txs["type"] == TransactionType.SECURITY_TRANSFER
+            ) & (df_txs["portfolio"] == scope_uuid)
+            df_txs.loc[mask_transfer_out, "type"] = TransactionType.OUTBOUND_DELIVERY
+
+            mask_transfer_in = (
+                df_txs["type"] == TransactionType.SECURITY_TRANSFER
+            ) & (df_txs["other_portfolio"] == scope_uuid)
+            df_txs.loc[mask_transfer_in, "type"] = TransactionType.INBOUND_DELIVERY
+        else:
+            # For a global view, internal transfers do not realize gains. Ignore them.
+            df_txs = df_txs[df_txs["type"] != TransactionType.SECURITY_TRANSFER].copy()
+
+        units_payload = self._load_transaction_units(df_txs["uuid"].tolist())
+        inventory: dict[str, deque[Lot]] = {}
+        realized_trades: list[RealizedTrade] = []
+        today = datetime.now(UTC)
+
+        df_txs = df_txs.sort_values("date")
+
+        for tx_row in df_txs.itertuples():
+            sec_id = tx_row.security
+            if not sec_id or not tx_row.shares or tx_row.shares == 0:
+                continue
+
+            tx_date = tx_row.date.to_pydatetime()
+            shares = abs(tx_row.shares_norm)
+            tx_units = units_payload.get(tx_row.uuid, {})
+            fees = tx_units.get("fees", 0)
+            taxes = tx_units.get("taxes", 0)
+
+            # Inbound: BUY, INBOUND_DELIVERY
+            if tx_row.type in {TransactionType.BUY, TransactionType.INBOUND_DELIVERY}:
+                net_amount = (
+                    abs(tx_row.amount) - fees - taxes
+                    if tx_row.amount is not None
+                    else 0
+                )
+
+                if (
+                    net_amount < _ZERO_AMOUNT_EPSILON
+                    and tx_row.type == TransactionType.INBOUND_DELIVERY
+                ):
+                    price_native = self.market_resolver.get_price(sec_id, tx_date)
+                else:
+                    price_native = (net_amount / 100.0) / shares if shares > 0 else 0.0
+
+                fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
+
+                if sec_id not in inventory:
+                    inventory[sec_id] = deque()
+
+                inventory[sec_id].append(
+                    Lot(
+                        date=tx_date,
+                        shares=shares,
+                        price_native=price_native,
+                        fx_rate=fx_rate,
+                    )
+                )
+
+            # Outbound: SELL, OUTBOUND_DELIVERY
+            elif tx_row.type in {
+                TransactionType.SELL,
+                TransactionType.OUTBOUND_DELIVERY,
+            }:
+                gross_proceeds = (
+                    abs(tx_row.amount) + fees + taxes
+                    if tx_row.amount is not None
+                    else 0
+                )
+
+                if (
+                    gross_proceeds < _ZERO_AMOUNT_EPSILON
+                    and tx_row.type == TransactionType.OUTBOUND_DELIVERY
+                ):
+                    sale_price_native = self.market_resolver.get_price(sec_id, tx_date)
+                else:
+                    sale_price_native = (
+                        (gross_proceeds / 100.0) / shares if shares > 0 else 0.0
+                    )
+
+                sale_fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
+                sale_price_eur = (
+                    sale_price_native / sale_fx_rate
+                    if sale_fx_rate and sale_fx_rate != 0
+                    else 0.0
+                )
+
+                if sec_id in inventory:
+                    lots_to_process = inventory[sec_id]
+                    remaining_shares_to_sell = shares
+
+                    while remaining_shares_to_sell > _SHARE_EPSILON and lots_to_process:
+                        lot = lots_to_process[0]
+                        shares_from_lot = min(lot.shares, remaining_shares_to_sell)
+
+                        lot.shares -= shares_from_lot
+                        remaining_shares_to_sell -= shares_from_lot
+
+                        buy_price_eur = (
+                            lot.price_native / lot.fx_rate
+                            if lot.fx_rate and lot.fx_rate != 0
+                            else 0.0
+                        )
+                        buy_cost_total_eur = buy_price_eur * shares_from_lot
+                        sell_value_total_eur = sale_price_eur * shares_from_lot
+                        gain = sell_value_total_eur - buy_cost_total_eur
+
+                        current_price_native = self.market_resolver.get_price(
+                            sec_id, today
+                        )
+                        security_currency = self.market_resolver.get_security_currency(
+                            sec_id
+                        )
+                        current_fx_rate = self.market_resolver.get_fx(
+                            security_currency, today
+                        )
+                        current_price_eur = (
+                            current_price_native / current_fx_rate
+                            if current_fx_rate and current_fx_rate != 0
+                            else 0.0
+                        )
+                        opportunity_cost = (
+                            current_price_eur - sale_price_eur
+                        ) * shares_from_lot
+
+                        realized_trades.append(
+                            RealizedTrade(
+                                security_uuid=sec_id,
+                                buy_date=lot.date,
+                                sell_date=tx_date,
+                                shares=shares_from_lot,
+                                buy_cost_eur=buy_cost_total_eur,
+                                sell_value_eur=sell_value_total_eur,
+                                realized_gain_eur=gain,
+                                opportunity_gain_eur=opportunity_cost,
+                            )
+                        )
+
+                        if lot.shares < _SHARE_EPSILON:
+                            lots_to_process.popleft()
+
+        return realized_trades
 
     def _resolve_sec_name(self, uuid_val: str) -> str:
         return self._sec_name_map.get(uuid_val, f"Security {uuid_val[:8]}")
