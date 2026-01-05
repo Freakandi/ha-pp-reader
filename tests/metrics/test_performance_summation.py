@@ -76,7 +76,19 @@ def test_summation_with_cash_flows_and_fx():
     # 1. Deposit (T_mid). 100 USD (Gross) -> 90 USD (Net) + 10 USD Fee.
     conn.execute(
         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        ("t_dep", 6, "2023-01-15T12:00:00", "acc1", None, None, None, None, 0, 9000, "USD"),
+        (
+            "t_dep",
+            6,
+            "2023-01-15T12:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            9000,
+            "USD",
+        ),
     )  # Net Amount 90.00
 
     # Unit: Fee 10 USD
@@ -215,7 +227,19 @@ def test_summation_with_all_neutral_types():
     # 1. Deposit 1000 EUR (Start Money) - Day 1
     conn.execute(
         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        ("t1", 6, "2023-01-02T10:00:00", "acc1", None, None, None, None, 0, 100000, "EUR"),
+        (
+            "t1",
+            6,
+            "2023-01-02T10:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            100000,
+            "EUR",
+        ),
     )  # Net 1000. No fee. Neutral = +1000.
 
     # 2. Removal with Fee.
@@ -240,7 +264,19 @@ def test_summation_with_all_neutral_types():
 
     conn.execute(
         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        ("t2", 7, "2023-01-05T10:00:00", "acc1", None, None, None, None, 0, 10000, "EUR"),
+        (
+            "t2",
+            7,
+            "2023-01-05T10:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            10000,
+            "EUR",
+        ),
     )  # Amount 100.00 (Positive magnitude, Sign -1 applied by type)
     conn.execute(
         "INSERT INTO transaction_units VALUES (?,?,?,?,?,?)",

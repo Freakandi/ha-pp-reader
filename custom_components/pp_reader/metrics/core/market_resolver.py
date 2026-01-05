@@ -193,11 +193,7 @@ class MarketResolver:
     def is_price_stale(self, sec_uuid: str, d: date | pd.Timestamp) -> bool:
         """Check if the price for a security on a given date is stale (>7 days old)."""
         ts = pd.Timestamp(d)
-        ts = (
-            ts.tz_localize("UTC")
-            if ts.tzinfo is None
-            else ts.tz_convert("UTC")
-        )
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
 
         if sec_uuid not in self._prices_idx.index.get_level_values(0):
             return True

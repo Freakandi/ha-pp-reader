@@ -947,9 +947,7 @@ class PerformanceEngine:
         )
 
         # 4. Capital Gains
-        transactions = [
-            Transaction(**row) for row in df_augmented.to_dict("records")
-        ]
+        transactions = [Transaction(**row) for row in df_augmented.to_dict("records")]
         realized_map, unrealized_map = self._calculate_capital_gains_detailed(
             transactions,  # Use augmented DF
             start_date,
@@ -1616,9 +1614,7 @@ class PerformanceEngine:
 
             elif is_outbound:
                 gross_proceeds = abs(tx.amount + tx.fees + tx.taxes)
-                sale_price_native = (
-                    (gross_proceeds / 100.0) / shares if shares else 0.0
-                )
+                sale_price_native = (gross_proceeds / 100.0) / shares if shares else 0.0
                 sale_fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_date)
                 sale_price_eur = (
                     sale_price_native / sale_fx_rate if sale_fx_rate else 0.0
