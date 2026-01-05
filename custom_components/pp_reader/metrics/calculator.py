@@ -946,7 +946,7 @@ class PerformanceEngine:
         # 2. Sum Fee/Tax units from all transaction types in the period
         unit_sums = pd.Series(dtype=float)
         if not self._df_units.empty and not df_augmented.empty:
-            # Merge units with their parent transactions (already filtered for the period)
+            # Merge units with parent transactions (already filtered for the period)
             df_u_aug = self._df_units.merge(
                 df_augmented[["uuid", "security", "account"]].rename(
                     columns={
@@ -968,9 +968,7 @@ class PerformanceEngine:
                     0.0,
                 )
 
-                df_target = df_u_aug_market[
-                    df_u_aug_market["type"] == unit_type
-                ].copy()
+                df_target = df_u_aug_market[df_u_aug_market["type"] == unit_type].copy()
                 df_target["group_id"] = (
                     df_target["p_sec"].fillna(df_target["p_acc"]).fillna("Unknown")
                 )
@@ -1298,17 +1296,22 @@ class PerformanceEngine:
         )
 
         cash_signs = {
-            int(TransactionType.SELL): 1, int(TransactionType.DEPOSIT): 1,
-            int(TransactionType.DIVIDEND): 1, int(TransactionType.INTEREST): 1,
-            int(TransactionType.TAX_REFUND): 1, int(TransactionType.FEE_REFUND): 1,
-            int(TransactionType.BUY): -1, int(TransactionType.REMOVAL): -1,
-            int(TransactionType.INTEREST_CHARGE): -1, int(TransactionType.TAX): -1,
+            int(TransactionType.SELL): 1,
+            int(TransactionType.DEPOSIT): 1,
+            int(TransactionType.DIVIDEND): 1,
+            int(TransactionType.INTEREST): 1,
+            int(TransactionType.TAX_REFUND): 1,
+            int(TransactionType.FEE_REFUND): 1,
+            int(TransactionType.BUY): -1,
+            int(TransactionType.REMOVAL): -1,
+            int(TransactionType.INTEREST_CHARGE): -1,
+            int(TransactionType.TAX): -1,
             int(TransactionType.FEE): -1,
         }
 
-        df_cash_calc["type"] = pd.to_numeric(
-            df_cash_calc["type"], errors="coerce"
-        ).fillna(-1).astype(int)
+        df_cash_calc["type"] = (
+            pd.to_numeric(df_cash_calc["type"], errors="coerce").fillna(-1).astype(int)
+        )
         signs = df_cash_calc["type"].map(cash_signs).fillna(0)
         df_cash_calc["delta_cash"] = (df_cash_calc["amount_norm"].fillna(0)) * signs
         acc_txs = df_cash_calc.dropna(subset=["account"])
