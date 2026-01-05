@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 
 import pandas as pd
 
-from custom_components.pp_reader.backdating.engine_pandas import TransactionType
+from custom_components.pp_reader.const import TransactionType
 from custom_components.pp_reader.util.currency import PRICE_SCALE
 
 _LOGGER = logging.getLogger(__name__)
