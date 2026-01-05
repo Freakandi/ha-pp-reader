@@ -63,14 +63,14 @@ Modify `custom_components/pp_reader/metrics/calculator.py`.
     - Update `_get_fx` to return `self.market_resolver.get_fx(...)`.
     - Update usage of `_sec_curr_map`: Replace `self._sec_curr_map.get(uuid)` with `self.market_resolver.get_security_currency(uuid)`.
 
-- [ ] **Step 4: Cleanup Redundant Engine Logic**
+- [x] **Step 4: Cleanup Redundant Engine Logic**
     - Remove `_prepare_market_data` in `calculator.py`.
     - Implement `_augment_txs_with_market_data` rewrite:
         - **Logic:** Use `df.apply()` (or simple iteration) to populate `price` and `fx_rate` columns by calling `self.market_resolver.get_price` and `self.market_resolver.get_fx` for each row.
         - **Removal:** Delete the old logic that relied on merging `_df_prices` / `_df_rates` pivot tables.
         - *Rationale:* Decouples Engine from Resolver internal storage type (Pandas vs SQL vs Dict). Performance impact acceptable for transaction volumes.
 
-- [ ] **Step 5: Review & Regression Testing**
+- [x] **Step 5: Review & Regression Testing**
     - Run `pytest tests/metrics/core/test_market_resolver.py`.
     - Run `pytest tests/metrics/test_calculator.py` (Ensure no regression in engine outputs).
     - Check for Linting Errors (`ruff check .`, `ruff format .`, `mypy`).
