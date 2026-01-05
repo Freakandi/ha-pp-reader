@@ -1,5 +1,6 @@
 import datetime
 import sqlite3
+from unittest.mock import Mock
 
 import pytest
 
@@ -175,7 +176,26 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     start_date = datetime.date(2025, 1, 2)
     end_date = datetime.date(2025, 1, 3)
 
-    engine = PerformanceEngine(sqlite3.connect(test_db))
+    # Mock the MarketResolver to return scalar 1.0 instead of a Mock object for FX
+    mock_market_resolver = Mock()
+    mock_market_resolver.get_price_history_for_period.return_value = {}
+    mock_market_resolver.get_rates_for_period.return_value = {}
+
+    # Crucially, the engine might call .get_fx(currency, date) -> scalar
+    mock_market_resolver.get_fx.return_value = 1.0
+
+    # And get_price must return a float
+    def fake_get_price(uuid, date):
+        if uuid == sec_uuid:
+            # Return 110.0 for Jan 2, 105.0 for Jan 1
+            if date.date() <= datetime.date(2025, 1, 1):
+                return 105.0
+            return 110.0
+        return 0.0
+
+    mock_market_resolver.get_price.side_effect = fake_get_price
+
+    engine = PerformanceEngine(sqlite3.connect(test_db), mock_market_resolver)
     engine.load_data()
     results = engine.calculate_period_performance(start_date, end_date)
 
