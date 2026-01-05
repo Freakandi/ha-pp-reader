@@ -22,9 +22,6 @@
   "author": "",
   "license": "ISC",
   "type": "module",
-  "dependencies": {
-    "jsdom": "^27.0.0"
-  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^9.13.0",
@@ -36,6 +33,7 @@
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.5.0",
     "eslint-config-prettier": "^9.1.0",
+    "jsdom": "^27.4.0",
     "rollup-plugin-visualizer": "^6.0.4",
     "tsx": "^4.20.6",
     "typescript": "^5.4.0",
