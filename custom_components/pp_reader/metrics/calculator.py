@@ -244,42 +244,26 @@ class PerformanceEngine:
             start_date_ts = start_date_ts.tz_localize("UTC")
 
         if pd.notna(first_tx) and first_tx < start_date_ts:
-            start_hist = first_tx
+            _ = first_tx
         else:
-            start_hist = start_date_ts
+            _ = start_date_ts
 
         # Ensure end_date is also UTC for range generation
         end_date_ts = pd.Timestamp(end_date)
         if end_date_ts.tzinfo is None:
             end_date_ts = end_date_ts.tz_localize("UTC")
 
-        # Add buffer (e.g. 7 days before first tx for initial prices)
-        start_hist = pd.Timestamp(start_hist).floor("D") - pd.Timedelta(days=7)
-        date_range_hist = pd.date_range(
-            start=start_hist, end=end_date_ts, freq="D", tz="UTC"
-        )
-
-        fx_pivot, price_pivot, price_exists_mask = self._prepare_market_data(
-            date_range_hist
-        )
-
-        # unified_scalar: Use scalar lookup for main DF to match Wealth Delta logic
+        # unified_resolver: Pivot tables are no longer generated here.
+        # All calculations will rely on scalar lookups against the MarketResolver.
         df_augmented = self._augment_txs_with_market_data(self._df_txs)
 
-        # unified_scalar: Maintain compatibility fields for _calculate_cash_accumulators
-        df_augmented["daily_fx_rate"] = df_augmented["fx_rate"]
-        # Note: _augment_txs_with_market_data guarantees fx_rate != 0 (defaults to 1.0)
-        df_augmented["amount_eur"] = (df_augmented["amount"] / 100.0) / df_augmented[
-            "daily_fx_rate"
-        ]
-
-        # unified_scalar: Recreate fx_long manually for _calculate_cash_wealth
-        # (legacy vector requirement)
-        fx_long = fx_pivot.reset_index(names="date").melt(
-            id_vars="date", var_name="currency_code", value_name="daily_fx_rate"
+        # Add amount_eur column, which is essential for many downstream calcs
+        # Guard against division by zero for fx_rate.
+        df_augmented["amount_eur"] = np.where(
+            df_augmented["fx_rate"] != 0,
+            (df_augmented["amount_norm"]) / df_augmented["fx_rate"],
+            0.0,
         )
-        fx_long["currency_code"] = fx_long["currency_code"].astype(str)
-        fx_long["date"] = pd.to_datetime(fx_long["date"], utc=True).dt.normalize()
 
         daily_neutral_flow = self._calculate_gross_neutral_flows(
             df_augmented, date_range
@@ -287,22 +271,32 @@ class PerformanceEngine:
         daily_invested_cum = daily_neutral_flow.cumsum().fillna(0.0)
 
         div_flow, int_net, fees_net, taxes_net = self._calculate_cash_accumulators(
-            df_augmented, self._df_units, self._df_txs, fx_long, date_range
+            df_augmented, self._df_units, self._df_txs, date_range
         )
 
         daily_sec_wealth, sec_holdings = self._calculate_security_wealth(
-            df_augmented, price_pivot, fx_pivot, date_range
+            df_augmented, date_range
         )
 
         daily_cash_wealth, acc_balances = self._calculate_cash_wealth(
-            self._df_txs, fx_pivot, date_range
+            self._df_txs, date_range
         )
 
-        common_cols = sec_holdings.columns.intersection(price_exists_mask.columns)
-        sh_aligned = sec_holdings[common_cols]
-        pem_aligned = price_exists_mask[common_cols]
-        stale_securities = (sh_aligned > 0) & (~pem_aligned)
-        daily_stale_flag = stale_securities.any(axis=1)
+        # unified_resolver: Stale price detection using daily scalar lookups.
+        stale_flags = []
+        for d in date_range:
+            stale_for_day = False
+            if d in sec_holdings.index:
+                holdings_on_date = sec_holdings.loc[d]
+                held_securities = holdings_on_date[
+                    holdings_on_date.abs() > _SHARE_EPSILON
+                ].index
+                for sec_uuid in held_securities:
+                    if self.market_resolver.is_price_stale(sec_uuid, d):
+                        stale_for_day = True
+                        break
+            stale_flags.append(stale_for_day)
+        daily_stale_flag = pd.Series(stale_flags, index=date_range)
 
         result = pd.DataFrame(index=date_range)
         result["invested_capital_eur"] = daily_invested_cum.fillna(0).round(2)
@@ -359,15 +353,10 @@ class PerformanceEngine:
                         _LOGGER.debug("--- Security Breakdown for %s ---", end_date)
                         for sec_uuid, qty in held.items():
                             sec_name = self._resolve_sec_name(sec_uuid)
-                            # Price
-                            price = 0.0
-                            if sec_uuid in price_pivot.columns:
-                                price = price_pivot.loc[e_ts, sec_uuid]
-                            # FX
+                            # unified_resolver: Use scalar lookups for debug info
+                            price = self._get_price(sec_uuid, e_ts)
                             curr = self.market_resolver.get_security_currency(sec_uuid)
-                            rate = 1.0
-                            if curr != "EUR" and curr in fx_pivot.columns:
-                                rate = fx_pivot.loc[e_ts, curr]
+                            rate = self._get_fx(curr, e_ts)
 
                             val_eur = (qty * price) / rate if rate else 0.0
                             _LOGGER.debug(
@@ -389,9 +378,7 @@ class PerformanceEngine:
                         _LOGGER.debug("--- Cash Breakdown for %s ---", end_date)
                         for (acc_uuid, curr), balance in held_cash.items():
                             acc_name = self._resolve_acc_name(acc_uuid)
-                            rate = 1.0
-                            if curr != "EUR" and curr in fx_pivot.columns:
-                                rate = fx_pivot.loc[e_ts, curr]
+                            rate = self._get_fx(curr, e_ts)
                             val_eur = balance / rate if rate else 0.0
                             _LOGGER.debug(
                                 "CASH: %s (%s) | Bal=%.2f | FX=%.4f | ValEUR=%.2f",
@@ -783,30 +770,34 @@ class PerformanceEngine:
         )
         end_ts = pd.Timestamp(end_date, tz="UTC")
 
-        # 2. Capital Gains
+        # 2. Filter transactions for the period
         window_mask = (self._df_txs["date"] >= start_ts) & (
             self._df_txs["date"] <= end_ts
         )
         df_txs_window = self._df_txs[window_mask].copy()
 
+        # 3. Augment with Market Data
+        df_augmented = self._augment_txs_with_market_data(df_txs_window)
+        df_augmented["amount_eur"] = np.where(
+            df_augmented["fx_rate"] != 0,
+            df_augmented["amount_norm"] / df_augmented["fx_rate"],
+            0.0,
+        )
+
+        # 4. Capital Gains
         realized_map, unrealized_map = self._calculate_capital_gains_detailed(
-            df_txs_window,
+            df_augmented,  # Use augmented DF
             start_date,
             end_date,
             initial_inventory=virtual_inventory,
             basis_ts=basis_ts,
         )
 
-        # 3. Other Metrics Aggregation
-        date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
-        # Prepare FX for window augmentation
-        fx_pivot, _, _ = self._prepare_market_data(date_range)
-        df_augmented, fx_long = self._augment_transactions(df_txs_window, fx_pivot)
-
-        divs = self._aggregate_dividends(df_augmented, fx_long)
-        fees = self._aggregate_fees(df_augmented, fx_long)
-        taxes = self._aggregate_taxes(df_augmented, fx_long)
-        interest = self._aggregate_interest(df_augmented, fx_long)
+        # 5. Other Metrics Aggregation
+        divs = self._aggregate_dividends(df_augmented)
+        fees = self._aggregate_fees(df_augmented)
+        taxes = self._aggregate_taxes(df_augmented)
+        interest = self._aggregate_interest(df_augmented)
 
         # 4. Format Results
         realized_items = [
@@ -845,22 +836,16 @@ class PerformanceEngine:
         filtered.sort(key=lambda x: x.amount, reverse=True)
         return filtered
 
-    def _aggregate_dividends(
-        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
-    ) -> list[BreakdownItem]:
-        # 1. Base Dividends
+    def _aggregate_dividends(self, df_augmented: pd.DataFrame) -> list[BreakdownItem]:
+        """Aggregate dividend income, grossed up with associated fees and taxes."""
         div_txs = df_augmented[df_augmented["type"] == TransactionType.DIVIDEND]
         base_sums = div_txs.groupby("security")["amount_eur"].sum()
 
-        # 2. Units (Tax/Fee on Dividend) - Treated as ADDITION to Gross Dividend?
-        # PP Logic: Gross Dividend = Net Amount + Taxes + Fees.
-        # DB 'amount' for DIVIDEND is usually Net Inflow.
-        # So yes, we add Taxes/Fees from Units.
-
         gross_additions = pd.Series(dtype=float)
         if not self._df_units.empty and not df_augmented.empty:
+            # Merge units with parent transactions to identify dividend-related units
             df_u_aug = self._df_units.merge(
-                df_augmented[["uuid", "type", "security", "date"]].rename(
+                df_augmented[["uuid", "type", "security"]].rename(
                     columns={
                         "type": "parent_type",
                         "security": "parent_sec",
@@ -871,21 +856,21 @@ class PerformanceEngine:
                 right_on="tx_uuid",
                 how="inner",
             )
-            if not df_u_aug.empty:
-                df_u_aug = df_u_aug.merge(
-                    fx_long, on=["date", "currency_code"], how="left"
-                )
-                df_u_aug["daily_fx_rate"] = df_u_aug["daily_fx_rate"].fillna(1.0)
-                df_u_aug["amount_eur"] = (df_u_aug["amount"] / 100.0) / df_u_aug[
-                    "daily_fx_rate"
-                ]
+            # The parent df_augmented is already window-filtered, so units are too.
+            # We just need to augment these units with their own FX rates.
+            df_u_aug_market = self._augment_txs_with_market_data(df_u_aug)
+            df_u_aug_market["amount_eur"] = np.where(
+                df_u_aug_market["fx_rate"] != 0,
+                (df_u_aug_market["amount"] / 100.0) / df_u_aug_market["fx_rate"],
+                0.0,
+            )
 
-                mask_gross = (df_u_aug["parent_type"] == TransactionType.DIVIDEND) & (
-                    df_u_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE])
-                )
-                gross_additions = (
-                    df_u_aug[mask_gross].groupby("parent_sec")["amount_eur"].sum()
-                )
+            mask_gross = (
+                df_u_aug_market["parent_type"] == TransactionType.DIVIDEND
+            ) & (df_u_aug_market["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
+            gross_additions = (
+                df_u_aug_market[mask_gross].groupby("parent_sec")["amount_eur"].sum()
+            )
 
         total_sums = base_sums.add(gross_additions, fill_value=0)
         results = [
@@ -894,42 +879,28 @@ class PerformanceEngine:
         ]
         return self._format_breakdown_list(results)
 
-    def _aggregate_interest(
-        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
-    ) -> list[BreakdownItem]:
-        # Interest - InterestCharge
-        # PP Logic: Gross Interest = Net Amount + Taxes + Fees.
-        # PP Logic: Gross Charge = Net Amount - Taxes - Fees (Magnitude reduces).
-
-        # 1. Base Net Amounts
+    def _aggregate_interest(self, df_augmented: pd.DataFrame) -> list[BreakdownItem]:
+        """Aggregate net interest income, grossed up with associated fees/taxes."""
+        # 1. Base Net Amounts from main transactions
         df_int = df_augmented[df_augmented["type"] == TransactionType.INTEREST]
         df_chg = df_augmented[df_augmented["type"] == TransactionType.INTEREST_CHARGE]
-
         pos = df_int.groupby("account")["amount_eur"].sum()
         neg = df_chg.groupby("account")["amount_eur"].sum()
-
         net = pos.sub(neg, fill_value=0)
 
-        # 2. Adjust for Units (Gross Up)
-        # For Interest (Gain): We received Net. We want Gross. Add Tax/Fee.
-        # For Charge (Loss): We paid Net. We want Gross Expense.
-        #   If Net=110 (paid), Tax=10. Gross=100.
-        #   Component should correspond to -100.
-        #   Current 'neg' is 110. 'net' has -110.
-        #   We want 'net' to be -100. So we ADD 10.
-        # Conclusion: ALWAYS ADD the Tax/Fee amount to the Net Result.
-
+        # 2. Gross up with unit costs (fees/taxes)
         gross_additions = pd.Series(dtype=float)
         if not self._df_units.empty and not df_augmented.empty:
-            # Filter augmented for Interest types
+            # Filter for interest-related parent transactions
             mask_int = df_augmented["type"].isin(
                 [TransactionType.INTEREST, TransactionType.INTEREST_CHARGE]
             )
             df_int_aug = df_augmented[mask_int]
 
             if not df_int_aug.empty:
+                # Merge units to find those attached to interest transactions
                 df_u_aug = self._df_units.merge(
-                    df_int_aug[["uuid", "account", "date"]].rename(
+                    df_int_aug[["uuid", "account"]].rename(
                         columns={"uuid": "tx_uuid", "account": "parent_acc"}
                     ),
                     left_on="transaction_uuid",
@@ -937,21 +908,25 @@ class PerformanceEngine:
                     how="inner",
                 )
                 if not df_u_aug.empty:
-                    df_u_aug = df_u_aug.merge(
-                        fx_long, on=["date", "currency_code"], how="left"
+                    # Augment units with market data and calculate EUR value
+                    df_u_aug_market = self._augment_txs_with_market_data(df_u_aug)
+                    df_u_aug_market["amount_eur"] = np.where(
+                        df_u_aug_market["fx_rate"] != 0,
+                        (df_u_aug_market["amount"] / 100.0)
+                        / df_u_aug_market["fx_rate"],
+                        0.0,
                     )
-                    df_u_aug["daily_fx_rate"] = df_u_aug["daily_fx_rate"].fillna(1.0)
-                    df_u_aug["amount_eur"] = (df_u_aug["amount"] / 100.0) / df_u_aug[
-                        "daily_fx_rate"
-                    ]
 
-                    mask_gross = df_u_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE])
+                    mask_gross = df_u_aug_market["type"].isin(
+                        [UNIT_TYPE_TAX, UNIT_TYPE_FEE]
+                    )
                     gross_additions = (
-                        df_u_aug[mask_gross].groupby("parent_acc")["amount_eur"].sum()
+                        df_u_aug_market[mask_gross]
+                        .groupby("parent_acc")["amount_eur"]
+                        .sum()
                     )
 
         total = net.add(gross_additions, fill_value=0)
-
         results = [
             BreakdownItem(label=self._resolve_acc_name(k), amount=v)
             for k, v in total.items()
@@ -959,45 +934,41 @@ class PerformanceEngine:
         return self._format_breakdown_list(results)
 
     def _aggregate_fees_taxes_generic(
-        self,
-        df_augmented: pd.DataFrame,
-        fx_long: pd.DataFrame,
-        main_type: int,
-        unit_type: int,
+        self, df_augmented: pd.DataFrame, main_type: int, unit_type: int
     ) -> list[BreakdownItem]:
-        # 1. Explicit Transactions (e.g. Type=TAX or FEE)
-        # Note: In PP, standalone Fees/Taxes exist.
-        # But also attached to Buy/Sell/Div as Units.
-
+        """Aggregate fees or taxes from transactions and units."""
+        # 1. Sum explicit Fee/Tax transactions from the augmented main DF
         df_main = df_augmented[df_augmented["type"] == main_type].copy()
-        # Group by Security if present, else Account
         df_main["group_id"] = df_main["security"].fillna(df_main["account"])
-        # Some rows might have neither? fallback to 'Unknown'
         df_main["group_id"] = df_main["group_id"].fillna("Unknown")
-
         base_sums = df_main.groupby("group_id")["amount_eur"].sum()
 
-        # 2. Units
+        # 2. Sum Fee/Tax units from all transaction types in the period
         unit_sums = pd.Series(dtype=float)
         if not self._df_units.empty and not df_augmented.empty:
+            # Merge units with parent transactions (already filtered for the period)
             df_u_aug = self._df_units.merge(
-                df_augmented[["uuid", "security", "account", "date"]].rename(
-                    columns={"uuid": "tx_uuid", "security": "p_sec", "account": "p_acc"}
+                df_augmented[["uuid", "security", "account"]].rename(
+                    columns={
+                        "uuid": "tx_uuid",
+                        "security": "p_sec",
+                        "account": "p_acc",
+                    }
                 ),
                 left_on="transaction_uuid",
                 right_on="tx_uuid",
                 how="inner",
             )
             if not df_u_aug.empty:
-                df_u_aug = df_u_aug.merge(
-                    fx_long, on=["date", "currency_code"], how="left"
+                # Augment the units with market data
+                df_u_aug_market = self._augment_txs_with_market_data(df_u_aug)
+                df_u_aug_market["amount_eur"] = np.where(
+                    df_u_aug_market["fx_rate"] != 0,
+                    (df_u_aug_market["amount"] / 100.0) / df_u_aug_market["fx_rate"],
+                    0.0,
                 )
-                df_u_aug["daily_fx_rate"] = df_u_aug["daily_fx_rate"].fillna(1.0)
-                df_u_aug["amount_eur"] = (df_u_aug["amount"] / 100.0) / df_u_aug[
-                    "daily_fx_rate"
-                ]
 
-                df_target = df_u_aug[df_u_aug["type"] == unit_type].copy()
+                df_target = df_u_aug_market[df_u_aug_market["type"] == unit_type].copy()
                 df_target["group_id"] = (
                     df_target["p_sec"].fillna(df_target["p_acc"]).fillna("Unknown")
                 )
@@ -1005,116 +976,62 @@ class PerformanceEngine:
 
         total = base_sums.add(unit_sums, fill_value=0)
 
-        # Resolve names
+        # Resolve UUIDs to names for the final breakdown list
         results = []
         for uid, val in total.items():
-            if uid == "Unknown":
-                name = "Unknown"
-            elif uid in self._sec_name_map:
-                name = self._resolve_sec_name(uid)
-            elif uid in self._account_name_map:
-                name = self._resolve_acc_name(uid)
-            else:
-                name = str(uid)
+            name = self._sec_name_map.get(
+                uid, self._account_name_map.get(uid, str(uid))
+            )
             results.append(BreakdownItem(label=name, amount=val))
 
         return self._format_breakdown_list(results)
 
-    def _aggregate_fees(
-        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
-    ) -> list[BreakdownItem]:
+    def _aggregate_fees(self, df_augmented: pd.DataFrame) -> list[BreakdownItem]:
+        """Aggregate all fees from transactions and units."""
         return self._aggregate_fees_taxes_generic(
-            df_augmented, fx_long, TransactionType.FEE, UNIT_TYPE_FEE
+            df_augmented, TransactionType.FEE, UNIT_TYPE_FEE
         )
 
-    def _aggregate_taxes(
-        self, df_augmented: pd.DataFrame, fx_long: pd.DataFrame
-    ) -> list[BreakdownItem]:
+    def _aggregate_taxes(self, df_augmented: pd.DataFrame) -> list[BreakdownItem]:
+        """Aggregate all taxes from transactions and units."""
         return self._aggregate_fees_taxes_generic(
-            df_augmented, fx_long, TransactionType.TAX, UNIT_TYPE_TAX
+            df_augmented, TransactionType.TAX, UNIT_TYPE_TAX
         )
-
-    def _prepare_market_data(
-        self,
-        date_range: pd.DatetimeIndex,
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Prepare vectorized market data pivot tables for a given date range.
-
-        This method leverages the MarketResolver to obtain pivot tables for FX rates
-        and security prices, ensuring that the data is correctly indexed and
-        forward-filled for use in vectorized calculations.
-        """
-        all_currencies = self._df_txs["currency_code"].dropna().unique().tolist()
-        all_securities = self._df_txs["security"].dropna().unique().tolist()
-
-        # Ensure EUR is always present
-        if "EUR" not in all_currencies:
-            all_currencies.append("EUR")
-
-        fx_pivot = self.market_resolver.get_fx_pivot(all_currencies, date_range)
-        price_pivot, price_exists_mask = self.market_resolver.get_prices_pivot(
-            all_securities, date_range
-        )
-
-        # Ensure EUR column exists and is filled with 1.0
-        fx_pivot["EUR"] = 1.0
-
-        return fx_pivot, price_pivot, price_exists_mask
-
-    def _augment_transactions(
-        self, df_txs: pd.DataFrame, fx_pivot: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        fx_long = fx_pivot.reset_index(names="date").melt(
-            id_vars="date", var_name="currency_code", value_name="daily_fx_rate"
-        )
-        fx_long["currency_code"] = fx_long["currency_code"].astype(str)
-        # fx_long["date"] is already correct (DatetimeIndex from pivot)
-
-        if not df_txs.empty:
-            # df_txs["date"] is already normalized in load_data
-            df_txs["currency_code"] = df_txs["currency_code"].astype(str)
-            df_augmented = df_txs.merge(
-                fx_long, on=["date", "currency_code"], how="left"
-            )
-            df_augmented["daily_fx_rate"] = df_augmented["daily_fx_rate"].fillna(1.0)
-            df_augmented["amount_eur"] = (
-                df_augmented["amount"] / 100.0
-            ) / df_augmented["daily_fx_rate"]
-        else:
-            df_augmented = pd.DataFrame(
-                columns=["date", "type", "amount_eur", "security", "shares"]
-            )
-
-        return df_augmented, fx_long
 
     def _augment_txs_with_market_data(self, df_txs: pd.DataFrame) -> pd.DataFrame:
         """
-        Augment transactions with FX rates using unified _get_fx logic.
+        Augment transactions with FX rates and prices using scalar lookups.
 
-        We deprecate merge_asof to ensure that Flow Valuations exactly match
-        Point-in-Time Valuations (which use _get_fx). This sacrifices some performance
-        for consistency, preventing "Two Watches" summation errors.
+        This method populates 'fx_rate' and 'price' columns by iterating through
+        the DataFrame and calling the MarketResolver's scalar `_get_fx` and `_get_price`
+        methods. This ensures consistency between point-in-time valuations and
+        transaction flow valuations, sacrificing some performance for accuracy.
         """
         if df_txs.empty:
-            if "fx_rate" not in df_txs.columns:
-                df_txs["fx_rate"] = 1.0
+            # Ensure columns exist even for empty DataFrame
+            df_txs["fx_rate"] = []
+            df_txs["price"] = []
             return df_txs.copy()
 
-        # Create a copy to avoid SettingWithCopy warnings on the input
         df_out = df_txs.copy()
 
-        # Improve performance by pre-validating columns?
-        # Assuming date and currency_code exist as per usage.
+        rates = []
+        prices = []
+        # Use itertuples for performance over iterrows
+        for row in df_out.itertuples(index=False):
+            # FX Rate Lookup
+            currency = getattr(row, "currency_code", "EUR")
+            rates.append(self._get_fx(currency, row.date))
 
-        # Explicitly use the scalar lookup to match the valuation engine exactly.
-        # This handles 'searchsorted', 'backward limits', and 'pre-history' logic
-        # uniformly.
-        rates = [
-            self._get_fx(row.currency_code, row.date) for row in df_out.itertuples()
-        ]
+            # Price Lookup (only if security is present)
+            security = getattr(row, "security", None)
+            if security:
+                prices.append(self._get_price(security, row.date))
+            else:
+                prices.append(0.0)
 
         df_out["fx_rate"] = rates
+        df_out["price"] = prices
         return df_out
 
     def _calculate_gross_neutral_flows(
@@ -1230,9 +1147,10 @@ class PerformanceEngine:
         df_augmented: pd.DataFrame,
         df_units: pd.DataFrame,
         df_txs: pd.DataFrame,
-        fx_long: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+        """Calculate daily sums for dividends, interest, fees, and taxes."""
+
         def _sum_by_type(tx_type: int) -> pd.Series:
             return (
                 df_augmented[df_augmented["type"] == tx_type]
@@ -1253,22 +1171,25 @@ class PerformanceEngine:
         )
 
         if not df_units.empty and not df_txs.empty:
-            df_units_aug = df_units.merge(
+            # Merge units with their parent transactions to get the date
+            df_units_dated = df_units.merge(
                 df_txs[["uuid", "date", "type"]].rename(
                     columns={"type": "parent_type"}
                 ),
                 left_on="transaction_uuid",
                 right_on="uuid",
                 how="left",
+            ).dropna(subset=["date"])
+
+            # Augment the dated units with FX rates
+            df_units_aug = self._augment_txs_with_market_data(df_units_dated)
+
+            # Calculate the EUR value of each unit
+            df_units_aug["amount_eur"] = np.where(
+                df_units_aug["fx_rate"] != 0,
+                (df_units_aug["amount"] / 100.0) / df_units_aug["fx_rate"],
+                0.0,
             )
-            df_units_aug = df_units_aug.dropna(subset=["date"])
-            df_units_aug = df_units_aug.merge(
-                fx_long, on=["date", "currency_code"], how="left"
-            )
-            df_units_aug["daily_fx_rate"] = df_units_aug["daily_fx_rate"].fillna(1.0)
-            df_units_aug["amount_eur"] = (
-                df_units_aug["amount"] / 100.0
-            ) / df_units_aug["daily_fx_rate"]
 
             units_tax = (
                 df_units_aug[df_units_aug["type"] == UNIT_TYPE_TAX]
@@ -1281,7 +1202,7 @@ class PerformanceEngine:
                 .sum()
             )
 
-            # Gross up Dividends: Add Taxes + Fees specifically for Dividend Parent Txs
+            # Gross up Dividends: Add Taxes + Fees from dividend-related units
             mask_div_units = (
                 df_units_aug["parent_type"] == TransactionType.DIVIDEND
             ) & (df_units_aug["type"].isin([UNIT_TYPE_TAX, UNIT_TYPE_FEE]))
@@ -1294,6 +1215,7 @@ class PerformanceEngine:
                 div_additions.reindex(date_range, fill_value=0), fill_value=0
             )
 
+            # Add all tax and fee units to their respective totals
             taxes_net = taxes_net.add(
                 units_tax.reindex(date_range, fill_value=0), fill_value=0
             )
@@ -1306,14 +1228,12 @@ class PerformanceEngine:
     def _calculate_security_wealth(
         self,
         df_augmented: pd.DataFrame,
-        price_pivot: pd.DataFrame,
-        fx_pivot: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> tuple[pd.Series, pd.DataFrame]:
+        """Calculate the total value of all securities on each day of the range."""
         sec_txs = df_augmented[df_augmented["security"].notna()].copy()
-        daily_sec_wealth = pd.Series(0.0, index=date_range)
         if sec_txs.empty:
-            return daily_sec_wealth, pd.DataFrame(index=date_range)
+            return pd.Series(0.0, index=date_range), pd.DataFrame(index=date_range)
 
         share_signs = {
             TransactionType.BUY: 1,
@@ -1323,8 +1243,7 @@ class PerformanceEngine:
             TransactionType.OUTBOUND_DELIVERY: -1,
         }
         signs = sec_txs["type"].map(share_signs).fillna(0)
-        shares_norm = sec_txs["shares"].fillna(0) / 100000000.0
-        sec_txs["delta_shares"] = shares_norm * signs
+        sec_txs["delta_shares"] = sec_txs["shares_norm"].fillna(0) * signs
 
         sec_daily_change = sec_txs.pivot_table(
             index="date",
@@ -1337,49 +1256,44 @@ class PerformanceEngine:
             sec_daily_change.cumsum().reindex(date_range, method="ffill").fillna(0.0)
         )
 
-        # Group securities by currency to vectorize FX division
-        # Reduces loop overhead from O(Securities) to O(Currencies)
-        securities_by_currency = {}
-        for sec_uuid in sec_holdings.columns:
-            if sec_uuid in price_pivot.columns:
-                curr = self.market_resolver.get_security_currency(sec_uuid)
-                securities_by_currency.setdefault(curr, []).append(sec_uuid)
+        # Use a list to accumulate daily wealth values, then create Series
+        wealth_values = []
+        for d in date_range:
+            daily_total = 0.0
+            if d in sec_holdings.index:
+                holdings_on_date = sec_holdings.loc[d]
+                held_secs = holdings_on_date[holdings_on_date.abs() > _SHARE_EPSILON]
+                for sec_uuid, qty in held_secs.items():
+                    price = self._get_price(sec_uuid, d)
+                    curr = self.market_resolver.get_security_currency(sec_uuid)
+                    rate = self._get_fx(curr, d)
+                    val_eur = (qty * price) / rate if rate else 0.0
+                    daily_total += val_eur
+            wealth_values.append(daily_total)
 
-        for curr, sec_uuids in securities_by_currency.items():
-            # Sum native value for all securities in this currency
-            # (Dates x Securities) * (Dates x Securities) -> Sum(axis=1) -> (Dates,)
-            native_val = (sec_holdings[sec_uuids] * price_pivot[sec_uuids]).sum(axis=1)
-
-            rates = (
-                fx_pivot[curr]
-                if curr in fx_pivot.columns
-                else pd.Series(1.0, index=date_range)
-            )
-            val = native_val / rates.where(rates > 0, 1.0)
-            daily_sec_wealth = daily_sec_wealth.add(val.fillna(0.0))
-
+        daily_sec_wealth = pd.Series(wealth_values, index=date_range)
         return daily_sec_wealth, sec_holdings
 
     def _calculate_cash_wealth(
         self,
         df_txs: pd.DataFrame,
-        fx_pivot: pd.DataFrame,
         date_range: pd.DatetimeIndex,
     ) -> tuple[pd.Series, pd.DataFrame]:
-        daily_cash_wealth = pd.Series(0.0, index=date_range)
+        """Calculate the total value of all cash accounts on each day of the range."""
         if df_txs.empty:
-            return daily_cash_wealth, pd.DataFrame(index=date_range)
+            return pd.Series(0.0, index=date_range), pd.DataFrame(index=date_range)
 
         df_standard = df_txs[df_txs["type"] != TransactionType.CASH_TRANSFER].copy()
         df_transfers = df_txs[df_txs["type"] == TransactionType.CASH_TRANSFER].copy()
 
-        if not df_transfers.empty:
-            df_transfers_augmented = self._augment_transfers(df_transfers)
-            df_cash_calc = pd.concat(
-                [df_standard, df_transfers_augmented], ignore_index=True
-            )
-        else:
-            df_cash_calc = df_standard
+        df_transfers_augmented = (
+            self._augment_transfers(df_transfers)
+            if not df_transfers.empty
+            else pd.DataFrame()
+        )
+        df_cash_calc = pd.concat(
+            [df_standard, df_transfers_augmented], ignore_index=True
+        )
 
         cash_signs = {
             int(TransactionType.SELL): 1,
@@ -1395,15 +1309,11 @@ class PerformanceEngine:
             int(TransactionType.FEE): -1,
         }
 
-        if not df_cash_calc.empty:
-            df_cash_calc["type"] = (
-                pd.to_numeric(df_cash_calc["type"], errors="coerce")
-                .fillna(-1)
-                .astype(int)
-            )
-
+        df_cash_calc["type"] = (
+            pd.to_numeric(df_cash_calc["type"], errors="coerce").fillna(-1).astype(int)
+        )
         signs = df_cash_calc["type"].map(cash_signs).fillna(0)
-        df_cash_calc["delta_cash"] = (df_cash_calc["amount"].fillna(0) / 100.0) * signs
+        df_cash_calc["delta_cash"] = (df_cash_calc["amount_norm"].fillna(0)) * signs
         acc_txs = df_cash_calc.dropna(subset=["account"])
 
         acc_daily_change = acc_txs.pivot_table(
@@ -1417,17 +1327,18 @@ class PerformanceEngine:
             acc_daily_change.cumsum().reindex(date_range, method="ffill").fillna(0.0)
         )
 
-        for col in acc_balances.columns:
-            _acc, curr = col
-            bal = acc_balances[col]
-            rates = (
-                fx_pivot[curr]
-                if curr in fx_pivot.columns
-                else pd.Series(1.0, index=date_range)
-            )
-            val = bal / rates.where(rates > 0, 1.0)
-            daily_cash_wealth = daily_cash_wealth.add(val.fillna(0.0))
+        wealth_values = []
+        for d in date_range:
+            daily_total = 0.0
+            if d in acc_balances.index:
+                balances_on_date = acc_balances.loc[d]
+                for (_acc, curr), bal in balances_on_date.items():
+                    if abs(bal) > _SHARE_EPSILON:
+                        rate = self._get_fx(curr, d)
+                        daily_total += bal / rate if rate else 0.0
+            wealth_values.append(daily_total)
 
+        daily_cash_wealth = pd.Series(wealth_values, index=date_range)
         return daily_cash_wealth, acc_balances
 
     def _get_price(self, sec_id: str, d: pd.Timestamp) -> float:

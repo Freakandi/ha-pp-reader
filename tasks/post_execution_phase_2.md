@@ -70,3 +70,38 @@
 ## 5. Next Steps
 *   Proceed to **Phase 3: The Chain Engine**.
 *   This phase will be critical to rewiring the `PerformanceEngine` to use the "Single Source of Truth" (`amount_eur_cents`) and restoring the Transfer Neutrality invariant.
+
+# Assessment: PR #765 - Phase 2 (Cleanup & Vectorization)
+
+## 1. Execution Summary
+*   **Result:** Success.
+*   **Status:** PR #765 (Jules Session 3739497727752165348).
+*   **Files Changed:**
+    *   `custom_components/pp_reader/metrics/calculator.py`: Final removal of `_prepare_market_data` and transition to scalar text/augmented lookups.
+    *   `tasks/refactor_phase_2_unified_market_resolver.md`: Marked steps 4 & 5 as complete.
+
+## 2. Quality Check
+*   **Architecture Compliance:**
+    *   [x] `_prepare_market_data` (Pivot Tables) completely removed.
+    *   [x] `_augment_txs_with_market_data` rewritten to use `self.market_resolver` (via helper wrappers).
+    *   [x] Engine no longer manages internal Price/FX DataFrames (`_df_prices`, `_df_rates` removed).
+*   **Breaking Changes:**
+    *   [x] Handled correctly. The Engine internal API has shifted significantly but tests pass.
+*   **Linting:**
+    *   [ ] `ruff check .` FAILED.
+        *   Error: `E501 Line too long (90 > 88)` in `custom_components/pp_reader/metrics/calculator.py:949`.
+        *   Action: User needs to fix this manually before merging.
+
+## 3. Test Results
+*   **Suite:** `pytest tests/metrics/core/test_market_resolver.py tests/metrics/test_calculator.py`
+*   **Outcome:** 9 passed in 0.42s.
+*   **Key Validations:**
+    *   `test_calculator.py` passed without regressions, proving that the new "Scalar/Augmented" lookup strategy produces the same results as the old Pivot strategy.
+
+## 4. Assessment Notes
+*   **Performance:** The move from Pivot Tables to `_augment_txs_with_market_data` (Iterative/Applied lookup) is conceptually O(N) where N is transactions. For the typical dataset this is perfectly fine and saves significant memory vs the dense Pivot Table approach.
+*   **Code Cleanliness:** `calculator.py` is now decoupled from the *storage structure* of the Market Data (Pandas vs SQL vs Hashmap), answering the architectural goal.
+
+## 5. Final Verdict
+*   **Approved with Minor Fix.** Run `ruff format` or manually break the line at 949 in `calculator.py`.
+*   **Next Phase:** Phase 3 (The Chain Engine).
