@@ -800,9 +800,9 @@ class PerformanceEngine:
             ) & (df_txs["portfolio"] == scope_uuid)
             df_txs.loc[mask_transfer_out, "type"] = TransactionType.OUTBOUND_DELIVERY
 
-            mask_transfer_in = (
-                df_txs["type"] == TransactionType.SECURITY_TRANSFER
-            ) & (df_txs["other_portfolio"] == scope_uuid)
+            mask_transfer_in = (df_txs["type"] == TransactionType.SECURITY_TRANSFER) & (
+                df_txs["other_portfolio"] == scope_uuid
+            )
             df_txs.loc[mask_transfer_in, "type"] = TransactionType.INBOUND_DELIVERY
         else:
             # For a global view, internal transfers do not realize gains. Ignore them.
