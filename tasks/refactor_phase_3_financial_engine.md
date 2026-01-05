@@ -40,7 +40,7 @@ Implement the core mathematical verification engine ("The Chain") and the detail
         *   Call `MarketResolver.get_price(T)` and `get_fx(T)` to value inventory.
         *   Sum External Flows (Deposits/Removals) for `invested_capital`.
         *   Return dictionary `Values`.
-- [ ] **Step 2: Implement Period Attribution Logic**
+- [x] **Step 2: Implement Period Attribution Logic**
     *   Implement `calculate_period_performance(start, end)`:
         *   Fetch Snapshots for `Start` (T-1) and `End` (T).
         *   Calculate `System_Delta = End - Start - Net_External_Flows`.

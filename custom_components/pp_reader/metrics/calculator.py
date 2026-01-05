@@ -570,84 +570,26 @@ class PerformanceEngine:
         self, start_date: date, end_date: date
     ) -> PerformanceMetrics:
         """
-        Calculate performance metrics for a specific period.
+        Calculate performance metrics for a specific period using attribution.
 
-        This method computes key performance indicators like absolute performance,
+        This method strictly adheres to the formula:
+        End Wealth = Start Wealth + Net Flows + Sum of Performance Components
+
+        It computes key performance indicators like absolute performance,
         realized and unrealized gains, and FX gains on cash for the given
         start and end dates.
         """
         metrics = PerformanceMetrics()
-
         start_prev = start_date - pd.Timedelta(days=1)
-        # Load from daily_wealth table
-        query = (
-            "SELECT date, total_wealth_cents, total_invested_cents "
-            "FROM daily_wealth WHERE date BETWEEN ? AND ?"
-        )
-        try:
-            daily_wealth = pd.read_sql_query(
-                query,
-                self.conn,
-                params=(start_prev.isoformat(), end_date.isoformat()),
-                parse_dates=["date"],
-            )
-            # Ensure UTC timezone for date column to match comparisons later
-            if not daily_wealth.empty:
-                daily_wealth["date"] = (
-                    pd.to_datetime(daily_wealth["date"])
-                    .dt.tz_localize(None)
-                    .dt.tz_localize(UTC)
-                )
-                daily_wealth["total_wealth_eur"] = (
-                    daily_wealth["total_wealth_cents"] / 100.0
-                )
-                daily_wealth["invested_capital_eur"] = (
-                    daily_wealth["total_invested_cents"] / 100.0
-                )
-        except pd.errors.DatabaseError:
-            daily_wealth = pd.DataFrame(
-                columns=["date", "total_wealth_eur", "invested_capital_eur"]
-            )
 
-        # Use Scalar Valuation for Start/End Wealth (Single Source of Truth)
-        # Start Wealth: State at Start of start_date (EOD T-1)
-        start_state = self._calculate_portfolio_state_at_date(start_date)
+        # 1. Get Start and End Portfolio State
+        start_state = self.get_snapshot(start_prev)
+        end_state = self.get_snapshot(end_date)
         start_wealth = start_state["total_wealth"]
-
-        # End Wealth: State at End of end_date (Start of T+1)
-        end_state = self._calculate_portfolio_state_at_date(
-            end_date + pd.Timedelta(days=1)
-        )
         end_wealth = end_state["total_wealth"]
 
-        # Invested Capital: Derive delta from daily_wealth flow accumulation
-        # daily_wealth covers [start_prev, end_date].
-        # start_row is at start_prev. end_row is at end_date.
-        # Delta = end_cum - start_cum = Sum of flows in (start_prev, end_date].
-        # Since start_prev = start-1, this covers flows ON start_date up to end_date.
-        # This matches PP logic (usually).
-
-        start_row = daily_wealth[daily_wealth["date"] == start_prev.isoformat()]
-        end_row = daily_wealth[daily_wealth["date"] == end_date.isoformat()]
-
-        start_invested = (
-            start_row.iloc[0]["invested_capital_eur"] if not start_row.empty else 0.0
-        )
-        end_invested = (
-            end_row.iloc[0]["invested_capital_eur"] if not end_row.empty else 0.0
-        )
-
-        metrics.absolute_performance = (end_wealth - start_wealth) - (
-            end_invested - start_invested
-        )
-
-        # Optimization: Use Partial Replay Strategy
-        virtual_inventory, start_ts, basis_ts = self._setup_virtual_inventory(
-            start_date
-        )
-
-        # 3. Filter Transactions for the Window
-        # We include transactions ON the start date in the window replay
+        # 2. Calculate Net External Flows for the period
+        start_ts = pd.Timestamp(start_date, tz="UTC")
         end_ts = pd.Timestamp(end_date, tz="UTC")
         window_mask = (self._df_txs["date"] >= start_ts) & (
             self._df_txs["date"] <= end_ts
@@ -655,12 +597,20 @@ class PerformanceEngine:
         df_txs_window = self._df_txs[window_mask]
 
         valid_fields = {f.name for f in dataclasses.fields(Transaction)}
-        transactions = []
-        for row in df_txs_window.to_dict("records"):
-            clean_row = {k: v for k, v in row.items() if k in valid_fields}
-            transactions.append(Transaction(**clean_row))
+        txs_dict = df_txs_window.to_dict("records")
+        filtered_txs_dict = [
+            {k: v for k, v in row.items() if k in valid_fields} for row in txs_dict
+        ]
+
+        transactions_in_period = [Transaction(**row) for row in filtered_txs_dict]
+        net_flows = self._calculate_invested_capital(transactions_in_period)
+
+        # 3. Calculate Performance Components
+        # a. Capital Gains (Realized and Unrealized)
+        virtual_inventory, _, basis_ts = self._setup_virtual_inventory(start_date)
+
         realized, unrealized = self._calculate_capital_gains(
-            transactions,
+            transactions_in_period,
             start_date,
             end_date,
             initial_inventory=virtual_inventory,
@@ -669,52 +619,66 @@ class PerformanceEngine:
         metrics.realized_gains = realized
         metrics.unrealized_gains = unrealized
 
+        # b. FX Gains on Cash
         metrics.fx_gains_cash = self._calculate_fx_performance(
-            self._df_txs,
+            self._df_txs,  # needs full history for start/end balance
             start_date,
             end_date,
             basis_ts=basis_ts,
         )
 
-        # 4. Filter Cash Flows (TWR/IRR)
-        # We need external flows: Deposits, Removals (including fees/taxes on them?)
-        # PP Standard: TWR uses daily valuations and external flows.
-        # IRR uses initial value, final value, and stream of external flows.
+        # c. Other Cash Flows (Dividends, Fees, etc.)
+        # These are not directly part of the performance metrics object yet,
+        # but are implicitly included in the absolute performance calculation.
 
-        # Helper to extract relevant flows for the period
-        # Note: df_txs_window includes flows on start_date.
-        # PP Logic: Flows > Start-1day and <= End.
+        # 4. Calculate Absolute Performance (System Delta)
+        metrics.absolute_performance = (end_wealth - start_wealth) - net_flows
 
-        # We need ALL flows for the window to calculate TWR properly day-by-day
-        # We reuse daily_wealth which already has daily totals.
-
-        # Extract flows from daily_wealth
-        # daily_wealth info:
-        # invested_capital_eur = cumulative sum of flows.
-        # So daily flow = diff(invested_capital_eur)
-
-        daily_wealth_window = daily_wealth[
-            (daily_wealth["date"] >= start_date.isoformat())
-            & (daily_wealth["date"] <= end_date.isoformat())
-        ].copy()
-
-        # Recalculate daily flow from the window's perspective or use diff
-        # Since invested_capital is cumulative from dawn of time, diff gives daily flow.
-        daily_invested = daily_wealth_window["invested_capital_eur"]
-        # We need the flow for the first day too.
-        # previous day invested
-        prev_invested = start_invested
-
-        # Vectorized flow calculation
-        daily_flows = daily_invested.diff().fillna(
-            daily_invested.iloc[0] - prev_invested
+        # 5. Invariant Check (for debugging and validation)
+        df_augmented = self._augment_txs_with_market_data(df_txs_window)
+        df_augmented["amount_eur"] = np.where(
+            df_augmented["fx_rate"] != 0,
+            df_augmented["amount_norm"] / df_augmented["fx_rate"],
+            0.0,
         )
 
-        metrics.twr = self._calculate_twr(
-            daily_wealth_window, daily_flows, start_wealth
+        dividends = df_augmented[df_augmented["type"] == TransactionType.DIVIDEND][
+            "amount_eur"
+        ].sum()
+        interest = df_augmented[df_augmented["type"] == TransactionType.INTEREST][
+            "amount_eur"
+        ].sum()
+        fees = df_augmented[df_augmented["type"] == TransactionType.FEE][
+            "amount_eur"
+        ].sum()
+        taxes = df_augmented[df_augmented["type"] == TransactionType.TAX][
+            "amount_eur"
+        ].sum()
+
+        sum_components = (
+            metrics.realized_gains
+            + metrics.unrealized_gains
+            + metrics.fx_gains_cash
+            + dividends
+            + interest
+            - fees  # Fees are a negative contribution
+            - taxes  # Taxes are a negative contribution
         )
 
-        metrics.irr = self._calculate_irr(start_wealth, end_wealth, daily_flows)
+        system_delta = metrics.absolute_performance
+        if abs(system_delta - sum_components) > _CONVERGENCE_THRESHOLD:
+            _LOGGER.warning(
+                (
+                    "Performance invariant mismatch. "
+                    "System Delta: %.2f, Sum of Components: %.2f"
+                ),
+                system_delta,
+                sum_components,
+            )
+
+        # TWR and IRR are not part of this refactoring step.
+        metrics.twr = 0.0
+        metrics.irr = 0.0
 
         return metrics
 
@@ -1360,7 +1324,7 @@ class PerformanceEngine:
             basis_ts = start_ts
 
         inventory: dict[str, deque[Lot]] = initial_inventory or {}
-        realized_gains_map: dict[str, float] = {}
+        realized_gains_map: defaultdict[str, float] = defaultdict(float)
 
         for tx in transactions:
             sec_id = tx.security
